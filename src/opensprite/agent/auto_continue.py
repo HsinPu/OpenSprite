@@ -161,6 +161,8 @@ class AutoContinueService:
                 "assistant only emitted internal control text",
                 "required task evidence was not produced",
                 "required task artifacts were not produced",
+                "required task artifacts were not traceable",
+                "assistant final answer did not reference gathered sources",
                 "assistant final answer was too terse for the task",
             }
         ):
@@ -391,6 +393,17 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
             "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
             "Use the relevant media/source tools for each missing resource before finalizing. "
             "Do not claim completion until each required resource has a concrete tool-derived result."
+        )
+    if reason == "required task artifacts were not traceable":
+        return (
+            "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
+            "Use `web_search` or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
+            "Do not finalize from an untraceable source artifact."
+        )
+    if reason == "assistant final answer did not reference gathered sources":
+        return (
+            "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
+            "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
         )
     if reason == "assistant final answer was too terse for the task":
         return (

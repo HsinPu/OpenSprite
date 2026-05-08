@@ -681,6 +681,19 @@ class AgentTurnRunner:
                 )
             await self._apply_work_progress(turn.session_id, work_progress, updated_work_state)
             await self._apply_completion_gate_result(turn.session_id, completion_result)
+            if aggregate_result.task_artifacts:
+                await self._emit_run_event(
+                    turn.session_id,
+                    run_id,
+                    "task_artifacts.recorded",
+                    {
+                        "status": "completed",
+                        "count": len(aggregate_result.task_artifacts),
+                        "artifacts": [item.to_metadata() for item in aggregate_result.task_artifacts],
+                    },
+                    channel=turn.channel,
+                    external_chat_id=turn.external_chat_id,
+                )
             self._finalize_learning_reuse(turn.session_id, run_id, True)
             self._schedule_curator(
                 turn.session_id,

@@ -23,6 +23,7 @@ _EVENT_KINDS = {
     "work_plan.created": "work",
     "work_progress.updated": "work",
     "task_checklist.updated": "work",
+    "task_artifacts.recorded": "work",
     "curator.started": "work",
     "curator.job.started": "work",
     "curator.job.completed": "work",
@@ -244,6 +245,24 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
+    if normalized == "task_artifacts.recorded":
+        artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), list) else []
+        count = _non_negative_int(data.get("count") or len(artifacts))
+        source_count = _task_artifact_source_count(artifacts)
+        detail = f"{count} task artifact(s)"
+        if source_count:
+            detail += f" · {source_count} source(s)"
+        return {
+            "schema_version": RUN_SCHEMA_VERSION,
+            "artifact_id": "task_artifacts",
+            "artifact_type": "task_artifacts",
+            "kind": "task",
+            "status": status,
+            "title": "Task artifacts",
+            "detail": detail,
+            "metadata": data,
+        }
+
     if normalized in {"curator.started", "curator.failed", "curator.completed"}:
         detail = _text(data.get("summary") or data.get("error") or data.get("message"))
         if not detail and normalized == "curator.started":
@@ -376,6 +395,18 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
         }
 
     return None
+
+
+def _task_artifact_source_count(artifacts: list[Any]) -> int:
+    count = 0
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+        metadata = artifact.get("metadata") if isinstance(artifact.get("metadata"), dict) else {}
+        sources = metadata.get("sources") if isinstance(metadata, dict) else None
+        if isinstance(sources, list):
+            count += sum(1 for source in sources if isinstance(source, dict))
+    return count
 
 
 def run_event_envelope(event_type: str, payload: dict[str, Any] | None) -> dict[str, Any]:

@@ -277,9 +277,71 @@ def test_serialize_run_event_projects_permission_artifacts():
     }
 
 
-def test_serialize_run_event_projects_curator_artifact():
+def test_serialize_run_event_projects_task_artifact_summary():
     event = SimpleNamespace(
         event_id=44,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="task_artifacts.recorded",
+        payload={
+            "status": "completed",
+            "count": 1,
+            "artifacts": [
+                {
+                    "kind": "web_source",
+                    "source_tool": "web_search",
+                    "metadata": {
+                        "sources": [
+                            {
+                                "url": "https://www.reddit.com/dev/api/",
+                                "title": "Reddit API docs",
+                                "snippet": "Official Reddit API documentation.",
+                            }
+                        ]
+                    },
+                }
+            ],
+        },
+        created_at=12.8,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "work"
+    assert payload["status"] == "completed"
+    assert payload["artifact"] == {
+        "schema_version": 1,
+        "artifact_id": "task_artifacts",
+        "artifact_type": "task_artifacts",
+        "kind": "task",
+        "status": "completed",
+        "title": "Task artifacts",
+        "detail": "1 task artifact(s) · 1 source(s)",
+        "metadata": {
+            "status": "completed",
+            "count": 1,
+            "artifacts": [
+                {
+                    "kind": "web_source",
+                    "source_tool": "web_search",
+                    "metadata": {
+                        "sources": [
+                            {
+                                "url": "https://www.reddit.com/dev/api/",
+                                "title": "Reddit API docs",
+                                "snippet": "Official Reddit API documentation.",
+                            }
+                        ]
+                    },
+                }
+            ],
+        },
+    }
+
+
+def test_serialize_run_event_projects_curator_artifact():
+    event = SimpleNamespace(
+        event_id=45,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="curator.completed",
@@ -313,7 +375,7 @@ def test_serialize_run_event_projects_curator_artifact():
 
 def test_serialize_run_event_projects_curator_job_artifact():
     event = SimpleNamespace(
-        event_id=45,
+        event_id=46,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="curator.job.completed",
@@ -349,7 +411,7 @@ def test_serialize_run_event_projects_curator_job_artifact():
 
 def test_serialize_run_event_projects_curator_failed_artifact():
     event = SimpleNamespace(
-        event_id=46,
+        event_id=47,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="curator.failed",
@@ -383,7 +445,7 @@ def test_serialize_run_event_projects_curator_failed_artifact():
 
 def test_serialize_run_event_projects_subagent_artifact():
     event = SimpleNamespace(
-        event_id=47,
+        event_id=48,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="subagent.completed",
@@ -429,7 +491,7 @@ def test_serialize_run_event_projects_subagent_artifact():
 
 def test_serialize_run_event_projects_cancelled_subagent_artifact():
     event = SimpleNamespace(
-        event_id=48,
+        event_id=49,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="subagent.cancelled",
@@ -475,7 +537,7 @@ def test_serialize_run_event_projects_cancelled_subagent_artifact():
 
 def test_serialize_run_event_projects_parallel_subagent_group_artifact():
     event = SimpleNamespace(
-        event_id=49,
+        event_id=50,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="subagent.group.completed",
@@ -529,7 +591,7 @@ def test_serialize_run_event_projects_parallel_subagent_group_artifact():
 
 def test_serialize_run_event_projects_workflow_artifact():
     event = SimpleNamespace(
-        event_id=50,
+        event_id=51,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="workflow.completed",
@@ -567,7 +629,7 @@ def test_serialize_run_event_projects_workflow_artifact():
 
 def test_serialize_run_event_projects_workflow_step_artifact():
     event = SimpleNamespace(
-        event_id=51,
+        event_id=52,
         run_id="run-1",
         session_id="web:browser-1",
         event_type="workflow.step.completed",

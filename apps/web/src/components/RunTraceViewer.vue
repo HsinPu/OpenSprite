@@ -189,6 +189,36 @@
                   <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
                 </details>
 
+                <details
+                  v-else-if="isTaskArtifactSummary(artifact)"
+                  class="run-trace__artifact-card run-trace__artifact-card--details"
+                  :data-kind="artifact.kind"
+                  :data-status="artifact.status"
+                >
+                  <summary class="run-trace__artifact-summary">
+                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                    <strong>{{ artifactTitle(artifact) }}</strong>
+                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                  </summary>
+                  <dl v-if="taskArtifactRows(artifact).length" class="run-trace__tool-details">
+                    <div v-for="row in taskArtifactRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </div>
+                  </dl>
+                  <div v-if="taskArtifactSources(artifact).length" class="run-trace__source-list">
+                    <article v-for="source in taskArtifactSources(artifact)" :key="`${source.url}:${source.title}`" class="run-trace__source-card">
+                      <a v-if="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title || source.domain || source.url }}</a>
+                      <strong v-else>{{ source.title || copy.trace.unknownArtifact }}</strong>
+                      <small v-if="source.url">{{ source.url }}</small>
+                      <p v-if="source.snippet">{{ source.snippet }}</p>
+                      <span v-if="source.meta">{{ source.meta }}</span>
+                    </article>
+                  </div>
+                  <p v-else class="run-trace__tool-empty">{{ copy.trace.noTaskArtifactSources }}</p>
+                </details>
+
                 <article
                   v-else
                   class="run-trace__artifact-card"
@@ -813,6 +843,10 @@ function isProcessArtifact(artifact) {
   return artifact?.kind === "process" || artifact?.artifactType === "background_process";
 }
 
+function isTaskArtifactSummary(artifact) {
+  return artifact?.artifactType === "task_artifacts";
+}
+
 function structuredSubagentOutput(artifact) {
   const structured = artifact?.metadata?.structured_output || artifact?.metadata?.structuredOutput;
   return structured && typeof structured === "object" ? structured : null;
@@ -883,6 +917,55 @@ function processDetailRows(artifact) {
     { label: labels.outputTail, value: metadata.output_tail || metadata.outputTail },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
+}
+
+function taskArtifactRows(artifact) {
+  const labels = props.copy.trace.detailLabels;
+  const metadata = artifact.metadata || {};
+  const rows = [
+    { label: labels.taskArtifactCount, value: metadata.count },
+    { label: labels.structuredSources, value: taskArtifactSources(artifact).length },
+  ];
+  return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
+}
+
+function taskArtifactSources(artifact) {
+  const artifacts = Array.isArray(artifact?.metadata?.artifacts) ? artifact.metadata.artifacts : [];
+  return artifacts.flatMap((taskArtifact) => {
+    const metadata = taskArtifact?.metadata || {};
+    const sources = Array.isArray(metadata.sources) ? metadata.sources : [];
+    return sources.map((source) => normalizeTaskArtifactSource(source, taskArtifact)).filter(Boolean);
+  }).slice(0, 8);
+}
+
+function normalizeTaskArtifactSource(source, taskArtifact) {
+  if (!source || typeof source !== "object") {
+    return null;
+  }
+  const url = String(source.url || "").trim();
+  const title = String(source.title || "").trim();
+  const snippet = previewText(source.snippet || source.content || "");
+  if (!url && !title && !snippet) {
+    return null;
+  }
+  const provider = String(source.provider || "").trim();
+  const toolName = String(source.tool_name || source.toolName || taskArtifact?.source_tool || taskArtifact?.sourceTool || "").trim();
+  return {
+    url,
+    title,
+    snippet,
+    domain: sourceDomain(url),
+    meta: [toolName, provider].filter(Boolean).join(" · "),
+  };
+}
+
+function sourceDomain(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }
 
 function structuredSubagentPreview(artifact) {

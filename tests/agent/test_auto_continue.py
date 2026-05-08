@@ -206,6 +206,53 @@ def test_auto_continue_guides_retry_after_missing_task_artifacts():
     assert "Missing artifact for image:images/a.jpg" in (decision.prompt or "")
 
 
+def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
+    intent = TaskIntentService().classify("Please find current Reddit search sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required task artifacts were not traceable",
+        active_task_detail="- Missing traceable source metadata: url plus title/snippet",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I found sources.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="I found sources.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "source artifact without traceable source metadata" in (decision.prompt or "")
+    assert "web_search" in (decision.prompt or "")
+    assert "web_fetch" in (decision.prompt or "")
+    assert "URL plus title or snippet" in (decision.prompt or "")
+
+
+def test_auto_continue_guides_retry_after_missing_web_source_reference():
+    intent = TaskIntentService().classify("Please find current Reddit search sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant final answer did not reference gathered sources",
+        active_task_detail="- Reference at least one gathered source by URL, domain, or title",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I found sources.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="I found sources.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "gathered sources are available" in (decision.prompt or "")
+    assert "Do not rerun tools unless the sources are insufficient" in (decision.prompt or "")
+    assert "reference at least one source by URL, domain, or title" in (decision.prompt or "")
+
+
 def test_auto_continue_guides_retry_after_terse_final_answer():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
