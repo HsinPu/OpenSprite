@@ -233,6 +233,40 @@ class BrowserBackTool(BrowserToolBase):
         return await self._run_browser("back", [])
 
 
+class BrowserConsoleTool(BrowserToolBase):
+    @property
+    def name(self) -> str:
+        return "browser_console"
+
+    @property
+    def description(self) -> str:
+        return "Read browser console messages or evaluate a JavaScript expression in the current page."
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "clear": {
+                    "type": "boolean",
+                    "description": "Clear console messages after reading when expression is not provided.",
+                    "default": False,
+                },
+                "expression": {
+                    "type": "string",
+                    "description": "Optional JavaScript expression to evaluate in the current page.",
+                },
+            },
+        }
+
+    async def _execute(self, **kwargs: Any) -> str:
+        expression = str(kwargs.get("expression") or "").strip()
+        if expression:
+            return await self._run_browser("eval", [expression])
+        args = ["--clear"] if bool(kwargs.get("clear", False)) else []
+        return await self._run_browser("console", args)
+
+
 def _normalize_ref(ref: str) -> str:
     normalized = str(ref or "").strip()
     return normalized if normalized.startswith("@") else f"@{normalized}"

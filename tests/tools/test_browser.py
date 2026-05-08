@@ -6,7 +6,13 @@ import pytest
 from opensprite.agent.tool_registration import register_browser_tools
 from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import BrowserToolConfig, ToolsConfig
-from opensprite.tools.browser import BrowserClickTool, BrowserNavigateTool, BrowserSnapshotTool, BrowserTypeTool
+from opensprite.tools.browser import (
+    BrowserClickTool,
+    BrowserConsoleTool,
+    BrowserNavigateTool,
+    BrowserSnapshotTool,
+    BrowserTypeTool,
+)
 from opensprite.tools.browser_runtime import AgentBrowserRuntime, BrowserRuntimeError
 from opensprite.tools.evidence import build_tool_evidence
 from opensprite.tools.registry import ToolRegistry
@@ -79,6 +85,7 @@ def test_register_browser_tools_adds_mvp_tools():
         "browser_press",
         "browser_scroll",
         "browser_back",
+        "browser_console",
     }.issubset(set(registry.tool_names))
 
 
@@ -156,6 +163,50 @@ def test_agent_browser_runtime_builds_json_command(monkeypatch):
         ],
         "timeout": 9,
     }
+
+
+def test_agent_browser_runtime_uses_cdp_backend_without_session(monkeypatch):
+    runtime = AgentBrowserRuntime(command="agent-browser", command_timeout=9, cdp_url="http://127.0.0.1:9222")
+    captured = {}
+
+    async def fake_resolve():
+        return "ws://127.0.0.1:9222/devtools/browser/abc"
+
+    async def fake_run(argv, timeout):
+        captured["argv"] = argv
+        captured["timeout"] = timeout
+        return {"success": True}
+
+    monkeypatch.setattr(runtime, "_resolve_cdp_url", fake_resolve)
+    monkeypatch.setattr(runtime, "_run_subprocess", fake_run)
+
+    result = asyncio.run(runtime.run(session_key="web:browser-1", command="open", args=["https://example.com"]))
+
+    assert result == {"success": True}
+    assert captured == {
+        "argv": [
+            "agent-browser",
+            "--cdp",
+            "ws://127.0.0.1:9222/devtools/browser/abc",
+            "--json",
+            "open",
+            "https://example.com",
+        ],
+        "timeout": 9,
+    }
+
+
+def test_browser_console_reads_or_evaluates_page_context():
+    runtime = _FakeRuntime()
+    tool = BrowserConsoleTool(runtime=runtime, browser_config=BrowserToolConfig(enabled=True))
+
+    asyncio.run(tool.execute(clear=True))
+    asyncio.run(tool.execute(expression="document.title"))
+
+    assert runtime.calls[0]["command"] == "console"
+    assert runtime.calls[0]["args"] == ["--clear"]
+    assert runtime.calls[1]["command"] == "eval"
+    assert runtime.calls[1]["args"] == ["document.title"]
 
 
 def test_agent_browser_runtime_reports_missing_runtime(monkeypatch):

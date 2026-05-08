@@ -9,6 +9,7 @@ from .batch import BatchTool
 from .browser import (
     BrowserBackTool,
     BrowserClickTool,
+    BrowserConsoleTool,
     BrowserNavigateTool,
     BrowserPressTool,
     BrowserScrollTool,
@@ -54,6 +55,7 @@ __all__ = [
     "BatchTool",
     "BrowserBackTool",
     "BrowserClickTool",
+    "BrowserConsoleTool",
     "BrowserNavigateTool",
     "BrowserPressTool",
     "BrowserScrollTool",

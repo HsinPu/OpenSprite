@@ -18,6 +18,7 @@ from ..tools import (
     BatchTool,
     BrowserBackTool,
     BrowserClickTool,
+    BrowserConsoleTool,
     BrowserNavigateTool,
     BrowserPressTool,
     BrowserScrollTool,
@@ -299,6 +300,7 @@ def register_browser_tools(
     runtime = AgentBrowserRuntime(
         command_timeout=getattr(browser_config, "command_timeout", 30),
         session_timeout=getattr(browser_config, "session_timeout", 300),
+        cdp_url=getattr(browser_config, "cdp_url", ""),
     )
     kwargs = {"get_session_id": get_session_id, "runtime": runtime, "browser_config": browser_config}
     registry.register(BrowserNavigateTool(**kwargs))
@@ -308,6 +310,7 @@ def register_browser_tools(
     registry.register(BrowserPressTool(**kwargs))
     registry.register(BrowserScrollTool(**kwargs))
     registry.register(BrowserBackTool(**kwargs))
+    registry.register(BrowserConsoleTool(**kwargs))
 
 
 def register_media_tools(

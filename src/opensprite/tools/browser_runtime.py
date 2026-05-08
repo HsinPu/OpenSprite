@@ -9,6 +9,9 @@ import re
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
+
+import httpx
 
 
 class BrowserRuntimeError(RuntimeError):
@@ -18,21 +21,34 @@ class BrowserRuntimeError(RuntimeError):
 class AgentBrowserRuntime:
     """Small wrapper around the `agent-browser` CLI JSON interface."""
 
-    def __init__(self, *, command_timeout: int = 30, session_timeout: int = 300, command: str | None = None):
+    def __init__(
+        self,
+        *,
+        command_timeout: int = 30,
+        session_timeout: int = 300,
+        command: str | None = None,
+        cdp_url: str | None = None,
+    ):
         self.command_timeout = max(1, int(command_timeout or 30))
         self.session_timeout = max(1, int(session_timeout or 300))
         self.command = str(command or "").strip()
+        self.cdp_url = str(cdp_url or "").strip()
 
     async def run(self, *, session_key: str, command: str, args: list[str] | None = None, timeout: int | None = None) -> dict[str, Any]:
+        backend_args = ["--session", _browser_session_name(session_key)]
+        if self.cdp_url:
+            backend_args = ["--cdp", await self._resolve_cdp_url()]
         argv = [
             *self._command_prefix(),
-            "--session",
-            _browser_session_name(session_key),
+            *backend_args,
             "--json",
             command,
             *(args or []),
         ]
         return await self._run_subprocess(argv, timeout or self.command_timeout)
+
+    async def _resolve_cdp_url(self) -> str:
+        return await resolve_cdp_url(self.cdp_url, timeout=self.command_timeout)
 
     def _command_prefix(self) -> list[str]:
         if self.command:
@@ -115,3 +131,39 @@ def _parse_json_payload(text: str) -> dict[str, Any] | None:
             continue
         return payload if isinstance(payload, dict) else None
     return None
+
+
+async def resolve_cdp_url(raw_url: str, *, timeout: int = 30) -> str:
+    """Resolve an HTTP CDP discovery URL into a browser WebSocket URL when possible."""
+    raw = str(raw_url or "").strip()
+    if not raw:
+        return ""
+    lowered = raw.lower()
+    if lowered.startswith(("ws://", "wss://")) and "/devtools/browser/" in lowered:
+        return raw
+    discovery_url = _cdp_discovery_url(raw)
+    if not discovery_url:
+        return raw
+    try:
+        async with httpx.AsyncClient(timeout=max(1, int(timeout or 30)), follow_redirects=True) as client:
+            response = await client.get(discovery_url)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        return raw
+    if isinstance(payload, dict):
+        ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
+        if ws_url:
+            return ws_url
+    return raw
+
+
+def _cdp_discovery_url(raw_url: str) -> str:
+    raw = str(raw_url or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme in {"http", "https"}:
+        return raw if parsed.path.endswith("/json/version") else raw.rstrip("/") + "/json/version"
+    if parsed.scheme in {"ws", "wss"} and parsed.netloc and not parsed.path.strip("/"):
+        scheme = "http" if parsed.scheme == "ws" else "https"
+        return f"{scheme}://{parsed.netloc}/json/version"
+    return ""

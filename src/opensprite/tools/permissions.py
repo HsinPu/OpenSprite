@@ -62,6 +62,7 @@ DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
     "browser_press": frozenset({"network", "external_side_effect"}),
     "browser_scroll": frozenset({"network"}),
     "browser_back": frozenset({"network", "external_side_effect"}),
+    "browser_console": frozenset({"network", "external_side_effect"}),
     "send_media": frozenset({"external_side_effect"}),
     "cron": frozenset({"external_side_effect"}),
     "configure_mcp": frozenset({"configuration"}),
