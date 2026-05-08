@@ -37,10 +37,14 @@ class PromptLoggingService:
         dated_root = logs_root / time.strftime("%Y-%m-%d")
         dated_root.mkdir(parents=True, exist_ok=True)
         timestamp = time.strftime("%H-%M-%S")
-        suffix = str(time.time_ns())[-6:]
         safe_log_id = self.sanitize_log_filename(log_id)
-        filename = f"{timestamp}_{safe_log_id}_{suffix}.md"
-        return dated_root / filename
+        filename_base = f"{timestamp}_{safe_log_id}_{time.time_ns()}"
+        candidate = dated_root / f"{filename_base}.md"
+        counter = 1
+        while candidate.exists():
+            candidate = dated_root / f"{filename_base}_{counter}.md"
+            counter += 1
+        return candidate
 
     def write_full_system_prompt_log(self, log_id: str, content: str) -> None:
         """Write the full system prompt to a dedicated per-prompt log file."""
