@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
+from ipaddress import ip_address
 from typing import Any, Callable
+from urllib.parse import unquote, urlparse
 
+from ..config.schema import BrowserToolConfig
 from .base import Tool
 from .browser_runtime import AgentBrowserRuntime, BrowserRuntimeError
 from .validation import NON_EMPTY_STRING_PATTERN
@@ -16,9 +20,16 @@ SessionIdGetter = Callable[[], str | None]
 class BrowserToolBase(Tool):
     """Shared helpers for browser tools."""
 
-    def __init__(self, *, runtime: AgentBrowserRuntime | None = None, get_session_id: SessionIdGetter | None = None):
+    def __init__(
+        self,
+        *,
+        runtime: AgentBrowserRuntime | None = None,
+        get_session_id: SessionIdGetter | None = None,
+        browser_config: BrowserToolConfig | None = None,
+    ):
         self.runtime = runtime or AgentBrowserRuntime()
         self.get_session_id = get_session_id or (lambda: None)
+        self.browser_config = browser_config or BrowserToolConfig(enabled=True)
 
     def _session_key(self) -> str:
         return self.get_session_id() or "default"
@@ -61,7 +72,11 @@ class BrowserNavigateTool(BrowserToolBase):
         }
 
     async def _execute(self, **kwargs: Any) -> str:
-        return await self._run_browser("open", [str(kwargs["url"])], timeout=60)
+        url = str(kwargs["url"])
+        blocked = _validate_navigation_url(url, allow_private_urls=self.browser_config.allow_private_urls)
+        if blocked:
+            return json.dumps({"type": self.name, "success": False, "error": blocked}, ensure_ascii=False)
+        return await self._run_browser("open", [url], timeout=60)
 
 
 class BrowserSnapshotTool(BrowserToolBase):
@@ -221,3 +236,39 @@ class BrowserBackTool(BrowserToolBase):
 def _normalize_ref(ref: str) -> str:
     normalized = str(ref or "").strip()
     return normalized if normalized.startswith("@") else f"@{normalized}"
+
+
+_SECRET_IN_URL_RE = re.compile(
+    r"(?:sk-[A-Za-z0-9_-]{16,}|(?:api[_-]?key|token|secret|password)=([^&#]{8,}))",
+    re.IGNORECASE,
+)
+_ALWAYS_BLOCKED_HOSTS = frozenset({"169.254.169.254", "metadata.google.internal"})
+_PRIVATE_HOST_SUFFIXES = (".local", ".lan", ".internal")
+
+
+def _validate_navigation_url(url: str, *, allow_private_urls: bool = False) -> str:
+    decoded_url = unquote(str(url or "").strip())
+    parsed = urlparse(decoded_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return "Blocked: browser_navigate only accepts absolute http or https URLs."
+    if _SECRET_IN_URL_RE.search(decoded_url):
+        return "Blocked: URL appears to contain a secret or credential."
+
+    host = (parsed.hostname or "").strip().lower().strip(".")
+    if host in _ALWAYS_BLOCKED_HOSTS:
+        return "Blocked: URL targets a cloud metadata endpoint."
+    if not allow_private_urls and _is_private_host(host):
+        return "Blocked: URL targets a private or internal host."
+    return ""
+
+
+def _is_private_host(host: str) -> bool:
+    if not host:
+        return True
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(_PRIVATE_HOST_SUFFIXES):
+        return True
+    try:
+        address = ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback or address.is_link_local or address.is_reserved

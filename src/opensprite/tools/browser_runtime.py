@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -17,8 +18,9 @@ class BrowserRuntimeError(RuntimeError):
 class AgentBrowserRuntime:
     """Small wrapper around the `agent-browser` CLI JSON interface."""
 
-    def __init__(self, *, command_timeout: int = 30, command: str | None = None):
+    def __init__(self, *, command_timeout: int = 30, session_timeout: int = 300, command: str | None = None):
         self.command_timeout = max(1, int(command_timeout or 30))
+        self.session_timeout = max(1, int(session_timeout or 300))
         self.command = str(command or "").strip()
 
     async def run(self, *, session_key: str, command: str, args: list[str] | None = None, timeout: int | None = None) -> dict[str, Any]:
@@ -51,11 +53,14 @@ class AgentBrowserRuntime:
 
     async def _run_subprocess(self, argv: list[str], timeout: int) -> dict[str, Any]:
         try:
+            env = os.environ.copy()
+            env.setdefault("AGENT_BROWSER_IDLE_TIMEOUT_MS", str(self.session_timeout * 1000))
             proc = await asyncio.create_subprocess_exec(
                 *argv,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
         except FileNotFoundError as exc:
             raise BrowserRuntimeError(str(exc)) from exc

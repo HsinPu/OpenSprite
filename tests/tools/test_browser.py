@@ -4,6 +4,7 @@ import json
 import pytest
 
 from opensprite.agent.tool_registration import register_browser_tools
+from opensprite.config.schema import BrowserToolConfig, ToolsConfig
 from opensprite.tools.browser import BrowserClickTool, BrowserNavigateTool, BrowserSnapshotTool, BrowserTypeTool
 from opensprite.tools.browser_runtime import AgentBrowserRuntime, BrowserRuntimeError
 from opensprite.tools.registry import ToolRegistry
@@ -20,7 +21,11 @@ class _FakeRuntime:
 
 def test_browser_navigate_uses_current_session_and_open_command():
     runtime = _FakeRuntime()
-    tool = BrowserNavigateTool(runtime=runtime, get_session_id=lambda: "web:browser-1")
+    tool = BrowserNavigateTool(
+        runtime=runtime,
+        get_session_id=lambda: "web:browser-1",
+        browser_config=BrowserToolConfig(enabled=True),
+    )
 
     result = json.loads(asyncio.run(tool.execute(url="https://example.com")))
 
@@ -73,6 +78,55 @@ def test_register_browser_tools_adds_mvp_tools():
         "browser_scroll",
         "browser_back",
     }.issubset(set(registry.tool_names))
+
+
+def test_register_browser_tools_skips_when_disabled():
+    registry = ToolRegistry()
+
+    register_browser_tools(registry, get_session_id=lambda: "session", tools_config=ToolsConfig())
+
+    assert not any(name.startswith("browser_") for name in registry.tool_names)
+
+
+def test_browser_navigate_blocks_private_urls_by_default():
+    runtime = _FakeRuntime()
+    tool = BrowserNavigateTool(runtime=runtime, browser_config=BrowserToolConfig(enabled=True))
+
+    result = json.loads(asyncio.run(tool.execute(url="http://127.0.0.1:8765")))
+
+    assert result == {
+        "type": "browser_navigate",
+        "success": False,
+        "error": "Blocked: URL targets a private or internal host.",
+    }
+    assert runtime.calls == []
+
+
+def test_browser_navigate_allows_private_urls_when_configured():
+    runtime = _FakeRuntime()
+    tool = BrowserNavigateTool(
+        runtime=runtime,
+        browser_config=BrowserToolConfig(enabled=True, allow_private_urls=True),
+    )
+
+    result = json.loads(asyncio.run(tool.execute(url="http://127.0.0.1:8765")))
+
+    assert result["success"] is True
+    assert runtime.calls[0]["args"] == ["http://127.0.0.1:8765"]
+
+
+def test_browser_navigate_blocks_secret_bearing_urls():
+    runtime = _FakeRuntime()
+    tool = BrowserNavigateTool(runtime=runtime, browser_config=BrowserToolConfig(enabled=True))
+
+    result = json.loads(asyncio.run(tool.execute(url="https://example.com/?api_key=secret-token-value")))
+
+    assert result == {
+        "type": "browser_navigate",
+        "success": False,
+        "error": "Blocked: URL appears to contain a secret or credential.",
+    }
+    assert runtime.calls == []
 
 
 def test_agent_browser_runtime_builds_json_command(monkeypatch):

@@ -420,6 +420,17 @@ class WebFetchToolConfig(BaseModel):
     firecrawl_api_key: str = ""
 
 
+class BrowserToolConfig(BaseModel):
+    """Browser automation tool configuration."""
+
+    enabled: bool = False
+    backend: Literal["agent-browser"] = "agent-browser"
+    command_timeout: int = Field(default=30, ge=1)
+    session_timeout: int = Field(default=300, ge=1)
+    cdp_url: str = ""
+    allow_private_urls: bool = False
+
+
 class CronToolConfig(BaseModel):
     """Cron tool configuration."""
 
@@ -463,6 +474,7 @@ class ToolsConfig(BaseModel):
     exec_tool: ExecToolConfig = Field(default_factory=ExecToolConfig, alias="exec")
     web_search: WebSearchToolConfig = Field(default_factory=WebSearchToolConfig)
     web_fetch: WebFetchToolConfig = Field(default_factory=WebFetchToolConfig)
+    browser: BrowserToolConfig = Field(default_factory=BrowserToolConfig)
     cron: CronToolConfig = Field(default_factory=CronToolConfig)
     permissions: ToolPermissionsConfig = Field(default_factory=ToolPermissionsConfig)
     mcp_servers_file: str = "mcp_servers.json"
@@ -1415,6 +1427,7 @@ class Config:
                 "exec": self.tools.exec_tool.model_dump(by_alias=True),
                 "web_search": self.tools.web_search.model_dump(by_alias=True),
                 "web_fetch": self.tools.web_fetch.model_dump(by_alias=True),
+                "browser": self.tools.browser.model_dump(by_alias=True),
                 "cron": self.tools.cron.model_dump(by_alias=True),
                 "mcp_servers_file": self.tools.mcp_servers_file,
             },

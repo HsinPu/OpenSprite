@@ -63,6 +63,13 @@ def test_registry_blocks_denied_risk_levels():
     assert result == "Error: Tool 'web_fetch' blocked by permission policy: risk level(s) denied: network."
 
 
+def test_browser_actions_are_network_side_effect_tools():
+    assert ToolPermissionPolicy.risk_levels_for_tool("browser_navigate") == frozenset(
+        {"network", "external_side_effect"}
+    )
+    assert ToolPermissionPolicy.risk_levels_for_tool("browser_snapshot") == frozenset({"network"})
+
+
 def test_registry_restricts_allowed_tools_by_glob():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(allowed_tools=["read_*", "grep_files"])

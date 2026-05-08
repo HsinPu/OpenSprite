@@ -300,6 +300,12 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.web_fetch.max_response_size == 5242880
     assert config.web_fetch.timeout == 30
     assert config.web_fetch.prefer_trafilatura is True
+    assert config.browser.enabled is False
+    assert config.browser.backend == "agent-browser"
+    assert config.browser.command_timeout == 30
+    assert config.browser.session_timeout == 300
+    assert config.browser.cdp_url == ""
+    assert config.browser.allow_private_urls is False
     assert config.cron.default_timezone == "UTC"
     assert config.permissions.enabled is True
     assert config.permissions.approval_mode is None
@@ -324,6 +330,14 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "timeout": 9,
                 "prefer_trafilatura": False,
             },
+            "browser": {
+                "enabled": True,
+                "backend": "agent-browser",
+                "command_timeout": 11,
+                "session_timeout": 222,
+                "cdp_url": "http://127.0.0.1:9222",
+                "allow_private_urls": True,
+            },
             "cron": {"default_timezone": "Asia/Taipei"},
             "permissions": {
                 "approval_mode": "ask",
@@ -344,6 +358,12 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.web_fetch.max_response_size == 2048
     assert config.web_fetch.timeout == 9
     assert config.web_fetch.prefer_trafilatura is False
+    assert config.browser.enabled is True
+    assert config.browser.backend == "agent-browser"
+    assert config.browser.command_timeout == 11
+    assert config.browser.session_timeout == 222
+    assert config.browser.cdp_url == "http://127.0.0.1:9222"
+    assert config.browser.allow_private_urls is True
     assert config.cron.default_timezone == "Asia/Taipei"
     assert config.permissions.approval_mode == "ask"
     assert config.permissions.approval_timeout_seconds == 12

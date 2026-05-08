@@ -53,6 +53,14 @@
       "prefer_trafilatura": true,
       "firecrawl_api_key": ""
     },
+    "browser": {
+      "enabled": false,
+      "backend": "agent-browser",
+      "command_timeout": 30,
+      "session_timeout": 300,
+      "cdp_url": "",
+      "allow_private_urls": false
+    },
     "cron": {
       "default_timezone": "UTC"
     },

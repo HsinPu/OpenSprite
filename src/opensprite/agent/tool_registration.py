@@ -55,6 +55,7 @@ from ..tools import (
     RunWorkflowTool,
 )
 from ..tools.delegate import DelegateTool
+from ..tools.browser_runtime import AgentBrowserRuntime
 from ..tools.process_runtime import BackgroundProcessManager
 from ..tools.permissions import ToolPermissionPolicy
 
@@ -289,9 +290,17 @@ def register_browser_tools(
     registry: ToolRegistry,
     *,
     get_session_id: Callable[[], str | None],
+    tools_config: ToolsConfig | None = None,
 ) -> None:
     """Register local browser automation tools."""
-    kwargs = {"get_session_id": get_session_id}
+    browser_config = getattr(tools_config, "browser", None) if tools_config is not None else None
+    if browser_config is not None and not browser_config.enabled:
+        return
+    runtime = AgentBrowserRuntime(
+        command_timeout=getattr(browser_config, "command_timeout", 30),
+        session_timeout=getattr(browser_config, "session_timeout", 300),
+    )
+    kwargs = {"get_session_id": get_session_id, "runtime": runtime, "browser_config": browser_config}
     registry.register(BrowserNavigateTool(**kwargs))
     registry.register(BrowserSnapshotTool(**kwargs))
     registry.register(BrowserClickTool(**kwargs))
@@ -522,7 +531,7 @@ def register_default_tools(
     )
     register_verify_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=current_tools_config)
-    register_browser_tools(registry, get_session_id=get_session_id)
+    register_browser_tools(registry, get_session_id=get_session_id, tools_config=current_tools_config)
     register_media_tools(
         registry,
         media_router=media_router,
