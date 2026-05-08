@@ -182,6 +182,14 @@ class TaskContractService:
             task_type = "media_extraction"
 
         if cls._looks_like_web_task(text):
+            acceptance_criteria.append(
+                AcceptanceCriterion(
+                    kind="source_artifact",
+                    min_count=1,
+                    description="Produce at least one web source artifact before finalizing the answer.",
+                )
+            )
+            acceptance_criteria.append(_web_final_answer_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="tool_group",
@@ -309,4 +317,12 @@ def _media_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=80,
         description="Provide a substantive final answer that uses the inspected media results.",
+    )
+
+
+def _web_final_answer_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="substantive_final_answer",
+        min_response_chars=100,
+        description="Provide a substantive final answer that uses the gathered web source results.",
     )

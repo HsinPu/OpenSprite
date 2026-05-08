@@ -12,6 +12,7 @@ from .task_intent import TaskIntent
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
+_SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,10 @@ class QualityGateService:
                     return result
             elif criterion.kind == "substantive_final_answer":
                 result = _evaluate_substantive_final_answer(criterion, response_text)
+                if result is not None:
+                    return result
+            elif criterion.kind == "source_artifact":
+                result = _evaluate_source_artifact(criterion, execution_result)
                 if result is not None:
                     return result
         return QualityGateResult(passed=True)
@@ -109,6 +114,26 @@ def _evaluate_substantive_final_answer(
         status="incomplete",
         reason="assistant final answer was too terse for the task",
         active_task_detail=getattr(criterion, "description", "") or None,
+    )
+
+
+def _evaluate_source_artifact(
+    criterion: AcceptanceCriterion,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+    count = sum(
+        1
+        for artifact in execution_result.task_artifacts
+        if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
+    )
+    if count >= min_count:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="required task artifacts were not produced",
+        active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {count})",
     )
 
 

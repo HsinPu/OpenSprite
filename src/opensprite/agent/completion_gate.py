@@ -445,6 +445,23 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip() and not _looks_incomplete(response_text):
+            return CompletionGateResult(
+                status="complete",
+                reason="task contract was satisfied",
+                active_task_status="done",
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         if _looks_complete(response_text):
             return CompletionGateResult(
                 status="complete",
@@ -488,6 +505,10 @@ def _looks_complete(response_text: str) -> bool:
     if _looks_incomplete(response_text):
         return False
     return any(marker in lowered for marker in _COMPLETE_MARKERS)
+
+
+def _contract_has_completion_criteria(task_contract: Any) -> bool:
+    return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
 
 
 def _looks_incomplete(response_text: str) -> bool:

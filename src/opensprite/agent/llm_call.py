@@ -360,4 +360,6 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     if criterion.kind == "substantive_final_answer":
         min_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
         return f"Write a substantive final answer using the inspected media/tool results (minimum {min_chars} visible characters)."
+    if criterion.kind == "source_artifact":
+        return f"Produce at least {max(1, int(criterion.min_count or 1))} source artifact from web/source tools before finalizing."
     return criterion.description or criterion.kind
