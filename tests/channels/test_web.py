@@ -776,6 +776,93 @@ def test_web_adapter_network_settings_roundtrip(tmp_path):
     asyncio.run(_run_web_network_settings_roundtrip(tmp_path))
 
 
+async def _run_web_browser_settings_roundtrip(tmp_path: Path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/browser") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["browser"]["enabled"] is False
+                assert payload["browser"]["backend"] == "agent-browser"
+                assert payload["browser"]["backends"] == ["agent-browser"]
+                assert "install_hint" in payload["browser"]["runtime"]
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/browser",
+                json={
+                    "enabled": True,
+                    "backend": "agent-browser",
+                    "command_timeout": 45,
+                    "session_timeout": 600,
+                    "cdp_url": "http://127.0.0.1:9222",
+                    "allow_private_urls": True,
+                },
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["restart_required"] is True
+                assert payload["browser"]["enabled"] is True
+                assert payload["browser"]["command_timeout"] == 45
+                assert payload["browser"]["cdp_url"] == "http://127.0.0.1:9222"
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/browser",
+                json={"cdp_url": ""},
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["browser"]["cdp_url"] == ""
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/browser",
+                json={"backend": "unknown"},
+            ) as resp:
+                assert resp.status == 400
+
+        loaded = Config.from_json(config_path)
+        assert loaded.tools.browser.enabled is True
+        assert loaded.tools.browser.backend == "agent-browser"
+        assert loaded.tools.browser.command_timeout == 45
+        assert loaded.tools.browser.session_timeout == 600
+        assert loaded.tools.browser.cdp_url == ""
+        assert loaded.tools.browser.allow_private_urls is True
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_browser_settings_roundtrip(tmp_path):
+    asyncio.run(_run_web_browser_settings_roundtrip(tmp_path))
+
+
 async def _run_web_run_events_api():
     storage = MemoryStorage()
     await storage.add_message(

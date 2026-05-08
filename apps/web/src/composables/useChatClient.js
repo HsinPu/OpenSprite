@@ -1,5 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { getDisplayCopy } from "../i18n/copy";
+import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
 import { useDataSettingsActions } from "./useDataSettingsActions";
 import { useLogSettingsActions } from "./useLogSettingsActions";
@@ -2363,6 +2364,13 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
+  const { loadBrowserSettings, saveBrowserSettings } = useBrowserSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy,
+    setSettingsSuccess,
+  });
+
   const { loadLogSettings, saveLogSettings } = useLogSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -3554,6 +3562,10 @@ export function useChatClient() {
       loadNetworkSettings();
       return;
     }
+    if (sectionName === "browser") {
+      loadBrowserSettings();
+      return;
+    }
     if (sectionName === "log") {
       loadLogSettings();
       return;
@@ -4471,6 +4483,7 @@ export function useChatClient() {
     loadChannelSettings,
     loadScheduleSettings,
     loadNetworkSettings,
+    loadBrowserSettings,
     loadLogSettings,
     loadDataSettings,
     loadEvalStatus,
@@ -4519,6 +4532,7 @@ export function useChatClient() {
     applyMcpJson,
     saveScheduleSettings,
     saveNetworkSettings,
+    saveBrowserSettings,
     saveLogSettings,
     beginCronJobEdit,
     beginCronJobCreate,

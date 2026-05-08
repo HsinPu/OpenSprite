@@ -98,6 +98,15 @@
           </button>
           <button
             class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'browser' }"
+            type="button"
+            @click="$emit('select-section', 'browser')"
+          >
+            <span aria-hidden="true">◉</span>
+            {{ copy.settingsTitles.browser }}
+          </button>
+          <button
+            class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'log' }"
             type="button"
             @click="$emit('select-section', 'log')"
@@ -1323,6 +1332,126 @@
               <div>
                 <strong>{{ copy.settings.network.scopeTitle }}</strong>
                 <span>{{ copy.settings.network.scopeDescription }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="section === 'browser'" class="settings-page">
+          <p v-if="settingsState.browserLoading" class="settings-inline-status">{{ copy.settings.browser.loading }}</p>
+          <p v-if="settingsState.browserNotice" class="settings-inline-status">{{ settingsState.browserNotice }}</p>
+          <p v-if="settingsState.browserError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.browserError }}
+          </p>
+
+          <h3>{{ copy.settings.browser.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.browser.enabled.title }}</strong>
+                <span>{{ copy.settings.browser.enabled.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.browserForm.enabled"
+                class="switch"
+                type="checkbox"
+                :aria-label="copy.settings.browser.enabled.title"
+                :disabled="settingsState.browserLoading"
+              />
+            </div>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.browser.backend.title }}</strong>
+                <span>{{ copy.settings.browser.backend.description }}</span>
+              </div>
+              <select v-model="settingsState.browserForm.backend" :disabled="settingsState.browserLoading">
+                <option v-for="backend in browserBackendOptions" :key="backend.id" :value="backend.id">
+                  {{ backend.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.browser.cdpUrl.title }}</strong>
+                <span>{{ copy.settings.browser.cdpUrl.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.browserForm.cdpUrl"
+                type="text"
+                :placeholder="copy.settings.browser.cdpUrl.placeholder"
+                :disabled="settingsState.browserLoading"
+                @keydown.enter.prevent="$emit('save-browser-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.browser.commandTimeout.title }}</strong>
+                <span>{{ copy.settings.browser.commandTimeout.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.browserForm.commandTimeout"
+                type="number"
+                min="1"
+                max="600"
+                :disabled="settingsState.browserLoading"
+                @keydown.enter.prevent="$emit('save-browser-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.browser.sessionTimeout.title }}</strong>
+                <span>{{ copy.settings.browser.sessionTimeout.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.browserForm.sessionTimeout"
+                type="number"
+                min="1"
+                max="86400"
+                :disabled="settingsState.browserLoading"
+                @keydown.enter.prevent="$emit('save-browser-settings')"
+              />
+            </label>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.browser.allowPrivateUrls.title }}</strong>
+                <span>{{ copy.settings.browser.allowPrivateUrls.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.browserForm.allowPrivateUrls"
+                class="switch"
+                type="checkbox"
+                :aria-label="copy.settings.browser.allowPrivateUrls.title"
+                :disabled="settingsState.browserLoading"
+              />
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.browser.currentTitle }}</strong>
+                <span>{{ browserSummary }}</span>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.browserLoading"
+                @click="$emit('save-browser-settings')"
+              >
+                {{ copy.settings.browser.save }}
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.browser.runtimeTitle }}</strong>
+                <span>{{ browserRuntimeStatus }}</span>
+                <span v-if="settingsState.browser.runtime?.install_hint">{{ settingsState.browser.runtime.install_hint }}</span>
               </div>
             </div>
           </div>
@@ -3398,6 +3527,34 @@ const mcpRuntimeStatus = computed(() => {
   return props.copy.settings.mcp.runtimeDisconnected;
 });
 
+const browserBackendOptions = computed(() => {
+  const backends = props.settingsState.browser?.backends;
+  const values = Array.isArray(backends) && backends.length ? backends : ["agent-browser"];
+  return values.map((id) => ({
+    id,
+    label: props.copy.settings.browser.backends?.[id] || id,
+  }));
+});
+
+const browserRuntimeStatus = computed(() => {
+  const runtime = props.settingsState.browser?.runtime || {};
+  if (runtime.available) {
+    return props.copy.settings.browser.runtimeAvailable(runtime.command || "agent-browser");
+  }
+  return props.copy.settings.browser.runtimeMissing;
+});
+
+const browserSummary = computed(() => {
+  const form = props.settingsState.browserForm || {};
+  if (!form.enabled) {
+    return props.copy.settings.browser.disabled;
+  }
+  if (String(form.cdpUrl || "").trim()) {
+    return props.copy.settings.browser.cdpEnabled;
+  }
+  return props.copy.settings.browser.enabledSummary;
+});
+
 const networkSummary = computed(() => {
   const form = props.settingsState.networkForm || {};
   const active = [form.httpProxy, form.httpsProxy].map((value) => String(value || "").trim()).filter(Boolean).length;
@@ -3524,6 +3681,7 @@ const emit = defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "save-browser-settings",
   "refresh-eval-status",
   "run-eval-smoke",
   "run-task-completion-smoke",

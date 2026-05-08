@@ -48,6 +48,7 @@ const [
   settingsModal,
   chatClient,
   dataSettingsActions,
+  browserSettingsActions,
   mcpSettingsActions,
   modelSettingsActions,
   settingsNormalizers,
@@ -70,6 +71,7 @@ const [
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
   read("src/composables/useDataSettingsActions.js"),
+  read("src/composables/useBrowserSettingsActions.js"),
   read("src/composables/useMcpSettingsActions.js"),
   read("src/composables/useModelSettingsActions.js"),
   read("src/composables/settingsNormalizers.js"),
@@ -80,7 +82,7 @@ const [
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
@@ -116,6 +118,8 @@ assertIncludes(app, "clearWebSessions: clearWebSessionsNow", "web conversation c
 assertIncludes(app, "clearTaskCompletionHistory: clearTaskCompletionHistoryNow", "eval history clear skips native confirm in client action");
 assertIncludes(app, "confirmClearHistoryTitle", "eval history clear custom confirm title");
 assertIncludes(settingsModal, "clear-web-sessions", "settings clear web sessions event");
+assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
+assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
@@ -215,6 +219,7 @@ assertNotIncludes(chatClient, "copy.value.sidebar.confirmDeleteChat", "conversat
 assertNotIncludes(chatClient, "copy.value.settings.general.clearWebChats.confirm", "web conversation clear does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.eval.confirmClearHistory", "eval history clear does not use native confirm in client action");
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
+assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");

@@ -149,6 +149,7 @@
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
+    @save-browser-settings="saveBrowserSettings"
     @refresh-data-settings="loadDataSettings"
     @refresh-eval-status="loadEvalStatus"
     @run-eval-smoke="runEvalSmokeCheck"
@@ -300,6 +301,7 @@ const {
   applyMcpJson,
   saveScheduleSettings,
   saveNetworkSettings,
+  saveBrowserSettings,
   loadDataSettings,
   loadEvalStatus,
   runEvalSmokeCheck,

@@ -78,6 +78,7 @@ class WebAdapter(MessageAdapter):
 
     LOG_LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
+    BROWSER_BACKENDS = ("agent-browser",)
     LLM_DECODING_PRESETS = {
         "precise": {
             "temperature": 0.25,
@@ -468,6 +469,44 @@ class WebAdapter(MessageAdapter):
         }
 
     @staticmethod
+    def _browser_runtime_status() -> dict[str, Any]:
+        agent_browser = shutil.which("agent-browser")
+        if agent_browser:
+            return {
+                "available": True,
+                "command": agent_browser,
+                "install_hint": "",
+            }
+
+        npx = shutil.which("npx")
+        if npx:
+            return {
+                "available": True,
+                "command": f"{npx} agent-browser",
+                "install_hint": "agent-browser is not on PATH; OpenSprite will fall back to npx agent-browser.",
+            }
+
+        return {
+            "available": False,
+            "command": "",
+            "install_hint": "Install agent-browser on PATH, or install Node.js/npm so npx agent-browser can run.",
+        }
+
+    @classmethod
+    def _browser_payload(cls, config: Config) -> dict[str, Any]:
+        browser = getattr(getattr(config, "tools", None), "browser", None)
+        return {
+            "enabled": bool(getattr(browser, "enabled", False)),
+            "backend": str(getattr(browser, "backend", "agent-browser") or "agent-browser"),
+            "backends": list(cls.BROWSER_BACKENDS),
+            "command_timeout": int(getattr(browser, "command_timeout", 30) or 30),
+            "session_timeout": int(getattr(browser, "session_timeout", 300) or 300),
+            "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
+            "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),
+            "runtime": cls._browser_runtime_status(),
+        }
+
+    @staticmethod
     def _llm_decoding_payload(config: Config) -> dict[str, Any]:
         llm = config.llm
         return {
@@ -647,6 +686,29 @@ class WebAdapter(MessageAdapter):
         if number > maximum:
             raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
         return number
+
+    @staticmethod
+    def _coerce_bool(value: Any, *, field: str, default: bool) -> bool:
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        raise web.HTTPBadRequest(text=f"{field} must be a boolean")
+
+    @classmethod
+    def _coerce_browser_backend(cls, value: Any) -> str:
+        backend = str(value or "agent-browser").strip() or "agent-browser"
+        if backend not in cls.BROWSER_BACKENDS:
+            raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(cls.BROWSER_BACKENDS)}")
+        return backend
 
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
@@ -1839,6 +1901,41 @@ class WebAdapter(MessageAdapter):
         self._apply_network_environment(config)
         return web.json_response({"network": self._network_payload(config), "restart_required": False})
 
+    async def _handle_settings_browser(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        return web.json_response({"browser": self._browser_payload(config)})
+
+    async def _handle_settings_browser_update(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        config_path = self._get_config_path()
+        config = Config.load(config_path)
+        browser = config.tools.browser
+        browser.enabled = self._coerce_bool(body.get("enabled"), field="enabled", default=browser.enabled)
+        browser.backend = self._coerce_browser_backend(body.get("backend", browser.backend))
+        browser.command_timeout = self._coerce_positive_int(
+            body.get("command_timeout"),
+            field="command_timeout",
+            default=browser.command_timeout,
+            minimum=1,
+            maximum=600,
+        )
+        browser.session_timeout = self._coerce_positive_int(
+            body.get("session_timeout"),
+            field="session_timeout",
+            default=browser.session_timeout,
+            minimum=1,
+            maximum=86400,
+        )
+        if "cdp_url" in body:
+            browser.cdp_url = self._coerce_optional_text(body.get("cdp_url"), default="") or ""
+        browser.allow_private_urls = self._coerce_bool(
+            body.get("allow_private_urls"),
+            field="allow_private_urls",
+            default=browser.allow_private_urls,
+        )
+        config.save(config_path)
+        return web.json_response({"browser": self._browser_payload(config), "restart_required": True})
+
     async def _handle_settings_log(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"log": self._log_payload(config)})
@@ -2219,6 +2316,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/schedule", self._handle_settings_schedule_update)
         self.app.router.add_get("/api/settings/network", self._handle_settings_network)
         self.app.router.add_put("/api/settings/network", self._handle_settings_network_update)
+        self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
+        self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
         self.app.router.add_get("/api/settings/log", self._handle_settings_log)
         self.app.router.add_put("/api/settings/log", self._handle_settings_log_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
