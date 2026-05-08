@@ -1,6 +1,8 @@
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
+from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
@@ -113,6 +115,20 @@ def test_completion_gate_requires_web_evidence_for_external_search_task():
     assert result.missing_evidence
 
 
+def test_evidence_gate_reports_missing_contract_items():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+
+    result = EvidenceGateService().evaluate(
+        task_intent=intent,
+        execution_result=ExecutionResult(content="我會搜尋 Reddit。"),
+        verification_passed=False,
+    )
+
+    assert result.passed is False
+    assert result.reason == "required task evidence was not produced"
+    assert result.missing_evidence
+
+
 def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
 
@@ -122,6 +138,20 @@ def test_completion_gate_marks_progress_only_fetch_response_incomplete():
         execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！"),
     )
 
+    assert result.status == "incomplete"
+    assert result.reason == "assistant did not provide the requested itemized result"
+
+
+def test_quality_gate_reports_missing_requested_items():
+    intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="好，幫你抓 r/taiwan 熱門文章 20 筆！",
+        execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！"),
+    )
+
+    assert result.passed is False
     assert result.status == "incomplete"
     assert result.reason == "assistant did not provide the requested itemized result"
 

@@ -8,8 +8,9 @@ from typing import Any
 
 from ..documents.active_task import infer_immediate_task_transition
 from ..storage.base import StoredDelegatedTask
+from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
-from .task_contract import TaskContractService, missing_evidence
+from .quality_gate import QualityGateService
 from .task_intent import TaskIntent
 
 
@@ -139,6 +140,15 @@ class CompletionGateResult:
 
 class CompletionGateService:
     """Evaluate completion without calling the LLM or continuing autonomously."""
+
+    def __init__(
+        self,
+        *,
+        evidence_gate: EvidenceGateService | None = None,
+        quality_gate: QualityGateService | None = None,
+    ):
+        self.evidence_gate = evidence_gate or EvidenceGateService()
+        self.quality_gate = quality_gate or QualityGateService()
 
     def evaluate(
         self,
@@ -324,21 +334,16 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        task_contract = execution_result.task_contract or TaskContractService.build(
+        evidence_result = self.evidence_gate.evaluate(
             task_intent=task_intent,
-            current_message=task_intent.objective,
-        )
-        missing = missing_evidence(
-            task_contract,
-            tuple(execution_result.tool_evidence or ()),
-            file_change_count=execution_result.file_change_count,
+            execution_result=execution_result,
             verification_passed=verification_passed,
         )
-        if missing:
+        if not evidence_result.passed:
             return CompletionGateResult(
                 status="incomplete",
-                reason="required task evidence was not produced",
-                active_task_detail="\n".join(f"- {item}" for item in missing),
+                reason=evidence_result.reason,
+                active_task_detail=evidence_result.active_task_detail,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -348,16 +353,18 @@ class CompletionGateService:
                 review_summary=review["summary"],
                 review_prompt_types=review["prompt_types"],
                 review_finding_count=review["finding_count"],
-                missing_evidence=missing,
+                missing_evidence=evidence_result.missing_evidence,
             )
 
-        if execution_result.executed_tool_calls == 0 and _looks_like_missing_requested_items(
-            task_intent,
-            response_text,
-        ):
+        quality_result = self.quality_gate.evaluate(
+            task_intent=task_intent,
+            response_text=response_text,
+            execution_result=execution_result,
+        )
+        if not quality_result.passed:
             return CompletionGateResult(
-                status="incomplete",
-                reason="assistant did not provide the requested itemized result",
+                status=quality_result.status,
+                reason=quality_result.reason,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -489,30 +496,6 @@ def _looks_incomplete(response_text: str) -> bool:
 def _looks_like_direct_reply_instruction(objective: str) -> bool:
     normalized = re.sub(r"\s+", " ", (objective or "").strip().lower())
     return any(marker in normalized for marker in _DIRECT_REPLY_INSTRUCTION_MARKERS)
-
-
-def _looks_like_missing_requested_items(task_intent: TaskIntent, response_text: str) -> bool:
-    requested_count = _requested_item_count(task_intent.objective)
-    if requested_count < 3:
-        return False
-    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
-    if not normalized or len(normalized) > 260:
-        return False
-    return _response_item_count(response_text) < min(requested_count, 3)
-
-
-def _requested_item_count(objective: str) -> int:
-    counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,3}(?!\d)", str(objective or ""))]
-    return max(counts, default=0)
-
-
-def _response_item_count(response_text: str) -> int:
-    lines = [line.strip() for line in str(response_text or "").splitlines() if line.strip()]
-    item_like = 0
-    for line in lines:
-        if re.match(r"^(?:[-*]|\d+[.)]|\|)", line):
-            item_like += 1
-    return item_like
 
 
 def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:
