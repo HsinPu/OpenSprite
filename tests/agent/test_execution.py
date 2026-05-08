@@ -1,15 +1,19 @@
 import asyncio
 
 import opensprite.agent.execution as execution_module
+from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
-from opensprite.config.schema import Config, ToolsConfig
+from opensprite.agent.task_intent import TaskIntentService
+from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
 from opensprite.tools.base import Tool
 from opensprite.tools.credential_store import CredentialStoreTool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.image import AnalyzeImageTool
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.web_fetch import WebFetchTool
+from opensprite.tools.web_search import WebSearchTool, _format_results
 
 
 class DummyTool(Tool):
@@ -113,6 +117,35 @@ class FakeProvider:
 class FakeMediaRouter:
     async def analyze_image(self, *, instruction, images, image_index=0):
         return f"image analysis:{image_index}:{instruction}"
+
+
+class FakeWebFetcher:
+    def __init__(
+        self,
+        max_chars=50000,
+        max_response_size=5242880,
+        timeout=30,
+        prefer_trafilatura=True,
+        firecrawl_api_key=None,
+        **kwargs,
+    ):
+        self.max_chars = max_chars
+        self.max_response_size = max_response_size
+        self.timeout = timeout
+        self.prefer_trafilatura = prefer_trafilatura
+        self.firecrawl_api_key = firecrawl_api_key
+
+    def fetch(self, url: str):
+        return {
+            "url": url,
+            "finalUrl": f"{url}?ref=1",
+            "status": 200,
+            "title": "SQLite FTS5",
+            "extractor": "trafilatura",
+            "contentType": "text/html",
+            "truncated": False,
+            "text": "SQLite FTS5 supports full text search over local tables.",
+        }
 
 
 class StreamingProvider:
@@ -396,6 +429,121 @@ def test_execution_engine_builds_task_artifacts_from_media_evidence():
     assert result.task_artifacts[0].source_tool == "analyze_image"
     assert result.task_artifacts[0].resource_ids == ("image_index:0",)
     assert "image analysis:0" in result.task_artifacts[0].content_preview
+
+
+def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
+    registry = ToolRegistry()
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=3))
+
+    async def fake_search(query, n):
+        return _format_results(
+            query,
+            [
+                {
+                    "title": "Reddit API docs",
+                    "url": "https://www.reddit.com/dev/api/",
+                    "content": "Official Reddit API documentation for listings and search.",
+                }
+            ],
+            n,
+            provider="duckduckgo",
+        )
+
+    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
+    registry.register(tool)
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need web",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="web_search",
+                        arguments={"query": "reddit api search"},
+                    )
+                ],
+            ),
+            LLMResponse(
+                content=(
+                    "I found Reddit API docs at reddit.com. They are the best first source for authenticated "
+                    "search and listing behavior before adding any third-party historical source."
+                ),
+                model="fake-model",
+            ),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="Please find Reddit API search sources")],
+            allow_tools=True,
+        )
+    )
+
+    assert result.task_artifacts[0].kind == "web_source"
+    assert result.task_artifacts[0].metadata["source_count"] == 1
+    source = result.task_artifacts[0].metadata["sources"][0]
+    assert source["url"] == "https://www.reddit.com/dev/api/"
+    assert source["title"] == "Reddit API docs"
+    assert source["snippet"] == "Official Reddit API documentation for listings and search."
+
+    intent = TaskIntentService().classify("Please find Reddit API search sources")
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=result.content,
+        execution_result=result,
+    )
+    assert completion.status == "complete"
+
+
+def test_execution_engine_builds_traceable_web_fetch_artifact(monkeypatch):
+    monkeypatch.setattr(
+        "opensprite.tools.web_fetch.WebFetcher",
+        lambda *args, **kwargs: FakeWebFetcher(**kwargs),
+    )
+    registry = ToolRegistry()
+    registry.register(WebFetchTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need fetch",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="web_fetch",
+                        arguments={"url": "https://sqlite.org/fts5.html"},
+                    )
+                ],
+            ),
+            LLMResponse(
+                content=(
+                    "The sqlite.org FTS5 page explains that SQLite FTS5 supports full text search over local "
+                    "tables, so it is the relevant source for local indexing behavior."
+                ),
+                model="fake-model",
+            ),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="Please fetch https://sqlite.org/fts5.html and summarize source")],
+            allow_tools=True,
+        )
+    )
+
+    artifact = result.task_artifacts[0]
+    assert artifact.kind == "web_source"
+    source = artifact.metadata["sources"][0]
+    assert source["url"] == "https://sqlite.org/fts5.html?ref=1"
+    assert source["title"] == "SQLite FTS5"
+    assert "full text search" in source["snippet"]
 
 
 def test_execution_engine_records_evidence_for_invalid_media_tool_args():

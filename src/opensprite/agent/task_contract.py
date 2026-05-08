@@ -190,6 +190,7 @@ class TaskContractService:
                 )
             )
             acceptance_criteria.append(_web_final_answer_criterion())
+            acceptance_criteria.append(_web_source_reference_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="tool_group",
@@ -325,4 +326,12 @@ def _web_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=100,
         description="Provide a substantive final answer that uses the gathered web source results.",
+    )
+
+
+def _web_source_reference_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="source_reference",
+        min_count=1,
+        description="Reference at least one gathered web source by URL, domain, or title.",
     )

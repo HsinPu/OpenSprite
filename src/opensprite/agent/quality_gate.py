@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from .execution import ExecutionResult
 from .resource_index import ResourceIndex
@@ -54,6 +55,10 @@ class QualityGateService:
                     return result
             elif criterion.kind == "source_artifact":
                 result = _evaluate_source_artifact(criterion, execution_result)
+                if result is not None:
+                    return result
+            elif criterion.kind == "source_reference":
+                result = _evaluate_source_reference(criterion, response_text, execution_result)
                 if result is not None:
                     return result
         return QualityGateResult(passed=True)
@@ -122,19 +127,108 @@ def _evaluate_source_artifact(
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
     min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
-    count = sum(
+    artifact_count = sum(
         1
         for artifact in execution_result.task_artifacts
         if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
     )
-    if count >= min_count:
+    traceable_count = sum(
+        1
+        for artifact in execution_result.task_artifacts
+        if artifact.ok
+        and artifact.kind in _SOURCE_ARTIFACT_KINDS
+        and _artifact_web_sources(artifact.metadata)
+    )
+    if traceable_count >= min_count:
         return None
+    if artifact_count > 0:
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="required task artifacts were not traceable",
+            active_task_detail=(
+                "- Missing traceable source metadata: url plus title/snippet "
+                f"(need {min_count}, found {traceable_count})"
+            ),
+        )
     return QualityGateResult(
         passed=False,
         status="incomplete",
         reason="required task artifacts were not produced",
-        active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {count})",
+        active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {artifact_count})",
     )
+
+
+def _evaluate_source_reference(
+    criterion: AcceptanceCriterion,
+    response_text: str,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    sources = _execution_web_sources(execution_result)
+    if not sources:
+        return None
+    min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+    referenced_count = sum(1 for source in sources if _source_is_referenced(source, response_text))
+    if referenced_count >= min_count:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="assistant final answer did not reference gathered sources",
+        active_task_detail=(
+            "- Reference at least one gathered source by URL, domain, or title "
+            f"(need {min_count}, found {referenced_count})"
+        ),
+    )
+
+
+def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, str]]:
+    sources: list[dict[str, str]] = []
+    for artifact in execution_result.task_artifacts:
+        if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS:
+            sources.extend(_artifact_web_sources(artifact.metadata))
+    return sources
+
+
+def _artifact_web_sources(metadata: dict[str, object]) -> list[dict[str, str]]:
+    raw_sources = metadata.get("sources") if isinstance(metadata, dict) else None
+    if not isinstance(raw_sources, list):
+        return []
+    sources: list[dict[str, str]] = []
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, dict):
+            continue
+        url = str(raw_source.get("url") or "").strip()
+        title = str(raw_source.get("title") or "").strip()
+        snippet = str(raw_source.get("snippet") or "").strip()
+        if url and (title or snippet):
+            sources.append({"url": url, "title": title, "snippet": snippet})
+    return sources
+
+
+def _source_is_referenced(source: dict[str, str], response_text: str) -> bool:
+    normalized_response = re.sub(r"\s+", " ", (response_text or "").strip().lower())
+    if not normalized_response:
+        return False
+
+    url = source.get("url", "").strip().lower()
+    if url and url in normalized_response:
+        return True
+
+    domain = _source_domain(url)
+    if domain and domain in normalized_response:
+        return True
+
+    title = re.sub(r"\s+", " ", source.get("title", "").strip().lower())
+    return len(title) >= 6 and title in normalized_response
+
+
+def _source_domain(url: str) -> str:
+    try:
+        domain = urlparse(url).netloc.lower()
+    except Exception:
+        return ""
+    return domain[4:] if domain.startswith("www.") else domain
 
 
 def _response_item_count(response_text: str) -> int:

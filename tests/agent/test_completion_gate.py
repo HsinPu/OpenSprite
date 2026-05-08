@@ -10,6 +10,27 @@ from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
 
 
+def _web_source_artifact() -> TaskArtifact:
+    return TaskArtifact(
+        kind="web_source",
+        source_tool="web_search",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_search",
+                    "url": "https://www.reddit.com/dev/api/",
+                    "title": "Reddit API docs",
+                    "snippet": "Official Reddit API documentation for search and listings.",
+                    "query": "reddit search api",
+                    "provider": "duckduckgo",
+                }
+            ],
+            "source_count": 1,
+        },
+    )
+
+
 def test_completion_gate_requires_requested_verification_before_completion():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
 
@@ -141,6 +162,7 @@ def test_task_contract_records_web_source_acceptance_criteria():
     kinds = [criterion.kind for criterion in contract.acceptance_criteria]
     assert "source_artifact" in kinds
     assert "substantive_final_answer" in kinds
+    assert "source_reference" in kinds
 
 
 def test_completion_gate_requires_web_source_artifacts_after_evidence():
@@ -166,6 +188,33 @@ def test_completion_gate_requires_web_source_artifacts_after_evidence():
     assert "web_source" in (completion.active_task_detail or "")
 
 
+def test_completion_gate_requires_traceable_web_source_metadata():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=(
+            "我找到 Reddit 官方 API 文件與第三方搜尋方向，可以先看 reddit.com 的官方文件，"
+            "再評估是否需要補充歷史資料來源。這樣能先確認授權與查詢限制，再決定整合方式。"
+        ),
+        execution_result=ExecutionResult(
+            content="done",
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True),),
+            task_artifacts=(TaskArtifact(kind="web_source", source_tool="web_search", content_preview="source"),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task artifacts were not traceable"
+    assert "source metadata" in (completion.active_task_detail or "")
+
+
 def test_completion_gate_rejects_terse_web_research_final_answer():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
@@ -181,7 +230,7 @@ def test_completion_gate_rejects_terse_web_research_final_answer():
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="web_search", ok=True),),
-            task_artifacts=(TaskArtifact(kind="web_source", source_tool="web_search", content_preview="source"),),
+            task_artifacts=(_web_source_artifact(),),
         ),
     )
 
@@ -189,15 +238,16 @@ def test_completion_gate_rejects_terse_web_research_final_answer():
     assert completion.reason == "assistant final answer was too terse for the task"
 
 
-def test_completion_gate_completes_web_research_with_source_artifact_and_answer():
+def test_completion_gate_requires_web_source_reference_in_final_answer():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
         task_intent=intent,
         current_message=intent.objective,
     )
     answer = (
-        "我找到幾個可行方向：Reddit 官方 API 適合授權後搜尋與抓取討論串，Pushshift 類資料源可作歷史資料補充，"
-        "也可以用一般 web search 搭配 site:reddit.com 查詢。建議先用官方 API，若需要大量歷史查詢再評估第三方資料源。"
+        "我找到幾個可行方向：官方 API 適合授權後搜尋與抓取討論串，第三方歷史資料源可作補充，"
+        "也可以用一般網頁搜尋搭配站內查詢。建議先用官方 API，若需要大量歷史查詢再評估第三方資料源。"
+        "整合時要先確認授權限制、查詢速率、資料保留政策，以及是否需要補充快取與去重機制。"
     )
 
     completion = CompletionGateService().evaluate(
@@ -208,7 +258,35 @@ def test_completion_gate_completes_web_research_with_source_artifact_and_answer(
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="web_search", ok=True),),
-            task_artifacts=(TaskArtifact(kind="web_source", source_tool="web_search", content_preview="source"),),
+            task_artifacts=(_web_source_artifact(),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer did not reference gathered sources"
+
+
+def test_completion_gate_completes_web_research_with_source_artifact_and_answer():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我找到幾個可行方向：Reddit 官方 API 文件在 reddit.com，適合授權後搜尋與抓取討論串，"
+        "Pushshift 類資料源可作歷史資料補充，也可以用一般 web search 搭配 site:reddit.com 查詢。"
+        "建議先用官方 API，若需要大量歷史查詢再評估第三方資料源。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True),),
+            task_artifacts=(_web_source_artifact(),),
         ),
     )
 

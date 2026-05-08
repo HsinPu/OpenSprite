@@ -49,11 +49,13 @@ def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
     kind = _TOOL_ARTIFACT_KINDS.get(evidence.name)
     if kind is None:
         return None
+    metadata = {"tool_args": dict(evidence.args)}
+    metadata.update(dict(evidence.metadata))
     return TaskArtifact(
         kind=kind,
         source_tool=evidence.name,
         resource_ids=tuple(evidence.resource_ids),
         content_preview=evidence.result_preview,
         ok=evidence.ok,
-        metadata={"tool_args": dict(evidence.args)},
+        metadata=metadata,
     )
