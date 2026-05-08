@@ -641,6 +641,8 @@ class AgentTurnRunner:
             response_metadata["task_contract"] = aggregate_result.task_contract.to_metadata()
         if aggregate_result.tool_evidence:
             response_metadata["tool_evidence"] = [item.to_metadata() for item in aggregate_result.tool_evidence]
+        if aggregate_result.task_artifacts:
+            response_metadata["task_artifacts"] = [item.to_metadata() for item in aggregate_result.task_artifacts]
         status_metadata["completion_status"] = completion_result.status
         response_metadata["delegated_tasks"] = [task.to_payload() for task in aggregate_result.delegated_tasks]
         response_metadata["active_delegate_task_id"] = aggregate_result.active_delegate_task_id
@@ -951,6 +953,11 @@ class AgentTurnRunner:
                 evidence
                 for result in results
                 for evidence in result.tool_evidence
+            ),
+            task_artifacts=tuple(
+                artifact
+                for result in results
+                for artifact in result.task_artifacts
             ),
         )
 

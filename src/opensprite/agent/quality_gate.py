@@ -6,8 +6,12 @@ import re
 from dataclasses import dataclass
 
 from .execution import ExecutionResult
+from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, TaskContractService
 from .task_intent import TaskIntent
+
+
+_MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
 
 
 @dataclass(frozen=True)
@@ -17,6 +21,7 @@ class QualityGateResult:
     passed: bool
     reason: str = ""
     status: str = "complete"
+    active_task_detail: str | None = None
 
 
 class QualityGateService:
@@ -34,6 +39,9 @@ class QualityGateService:
             task_intent=task_intent,
             current_message=task_intent.objective,
         )
+        artifact_result = _evaluate_media_artifacts(contract, execution_result)
+        if artifact_result is not None:
+            return artifact_result
         for criterion in contract.acceptance_criteria:
             if criterion.kind == "itemized_output":
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
@@ -59,6 +67,28 @@ def _evaluate_itemized_output(
         passed=False,
         status="incomplete",
         reason="assistant did not provide the requested itemized result",
+    )
+
+
+def _evaluate_media_artifacts(contract: TaskContract, execution_result: ExecutionResult) -> QualityGateResult | None:
+    if contract.task_type != "media_extraction" or not contract.selected_resources:
+        return None
+    aliases = ResourceIndex.aliases_for(contract.selected_resources)
+    covered = {
+        alias
+        for artifact in execution_result.task_artifacts
+        if artifact.ok and artifact.kind in _MEDIA_ARTIFACT_KINDS
+        for resource_id in artifact.resource_ids
+        for alias in aliases.get(resource_id, {resource_id})
+    }
+    missing = tuple(resource.id for resource in contract.selected_resources if resource.id not in covered)
+    if not missing:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="required task artifacts were not produced",
+        active_task_detail="\n".join(f"- Missing artifact for {resource_id}" for resource_id in missing),
     )
 
 

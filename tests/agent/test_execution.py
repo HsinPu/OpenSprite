@@ -110,6 +110,11 @@ class FakeProvider:
         return "fake-model"
 
 
+class FakeMediaRouter:
+    async def analyze_image(self, *, instruction, images, image_index=0):
+        return f"image analysis:{image_index}:{instruction}"
+
+
 class StreamingProvider:
     def __init__(self, content):
         self.content = content
@@ -349,6 +354,48 @@ def test_execution_engine_uses_tool_defined_evidence():
     assert result.content == "done"
     assert result.tool_evidence[0].name == "evidence_tool"
     assert result.tool_evidence[0].resource_ids == ("custom:a",)
+
+
+def test_execution_engine_builds_task_artifacts_from_media_evidence():
+    registry = ToolRegistry()
+    registry.register(
+        AnalyzeImageTool(
+            media_router=FakeMediaRouter(),
+            get_current_images=lambda: ["data:image/png;base64,abc"],
+        )
+    )
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need image",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="analyze_image",
+                        arguments={"instruction": "read prompt", "image_index": 0},
+                    )
+                ],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="read the image")],
+            allow_tools=True,
+        )
+    )
+
+    assert result.content == "done"
+    assert result.tool_evidence[0].resource_ids == ("image_index:0",)
+    assert result.task_artifacts[0].kind == "image_analysis"
+    assert result.task_artifacts[0].source_tool == "analyze_image"
+    assert result.task_artifacts[0].resource_ids == ("image_index:0",)
+    assert "image analysis:0" in result.task_artifacts[0].content_preview
 
 
 def test_execution_engine_records_evidence_for_invalid_media_tool_args():

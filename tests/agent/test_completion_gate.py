@@ -3,6 +3,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
+from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, TaskContract, TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
@@ -344,11 +345,45 @@ def test_completion_gate_completes_media_contract_when_all_images_have_evidence(
                 ToolEvidence(name="ocr_image", resource_ids=("image:images/a.jpg",), ok=True),
                 ToolEvidence(name="analyze_image", resource_ids=("image:images/b.jpg",), ok=True),
             ),
+            task_artifacts=(
+                TaskArtifact(kind="image_text", source_tool="ocr_image", resource_ids=("image:images/a.jpg",)),
+                TaskArtifact(kind="image_analysis", source_tool="analyze_image", resource_ids=("image:images/b.jpg",)),
+            ),
         ),
     )
 
     assert completion.status == "complete"
     assert completion.missing_evidence == ()
+
+
+def test_completion_gate_requires_media_artifacts_after_evidence():
+    intent = TaskIntentService().classify(
+        "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理"
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "user", "content": "[Media-only message saved to workspace]\nImages: images/a.jpg"},
+        ],
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Prompt 1: ...\n\n整合版：...",
+        execution_result=ExecutionResult(
+            content="Prompt 1: ...\n\n整合版：...",
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(name="ocr_image", resource_ids=("image:images/a.jpg",), ok=True),
+            ),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task artifacts were not produced"
+    assert "image:images/a.jpg" in (completion.active_task_detail or "")
 
 
 def test_completion_gate_accepts_current_turn_media_index_evidence_for_saved_files():
@@ -372,6 +407,10 @@ def test_completion_gate_accepts_current_turn_media_index_evidence_for_saved_fil
             tool_evidence=(
                 ToolEvidence(name="ocr_image", resource_ids=("image_index:0",), ok=True),
                 ToolEvidence(name="ocr_image", resource_ids=("image_index:1",), ok=True),
+            ),
+            task_artifacts=(
+                TaskArtifact(kind="image_text", source_tool="ocr_image", resource_ids=("image_index:0",)),
+                TaskArtifact(kind="image_text", source_tool="ocr_image", resource_ids=("image_index:1",)),
             ),
         ),
     )

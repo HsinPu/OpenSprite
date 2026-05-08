@@ -19,6 +19,7 @@ from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_state import RunCancelledError
+from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 
@@ -92,6 +93,7 @@ class ExecutionResult:
     assistant_internal_only_response: bool = False
     task_contract: TaskContract | None = None
     tool_evidence: tuple[ToolEvidence, ...] = ()
+    task_artifacts: tuple[TaskArtifact, ...] = ()
 
 
 @dataclass
@@ -1083,6 +1085,7 @@ Output exactly these sections when applicable:
         used_configure_skill = False
         had_tool_error = False
         tool_evidence: list[ToolEvidence] = []
+        task_artifacts: list[TaskArtifact] = []
         delegated_tasks: list[StoredDelegatedTask] = []
         active_delegate_task_id: str | None = None
         active_delegate_prompt_type: str | None = None
@@ -1404,6 +1407,7 @@ Output exactly these sections when applicable:
                             context_compaction_events=context_compaction_events,
                             llm_step_events=llm_step_events,
                             tool_evidence=tuple(tool_evidence),
+                            task_artifacts=tuple(task_artifacts),
                         )
 
                     if response_delta_count == 0:
@@ -1427,6 +1431,7 @@ Output exactly these sections when applicable:
                         llm_step_events=llm_step_events,
                         reasoning_details=response.reasoning_details,
                         tool_evidence=tuple(tool_evidence),
+                        task_artifacts=tuple(task_artifacts),
                     )
 
                 logger.info(
@@ -1544,14 +1549,16 @@ Output exactly these sections when applicable:
                             tool_failed = self._tool_result_looks_like_failure(result)
                     if tool_failed:
                         had_tool_error = True
-                    tool_evidence.append(
-                        active_tools.build_evidence(
-                            tool_name,
-                            display_tool_args,
-                            result,
-                            ok=not tool_failed,
-                        )
+                    evidence = active_tools.build_evidence(
+                        tool_name,
+                        display_tool_args,
+                        result,
+                        ok=not tool_failed,
                     )
+                    tool_evidence.append(evidence)
+                    artifact = build_task_artifact(evidence)
+                    if artifact is not None:
+                        task_artifacts.append(artifact)
                     if tool_name == "verify":
                         verification_outcome = classify_verification_result(result)
                         verification_attempted = verification_attempted or bool(verification_outcome["attempted"])
@@ -1633,6 +1640,7 @@ Output exactly these sections when applicable:
                                 context_compaction_events=context_compaction_events,
                                 llm_step_events=llm_step_events,
                                 tool_evidence=tuple(tool_evidence),
+                                task_artifacts=tuple(task_artifacts),
                             )
                     else:
                         repeated_tool_error_key = None
@@ -1718,6 +1726,7 @@ Output exactly these sections when applicable:
                     llm_step_events=llm_step_events,
                     assistant_internal_only_response=assistant_internal_only_response,
                     tool_evidence=tuple(tool_evidence),
+                    task_artifacts=tuple(task_artifacts),
                 )
 
             if response_delta_count == 0:
@@ -1741,6 +1750,7 @@ Output exactly these sections when applicable:
                 llm_step_events=llm_step_events,
                 reasoning_details=response.reasoning_details,
                 tool_evidence=tuple(tool_evidence),
+                task_artifacts=tuple(task_artifacts),
             )
 
         logger.warning(f"[{log_id}] llm.max-iterations | limit={iteration_limit}")
@@ -1774,4 +1784,5 @@ Output exactly these sections when applicable:
             context_compaction_events=context_compaction_events,
             llm_step_events=llm_step_events,
             tool_evidence=tuple(tool_evidence),
+            task_artifacts=tuple(task_artifacts),
         )

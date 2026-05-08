@@ -366,6 +366,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=quality_result.status,
                 reason=quality_result.reason,
+                active_task_detail=quality_result.active_task_detail,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
