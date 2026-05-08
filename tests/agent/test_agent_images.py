@@ -2,6 +2,7 @@ import asyncio
 
 from agent_test_helpers import make_agent_loop
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.task_intent import TaskIntentService
 
 
 def _make_media_agent(tmp_path):
@@ -48,6 +49,36 @@ def test_call_llm_replaces_direct_image_payload_with_tool_hint(tmp_path):
         "User attached 1 image(s). Use analyze_image or ocr_image only if the user's text asks for visual understanding or text extraction."
         in captured["content"]
     )
+
+
+def test_call_llm_includes_task_contract_guidance_for_media_task(tmp_path):
+    agent = _make_media_agent(tmp_path)
+    captured = _capture_first_prompt(agent)
+    intent = TaskIntentService().classify(
+        "Please inspect this image and summarize it.",
+        images=["img-a"],
+    )
+
+    result = asyncio.run(
+        agent.call_llm(
+            "telegram:user-a",
+            current_message="Please inspect this image and summarize it.",
+            channel="telegram",
+            user_images=["img-a"],
+            user_image_files=["images/a.jpg"],
+            task_intent=intent,
+        )
+    )
+
+    assert result.content == "ok"
+    content = captured["content"]
+    assert "## Runtime Task Contract" in content
+    assert "Task type: media_extraction" in content
+    assert "image:images/a.jpg" in content
+    assert "Required evidence" in content
+    assert "tool_group=image_text" in content
+    assert "Final answer acceptance criteria" in content
+    assert "substantive final answer" in content
 
 
 def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):

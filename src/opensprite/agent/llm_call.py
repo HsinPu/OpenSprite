@@ -10,7 +10,7 @@ from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
-from .task_contract import TaskContractService
+from .task_contract import TaskContract, TaskContractService
 from .task_intent import TaskIntent
 
 
@@ -155,6 +155,25 @@ class LlmCallService:
             user_audio_files=user_audio_files,
             user_video_files=user_video_files,
         )
+        task_contract = None
+        if task_intent is not None:
+            task_contract = TaskContractService.build(
+                task_intent=task_intent,
+                current_message=prompt_message,
+                history=history_dicts,
+                current_image_files=user_image_files,
+                current_audio_files=user_audio_files,
+                current_video_files=user_video_files,
+            )
+            guidance = _build_task_contract_guidance(task_contract)
+            if guidance:
+                prompt_message = f"{prompt_message}\n\n{guidance}"
+            logger.info(
+                f"[{session_id}] task.contract | type={task_contract.task_type} "
+                f"requirements={len(task_contract.requirements)} resources={len(task_contract.selected_resources)} "
+                f"acceptance_criteria={len(task_contract.acceptance_criteria)} "
+                f"allow_no_tool_final={task_contract.allow_no_tool_final}"
+            )
         planning_mode = resolve_planning_mode(current_message, base_registry=self._get_tool_registry())
         selected_tool_registry = planning_mode.tool_registry
         if planning_mode.enabled and selected_tool_registry is not None:
@@ -178,21 +197,6 @@ class LlmCallService:
         )
         if proactive_retrieval_context:
             history_dicts = [{"role": "system", "content": proactive_retrieval_context}, *history_dicts]
-        task_contract = None
-        if task_intent is not None:
-            task_contract = TaskContractService.build(
-                task_intent=task_intent,
-                current_message=prompt_message,
-                history=history_dicts,
-                current_image_files=user_image_files,
-                current_audio_files=user_audio_files,
-                current_video_files=user_video_files,
-            )
-            logger.info(
-                f"[{session_id}] task.contract | type={task_contract.task_type} "
-                f"requirements={len(task_contract.requirements)} resources={len(task_contract.selected_resources)} "
-                f"allow_no_tool_final={task_contract.allow_no_tool_final}"
-            )
         effective_context_budget = self._effective_context_token_budget()
         logger.info(
             f"[{session_id}] prompt.tokens | budget={effective_context_budget} "
@@ -309,3 +313,51 @@ class LlmCallService:
             result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
             result.task_contract = task_contract
             return result
+
+
+def _build_task_contract_guidance(contract: TaskContract) -> str:
+    if not (contract.requirements or contract.acceptance_criteria or contract.selected_resources):
+        return ""
+    lines = [
+        "## Runtime Task Contract",
+        "Satisfy these deterministic completion requirements before giving the final answer.",
+        f"- Task type: {contract.task_type}",
+    ]
+    if contract.selected_resources:
+        lines.append("- Required resources:")
+        for resource in contract.selected_resources[:12]:
+            label = f"{resource.id} ({resource.kind}, {resource.source})"
+            if resource.path:
+                label += f" path={resource.path}"
+            lines.append(f"  - {label}")
+        if len(contract.selected_resources) > 12:
+            lines.append(f"  - ... {len(contract.selected_resources) - 12} more resource(s)")
+    if contract.requirements:
+        lines.append("- Required evidence:")
+        for requirement in contract.requirements:
+            detail = requirement.description or requirement.kind
+            qualifiers = []
+            if requirement.tool_group:
+                qualifiers.append(f"tool_group={requirement.tool_group}")
+            if requirement.coverage:
+                qualifiers.append(f"coverage={requirement.coverage}")
+            qualifiers.append(f"min_count={requirement.min_count}")
+            lines.append(f"  - {detail} ({', '.join(qualifiers)})")
+    if contract.acceptance_criteria:
+        lines.append("- Final answer acceptance criteria:")
+        for criterion in contract.acceptance_criteria:
+            lines.append(f"  - {_format_acceptance_criterion(criterion)}")
+    lines.extend([
+        "- If a requirement cannot be satisfied, state the blocker clearly instead of claiming completion.",
+        "- Do not answer with only an acknowledgement, plan, or promise of future work when tool evidence or artifacts are required.",
+    ])
+    return "\n".join(lines)
+
+
+def _format_acceptance_criterion(criterion: Any) -> str:
+    if criterion.kind == "itemized_output":
+        return f"Provide at least {max(1, int(criterion.min_count or 1))} itemized result entries; do not answer with only a plan or acknowledgement."
+    if criterion.kind == "substantive_final_answer":
+        min_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
+        return f"Write a substantive final answer using the inspected media/tool results (minimum {min_chars} visible characters)."
+    return criterion.description or criterion.kind
