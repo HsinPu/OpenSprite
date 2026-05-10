@@ -579,6 +579,66 @@ persist_browser_environment() {
   fi
 }
 
+ensure_default_config() {
+  local config_path="$APP_HOME/opensprite.json"
+  if [[ -f "$config_path" ]]; then
+    return 0
+  fi
+
+  log_info "Creating default OpenSprite config"
+  OPENSPRITE_CONFIG_PATH="$config_path" "$INSTALL_DIR/.venv/bin/python" - <<'PY'
+import os
+from pathlib import Path
+
+from opensprite.config import Config
+
+path = Path(os.environ["OPENSPRITE_CONFIG_PATH"]).expanduser()
+Config.copy_template(path)
+PY
+}
+
+systemd_user_available() {
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1
+}
+
+enable_user_linger() {
+  if ! command -v loginctl >/dev/null 2>&1; then
+    log_warn "loginctl not found; the user service may only start after login."
+    return 0
+  fi
+  if [[ -z "${USER:-}" ]]; then
+    log_warn "USER is not set; run 'loginctl enable-linger <user>' if you need startup before login."
+    return 0
+  fi
+  if loginctl enable-linger "$USER" >/dev/null 2>&1; then
+    log_success "Enabled user linger for $USER"
+  else
+    log_warn "Could not enable user linger automatically; run: loginctl enable-linger $USER"
+  fi
+}
+
+persist_systemd_environment() {
+  if ! systemd_user_available; then
+    return 0
+  fi
+
+  local env_dir="$HOME/.config/environment.d"
+  local env_file="$env_dir/opensprite.conf"
+  mkdir -p "$env_dir"
+  {
+    printf '# OpenSprite service environment\n'
+    printf 'PATH=%s\n' "$PATH"
+    if [[ -n "${AGENT_BROWSER_EXECUTABLE_PATH:-}" ]]; then
+      printf 'AGENT_BROWSER_EXECUTABLE_PATH=%s\n' "$AGENT_BROWSER_EXECUTABLE_PATH"
+    fi
+    if [[ -n "${AGENT_BROWSER_ARGS:-}" ]]; then
+      printf 'AGENT_BROWSER_ARGS=%s\n' "$AGENT_BROWSER_ARGS"
+    fi
+  } > "$env_file"
+  systemctl --user import-environment PATH AGENT_BROWSER_EXECUTABLE_PATH AGENT_BROWSER_ARGS >/dev/null 2>&1 || true
+  log_success "Wrote systemd user environment: $env_file"
+}
+
 setup_command_link() {
   if [[ "$CREATE_LINK" -ne 1 ]]; then
     return 0
@@ -630,9 +690,24 @@ maybe_start_service() {
   if [[ "$START_SERVICE" -ne 1 ]]; then
     return 0
   fi
-  log_info "Starting OpenSprite background gateway"
+
+  ensure_default_config
+  persist_systemd_environment
+
+  if systemd_user_available; then
+    log_info "Installing OpenSprite systemd user service"
+    "$INSTALL_DIR/.venv/bin/opensprite" service stop >/dev/null 2>&1 || true
+    enable_user_linger
+    if "$INSTALL_DIR/.venv/bin/opensprite" service install --config "$APP_HOME/opensprite.json" --start; then
+      "$INSTALL_DIR/.venv/bin/opensprite" service status
+      return 0
+    fi
+    log_warn "Systemd user service install failed; falling back to a detached background process."
+  fi
+
+  log_info "Starting OpenSprite detached background gateway"
   "$INSTALL_DIR/.venv/bin/opensprite" service stop >/dev/null 2>&1 || true
-  "$INSTALL_DIR/.venv/bin/opensprite" service start
+  "$INSTALL_DIR/.venv/bin/opensprite" service start --config "$APP_HOME/opensprite.json"
   "$INSTALL_DIR/.venv/bin/opensprite" service status
 }
 
@@ -649,6 +724,9 @@ Commands:
   opensprite service start
   opensprite service status
   opensprite service stop
+
+On Linux systems with systemd user services, the installer enables
+opensprite-gateway.service so the gateway starts again after reboot.
 
 Uninstall while keeping ~/.opensprite data:
   curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.sh | bash
