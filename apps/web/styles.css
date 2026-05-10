@@ -5097,6 +5097,14 @@ button:disabled {
   align-items: start;
 }
 
+.settings-collapsible-section {
+  display: grid;
+}
+
+.settings-collapsible-section .settings-row:first-child {
+  border-top: 1px solid #dddddd;
+}
+
 .settings-choice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

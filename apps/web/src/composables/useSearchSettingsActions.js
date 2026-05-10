@@ -89,7 +89,6 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
       const payload = await requestSettingsJson("/api/settings/search");
       settingsState.search = normalizeSearchSettings(payload.search || {});
       syncSearchForm(settingsState);
-      void loadSearxngOptions();
     } catch (error) {
       settingsState.searchError = error?.message || copy.value.notices.searchLoadFailed;
     } finally {

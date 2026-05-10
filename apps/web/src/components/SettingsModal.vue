@@ -1442,61 +1442,78 @@
               <div>
                 <strong>{{ copy.settings.search.searxngOptions.title }}</strong>
                 <span>{{ copy.settings.search.searxngOptions.description }}</span>
-                <span v-if="settingsState.searchOptionsNotice">{{ settingsState.searchOptionsNotice }}</span>
-                <span v-if="settingsState.searchOptionsError" class="settings-row__error">{{ settingsState.searchOptionsError }}</span>
               </div>
               <button
                 class="secondary-button"
                 type="button"
-                :disabled="settingsState.searchLoading || settingsState.searchOptionsLoading"
-                @click="$emit('load-search-searxng-options')"
+                :aria-expanded="searxngOptionsExpanded"
+                @click="toggleSearxngOptions"
               >
-                {{ settingsState.searchOptionsLoading ? copy.settings.search.searxngOptions.loading : copy.settings.search.searxngOptions.load }}
+                {{ searxngOptionsExpanded ? copy.settings.search.searxngOptions.collapse : copy.settings.search.searxngOptions.expand }}
               </button>
             </div>
 
-            <div class="settings-row settings-row--field settings-row--choice-list">
-              <div>
-                <strong>{{ copy.settings.search.searxngEngines.title }}</strong>
-                <span>{{ copy.settings.search.searxngEngines.description }}</span>
+            <div v-show="searxngOptionsExpanded" class="settings-collapsible-section">
+              <div class="settings-row">
+                <div>
+                  <strong>{{ copy.settings.search.searxngOptions.loadTitle }}</strong>
+                  <span>{{ copy.settings.search.searxngOptions.loadDescription }}</span>
+                  <span v-if="settingsState.searchOptionsNotice">{{ settingsState.searchOptionsNotice }}</span>
+                  <span v-if="settingsState.searchOptionsError" class="settings-row__error">{{ settingsState.searchOptionsError }}</span>
+                </div>
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.searchLoading || settingsState.searchOptionsLoading"
+                  @click="$emit('load-search-searxng-options')"
+                >
+                  {{ settingsState.searchOptionsLoading ? copy.settings.search.searxngOptions.loading : copy.settings.search.searxngOptions.load }}
+                </button>
               </div>
-              <div v-if="webSearchSearxngEngineOptions.length" class="settings-choice-grid">
-                <label v-for="option in webSearchSearxngEngineOptions" :key="option.id" class="settings-choice">
-                  <input
-                    v-model="settingsState.searchForm.searxngEngines"
-                    type="checkbox"
-                    :value="option.id"
-                    :disabled="settingsState.searchLoading"
-                  />
-                  <span>
-                    <strong>{{ option.label }}</strong>
-                    <small>{{ searxngEngineMeta(option) }}</small>
-                  </span>
-                </label>
-              </div>
-              <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyEngines }}</p>
-            </div>
 
-            <div class="settings-row settings-row--field settings-row--choice-list">
-              <div>
-                <strong>{{ copy.settings.search.searxngCategories.title }}</strong>
-                <span>{{ copy.settings.search.searxngCategories.description }}</span>
+              <div class="settings-row settings-row--field settings-row--choice-list">
+                <div>
+                  <strong>{{ copy.settings.search.searxngEngines.title }}</strong>
+                  <span>{{ copy.settings.search.searxngEngines.description }}</span>
+                </div>
+                <div v-if="webSearchSearxngEngineOptions.length" class="settings-choice-grid">
+                  <label v-for="option in webSearchSearxngEngineOptions" :key="option.id" class="settings-choice">
+                    <input
+                      v-model="settingsState.searchForm.searxngEngines"
+                      type="checkbox"
+                      :value="option.id"
+                      :disabled="settingsState.searchLoading"
+                    />
+                    <span>
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ searxngEngineMeta(option) }}</small>
+                    </span>
+                  </label>
+                </div>
+                <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyEngines }}</p>
               </div>
-              <div v-if="webSearchSearxngCategoryOptions.length" class="settings-choice-grid">
-                <label v-for="option in webSearchSearxngCategoryOptions" :key="option.id" class="settings-choice">
-                  <input
-                    v-model="settingsState.searchForm.searxngCategories"
-                    type="checkbox"
-                    :value="option.id"
-                    :disabled="settingsState.searchLoading"
-                  />
-                  <span>
-                    <strong>{{ option.label }}</strong>
-                    <small v-if="option.configuredOnly">{{ copy.settings.search.searxngOptions.configuredOnly }}</small>
-                  </span>
-                </label>
+
+              <div class="settings-row settings-row--field settings-row--choice-list">
+                <div>
+                  <strong>{{ copy.settings.search.searxngCategories.title }}</strong>
+                  <span>{{ copy.settings.search.searxngCategories.description }}</span>
+                </div>
+                <div v-if="webSearchSearxngCategoryOptions.length" class="settings-choice-grid">
+                  <label v-for="option in webSearchSearxngCategoryOptions" :key="option.id" class="settings-choice">
+                    <input
+                      v-model="settingsState.searchForm.searxngCategories"
+                      type="checkbox"
+                      :value="option.id"
+                      :disabled="settingsState.searchLoading"
+                    />
+                    <span>
+                      <strong>{{ option.label }}</strong>
+                      <small v-if="option.configuredOnly">{{ copy.settings.search.searxngOptions.configuredOnly }}</small>
+                    </span>
+                  </label>
+                </div>
+                <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyCategories }}</p>
               </div>
-              <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyCategories }}</p>
             </div>
 
             <label class="settings-row settings-row--field">
@@ -2724,6 +2741,7 @@ const evalCopyFallbackOpen = ref(false);
 const evalCopyText = ref("");
 const evalCopyTextarea = ref(null);
 const providerRequestOptionsExpanded = ref(false);
+const searxngOptionsExpanded = ref(false);
 const EVAL_HISTORY_GROUP_WINDOW_SECONDS = 10 * 60;
 let evalCopyResetTimer = null;
 
@@ -3774,6 +3792,18 @@ function webSearchProviderLabel(provider) {
 
 function webSearchFreshnessLabel(freshness) {
   return props.copy.settings.search.freshness.options?.[freshness] || freshness;
+}
+
+function toggleSearxngOptions() {
+  searxngOptionsExpanded.value = !searxngOptionsExpanded.value;
+  if (!searxngOptionsExpanded.value || props.settingsState.searchOptionsLoading) {
+    return;
+  }
+  const options = props.settingsState.search?.searxng_options || {};
+  const hasOptions = Boolean(options.engines?.length || options.categories?.length);
+  if (!hasOptions) {
+    emit("load-search-searxng-options");
+  }
 }
 
 const webSearchProviderOptions = computed(() => {
