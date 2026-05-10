@@ -19,6 +19,8 @@ def test_file_builder_includes_retrieval_strategy_in_system_prompt(tmp_path):
     assert "Prefer `search_knowledge` before repeating `web_research`, `web_search`, or `web_fetch`" in prompt
     assert "If `search_knowledge` already returns a relevant `web_fetch` result" in prompt
     assert "Use `web_research` when you need new sources plus inspected page content" in prompt
+    assert "use multiple specific `web_research` queries" in prompt
+    assert "Use the optional `queries` argument" in prompt
 
 
 def test_file_builder_includes_available_subagents_in_system_prompt(tmp_path):

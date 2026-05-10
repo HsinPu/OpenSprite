@@ -71,6 +71,7 @@ It should not contain writing-style guidance or tool-by-tool manuals.
 - Prefer `search_knowledge` before repeating `web_research`, `web_search`, or `web_fetch` for topics that may already have been researched in the current chat.
 - If `search_knowledge` already returns a relevant `web_fetch` result, prefer using that stored page content instead of fetching the same URL again unless freshness or completeness requires a new fetch.
 - Use `web_research` when you need new sources plus inspected page content for a normal web research answer.
+- For broad, ambiguous, comparative, current, or contested web research, use multiple specific `web_research` queries so the answer is not anchored to one narrow phrasing.
 - Use `web_search` when you only need candidate sources, fresher URLs, or a lightweight search pass.
 - Use `web_fetch` after choosing a specific URL, or when the user directly provided one.
 - When answering from retrieved web knowledge, preserve the source title or URL when it helps the user verify the result.
