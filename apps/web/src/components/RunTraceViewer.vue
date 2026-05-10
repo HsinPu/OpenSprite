@@ -45,200 +45,205 @@
 
       <div class="run-trace__artifacts" aria-label="Run artifacts">
         <div class="run-trace__section-head">
-          <strong>{{ copy.trace.artifactHeading }}</strong>
-          <span>{{ artifactCount }} {{ copy.trace.artifacts }}</span>
+          <button class="run-trace__section-toggle" type="button" :aria-expanded="artifactsExpanded" @click="artifactsExpanded = !artifactsExpanded">
+            <strong>{{ copy.trace.artifactHeading }}</strong>
+            <span>{{ artifactCount }} {{ copy.trace.artifacts }}</span>
+            <small>{{ artifactsExpanded ? copy.trace.collapse : copy.trace.expand }}</small>
+          </button>
         </div>
 
-        <section v-if="parallelDelegationGroups.length" class="run-trace__artifact-group">
-          <div class="run-trace__artifact-group-title">
-            <span>{{ copy.trace.parallelDelegation }}</span>
-            <small>{{ parallelDelegationGroups.length }}</small>
-          </div>
-
-          <div class="run-trace__parallel-groups">
-            <article
-              v-for="group in parallelDelegationGroups"
-              :key="group.groupId"
-              class="run-trace__parallel-group"
-              :data-status="group.status"
-            >
-              <div class="run-trace__parallel-group-head">
-                <div>
-                  <strong>{{ copy.trace.parallelGroup(group.shortId) }}</strong>
-                  <small>{{ parallelGroupCountLabel(group) }}</small>
-                </div>
-                <span class="run-trace__artifact-status">{{ parallelStatusLabel(group.status) }}</span>
-              </div>
-
-              <div v-if="parallelGroupStatusEntries(group).length" class="run-trace__parallel-group-chips">
-                <code
-                  v-for="entry in parallelGroupStatusEntries(group)"
-                  :key="entry.status"
-                  :data-status="entry.status"
-                >
-                  {{ entry.label }} x{{ entry.count }}
-                </code>
-              </div>
-
-              <div class="run-trace__parallel-task-list">
-                <article
-                  v-for="artifact in group.items"
-                  :key="artifact.artifactId"
-                  class="run-trace__parallel-task"
-                  :data-status="artifact.status"
-                >
-                  <span class="run-trace__artifact-status">{{ parallelStatusLabel(artifact.status) }}</span>
-                  <strong>{{ parallelTaskTitle(artifact) }}</strong>
-                  <small v-if="parallelTaskMeta(artifact)">{{ parallelTaskMeta(artifact) }}</small>
-                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                </article>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <div v-if="displayedArtifactCount" class="run-trace__artifact-groups">
-          <section
-            v-for="group in artifactGroups"
-            :key="group.kind"
-            v-show="group.items.length"
-            class="run-trace__artifact-group"
-          >
+        <div v-show="artifactsExpanded" class="run-trace__section-body">
+          <section v-if="parallelDelegationGroups.length" class="run-trace__artifact-group">
             <div class="run-trace__artifact-group-title">
-              <span>{{ group.label }}</span>
-              <small>{{ group.items.length }}</small>
+              <span>{{ copy.trace.parallelDelegation }}</span>
+              <small>{{ parallelDelegationGroups.length }}</small>
             </div>
 
-            <div class="run-trace__artifact-grid">
-              <template
-                v-for="artifact in group.items"
-                :key="artifact.artifactId"
+            <div class="run-trace__parallel-groups">
+              <article
+                v-for="group in parallelDelegationGroups"
+                :key="group.groupId"
+                class="run-trace__parallel-group"
+                :data-status="group.status"
               >
-                <details
-                  v-if="isToolArtifact(artifact)"
-                  class="run-trace__artifact-card run-trace__artifact-card--details"
-                  :data-kind="artifact.kind"
-                  :data-status="artifact.status"
-                >
-                  <summary class="run-trace__artifact-summary">
-                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                    <strong>{{ artifactTitle(artifact) }}</strong>
-                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                  </summary>
-                  <dl v-if="toolDetailRows(artifact).length" class="run-trace__tool-details">
-                    <div v-for="row in toolDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
-                      <dt>{{ row.label }}</dt>
-                      <dd>{{ row.value }}</dd>
-                    </div>
-                  </dl>
-                  <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
-                </details>
-
-                <button
-                  v-else-if="isFileArtifact(artifact)"
-                  class="run-trace__artifact-card run-trace__artifact-card--button"
-                  :data-kind="'file'"
-                  :data-status="artifact.status"
-                  type="button"
-                  @click="inspectArtifact(artifact)"
-                >
-                  <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                  <strong>{{ artifactTitle(artifact) }}</strong>
-                  <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                </button>
-
-                <details
-                  v-else-if="isStructuredSubagentArtifact(artifact)"
-                  class="run-trace__artifact-card run-trace__artifact-card--details"
-                  :data-kind="artifact.kind"
-                  :data-status="artifact.status"
-                >
-                  <summary class="run-trace__artifact-summary">
-                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                    <strong>{{ artifactTitle(artifact) }}</strong>
-                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                  </summary>
-                  <dl v-if="subagentDetailRows(artifact).length" class="run-trace__tool-details">
-                    <div v-for="row in subagentDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
-                      <dt>{{ row.label }}</dt>
-                      <dd>{{ row.value }}</dd>
-                    </div>
-                  </dl>
-                  <pre v-if="structuredSubagentPreview(artifact)" class="run-trace__structured-preview">{{ structuredSubagentPreview(artifact) }}</pre>
-                  <p v-else class="run-trace__tool-empty">{{ copy.trace.structuredOutputEmpty }}</p>
-                </details>
-
-                <details
-                  v-else-if="isProcessArtifact(artifact)"
-                  class="run-trace__artifact-card run-trace__artifact-card--details"
-                  :data-kind="artifact.kind"
-                  :data-status="artifact.status"
-                >
-                  <summary class="run-trace__artifact-summary">
-                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                    <strong>{{ artifactTitle(artifact) }}</strong>
-                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                  </summary>
-                  <dl v-if="processDetailRows(artifact).length" class="run-trace__tool-details">
-                    <div v-for="row in processDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
-                      <dt>{{ row.label }}</dt>
-                      <dd>{{ row.value }}</dd>
-                    </div>
-                  </dl>
-                  <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
-                </details>
-
-                <details
-                  v-else-if="isTaskArtifactSummary(artifact)"
-                  class="run-trace__artifact-card run-trace__artifact-card--details"
-                  :data-kind="artifact.kind"
-                  :data-status="artifact.status"
-                >
-                  <summary class="run-trace__artifact-summary">
-                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                    <strong>{{ artifactTitle(artifact) }}</strong>
-                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                  </summary>
-                  <dl v-if="taskArtifactRows(artifact).length" class="run-trace__tool-details">
-                    <div v-for="row in taskArtifactRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
-                      <dt>{{ row.label }}</dt>
-                      <dd>{{ row.value }}</dd>
-                    </div>
-                  </dl>
-                  <div v-if="taskArtifactSources(artifact).length" class="run-trace__source-list">
-                    <article v-for="source in taskArtifactSources(artifact)" :key="`${source.url}:${source.title}`" class="run-trace__source-card">
-                      <a v-if="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title || source.domain || source.url }}</a>
-                      <strong v-else>{{ source.title || copy.trace.unknownArtifact }}</strong>
-                      <small v-if="source.url">{{ source.url }}</small>
-                      <p v-if="source.snippet">{{ source.snippet }}</p>
-                      <span v-if="source.meta">{{ source.meta }}</span>
-                    </article>
+                <div class="run-trace__parallel-group-head">
+                  <div>
+                    <strong>{{ copy.trace.parallelGroup(group.shortId) }}</strong>
+                    <small>{{ parallelGroupCountLabel(group) }}</small>
                   </div>
-                  <p v-else class="run-trace__tool-empty">{{ copy.trace.noTaskArtifactSources }}</p>
-                </details>
+                  <span class="run-trace__artifact-status">{{ parallelStatusLabel(group.status) }}</span>
+                </div>
 
-                <article
-                  v-else
-                  class="run-trace__artifact-card"
-                  :data-kind="artifact.kind"
-                  :data-status="artifact.status"
-                >
-                  <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                  <strong>{{ artifactTitle(artifact) }}</strong>
-                  <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-                </article>
-              </template>
+                <div v-if="parallelGroupStatusEntries(group).length" class="run-trace__parallel-group-chips">
+                  <code
+                    v-for="entry in parallelGroupStatusEntries(group)"
+                    :key="entry.status"
+                    :data-status="entry.status"
+                  >
+                    {{ entry.label }} x{{ entry.count }}
+                  </code>
+                </div>
+
+                <div class="run-trace__parallel-task-list">
+                  <article
+                    v-for="artifact in group.items"
+                    :key="artifact.artifactId"
+                    class="run-trace__parallel-task"
+                    :data-status="artifact.status"
+                  >
+                    <span class="run-trace__artifact-status">{{ parallelStatusLabel(artifact.status) }}</span>
+                    <strong>{{ parallelTaskTitle(artifact) }}</strong>
+                    <small v-if="parallelTaskMeta(artifact)">{{ parallelTaskMeta(artifact) }}</small>
+                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                  </article>
+                </div>
+              </article>
             </div>
           </section>
-        </div>
 
-        <p v-else class="run-trace__empty">{{ copy.trace.noArtifacts }}</p>
+          <div v-if="displayedArtifactCount" class="run-trace__artifact-groups">
+            <section
+              v-for="group in artifactGroups"
+              :key="group.kind"
+              v-show="group.items.length"
+              class="run-trace__artifact-group"
+            >
+              <div class="run-trace__artifact-group-title">
+                <span>{{ group.label }}</span>
+                <small>{{ group.items.length }}</small>
+              </div>
+
+              <div class="run-trace__artifact-grid">
+                <template
+                  v-for="artifact in group.items"
+                  :key="artifact.artifactId"
+                >
+                  <details
+                    v-if="isToolArtifact(artifact)"
+                    class="run-trace__artifact-card run-trace__artifact-card--details"
+                    :data-kind="artifact.kind"
+                    :data-status="artifact.status"
+                  >
+                    <summary class="run-trace__artifact-summary">
+                      <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                      <strong>{{ artifactTitle(artifact) }}</strong>
+                      <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                      <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                    </summary>
+                    <dl v-if="toolDetailRows(artifact).length" class="run-trace__tool-details">
+                      <div v-for="row in toolDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                        <dt>{{ row.label }}</dt>
+                        <dd>{{ row.value }}</dd>
+                      </div>
+                    </dl>
+                    <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
+                  </details>
+
+                  <button
+                    v-else-if="isFileArtifact(artifact)"
+                    class="run-trace__artifact-card run-trace__artifact-card--button"
+                    :data-kind="'file'"
+                    :data-status="artifact.status"
+                    type="button"
+                    @click="inspectArtifact(artifact)"
+                  >
+                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                    <strong>{{ artifactTitle(artifact) }}</strong>
+                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                  </button>
+
+                  <details
+                    v-else-if="isStructuredSubagentArtifact(artifact)"
+                    class="run-trace__artifact-card run-trace__artifact-card--details"
+                    :data-kind="artifact.kind"
+                    :data-status="artifact.status"
+                  >
+                    <summary class="run-trace__artifact-summary">
+                      <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                      <strong>{{ artifactTitle(artifact) }}</strong>
+                      <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                      <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                    </summary>
+                    <dl v-if="subagentDetailRows(artifact).length" class="run-trace__tool-details">
+                      <div v-for="row in subagentDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                        <dt>{{ row.label }}</dt>
+                        <dd>{{ row.value }}</dd>
+                      </div>
+                    </dl>
+                    <pre v-if="structuredSubagentPreview(artifact)" class="run-trace__structured-preview">{{ structuredSubagentPreview(artifact) }}</pre>
+                    <p v-else class="run-trace__tool-empty">{{ copy.trace.structuredOutputEmpty }}</p>
+                  </details>
+
+                  <details
+                    v-else-if="isProcessArtifact(artifact)"
+                    class="run-trace__artifact-card run-trace__artifact-card--details"
+                    :data-kind="artifact.kind"
+                    :data-status="artifact.status"
+                  >
+                    <summary class="run-trace__artifact-summary">
+                      <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                      <strong>{{ artifactTitle(artifact) }}</strong>
+                      <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                      <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                    </summary>
+                    <dl v-if="processDetailRows(artifact).length" class="run-trace__tool-details">
+                      <div v-for="row in processDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                        <dt>{{ row.label }}</dt>
+                        <dd>{{ row.value }}</dd>
+                      </div>
+                    </dl>
+                    <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
+                  </details>
+
+                  <details
+                    v-else-if="isTaskArtifactSummary(artifact)"
+                    class="run-trace__artifact-card run-trace__artifact-card--details"
+                    :data-kind="artifact.kind"
+                    :data-status="artifact.status"
+                  >
+                    <summary class="run-trace__artifact-summary">
+                      <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                      <strong>{{ artifactTitle(artifact) }}</strong>
+                      <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                      <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                    </summary>
+                    <dl v-if="taskArtifactRows(artifact).length" class="run-trace__tool-details">
+                      <div v-for="row in taskArtifactRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                        <dt>{{ row.label }}</dt>
+                        <dd>{{ row.value }}</dd>
+                      </div>
+                    </dl>
+                    <div v-if="taskArtifactSources(artifact).length" class="run-trace__source-list">
+                      <article v-for="source in taskArtifactSources(artifact)" :key="`${source.url}:${source.title}`" class="run-trace__source-card">
+                        <a v-if="source.url" :href="source.url" target="_blank" rel="noreferrer">{{ source.title || source.domain || source.url }}</a>
+                        <strong v-else>{{ source.title || copy.trace.unknownArtifact }}</strong>
+                        <small v-if="source.url">{{ source.url }}</small>
+                        <p v-if="source.snippet">{{ source.snippet }}</p>
+                        <span v-if="source.meta">{{ source.meta }}</span>
+                      </article>
+                    </div>
+                    <p v-else class="run-trace__tool-empty">{{ copy.trace.noTaskArtifactSources }}</p>
+                  </details>
+
+                  <article
+                    v-else
+                    class="run-trace__artifact-card"
+                    :data-kind="artifact.kind"
+                    :data-status="artifact.status"
+                  >
+                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                    <strong>{{ artifactTitle(artifact) }}</strong>
+                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                  </article>
+                </template>
+              </div>
+            </section>
+          </div>
+
+          <p v-else class="run-trace__empty">{{ copy.trace.noArtifacts }}</p>
+        </div>
       </div>
 
       <section v-if="codeNavigationResults.length" class="run-trace__code-nav" aria-label="Code navigation results">
@@ -371,6 +376,7 @@ const emit = defineEmits(["cancel-run", "inspect-file"]);
 
 const selectedFilter = ref("all");
 const expanded = ref(false);
+const artifactsExpanded = ref(true);
 const partsExpanded = ref(false);
 const debugExpanded = ref(false);
 
