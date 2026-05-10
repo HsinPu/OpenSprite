@@ -23,6 +23,8 @@ INSTALL_DEV=0
 CREATE_LINK=1
 START_SERVICE=1
 INSTALL_SYSTEM_PACKAGES=1
+INSTALL_BROWSER=1
+BROWSER_NO_SANDBOX="${OPENSPRITE_BROWSER_NO_SANDBOX:-1}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -51,6 +53,7 @@ Options:
   --no-start       Do not start the background gateway after installation.
   --no-link        Do not create ~/.local/bin/opensprite symlink.
   --no-system      Do not try to install system packages with apt.
+  --no-browser     Do not install Chromium/agent-browser browser dependencies.
   -h, --help       Show this help.
 
 Environment overrides:
@@ -58,6 +61,7 @@ Environment overrides:
   OPENSPRITE_BRANCH
   OPENSPRITE_INSTALL_DIR
   OPENSPRITE_HOME
+  OPENSPRITE_BROWSER_NO_SANDBOX=0  Do not set AGENT_BROWSER_ARGS=--no-sandbox.
 EOF
 }
 
@@ -93,6 +97,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-system)
       INSTALL_SYSTEM_PACKAGES=0
+      shift
+      ;;
+    --no-browser)
+      INSTALL_BROWSER=0
       shift
       ;;
     -h|--help)
@@ -325,6 +333,132 @@ ensure_node() {
   log_success "Node.js $(node --version) and npm $(npm --version) ready"
 }
 
+find_browser_executable() {
+  local candidate resolved
+  for candidate in \
+    "${AGENT_BROWSER_EXECUTABLE_PATH:-}" \
+    chromium \
+    chromium-browser \
+    google-chrome-stable \
+    google-chrome \
+    chrome \
+    /usr/bin/chromium \
+    /usr/bin/chromium-browser \
+    /usr/bin/google-chrome-stable \
+    /usr/bin/google-chrome \
+    /snap/bin/chromium; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" == */* ]]; then
+      [[ -x "$candidate" ]] || continue
+      resolved="$candidate"
+    else
+      resolved="$(command -v "$candidate" 2>/dev/null || true)"
+      [[ -n "$resolved" ]] || continue
+    fi
+    printf '%s' "$resolved"
+    return 0
+  done
+  return 1
+}
+
+ensure_browser_no_sandbox_arg() {
+  if [[ "$BROWSER_NO_SANDBOX" == "0" || "$BROWSER_NO_SANDBOX" == "false" ]]; then
+    return 0
+  fi
+  case ",${AGENT_BROWSER_ARGS:-}," in
+    *,--no-sandbox,*) ;;
+    *)
+      if [[ -n "${AGENT_BROWSER_ARGS:-}" ]]; then
+        export AGENT_BROWSER_ARGS="${AGENT_BROWSER_ARGS},--no-sandbox"
+      else
+        export AGENT_BROWSER_ARGS="--no-sandbox"
+      fi
+      ;;
+  esac
+}
+
+install_system_browser_package() {
+  if [[ "$INSTALL_SYSTEM_PACKAGES" -ne 1 ]]; then
+    return 1
+  fi
+
+  local sudo_cmd=()
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      return 1
+    fi
+    sudo_cmd=(sudo)
+  fi
+
+  if command -v apt-get >/dev/null 2>&1; then
+    log_info "Installing Chromium with apt"
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=a
+    if command -v apt-cache >/dev/null 2>&1 && apt-cache show chromium >/dev/null 2>&1; then
+      "${sudo_cmd[@]}" apt-get install -y chromium && return 0
+    fi
+    if command -v apt-cache >/dev/null 2>&1 && apt-cache show chromium-browser >/dev/null 2>&1; then
+      "${sudo_cmd[@]}" apt-get install -y chromium-browser && return 0
+    fi
+    "${sudo_cmd[@]}" apt-get install -y chromium && return 0
+    return 1
+  fi
+
+  if command -v dnf >/dev/null 2>&1; then
+    log_info "Installing Chromium with dnf"
+    "${sudo_cmd[@]}" dnf install -y chromium && return 0
+    return 1
+  fi
+
+  if command -v yum >/dev/null 2>&1; then
+    log_info "Installing Chromium with yum"
+    "${sudo_cmd[@]}" yum install -y chromium && return 0
+    return 1
+  fi
+
+  return 1
+}
+
+install_agent_browser_chrome() {
+  if ! command -v npx >/dev/null 2>&1; then
+    return 1
+  fi
+  if [[ "$INSTALL_SYSTEM_PACKAGES" -eq 1 ]]; then
+    log_info "Installing agent-browser managed Chrome runtime with system dependencies"
+    npx --yes agent-browser install --with-deps
+  else
+    log_info "Installing agent-browser managed Chrome runtime"
+    npx --yes agent-browser install
+  fi
+}
+
+ensure_browser_runtime() {
+  if [[ "$INSTALL_BROWSER" -ne 1 ]]; then
+    return 0
+  fi
+
+  local browser_path=""
+  if browser_path="$(find_browser_executable)"; then
+    export AGENT_BROWSER_EXECUTABLE_PATH="${AGENT_BROWSER_EXECUTABLE_PATH:-$browser_path}"
+    log_success "Browser runtime found: ${AGENT_BROWSER_EXECUTABLE_PATH}"
+  else
+    log_info "Chromium/Chrome was not found; installing browser runtime"
+    install_system_browser_package || install_agent_browser_chrome || log_warn "Could not install Chromium automatically; browser tools may fail until Chromium/Chrome is installed."
+    if browser_path="$(find_browser_executable)"; then
+      export AGENT_BROWSER_EXECUTABLE_PATH="${AGENT_BROWSER_EXECUTABLE_PATH:-$browser_path}"
+      log_success "Browser runtime ready: ${AGENT_BROWSER_EXECUTABLE_PATH}"
+    else
+      log_warn "No system Chromium/Chrome executable found after install. agent-browser may still use its managed browser if doctor passes."
+    fi
+  fi
+
+  ensure_browser_no_sandbox_arg
+  if command -v npx >/dev/null 2>&1; then
+    log_info "Checking agent-browser runtime"
+    npx --yes agent-browser doctor || log_warn "agent-browser doctor reported issues; browser tools may need manual setup."
+  fi
+}
+
 find_python() {
   local candidate
   for candidate in python3.13 python3.12 python3.11 python3; do
@@ -409,6 +543,42 @@ install_web_frontend() {
   log_success "Built Web UI"
 }
 
+detect_shell_config() {
+  case "$(basename "${SHELL:-bash}")" in
+    zsh) printf '%s' "$HOME/.zshrc" ;;
+    bash) printf '%s' "$HOME/.bashrc" ;;
+    *) printf '%s' "$HOME/.profile" ;;
+  esac
+}
+
+persist_browser_environment() {
+  if [[ "$INSTALL_BROWSER" -ne 1 ]]; then
+    return 0
+  fi
+
+  local shell_config
+  shell_config="$(detect_shell_config)"
+  touch "$shell_config"
+
+  if [[ -n "${AGENT_BROWSER_EXECUTABLE_PATH:-}" ]] && ! grep -v '^[[:space:]]*#' "$shell_config" | grep -qE '^export[[:space:]]+AGENT_BROWSER_EXECUTABLE_PATH='; then
+    {
+      printf '\n'
+      printf '# OpenSprite browser runtime\n'
+      printf 'export AGENT_BROWSER_EXECUTABLE_PATH=%q\n' "$AGENT_BROWSER_EXECUTABLE_PATH"
+    } >> "$shell_config"
+    log_success "Added browser executable path to $shell_config"
+  fi
+
+  if [[ "${AGENT_BROWSER_ARGS:-}" == *"--no-sandbox"* ]] && ! grep -v '^[[:space:]]*#' "$shell_config" | grep -qE 'AGENT_BROWSER_ARGS=.*--no-sandbox'; then
+    {
+      printf '\n'
+      printf '# OpenSprite browser runtime flags\n'
+      printf 'export AGENT_BROWSER_ARGS=%q\n' "$AGENT_BROWSER_ARGS"
+    } >> "$shell_config"
+    log_success "Added browser no-sandbox flag to $shell_config"
+  fi
+}
+
 setup_command_link() {
   if [[ "$CREATE_LINK" -ne 1 ]]; then
     return 0
@@ -419,11 +589,7 @@ setup_command_link() {
   log_success "Linked opensprite -> $link_dir/opensprite"
 
   local shell_config=""
-  case "$(basename "${SHELL:-bash}")" in
-    zsh) shell_config="$HOME/.zshrc" ;;
-    bash) shell_config="$HOME/.bashrc" ;;
-    *) shell_config="$HOME/.profile" ;;
-  esac
+  shell_config="$(detect_shell_config)"
   touch "$shell_config"
 
   case ":$PATH:" in
@@ -513,7 +679,9 @@ main() {
   clone_or_update_repo
   install_python_package "$python_bin"
   install_web_frontend
+  ensure_browser_runtime
   setup_command_link
+  persist_browser_environment
   verify_install
   maybe_start_service
   print_success
