@@ -91,7 +91,7 @@ const props = defineProps({
 
 defineEmits(["resume-follow-up", "run-verification"]);
 
-const expanded = ref(true);
+const expanded = ref(false);
 
 const statusLabel = computed(() => {
   return props.copy.workState.statusLabels[props.workState.status] || props.workState.status;
