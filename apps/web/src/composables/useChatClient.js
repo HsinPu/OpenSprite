@@ -9,6 +9,7 @@ import { useModelSettingsActions } from "./useModelSettingsActions";
 import { useNetworkSettingsActions } from "./useNetworkSettingsActions";
 import { useProviderSettingsActions } from "./useProviderSettingsActions";
 import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
+import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
 import { createCuratorState, createPermissionState, createSettingsForm, createSettingsState } from "./useSettingsState";
@@ -2364,6 +2365,13 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
+  const { loadSearchSettings, saveSearchSettings } = useSearchSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy,
+    setSettingsSuccess,
+  });
+
   const { loadBrowserSettings, saveBrowserSettings } = useBrowserSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -3562,6 +3570,10 @@ export function useChatClient() {
       loadNetworkSettings();
       return;
     }
+    if (sectionName === "search") {
+      loadSearchSettings();
+      return;
+    }
     if (sectionName === "browser") {
       loadBrowserSettings();
       return;
@@ -4483,6 +4495,7 @@ export function useChatClient() {
     loadChannelSettings,
     loadScheduleSettings,
     loadNetworkSettings,
+    loadSearchSettings,
     loadBrowserSettings,
     loadLogSettings,
     loadDataSettings,
@@ -4532,6 +4545,7 @@ export function useChatClient() {
     applyMcpJson,
     saveScheduleSettings,
     saveNetworkSettings,
+    saveSearchSettings,
     saveBrowserSettings,
     saveLogSettings,
     beginCronJobEdit,

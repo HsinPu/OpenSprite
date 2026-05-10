@@ -892,6 +892,97 @@ def test_web_adapter_browser_settings_roundtrip(tmp_path):
     asyncio.run(_run_web_browser_settings_roundtrip(tmp_path))
 
 
+async def _run_web_search_settings_roundtrip(tmp_path: Path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/search") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["search"]["provider"] == "duckduckgo"
+                assert payload["search"]["freshness"] == "year"
+                assert payload["search"]["providers"] == ["duckduckgo", "brave", "tavily", "searxng", "jina"]
+                assert payload["search"]["brave_api_key_configured"] is False
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/search",
+                json={
+                    "provider": "brave",
+                    "freshness": "week",
+                    "max_results": 12,
+                    "duckduckgo_max_pages": 3,
+                    "searxng_url": "https://search.example.test",
+                    "proxy": "http://proxy.local:8080",
+                    "brave_api_key": "brave-secret",
+                    "tavily_api_key": "tavily-secret",
+                },
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["restart_required"] is True
+                assert payload["search"]["provider"] == "brave"
+                assert payload["search"]["freshness"] == "week"
+                assert payload["search"]["max_results"] == 12
+                assert payload["search"]["duckduckgo_max_pages"] == 3
+                assert payload["search"]["brave_api_key_configured"] is True
+                assert payload["search"]["tavily_api_key_configured"] is True
+                assert "brave-secret" not in json.dumps(payload)
+                assert "tavily-secret" not in json.dumps(payload)
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/search",
+                json={"provider": "unknown"},
+            ) as resp:
+                assert resp.status == 400
+
+        loaded = Config.from_json(config_path)
+        assert loaded.tools.web_search.provider == "brave"
+        assert loaded.tools.web_search.freshness == "week"
+        assert loaded.tools.web_search.max_results == 12
+        assert loaded.tools.web_search.duckduckgo_max_pages == 3
+        assert loaded.tools.web_search.searxng_url == "https://search.example.test"
+        assert loaded.tools.web_search.proxy == "http://proxy.local:8080"
+        assert loaded.tools.web_search.brave_api_key == "brave-secret"
+        assert loaded.tools.web_search.tavily_api_key == "tavily-secret"
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_search_settings_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("JINA_API_KEY", raising=False)
+    asyncio.run(_run_web_search_settings_roundtrip(tmp_path))
+
+
 async def _run_web_run_events_api():
     storage = MemoryStorage()
     await storage.add_message(

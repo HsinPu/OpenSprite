@@ -98,6 +98,15 @@
           </button>
           <button
             class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'search' }"
+            type="button"
+            @click="$emit('select-section', 'search')"
+          >
+            <span aria-hidden="true">⌕</span>
+            {{ copy.settingsTitles.search }}
+          </button>
+          <button
+            class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'browser' }"
             type="button"
             @click="$emit('select-section', 'browser')"
@@ -1334,6 +1343,162 @@
                 <span>{{ copy.settings.network.scopeDescription }}</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section v-if="section === 'search'" class="settings-page">
+          <p v-if="settingsState.searchLoading" class="settings-inline-status">{{ copy.settings.search.loading }}</p>
+          <p v-if="settingsState.searchNotice" class="settings-inline-status">{{ settingsState.searchNotice }}</p>
+          <p v-if="settingsState.searchError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.searchError }}
+          </p>
+
+          <h3>{{ copy.settings.search.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.provider.title }}</strong>
+                <span>{{ copy.settings.search.provider.description }}</span>
+              </div>
+              <select v-model="settingsState.searchForm.provider" :disabled="settingsState.searchLoading">
+                <option v-for="provider in webSearchProviderOptions" :key="provider.id" :value="provider.id">
+                  {{ provider.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.freshness.title }}</strong>
+                <span>{{ copy.settings.search.freshness.description }}</span>
+              </div>
+              <select v-model="settingsState.searchForm.freshness" :disabled="settingsState.searchLoading">
+                <option v-for="freshness in webSearchFreshnessOptions" :key="freshness.id" :value="freshness.id">
+                  {{ freshness.label }}
+                </option>
+              </select>
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.maxResults.title }}</strong>
+                <span>{{ copy.settings.search.maxResults.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.searchForm.maxResults"
+                type="number"
+                min="1"
+                max="100"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.duckduckgoMaxPages.title }}</strong>
+                <span>{{ copy.settings.search.duckduckgoMaxPages.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.searchForm.duckduckgoMaxPages"
+                type="number"
+                min="1"
+                max="50"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.searxngUrl.title }}</strong>
+                <span>{{ copy.settings.search.searxngUrl.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.searxngUrl"
+                type="text"
+                :placeholder="copy.settings.search.searxngUrl.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.proxy.title }}</strong>
+                <span>{{ copy.settings.search.proxy.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.proxy"
+                type="text"
+                :placeholder="copy.settings.search.proxy.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.search.currentTitle }}</strong>
+                <span>{{ webSearchSummary }}</span>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.searchLoading"
+                @click="$emit('save-search-settings')"
+              >
+                {{ copy.settings.search.save }}
+              </button>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.search.credentialsTitle }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.credentials.brave.title }}</strong>
+                <span>{{ copy.settings.search.credentials.description(webSearchCredentialStatus('brave')) }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.braveApiKey"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="copy.settings.search.credentials.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.credentials.tavily.title }}</strong>
+                <span>{{ copy.settings.search.credentials.description(webSearchCredentialStatus('tavily')) }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.tavilyApiKey"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="copy.settings.search.credentials.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.credentials.jina.title }}</strong>
+                <span>{{ copy.settings.search.credentials.description(webSearchCredentialStatus('jina')) }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.jinaApiKey"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="copy.settings.search.credentials.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
           </div>
         </section>
 
@@ -3527,6 +3692,40 @@ const mcpRuntimeStatus = computed(() => {
   return props.copy.settings.mcp.runtimeDisconnected;
 });
 
+function webSearchProviderLabel(provider) {
+  return props.copy.settings.search.providers?.[provider] || provider;
+}
+
+function webSearchFreshnessLabel(freshness) {
+  return props.copy.settings.search.freshness.options?.[freshness] || freshness;
+}
+
+const webSearchProviderOptions = computed(() => {
+  const providers = props.settingsState.search?.providers;
+  const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "brave", "tavily", "searxng", "jina"];
+  return values.map((id) => ({ id, label: webSearchProviderLabel(id) }));
+});
+
+const webSearchFreshnessOptions = computed(() => {
+  const freshnessOptions = props.settingsState.search?.freshness_options;
+  const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["none", "day", "week", "month", "year"];
+  return values.map((id) => ({ id, label: webSearchFreshnessLabel(id) }));
+});
+
+function webSearchCredentialStatus(provider) {
+  const configured = props.settingsState.search?.[`${provider}_api_key_configured`] === true;
+  return configured ? props.copy.settings.search.credentials.configured : props.copy.settings.search.credentials.notConfigured;
+}
+
+const webSearchSummary = computed(() => {
+  const form = props.settingsState.searchForm || {};
+  return props.copy.settings.search.summary(
+    webSearchProviderLabel(form.provider || "duckduckgo"),
+    webSearchFreshnessLabel(form.freshness || "year"),
+    Number(form.maxResults || 25),
+  );
+});
+
 const browserBackendOptions = computed(() => {
   const backends = props.settingsState.browser?.backends;
   const values = Array.isArray(backends) && backends.length ? backends : ["agent-browser", "browserbase", "browser-use", "firecrawl"];
@@ -3698,6 +3897,7 @@ const emit = defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "save-search-settings",
   "save-browser-settings",
   "refresh-eval-status",
   "run-eval-smoke",

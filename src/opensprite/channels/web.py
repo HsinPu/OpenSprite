@@ -79,6 +79,8 @@ class WebAdapter(MessageAdapter):
 
     LOG_LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
+    WEB_SEARCH_PROVIDERS = ("duckduckgo", "brave", "tavily", "searxng", "jina")
+    WEB_SEARCH_FRESHNESS = ("none", "day", "week", "month", "year")
     BROWSER_BACKENDS = SUPPORTED_BROWSER_BACKENDS
     LLM_DECODING_PRESETS = {
         "precise": {
@@ -508,6 +510,23 @@ class WebAdapter(MessageAdapter):
             "runtime": cls._browser_runtime_status(),
         }
 
+    @classmethod
+    def _web_search_payload(cls, config: Config) -> dict[str, Any]:
+        search = getattr(getattr(config, "tools", None), "web_search", None)
+        return {
+            "provider": str(getattr(search, "provider", "duckduckgo") or "duckduckgo"),
+            "providers": list(cls.WEB_SEARCH_PROVIDERS),
+            "freshness": str(getattr(search, "freshness", "year") or "year"),
+            "freshness_options": list(cls.WEB_SEARCH_FRESHNESS),
+            "max_results": int(getattr(search, "max_results", 25) or 25),
+            "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", 10) or 10),
+            "searxng_url": str(getattr(search, "searxng_url", "https://searx.be") or "https://searx.be"),
+            "proxy": str(getattr(search, "proxy", "") or ""),
+            "brave_api_key_configured": bool(getattr(search, "brave_api_key", "") or os.environ.get("BRAVE_API_KEY", "")),
+            "tavily_api_key_configured": bool(getattr(search, "tavily_api_key", "") or os.environ.get("TAVILY_API_KEY", "")),
+            "jina_api_key_configured": bool(getattr(search, "jina_api_key", "") or os.environ.get("JINA_API_KEY", "")),
+        }
+
     @staticmethod
     def _llm_decoding_payload(config: Config) -> dict[str, Any]:
         llm = config.llm
@@ -711,6 +730,31 @@ class WebAdapter(MessageAdapter):
         if backend not in cls.BROWSER_BACKENDS:
             raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(cls.BROWSER_BACKENDS)}")
         return backend
+
+    @classmethod
+    def _coerce_web_search_provider(cls, value: Any) -> str:
+        provider = str(value or "duckduckgo").strip().lower() or "duckduckgo"
+        if provider not in cls.WEB_SEARCH_PROVIDERS:
+            raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(cls.WEB_SEARCH_PROVIDERS)}")
+        return provider
+
+    @classmethod
+    def _coerce_web_search_freshness(cls, value: Any) -> str:
+        freshness = str(value or "year").strip().lower() or "year"
+        if freshness not in cls.WEB_SEARCH_FRESHNESS:
+            raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(cls.WEB_SEARCH_FRESHNESS)}")
+        return freshness
+
+    def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
+        clear_field = f"clear_{field}"
+        if self._coerce_bool(body.get(clear_field), field=clear_field, default=False):
+            setattr(target, field, "")
+            return
+        if field not in body:
+            return
+        value = self._coerce_optional_text(body.get(field), default="") or ""
+        if value:
+            setattr(target, field, value)
 
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
@@ -1903,6 +1947,40 @@ class WebAdapter(MessageAdapter):
         self._apply_network_environment(config)
         return web.json_response({"network": self._network_payload(config), "restart_required": False})
 
+    async def _handle_settings_search(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        return web.json_response({"search": self._web_search_payload(config)})
+
+    async def _handle_settings_search_update(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        config_path = self._get_config_path()
+        config = Config.load(config_path)
+        search = config.tools.web_search
+        search.provider = self._coerce_web_search_provider(body.get("provider", search.provider))
+        search.freshness = self._coerce_web_search_freshness(body.get("freshness", search.freshness))
+        search.max_results = self._coerce_positive_int(
+            body.get("max_results"),
+            field="max_results",
+            default=search.max_results,
+            minimum=1,
+            maximum=100,
+        )
+        search.duckduckgo_max_pages = self._coerce_positive_int(
+            body.get("duckduckgo_max_pages"),
+            field="duckduckgo_max_pages",
+            default=search.duckduckgo_max_pages,
+            minimum=1,
+            maximum=50,
+        )
+        if "searxng_url" in body:
+            search.searxng_url = self._coerce_optional_text(body.get("searxng_url"), default="") or "https://searx.be"
+        if "proxy" in body:
+            search.proxy = self._coerce_optional_text(body.get("proxy"), default="") or None
+        for field in ("brave_api_key", "tavily_api_key", "jina_api_key"):
+            self._apply_optional_secret_field(search, body, field)
+        config.save(config_path)
+        return web.json_response({"search": self._web_search_payload(config), "restart_required": True})
+
     async def _handle_settings_browser(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"browser": self._browser_payload(config)})
@@ -2332,6 +2410,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/schedule", self._handle_settings_schedule_update)
         self.app.router.add_get("/api/settings/network", self._handle_settings_network)
         self.app.router.add_put("/api/settings/network", self._handle_settings_network_update)
+        self.app.router.add_get("/api/settings/search", self._handle_settings_search)
+        self.app.router.add_put("/api/settings/search", self._handle_settings_search_update)
         self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
         self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
         self.app.router.add_get("/api/settings/log", self._handle_settings_log)
