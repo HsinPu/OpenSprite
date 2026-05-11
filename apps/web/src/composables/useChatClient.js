@@ -57,6 +57,7 @@ const CURATOR_BUSY_STATES = new Set(["queued", "running"]);
 const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "completion", "file", "process", "text", "system", "other"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
+  "task_context.resolved",
   "llm_status",
   "tool_started",
   "file_changed",
@@ -1171,6 +1172,14 @@ function describeRunEvent(eventType, payload, copy) {
     return { label: copy.run.runStarted, detail: copy.run.preparingTask, tone: "running" };
   }
 
+  if (eventType === "task_context.resolved") {
+    return {
+      label: copy.run.taskContextResolved || "Task context resolved",
+      detail: formatTaskContextDetail(payload),
+      tone: payload.method === "fallback" ? "warning" : "running",
+    };
+  }
+
   if (eventType === "llm_status") {
     const message = String(payload.message || copy.run.thinking);
     return {
@@ -1470,6 +1479,15 @@ function describeRunEvent(eventType, payload, copy) {
   }
 
   return null;
+}
+
+function formatTaskContextDetail(payload = {}) {
+  const method = String(payload.method || "deterministic").trim();
+  const inheritedToolGroup = String(payload.inherited_tool_group || payload.inheritedToolGroup || "").trim();
+  const confidence = Number(payload.confidence);
+  const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
+  const reason = String(payload.reason || "").trim();
+  return [method, inheritedToolGroup, confidenceText, reason].filter(Boolean).join(" · ");
 }
 
 export function formatEventTime(timestamp) {

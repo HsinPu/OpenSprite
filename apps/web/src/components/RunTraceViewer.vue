@@ -612,6 +612,9 @@ function eventSummary(event) {
   if (payload.status) {
     return payload.status;
   }
+  if (payload.reason) {
+    return payload.reason;
+  }
   if (payload.message) {
     return payload.message;
   }
