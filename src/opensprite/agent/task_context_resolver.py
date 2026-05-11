@@ -60,6 +60,7 @@ _ALLOWED_CONTINUATION_TYPES = frozenset(
         "advance_current_step",
         "task_switch",
         "new_task",
+        "ambiguous_boundary",
         "none",
     }
 )
@@ -73,6 +74,8 @@ _FOLLOW_UP_CONTINUATION_TYPES = frozenset(
     }
 )
 _NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
+_AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE = "ambiguous_boundary"
+_LLM_TASK_SWITCH_CONFIDENCE = 0.80
 _TASK_TYPE_BY_TOOL_GROUP = {
     "audio_text": "media_extraction",
     "image_text": "media_extraction",
@@ -162,7 +165,11 @@ class TaskContextResolver:
             logger.warning("Task context LLM resolution failed: {}", exc)
             return replace(deterministic, method="fallback", reason=f"llm failed; {deterministic.reason}")
 
-        llm_decision = _merge_with_deterministic(deterministic, llm_decision)
+        llm_decision = _merge_with_deterministic(
+            deterministic,
+            llm_decision,
+            has_active_task=_has_active_task(active_task),
+        )
         if llm_decision.confidence < 0.55:
             return replace(
                 deterministic,
@@ -334,6 +341,8 @@ def _build_llm_prompt(
         f"{', '.join(sorted(_ALLOWED_TOOL_GROUPS))}.\n"
         "Do not mark a turn as no-tool if it likely asks for external web, media, or workspace evidence.\n"
         "Do not remove evidence or active-task inheritance from deterministic_decision; only add stricter context.\n"
+        "If an active task exists and the latest turn might be either a new task or a continuation, use "
+        "continuation_type=ambiguous_boundary instead of replacing the task.\n"
         "Return only JSON with these keys: continuation_type, is_follow_up, should_inherit_active_task, "
         "should_seed_active_task, should_replace_active_task, inherited_task_type, inherited_tool_group, "
         "confidence, reason. Use null when no task/tool is inherited.\n"
@@ -370,6 +379,13 @@ def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = F
     if continuation_type in _NEW_TASK_CONTINUATION_TYPES:
         should_inherit_active_task = False
         should_seed_active_task = True
+    if continuation_type == _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE:
+        should_inherit_active_task = False
+        should_seed_active_task = False
+        should_replace_active_task = False
+        is_follow_up = False
+        inherited_task_type = None
+        inherited_tool_group = None
     return TaskContextDecision(
         is_follow_up=is_follow_up,
         should_inherit_active_task=should_inherit_active_task,
@@ -387,6 +403,8 @@ def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = F
 def _merge_with_deterministic(
     deterministic: TaskContextDecision,
     llm_decision: TaskContextDecision,
+    *,
+    has_active_task: bool = False,
 ) -> TaskContextDecision:
     """Keep deterministic safety signals when accepting an LLM classification."""
     if deterministic.continuation_type == "ack":
@@ -409,6 +427,22 @@ def _merge_with_deterministic(
         inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
 
     continuation_type = llm_decision.continuation_type
+    if (
+        has_active_task
+        and continuation_type in _NEW_TASK_CONTINUATION_TYPES
+        and llm_decision.confidence < _LLM_TASK_SWITCH_CONFIDENCE
+    ):
+        return replace(
+            llm_decision,
+            is_follow_up=False,
+            should_inherit_active_task=False,
+            should_seed_active_task=False,
+            should_replace_active_task=False,
+            inherited_task_type=None,
+            inherited_tool_group=None,
+            continuation_type=_AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
+            reason=f"task boundary confidence too low ({llm_decision.confidence:.2f}); ask for confirmation",
+        )
     if deterministic.should_inherit_active_task and continuation_type not in _NEW_TASK_CONTINUATION_TYPES:
         continuation_type = "continue_active_task"
     elif inherited_tool_group and continuation_type == "none":

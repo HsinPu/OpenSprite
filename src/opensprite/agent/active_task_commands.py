@@ -36,6 +36,7 @@ _CURRENT_TASK_CONTINUATION_TYPES = frozenset(
     }
 )
 _CURRENT_TASK_REPLACEMENT_TYPES = frozenset({"task_switch", "new_task"})
+_AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE = "ambiguous_boundary"
 
 
 class ActiveTaskCommandService:
@@ -213,6 +214,19 @@ class ActiveTaskCommandService:
         has_current_task = current_status in {"active", "blocked", "waiting_user"}
         if has_current_task:
             current_task = store.read_managed_block()
+            if _decision_needs_boundary_confirmation(task_context_decision):
+                question = _boundary_confirmation_question(current_task, current_message)
+                store.update_fields(status="waiting_user", open_questions=[question], force=True)
+                await self._mark_processed(session_id, store)
+                store.append_event(
+                    "task_boundary_confirmation",
+                    "immediate",
+                    details={
+                        "message": re.sub(r"\s+", " ", current_message).strip()[:120],
+                        "confidence": task_context_decision.confidence if task_context_decision else 0.0,
+                    },
+                )
+                return
             if _decision_continues_current_task(task_context_decision):
                 return
             explicit_replace = should_replace_active_task(current_task, current_message)
@@ -457,6 +471,28 @@ def _decision_replaces_current_task(decision: TaskContextDecision | None) -> boo
         and decision.should_replace_active_task
         and decision.continuation_type in _CURRENT_TASK_REPLACEMENT_TYPES
     )
+
+
+def _decision_needs_boundary_confirmation(decision: TaskContextDecision | None) -> bool:
+    return bool(decision and decision.continuation_type == _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE)
+
+
+def _boundary_confirmation_question(current_task: str, current_message: str) -> str:
+    current_goal = _compact_for_prompt(_extract_task_field(current_task, "Goal"))
+    new_request = _compact_for_prompt(current_message) or "the new request"
+    if current_goal and current_goal.lower() != "not set":
+        return (
+            f"Confirm whether to switch from the active task ({current_goal}) "
+            f"to the new request ({new_request}), or continue the active task."
+        )
+    return f"Confirm whether to switch to the new request ({new_request}) or continue the active task."
+
+
+def _compact_for_prompt(value: str, max_chars: int = 120) -> str:
+    compact = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3].rstrip() + "..."
 
 
 def _objective_assumptions(decision: TaskObjectiveDecision) -> list[str]:

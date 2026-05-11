@@ -61,6 +61,26 @@ class TaskContextDecisionProvider(CapturingProvider):
         return LLMResponse(content="done", model="fake-model")
 
 
+class AmbiguousBoundaryDecisionProvider(CapturingProvider):
+    """Returns an ambiguous boundary decision before the main assistant response."""
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append(list(messages))
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You classify whether the latest user turn inherits task context" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"continuation_type": "new_task", "is_follow_up": false, '
+                    '"should_inherit_active_task": false, '
+                    '"should_seed_active_task": true, "should_replace_active_task": true, '
+                    '"inherited_task_type": null, "inherited_tool_group": null, '
+                    '"confidence": 0.72, "reason": "might be a new README task"}'
+                ),
+                model="fake-model",
+            )
+        return LLMResponse(content="done", model="fake-model")
+
+
 class TaskObjectiveDecisionProvider(CapturingProvider):
     """Returns an objective JSON decision before the main assistant response."""
 
@@ -485,6 +505,79 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
     assert len(provider.calls) == 2
     system_text = provider.calls[-1][0].content
     assert f"Goal: {message}" in system_text
+
+
+def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = AmbiguousBoundaryDecisionProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    session_id = "telegram:room-1"
+    message = "please update README"
+
+    async def _run() -> str:
+        task_store = create_active_task_store(app_home, session_id, workspace_root=context_builder.tool_workspace)
+        task_store.write_managed_block(
+            "- Status: active\n"
+            "- Goal: Refactor the agent in small safe steps.\n"
+            "- Deliverable: a safe refactor and verification\n"
+            "- Definition of done:\n"
+            "  - tests pass\n"
+            "- Constraints:\n"
+            "  - minimal changes\n"
+            "- Assumptions:\n"
+            "  - none\n"
+            "- Plan:\n"
+            "  1. inspect\n"
+            "- Current step: 1. inspect\n"
+            "- Next step: not set\n"
+            "- Completed steps:\n"
+            "  - none\n"
+            "- Open questions:\n"
+            "  - none"
+        )
+        return await agent.call_llm(
+            session_id,
+            message,
+            channel="telegram",
+            allow_tools=False,
+            task_intent=agent.task_intents.classify(message),
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    assert len(provider.calls) == 2
+    system_text = provider.calls[-1][0].content
+    assert "Status: waiting_user" in system_text
+    assert "Goal: Refactor the agent in small safe steps." in system_text
+    assert "Confirm whether to switch from the active task" in system_text
+    assert message in system_text
+    assert f"Goal: {message}" not in system_text
 
 
 def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_path: Path) -> None:

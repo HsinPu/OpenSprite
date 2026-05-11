@@ -252,6 +252,67 @@ def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
     assert decision.should_replace_active_task is True
 
 
+def test_task_context_downgrades_low_confidence_task_switch_to_ambiguous_boundary():
+    provider = _JsonProvider(
+        '{"continuation_type": "new_task", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": true, "should_replace_active_task": true, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.72, "reason": "might be a new README task"}'
+    )
+    message = "please update README"
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.continuation_type == "ambiguous_boundary"
+    assert decision.should_seed_active_task is False
+    assert decision.should_replace_active_task is False
+    assert decision.should_inherit_active_task is False
+    assert decision.is_follow_up is False
+    assert "ask for confirmation" in decision.reason
+
+
+def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
+    provider = _JsonProvider(
+        '{"continuation_type": "ambiguous_boundary", "is_follow_up": true, '
+        '"should_inherit_active_task": true, '
+        '"should_seed_active_task": true, "should_replace_active_task": true, '
+        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"confidence": 0.82, "reason": "could be either a new task or continuation"}'
+    )
+    message = "please update README"
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.continuation_type == "ambiguous_boundary"
+    assert decision.is_follow_up is False
+    assert decision.should_seed_active_task is False
+    assert decision.should_replace_active_task is False
+    assert decision.should_inherit_active_task is False
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
+
+
 def test_task_context_skips_llm_when_provider_is_unconfigured():
     message = "那這個呢"
 
@@ -474,3 +535,42 @@ def test_active_task_seed_skips_continuation_of_current_task(tmp_path):
 
     assert store.read_managed_block() == _ACTIVE_TASK_BLOCK
     assert not any(event["event_type"] == "seed" for event in store.read_events())
+
+
+def test_active_task_seed_marks_ambiguous_boundary_waiting_user(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    store.write_managed_block(_ACTIVE_TASK_BLOCK)
+    message = "please update README"
+    decision = TaskContextDecision(
+        continuation_type="ambiguous_boundary",
+        confidence=0.72,
+        method="llm",
+        reason="task boundary confidence too low; ask for confirmation",
+    )
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            message,
+            enabled=True,
+            task_intent=TaskIntentService().classify(message),
+            task_context_decision=decision,
+        )
+    )
+
+    updated = store.read_managed_block()
+    assert "- Status: waiting_user" in updated
+    assert "- Goal: Refactor the agent in small safe steps." in updated
+    assert "Confirm whether to switch from the active task" in updated
+    assert message in updated
+    assert not any(event["event_type"] == "seed" for event in store.read_events())
+    boundary_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation")
+    assert boundary_event["details"]["confidence"] == 0.72
