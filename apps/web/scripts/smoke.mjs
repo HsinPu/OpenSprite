@@ -114,6 +114,8 @@ assertIncludes(toastStack, "dismiss-toast", "toast dismiss event");
 assertIncludes(sidebarNav, "delete-sessions", "sidebar batch session delete event");
 assertIncludes(sidebarNav, "deleteMode", "sidebar session delete mode");
 assertIncludes(sidebarNav, "session-tile__select", "sidebar session selection checkbox");
+assertIncludes(sidebarNav, "session-tile__expand", "collapsed sidebar hover expand affordance");
+assertIncludes(sidebarNav, "collapsed ? $emit('toggle-sidebar-collapsed')", "collapsed session tile expands sidebar");
 assertNotIncludes(sidebarNav, "session-tile__delete", "sidebar row delete button removed");
 assertIncludes(app, "state.authRequired", "auth gate visibility");
 assertIncludes(app, "submitAccessToken", "auth gate submit wiring");
@@ -138,6 +140,8 @@ assertIncludes(styles, ".settings-content__header", "settings shared header styl
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
 assertIncludes(styles, ".session-tile__select", "sidebar session select styling");
+assertIncludes(styles, ".app-shell--sidebar-collapsed .sidebar-collapse-button", "collapsed sidebar hides top restore button");
+assertIncludes(styles, ".app-shell--sidebar-collapsed .session-tile:hover .session-tile__expand", "collapsed sidebar hover expand styling");
 assertIncludes(styles, ".secondary-button--danger", "settings destructive action styling");
 assertIncludes(curatorSettingsPage, "settings-card", "curator settings card layout");
 assertIncludes(curatorSettingsPage, "provider-row", "curator settings history layout");

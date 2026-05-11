@@ -94,10 +94,11 @@
             <button
               class="session-tile"
               type="button"
-              :title="`${getSessionTitle(session)} · ${getSessionDisplayId(session)}`"
-              @click="$emit('set-active-session', session.externalChatId)"
+              :title="collapsed ? copy.sidebar.expand : `${getSessionTitle(session)} · ${getSessionDisplayId(session)}`"
+              @click="collapsed ? $emit('toggle-sidebar-collapsed') : $emit('set-active-session', session.externalChatId)"
             >
               <span class="session-tile__initial" aria-hidden="true">{{ getSessionTitle(session).slice(0, 1) }}</span>
+              <span class="session-tile__expand" aria-hidden="true">&gt;</span>
               <span class="session-tile__heading">
                 <strong>{{ getSessionTitle(session) }}</strong>
                 <span v-if="session.channel && session.channel !== 'web'" class="session-tile__channel">

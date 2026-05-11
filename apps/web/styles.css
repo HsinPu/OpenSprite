@@ -770,6 +770,10 @@ button:disabled {
   display: none;
 }
 
+.session-tile__expand {
+  display: none;
+}
+
 .session-tile strong,
 .session-tile span {
   overflow: hidden;
@@ -1017,8 +1021,7 @@ button:disabled {
   }
 
   .app-shell--sidebar-collapsed .sidebar-collapse-button {
-    width: 34px;
-    height: 34px;
+    display: none;
   }
 
   .app-shell--sidebar-collapsed .new-chat-button,
@@ -1060,6 +1063,30 @@ button:disabled {
     background: var(--surface);
     font-size: 0.78rem;
     font-weight: 700;
+  }
+
+  .app-shell--sidebar-collapsed .session-tile__expand {
+    display: none;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    color: var(--text);
+    background: var(--surface-hover);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .app-shell--sidebar-collapsed .session-tile:hover .session-tile__initial,
+  .app-shell--sidebar-collapsed .session-tile:focus-visible .session-tile__initial {
+    display: none;
+  }
+
+  .app-shell--sidebar-collapsed .session-tile:hover .session-tile__expand,
+  .app-shell--sidebar-collapsed .session-tile:focus-visible .session-tile__expand {
+    display: grid;
   }
 
   .app-shell--sidebar-collapsed .session-tile--active .session-tile__initial {
