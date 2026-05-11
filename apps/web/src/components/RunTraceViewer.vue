@@ -53,7 +53,7 @@
         </div>
 
         <div v-show="artifactsExpanded" class="run-trace__section-body">
-          <details v-if="parallelDelegationGroups.length" class="run-trace__artifact-group" open>
+          <details v-if="parallelDelegationGroups.length" class="run-trace__artifact-group">
             <summary class="run-trace__artifact-group-title">
               <span>{{ copy.trace.parallelDelegation }}</span>
               <small>{{ parallelDelegationGroups.length }}</small>
@@ -107,7 +107,6 @@
               :key="group.kind"
               v-show="group.items.length"
               class="run-trace__artifact-group"
-              open
             >
               <summary class="run-trace__artifact-group-title">
                 <span>{{ group.label }}</span>
@@ -377,7 +376,7 @@ const emit = defineEmits(["cancel-run", "inspect-file"]);
 
 const selectedFilter = ref("all");
 const expanded = ref(false);
-const artifactsExpanded = ref(true);
+const artifactsExpanded = ref(false);
 const partsExpanded = ref(false);
 const debugExpanded = ref(false);
 
