@@ -50,6 +50,29 @@ _ALLOWED_TOOL_GROUPS = frozenset(
         "workspace_write",
     }
 )
+_ALLOWED_CONTINUATION_TYPES = frozenset(
+    {
+        "ack",
+        "follow_up",
+        "continue_active_task",
+        "continue_last_answer",
+        "continue_tool_work",
+        "advance_current_step",
+        "task_switch",
+        "new_task",
+        "none",
+    }
+)
+_FOLLOW_UP_CONTINUATION_TYPES = frozenset(
+    {
+        "follow_up",
+        "continue_active_task",
+        "continue_last_answer",
+        "continue_tool_work",
+        "advance_current_step",
+    }
+)
+_NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
 _TASK_TYPE_BY_TOOL_GROUP = {
     "audio_text": "media_extraction",
     "image_text": "media_extraction",
@@ -70,6 +93,7 @@ class TaskContextDecision:
     should_replace_active_task: bool = False
     inherited_task_type: str | None = None
     inherited_tool_group: str | None = None
+    continuation_type: str = "none"
     confidence: float = 0.0
     method: str = "deterministic"
     reason: str = ""
@@ -83,6 +107,7 @@ class TaskContextDecision:
             "should_replace_active_task": self.should_replace_active_task,
             "inherited_task_type": self.inherited_task_type,
             "inherited_tool_group": self.inherited_tool_group,
+            "continuation_type": self.continuation_type,
             "confidence": self.confidence,
             "method": self.method,
             "reason": self.reason,
@@ -110,7 +135,14 @@ class TaskContextResolver:
             active_task=active_task,
             work_state_summary=work_state_summary,
         )
-        if not _should_consult_llm(current_message, deterministic, active_task, task_intent):
+        if not _should_consult_llm(
+            current_message,
+            deterministic,
+            active_task,
+            task_intent,
+            history=history,
+            work_state_summary=work_state_summary,
+        ):
             return deterministic
         if provider is None or str(model or "").strip().lower() == "unconfigured":
             return replace(deterministic, method="fallback", reason=f"llm unavailable; {deterministic.reason}")
@@ -130,6 +162,7 @@ class TaskContextResolver:
             logger.warning("Task context LLM resolution failed: {}", exc)
             return replace(deterministic, method="fallback", reason=f"llm failed; {deterministic.reason}")
 
+        llm_decision = _merge_with_deterministic(deterministic, llm_decision)
         if llm_decision.confidence < 0.55:
             return replace(
                 deterministic,
@@ -152,12 +185,17 @@ class TaskContextResolver:
         current = _compact(current_message)
         has_active_task = _has_active_task(active_task)
         if not current or _ACK_RE.match(current):
-            return TaskContextDecision(confidence=0.9, reason="current message is an acknowledgement")
+            return TaskContextDecision(
+                continuation_type="ack",
+                confidence=0.9,
+                reason="current message is an acknowledgement",
+            )
 
         if has_active_task and should_replace_active_task(active_task or "", current):
             return TaskContextDecision(
                 should_seed_active_task=True,
                 should_replace_active_task=True,
+                continuation_type="task_switch",
                 confidence=0.85,
                 reason="current message explicitly switches the active task",
             )
@@ -166,13 +204,36 @@ class TaskContextResolver:
             return TaskContextDecision(
                 is_follow_up=True,
                 should_inherit_active_task=True,
+                continuation_type="continue_active_task",
                 confidence=0.75,
                 reason="current message is a continuation of the active task",
             )
 
+        if _CONTINUATION_RE.match(current):
+            follow_up = FollowUpIntentResolver.resolve(current_message=current, history=history)
+            if follow_up.inherited_tool_group:
+                return TaskContextDecision(
+                    is_follow_up=True,
+                    inherited_task_type=follow_up.inherited_task_type,
+                    inherited_tool_group=follow_up.inherited_tool_group,
+                    continuation_type="follow_up",
+                    confidence=follow_up.confidence,
+                    reason=follow_up.reason,
+                )
+            return TaskContextDecision(
+                is_follow_up=True,
+                continuation_type="continue_last_answer",
+                confidence=0.45,
+                reason="continuation phrase without an active task",
+            )
+
         follow_up = FollowUpIntentResolver.resolve(current_message=current, history=history)
         if not follow_up.is_follow_up:
-            return TaskContextDecision(confidence=0.65, reason=follow_up.reason)
+            return TaskContextDecision(
+                continuation_type="none",
+                confidence=0.65,
+                reason=follow_up.reason,
+            )
 
         inherited_task_type = follow_up.inherited_task_type
         inherited_tool_group = follow_up.inherited_tool_group
@@ -182,6 +243,7 @@ class TaskContextResolver:
             should_inherit_active_task=should_inherit_active_task,
             inherited_task_type=inherited_task_type,
             inherited_tool_group=inherited_tool_group,
+            continuation_type="follow_up",
             confidence=follow_up.confidence,
             reason=follow_up.reason,
         )
@@ -222,7 +284,7 @@ class TaskContextResolver:
             max_tokens=500,
         )
         payload = _parse_json_object(str(getattr(response, "content", "") or ""))
-        return _decision_from_payload(payload)
+        return _decision_from_payload(payload, has_active_task=_has_active_task(active_task))
 
 
 def _should_consult_llm(
@@ -230,6 +292,8 @@ def _should_consult_llm(
     decision: TaskContextDecision,
     active_task: str | None,
     task_intent: TaskIntent | None,
+    history: list[dict[str, Any]] | None = None,
+    work_state_summary: str | None = None,
 ) -> bool:
     current = _compact(current_message)
     if not current or len(current) > 80 or _ACK_RE.match(current):
@@ -239,7 +303,7 @@ def _should_consult_llm(
     if decision.is_follow_up:
         return True
     if not _has_active_task(active_task):
-        return False
+        return _has_recent_context(history, work_state_summary) and _is_context_dependent_short_turn(current, task_intent)
     if decision.should_inherit_active_task:
         return True
     return bool(task_intent and task_intent.should_seed_active_task)
@@ -264,32 +328,113 @@ def _build_llm_prompt(
     }
     return (
         "Decide whether the latest user message is a follow-up, continuation, or task switch.\n"
+        "Handle multilingual, typo-heavy, shorthand, and code-mixed user turns.\n"
         "Use recent history and ACTIVE_TASK only as context.\n"
         "If evidence should be inherited, choose one inherited_tool_group from: "
         f"{', '.join(sorted(_ALLOWED_TOOL_GROUPS))}.\n"
         "Do not mark a turn as no-tool if it likely asks for external web, media, or workspace evidence.\n"
-        "Return only JSON with these keys: is_follow_up, should_inherit_active_task, "
+        "Do not remove evidence or active-task inheritance from deterministic_decision; only add stricter context.\n"
+        "Return only JSON with these keys: continuation_type, is_follow_up, should_inherit_active_task, "
         "should_seed_active_task, should_replace_active_task, inherited_task_type, inherited_tool_group, "
-        "confidence, reason. Use null when no task/tool is inherited.\n\n"
+        "confidence, reason. Use null when no task/tool is inherited.\n"
+        "continuation_type must be one of: "
+        f"{', '.join(sorted(_ALLOWED_CONTINUATION_TYPES))}.\n\n"
         f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
 
 
-def _decision_from_payload(payload: dict[str, Any]) -> TaskContextDecision:
+def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = False) -> TaskContextDecision:
     inherited_tool_group = _allowed_string(payload.get("inherited_tool_group"), _ALLOWED_TOOL_GROUPS)
     inherited_task_type = _allowed_string(payload.get("inherited_task_type"), _ALLOWED_TASK_TYPES)
     if inherited_tool_group and inherited_task_type is None:
         inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
+    should_inherit_active_task = _coerce_bool(payload.get("should_inherit_active_task"))
+    should_replace_active_task = _coerce_bool(payload.get("should_replace_active_task"))
+    should_seed_active_task = _coerce_bool(payload.get("should_seed_active_task"))
+    is_follow_up = _coerce_bool(payload.get("is_follow_up"))
+    continuation_type = _continuation_type_from_payload(
+        payload,
+        is_follow_up=is_follow_up,
+        should_inherit_active_task=should_inherit_active_task,
+        should_seed_active_task=should_seed_active_task,
+        should_replace_active_task=should_replace_active_task,
+    )
+    if continuation_type in _FOLLOW_UP_CONTINUATION_TYPES:
+        should_replace_active_task = False
+        is_follow_up = True
+    if continuation_type == "continue_active_task" or (
+        has_active_task and continuation_type in _FOLLOW_UP_CONTINUATION_TYPES
+    ):
+        should_inherit_active_task = True
+        is_follow_up = True
+    if continuation_type in _NEW_TASK_CONTINUATION_TYPES:
+        should_inherit_active_task = False
+        should_seed_active_task = True
     return TaskContextDecision(
-        is_follow_up=_coerce_bool(payload.get("is_follow_up")),
-        should_inherit_active_task=_coerce_bool(payload.get("should_inherit_active_task")),
-        should_seed_active_task=_coerce_bool(payload.get("should_seed_active_task")),
-        should_replace_active_task=_coerce_bool(payload.get("should_replace_active_task")),
+        is_follow_up=is_follow_up,
+        should_inherit_active_task=should_inherit_active_task,
+        should_seed_active_task=should_seed_active_task,
+        should_replace_active_task=should_replace_active_task,
         inherited_task_type=inherited_task_type,
         inherited_tool_group=inherited_tool_group,
+        continuation_type=continuation_type,
         confidence=_coerce_confidence(payload.get("confidence")),
         method="llm",
         reason=_truncate(str(payload.get("reason") or "llm resolved task context"), 240),
+    )
+
+
+def _merge_with_deterministic(
+    deterministic: TaskContextDecision,
+    llm_decision: TaskContextDecision,
+) -> TaskContextDecision:
+    """Keep deterministic safety signals when accepting an LLM classification."""
+    if deterministic.continuation_type == "ack":
+        return replace(llm_decision, continuation_type="ack", is_follow_up=False, should_inherit_active_task=False)
+
+    if deterministic.should_replace_active_task:
+        return replace(
+            llm_decision,
+            is_follow_up=False,
+            should_inherit_active_task=False,
+            should_seed_active_task=True,
+            should_replace_active_task=True,
+            continuation_type="task_switch",
+            confidence=max(deterministic.confidence, llm_decision.confidence),
+        )
+
+    inherited_tool_group = llm_decision.inherited_tool_group or deterministic.inherited_tool_group
+    inherited_task_type = llm_decision.inherited_task_type or deterministic.inherited_task_type
+    if inherited_tool_group and inherited_task_type is None:
+        inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
+
+    continuation_type = llm_decision.continuation_type
+    if deterministic.should_inherit_active_task and continuation_type not in _NEW_TASK_CONTINUATION_TYPES:
+        continuation_type = "continue_active_task"
+    elif inherited_tool_group and continuation_type == "none":
+        continuation_type = "follow_up"
+
+    should_replace_active_task = llm_decision.should_replace_active_task and continuation_type in _NEW_TASK_CONTINUATION_TYPES
+    should_seed_active_task = llm_decision.should_seed_active_task or should_replace_active_task
+    should_inherit_active_task = llm_decision.should_inherit_active_task
+    if deterministic.should_inherit_active_task and not should_replace_active_task:
+        should_inherit_active_task = True
+
+    is_follow_up = llm_decision.is_follow_up
+    if inherited_tool_group or continuation_type in _FOLLOW_UP_CONTINUATION_TYPES:
+        is_follow_up = True
+    if should_replace_active_task:
+        is_follow_up = False
+
+    return replace(
+        llm_decision,
+        is_follow_up=is_follow_up,
+        should_inherit_active_task=should_inherit_active_task,
+        should_seed_active_task=should_seed_active_task,
+        should_replace_active_task=should_replace_active_task,
+        inherited_task_type=inherited_task_type,
+        inherited_tool_group=inherited_tool_group,
+        continuation_type=continuation_type,
     )
 
 
@@ -324,6 +469,42 @@ def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
     if not normalized or normalized.lower() in {"none", "null", "n/a"}:
         return None
     return normalized if normalized in allowed else None
+
+
+def _continuation_type_from_payload(
+    payload: dict[str, Any],
+    *,
+    is_follow_up: bool,
+    should_inherit_active_task: bool,
+    should_seed_active_task: bool,
+    should_replace_active_task: bool,
+) -> str:
+    normalized = str(payload.get("continuation_type") or "").strip()
+    if normalized in _ALLOWED_CONTINUATION_TYPES:
+        return normalized
+    if should_replace_active_task:
+        return "task_switch"
+    if should_seed_active_task:
+        return "new_task"
+    if should_inherit_active_task:
+        return "continue_active_task"
+    if is_follow_up:
+        return "follow_up"
+    return "none"
+
+
+def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary: str | None) -> bool:
+    if _compact(work_state_summary):
+        return True
+    return any(_compact(str(message.get("content") or "")) for message in (history or [])[-6:])
+
+
+def _is_context_dependent_short_turn(current: str, task_intent: TaskIntent | None) -> bool:
+    if _CONTINUATION_RE.match(current):
+        return True
+    if task_intent is not None and task_intent.kind in {"question", "task", "analysis", "conversation"}:
+        return True
+    return current.endswith(("?", "？")) or len(re.findall(r"[\w\u4e00-\u9fff]+", current)) <= 4
 
 
 def _coerce_bool(value: Any) -> bool:

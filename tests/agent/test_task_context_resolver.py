@@ -1,6 +1,8 @@
 import asyncio
 
 from opensprite.agent.active_task_commands import ActiveTaskCommandService
+from opensprite.agent.completion_gate import CompletionGateService
+from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntentService
@@ -63,6 +65,10 @@ _ACTIVE_TASK_BLOCK = (
     "- Open questions:\n"
     "  - none"
 )
+_WEB_RESEARCH_HISTORY = [
+    {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
+    {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
+]
 
 
 def test_task_context_uses_deterministic_follow_up_without_llm():
@@ -71,10 +77,7 @@ def test_task_context_uses_deterministic_follow_up_without_llm():
     decision = asyncio.run(
         TaskContextResolver().resolve(
             current_message="那00981t呢",
-            history=[
-                {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
-                {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
-            ],
+            history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
             provider=provider,
             model=provider.get_default_model(),
@@ -84,6 +87,7 @@ def test_task_context_uses_deterministic_follow_up_without_llm():
     assert decision.method == "deterministic"
     assert decision.is_follow_up is True
     assert decision.inherited_tool_group == "web_research"
+    assert decision.continuation_type == "follow_up"
 
 
 def test_task_context_uses_llm_for_ambiguous_follow_up():
@@ -109,6 +113,74 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"
     assert decision.inherited_tool_group == "web_research"
+    assert decision.continuation_type == "follow_up"
+
+
+def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
+    messages = ["¿y este?", "et celui-ci ?", "und das?", "ths one?"]
+
+    for message in messages:
+        provider = _JsonProvider(
+            '{"continuation_type": "follow_up", "is_follow_up": true, '
+            '"should_inherit_active_task": false, '
+            '"should_seed_active_task": false, "should_replace_active_task": false, '
+            '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+            '"confidence": 0.86, "reason": "short multilingual follow-up refers to prior lookup"}'
+        )
+
+        decision = asyncio.run(
+            TaskContextResolver().resolve(
+                current_message=message,
+                history=_WEB_RESEARCH_HISTORY,
+                task_intent=TaskIntentService().classify(message),
+                provider=provider,
+                model=provider.get_default_model(),
+            )
+        )
+
+        assert len(provider.calls) == 1
+        assert decision.method == "llm"
+        assert decision.is_follow_up is True
+        assert decision.inherited_task_type == "web_research"
+        assert decision.inherited_tool_group == "web_research"
+        assert decision.continuation_type == "follow_up"
+
+
+def test_task_context_handles_chinese_typo_follow_up_deterministically():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="這ㄍ呢",
+            history=_WEB_RESEARCH_HISTORY,
+            task_intent=TaskIntentService().classify("這ㄍ呢"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is True
+    assert decision.inherited_tool_group == "web_research"
+    assert decision.continuation_type == "follow_up"
+
+
+def test_task_context_acknowledgement_skips_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="thanks",
+            history=_WEB_RESEARCH_HISTORY,
+            task_intent=TaskIntentService().classify("thanks"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is False
+    assert decision.continuation_type == "ack"
 
 
 def test_task_context_falls_back_when_llm_json_is_invalid():
@@ -196,12 +268,53 @@ def test_task_context_skips_llm_when_provider_is_unconfigured():
     assert decision.reason.startswith("llm unavailable")
 
 
+def test_task_context_continues_active_task_without_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="繼續",
+            history=[],
+            task_intent=TaskIntentService().classify("繼續"),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is True
+    assert decision.should_inherit_active_task is True
+    assert decision.continuation_type == "continue_active_task"
+
+
+def test_task_context_continue_without_active_task_inherits_recent_web_context():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="繼續",
+            history=_WEB_RESEARCH_HISTORY,
+            task_intent=TaskIntentService().classify("繼續"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is True
+    assert decision.inherited_task_type == "web_research"
+    assert decision.inherited_tool_group == "web_research"
+    assert decision.continuation_type == "follow_up"
+
+
 def test_task_contract_uses_task_context_decision_for_web_follow_up():
     intent = TaskIntentService().classify("那這個呢")
     decision = TaskContextDecision(
         is_follow_up=True,
         inherited_task_type="web_research",
         inherited_tool_group="web_research",
+        continuation_type="follow_up",
         confidence=0.86,
         method="llm",
         reason="LLM linked the follow-up to external lookup context",
@@ -216,6 +329,35 @@ def test_task_contract_uses_task_context_decision_for_web_follow_up():
     assert contract.task_type == "web_research"
     assert contract.allow_no_tool_final is False
     assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+
+
+def test_completion_gate_requires_evidence_for_llm_web_follow_up():
+    intent = TaskIntentService().classify("¿y este?")
+    decision = TaskContextDecision(
+        is_follow_up=True,
+        inherited_task_type="web_research",
+        inherited_tool_group="web_research",
+        continuation_type="follow_up",
+        confidence=0.86,
+        method="llm",
+        reason="short follow-up refers to prior external lookup",
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        task_context_decision=decision,
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Let me check that next.",
+        execution_result=ExecutionResult(content="Let me check that next.", task_contract=contract),
+    )
+
+    assert contract.allow_no_tool_final is False
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
 
 
 def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
@@ -233,6 +375,7 @@ def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
     decision = TaskContextDecision(
         should_seed_active_task=True,
         should_replace_active_task=True,
+        continuation_type="task_switch",
         confidence=0.86,
         method="llm",
         reason="user switched to a new concrete fix task",
@@ -252,3 +395,37 @@ def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
     assert f"- Goal: {message}" in updated
     seed_event = next(event for event in store.read_events() if event["event_type"] == "seed")
     assert seed_event["details"]["replace"] is True
+
+
+def test_active_task_seed_skips_continuation_of_current_task(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    store.write_managed_block(_ACTIVE_TASK_BLOCK)
+    decision = TaskContextDecision(
+        is_follow_up=True,
+        should_inherit_active_task=True,
+        continuation_type="continue_active_task",
+        confidence=0.75,
+        method="deterministic",
+        reason="current message is a continuation of the active task",
+    )
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            "繼續",
+            enabled=True,
+            task_intent=TaskIntentService().classify("繼續"),
+            task_context_decision=decision,
+        )
+    )
+
+    assert store.read_managed_block() == _ACTIVE_TASK_BLOCK
+    assert not any(event["event_type"] == "seed" for event in store.read_events())

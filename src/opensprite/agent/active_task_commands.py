@@ -25,6 +25,18 @@ from .task_intent import TaskIntent
 from .work_progress import WorkProgressService, WorkProgressUpdate
 
 
+_CURRENT_TASK_CONTINUATION_TYPES = frozenset(
+    {
+        "follow_up",
+        "continue_active_task",
+        "continue_last_answer",
+        "continue_tool_work",
+        "advance_current_step",
+    }
+)
+_CURRENT_TASK_REPLACEMENT_TYPES = frozenset({"task_switch", "new_task"})
+
+
 class ActiveTaskCommandService:
     """Handles direct commands and immediate updates for ACTIVE_TASK state."""
 
@@ -199,8 +211,10 @@ class ActiveTaskCommandService:
         has_current_task = current_status in {"active", "blocked", "waiting_user"}
         if has_current_task:
             current_task = store.read_managed_block()
+            if _decision_continues_current_task(task_context_decision):
+                return
             explicit_replace = should_replace_active_task(current_task, current_message)
-            llm_replace = bool(task_context_decision and task_context_decision.should_replace_active_task)
+            llm_replace = _decision_replaces_current_task(task_context_decision)
             if task_context_decision and task_context_decision.should_inherit_active_task and not (explicit_replace or llm_replace):
                 return
             if not (explicit_replace or llm_replace):
@@ -403,3 +417,21 @@ class ActiveTaskCommandService:
             return
         self.clear(session_id)
         store.append_event("reset", "user")
+
+
+def _decision_continues_current_task(decision: TaskContextDecision | None) -> bool:
+    if decision is None or decision.should_replace_active_task:
+        return False
+    return bool(
+        decision.should_inherit_active_task
+        or decision.continuation_type in _CURRENT_TASK_CONTINUATION_TYPES
+        or decision.is_follow_up
+    )
+
+
+def _decision_replaces_current_task(decision: TaskContextDecision | None) -> bool:
+    return bool(
+        decision
+        and decision.should_replace_active_task
+        and decision.continuation_type in _CURRENT_TASK_REPLACEMENT_TYPES
+    )

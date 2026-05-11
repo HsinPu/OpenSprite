@@ -843,6 +843,7 @@ def test_agent_process_emits_task_context_resolved_event(tmp_path):
     event = next(event for event in events if event.event_type == "task_context.resolved")
     assert event.payload["method"] == "deterministic"
     assert event.payload["is_follow_up"] is False
+    assert event.payload["continuation_type"] == "none"
     assert event.payload["confidence"] >= 0.0
 
 
