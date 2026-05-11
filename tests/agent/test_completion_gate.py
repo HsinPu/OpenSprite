@@ -261,6 +261,54 @@ def test_task_contract_records_web_source_acceptance_criteria():
     assert criteria["source_detail"].min_count == 1
 
 
+def test_task_contract_inherits_web_research_for_short_follow_up():
+    intent = TaskIntentService().classify("那00981t呢")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
+            {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
+        ],
+    )
+
+    assert contract.task_type == "web_research"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
+        "source_artifact",
+        "source_detail",
+        "substantive_final_answer",
+        "source_reference",
+    }
+
+
+def test_completion_gate_requires_web_evidence_for_short_follow_up():
+    intent = TaskIntentService().classify("那00981t呢")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
+            {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
+        ],
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="## 查詢 00981T\n\n讓我搜尋一下這個代碼，請稍候。",
+        execution_result=ExecutionResult(
+            content="## 查詢 00981T\n\n讓我搜尋一下這個代碼，請稍候。",
+            task_contract=contract,
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
+
+
 def test_task_contract_allows_one_source_for_explicit_url_web_tasks():
     intent = TaskIntentService().classify("Please summarize https://example.com/docs")
 

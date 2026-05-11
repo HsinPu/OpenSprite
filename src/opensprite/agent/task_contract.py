@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .follow_up_intent import FollowUpIntentResolver
 from .resource_index import ResourceIndex, ResourceRef
 from .task_intent import TaskIntent
 from ..tools.evidence import ToolEvidence
@@ -181,7 +182,13 @@ class TaskContractService:
             )
             task_type = "media_extraction"
 
-        if cls._looks_like_web_task(text):
+        follow_up = None
+        web_required = cls._looks_like_web_task(text)
+        if not web_required and not requirements:
+            follow_up = FollowUpIntentResolver.resolve(current_message=current_message, history=history)
+            web_required = follow_up.inherited_tool_group == "web_research"
+
+        if web_required:
             min_source_count = 1 if _URL_RE.search(text) else 2
             acceptance_criteria.append(
                 AcceptanceCriterion(
@@ -208,7 +215,8 @@ class TaskContractService:
                     description="Use web research tools before answering this external information request.",
                 )
             )
-            task_type = "web_research" if task_type == "pure_answer" else task_type
+            if task_type == "pure_answer" or (follow_up and follow_up.inherited_task_type == "web_research"):
+                task_type = "web_research"
 
         if task_intent.expects_code_change:
             requirements.append(
