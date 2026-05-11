@@ -3128,13 +3128,17 @@ button:disabled {
 .run-trace__section-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   width: 100%;
   padding: 0;
   color: inherit;
   background: transparent;
   text-align: left;
+}
+
+.run-trace__section-toggle strong {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .run-trace__section-head strong {
@@ -3151,6 +3155,7 @@ button:disabled {
 
 .run-trace__section-head small {
   flex: 0 0 auto;
+  margin-left: auto;
   padding: 2px 7px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
@@ -3271,7 +3276,6 @@ button:disabled {
 .run-trace__artifact-group-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   cursor: pointer;
   list-style: none;
@@ -3281,7 +3285,9 @@ button:disabled {
   display: none;
 }
 
-.run-trace__artifact-group-title::before {
+.run-trace__artifact-group-title::after {
+  flex: 0 0 auto;
+  margin-left: auto;
   color: var(--text-soft);
   content: "+";
   font-size: 0.84rem;
@@ -3289,7 +3295,7 @@ button:disabled {
   line-height: 1;
 }
 
-.run-trace__artifact-group[open] > .run-trace__artifact-group-title::before {
+.run-trace__artifact-group[open] > .run-trace__artifact-group-title::after {
   content: "-";
 }
 
@@ -3303,6 +3309,7 @@ button:disabled {
 }
 
 .run-trace__artifact-group-title small {
+  flex: 0 0 auto;
   color: var(--text-soft);
   font-size: 0.72rem;
   font-weight: 700;
@@ -3348,7 +3355,7 @@ button:disabled {
 .run-trace__artifact-summary {
   display: grid;
   gap: 5px;
-  padding: 10px;
+  padding: 10px 30px 10px 10px;
   cursor: pointer;
   list-style: none;
 }
@@ -3521,14 +3528,33 @@ button:disabled {
 }
 
 .run-trace__part summary {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 30px 8px 10px;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.8rem;
+  list-style: none;
+}
+
+.run-trace__part summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-trace__part summary::after {
+  position: absolute;
+  right: 10px;
+  color: var(--text-soft);
+  content: "+";
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.run-trace__part[open] > summary::after {
+  content: "-";
 }
 
 .run-trace__part summary span {
@@ -3660,14 +3686,33 @@ button:disabled {
 }
 
 .run-trace__event summary {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 8px 10px;
+  padding: 8px 30px 8px 10px;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.8rem;
+  list-style: none;
+}
+
+.run-trace__event summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-trace__event summary::after {
+  position: absolute;
+  right: 10px;
+  color: var(--text-soft);
+  content: "+";
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.run-trace__event[open] > summary::after {
+  content: "-";
 }
 
 .run-trace__event summary span {
