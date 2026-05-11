@@ -15,10 +15,36 @@ from .task_contract import (
     TaskContract,
     TaskContractService,
     merge_semantic_contract,
+    semantic_contract_skip_reason,
 )
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision
+
+
+def _semantic_classifier_trace_metadata(
+    *,
+    enabled: bool,
+    status: str,
+    reason: str | None,
+    task_contract: TaskContract,
+    semantic_decision: SemanticContractDecision | None,
+) -> dict[str, Any]:
+    metadata = dict(task_contract.semantic_contract or (semantic_decision.to_metadata() if semantic_decision is not None else {}))
+    metadata.setdefault("requires_tool_evidence", False)
+    metadata.setdefault("confidence", 0.0)
+    metadata.setdefault("applied", False)
+    metadata["classifier_enabled"] = enabled
+    metadata["classifier_status"] = status
+    metadata["classifier_invoked"] = status in {"invoked", "failed"}
+    metadata["classifier_skipped"] = status in {"disabled", "skipped"}
+    fallback_reason = str(reason or metadata.get("reason") or "").strip()
+    if fallback_reason:
+        metadata.setdefault("reason", fallback_reason)
+        if status in {"disabled", "skipped", "failed"}:
+            metadata["fallback_reason"] = fallback_reason
+    metadata["contract_sources"] = list(task_contract.contract_sources)
+    return metadata
 
 
 class LlmCallService:
@@ -242,25 +268,43 @@ class LlmCallService:
                 task_context_decision=task_context_decision,
             )
             semantic_decision = None
+            semantic_classifier_status = "disabled"
+            semantic_classifier_reason = "semantic classifier disabled by config"
             if self.config.semantic_contract_classifier_enabled:
-                try:
-                    semantic_decision = await self._classify_semantic_contract(
-                        task_intent=effective_task_intent,
-                        current_message=prompt_message,
-                        history=history_dicts,
-                        deterministic_contract=deterministic_contract,
-                    )
-                except Exception as exc:
-                    logger.warning("[{}] task.semantic_contract | failed={}", session_id, exc)
-                    semantic_decision = SemanticContractDecision(reason=f"semantic classifier failed: {exc}")
+                semantic_classifier_reason = semantic_contract_skip_reason(
+                    current_message=prompt_message,
+                    task_intent=effective_task_intent,
+                    deterministic_contract=deterministic_contract,
+                )
+                if semantic_classifier_reason:
+                    semantic_classifier_status = "skipped"
+                else:
+                    semantic_classifier_status = "invoked"
+                    try:
+                        semantic_decision = await self._classify_semantic_contract(
+                            task_intent=effective_task_intent,
+                            current_message=prompt_message,
+                            history=history_dicts,
+                            deterministic_contract=deterministic_contract,
+                        )
+                    except Exception as exc:
+                        logger.warning("[{}] task.semantic_contract | failed={}", session_id, exc)
+                        semantic_classifier_status = "failed"
+                        semantic_classifier_reason = f"semantic classifier failed: {exc}"
+                        semantic_decision = SemanticContractDecision(reason=semantic_classifier_reason)
             task_contract = merge_semantic_contract(
                 deterministic_contract,
                 semantic_decision,
                 min_confidence=self.config.semantic_contract_classifier_confidence_threshold,
             )
-            if run_id is not None and semantic_decision is not None:
-                semantic_metadata = dict(task_contract.semantic_contract or semantic_decision.to_metadata())
-                semantic_metadata["contract_sources"] = list(task_contract.contract_sources)
+            if run_id is not None:
+                semantic_metadata = _semantic_classifier_trace_metadata(
+                    enabled=self.config.semantic_contract_classifier_enabled,
+                    status=semantic_classifier_status,
+                    reason=semantic_classifier_reason,
+                    task_contract=task_contract,
+                    semantic_decision=semantic_decision,
+                )
                 await self._emit_run_event(
                     session_id,
                     run_id,

@@ -162,7 +162,7 @@ class SemanticContractClassifier:
         history: list[dict[str, Any]] | None,
         deterministic_contract: TaskContract,
     ) -> SemanticContractDecision | None:
-        if not should_classify_semantic_contract(
+        if semantic_contract_skip_reason(
             current_message=current_message,
             task_intent=task_intent,
             deterministic_contract=deterministic_contract,
@@ -533,20 +533,36 @@ def should_classify_semantic_contract(
     deterministic_contract: TaskContract,
 ) -> bool:
     """Return whether an optional semantic pass may add missing requirements."""
+    return semantic_contract_skip_reason(
+        current_message=current_message,
+        task_intent=task_intent,
+        deterministic_contract=deterministic_contract,
+    ) is None
+
+
+def semantic_contract_skip_reason(
+    *,
+    current_message: str,
+    task_intent: TaskIntent,
+    deterministic_contract: TaskContract,
+) -> str | None:
+    """Return why the optional semantic pass should not run, or None when eligible."""
     if deterministic_contract.requirements:
-        return False
+        return "deterministic contract already requires evidence"
     if task_intent.expects_code_change or task_intent.expects_verification:
-        return False
+        return "code or verification task uses deterministic completion rules"
     if task_intent.kind in {"command", "media_upload"}:
-        return False
+        return f"task intent kind {task_intent.kind} is not eligible"
     message = _compact(current_message)
     if not message or len(message) > 500:
-        return False
+        return "message is empty or too long for semantic classification"
     if _URL_RE.search(message):
-        return False
+        return "message already has a deterministic URL requirement"
     if task_intent.kind == "conversation" and not _looks_like_semantic_lookup_candidate(message):
-        return False
-    return task_intent.kind in {"task", "question", "conversation", "analysis", "writing", "planning"}
+        return "conversation does not look like an evidence lookup"
+    if task_intent.kind not in {"task", "question", "conversation", "analysis", "writing", "planning"}:
+        return f"task intent kind {task_intent.kind} is not eligible"
+    return None
 
 
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:

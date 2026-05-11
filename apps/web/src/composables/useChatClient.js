@@ -1556,6 +1556,7 @@ function formatTaskObjectiveDetail(payload = {}) {
 function formatSemanticContractDetail(payload = {}) {
   const requiredToolGroup = String(payload.required_tool_group || payload.requiredToolGroup || "").trim();
   const taskType = String(payload.task_type || payload.taskType || "").trim();
+  const classifierStatus = String(payload.classifier_status || payload.classifierStatus || "").trim();
   const confidence = Number(payload.confidence);
   const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
   const applied = payload.applied === true ? "applied" : payload.applied === false ? "not applied" : "";
@@ -1565,7 +1566,17 @@ function formatSemanticContractDetail(payload = {}) {
     ? contractSources.join(", ")
     : String(payload.contract_source || payload.contractSource || payload.source || "semantic classifier").trim();
   const reason = String(payload.reason || "").trim();
-  return [taskType, requiredToolGroup, requiresEvidence, applied, confidenceText, source ? `source ${source}` : "", reason].filter(Boolean).join(" · ");
+  const fallbackReason = String(payload.fallback_reason || payload.fallbackReason || "").trim();
+  return [
+    classifierStatus ? `classifier ${classifierStatus}` : "",
+    taskType,
+    requiredToolGroup,
+    requiresEvidence,
+    applied,
+    confidenceText,
+    source ? `source ${source}` : "",
+    fallbackReason ? `fallback ${fallbackReason}` : reason,
+  ].filter(Boolean).join(" · ");
 }
 
 function semanticContractLabel(payload = {}, copy) {

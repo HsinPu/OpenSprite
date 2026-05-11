@@ -4,6 +4,7 @@ from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.llm_call import _semantic_classifier_trace_metadata
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
@@ -12,6 +13,7 @@ from opensprite.agent.task_contract import (
     SemanticContractDecision,
     TaskContract,
     TaskContractService,
+    semantic_contract_skip_reason,
 )
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.llms.base import LLMResponse
@@ -906,6 +908,11 @@ def test_semantic_contract_classifier_skips_deterministic_requirements():
 
     assert decision is None
     assert provider.calls == []
+    assert semantic_contract_skip_reason(
+        current_message=intent.objective,
+        task_intent=intent,
+        deterministic_contract=deterministic,
+    ) == "deterministic contract already requires evidence"
 
 
 def test_semantic_contract_classifier_skips_casual_conversation():
@@ -929,6 +936,78 @@ def test_semantic_contract_classifier_skips_casual_conversation():
 
     assert decision is None
     assert provider.calls == []
+    assert semantic_contract_skip_reason(
+        current_message=intent.objective,
+        task_intent=intent,
+        deterministic_contract=deterministic,
+    ) == "conversation does not look like an evidence lookup"
+
+
+def test_semantic_classifier_trace_metadata_records_invoked_health():
+    intent = TaskIntentService().classify("2330 現在多少")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    decision = SemanticContractDecision(
+        requires_tool_evidence=True,
+        required_tool_group="web_research",
+        task_type="web_research",
+        confidence=0.88,
+        reason="Current stock price needs web evidence.",
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=decision,
+    )
+
+    metadata = _semantic_classifier_trace_metadata(
+        enabled=True,
+        status="invoked",
+        reason=None,
+        task_contract=contract,
+        semantic_decision=decision,
+    )
+
+    assert metadata["classifier_enabled"] is True
+    assert metadata["classifier_status"] == "invoked"
+    assert metadata["classifier_invoked"] is True
+    assert metadata["classifier_skipped"] is False
+    assert metadata["applied"] is True
+    assert metadata["confidence"] == 0.88
+    assert metadata["contract_sources"] == ["deterministic", "semantic_classifier"]
+
+
+def test_semantic_classifier_trace_metadata_records_skipped_health():
+    intent = TaskIntentService().classify("hello")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    reason = semantic_contract_skip_reason(
+        current_message=intent.objective,
+        task_intent=intent,
+        deterministic_contract=deterministic,
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    metadata = _semantic_classifier_trace_metadata(
+        enabled=True,
+        status="skipped",
+        reason=reason,
+        task_contract=contract,
+        semantic_decision=None,
+    )
+
+    assert metadata["classifier_status"] == "skipped"
+    assert metadata["classifier_invoked"] is False
+    assert metadata["classifier_skipped"] is True
+    assert metadata["applied"] is False
+    assert metadata["fallback_reason"] == "conversation does not look like an evidence lookup"
 
 
 def test_semantic_contract_cannot_remove_deterministic_requirement():
