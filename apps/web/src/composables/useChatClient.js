@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
   language: "opensprite:web:language",
   colorScheme: "opensprite:web:colorScheme",
   sidebarCollapsed: "opensprite:web:sidebarCollapsed",
+  traceInspectorCollapsed: "opensprite:web:traceInspectorCollapsed",
   overlayProfileId: "opensprite:web:overlayProfileId",
 };
 
@@ -1669,6 +1670,7 @@ export function useChatClient() {
   const toasts = ref([]);
   const sidebarOpen = ref(false);
   const sidebarCollapsed = ref(readStoredBoolean(STORAGE_KEYS.sidebarCollapsed, false));
+  const traceInspectorCollapsed = ref(readStoredBoolean(STORAGE_KEYS.traceInspectorCollapsed, false));
   const sessionChannelFilter = ref("all");
   const settingsOpen = ref(false);
   const settingsSection = ref("general");
@@ -2680,6 +2682,11 @@ export function useChatClient() {
   function toggleSidebarCollapsed() {
     sidebarCollapsed.value = !sidebarCollapsed.value;
     writeStoredValue(STORAGE_KEYS.sidebarCollapsed, String(sidebarCollapsed.value));
+  }
+
+  function toggleTraceInspectorCollapsed() {
+    traceInspectorCollapsed.value = !traceInspectorCollapsed.value;
+    writeStoredValue(STORAGE_KEYS.traceInspectorCollapsed, String(traceInspectorCollapsed.value));
   }
 
   function disconnectSocket(reason, tone = "warning") {
@@ -4573,6 +4580,7 @@ export function useChatClient() {
     messageStage,
     sidebarOpen,
     sidebarCollapsed,
+    traceInspectorCollapsed,
     settingsOpen,
     settingsSection,
     settingsForm,
@@ -4686,6 +4694,7 @@ export function useChatClient() {
     runCronJobAction,
     toggleSidebar,
     toggleSidebarCollapsed,
+    toggleTraceInspectorCollapsed,
     connectSocket,
     resizeComposer,
     createNewChat,

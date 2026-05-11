@@ -29,55 +29,32 @@
       {{ notice.text }}
     </div>
 
-    <section class="chat-workspace">
-      <section :ref="setMessageStageRef" class="message-stage" aria-live="polite">
-        <div class="conversation-wrap">
-          <EmptyState
-            v-if="entries.length === 0 && messages.length === 0"
-            :copy="copy"
-            :prompts="prompts"
-            @apply-prompt="$emit('apply-prompt', $event)"
-          />
-
-          <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
-
-          <WorkStateCard
-            v-if="showWorkState && workState"
-            :copy="copy"
-            :work-state="workState"
-            @resume-follow-up="$emit('resume-follow-up', $event)"
-            @run-verification="$emit('run-verification', $event)"
-          />
-
-          <PermissionPanel
-            :copy="copy"
-            :state="permissionState"
-            :requests="permissionRequests"
-            @resolve-permission="forwardPermissionResolution"
-          />
-        </div>
-      </section>
-
-      <aside class="trace-inspector" aria-label="Run trace inspector">
-        <RunDetailsPanel
+    <section :ref="setMessageStageRef" class="message-stage" aria-live="polite">
+      <div class="conversation-wrap">
+        <EmptyState
+          v-if="entries.length === 0 && messages.length === 0"
           :copy="copy"
-          :runs="runs"
-          :runs-loading="runsLoading"
-          :runs-error="runsError"
-          :current-run="currentRun"
-          :run-timeline="runTimeline"
-          :run-summary="runSummary"
-          :show-run-history="showRunHistory"
-          :show-run-timeline="showRunTimeline"
-          :show-run-summary="showRunSummary"
-          :show-run-trace="showRunTrace"
-          @select-run="$emit('select-run', $event)"
-          @cancel-run="$emit('cancel-run', $event)"
-          @cleanup-worktree="$emit('cleanup-worktree', $event)"
-          @resume-follow-up="$emit('resume-follow-up', $event)"
-          @revert-file-change="forwardRunFileRevert"
+          :prompts="prompts"
+          @apply-prompt="$emit('apply-prompt', $event)"
         />
-      </aside>
+
+        <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
+
+        <WorkStateCard
+          v-if="showWorkState && workState"
+          :copy="copy"
+          :work-state="workState"
+          @resume-follow-up="$emit('resume-follow-up', $event)"
+          @run-verification="$emit('run-verification', $event)"
+        />
+
+        <PermissionPanel
+          :copy="copy"
+          :state="permissionState"
+          :requests="permissionRequests"
+          @resolve-permission="forwardPermissionResolution"
+        />
+      </div>
     </section>
 
     <ChatComposer
@@ -103,7 +80,6 @@ import ChatComposer from "./ChatComposer.vue";
 import EmptyState from "./EmptyState.vue";
 import MessageList from "./MessageList.vue";
 import PermissionPanel from "./PermissionPanel.vue";
-import RunDetailsPanel from "./RunDetailsPanel.vue";
 import WorkStateCard from "./WorkStateCard.vue";
 
 const props = defineProps({
@@ -127,30 +103,6 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-  runs: {
-    type: Array,
-    required: true,
-  },
-  runsLoading: {
-    type: Boolean,
-    required: true,
-  },
-  runsError: {
-    type: String,
-    default: "",
-  },
-  currentRun: {
-    type: Object,
-    default: null,
-  },
-  runTimeline: {
-    type: Array,
-    required: true,
-  },
-  runSummary: {
-    type: Object,
-    default: null,
-  },
   permissionState: {
     type: Object,
     required: true,
@@ -160,22 +112,6 @@ const props = defineProps({
     required: true,
   },
   showWorkState: {
-    type: Boolean,
-    required: true,
-  },
-  showRunHistory: {
-    type: Boolean,
-    required: true,
-  },
-  showRunTimeline: {
-    type: Boolean,
-    required: true,
-  },
-  showRunSummary: {
-    type: Boolean,
-    required: true,
-  },
-  showRunTrace: {
     type: Boolean,
     required: true,
   },
@@ -245,20 +181,13 @@ const emit = defineEmits([
   "composer-keydown",
   "submit-message",
   "apply-command-hint",
-  "cancel-run",
   "resolve-permission",
-  "revert-file-change",
-  "cleanup-worktree",
   "resume-follow-up",
   "run-verification",
-  "select-run",
 ]);
 
 function forwardPermissionResolution(request, decision) {
   emit("resolve-permission", request, decision);
 }
 
-function forwardRunFileRevert(run, change) {
-  emit("revert-file-change", run, change);
-}
 </script>

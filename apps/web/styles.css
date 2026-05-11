@@ -47,6 +47,7 @@
 :root[data-color-scheme="dark"] .topbar,
 :root[data-color-scheme="dark"] .mobile-nav-toggle,
 :root[data-color-scheme="dark"] .sidebar-collapse-button,
+:root[data-color-scheme="dark"] .trace-sidebar__toggle,
 :root[data-color-scheme="dark"] .toast {
   background: rgba(21, 23, 28, 0.9);
 }
@@ -472,7 +473,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr);
+  grid-template-columns: 268px minmax(0, 1fr) 430px;
   height: 100dvh;
   min-height: 100vh;
   background: var(--surface);
@@ -978,7 +979,15 @@ button:disabled {
 
 @media (min-width: 861px) {
   .app-shell--sidebar-collapsed {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: 72px minmax(0, 1fr) 430px;
+  }
+
+  .app-shell--trace-collapsed {
+    grid-template-columns: 268px minmax(0, 1fr) 58px;
+  }
+
+  .app-shell--sidebar-collapsed.app-shell--trace-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr) 58px;
   }
 
   .app-shell--sidebar-collapsed .sidebar {
@@ -1181,13 +1190,6 @@ button:disabled {
   background: #fff8eb;
 }
 
-.chat-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
-  min-height: 0;
-  overflow: hidden;
-}
-
 .toast-stack {
   position: fixed;
   right: 22px;
@@ -1266,21 +1268,81 @@ button:disabled {
   scroll-behavior: smooth;
 }
 
-.trace-inspector {
+.trace-sidebar {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-width: 0;
+  border-left: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
+}
+
+.trace-sidebar[data-collapsed="true"] {
+  grid-template-columns: 1fr;
+}
+
+.trace-sidebar__rail {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border-soft);
+}
+
+.trace-sidebar[data-collapsed="true"] .trace-sidebar__rail {
+  border-right: 0;
+}
+
+.trace-sidebar__toggle {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 8px 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.trace-sidebar__toggle span {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.trace-sidebar__toggle strong {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  letter-spacing: 0.08em;
+}
+
+.trace-sidebar__body {
   min-width: 0;
   padding: 18px 18px 22px;
   overflow: auto;
-  border-left: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
 }
 
-.trace-inspector > * + * {
+.trace-sidebar__body > * + * {
   margin-top: 14px;
 }
 
 @media (max-width: 1180px) and (min-width: 861px) {
-  .chat-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  .app-shell {
+    grid-template-columns: 268px minmax(0, 1fr) 380px;
+  }
+
+  .app-shell--sidebar-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr) 380px;
+  }
+
+  .app-shell--trace-collapsed {
+    grid-template-columns: 268px minmax(0, 1fr) 58px;
+  }
+
+  .app-shell--sidebar-collapsed.app-shell--trace-collapsed {
+    grid-template-columns: 72px minmax(0, 1fr) 58px;
   }
 }
 
@@ -5311,22 +5373,34 @@ textarea:focus-visible {
     padding-top: 24px;
   }
 
-  .chat-workspace {
+  .trace-sidebar {
     display: block;
-    overflow: auto;
-  }
-
-  .message-stage {
-    overflow: visible;
-  }
-
-  .trace-inspector {
     width: min(var(--content-width), calc(100% - 24px));
     margin: 0 auto 18px;
-    padding: 0;
-    overflow: visible;
     border-left: 0;
     background: transparent;
+  }
+
+  .trace-sidebar__rail {
+    justify-content: flex-end;
+    padding: 0 0 10px;
+    border-right: 0;
+  }
+
+  .trace-sidebar__toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 12px;
+  }
+
+  .trace-sidebar__toggle strong {
+    writing-mode: horizontal-tb;
+    letter-spacing: 0;
+  }
+
+  .trace-sidebar__body {
+    padding: 0;
+    overflow: visible;
   }
 
   .prompt-grid {

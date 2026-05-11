@@ -1,5 +1,11 @@
 <template>
-  <div class="app-shell" :class="{ 'app-shell--sidebar-collapsed': sidebarCollapsed }">
+  <div
+    class="app-shell"
+    :class="{
+      'app-shell--sidebar-collapsed': sidebarCollapsed,
+      'app-shell--trace-collapsed': traceInspectorCollapsed,
+    }"
+  >
     <button
       class="mobile-nav-toggle"
       type="button"
@@ -36,19 +42,9 @@
       :entries="currentEntries"
       :messages="currentMessages"
       :work-state="currentWorkState"
-      :runs="currentRuns"
-      :runs-loading="currentRunsLoading"
-      :runs-error="currentRunsError"
-      :current-run="currentRun"
-      :run-timeline="currentRunTimeline"
-      :run-summary="currentRunSummary"
       :permission-state="permissionState"
       :permission-requests="currentPermissionRequests"
       :show-work-state="state.showWorkState"
-      :show-run-history="state.showRunHistory"
-      :show-run-timeline="state.showRunTimeline"
-      :show-run-summary="state.showRunSummary"
-      :show-run-trace="state.showRunTrace"
       :notice="state.notice"
       :session-meta="sessionMeta"
       :runtime-hint="composerHint"
@@ -70,14 +66,46 @@
       @composer-keydown="handleComposerKeydown"
       @submit-message="submitMessage"
       @apply-command-hint="applyCommandHint"
-      @cancel-run="cancelRun"
       @resolve-permission="resolvePermissionRequest"
-      @revert-file-change="revertRunFileChange"
-      @cleanup-worktree="cleanupWorktreeSandbox"
       @resume-follow-up="resumeFollowUp"
       @run-verification="runVerification"
-      @select-run="selectRun"
     />
+
+    <aside class="trace-sidebar" :data-collapsed="traceInspectorCollapsed" aria-label="Run trace inspector">
+      <div class="trace-sidebar__rail">
+        <button
+          class="trace-sidebar__toggle"
+          type="button"
+          :aria-expanded="String(!traceInspectorCollapsed)"
+          :title="traceInspectorCollapsed ? 'Expand trace' : 'Collapse trace'"
+          @click="toggleTraceInspectorCollapsed"
+        >
+          <span aria-hidden="true">{{ traceInspectorCollapsed ? '<' : '>' }}</span>
+          <strong>Trace</strong>
+        </button>
+      </div>
+
+      <div v-show="!traceInspectorCollapsed" class="trace-sidebar__body">
+        <RunDetailsPanel
+          :copy="copy"
+          :runs="currentRuns"
+          :runs-loading="currentRunsLoading"
+          :runs-error="currentRunsError"
+          :current-run="currentRun"
+          :run-timeline="currentRunTimeline"
+          :run-summary="currentRunSummary"
+          :show-run-history="state.showRunHistory"
+          :show-run-timeline="state.showRunTimeline"
+          :show-run-summary="state.showRunSummary"
+          :show-run-trace="state.showRunTrace"
+          @select-run="selectRun"
+          @cancel-run="cancelRun"
+          @cleanup-worktree="cleanupWorktreeSandbox"
+          @resume-follow-up="resumeFollowUp"
+          @revert-file-change="revertRunFileChange"
+        />
+      </div>
+    </aside>
   </div>
 
   <section v-if="state.authRequired" class="auth-gate" aria-labelledby="authGateTitle">
@@ -209,6 +237,7 @@
 <script setup>
 import { ref } from "vue";
 import ChatPanel from "./components/ChatPanel.vue";
+import RunDetailsPanel from "./components/RunDetailsPanel.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import SidebarNav from "./components/SidebarNav.vue";
 import ToastStack from "./components/ToastStack.vue";
@@ -224,6 +253,7 @@ const {
   messageText,
   sidebarOpen,
   sidebarCollapsed,
+  traceInspectorCollapsed,
   settingsOpen,
   settingsSection,
   settingsForm,
@@ -323,6 +353,7 @@ const {
   runCronJobAction,
   toggleSidebar,
   toggleSidebarCollapsed,
+  toggleTraceInspectorCollapsed,
   connectSocket,
   resizeComposer,
   createNewChat,

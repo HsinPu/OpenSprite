@@ -104,8 +104,10 @@ assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selec
 assertIncludes(runDetailsPanel, "showRunHistory", "run history visibility toggle");
 assertIncludes(runDetailsPanel, "RunFileChangeDrawer", "run details file drawer");
 assertIncludes(chatPanel, "showWorkState && workState", "work state visibility toggle");
-assertIncludes(chatPanel, "trace-inspector", "run details right inspector shell");
-assertIncludes(chatPanel, ":show-run-history=\"showRunHistory\"", "run history prop wiring");
+assertIncludes(app, "trace-sidebar", "independent right trace sidebar shell");
+assertIncludes(app, "traceInspectorCollapsed", "right trace sidebar collapse state");
+assertIncludes(app, "toggleTraceInspectorCollapsed", "right trace sidebar collapse action");
+assertIncludes(app, ":show-run-history=\"state.showRunHistory\"", "run history prop wiring");
 assertIncludes(chatComposer, "composer__commands", "slash command hints rendering");
 assertIncludes(toastStack, "toast-stack", "toast stack rendering");
 assertIncludes(toastStack, "dismiss-toast", "toast dismiss event");
@@ -129,9 +131,9 @@ assertIncludes(settingsModal, "save-browser-settings", "browser settings save ev
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
-assertIncludes(styles, ".chat-workspace", "chat and inspector split layout");
-assertIncludes(styles, "grid-template-columns: minmax(0, 1fr) minmax(360px, 430px)", "desktop right inspector column");
-assertIncludes(styles, ".trace-inspector", "right trace inspector styling");
+assertIncludes(styles, "grid-template-columns: 268px minmax(0, 1fr) 430px", "desktop three-column app shell");
+assertIncludes(styles, ".app-shell--trace-collapsed", "right trace sidebar collapsed app shell");
+assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
