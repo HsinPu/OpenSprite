@@ -2998,6 +2998,7 @@ button:disabled {
 .run-trace__debug {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .run-trace__code-nav,
@@ -3154,6 +3155,7 @@ button:disabled {
 .run-trace__section-body {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .run-trace__artifact-groups {
@@ -3468,9 +3470,11 @@ button:disabled {
 .run-trace__part-list {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .run-trace__part {
+  min-width: 0;
   border: 1px solid var(--border-soft);
   border-left: 3px solid var(--text-soft);
   border-radius: var(--radius-sm);
@@ -3540,11 +3544,13 @@ button:disabled {
 .run-trace__part-body {
   display: grid;
   gap: 8px;
+  min-width: 0;
   padding: 10px;
   border-top: 1px solid var(--border-soft);
 }
 
 .run-trace__part-body pre {
+  max-width: 100%;
   max-height: 220px;
   margin: 0;
   overflow: auto;
@@ -3555,6 +3561,7 @@ button:disabled {
   background: #fbfbfc;
   font-size: 0.76rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 

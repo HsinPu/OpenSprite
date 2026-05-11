@@ -139,6 +139,8 @@ assertIncludes(styles, "var(--trace-sidebar-width, var(--trace-sidebar-default-w
 assertIncludes(styles, ".app-shell--trace-collapsed", "right trace sidebar collapsed app shell");
 assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
 assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize styling");
+assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded content styling");
+assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
