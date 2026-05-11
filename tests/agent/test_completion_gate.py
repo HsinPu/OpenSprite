@@ -592,8 +592,10 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
         current_message=intent.objective,
     )
     answer = (
-        "我回頭查過前面的內容了。剛剛提到的三個方案是先收斂 deterministic regex、"
-        "再補 semantic classifier 的安全合併，最後把 trace observability 顯示補齊。"
+        "我回頭查過前面的內容了。剛剛提到的三個方案是：\n"
+        "1. 先收斂 deterministic regex。\n"
+        "2. 再補 semantic classifier 的安全合併。\n"
+        "3. 最後把 trace observability 顯示補齊。"
     )
 
     completion = CompletionGateService().evaluate(
@@ -604,6 +606,112 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="search_history", ok=True),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_requires_history_answer_to_reference_prior_context():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "三個方案是：\n"
+        "1. 收斂 deterministic regex。\n"
+        "2. 補 semantic classifier。\n"
+        "3. 補 trace observability。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer did not reference retrieved prior context"
+
+
+def test_completion_gate_requires_enough_history_items():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我回頭查過前面的內容了，但目前只整理出兩個方案，還缺少第三個：\n"
+        "1. 收斂 deterministic regex，避免模糊查詢直接被硬判成 web。\n"
+        "2. 補 semantic classifier，讓不明確的請求可加上更嚴格 evidence。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant did not provide enough recalled items"
+
+
+def test_completion_gate_rejects_answer_after_empty_history_retrieval():
+    intent = TaskIntentService().classify("前面說過的 threshold 是多少")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "前面說過 threshold 是 0.7，這是 semantic classifier 的預設信心門檻，"
+        "因此我會直接用這個數值作為目前設定的答案。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 0}),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant answered despite empty history retrieval"
+
+
+def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval():
+    intent = TaskIntentService().classify("前面說過的 threshold 是多少")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我查過前面的內容，但 not found matching prior threshold 討論，"
+        "所以不能可靠回答數值；需要的話我可以再用目前設定檔重新查一次。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 0}),),
         ),
     )
 

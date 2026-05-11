@@ -45,6 +45,10 @@ class QualityGateService:
         artifact_result = _evaluate_media_artifacts(contract, execution_result)
         if artifact_result is not None:
             return artifact_result
+        if contract.task_type == "history_retrieval" and _history_retrieval_was_empty(execution_result):
+            history_result = _evaluate_history_grounding(contract, response_text, execution_result)
+            if history_result is not None:
+                return history_result
         for criterion in contract.acceptance_criteria:
             if criterion.kind == "itemized_output":
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
@@ -69,6 +73,9 @@ class QualityGateService:
         workspace_result = _evaluate_workspace_grounding(contract, response_text)
         if workspace_result is not None:
             return workspace_result
+        history_result = _evaluate_history_grounding(contract, response_text, execution_result)
+        if history_result is not None:
+            return history_result
         return QualityGateResult(passed=True)
 
 
@@ -242,6 +249,46 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     return None
 
 
+def _evaluate_history_grounding(
+    contract: TaskContract,
+    response_text: str,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    if contract.task_type != "history_retrieval":
+        return None
+    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
+    if not normalized_response:
+        return None
+
+    if _history_retrieval_was_empty(execution_result):
+        if _states_history_not_found(normalized_response):
+            return None
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant answered despite empty history retrieval",
+            active_task_detail="- State that no matching prior context was found instead of inventing recalled details.",
+        )
+
+    if not _references_prior_context(normalized_response):
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant final answer did not reference retrieved prior context",
+            active_task_detail="- Make clear that the answer is based on retrieved prior chat or knowledge context.",
+        )
+
+    requested_count = _requested_history_item_count(contract.objective)
+    if requested_count > 1 and _response_item_count(response_text) < requested_count:
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant did not provide enough recalled items",
+            active_task_detail=f"- Provide at least {requested_count} recalled item(s) from the retrieved context.",
+        )
+    return None
+
+
 def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, object]]:
     sources: list[dict[str, object]] = []
     for artifact in execution_result.task_artifacts:
@@ -384,6 +431,79 @@ def _contains_workspace_location_clue(normalized_response: str) -> bool:
     if re.search(r"[`'\"][\w.:-]+[`'\"]", normalized_response):
         return True
     return False
+
+
+def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
+    evidence = [
+        item
+        for item in execution_result.tool_evidence
+        if item.ok and item.name in {"search_history", "search_knowledge"}
+    ]
+    if not evidence:
+        return False
+    saw_explicit_empty = False
+    for item in evidence:
+        metadata = item.metadata if isinstance(item.metadata, dict) else {}
+        for key in ("result_count", "hit_count", "hits", "count"):
+            if key in metadata:
+                value = metadata.get(key)
+                if isinstance(value, list) and len(value) > 0:
+                    return False
+                if _coerce_int(value, default=0) > 0:
+                    return False
+                saw_explicit_empty = True
+        preview = str(item.result_preview or "").lower()
+        if preview and any(marker in preview for marker in ("no results", "no matches", "not found", "[]", "沒有找到", "找不到")):
+            saw_explicit_empty = True
+        elif preview:
+            return False
+    return saw_explicit_empty
+
+
+def _states_history_not_found(normalized_response: str) -> bool:
+    return any(
+        marker in normalized_response
+        for marker in (
+            "no matching prior",
+            "no prior",
+            "not found",
+            "could not find",
+            "沒有找到",
+            "找不到",
+            "查不到",
+            "沒有相關",
+        )
+    )
+
+
+def _references_prior_context(normalized_response: str) -> bool:
+    return any(
+        marker in normalized_response
+        for marker in (
+            "previous",
+            "earlier",
+            "prior",
+            "retrieved",
+            "history",
+            "前面",
+            "剛剛",
+            "之前",
+            "先前",
+            "上次",
+            "查到",
+            "回頭查",
+        )
+    )
+
+
+def _requested_history_item_count(objective: str) -> int:
+    text = str(objective or "")
+    digit_counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,2}(?!\d)", text)]
+    word_counts = []
+    for marker, count in (("一", 1), ("兩", 2), ("二", 2), ("三", 3), ("四", 4), ("五", 5)):
+        if marker in text:
+            word_counts.append(count)
+    return max([*digit_counts, *word_counts], default=0)
 
 
 def _truthy(value: object) -> bool:
