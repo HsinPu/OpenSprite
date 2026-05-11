@@ -59,6 +59,7 @@ const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "task_context.resolved",
   "task_objective.resolved",
+  "task_contract.semantic_classified",
   "llm_status",
   "tool_started",
   "file_changed",
@@ -1205,6 +1206,14 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
+  if (eventType === "task_contract.semantic_classified") {
+    return {
+      label: copy.run.semanticContractClassified || "Semantic contract classified",
+      detail: formatSemanticContractDetail(payload),
+      tone: payload.applied === true ? "running" : payload.requires_tool_evidence ? "warning" : "neutral",
+    };
+  }
+
   if (eventType === "llm_status") {
     const message = String(payload.message || copy.run.thinking);
     return {
@@ -1532,6 +1541,17 @@ function formatTaskObjectiveDetail(payload = {}) {
   const objectiveText = resolvedObjective ? previewText(resolvedObjective) : "";
   const useText = shouldUse === true ? "use resolved objective" : shouldUse === false ? "keep original objective" : "";
   return [method, useText, confidenceText, objectiveText, reason].filter(Boolean).join(" · ");
+}
+
+function formatSemanticContractDetail(payload = {}) {
+  const requiredToolGroup = String(payload.required_tool_group || payload.requiredToolGroup || "").trim();
+  const taskType = String(payload.task_type || payload.taskType || "").trim();
+  const confidence = Number(payload.confidence);
+  const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
+  const applied = payload.applied === true ? "applied" : payload.applied === false ? "not applied" : "";
+  const requiresEvidence = payload.requires_tool_evidence || payload.requiresToolEvidence ? "requires evidence" : "";
+  const reason = String(payload.reason || "").trim();
+  return [taskType, requiredToolGroup, requiresEvidence, applied, confidenceText, reason].filter(Boolean).join(" · ");
 }
 
 export function formatEventTime(timestamp) {

@@ -339,6 +339,29 @@ def test_serialize_run_event_projects_task_artifact_summary():
     }
 
 
+def test_serialize_run_event_classifies_semantic_contract_event():
+    event = SimpleNamespace(
+        event_id=45,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="task_contract.semantic_classified",
+        payload={
+            "requires_tool_evidence": True,
+            "required_tool_group": "web_research",
+            "task_type": "web_research",
+            "confidence": 0.88,
+            "reason": "Current stock price needs web evidence.",
+        },
+        created_at=12.9,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "work"
+    assert payload["status"] == "completed"
+    assert payload["artifact"] is None
+
+
 def test_serialize_run_event_projects_curator_artifact():
     event = SimpleNamespace(
         event_id=45,

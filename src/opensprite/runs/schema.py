@@ -24,6 +24,7 @@ _EVENT_KINDS = {
     "work_progress.updated": "work",
     "task_checklist.updated": "work",
     "task_artifacts.recorded": "work",
+    "task_contract.semantic_classified": "work",
     "curator.started": "work",
     "curator.job.started": "work",
     "curator.job.completed": "work",

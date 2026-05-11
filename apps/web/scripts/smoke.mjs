@@ -234,7 +234,9 @@ assertIncludes(chatClient, 'params.set("scope", scope)', "curator scoped action 
 assertIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval");
 assertIncludes(chatClient, "task_context.resolved", "task context timeline event");
 assertIncludes(chatClient, "task_objective.resolved", "task objective timeline event");
+assertIncludes(chatClient, "task_contract.semantic_classified", "semantic contract timeline event");
 assertIncludes(chatClient, "formatTaskObjectiveDetail", "task objective timeline detail");
+assertIncludes(chatClient, "formatSemanticContractDetail", "semantic contract timeline detail");
 assertIncludes(chatClient, "function previewText", "chat client trace preview helper");
 assertIncludes(chatClient, "continuation_type", "task context continuation detail");
 assertIncludes(chatClient, "formatTaskContextDetail", "task context timeline detail");
