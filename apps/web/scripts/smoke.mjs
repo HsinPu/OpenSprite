@@ -104,6 +104,7 @@ assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selec
 assertIncludes(runDetailsPanel, "showRunHistory", "run history visibility toggle");
 assertIncludes(runDetailsPanel, "RunFileChangeDrawer", "run details file drawer");
 assertIncludes(chatPanel, "showWorkState && workState", "work state visibility toggle");
+assertIncludes(chatPanel, "trace-inspector", "run details right inspector shell");
 assertIncludes(chatPanel, ":show-run-history=\"showRunHistory\"", "run history prop wiring");
 assertIncludes(chatComposer, "composer__commands", "slash command hints rendering");
 assertIncludes(toastStack, "toast-stack", "toast stack rendering");
@@ -128,6 +129,9 @@ assertIncludes(settingsModal, "save-browser-settings", "browser settings save ev
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
+assertIncludes(styles, ".chat-workspace", "chat and inspector split layout");
+assertIncludes(styles, "grid-template-columns: minmax(0, 1fr) minmax(360px, 430px)", "desktop right inspector column");
+assertIncludes(styles, ".trace-inspector", "right trace inspector styling");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");

@@ -29,32 +29,36 @@
       {{ notice.text }}
     </div>
 
-    <section :ref="setMessageStageRef" class="message-stage" aria-live="polite">
-      <div class="conversation-wrap">
-        <EmptyState
-          v-if="entries.length === 0 && messages.length === 0"
-          :copy="copy"
-          :prompts="prompts"
-          @apply-prompt="$emit('apply-prompt', $event)"
-        />
+    <section class="chat-workspace">
+      <section :ref="setMessageStageRef" class="message-stage" aria-live="polite">
+        <div class="conversation-wrap">
+          <EmptyState
+            v-if="entries.length === 0 && messages.length === 0"
+            :copy="copy"
+            :prompts="prompts"
+            @apply-prompt="$emit('apply-prompt', $event)"
+          />
 
-        <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
+          <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
 
-        <WorkStateCard
-          v-if="showWorkState && workState"
-          :copy="copy"
-          :work-state="workState"
-          @resume-follow-up="$emit('resume-follow-up', $event)"
-          @run-verification="$emit('run-verification', $event)"
-        />
+          <WorkStateCard
+            v-if="showWorkState && workState"
+            :copy="copy"
+            :work-state="workState"
+            @resume-follow-up="$emit('resume-follow-up', $event)"
+            @run-verification="$emit('run-verification', $event)"
+          />
 
-        <PermissionPanel
-          :copy="copy"
-          :state="permissionState"
-          :requests="permissionRequests"
-          @resolve-permission="forwardPermissionResolution"
-        />
+          <PermissionPanel
+            :copy="copy"
+            :state="permissionState"
+            :requests="permissionRequests"
+            @resolve-permission="forwardPermissionResolution"
+          />
+        </div>
+      </section>
 
+      <aside class="trace-inspector" aria-label="Run trace inspector">
         <RunDetailsPanel
           :copy="copy"
           :runs="runs"
@@ -73,7 +77,7 @@
           @resume-follow-up="$emit('resume-follow-up', $event)"
           @revert-file-change="forwardRunFileRevert"
         />
-      </div>
+      </aside>
     </section>
 
     <ChatComposer

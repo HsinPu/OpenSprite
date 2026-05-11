@@ -1181,6 +1181,13 @@ button:disabled {
   background: #fff8eb;
 }
 
+.chat-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
+  min-height: 0;
+  overflow: hidden;
+}
+
 .toast-stack {
   position: fixed;
   right: 22px;
@@ -1257,6 +1264,24 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   scroll-behavior: smooth;
+}
+
+.trace-inspector {
+  min-width: 0;
+  padding: 18px 18px 22px;
+  overflow: auto;
+  border-left: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface-muted) 62%, var(--surface));
+}
+
+.trace-inspector > * + * {
+  margin-top: 14px;
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  .chat-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  }
 }
 
 .conversation-wrap {
@@ -5284,6 +5309,24 @@ textarea:focus-visible {
 
   .conversation-wrap {
     padding-top: 24px;
+  }
+
+  .chat-workspace {
+    display: block;
+    overflow: auto;
+  }
+
+  .message-stage {
+    overflow: visible;
+  }
+
+  .trace-inspector {
+    width: min(var(--content-width), calc(100% - 24px));
+    margin: 0 auto 18px;
+    padding: 0;
+    overflow: visible;
+    border-left: 0;
+    background: transparent;
   }
 
   .prompt-grid {
