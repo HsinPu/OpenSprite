@@ -2,7 +2,17 @@
   <aside class="sidebar" id="sidebar" :aria-label="copy.sidebar.ariaLabel">
     <div class="sidebar__top">
       <div class="brand-row">
-        <div class="brand-mark" aria-hidden="true">OS</div>
+        <button
+          class="brand-mark brand-mark--button"
+          type="button"
+          :aria-label="collapsed ? copy.sidebar.expand : 'OpenSprite'"
+          :title="collapsed ? copy.sidebar.expand : 'OpenSprite'"
+          :disabled="!collapsed"
+          @click="collapsed && $emit('toggle-sidebar-collapsed')"
+        >
+          <span class="brand-mark__initial" aria-hidden="true">OS</span>
+          <span class="brand-mark__expand" aria-hidden="true">&gt;</span>
+        </button>
         <div class="brand-row__copy">
           <strong>OpenSprite</strong>
           <span>{{ copy.sidebar.brandSubtitle }}</span>
@@ -94,11 +104,10 @@
             <button
               class="session-tile"
               type="button"
-              :title="collapsed ? copy.sidebar.expand : `${getSessionTitle(session)} · ${getSessionDisplayId(session)}`"
-              @click="collapsed ? $emit('toggle-sidebar-collapsed') : $emit('set-active-session', session.externalChatId)"
+              :title="`${getSessionTitle(session)} · ${getSessionDisplayId(session)}`"
+              @click="$emit('set-active-session', session.externalChatId)"
             >
               <span class="session-tile__initial" aria-hidden="true">{{ getSessionTitle(session).slice(0, 1) }}</span>
-              <span class="session-tile__expand" aria-hidden="true">&gt;</span>
               <span class="session-tile__heading">
                 <strong>{{ getSessionTitle(session) }}</strong>
                 <span v-if="session.channel && session.channel !== 'web'" class="session-tile__channel">

@@ -568,6 +568,19 @@ button:disabled {
   font-size: 0.72rem;
 }
 
+.brand-mark--button {
+  border: 0;
+  cursor: default;
+}
+
+.brand-mark--button:disabled {
+  opacity: 1;
+}
+
+.brand-mark__expand {
+  display: none;
+}
+
 .new-chat-button {
   display: flex;
   align-items: center;
@@ -767,10 +780,6 @@ button:disabled {
 }
 
 .session-tile__initial {
-  display: none;
-}
-
-.session-tile__expand {
   display: none;
 }
 
@@ -1024,6 +1033,29 @@ button:disabled {
     display: none;
   }
 
+  .app-shell--sidebar-collapsed .brand-mark--button {
+    cursor: pointer;
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__initial,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible .brand-mark__initial {
+    display: none;
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__expand,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible .brand-mark__expand {
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
   .app-shell--sidebar-collapsed .new-chat-button,
   .app-shell--sidebar-collapsed .settings-button {
     justify-content: center;
@@ -1063,30 +1095,6 @@ button:disabled {
     background: var(--surface);
     font-size: 0.78rem;
     font-weight: 700;
-  }
-
-  .app-shell--sidebar-collapsed .session-tile__expand {
-    display: none;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid var(--border-soft);
-    border-radius: 999px;
-    color: var(--text);
-    background: var(--surface-hover);
-    font-size: 1rem;
-    font-weight: 800;
-    line-height: 1;
-  }
-
-  .app-shell--sidebar-collapsed .session-tile:hover .session-tile__initial,
-  .app-shell--sidebar-collapsed .session-tile:focus-visible .session-tile__initial {
-    display: none;
-  }
-
-  .app-shell--sidebar-collapsed .session-tile:hover .session-tile__expand,
-  .app-shell--sidebar-collapsed .session-tile:focus-visible .session-tile__expand {
-    display: grid;
   }
 
   .app-shell--sidebar-collapsed .session-tile--active .session-tile__initial {
