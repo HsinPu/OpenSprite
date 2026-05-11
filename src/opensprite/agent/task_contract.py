@@ -40,6 +40,11 @@ _WORKSPACE_TASK_HINT_RE = re.compile(
     r"|(?:程式|程式碼|檔案|函式|類別|專案|錯誤|測試|建置|設定|原始碼)",
     re.IGNORECASE,
 )
+_HISTORY_TASK_HINT_RE = re.compile(
+    r"\b(?:again|before|earlier|history|last time|previous|revisit|repeat)\b"
+    r"|(?:之前|先前|剛剛|上次|剛才|前面|剛提到|提過|說過)",
+    re.IGNORECASE,
+)
 _WEB_KEYWORD_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:web|internet|online|reddit|url|link|news)(?![A-Za-z0-9_])",
     re.IGNORECASE,
@@ -364,6 +369,23 @@ class TaskContractService:
             )
             task_type = "workspace_read"
 
+        history_required = not requirements and cls._looks_like_history_task(text)
+        if not history_required and not requirements:
+            history_required = inherited_tool_group == "history_retrieval"
+
+        if history_required:
+            acceptance_criteria.append(_history_final_answer_criterion())
+            requirements.append(
+                EvidenceRequirement(
+                    kind="tool_group",
+                    tool_group="history_retrieval",
+                    coverage="any",
+                    min_count=1,
+                    description="Search prior chat history or retrieved knowledge before answering this recall request.",
+                )
+            )
+            task_type = "history_retrieval"
+
         if task_intent.expects_code_change:
             requirements.append(
                 EvidenceRequirement(
@@ -433,6 +455,10 @@ class TaskContractService:
     @staticmethod
     def _looks_like_workspace_task(text: str) -> bool:
         return bool(_WORKSPACE_TASK_HINT_RE.search(text or ""))
+
+    @staticmethod
+    def _looks_like_history_task(text: str) -> bool:
+        return bool(_HISTORY_TASK_HINT_RE.search(text or ""))
 
 
 def merge_semantic_contract(
@@ -756,4 +782,12 @@ def _workspace_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=80,
         description="Provide a substantive final answer that uses the inspected workspace context.",
+    )
+
+
+def _history_final_answer_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="substantive_final_answer",
+        min_response_chars=80,
+        description="Provide a substantive final answer that uses the retrieved prior context.",
     )

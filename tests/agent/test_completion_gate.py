@@ -447,6 +447,81 @@ def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_
     assert completion.status == "complete"
 
 
+def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    assert contract.task_type == "history_retrieval"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
+    assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
+
+
+def test_completion_gate_requires_history_evidence_for_prior_context_lookup():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="我先回頭查一下剛剛的內容。",
+        execution_result=ExecutionResult(content="我先回頭查一下剛剛的內容。"),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
+
+
+def test_completion_gate_rejects_terse_history_answer_after_retrieval():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="找到了。",
+        execution_result=ExecutionResult(
+            content="找到了。",
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer was too terse for the task"
+
+
+def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
+    intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我回頭查過前面的內容了。剛剛提到的三個方案是先收斂 deterministic regex、"
+        "再補 semantic classifier 的安全合併，最後把 trace observability 顯示補齊。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_semantic_contract_can_add_web_research_requirement():
     intent = TaskIntentService().classify("2330 現在多少")
 
