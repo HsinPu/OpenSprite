@@ -568,42 +568,17 @@ button:disabled {
   font-size: 0.72rem;
 }
 
-.brand-mark-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
+.brand-mark--button {
+  border: 0;
+  cursor: default;
 }
 
-.brand-mark-expand {
-  position: absolute;
-  left: calc(100% + 6px);
-  top: 50%;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  color: var(--text);
-  background: var(--surface);
-  box-shadow: 0 10px 26px rgba(15, 17, 21, 0.16);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-4px, -50%) scale(0.94);
-  transition: opacity 150ms ease, transform 150ms ease, background-color 140ms ease, border-color 140ms ease;
+.brand-mark--button:disabled {
+  opacity: 1;
 }
 
-.brand-mark-expand span {
-  transform: translateY(-1px);
-  font-size: 1rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.brand-mark-expand:hover {
-  border-color: var(--border);
-  background: var(--surface-hover);
+.brand-mark__expand {
+  display: none;
 }
 
 .new-chat-button {
@@ -1058,11 +1033,27 @@ button:disabled {
     display: none;
   }
 
-  .app-shell--sidebar-collapsed .brand-mark-wrap:hover .brand-mark-expand,
-  .app-shell--sidebar-collapsed .brand-mark-expand:focus-visible {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translate(0, -50%) scale(1);
+  .app-shell--sidebar-collapsed .brand-mark--button {
+    cursor: pointer;
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible {
+    color: var(--text);
+    background: var(--surface-hover);
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__initial,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible .brand-mark__initial {
+    display: none;
+  }
+
+  .app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__expand,
+  .app-shell--sidebar-collapsed .brand-mark--button:focus-visible .brand-mark__expand {
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1;
   }
 
   .app-shell--sidebar-collapsed .new-chat-button,
