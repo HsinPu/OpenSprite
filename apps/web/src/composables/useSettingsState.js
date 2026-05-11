@@ -100,7 +100,7 @@ export function createSettingsState() {
         frequency_penalty: null,
         presence_penalty: null,
       },
-      semantic_contract_classifier_enabled: false,
+      semantic_contract_classifier_enabled: true,
       semantic_contract_classifier_confidence_threshold: 0.7,
       effective_request: null,
     },

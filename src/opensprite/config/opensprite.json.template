@@ -103,7 +103,7 @@
     "auto_continue_long_running_budget": 3,
     "auto_continue_deterministic_action_budget": 4,
     "subagent_max_tool_iterations": 100,
-    "semantic_contract_classifier_enabled": false,
+    "semantic_contract_classifier_enabled": true,
     "semantic_contract_classifier_confidence_threshold": 0.7,
     "skill_review_enabled": true,
     "skill_review_min_tool_calls": 5,

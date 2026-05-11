@@ -2764,7 +2764,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             assert llm_payload["llm"]["decoding_mode"] == "provider_default"
             assert "precise" in llm_payload["llm"]["decoding_modes"]
             assert llm_payload["llm"]["pass_decoding_params"] is False
-            assert llm_payload["llm"]["semantic_contract_classifier_enabled"] is False
+            assert llm_payload["llm"]["semantic_contract_classifier_enabled"] is True
             assert llm_payload["llm"]["semantic_contract_classifier_confidence_threshold"] == 0.7
             assert llm_payload["llm"]["decoding"] == {
                 "temperature": 0.25,
