@@ -200,7 +200,7 @@ class CronService:
         """Start the cron timer loop."""
         self._running = True
         self._load_store()
-        self._recompute_next_runs()
+        self._recompute_next_runs(preserve_existing=True)
         self._save_store()
         self._arm_timer()
 
@@ -211,12 +211,14 @@ class CronService:
             self._timer_task.cancel()
             self._timer_task = None
 
-    def _recompute_next_runs(self) -> None:
+    def _recompute_next_runs(self, *, preserve_existing: bool = False) -> None:
         if self._store is None:
             return
         now_ms = _now_ms()
         for job in self._store.jobs:
             if job.enabled:
+                if preserve_existing and job.state.next_run_at_ms is not None:
+                    continue
                 job.state.next_run_at_ms = _compute_next_run(job.schedule, now_ms)
 
     def _get_next_wake_ms(self) -> int | None:

@@ -1,6 +1,9 @@
 import asyncio
+import json
+import time
 
 from opensprite.cron.manager import CronManager
+from opensprite.cron.service import CronService
 from opensprite.cron.types import CronJob
 from opensprite.tools.cron import CronTool
 
@@ -73,3 +76,72 @@ def test_cron_tool_can_pause_enable_and_run(tmp_path):
     assert executions == [("telegram:user-a", job_id)]
     assert job is not None
     assert job.enabled is True
+
+
+def test_cron_service_runs_persisted_due_job_on_start(tmp_path):
+    async def scenario():
+        executions = []
+        now_ms = int(time.time() * 1000)
+        store_path = tmp_path / "cron" / "jobs.json"
+        store_path.parent.mkdir(parents=True)
+        store_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "sessionId": "telegram:user-a",
+                    "jobs": [
+                        {
+                            "id": "job-due",
+                            "name": "due job",
+                            "enabled": True,
+                            "schedule": {
+                                "kind": "every",
+                                "atMs": None,
+                                "everyMs": 60_000,
+                                "expr": None,
+                                "tz": None,
+                            },
+                            "payload": {
+                                "message": "Run missed work",
+                                "deliver": False,
+                                "channel": None,
+                                "externalChatId": None,
+                            },
+                            "state": {
+                                "nextRunAtMs": now_ms - 1,
+                                "lastRunAtMs": None,
+                                "lastStatus": None,
+                                "lastError": None,
+                                "runHistory": [],
+                            },
+                            "createdAtMs": now_ms - 60_000,
+                            "updatedAtMs": now_ms - 60_000,
+                            "deleteAfterRun": False,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        async def on_job(job: CronJob):
+            executions.append(job.id)
+            return "ok"
+
+        service = CronService(store_path, session_id="telegram:user-a", on_job=on_job)
+        await service.start()
+        deadline = time.time() + 1
+        while not executions and time.time() < deadline:
+            await asyncio.sleep(0.01)
+        service.stop()
+        saved = json.loads(store_path.read_text(encoding="utf-8"))
+        return executions, saved, now_ms
+
+    executions, saved, now_ms = asyncio.run(scenario())
+
+    assert executions == ["job-due"]
+    state = saved["jobs"][0]["state"]
+    assert state["lastStatus"] == "ok"
+    assert state["lastRunAtMs"] >= now_ms
+    assert state["nextRunAtMs"] > now_ms
+    assert state["runHistory"][-1]["status"] == "ok"

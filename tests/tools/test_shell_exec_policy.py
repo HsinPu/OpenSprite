@@ -227,6 +227,10 @@ def test_exec_tool_persists_background_session_lifecycle(tmp_path):
     assert stored.exit_code == 0
     assert stored.notify_mode == "none"
     assert "persisted background" in stored.output_tail
+    assert stored.output_path is not None
+    assert "persisted background" in Path(stored.output_path).read_text(
+        encoding="utf-8"
+    )
     assert [event.event_type for event in events] == [
         "background_process.started",
         "background_process.completed",

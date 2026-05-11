@@ -7,6 +7,7 @@ import contextlib
 import time
 import uuid
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Awaitable, Callable
 
 from ..storage.base import StorageProvider, StoredBackgroundProcess
@@ -49,6 +50,7 @@ class BackgroundSession:
     owner_run_id: str | None = None
     owner_channel: str | None = None
     owner_external_chat_id: str | None = None
+    output_path: str | None = None
 
     @property
     def pid(self) -> int:
@@ -124,7 +126,44 @@ class BackgroundProcessManager:
         self._schedule_persist_session(session, event_type="background_process.started")
         return session
 
-    def _stored_process_for_session(self, session: BackgroundSession) -> StoredBackgroundProcess | None:
+    def _output_file_path_for_session(self, session: BackgroundSession) -> Path | None:
+        if not session.cwd:
+            return None
+        return (
+            Path(session.cwd)
+            / ".opensprite"
+            / "background-processes"
+            / f"{session.session_id}.log"
+        )
+
+    def _persist_session_output(self, session: BackgroundSession) -> str | None:
+        output_path = (
+            Path(session.output_path)
+            if session.output_path
+            else self._output_file_path_for_session(session)
+        )
+        if output_path is None:
+            return session.output_path
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                self.render_output(session, max_chars=None, empty_placeholder=""),
+                encoding="utf-8",
+            )
+            session.output_path = str(output_path)
+        except Exception:
+            logger.exception(
+                "background.process.output-persist-failed | session_id={}",
+                session.session_id,
+            )
+        return session.output_path
+
+    def _stored_process_for_session(
+        self,
+        session: BackgroundSession,
+        *,
+        output_path: str | None = None,
+    ) -> StoredBackgroundProcess | None:
         if session.owner_session_id is None:
             return None
         return StoredBackgroundProcess(
@@ -141,6 +180,7 @@ class BackgroundProcessManager:
             exit_code=session.exit_code,
             notify_mode="agent_summary" if session.notify_on_exit else "none",
             output_tail=self.render_output(session, max_chars=12000, empty_placeholder=""),
+            output_path=output_path or session.output_path,
             metadata={
                 "output_drained": session.output_drained,
                 "notify_on_exit_empty_success": session.notify_on_exit_empty_success,
@@ -163,6 +203,7 @@ class BackgroundProcessManager:
             "exit_code": process.exit_code,
             "notify_mode": process.notify_mode,
             "output_tail": process.output_tail,
+            "output_path": process.output_path,
             "metadata": dict(process.metadata or {}),
         }
 
@@ -201,7 +242,10 @@ class BackgroundProcessManager:
         *,
         event_type: str | None = None,
     ) -> None:
-        stored_process = self._stored_process_for_session(session)
+        if self.storage is None or session.owner_session_id is None:
+            return
+        output_path = self._persist_session_output(session)
+        stored_process = self._stored_process_for_session(session, output_path=output_path)
         if stored_process is None:
             return
         await self._persist_stored_process(stored_process, event_type=event_type)
@@ -209,7 +253,8 @@ class BackgroundProcessManager:
     def _schedule_persist_session(self, session: BackgroundSession, *, event_type: str | None = None) -> None:
         if self.storage is None or session.owner_session_id is None:
             return
-        stored_process = self._stored_process_for_session(session)
+        output_path = self._persist_session_output(session)
+        stored_process = self._stored_process_for_session(session, output_path=output_path)
         if stored_process is None:
             return
         asyncio.create_task(self._persist_stored_process(stored_process, event_type=event_type))
@@ -374,6 +419,7 @@ class BackgroundProcessManager:
         elif not new_output:
             new_output = "(no new output)"
 
+        await self._persist_session(session)
         return session, new_output
 
     async def kill_session(self, session_id: str) -> BackgroundSession | None:
