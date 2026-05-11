@@ -231,6 +231,33 @@ def test_curator_skill_snapshot_is_session_scoped(tmp_path):
     assert agent._read_skill_snapshot("web:browser-b") == ""
 
 
+def test_agent_loop_uses_configured_continuation_budgets(tmp_path):
+    config = Config.load_agent_template_config(
+        auto_continue_default_budget=2,
+        auto_continue_long_running_budget=6,
+        auto_continue_deterministic_action_budget=7,
+    )
+
+    agent = AgentLoop(
+        config=config,
+        provider=FakeProvider(),
+        storage=FakeStorage(),
+        context_builder=FakeContextBuilder(tmp_path),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    assert agent.auto_continue.max_auto_continues == 2
+    assert agent.auto_continue.max_deterministic_actions == 7
+    assert agent.work_progress.default_continuation_budget == 2
+    assert agent.work_progress.long_running_continuation_budget == 6
+
+
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
     async def scenario():
         registry = ToolRegistry()

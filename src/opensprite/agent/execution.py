@@ -86,6 +86,8 @@ class ExecutionResult:
     had_tool_error: bool = False
     verification_attempted: bool = False
     verification_passed: bool = False
+    stop_reason: str | None = None
+    stop_metadata: dict[str, Any] = field(default_factory=dict)
     context_compactions: int = 0
     context_compaction_events: list[ContextCompactionEvent] = field(default_factory=list)
     llm_step_events: list[LlmStepEvent] = field(default_factory=list)
@@ -1753,7 +1755,16 @@ Output exactly these sections when applicable:
                 task_artifacts=tuple(task_artifacts),
             )
 
-        logger.warning(f"[{log_id}] llm.max-iterations | limit={iteration_limit}")
+        stop_metadata = {
+            "schema_version": 1,
+            "iteration_limit": iteration_limit,
+            "executed_tool_calls": executed_tool_calls,
+            "tool_result_count": len(tool_results_history),
+        }
+        logger.warning(
+            f"[{log_id}] llm.max-iterations | limit={iteration_limit} "
+            f"executed_tool_calls={executed_tool_calls} tool_result_count={len(tool_results_history)}"
+        )
 
         history_msg = ""
         if tool_results_history:
@@ -1780,6 +1791,8 @@ Output exactly these sections when applicable:
             active_delegate_prompt_type=active_delegate_prompt_type,
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,
+            stop_reason="max_tool_iterations",
+            stop_metadata=stop_metadata,
             context_compactions=context_compactions,
             context_compaction_events=context_compaction_events,
             llm_step_events=llm_step_events,

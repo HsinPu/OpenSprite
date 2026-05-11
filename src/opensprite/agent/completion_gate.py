@@ -188,6 +188,22 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        if execution_result.stop_reason == "max_tool_iterations":
+            return CompletionGateResult(
+                status="incomplete",
+                reason="max tool iterations exhausted before completion",
+                active_task_detail="The execution loop hit the configured max_tool_iterations limit and needs another bounded continuation pass.",
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         immediate_transition = infer_immediate_task_transition(
             response_text,
             had_tool_error=execution_result.had_tool_error,

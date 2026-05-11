@@ -99,6 +99,9 @@
       "frequency_penalty": null,
       "presence_penalty": null
     },
+    "auto_continue_default_budget": 1,
+    "auto_continue_long_running_budget": 3,
+    "auto_continue_deterministic_action_budget": 4,
     "skill_review_enabled": true,
     "skill_review_min_tool_calls": 5,
     "skill_review_max_tool_iterations": 6,

@@ -656,8 +656,14 @@ class AgentLoop:
         self.task_context_resolver = TaskContextResolver()
         self.task_objective_resolver = TaskObjectiveResolver()
         self.completion_gate = CompletionGateService()
-        self.auto_continue = AutoContinueService(max_auto_continues=1)
-        self.work_progress = WorkProgressService()
+        self.auto_continue = AutoContinueService(
+            max_auto_continues=self.config.auto_continue_default_budget,
+            max_deterministic_actions=self.config.auto_continue_deterministic_action_budget,
+        )
+        self.work_progress = WorkProgressService(
+            default_continuation_budget=self.config.auto_continue_default_budget,
+            long_running_continuation_budget=self.config.auto_continue_long_running_budget,
+        )
         self.run_state = AgentRunStateService()
         self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
         self.user_overlay_index = UserOverlayIndexStore(app_home=self.app_home)

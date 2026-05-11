@@ -650,6 +650,8 @@ class WorkProgressService:
             signals.append("verification_passed")
         if execution_result.context_compactions > 0:
             signals.append("context_compaction")
+        if execution_result.stop_reason == "max_tool_iterations":
+            signals.append("max_tool_iterations")
         if execution_result.had_tool_error:
             signals.append("tool_error")
         return tuple(signals)

@@ -339,6 +339,20 @@ class AgentTurnRunner:
             run_id,
             exec_result.llm_step_events,
         )
+        if exec_result.stop_reason:
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                "execution.stopped",
+                {
+                    "schema_version": 1,
+                    "status": "stopped",
+                    "stop_reason": exec_result.stop_reason,
+                    **dict(exec_result.stop_metadata or {}),
+                },
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
         aggregate_result = self._aggregate_execution_results(execution_results, content=response)
         delegated_task_updates = self._consume_delegated_task_updates(run_id)
         if delegated_task_updates:
@@ -647,6 +661,12 @@ class AgentTurnRunner:
         response_metadata["delegated_tasks"] = [task.to_payload() for task in aggregate_result.delegated_tasks]
         response_metadata["active_delegate_task_id"] = aggregate_result.active_delegate_task_id
         response_metadata["active_delegate_prompt_type"] = aggregate_result.active_delegate_prompt_type
+        if aggregate_result.stop_reason:
+            response_metadata["stop_reason"] = aggregate_result.stop_reason
+            status_metadata["stop_reason"] = aggregate_result.stop_reason
+            if aggregate_result.stop_metadata:
+                response_metadata["stop_metadata"] = dict(aggregate_result.stop_metadata)
+                status_metadata["stop_metadata"] = dict(aggregate_result.stop_metadata)
         persisted_assistant_metadata = dict(turn.assistant_metadata)
         if aggregate_result.reasoning_details:
             persisted_assistant_metadata["llm_reasoning_details"] = aggregate_result.reasoning_details
@@ -934,6 +954,8 @@ class AgentTurnRunner:
             had_tool_error=any(result.had_tool_error for result in results),
             verification_attempted=any(result.verification_attempted for result in results),
             verification_passed=any(result.verification_passed for result in results),
+            stop_reason=next((result.stop_reason for result in reversed(results) if result.stop_reason), None),
+            stop_metadata=next((dict(result.stop_metadata or {}) for result in reversed(results) if result.stop_reason), {}),
             context_compactions=sum(result.context_compactions for result in results),
             context_compaction_events=[
                 event

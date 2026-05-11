@@ -84,6 +84,7 @@ const TIMELINE_EVENT_TYPES = new Set([
   "curator.started",
   "curator.completed",
   "curator.failed",
+  "execution.stopped",
   "auto_continue.scheduled",
   "auto_continue.completed",
   "auto_continue.skipped",
@@ -299,6 +300,9 @@ function inferRunEventKind(eventType) {
   if (normalized === "reasoning_delta") {
     return "llm";
   }
+  if (normalized === "execution.stopped") {
+    return "llm";
+  }
   if (normalized.startsWith("tool_")) {
     return "tool";
   }
@@ -331,6 +335,9 @@ function inferRunEventStatus(eventType, payload = {}) {
   }
   if (normalized === "run_part_delta" || normalized === "message_part_delta") {
     return "running";
+  }
+  if (normalized === "execution.stopped") {
+    return "stopped";
   }
   if (normalized === "run_started" || normalized.endsWith("_started") || normalized === "llm_status" || normalized === "auto_continue.scheduled") {
     return "running";

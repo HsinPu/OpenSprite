@@ -143,6 +143,26 @@ def test_completion_gate_requires_requested_verification_before_completion():
     assert result.verification_path == "."
 
 
+def test_completion_gate_treats_max_tool_iterations_as_incomplete():
+    intent = TaskIntentService().classify("Please implement the cleanup and run tests.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="I hit the iteration limit before finishing.",
+        execution_result=ExecutionResult(
+            content="I hit the iteration limit before finishing.",
+            executed_tool_calls=1,
+            file_change_count=1,
+            stop_reason="max_tool_iterations",
+            stop_metadata={"iteration_limit": 1},
+        ),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "max tool iterations exhausted before completion"
+    assert "max_tool_iterations" in (result.active_task_detail or "")
+
+
 def test_completion_gate_prefers_web_smoke_when_requested_for_web_changes():
     intent = TaskIntentService().classify("Please update the web UI and run test:smoke.")
 

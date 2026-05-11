@@ -111,6 +111,9 @@ class AgentConfig(BaseModel):
     context_compaction_min_messages: int = Field(ge=2)
     context_compaction_strategy: Literal["deterministic", "llm"]
     context_compaction_llm: DocumentLlmConfig
+    auto_continue_default_budget: int = Field(default=1, ge=0, le=100)
+    auto_continue_long_running_budget: int = Field(default=3, ge=0, le=100)
+    auto_continue_deterministic_action_budget: int = Field(default=4, ge=0, le=100)
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
     skill_review_enabled: bool
     skill_review_min_tool_calls: int = Field(ge=1)
@@ -1453,6 +1456,9 @@ class Config:
                 "context_compaction_min_messages": self.agent.context_compaction_min_messages,
                 "context_compaction_strategy": self.agent.context_compaction_strategy,
                 "context_compaction_llm": self.agent.context_compaction_llm.model_dump(),
+                "auto_continue_default_budget": self.agent.auto_continue_default_budget,
+                "auto_continue_long_running_budget": self.agent.auto_continue_long_running_budget,
+                "auto_continue_deterministic_action_budget": self.agent.auto_continue_deterministic_action_budget,
                 "skill_review_enabled": self.agent.skill_review_enabled,
                 "skill_review_min_tool_calls": self.agent.skill_review_min_tool_calls,
                 "skill_review_max_tool_iterations": self.agent.skill_review_max_tool_iterations,

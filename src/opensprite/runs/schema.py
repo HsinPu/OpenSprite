@@ -45,6 +45,7 @@ _EVENT_KINDS = {
     "workflow.completed": "work",
     "workflow.failed": "work",
     "completion_gate.evaluated": "completion",
+    "execution.stopped": "llm",
     "auto_continue.scheduled": "run",
     "auto_continue.completed": "run",
     "background_process.started": "process",
@@ -154,6 +155,8 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "cancelling"
     if normalized in {"run_part_delta", "message_part_delta"}:
         return explicit or "running"
+    if normalized == "execution.stopped":
+        return explicit or "stopped"
     if normalized.endswith("_started") or normalized == "llm_status" or normalized == "auto_continue.scheduled":
         return explicit or "running"
     if explicit:

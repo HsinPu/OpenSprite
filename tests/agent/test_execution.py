@@ -1063,6 +1063,15 @@ def test_execution_engine_returns_max_iteration_message_when_tool_loop_never_fin
 
     assert "超過了最大迭代次數（1次）" in result.content
     assert "demo_tool: tool:abc" in result.content
+    assert result.stop_reason == "max_tool_iterations"
+    assert result.stop_metadata == {
+        "schema_version": 1,
+        "iteration_limit": 1,
+        "executed_tool_calls": 1,
+        "tool_result_count": 1,
+    }
+    assert len(result.llm_step_events) == 1
+    assert result.llm_step_events[0].tool_calls == 1
 
 
 def test_execution_engine_stops_when_cancel_checker_requests_stop():

@@ -165,6 +165,7 @@ class AutoContinueService:
                 "required source material was insufficient",
                 "assistant final answer did not reference gathered sources",
                 "assistant final answer was too terse for the task",
+                "max tool iterations exhausted before completion",
             }
         ):
             return self._skip(

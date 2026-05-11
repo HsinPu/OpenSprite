@@ -55,6 +55,15 @@ def test_work_progress_tracks_verification_and_next_action():
     assert update.continuation_budget == 3
 
 
+def test_work_progress_uses_configured_continuation_budgets():
+    service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
+    coding_intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    question_intent = TaskIntentService().classify("What does this command do?")
+
+    assert service.continuation_budget(coding_intent) == 5
+    assert service.continuation_budget(question_intent) == 2
+
+
 def test_work_progress_resume_hint_uses_verification_target():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
