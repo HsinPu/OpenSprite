@@ -876,6 +876,14 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
+            emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
+                session_id,
+                run_id,
+                event_type,
+                payload,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            ),
             build_proactive_retrieval_context=lambda session_id, current_message: self.retrieval.build_context(
                 session_id=session_id,
                 current_message=current_message,

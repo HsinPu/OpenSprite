@@ -802,6 +802,50 @@ def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
     assert seed_event["details"]["intent_kind"] == "refactor"
 
 
+def test_agent_process_emits_task_context_resolved_event(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_execute_messages(*args, **kwargs):
+            return ExecutionResult(content="context resolved", executed_tool_calls=0)
+
+        agent._execute_messages = fake_execute_messages
+        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
+
+        await agent.process(
+            UserMessage(
+                text="Please refactor the agent and run tests.",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+
+        run = next(iter(storage._runs.values()))
+        return await storage.get_run_events("web:browser-1", run.run_id)
+
+    events = asyncio.run(scenario())
+
+    event = next(event for event in events if event.event_type == "task_context.resolved")
+    assert event.payload["method"] == "deterministic"
+    assert event.payload["is_follow_up"] is False
+    assert event.payload["confidence"] >= 0.0
+
+
 def test_agent_process_emits_completion_gate_needs_verification_after_code_changes(tmp_path):
     async def scenario():
         storage = MemoryStorage()

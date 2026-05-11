@@ -39,6 +39,7 @@ class LlmCallService:
         get_work_state_summary: Callable[[str], Awaitable[str]],
         read_active_task_snapshot: Callable[[str], str],
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
+        emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
         get_current_run_id: Callable[[], str | None],
@@ -69,6 +70,7 @@ class LlmCallService:
         self._get_work_state_summary = get_work_state_summary
         self._read_active_task_snapshot = read_active_task_snapshot
         self._resolve_task_context = resolve_task_context
+        self._emit_run_event = emit_run_event
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
         self._get_current_run_id = get_current_run_id
@@ -138,6 +140,7 @@ class LlmCallService:
         )
         work_state_summary = await self._get_work_state_summary(session_id)
         active_task_snapshot = self._read_active_task_snapshot(session_id)
+        run_id = self._get_current_run_id()
         task_context_decision = None
         if task_intent is not None:
             task_context_decision = await self._resolve_task_context(
@@ -155,6 +158,15 @@ class LlmCallService:
                 f"tool_group={task_context_decision.inherited_tool_group or '-'} "
                 f"confidence={task_context_decision.confidence:.2f}"
             )
+            if run_id is not None:
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_context.resolved",
+                    task_context_decision.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
         await self._maybe_seed_active_task(
             session_id,
             current_message,
@@ -253,7 +265,6 @@ class LlmCallService:
             chat_messages.append(msg)
 
         self._log_prepared_messages(session_id, full_messages)
-        run_id = self._get_current_run_id()
         on_tool_before_execute = self._make_tool_progress_hook(
             channel=channel,
             external_chat_id=external_chat_id,
