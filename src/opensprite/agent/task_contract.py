@@ -34,7 +34,7 @@ _AUDIO_TASK_HINT_RE = re.compile(r"\b(?:audio|voice|speech|transcribe)\b|(?:音�
 _VIDEO_TASK_HINT_RE = re.compile(r"\b(?:video|clip)\b|(?:影片|視頻|短片)", re.IGNORECASE)
 _WEB_TASK_HINT_RE = re.compile(
     r"\b(?:web|internet|online|reddit|url|link|search|news)\b"
-    r"|(?:上網|網路|搜尋|查找|新聞|來源|連結)",
+    r"|(?:上網|網路|搜尋|搜索|查找|查詢|查一下|新聞|來源|連結|最新|即時|市值|股價|報價|匯率|天氣)",
     re.IGNORECASE,
 )
 
@@ -92,9 +92,11 @@ class TaskContract:
     selected_resources: tuple[ResourceRef, ...] = ()
     final_answer_required: bool = True
     allow_no_tool_final: bool = True
+    contract_sources: tuple[str, ...] = ("deterministic",)
+    semantic_contract: dict[str, Any] | None = None
 
     def to_metadata(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "schema_version": 1,
             "objective": self.objective,
             "task_type": self.task_type,
@@ -103,7 +105,37 @@ class TaskContract:
             "selected_resources": [item.to_metadata() for item in self.selected_resources],
             "final_answer_required": self.final_answer_required,
             "allow_no_tool_final": self.allow_no_tool_final,
+            "contract_sources": list(self.contract_sources),
         }
+        if self.semantic_contract:
+            payload["semantic_contract"] = dict(self.semantic_contract)
+        return payload
+
+
+@dataclass(frozen=True)
+class SemanticContractDecision:
+    """Optional semantic contract signal; Phase 1 callers may pass a stubbed decision."""
+
+    requires_tool_evidence: bool = False
+    required_tool_group: str | None = None
+    task_type: str | None = None
+    allow_no_tool_final: bool | None = None
+    confidence: float = 0.0
+    reason: str = ""
+
+    def to_metadata(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "requires_tool_evidence": self.requires_tool_evidence,
+            "confidence": self.confidence,
+            "reason": self.reason,
+        }
+        if self.required_tool_group:
+            payload["required_tool_group"] = self.required_tool_group
+        if self.task_type:
+            payload["task_type"] = self.task_type
+        if self.allow_no_tool_final is not None:
+            payload["allow_no_tool_final"] = self.allow_no_tool_final
+        return payload
 
 
 class TaskContractService:
@@ -111,6 +143,30 @@ class TaskContractService:
 
     @classmethod
     def build(
+        cls,
+        *,
+        task_intent: TaskIntent,
+        current_message: str,
+        history: list[dict[str, Any]] | None = None,
+        current_image_files: list[str] | None = None,
+        current_audio_files: list[str] | None = None,
+        current_video_files: list[str] | None = None,
+        task_context_decision: TaskContextDecision | None = None,
+        semantic_decision: SemanticContractDecision | None = None,
+    ) -> TaskContract:
+        deterministic = cls.build_deterministic(
+            task_intent=task_intent,
+            current_message=current_message,
+            history=history,
+            current_image_files=current_image_files,
+            current_audio_files=current_audio_files,
+            current_video_files=current_video_files,
+            task_context_decision=task_context_decision,
+        )
+        return merge_semantic_contract(deterministic, semantic_decision)
+
+    @classmethod
+    def build_deterministic(
         cls,
         *,
         task_intent: TaskIntent,
@@ -229,8 +285,7 @@ class TaskContractService:
                     description="Use web research tools before answering this external information request.",
                 )
             )
-            if task_type == "pure_answer" or task_context_decision.inherited_task_type == "web_research":
-                task_type = "web_research"
+            task_type = "web_research"
 
         if not requirements and inherited_tool_group == "workspace_read":
             requirements.append(
@@ -283,6 +338,7 @@ class TaskContractService:
             selected_resources=tuple(selected),
             final_answer_required=True,
             allow_no_tool_final=not requirements,
+            contract_sources=("deterministic",),
         )
 
     @staticmethod
@@ -302,6 +358,83 @@ class TaskContractService:
     @staticmethod
     def _looks_like_web_task(text: str) -> bool:
         return bool(_URL_RE.search(text or "") or _WEB_TASK_HINT_RE.search(text or ""))
+
+
+def merge_semantic_contract(
+    contract: TaskContract,
+    semantic_decision: SemanticContractDecision | None,
+    *,
+    min_confidence: float = 0.7,
+) -> TaskContract:
+    """Merge a semantic contract decision without loosening deterministic requirements."""
+    if semantic_decision is None:
+        return contract
+
+    metadata = semantic_decision.to_metadata()
+    metadata["merge_policy"] = "semantic_may_only_add_requirements"
+    confidence = max(0.0, min(1.0, float(semantic_decision.confidence or 0.0)))
+    tool_group = str(semantic_decision.required_tool_group or "").strip()
+    can_apply = bool(
+        semantic_decision.requires_tool_evidence
+        and tool_group
+        and confidence >= min_confidence
+    )
+    metadata["applied"] = can_apply
+    if not can_apply:
+        return TaskContract(
+            objective=contract.objective,
+            task_type=contract.task_type,
+            requirements=contract.requirements,
+            acceptance_criteria=contract.acceptance_criteria,
+            selected_resources=contract.selected_resources,
+            final_answer_required=contract.final_answer_required,
+            allow_no_tool_final=contract.allow_no_tool_final,
+            contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
+            semantic_contract=metadata,
+        )
+
+    requirements = list(contract.requirements)
+    if not any(item.kind == "tool_group" and item.tool_group == tool_group for item in requirements):
+        requirements.append(_semantic_tool_requirement(tool_group))
+
+    acceptance_criteria = list(contract.acceptance_criteria)
+    if tool_group == "web_research":
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (
+                AcceptanceCriterion(
+                    kind="source_artifact",
+                    min_count=2,
+                    description="Produce enough traceable web sources before finalizing the answer.",
+                ),
+                AcceptanceCriterion(
+                    kind="source_detail",
+                    min_count=1,
+                    description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
+                ),
+                _web_final_answer_criterion(),
+                _web_source_reference_criterion(),
+            ),
+        )
+
+    next_task_type = contract.task_type
+    semantic_task_type = str(semantic_decision.task_type or "").strip()
+    if semantic_task_type and contract.task_type in {"pure_answer", "task", "conversation", "question"}:
+        next_task_type = semantic_task_type
+    elif tool_group == "web_research" and contract.task_type in {"pure_answer", "task", "conversation", "question"}:
+        next_task_type = "web_research"
+
+    return TaskContract(
+        objective=contract.objective,
+        task_type=next_task_type,
+        requirements=tuple(requirements),
+        acceptance_criteria=tuple(acceptance_criteria),
+        selected_resources=contract.selected_resources,
+        final_answer_required=contract.final_answer_required,
+        allow_no_tool_final=contract.allow_no_tool_final and not requirements,
+        contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
+        semantic_contract=metadata,
+    )
 
 
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
@@ -353,6 +486,43 @@ def _task_type_from_intent(task_intent: TaskIntent) -> str:
 def _requested_item_count(objective: str) -> int:
     counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,3}(?!\d)", str(objective or ""))]
     return max(counts, default=0)
+
+
+def _append_unique(items: tuple[str, ...], item: str) -> tuple[str, ...]:
+    values = [value for value in items if value]
+    if item not in values:
+        values.append(item)
+    return tuple(values)
+
+
+def _semantic_tool_requirement(tool_group: str) -> EvidenceRequirement:
+    if tool_group == "web_research":
+        return EvidenceRequirement(
+            kind="tool_group",
+            tool_group="web_research",
+            coverage="any",
+            min_count=1,
+            description="Use web research tools before answering this external information request.",
+        )
+    return EvidenceRequirement(
+        kind="tool_group",
+        tool_group=tool_group,
+        coverage="any",
+        min_count=1,
+        description=f"Use {tool_group} tools before finalizing the answer.",
+    )
+
+
+def _append_acceptance_criteria(
+    existing: list[AcceptanceCriterion],
+    additions: tuple[AcceptanceCriterion, ...],
+) -> list[AcceptanceCriterion]:
+    seen = {item.kind for item in existing}
+    for criterion in additions:
+        if criterion.kind not in seen:
+            existing.append(criterion)
+            seen.add(criterion.kind)
+    return existing
 
 
 def _media_final_answer_criterion() -> AcceptanceCriterion:

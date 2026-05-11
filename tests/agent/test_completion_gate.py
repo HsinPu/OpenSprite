@@ -4,7 +4,7 @@ from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.task_contract import AcceptanceCriterion, TaskContract, TaskContractService
+from opensprite.agent.task_contract import AcceptanceCriterion, SemanticContractDecision, TaskContract, TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
@@ -279,6 +279,114 @@ def test_task_contract_records_web_source_acceptance_criteria():
     criteria = {criterion.kind: criterion for criterion in contract.acceptance_criteria}
     assert criteria["source_artifact"].min_count == 2
     assert criteria["source_detail"].min_count == 1
+
+
+def test_task_contract_requires_web_research_for_chinese_market_lookup():
+    intent = TaskIntentService().classify("幫我找 2330市值")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    assert contract.task_type == "web_research"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
+        "source_artifact",
+        "source_detail",
+        "substantive_final_answer",
+        "source_reference",
+    }
+
+
+def test_semantic_contract_can_add_web_research_requirement():
+    intent = TaskIntentService().classify("2330 現在多少")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="web_research",
+            task_type="web_research",
+            allow_no_tool_final=False,
+            confidence=0.86,
+            reason="User asks for current stock market data.",
+        ),
+    )
+
+    assert contract.task_type == "web_research"
+    assert contract.allow_no_tool_final is False
+    assert contract.contract_sources == ("deterministic", "semantic_classifier")
+    assert contract.semantic_contract
+    assert contract.semantic_contract["applied"] is True
+    assert contract.semantic_contract["reason"] == "User asks for current stock market data."
+    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
+        "source_artifact",
+        "source_detail",
+        "substantive_final_answer",
+        "source_reference",
+    }
+
+
+def test_semantic_contract_cannot_remove_deterministic_requirement():
+    intent = TaskIntentService().classify("Please summarize https://example.com/docs")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=False,
+            allow_no_tool_final=True,
+            confidence=0.95,
+            reason="Incorrectly says no tool evidence is required.",
+        ),
+    )
+
+    assert contract.task_type == "web_research"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert contract.semantic_contract
+    assert contract.semantic_contract["applied"] is False
+
+
+def test_low_confidence_semantic_contract_only_records_trace_metadata():
+    intent = TaskIntentService().classify("2330 怎麼樣")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="web_research",
+            task_type="web_research",
+            allow_no_tool_final=False,
+            confidence=0.42,
+            reason="Low confidence market lookup guess.",
+        ),
+    )
+
+    assert contract.requirements == ()
+    assert contract.allow_no_tool_final is True
+    assert contract.semantic_contract
+    assert contract.semantic_contract["applied"] is False
+    assert contract.to_metadata()["semantic_contract"]["reason"] == "Low confidence market lookup guess."
+
+
+def test_completion_gate_requires_web_evidence_for_chinese_market_lookup():
+    intent = TaskIntentService().classify("查一下 2330市值")
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="讓我查一下最新市值：",
+        execution_result=ExecutionResult(content="讓我查一下最新市值："),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
 
 
 def test_task_contract_inherits_web_research_for_short_follow_up():
