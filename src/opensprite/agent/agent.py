@@ -87,6 +87,7 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
+from .task_contract import SemanticContractClassifier
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
 from .tool_registration import (
@@ -655,6 +656,7 @@ class AgentLoop:
         self.task_intents = TaskIntentService()
         self.task_context_resolver = TaskContextResolver()
         self.task_objective_resolver = TaskObjectiveResolver()
+        self.semantic_contract_classifier = SemanticContractClassifier()
         self.completion_gate = CompletionGateService()
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
@@ -887,6 +889,11 @@ class AgentLoop:
                 **kwargs,
             ),
             resolve_task_objective=lambda **kwargs: self.task_objective_resolver.resolve(
+                provider=self.provider,
+                model=self.provider.get_default_model(),
+                **kwargs,
+            ),
+            classify_semantic_contract=lambda **kwargs: self.semantic_contract_classifier.classify(
                 provider=self.provider,
                 model=self.provider.get_default_model(),
                 **kwargs,

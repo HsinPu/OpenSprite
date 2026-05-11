@@ -115,6 +115,8 @@ class AgentConfig(BaseModel):
     auto_continue_long_running_budget: int = Field(default=3, ge=0, le=100)
     auto_continue_deterministic_action_budget: int = Field(default=4, ge=0, le=100)
     subagent_max_tool_iterations: int = Field(default=100, ge=1, le=100)
+    semantic_contract_classifier_enabled: bool = False
+    semantic_contract_classifier_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
     skill_review_enabled: bool
     skill_review_min_tool_calls: int = Field(ge=1)
@@ -1461,6 +1463,8 @@ class Config:
                 "auto_continue_long_running_budget": self.agent.auto_continue_long_running_budget,
                 "auto_continue_deterministic_action_budget": self.agent.auto_continue_deterministic_action_budget,
                 "subagent_max_tool_iterations": self.agent.subagent_max_tool_iterations,
+                "semantic_contract_classifier_enabled": self.agent.semantic_contract_classifier_enabled,
+                "semantic_contract_classifier_confidence_threshold": self.agent.semantic_contract_classifier_confidence_threshold,
                 "skill_review_enabled": self.agent.skill_review_enabled,
                 "skill_review_min_tool_calls": self.agent.skill_review_min_tool_calls,
                 "skill_review_max_tool_iterations": self.agent.skill_review_max_tool_iterations,

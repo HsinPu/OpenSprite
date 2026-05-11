@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
@@ -36,6 +38,12 @@ _WEB_TASK_HINT_RE = re.compile(
     r"\b(?:web|internet|online|reddit|url|link|search|news)\b"
     r"|(?:上網|網路|搜尋|搜索|查找|查詢|查一下|新聞|來源|連結|最新|即時|市值|股價|報價|匯率|天氣)",
     re.IGNORECASE,
+)
+_ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
+_ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "task", "analysis", "pure_answer"})
+_SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
+    "Classify whether a user request needs tool-derived evidence before the final answer. "
+    "Return only JSON. You may only add stricter requirements; never remove deterministic evidence requirements."
 )
 
 
@@ -114,7 +122,7 @@ class TaskContract:
 
 @dataclass(frozen=True)
 class SemanticContractDecision:
-    """Optional semantic contract signal; Phase 1 callers may pass a stubbed decision."""
+    """Optional semantic contract signal from a classifier or test stub."""
 
     requires_tool_evidence: bool = False
     required_tool_group: str | None = None
@@ -136,6 +144,48 @@ class SemanticContractDecision:
         if self.allow_no_tool_final is not None:
             payload["allow_no_tool_final"] = self.allow_no_tool_final
         return payload
+
+
+class SemanticContractClassifier:
+    """LLM-backed classifier for ambiguous task contracts."""
+
+    async def classify(
+        self,
+        *,
+        provider: Any,
+        model: str | None,
+        task_intent: TaskIntent,
+        current_message: str,
+        history: list[dict[str, Any]] | None,
+        deterministic_contract: TaskContract,
+    ) -> SemanticContractDecision | None:
+        if not should_classify_semantic_contract(
+            current_message=current_message,
+            task_intent=task_intent,
+            deterministic_contract=deterministic_contract,
+        ):
+            return None
+        if provider is None or str(model or "").strip().lower() == "unconfigured":
+            return SemanticContractDecision(reason="semantic classifier unavailable: llm not configured")
+
+        response = await provider.chat(
+            [
+                ChatMessage(role="system", content=_SEMANTIC_CONTRACT_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=_build_semantic_contract_prompt(
+                        current_message=current_message,
+                        history=history or [],
+                        task_intent=task_intent,
+                        deterministic_contract=deterministic_contract,
+                    ),
+                ),
+            ],
+            model=model,
+            temperature=0.0,
+            max_tokens=400,
+        )
+        return _semantic_decision_from_payload(_parse_json_object(str(getattr(response, "content", "") or "")))
 
 
 class TaskContractService:
@@ -437,6 +487,29 @@ def merge_semantic_contract(
     )
 
 
+def should_classify_semantic_contract(
+    *,
+    current_message: str,
+    task_intent: TaskIntent,
+    deterministic_contract: TaskContract,
+) -> bool:
+    """Return whether an optional semantic pass may add missing requirements."""
+    if deterministic_contract.requirements:
+        return False
+    if task_intent.expects_code_change or task_intent.expects_verification:
+        return False
+    if task_intent.kind in {"command", "media_upload"}:
+        return False
+    message = _compact(current_message)
+    if not message or len(message) > 500:
+        return False
+    if _URL_RE.search(message):
+        return False
+    if task_intent.kind == "conversation" and not _looks_like_semantic_lookup_candidate(message):
+        return False
+    return task_intent.kind in {"task", "question", "conversation", "analysis", "writing", "planning"}
+
+
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
     """Return human-readable missing evidence items for a contract."""
     if contract is None:
@@ -523,6 +596,110 @@ def _append_acceptance_criteria(
             existing.append(criterion)
             seen.add(criterion.kind)
     return existing
+
+
+def _build_semantic_contract_prompt(
+    *,
+    current_message: str,
+    history: list[dict[str, Any]],
+    task_intent: TaskIntent,
+    deterministic_contract: TaskContract,
+) -> str:
+    context = {
+        "current_message": _truncate(current_message, max_chars=700),
+        "task_intent": task_intent.to_metadata(),
+        "recent_history": _recent_history(history),
+        "deterministic_contract": deterministic_contract.to_metadata(),
+    }
+    return (
+        "Decide if the latest user request requires tool-derived evidence before the final answer.\n"
+        "Use this for ambiguous, multilingual, shorthand, typo-heavy, or code-mixed requests.\n"
+        "Classify requests for current/external facts, prices, finance/stock data, weather, news, web pages, or public data as web_research.\n"
+        "Do not require tools for opinions, brainstorming, casual chat, or answers that can be completed from existing context.\n"
+        "Return only JSON with keys: requires_tool_evidence, required_tool_group, task_type, allow_no_tool_final, confidence, reason.\n"
+        "required_tool_group must be one of: web_research, workspace_read, history_retrieval, or null.\n"
+        "task_type must be one of: web_research, workspace_read, task, analysis, pure_answer, or null.\n"
+        "If unsure, use confidence below 0.7.\n\n"
+        f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _semantic_decision_from_payload(payload: dict[str, Any]) -> SemanticContractDecision:
+    tool_group = _allowed_string(payload.get("required_tool_group"), _ALLOWED_SEMANTIC_TOOL_GROUPS)
+    task_type = _allowed_string(payload.get("task_type"), _ALLOWED_SEMANTIC_TASK_TYPES)
+    return SemanticContractDecision(
+        requires_tool_evidence=_coerce_bool(payload.get("requires_tool_evidence")),
+        required_tool_group=tool_group,
+        task_type=task_type,
+        allow_no_tool_final=(None if "allow_no_tool_final" not in payload else _coerce_bool(payload.get("allow_no_tool_final"))),
+        confidence=_coerce_confidence(payload.get("confidence")),
+        reason=_truncate(str(payload.get("reason") or "semantic classifier returned a decision"), max_chars=240),
+    )
+
+
+def _parse_json_object(text: str) -> dict[str, Any]:
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+    raw = fenced.group(1) if fenced else text
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end >= start:
+        raw = raw[start : end + 1]
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    for item in (history or [])[-6:]:
+        role = str(item.get("role") or "").strip()
+        content = _truncate(str(item.get("content") or ""), max_chars=500)
+        if role and content:
+            entries.append({"role": role, "content": content})
+    return entries
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _looks_like_semantic_lookup_candidate(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return bool(
+        re.search(r"\d", lowered)
+        or lowered.endswith(("?", "？"))
+        or any(marker in lowered for marker in ("多少", "哪", "什麼", "現在", "current", "latest"))
+    )
+
+
+def _truncate(text: str, *, max_chars: int) -> str:
+    compact = str(text or "").strip()
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
+    text = str(value or "").strip()
+    return text if text in allowed else None
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "是"}
+
+
+def _coerce_confidence(value: Any) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, confidence))
 
 
 def _media_final_answer_criterion() -> AcceptanceCriterion:

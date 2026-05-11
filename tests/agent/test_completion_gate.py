@@ -1,11 +1,20 @@
+import asyncio
+
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.task_contract import AcceptanceCriterion, SemanticContractDecision, TaskContract, TaskContractService
+from opensprite.agent.task_contract import (
+    AcceptanceCriterion,
+    SemanticContractClassifier,
+    SemanticContractDecision,
+    TaskContract,
+    TaskContractService,
+)
 from opensprite.agent.task_intent import TaskIntentService
+from opensprite.llms.base import LLMResponse
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
 
@@ -121,6 +130,26 @@ def _web_research_coverage_gap_artifact() -> TaskArtifact:
             },
         },
     )
+
+
+class _JsonProvider:
+    def __init__(self, content: str):
+        self.content = content
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=None, max_tokens=None, **kwargs):
+        self.calls.append(
+            {
+                "messages": list(messages),
+                "model": model,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+        )
+        return LLMResponse(content=self.content, model=model or "fake-model")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
 
 
 def test_completion_gate_requires_requested_verification_before_completion():
@@ -329,6 +358,84 @@ def test_semantic_contract_can_add_web_research_requirement():
         "substantive_final_answer",
         "source_reference",
     }
+
+
+def test_semantic_contract_classifier_parses_web_research_decision():
+    provider = _JsonProvider(
+        '{"requires_tool_evidence": true, "required_tool_group": "web_research", '
+        '"task_type": "web_research", "allow_no_tool_final": false, '
+        '"confidence": 0.88, "reason": "Current stock price needs web evidence."}'
+    )
+    intent = TaskIntentService().classify("2330 現在多少")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    decision = asyncio.run(
+        SemanticContractClassifier().classify(
+            provider=provider,
+            model=provider.get_default_model(),
+            task_intent=intent,
+            current_message=intent.objective,
+            history=[],
+            deterministic_contract=deterministic,
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision is not None
+    assert decision.requires_tool_evidence is True
+    assert decision.required_tool_group == "web_research"
+    assert decision.task_type == "web_research"
+    assert decision.allow_no_tool_final is False
+    assert decision.confidence == 0.88
+
+
+def test_semantic_contract_classifier_skips_deterministic_requirements():
+    provider = _JsonProvider("{}")
+    intent = TaskIntentService().classify("Please summarize https://example.com/docs")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    decision = asyncio.run(
+        SemanticContractClassifier().classify(
+            provider=provider,
+            model=provider.get_default_model(),
+            task_intent=intent,
+            current_message=intent.objective,
+            history=[],
+            deterministic_contract=deterministic,
+        )
+    )
+
+    assert decision is None
+    assert provider.calls == []
+
+
+def test_semantic_contract_classifier_skips_casual_conversation():
+    provider = _JsonProvider("{}")
+    intent = TaskIntentService().classify("hello")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    decision = asyncio.run(
+        SemanticContractClassifier().classify(
+            provider=provider,
+            model=provider.get_default_model(),
+            task_intent=intent,
+            current_message=intent.objective,
+            history=[],
+            deterministic_contract=deterministic,
+        )
+    )
+
+    assert decision is None
+    assert provider.calls == []
 
 
 def test_semantic_contract_cannot_remove_deterministic_requirement():

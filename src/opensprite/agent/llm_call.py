@@ -10,7 +10,12 @@ from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
-from .task_contract import TaskContract, TaskContractService
+from .task_contract import (
+    SemanticContractDecision,
+    TaskContract,
+    TaskContractService,
+    merge_semantic_contract,
+)
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision
@@ -41,6 +46,7 @@ class LlmCallService:
         read_active_task_snapshot: Callable[[str], str],
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
+        classify_semantic_contract: Callable[..., Awaitable[SemanticContractDecision | None]],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -73,6 +79,7 @@ class LlmCallService:
         self._read_active_task_snapshot = read_active_task_snapshot
         self._resolve_task_context = resolve_task_context
         self._resolve_task_objective = resolve_task_objective
+        self._classify_semantic_contract = classify_semantic_contract
         self._emit_run_event = emit_run_event
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
@@ -225,7 +232,7 @@ class LlmCallService:
         )
         task_contract = None
         if effective_task_intent is not None:
-            task_contract = TaskContractService.build(
+            deterministic_contract = TaskContractService.build_deterministic(
                 task_intent=effective_task_intent,
                 current_message=prompt_message,
                 history=history_dicts,
@@ -233,6 +240,32 @@ class LlmCallService:
                 current_audio_files=user_audio_files,
                 current_video_files=user_video_files,
                 task_context_decision=task_context_decision,
+            )
+            semantic_decision = None
+            if self.config.semantic_contract_classifier_enabled:
+                try:
+                    semantic_decision = await self._classify_semantic_contract(
+                        task_intent=effective_task_intent,
+                        current_message=prompt_message,
+                        history=history_dicts,
+                        deterministic_contract=deterministic_contract,
+                    )
+                except Exception as exc:
+                    logger.warning("[{}] task.semantic_contract | failed={}", session_id, exc)
+                    semantic_decision = SemanticContractDecision(reason=f"semantic classifier failed: {exc}")
+                if run_id is not None and semantic_decision is not None:
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        "task_contract.semantic_classified",
+                        semantic_decision.to_metadata(),
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
+            task_contract = merge_semantic_contract(
+                deterministic_contract,
+                semantic_decision,
+                min_confidence=self.config.semantic_contract_classifier_confidence_threshold,
             )
             guidance = _build_task_contract_guidance(task_contract)
             if guidance:
