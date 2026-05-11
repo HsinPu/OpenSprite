@@ -2019,7 +2019,7 @@ class WebAdapter(MessageAdapter):
         try:
             payload = self._get_media_settings().update_media(
                 category,
-                enabled=bool(body.get("enabled")),
+                enabled=self._coerce_bool(body.get("enabled"), field="enabled", default=False),
                 provider_id=self._coerce_optional_text(body.get("provider_id")),
                 model=self._coerce_optional_text(body.get("model")),
             )
@@ -2104,7 +2104,7 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_update_apply(self, request: web.Request) -> web.Response:
         body = await self._read_json_body(request)
-        restart = bool(body.get("restart", True))
+        restart = self._coerce_bool(body.get("restart"), field="restart", default=True)
         try:
             result = await asyncio.to_thread(update_cli.update_checkout, branch="main", install_dev=False)
         except update_cli.UpdateError as exc:
@@ -2299,7 +2299,7 @@ class WebAdapter(MessageAdapter):
         config_path = self._get_config_path()
         config = Config.load(config_path)
         if "enabled" in body:
-            config.log.enabled = bool(body.get("enabled"))
+            config.log.enabled = self._coerce_bool(body.get("enabled"), field="enabled", default=config.log.enabled)
         if "level" in body:
             config.log.level = self._coerce_log_level(body.get("level"))
         if "retention_days" in body:
@@ -2310,7 +2310,11 @@ class WebAdapter(MessageAdapter):
                 minimum=1,
             )
         if "log_system_prompt" in body:
-            config.log.log_system_prompt = bool(body.get("log_system_prompt"))
+            config.log.log_system_prompt = self._coerce_bool(
+                body.get("log_system_prompt"),
+                field="log_system_prompt",
+                default=config.log.log_system_prompt,
+            )
         if "log_system_prompt_lines" in body:
             config.log.log_system_prompt_lines = self._coerce_positive_int(
                 body.get("log_system_prompt_lines"),
@@ -2319,7 +2323,11 @@ class WebAdapter(MessageAdapter):
                 minimum=0,
             )
         if "log_reasoning_details" in body:
-            config.log.log_reasoning_details = bool(body.get("log_reasoning_details"))
+            config.log.log_reasoning_details = self._coerce_bool(
+                body.get("log_reasoning_details"),
+                field="log_reasoning_details",
+                default=config.log.log_reasoning_details,
+            )
         config.save(config_path)
         setup_log(config.log)
         return web.json_response({"log": self._log_payload(config), "restart_required": False, "runtime_reloaded": True})

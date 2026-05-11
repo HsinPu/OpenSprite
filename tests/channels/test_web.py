@@ -2912,6 +2912,23 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/log",
+                json={
+                    "enabled": "false",
+                    "log_system_prompt": "false",
+                    "log_reasoning_details": "false",
+                },
+            ) as resp:
+                assert resp.status == 200
+                log_disable_payload = await resp.json()
+
+            assert log_disable_payload["log"]["enabled"] is False
+            loaded_config = Config.from_json(config_path)
+            assert loaded_config.log.enabled is False
+            assert loaded_config.log.log_system_prompt is False
+            assert loaded_config.log.log_reasoning_details is False
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/log",
                 json={"level": "LOUD"},
             ) as resp:
                 assert resp.status == 400
