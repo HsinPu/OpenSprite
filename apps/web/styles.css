@@ -3272,9 +3272,28 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.run-trace__artifact-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.run-trace__artifact-group-title::before {
+  color: var(--text-soft);
+  content: "+";
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.run-trace__artifact-group[open] > .run-trace__artifact-group-title::before {
+  content: "-";
 }
 
 .run-trace__artifact-group-title span {
+  flex: 1 1 auto;
   color: var(--text-soft);
   font-size: 0.72rem;
   font-weight: 700;

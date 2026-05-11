@@ -53,11 +53,11 @@
         </div>
 
         <div v-show="artifactsExpanded" class="run-trace__section-body">
-          <section v-if="parallelDelegationGroups.length" class="run-trace__artifact-group">
-            <div class="run-trace__artifact-group-title">
+          <details v-if="parallelDelegationGroups.length" class="run-trace__artifact-group" open>
+            <summary class="run-trace__artifact-group-title">
               <span>{{ copy.trace.parallelDelegation }}</span>
               <small>{{ parallelDelegationGroups.length }}</small>
-            </div>
+            </summary>
 
             <div class="run-trace__parallel-groups">
               <article
@@ -99,19 +99,20 @@
                 </div>
               </article>
             </div>
-          </section>
+          </details>
 
           <div v-if="displayedArtifactCount" class="run-trace__artifact-groups">
-            <section
+            <details
               v-for="group in artifactGroups"
               :key="group.kind"
               v-show="group.items.length"
               class="run-trace__artifact-group"
+              open
             >
-              <div class="run-trace__artifact-group-title">
+              <summary class="run-trace__artifact-group-title">
                 <span>{{ group.label }}</span>
                 <small>{{ group.items.length }}</small>
-              </div>
+              </summary>
 
               <div class="run-trace__artifact-grid">
                 <template
@@ -239,7 +240,7 @@
                   </article>
                 </template>
               </div>
-            </section>
+            </details>
           </div>
 
           <p v-else class="run-trace__empty">{{ copy.trace.noArtifacts }}</p>
