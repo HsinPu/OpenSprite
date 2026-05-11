@@ -580,6 +580,78 @@ def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Pat
     assert f"Goal: {message}" not in system_text
 
 
+def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = CapturingProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    session_id = "telegram:room-1"
+
+    async def _run() -> str:
+        task_store = create_active_task_store(app_home, session_id, workspace_root=context_builder.tool_workspace)
+        task_store.write_managed_block(
+            "- Status: waiting_user\n"
+            "- Goal: Refactor the agent in small safe steps.\n"
+            "- Deliverable: a safe refactor and verification\n"
+            "- Definition of done:\n"
+            "  - tests pass\n"
+            "- Constraints:\n"
+            "  - minimal changes\n"
+            "- Assumptions:\n"
+            "  - none\n"
+            "- Plan:\n"
+            "  1. inspect\n"
+            "- Current step: 1. inspect\n"
+            "- Next step: not set\n"
+            "- Completed steps:\n"
+            "  - none\n"
+            "- Open questions:\n"
+            "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
+            "to the new request (please update README), or continue the active task."
+        )
+        return await agent.call_llm(
+            session_id,
+            "switch",
+            channel="telegram",
+            allow_tools=False,
+            task_intent=agent.task_intents.classify("switch"),
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    assert len(provider.calls) == 1
+    system_text = provider.calls[-1][0].content
+    assert "Status: active" in system_text
+    assert "Goal: please update README" in system_text
+    assert "Original user message: switch" in system_text
+    assert "Confirm whether to switch from the active task" not in system_text
+
+
 def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_path: Path) -> None:
     app_home = tmp_path / "home"
     sync_templates(app_home, silent=True)

@@ -53,6 +53,15 @@ _ACTIVE_TASK_BLOCK = (
     "- Current step: 1. inspect\n"
     "- Next step: not set"
 )
+_BOUNDARY_ACTIVE_TASK_BLOCK = (
+    "- Status: waiting_user\n"
+    "- Goal: Refactor the agent in small safe steps.\n"
+    "- Current step: 1. inspect\n"
+    "- Next step: not set\n"
+    "- Open questions:\n"
+    "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
+    "to the new request (please update README), or continue the active task."
+)
 
 
 def test_task_objective_resolver_enriches_short_web_follow_up():
@@ -106,6 +115,34 @@ def test_task_objective_resolver_skips_continue_active_task():
     assert decision.method == "deterministic"
     assert decision.should_use_resolved_objective is False
     assert decision.effective_objective == "繼續"
+
+
+def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
+    provider = _FailingProvider()
+    context = TaskContextDecision(
+        should_seed_active_task=True,
+        should_replace_active_task=True,
+        continuation_type="task_switch",
+        confidence=0.9,
+        reason="user confirmed switching to the pending task-boundary request",
+    )
+
+    decision = asyncio.run(
+        TaskObjectiveResolver().resolve(
+            current_message="switch",
+            history=[],
+            task_intent=TaskIntentService().classify("switch"),
+            task_context_decision=context,
+            active_task=_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.should_use_resolved_objective is True
+    assert decision.effective_objective == "please update README"
+    assert decision.original_message == "switch"
 
 
 def test_task_objective_resolver_falls_back_when_provider_is_unconfigured():

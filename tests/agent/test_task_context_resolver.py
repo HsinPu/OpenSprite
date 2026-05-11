@@ -66,6 +66,26 @@ _ACTIVE_TASK_BLOCK = (
     "- Open questions:\n"
     "  - none"
 )
+_BOUNDARY_ACTIVE_TASK_BLOCK = (
+    "- Status: waiting_user\n"
+    "- Goal: Refactor the agent in small safe steps.\n"
+    "- Deliverable: safe refactor\n"
+    "- Definition of done:\n"
+    "  - tests pass\n"
+    "- Constraints:\n"
+    "  - none\n"
+    "- Assumptions:\n"
+    "  - none\n"
+    "- Plan:\n"
+    "  1. inspect\n"
+    "- Current step: 1. inspect\n"
+    "- Next step: not set\n"
+    "- Completed steps:\n"
+    "  - none\n"
+    "- Open questions:\n"
+    "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
+    "to the new request (please update README), or continue the active task."
+)
 _WEB_RESEARCH_HISTORY = [
     {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
     {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
@@ -350,6 +370,45 @@ def test_task_context_continues_active_task_without_llm():
     assert decision.continuation_type == "continue_active_task"
 
 
+def test_task_context_confirms_pending_boundary_switch_without_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="switch",
+            history=[],
+            task_intent=TaskIntentService().classify("switch"),
+            active_task=_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.continuation_type == "task_switch"
+    assert decision.should_seed_active_task is True
+    assert decision.should_replace_active_task is True
+
+
+def test_task_context_confirms_pending_boundary_continue_without_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="continue",
+            history=[],
+            task_intent=TaskIntentService().classify("continue"),
+            active_task=_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.continuation_type == "continue_active_task"
+    assert decision.should_inherit_active_task is True
+
+
 def test_task_context_continue_without_active_task_inherits_recent_web_context():
     provider = _FailingProvider()
 
@@ -574,3 +633,42 @@ def test_active_task_seed_marks_ambiguous_boundary_waiting_user(tmp_path):
     assert not any(event["event_type"] == "seed" for event in store.read_events())
     boundary_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation")
     assert boundary_event["details"]["confidence"] == 0.72
+
+
+def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    store.write_managed_block(_BOUNDARY_ACTIVE_TASK_BLOCK)
+    decision = TaskContextDecision(
+        is_follow_up=True,
+        should_inherit_active_task=True,
+        continuation_type="continue_active_task",
+        confidence=0.9,
+        method="deterministic",
+        reason="user confirmed continuing the active task after task-boundary prompt",
+    )
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            "continue",
+            enabled=True,
+            task_intent=TaskIntentService().classify("continue"),
+            task_context_decision=decision,
+        )
+    )
+
+    updated = store.read_managed_block()
+    assert "- Status: active" in updated
+    assert "- Goal: Refactor the agent in small safe steps." in updated
+    assert "- Open questions:\n  - none" in updated
+    assert "Confirm whether to switch from the active task" not in updated
+    resolved_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation_resolved")
+    assert resolved_event["details"]["action"] == "continue"

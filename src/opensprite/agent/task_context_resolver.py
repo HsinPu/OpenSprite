@@ -22,6 +22,23 @@ _CONTINUATION_RE = re.compile(
     r"^(?:continue|keep going|go on|proceed|繼續|接著|繼續做|繼續處理|繼續吧|往下做)[。.!！?？]*$",
     re.IGNORECASE,
 )
+_BOUNDARY_SWITCH_CONFIRMATION_RE = re.compile(
+    r"^(?:switch|switch task|switch tasks|switch to the new request|switch to new request|"
+    r"do the new request|use the new request|new request|replace it|change task|"
+    r"切換|切換到新任務|切到新任務|換|換任務|換成新的|換新任務|改做新的|改做新任務|做新的|做新任務)[。.!！?？]*$",
+    re.IGNORECASE,
+)
+_BOUNDARY_CONTINUE_CONFIRMATION_RE = re.compile(
+    r"^(?:continue the active task|continue active task|continue current task|continue the current task|"
+    r"keep current task|keep the current task|keep the active task|stick with current task|"
+    r"繼續原本|繼續原本的|繼續原本任務|繼續目前|繼續目前任務|維持原本|維持目前|不要切換|別切換)[。.!！?？]*$",
+    re.IGNORECASE,
+)
+_BOUNDARY_REQUEST_RE = re.compile(
+    r"Confirm whether to switch(?: from the active task \(.+?\))? to the new request \((?P<request>.+?)\),? "
+    r"or continue the active task\.",
+    re.IGNORECASE | re.DOTALL,
+)
 _ACTIVE_STATUS_RE = re.compile(r"^- Status:\s*(?P<status>.+)$", re.MULTILINE)
 _ALLOWED_TASK_TYPES = frozenset(
     {
@@ -196,6 +213,24 @@ class TaskContextResolver:
                 continuation_type="ack",
                 confidence=0.9,
                 reason="current message is an acknowledgement",
+            )
+
+        pending_boundary_request = extract_pending_boundary_request(active_task)
+        if pending_boundary_request and _is_boundary_switch_confirmation(current):
+            return TaskContextDecision(
+                should_seed_active_task=True,
+                should_replace_active_task=True,
+                continuation_type="task_switch",
+                confidence=0.9,
+                reason="user confirmed switching to the pending task-boundary request",
+            )
+        if pending_boundary_request and _is_boundary_continue_confirmation(current):
+            return TaskContextDecision(
+                is_follow_up=True,
+                should_inherit_active_task=True,
+                continuation_type="continue_active_task",
+                confidence=0.9,
+                reason="user confirmed continuing the active task after task-boundary prompt",
             )
 
         if has_active_task and should_replace_active_task(active_task or "", current):
@@ -569,6 +604,25 @@ def _active_task_status(active_task: str | None) -> str:
     return match.group("status").strip().lower() or "inactive"
 
 
+def extract_pending_boundary_request(active_task: str | None) -> str | None:
+    """Return the pending new request from a boundary-confirmation ACTIVE_TASK prompt."""
+    if _active_task_status(active_task) != "waiting_user":
+        return None
+    match = _BOUNDARY_REQUEST_RE.search(_compact(active_task))
+    if not match:
+        return None
+    return _compact(match.group("request")) or None
+
+
+def _is_boundary_switch_confirmation(current_message: str) -> bool:
+    return bool(_BOUNDARY_SWITCH_CONFIRMATION_RE.match(_compact(current_message)))
+
+
+def _is_boundary_continue_confirmation(current_message: str) -> bool:
+    current = _compact(current_message)
+    return bool(_CONTINUATION_RE.match(current) or _BOUNDARY_CONTINUE_CONFIRMATION_RE.match(current))
+
+
 def _compact(value: str | None) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
@@ -580,4 +634,4 @@ def _truncate(value: str | None, max_chars: int) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-__all__ = ["TaskContextDecision", "TaskContextResolver"]
+__all__ = ["TaskContextDecision", "TaskContextResolver", "extract_pending_boundary_request"]

@@ -20,7 +20,7 @@ from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
 from .completion_gate import CompletionGateResult
-from .task_context_resolver import TaskContextDecision
+from .task_context_resolver import TaskContextDecision, extract_pending_boundary_request
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -228,6 +228,14 @@ class ActiveTaskCommandService:
                 )
                 return
             if _decision_continues_current_task(task_context_decision):
+                if current_status == "waiting_user" and extract_pending_boundary_request(current_task):
+                    store.update_fields(status="active", open_questions=["none"], force=True)
+                    await self._mark_processed(session_id, store)
+                    store.append_event(
+                        "task_boundary_confirmation_resolved",
+                        "immediate",
+                        details={"action": "continue", "message": _compact_for_prompt(current_message)},
+                    )
                 return
             explicit_replace = should_replace_active_task(current_task, current_message)
             llm_replace = _decision_replaces_current_task(task_context_decision)
