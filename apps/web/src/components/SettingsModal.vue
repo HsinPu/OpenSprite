@@ -1793,6 +1793,34 @@
               </div>
             </div>
           </div>
+
+          <h3>{{ copy.settings.browser.doctor.title }}</h3>
+          <div class="settings-card">
+            <div class="settings-row settings-row--update">
+              <div>
+                <strong>{{ copy.settings.browser.doctor.currentTitle }}</strong>
+                <span>{{ browserDoctorSummary }}</span>
+              </div>
+              <div class="settings-row__actions">
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.browserDoctorLoading || settingsState.browserLoading"
+                  @click="$emit('run-browser-doctor')"
+                >
+                  {{ settingsState.browserDoctorLoading ? copy.settings.browser.doctor.running : copy.settings.browser.doctor.run }}
+                </button>
+              </div>
+            </div>
+            <div v-if="settingsState.browserDoctorResult?.checks?.length" class="settings-stack">
+              <div v-for="check in settingsState.browserDoctorResult.checks" :key="check.name" class="settings-row">
+                <div>
+                  <strong>{{ check.command }}</strong>
+                  <span>{{ browserDoctorCheckSummary(check) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section v-if="section === 'log'" class="settings-page">
@@ -4006,6 +4034,24 @@ const browserTestSummary = computed(() => {
   return props.copy.settings.browser.test.resultFailed(result.error || result.open?.error || result.snapshot?.error || "");
 });
 
+const browserDoctorSummary = computed(() => {
+  const result = props.settingsState.browserDoctorResult;
+  if (!result) {
+    return props.copy.settings.browser.doctor.notRun;
+  }
+  const checks = Array.isArray(result.checks) ? result.checks : [];
+  const passed = checks.filter((check) => check?.ok).length;
+  return result.ok
+    ? props.copy.settings.browser.doctor.resultPassed(passed, checks.length)
+    : props.copy.settings.browser.doctor.resultFailed(passed, checks.length);
+});
+
+function browserDoctorCheckSummary(check) {
+  const status = check?.ok ? props.copy.settings.browser.doctor.checkPassed : props.copy.settings.browser.doctor.checkFailed;
+  const detail = String(check?.stderr || check?.stdout || "").trim();
+  return detail ? `${status}: ${detail}` : status;
+}
+
 const networkSummary = computed(() => {
   const form = props.settingsState.networkForm || {};
   const active = [form.httpProxy, form.httpsProxy].map((value) => String(value || "").trim()).filter(Boolean).length;
@@ -4136,6 +4182,7 @@ const emit = defineEmits([
   "save-search-settings",
   "save-browser-settings",
   "run-browser-test",
+  "run-browser-doctor",
   "refresh-eval-status",
   "run-eval-smoke",
   "run-task-completion-smoke",

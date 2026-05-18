@@ -197,9 +197,11 @@ export function createSettingsState() {
     },
     browserLoading: false,
     browserTestLoading: false,
+    browserDoctorLoading: false,
     browserError: "",
     browserNotice: "",
     browserTestResult: null,
+    browserDoctorResult: null,
     browser: {
       enabled: false,
       backend: "agent-browser",

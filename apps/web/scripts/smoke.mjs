@@ -142,8 +142,10 @@ assertIncludes(settingsModal, "clear-web-sessions", "settings clear web sessions
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
 assertIncludes(settingsModal, "run-browser-test", "browser settings manual test event");
+assertIncludes(settingsModal, "run-browser-doctor", "browser settings doctor event");
 assertIncludes(settingsModal, "settingsState.browserForm.launchArgs", "browser launch args field");
 assertIncludes(settingsModal, "browserTestSummary", "browser settings manual test summary");
+assertIncludes(settingsModal, "browserDoctorSummary", "browser settings doctor summary");
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
@@ -259,6 +261,7 @@ assertNotIncludes(chatClient, "copy.value.settings.eval.confirmClearHistory", "e
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
+assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");

@@ -194,6 +194,7 @@
     @save-search-settings="saveSearchSettings"
     @save-browser-settings="saveBrowserSettings"
     @run-browser-test="runBrowserTest"
+    @run-browser-doctor="runBrowserDoctor"
     @refresh-data-settings="loadDataSettings"
     @refresh-eval-status="loadEvalStatus"
     @run-eval-smoke="runEvalSmokeCheck"
@@ -351,6 +352,7 @@ const {
   saveSearchSettings,
   saveBrowserSettings,
   runBrowserTest,
+  runBrowserDoctor,
   loadDataSettings,
   loadEvalStatus,
   runEvalSmokeCheck,

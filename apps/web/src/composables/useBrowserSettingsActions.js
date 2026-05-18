@@ -34,6 +34,13 @@ function summarizeBrowserTest(payload, copy) {
   return browserCopy.testFailed(payload?.error || payload?.open?.error || payload?.snapshot?.error || "");
 }
 
+function summarizeBrowserDoctor(payload, copy) {
+  const browserCopy = copy.value.settings.browser;
+  const checks = Array.isArray(payload?.checks) ? payload.checks : [];
+  const passed = checks.filter((check) => check?.ok).length;
+  return payload?.ok ? browserCopy.doctorPassed(passed, checks.length) : browserCopy.doctorFailed(passed, checks.length);
+}
+
 export function useBrowserSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
   async function loadBrowserSettings() {
     settingsState.browserLoading = true;
@@ -101,9 +108,27 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
     }
   }
 
+  async function runBrowserDoctor() {
+    settingsState.browserDoctorLoading = true;
+    settingsState.browserError = "";
+    settingsState.browserNotice = "";
+    settingsState.browserDoctorResult = null;
+    try {
+      const payload = await requestSettingsJson("/api/settings/browser/doctor", { method: "POST" });
+      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
+      settingsState.browserDoctorResult = payload;
+      settingsState.browserNotice = summarizeBrowserDoctor(payload, copy);
+    } catch (error) {
+      settingsState.browserError = error?.message || copy.value.notices.browserDoctorFailed;
+    } finally {
+      settingsState.browserDoctorLoading = false;
+    }
+  }
+
   return {
     loadBrowserSettings,
     saveBrowserSettings,
     runBrowserTest,
+    runBrowserDoctor,
   };
 }
