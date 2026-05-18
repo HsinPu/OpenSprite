@@ -51,6 +51,7 @@ const [
   browserSettingsActions,
   mcpSettingsActions,
   modelSettingsActions,
+  browserDefaults,
   searchDefaults,
   settingsNormalizers,
   networkSettingsActions,
@@ -75,6 +76,7 @@ const [
   read("src/composables/useBrowserSettingsActions.js"),
   read("src/composables/useMcpSettingsActions.js"),
   read("src/composables/useModelSettingsActions.js"),
+  read("src/composables/browserDefaults.js"),
   read("src/composables/searchDefaults.js"),
   read("src/composables/settingsNormalizers.js"),
   read("src/composables/useNetworkSettingsActions.js"),
@@ -84,7 +86,7 @@ const [
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
@@ -267,6 +269,12 @@ assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings te
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
+assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
+assertIncludes(browserDefaults, 'DEFAULT_BROWSER_LAUNCH_ARGS = "--no-sandbox"', "browser default launch args");
+assertIncludes(browserDefaults, 'DEFAULT_BROWSER_BACKEND = "agent-browser"', "browser default backend");
+assertIncludes(browserDefaults, "createDefaultBrowserState", "browser default state factory");
+assertIncludes(browserSettingsActions, "normalizeBrowserSettings", "browser actions use shared normalizer");
+assertIncludes(settingsLogic, "createDefaultBrowserForm", "settings state uses shared browser form factory");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");
