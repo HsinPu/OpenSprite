@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import base64
-import mimetypes
 from pathlib import Path
 from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
 from .evidence import ToolEvidence, indexed_resource_id
+from .saved_media import resolve_media_items
 
 
 SUPPORTED_AUDIO_MIME_TYPES = {
@@ -23,30 +22,6 @@ SUPPORTED_AUDIO_MIME_TYPES = {
 }
 
 
-def _load_saved_audio_data_url(workspace: Path, audio_path: str) -> str | None:
-    """Load a saved session-workspace audio file as a base64 data URL."""
-    relative_path = str(audio_path or "").strip().replace("\\", "/")
-    if not relative_path:
-        return None
-    if relative_path.startswith("/") or ":" in Path(relative_path).parts[0]:
-        return None
-
-    workspace_root = Path(workspace).expanduser().resolve()
-    target = (workspace_root / relative_path).resolve()
-    try:
-        target.relative_to(workspace_root)
-    except ValueError:
-        return None
-    if not target.is_file():
-        return None
-
-    mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-    if mime_type not in SUPPORTED_AUDIO_MIME_TYPES:
-        return None
-    b64 = base64.b64encode(target.read_bytes()).decode("utf-8")
-    return f"data:{mime_type};base64,{b64}"
-
-
 def _resolve_audios(
     *,
     current_audios: list[str] | None,
@@ -54,17 +29,13 @@ def _resolve_audios(
     audio_path: str = "",
 ) -> tuple[list[str], str | None]:
     """Resolve audio from either current turn attachments or a saved workspace path."""
-    if not audio_path.strip():
-        return list(current_audios or []), None
-    if workspace_resolver is None:
-        return [], "Error: saved audio lookup is unavailable because no session workspace is active."
-    try:
-        audio = _load_saved_audio_data_url(workspace_resolver(), audio_path)
-    except OSError as exc:
-        return [], f"Error: failed to read saved audio '{audio_path}': {exc}"
-    if audio is None:
-        return [], f"Error: saved audio '{audio_path}' was not found or is not a supported audio file."
-    return [audio], None
+    return resolve_media_items(
+        current_items=current_audios,
+        workspace_resolver=workspace_resolver,
+        media_path=audio_path,
+        media_label="audio",
+        supported_mime_types=SUPPORTED_AUDIO_MIME_TYPES,
+    )
 
 
 class TranscribeAudioTool(Tool):
