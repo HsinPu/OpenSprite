@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable
 from ..config import AgentConfig
 from ..llms import ChatMessage
 from .planning_mode import resolve_planning_mode
+from .retrieval import ProactiveRetrievalService
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
@@ -135,8 +136,10 @@ class LlmCallService:
         task_intent: TaskIntent | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
+        run_id = self._get_current_run_id()
         logger.info(f"[{session_id}] history.load | requested=true")
         history_messages = await self._load_history(session_id)
+        loaded_history_count = len(history_messages)
 
         # Tool results are only valid inside the turn where they were produced.
         filtered = []
@@ -145,6 +148,7 @@ class LlmCallService:
             if role != "tool":
                 filtered.append(m)
         history_messages = filtered
+        filtered_tool_messages = loaded_history_count - len(history_messages)
 
         # The current user message is already passed explicitly to the context builder.
         # Drop the newest persisted user message for this turn to avoid duplicate/blank user entries.
@@ -174,9 +178,38 @@ class LlmCallService:
         logger.info(
             f"[{session_id}] prompt.build | history={len(history_dicts)} channel={channel or '-'} images={len(user_images or [])}"
         )
+        if run_id is not None:
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "history.loaded",
+                {
+                    "loaded_messages": loaded_history_count,
+                    "history_messages": len(history_dicts),
+                    "filtered_tool_messages": filtered_tool_messages,
+                },
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         work_state_summary = await self._get_work_state_summary(session_id)
         active_task_snapshot = self._read_active_task_snapshot(session_id)
-        run_id = self._get_current_run_id()
+        if run_id is not None:
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "prompt.built",
+                {
+                    "history_messages": len(history_dicts),
+                    "current_message_len": len(str(current_message or "")),
+                    "images": len(user_images or []),
+                    "audio_files": len(user_audio_files or []),
+                    "video_files": len(user_video_files or []),
+                    "has_work_state_summary": bool(work_state_summary),
+                    "has_active_task_snapshot": bool(active_task_snapshot),
+                },
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         task_context_decision = None
         task_objective_decision = None
         if task_intent is not None:
@@ -328,6 +361,18 @@ class LlmCallService:
             logger.info(
                 f"[{session_id}] prompt.mode | planning_mode=true allowed_tools={','.join(selected_tool_registry.tool_names)}"
             )
+        if run_id is not None:
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "planning_mode.selected",
+                {
+                    "enabled": bool(planning_mode.enabled),
+                    "tool_names": list(selected_tool_registry.tool_names) if selected_tool_registry is not None else [],
+                },
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         tool_schema_tokens = self._estimate_tool_schema_tokens(
             allow_tools=allow_tools,
             tool_registry=selected_tool_registry,
@@ -343,6 +388,19 @@ class LlmCallService:
             session_id=session_id,
             current_message=effective_current_message,
         )
+        if run_id is not None:
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "retrieval.proactive_checked",
+                {
+                    "should_retrieve": ProactiveRetrievalService.should_retrieve(effective_current_message),
+                    "applied": bool(proactive_retrieval_context),
+                    "context_len": len(proactive_retrieval_context or ""),
+                },
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         if proactive_retrieval_context:
             history_dicts = [{"role": "system", "content": proactive_retrieval_context}, *history_dicts]
         effective_context_budget = self._effective_context_token_budget()
@@ -352,6 +410,24 @@ class LlmCallService:
             f"output_reserve={self._llm_chat_max_tokens()} base={base_tokens} tools={tool_schema_tokens} "
             f"history={history_tokens} final_estimated={final_tokens}"
         )
+        if run_id is not None:
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "prompt.tokens_estimated",
+                {
+                    "budget": effective_context_budget,
+                    "history_budget": self.config.history_token_budget,
+                    "model_window": self._llm_context_window_tokens(),
+                    "output_reserve": self._llm_chat_max_tokens(),
+                    "base_tokens": base_tokens,
+                    "tool_schema_tokens": tool_schema_tokens,
+                    "history_tokens": history_tokens,
+                    "final_estimated_tokens": final_tokens,
+                },
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         self._sync_runtime_mcp_tools_context()
         full_messages = self._build_messages(
             history=history_dicts,
