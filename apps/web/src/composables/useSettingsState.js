@@ -1,6 +1,7 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
+import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
 export function createSettingsForm(state) {
@@ -140,13 +141,8 @@ export function createSettingsState() {
     scheduleLoading: false,
     scheduleError: "",
     scheduleNotice: "",
-    schedule: {
-      default_timezone: "UTC",
-      common_timezones: [],
-    },
-    scheduleForm: {
-      defaultTimezone: "UTC",
-    },
+    schedule: createDefaultScheduleState(),
+    scheduleForm: createDefaultScheduleForm(),
     networkLoading: false,
     networkError: "",
     networkNotice: "",
@@ -258,7 +254,7 @@ export function createSettingsState() {
       everySeconds: "3600",
       cronExpr: "0 9 * * *",
       at: "",
-      timezone: "UTC",
+      timezone: DEFAULT_CRON_TIMEZONE,
       deliver: true,
     },
     mcpLoading: false,

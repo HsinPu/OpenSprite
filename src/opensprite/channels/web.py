@@ -43,6 +43,7 @@ from ..config.defaults import (
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
     DEFAULT_BROWSER_LAUNCH_ARGS,
     DEFAULT_BROWSER_SESSION_TIMEOUT,
+    DEFAULT_CRON_TIMEZONE,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_LEVEL,
@@ -1264,9 +1265,9 @@ class WebAdapter(MessageAdapter):
 
     def _cron_default_timezone(self) -> str:
         try:
-            return Config.load(self._get_config_path()).tools.cron.default_timezone or "UTC"
+            return Config.load(self._get_config_path()).tools.cron.default_timezone or DEFAULT_CRON_TIMEZONE
         except Exception:
-            return "UTC"
+            return DEFAULT_CRON_TIMEZONE
 
     def _require_cron_manager(self) -> Any:
         agent = self._get_agent()

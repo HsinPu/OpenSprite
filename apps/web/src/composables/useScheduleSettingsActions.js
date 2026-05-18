@@ -1,3 +1,5 @@
+import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
+
 export function useScheduleSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
   async function loadScheduleSettings() {
     settingsState.scheduleLoading = true;
@@ -5,7 +7,7 @@ export function useScheduleSettingsActions({ settingsState, requestSettingsJson,
     try {
       const payload = await requestSettingsJson("/api/settings/schedule");
       settingsState.schedule = payload;
-      settingsState.scheduleForm.defaultTimezone = payload.default_timezone || "UTC";
+      settingsState.scheduleForm.defaultTimezone = payload.default_timezone || DEFAULT_CRON_TIMEZONE;
       if (!settingsState.cronJobForm.timezone || !settingsState.cronJobForm.jobId) {
         settingsState.cronJobForm.timezone = settingsState.scheduleForm.defaultTimezone;
       }
@@ -17,7 +19,7 @@ export function useScheduleSettingsActions({ settingsState, requestSettingsJson,
   }
 
   async function saveScheduleSettings() {
-    const defaultTimezone = String(settingsState.scheduleForm.defaultTimezone || "").trim() || "UTC";
+    const defaultTimezone = String(settingsState.scheduleForm.defaultTimezone || "").trim() || DEFAULT_CRON_TIMEZONE;
     settingsState.scheduleLoading = true;
     settingsState.scheduleError = "";
     settingsState.scheduleNotice = "";

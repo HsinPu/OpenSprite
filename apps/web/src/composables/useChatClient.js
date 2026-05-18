@@ -12,6 +12,7 @@ import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
+import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createCuratorState, createPermissionState, createSettingsForm, createSettingsState } from "./useSettingsState";
 
 const STORAGE_KEYS = {
@@ -3259,7 +3260,7 @@ export function useChatClient() {
     settingsState.cronJobForm.everySeconds = "3600";
     settingsState.cronJobForm.cronExpr = "0 9 * * *";
     settingsState.cronJobForm.at = "";
-    settingsState.cronJobForm.timezone = settingsState.schedule.default_timezone || "UTC";
+    settingsState.cronJobForm.timezone = settingsState.schedule.default_timezone || DEFAULT_CRON_TIMEZONE;
     settingsState.cronJobForm.deliver = true;
   }
 
@@ -3276,7 +3277,7 @@ export function useChatClient() {
       payload.every_seconds = Number(form.everySeconds);
     } else if (form.mode === "cron") {
       payload.cron_expr = String(form.cronExpr || "").trim();
-      payload.tz = String(form.timezone || settingsState.schedule.default_timezone || "UTC").trim();
+      payload.tz = String(form.timezone || settingsState.schedule.default_timezone || DEFAULT_CRON_TIMEZONE).trim();
     } else if (form.mode === "at") {
       payload.at = String(form.at || "").trim();
     }
@@ -3946,7 +3947,7 @@ export function useChatClient() {
     settingsState.cronJobForm.everySeconds = schedule.every_ms ? String(Math.max(1, Math.floor(schedule.every_ms / 1000))) : "3600";
     settingsState.cronJobForm.cronExpr = schedule.expr || "0 9 * * *";
     settingsState.cronJobForm.at = schedule.at_ms ? formatDateTimeLocal(schedule.at_ms) : "";
-    settingsState.cronJobForm.timezone = schedule.tz || settingsState.schedule.default_timezone || "UTC";
+    settingsState.cronJobForm.timezone = schedule.tz || settingsState.schedule.default_timezone || DEFAULT_CRON_TIMEZONE;
     settingsState.cronJobForm.deliver = payload.deliver !== false;
   }
 

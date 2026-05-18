@@ -54,6 +54,7 @@ const [
   browserDefaults,
   logDefaults,
   networkDefaults,
+  scheduleDefaults,
   searchDefaults,
   settingsNormalizers,
   networkSettingsActions,
@@ -81,6 +82,7 @@ const [
   read("src/composables/browserDefaults.js"),
   read("src/composables/logDefaults.js"),
   read("src/composables/networkDefaults.js"),
+  read("src/composables/scheduleDefaults.js"),
   read("src/composables/searchDefaults.js"),
   read("src/composables/settingsNormalizers.js"),
   read("src/composables/useNetworkSettingsActions.js"),
@@ -90,7 +92,7 @@ const [
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");

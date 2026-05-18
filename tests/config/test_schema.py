@@ -13,6 +13,7 @@ from opensprite.config.defaults import (
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_BROWSER_USE_BASE_URL,
     DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_CRON_TIMEZONE,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
     DEFAULT_LOG_ENABLED,
@@ -399,6 +400,14 @@ def test_template_network_defaults_match_backend_defaults():
     assert network["http_proxy"] == DEFAULT_HTTP_PROXY
     assert network["https_proxy"] == DEFAULT_HTTPS_PROXY
     assert network["no_proxy"] == DEFAULT_NO_PROXY
+
+
+def test_template_cron_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    cron = template["tools"]["cron"]
+
+    assert cron["default_timezone"] == DEFAULT_CRON_TIMEZONE
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():

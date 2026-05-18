@@ -12,6 +12,7 @@ from .defaults import (
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_BROWSER_USE_BASE_URL,
     DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_CRON_TIMEZONE,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_LEVEL,
@@ -479,7 +480,7 @@ class BrowserToolConfig(BaseModel):
 class CronToolConfig(BaseModel):
     """Cron tool configuration."""
 
-    default_timezone: str = "UTC"
+    default_timezone: str = DEFAULT_CRON_TIMEZONE
 
 
 class ToolPermissionsConfig(BaseModel):
