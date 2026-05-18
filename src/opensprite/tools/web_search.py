@@ -11,13 +11,14 @@ from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 import httpx
 from loguru import logger
 
+from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER, WEB_SEARCH_FRESHNESS_OPTIONS
 from ..config.schema import WebSearchToolConfig
 from ..utils.url import join_url_path
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
-FRESHNESS_VALUES = ("none", "day", "week", "month", "year")
+FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
 BRAVE_FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
 
@@ -298,7 +299,7 @@ class WebSearchTool(Tool):
 
     @property
     def provider(self) -> str:
-        return self.config.provider.strip().lower() or "duckduckgo"
+        return self.config.provider.strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
 
     @property
     def brave_api_key(self) -> str:

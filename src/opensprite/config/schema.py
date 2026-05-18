@@ -5,6 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..channels.registry import coerce_channel_instances, default_channel_instances
+from .defaults import DEFAULT_SEARXNG_URL, DEFAULT_WEB_SEARCH_FRESHNESS, DEFAULT_WEB_SEARCH_PROVIDER
 from .llm_presets import provider_profile_defaults
 
 
@@ -406,12 +407,12 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = "duckduckgo"
-    freshness: Literal["none", "day", "week", "month", "year"] = "year"
+    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = DEFAULT_WEB_SEARCH_PROVIDER
+    freshness: Literal["none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
     brave_api_key: str = ""
     tavily_api_key: str = ""
     jina_api_key: str = ""
-    searxng_url: str = "https://searx.be"
+    searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)
     searxng_categories: list[str] = Field(default_factory=list)
     max_results: int = Field(default=25, ge=1)

@@ -38,6 +38,13 @@ from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig
+from ..config.defaults import (
+    DEFAULT_SEARXNG_URL,
+    DEFAULT_WEB_SEARCH_FRESHNESS,
+    DEFAULT_WEB_SEARCH_PROVIDER,
+    WEB_SEARCH_FRESHNESS_OPTIONS,
+    WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
+)
 from ..config.channel_settings import (
     ChannelSettingsError,
     ChannelSettingsNotFound,
@@ -82,8 +89,8 @@ class WebAdapter(MessageAdapter):
 
     LOG_LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
-    WEB_SEARCH_PROVIDERS = ("duckduckgo", "brave", "tavily", "searxng", "jina")
-    WEB_SEARCH_FRESHNESS = ("none", "day", "week", "month", "year")
+    WEB_SEARCH_PROVIDERS = DEFAULT_WEB_SEARCH_PROVIDERS
+    WEB_SEARCH_FRESHNESS = WEB_SEARCH_FRESHNESS_OPTIONS
     SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
     SEARXNG_FALLBACK_ENGINES = (
         "duckduckgo",
@@ -615,14 +622,14 @@ class WebAdapter(MessageAdapter):
     def _web_search_payload(cls, config: Config) -> dict[str, Any]:
         search = getattr(getattr(config, "tools", None), "web_search", None)
         return {
-            "provider": str(getattr(search, "provider", "duckduckgo") or "duckduckgo"),
+            "provider": str(getattr(search, "provider", DEFAULT_WEB_SEARCH_PROVIDER) or DEFAULT_WEB_SEARCH_PROVIDER),
             "providers": list(cls.WEB_SEARCH_PROVIDERS),
-            "freshness": str(getattr(search, "freshness", "year") or "year"),
+            "freshness": str(getattr(search, "freshness", DEFAULT_WEB_SEARCH_FRESHNESS) or DEFAULT_WEB_SEARCH_FRESHNESS),
             "freshness_options": list(cls.WEB_SEARCH_FRESHNESS),
             "max_results": int(getattr(search, "max_results", 25) or 25),
             "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", 10) or 10),
             "searxng_max_pages": int(getattr(search, "searxng_max_pages", 5) or 5),
-            "searxng_url": str(getattr(search, "searxng_url", "https://searx.be") or "https://searx.be"),
+            "searxng_url": str(getattr(search, "searxng_url", DEFAULT_SEARXNG_URL) or DEFAULT_SEARXNG_URL),
             "searxng_engines": cls._coerce_text_list(getattr(search, "searxng_engines", []), field="searxng_engines", default=[]),
             "searxng_categories": cls._coerce_text_list(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
             "proxy": str(getattr(search, "proxy", "") or ""),
@@ -853,14 +860,14 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _coerce_web_search_provider(cls, value: Any) -> str:
-        provider = str(value or "duckduckgo").strip().lower() or "duckduckgo"
+        provider = str(value or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
         if provider not in cls.WEB_SEARCH_PROVIDERS:
             raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(cls.WEB_SEARCH_PROVIDERS)}")
         return provider
 
     @classmethod
     def _coerce_web_search_freshness(cls, value: Any) -> str:
-        freshness = str(value or "year").strip().lower() or "year"
+        freshness = str(value or DEFAULT_WEB_SEARCH_FRESHNESS).strip().lower() or DEFAULT_WEB_SEARCH_FRESHNESS
         if freshness not in cls.WEB_SEARCH_FRESHNESS:
             raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(cls.WEB_SEARCH_FRESHNESS)}")
         return freshness
@@ -2250,7 +2257,7 @@ class WebAdapter(MessageAdapter):
     async def _handle_settings_search_searxng_options(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         search = config.tools.web_search
-        searxng_url = self._coerce_optional_text(request.query.get("url"), default=search.searxng_url) or "https://searx.be"
+        searxng_url = self._coerce_optional_text(request.query.get("url"), default=search.searxng_url) or DEFAULT_SEARXNG_URL
         try:
             async with httpx.AsyncClient(proxy=search.proxy) as client:
                 response = await client.get(
@@ -2306,7 +2313,7 @@ class WebAdapter(MessageAdapter):
             maximum=50,
         )
         if "searxng_url" in body:
-            search.searxng_url = self._coerce_optional_text(body.get("searxng_url"), default="") or "https://searx.be"
+            search.searxng_url = self._coerce_optional_text(body.get("searxng_url"), default="") or DEFAULT_SEARXNG_URL
         if "searxng_engines" in body:
             search.searxng_engines = self._coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
         if "searxng_categories" in body:
