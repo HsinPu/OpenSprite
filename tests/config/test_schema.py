@@ -5,7 +5,19 @@ import pytest
 from pydantic import ValidationError
 
 from opensprite.auth.codex import CodexToken, save_codex_token
-from opensprite.config.defaults import DEFAULT_SEARXNG_URL, DEFAULT_WEB_SEARCH_PROVIDER, WEB_SEARCH_PROVIDERS
+from opensprite.config.defaults import (
+    BROWSER_BACKENDS,
+    DEFAULT_BROWSER_BACKEND,
+    DEFAULT_BROWSER_COMMAND_TIMEOUT,
+    DEFAULT_BROWSER_LAUNCH_ARGS,
+    DEFAULT_BROWSER_SESSION_TIMEOUT,
+    DEFAULT_BROWSER_USE_BASE_URL,
+    DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
+    DEFAULT_SEARXNG_URL,
+    DEFAULT_WEB_SEARCH_PROVIDER,
+    WEB_SEARCH_PROVIDERS,
+)
 from opensprite.config.schema import (
     AgentConfig,
     ChannelsConfig,
@@ -333,6 +345,22 @@ def test_template_web_search_defaults_match_backend_defaults():
     assert web_search["provider"] == DEFAULT_WEB_SEARCH_PROVIDER
     assert web_search["provider"] in WEB_SEARCH_PROVIDERS
     assert web_search["searxng_url"] == DEFAULT_SEARXNG_URL
+
+
+def test_template_browser_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    browser = template["tools"]["browser"]
+
+    assert browser["backend"] == DEFAULT_BROWSER_BACKEND
+    assert browser["backend"] in BROWSER_BACKENDS
+    assert browser["command_timeout"] == DEFAULT_BROWSER_COMMAND_TIMEOUT
+    assert browser["session_timeout"] == DEFAULT_BROWSER_SESSION_TIMEOUT
+    assert browser["launch_args"] == DEFAULT_BROWSER_LAUNCH_ARGS
+    assert browser["allow_private_urls"] is False
+    assert browser["browserbase_base_url"] == DEFAULT_BROWSERBASE_BASE_URL
+    assert browser["browser_use_base_url"] == DEFAULT_BROWSER_USE_BASE_URL
+    assert browser["firecrawl_base_url"] == DEFAULT_FIRECRAWL_BROWSER_BASE_URL
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():

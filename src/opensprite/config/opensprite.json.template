@@ -63,6 +63,7 @@
       "command_timeout": 30,
       "session_timeout": 1800,
       "cdp_url": "",
+      "launch_args": "--no-sandbox",
       "allow_private_urls": false,
       "browserbase_api_key": "",
       "browserbase_project_id": "",
