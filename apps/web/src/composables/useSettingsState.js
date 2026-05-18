@@ -162,7 +162,7 @@ export function createSettingsState() {
     searchNotice: "",
     searchOptionsNotice: "",
     search: {
-      provider: "searxng",
+      provider: "duckduckgo",
       providers: ["duckduckgo", "brave", "tavily", "searxng", "jina"],
       freshness: "year",
       freshness_options: ["none", "day", "week", "month", "year"],
@@ -182,7 +182,7 @@ export function createSettingsState() {
       jina_api_key_configured: false,
     },
     searchForm: {
-      provider: "searxng",
+      provider: "duckduckgo",
       freshness: "year",
       maxResults: 25,
       duckduckgoMaxPages: 10,

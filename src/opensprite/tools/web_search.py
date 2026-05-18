@@ -298,7 +298,7 @@ class WebSearchTool(Tool):
 
     @property
     def provider(self) -> str:
-        return self.config.provider.strip().lower() or "searxng"
+        return self.config.provider.strip().lower() or "duckduckgo"
 
     @property
     def brave_api_key(self) -> str:

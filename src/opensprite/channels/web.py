@@ -615,7 +615,7 @@ class WebAdapter(MessageAdapter):
     def _web_search_payload(cls, config: Config) -> dict[str, Any]:
         search = getattr(getattr(config, "tools", None), "web_search", None)
         return {
-            "provider": str(getattr(search, "provider", "searxng") or "searxng"),
+            "provider": str(getattr(search, "provider", "duckduckgo") or "duckduckgo"),
             "providers": list(cls.WEB_SEARCH_PROVIDERS),
             "freshness": str(getattr(search, "freshness", "year") or "year"),
             "freshness_options": list(cls.WEB_SEARCH_FRESHNESS),
@@ -853,7 +853,7 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _coerce_web_search_provider(cls, value: Any) -> str:
-        provider = str(value or "searxng").strip().lower() or "searxng"
+        provider = str(value or "duckduckgo").strip().lower() or "duckduckgo"
         if provider not in cls.WEB_SEARCH_PROVIDERS:
             raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(cls.WEB_SEARCH_PROVIDERS)}")
         return provider

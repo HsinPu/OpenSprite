@@ -37,7 +37,7 @@ function normalizeSearxngOptions(value = {}) {
 
 function normalizeSearchSettings(search = {}) {
   return {
-    provider: search.provider || "searxng",
+    provider: search.provider || "duckduckgo",
     providers: Array.isArray(search.providers) && search.providers.length ? search.providers : DEFAULT_SEARCH_PROVIDERS,
     freshness: search.freshness || "year",
     freshness_options: Array.isArray(search.freshness_options) && search.freshness_options.length ? search.freshness_options : DEFAULT_FRESHNESS_OPTIONS,
