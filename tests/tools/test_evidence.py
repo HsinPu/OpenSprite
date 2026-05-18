@@ -49,6 +49,49 @@ def test_web_fetch_http_error_marks_evidence_failed():
     assert "HTTP Error: 404" in evidence.metadata["error"]
 
 
+def test_web_search_without_traceable_sources_marks_evidence_failed():
+    result = json.dumps(
+        {
+            "type": "web_search",
+            "query": "sqlite fts",
+            "provider": "duckduckgo",
+            "items": [],
+        }
+    )
+
+    evidence = build_tool_evidence("web_search", {"query": "sqlite fts"}, result, ok=True)
+
+    assert evidence.ok is False
+    assert evidence.metadata["source_count"] == 0
+    assert evidence.metadata["result_count"] == 0
+    assert evidence.metadata["query"] == "sqlite fts"
+    assert evidence.metadata["provider"] == "duckduckgo"
+    assert evidence.metadata["error"] == "web_search returned no traceable sources"
+
+
+def test_web_search_with_traceable_source_remains_successful_evidence():
+    result = json.dumps(
+        {
+            "type": "web_search",
+            "query": "sqlite fts",
+            "provider": "duckduckgo",
+            "items": [
+                {
+                    "title": "SQLite FTS5",
+                    "url": "https://sqlite.org/fts5.html",
+                    "content": "Official full text search docs",
+                }
+            ],
+        }
+    )
+
+    evidence = build_tool_evidence("web_search", {"query": "sqlite fts"}, result, ok=True)
+
+    assert evidence.ok is True
+    assert evidence.metadata["source_count"] == 1
+    assert evidence.metadata["sources"][0]["url"] == "https://sqlite.org/fts5.html"
+
+
 def test_exec_http_command_records_external_warning_metadata():
     evidence = build_tool_evidence(
         "exec",

@@ -36,7 +36,12 @@ class ToolEvidence:
 
 def build_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok: bool) -> ToolEvidence:
     """Create default evidence for tools without resource-specific metadata."""
-    effective_ok = bool(ok) and not _tool_result_is_error(tool_name, result) and not _web_research_has_no_sources(tool_name, result)
+    effective_ok = (
+        bool(ok)
+        and not _tool_result_is_error(tool_name, result)
+        and not _web_search_has_no_sources(tool_name, args, result)
+        and not _web_research_has_no_sources(tool_name, result)
+    )
     metadata = _build_metadata(tool_name, args, result) if effective_ok else _build_failed_metadata(tool_name, args, result)
     return ToolEvidence(
         name=tool_name,
@@ -55,6 +60,8 @@ def _build_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[s
 
 def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
     metadata = _exec_metadata(args) if tool_name == "exec" else {}
+    if tool_name == "web_search":
+        metadata.update(_web_search_failure_metadata(args, result))
     if tool_name == "web_research":
         metadata.update(_web_research_failure_metadata(args, result))
     if _tool_result_is_error(tool_name, result):
@@ -69,6 +76,35 @@ def _tool_result_is_error(tool_name: str, result: str) -> bool:
     if text.startswith("Error:") or text.startswith("Error executing "):
         return True
     return tool_name == "web_fetch" and "http error:" in text.lower()
+
+
+def _web_search_has_no_sources(tool_name: str, args: dict[str, Any], result: str) -> bool:
+    if tool_name != "web_search":
+        return False
+    payload = _parse_json_object(result)
+    if not isinstance(payload, dict):
+        return False
+    return not _web_search_sources(tool_name, args, payload, result)
+
+
+def _web_search_failure_metadata(args: dict[str, Any], result: str) -> dict[str, Any]:
+    payload = _parse_json_object(result)
+    if not isinstance(payload, dict):
+        return {}
+    raw_items = payload.get("items", payload.get("results", []))
+    result_count = len(raw_items) if isinstance(raw_items, list) else 0
+    metadata: dict[str, Any] = {
+        "source_count": 0,
+        "result_count": result_count,
+        "error": "web_search returned no traceable sources",
+    }
+    query = _clean_source_text(payload.get("query") or args.get("query"))
+    if query:
+        metadata["query"] = query
+    provider = _clean_source_text(payload.get("provider"))
+    if provider:
+        metadata["provider"] = provider
+    return metadata
 
 
 def _web_research_has_no_sources(tool_name: str, result: str) -> bool:
