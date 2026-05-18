@@ -324,7 +324,7 @@ def register_browser_tools(
         return
     runtime = AgentBrowserRuntime(
         command_timeout=getattr(browser_config, "command_timeout", 30),
-        session_timeout=getattr(browser_config, "session_timeout", 300),
+        session_timeout=getattr(browser_config, "session_timeout", 1800),
         cdp_url=getattr(browser_config, "cdp_url", ""),
         launch_args=getattr(browser_config, "launch_args", ""),
         cloud_provider=cloud_provider_from_config(browser_config) if browser_config is not None else None,

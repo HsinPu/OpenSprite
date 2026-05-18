@@ -20,6 +20,7 @@ from ..utils.url import join_url_path
 
 SUPPORTED_BROWSER_BACKENDS = ("agent-browser", "browserbase", "browser-use", "firecrawl")
 CLOUD_BROWSER_BACKENDS = ("browserbase", "browser-use", "firecrawl")
+DEFAULT_BROWSER_SESSION_TIMEOUT = 1800
 
 
 class BrowserRuntimeError(RuntimeError):
@@ -117,7 +118,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             raise BrowserRuntimeError("Browserbase requires browserbase_api_key and browserbase_project_id or BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.")
         body: dict[str, Any] = {
             "projectId": self.project_id,
-            "timeout": max(1, int(session_timeout or 300)) * 1000,
+            "timeout": max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT)) * 1000,
         }
         if self.keep_alive:
             body["keepAlive"] = True
@@ -139,7 +140,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         return CloudBrowserSession(
             provider_session_id=provider_session_id,
             cdp_url=cdp_url,
-            expires_at=time.monotonic() + max(1, int(session_timeout or 300)),
+            expires_at=time.monotonic() + max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT)),
         )
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
@@ -190,7 +191,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Browser Use requires browser_use_api_key or BROWSER_USE_API_KEY.")
-        timeout_minutes = max(1, (max(1, int(session_timeout or 300)) + 59) // 60)
+        timeout_minutes = max(1, (max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT)) + 59) // 60)
         response = await self._request(
             "POST",
             join_url_path(self.base_url, "/browsers"),
@@ -207,7 +208,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         return CloudBrowserSession(
             provider_session_id=provider_session_id,
             cdp_url=cdp_url,
-            expires_at=time.monotonic() + max(1, int(session_timeout or 300)),
+            expires_at=time.monotonic() + max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT)),
         )
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
@@ -258,7 +259,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Firecrawl browser sessions require firecrawl_api_key or FIRECRAWL_API_KEY.")
-        ttl = max(1, int(session_timeout or 300))
+        ttl = max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
         response = await self._request(
             "POST",
             join_url_path(self.base_url, "/v2/browser"),
@@ -299,14 +300,14 @@ class AgentBrowserRuntime:
         self,
         *,
         command_timeout: int = 30,
-        session_timeout: int = 300,
+        session_timeout: int = DEFAULT_BROWSER_SESSION_TIMEOUT,
         command: str | None = None,
         cdp_url: str | None = None,
         launch_args: str | None = None,
         cloud_provider: CloudBrowserProvider | None = None,
     ):
         self.command_timeout = max(1, int(command_timeout or 30))
-        self.session_timeout = max(1, int(session_timeout or 300))
+        self.session_timeout = max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
         self.command = str(command or "").strip()
         self.cdp_url = str(cdp_url or "").strip()
         self.launch_args = str(launch_args or "").strip()

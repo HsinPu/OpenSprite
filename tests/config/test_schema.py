@@ -308,7 +308,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.browser.enabled is False
     assert config.browser.backend == "agent-browser"
     assert config.browser.command_timeout == 30
-    assert config.browser.session_timeout == 300
+    assert config.browser.session_timeout == 1800
     assert config.browser.cdp_url == ""
     assert config.browser.launch_args == "--no-sandbox"
     assert config.browser.allow_private_urls is False

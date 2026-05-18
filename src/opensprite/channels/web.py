@@ -610,7 +610,7 @@ class WebAdapter(MessageAdapter):
             "backend": str(getattr(browser, "backend", "agent-browser") or "agent-browser"),
             "backends": list(cls.BROWSER_BACKENDS),
             "command_timeout": int(getattr(browser, "command_timeout", 30) or 30),
-            "session_timeout": int(getattr(browser, "session_timeout", 300) or 300),
+            "session_timeout": int(getattr(browser, "session_timeout", 1800) or 1800),
             "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
             "launch_args": str(getattr(browser, "launch_args", "") or ""),
             "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),

@@ -61,7 +61,7 @@
       "enabled": false,
       "backend": "agent-browser",
       "command_timeout": 30,
-      "session_timeout": 300,
+      "session_timeout": 1800,
       "cdp_url": "",
       "allow_private_urls": false,
       "browserbase_api_key": "",

@@ -1,5 +1,6 @@
 const DEFAULT_BROWSER_BACKENDS = ["agent-browser", "browserbase", "browser-use", "firecrawl"];
 const DEFAULT_BROWSER_LAUNCH_ARGS = "--no-sandbox";
+const DEFAULT_BROWSER_SESSION_TIMEOUT = 1800;
 
 function normalizeBrowserSettings(browser = {}) {
   return {
@@ -7,7 +8,7 @@ function normalizeBrowserSettings(browser = {}) {
     backend: browser.backend || "agent-browser",
     backends: Array.isArray(browser.backends) && browser.backends.length ? browser.backends : DEFAULT_BROWSER_BACKENDS,
     command_timeout: Number(browser.command_timeout || 30),
-    session_timeout: Number(browser.session_timeout || 300),
+    session_timeout: Number(browser.session_timeout || DEFAULT_BROWSER_SESSION_TIMEOUT),
     cdp_url: browser.cdp_url || "",
     launch_args: browser.launch_args || DEFAULT_BROWSER_LAUNCH_ARGS,
     allow_private_urls: browser.allow_private_urls === true,
