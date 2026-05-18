@@ -2476,10 +2476,19 @@ class WebAdapter(MessageAdapter):
 
         install_result = await self._run_browser_install_command(timeout=300)
         after = await self._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
+        install_ok = bool(install_result.get("ok"))
+        after_ok = bool(after.get("ok"))
+        sandbox_only_after_install = (
+            install_ok
+            and not after_ok
+            and after.get("diagnostic_code") == "sandbox_unavailable"
+            and "--no-sandbox" in str(browser.launch_args or "")
+        )
         return web.json_response(
             {
-                "ok": bool(after.get("ok")),
-                "installed": bool(install_result.get("ok")),
+                "ok": after_ok or sandbox_only_after_install,
+                "installed": install_ok,
+                "doctor_warning": sandbox_only_after_install,
                 "already_installed": False,
                 "browser": self._browser_payload(config),
                 "runtime": self._browser_runtime_status(),

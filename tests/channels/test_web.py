@@ -1167,7 +1167,12 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
                 {"ok": False, "exit_code": 1, "stdout": "", "stderr": "Executable doesn't exist at /tmp/chromium"}
             )
         return WebAdapter._with_browser_diagnostic(
-            {"ok": True, "exit_code": 0, "stdout": "Browser install looks good", "stderr": ""}
+            {
+                "ok": False,
+                "exit_code": 1,
+                "stdout": "",
+                "stderr": "No usable sandbox! Hint: try --args \"--no-sandbox\"",
+            }
         )
 
     async def fake_install_command(*, timeout=300):
@@ -1207,10 +1212,11 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
                 payload = await resp.json()
                 assert payload["ok"] is True
                 assert payload["installed"] is True
+                assert payload["doctor_warning"] is True
                 assert payload["already_installed"] is False
                 assert payload["before"]["diagnostic_code"] == "browser_missing"
                 assert payload["install"]["diagnostic_code"] == "ok"
-                assert payload["after"]["diagnostic_code"] == "ok"
+                assert payload["after"]["diagnostic_code"] == "sandbox_unavailable"
         assert doctor_calls == [
             {"args": ["doctor"], "launch_args": "--no-sandbox"},
             {"args": ["doctor"], "launch_args": "--no-sandbox"},
