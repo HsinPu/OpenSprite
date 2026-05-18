@@ -1,4 +1,5 @@
 const DEFAULT_BROWSER_BACKENDS = ["agent-browser", "browserbase", "browser-use", "firecrawl"];
+const DEFAULT_BROWSER_LAUNCH_ARGS = "--no-sandbox";
 
 function normalizeBrowserSettings(browser = {}) {
   return {
@@ -8,7 +9,7 @@ function normalizeBrowserSettings(browser = {}) {
     command_timeout: Number(browser.command_timeout || 30),
     session_timeout: Number(browser.session_timeout || 300),
     cdp_url: browser.cdp_url || "",
-    launch_args: browser.launch_args || "",
+    launch_args: browser.launch_args || DEFAULT_BROWSER_LAUNCH_ARGS,
     allow_private_urls: browser.allow_private_urls === true,
     cloud: browser.cloud || {},
     runtime: browser.runtime || { available: false, command: "", install_hint: "" },

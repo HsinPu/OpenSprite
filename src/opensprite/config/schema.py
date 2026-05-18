@@ -438,7 +438,7 @@ class BrowserToolConfig(BaseModel):
     command_timeout: int = Field(default=30, ge=1)
     session_timeout: int = Field(default=300, ge=1)
     cdp_url: str = ""
-    launch_args: str = ""
+    launch_args: str = "--no-sandbox"
     allow_private_urls: bool = False
     browserbase_api_key: str = ""
     browserbase_project_id: str = ""
