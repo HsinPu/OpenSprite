@@ -240,6 +240,35 @@ def test_agent_browser_runtime_uses_cdp_backend_without_session(monkeypatch):
     }
 
 
+def test_agent_browser_runtime_passes_launch_args_for_managed_session(monkeypatch):
+    runtime = AgentBrowserRuntime(command="agent-browser", command_timeout=9, launch_args="--no-sandbox")
+    captured = {}
+
+    async def fake_run(argv, timeout):
+        captured["argv"] = argv
+        captured["timeout"] = timeout
+        return {"success": True}
+
+    monkeypatch.setattr(runtime, "_run_subprocess", fake_run)
+
+    result = asyncio.run(runtime.run(session_key="web:browser-1", command="open", args=["https://example.com"]))
+
+    assert result == {"success": True}
+    assert captured == {
+        "argv": [
+            "agent-browser",
+            "--args",
+            "--no-sandbox",
+            "--session",
+            "opensprite_web_browser-1",
+            "--json",
+            "open",
+            "https://example.com",
+        ],
+        "timeout": 9,
+    }
+
+
 def test_agent_browser_runtime_uses_cloud_provider_cdp_session(monkeypatch):
     cloud_provider = _FakeCloudProvider()
     runtime = AgentBrowserRuntime(

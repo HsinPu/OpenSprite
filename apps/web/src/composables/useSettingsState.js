@@ -207,6 +207,7 @@ export function createSettingsState() {
       command_timeout: 30,
       session_timeout: 300,
       cdp_url: "",
+      launch_args: "",
       allow_private_urls: false,
       cloud: {},
       runtime: {
@@ -221,6 +222,7 @@ export function createSettingsState() {
       commandTimeout: 30,
       sessionTimeout: 300,
       cdpUrl: "",
+      launchArgs: "",
       allowPrivateUrls: false,
       testUrl: "https://quotes.toscrape.com/js/",
     },

@@ -8,6 +8,7 @@ function normalizeBrowserSettings(browser = {}) {
     command_timeout: Number(browser.command_timeout || 30),
     session_timeout: Number(browser.session_timeout || 300),
     cdp_url: browser.cdp_url || "",
+    launch_args: browser.launch_args || "",
     allow_private_urls: browser.allow_private_urls === true,
     cloud: browser.cloud || {},
     runtime: browser.runtime || { available: false, command: "", install_hint: "" },
@@ -20,6 +21,7 @@ function syncBrowserForm(settingsState) {
   settingsState.browserForm.commandTimeout = settingsState.browser.command_timeout;
   settingsState.browserForm.sessionTimeout = settingsState.browser.session_timeout;
   settingsState.browserForm.cdpUrl = settingsState.browser.cdp_url;
+  settingsState.browserForm.launchArgs = settingsState.browser.launch_args;
   settingsState.browserForm.allowPrivateUrls = settingsState.browser.allow_private_urls;
 }
 
@@ -59,6 +61,7 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
           command_timeout: settingsState.browserForm.commandTimeout,
           session_timeout: settingsState.browserForm.sessionTimeout,
           cdp_url: settingsState.browserForm.cdpUrl,
+          launch_args: settingsState.browserForm.launchArgs,
           allow_private_urls: settingsState.browserForm.allowPrivateUrls,
         }),
       });

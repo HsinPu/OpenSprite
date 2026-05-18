@@ -1094,6 +1094,11 @@ export const DISPLAY_COPY = {
           description: "可填 http://127.0.0.1:9222 或 ws://... 連到已開啟 remote debugging 的瀏覽器；留空則使用本機 managed session。",
           placeholder: "http://127.0.0.1:9222",
         },
+        launchArgs: {
+          title: "Browser launch args",
+          description: "傳給 agent-browser 的 Chrome launch args。Linux container / VM sandbox 錯誤可填 --no-sandbox；CDP attach 模式不會使用此欄位。",
+          placeholder: "--no-sandbox",
+        },
         commandTimeout: {
           title: "Command timeout",
           description: "每個 browser command 最多等待秒數。",
@@ -2645,6 +2650,11 @@ export const DISPLAY_COPY = {
           title: "Chrome CDP URL",
           description: "Use http://127.0.0.1:9222 or ws://... to attach to a browser with remote debugging. Leave blank for a managed local session.",
           placeholder: "http://127.0.0.1:9222",
+        },
+        launchArgs: {
+          title: "Browser launch args",
+          description: "Chrome launch args passed to agent-browser. Use --no-sandbox for Linux container / VM sandbox errors. Ignored when attaching through CDP.",
+          placeholder: "--no-sandbox",
         },
         commandTimeout: {
           title: "Command timeout",

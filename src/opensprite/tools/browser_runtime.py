@@ -302,12 +302,14 @@ class AgentBrowserRuntime:
         session_timeout: int = 300,
         command: str | None = None,
         cdp_url: str | None = None,
+        launch_args: str | None = None,
         cloud_provider: CloudBrowserProvider | None = None,
     ):
         self.command_timeout = max(1, int(command_timeout or 30))
         self.session_timeout = max(1, int(session_timeout or 300))
         self.command = str(command or "").strip()
         self.cdp_url = str(cdp_url or "").strip()
+        self.launch_args = str(launch_args or "").strip()
         self.cloud_provider = cloud_provider
         self._cloud_sessions: dict[str, CloudBrowserSession] = {}
 
@@ -323,11 +325,12 @@ class AgentBrowserRuntime:
         return await self._run_subprocess(argv, timeout or self.command_timeout)
 
     async def _backend_args(self, session_key: str) -> list[str]:
+        launch_args = ["--args", self.launch_args] if self.launch_args and not self.cdp_url else []
         if self.cdp_url:
             return ["--cdp", await self._resolve_cdp_url()]
         if self.cloud_provider is not None:
             return ["--cdp", await self._cloud_cdp_url(session_key)]
-        return ["--session", _browser_session_name(session_key)]
+        return [*launch_args, "--session", _browser_session_name(session_key)]
 
     async def _resolve_cdp_url(self) -> str:
         return await resolve_cdp_url(self.cdp_url, timeout=self.command_timeout)

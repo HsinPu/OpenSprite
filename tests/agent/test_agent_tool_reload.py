@@ -64,6 +64,7 @@ def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
     config.tools.browser.command_timeout = 45
     config.tools.browser.session_timeout = 600
     config.tools.browser.cdp_url = "http://127.0.0.1:9222"
+    config.tools.browser.launch_args = "--no-sandbox"
     config.tools.browser.allow_private_urls = True
 
     payload = agent.reload_browser_from_config(config)
@@ -74,6 +75,7 @@ def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
         "backend": "agent-browser",
         "command_timeout": 45,
         "session_timeout": 600,
+        "launch_args": "--no-sandbox",
         "tool_updated": True,
         "tool_removed": False,
     }
@@ -82,6 +84,7 @@ def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
     assert browser_tool.runtime.command_timeout == 45
     assert browser_tool.runtime.session_timeout == 600
     assert browser_tool.runtime.cdp_url == "http://127.0.0.1:9222"
+    assert browser_tool.runtime.launch_args == "--no-sandbox"
     assert browser_tool.browser_config.allow_private_urls is True
 
     config.tools.browser.enabled = False
@@ -92,6 +95,7 @@ def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
         "backend": "agent-browser",
         "command_timeout": 45,
         "session_timeout": 600,
+        "launch_args": "--no-sandbox",
         "tool_updated": False,
         "tool_removed": True,
     }

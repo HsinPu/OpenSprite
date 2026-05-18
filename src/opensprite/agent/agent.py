@@ -1460,6 +1460,7 @@ class AgentLoop:
             "backend": browser_config.backend,
             "command_timeout": browser_config.command_timeout,
             "session_timeout": browser_config.session_timeout,
+            "launch_args": browser_config.launch_args,
             "tool_updated": bool(registered_tools),
             "tool_removed": bool(removed_tools),
         }

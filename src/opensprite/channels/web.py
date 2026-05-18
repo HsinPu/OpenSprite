@@ -526,6 +526,7 @@ class WebAdapter(MessageAdapter):
             "command_timeout": int(getattr(browser, "command_timeout", 30) or 30),
             "session_timeout": int(getattr(browser, "session_timeout", 300) or 300),
             "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
+            "launch_args": str(getattr(browser, "launch_args", "") or ""),
             "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),
             "cloud": browser_cloud_status(browser),
             "runtime": cls._browser_runtime_status(),
@@ -2267,6 +2268,8 @@ class WebAdapter(MessageAdapter):
         )
         if "cdp_url" in body:
             browser.cdp_url = self._coerce_optional_text(body.get("cdp_url"), default="") or ""
+        if "launch_args" in body:
+            browser.launch_args = self._coerce_optional_text(body.get("launch_args"), default="") or ""
         browser.allow_private_urls = self._coerce_bool(
             body.get("allow_private_urls"),
             field="allow_private_urls",
@@ -2314,6 +2317,7 @@ class WebAdapter(MessageAdapter):
             command_timeout=browser.command_timeout,
             session_timeout=browser.session_timeout,
             cdp_url=browser.cdp_url,
+            launch_args=browser.launch_args,
             cloud_provider=cloud_provider_from_config(browser),
         )
         session_key = f"settings-test-{uuid4().hex[:8]}"

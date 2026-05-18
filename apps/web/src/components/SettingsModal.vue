@@ -1677,6 +1677,21 @@
 
             <label class="settings-row settings-row--field">
               <div>
+                <strong>{{ copy.settings.browser.launchArgs.title }}</strong>
+                <span>{{ copy.settings.browser.launchArgs.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.browserForm.launchArgs"
+                type="text"
+                spellcheck="false"
+                :placeholder="copy.settings.browser.launchArgs.placeholder"
+                :disabled="settingsState.browserLoading"
+                @keydown.enter.prevent="$emit('save-browser-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
                 <strong>{{ copy.settings.browser.commandTimeout.title }}</strong>
                 <span>{{ copy.settings.browser.commandTimeout.description }}</span>
               </div>

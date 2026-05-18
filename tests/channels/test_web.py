@@ -829,12 +829,14 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
                 "backend": browser.backend,
                 "command_timeout": browser.command_timeout,
                 "session_timeout": browser.session_timeout,
+                "launch_args": browser.launch_args,
             })
             return {
                 "enabled": browser.enabled,
                 "backend": browser.backend,
                 "command_timeout": browser.command_timeout,
                 "session_timeout": browser.session_timeout,
+                "launch_args": browser.launch_args,
                 "tool_updated": browser.enabled,
                 "tool_removed": False,
             }
@@ -879,6 +881,7 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
                     "command_timeout": 45,
                     "session_timeout": 600,
                     "cdp_url": "http://127.0.0.1:9222",
+                    "launch_args": "--no-sandbox",
                     "allow_private_urls": True,
                 },
             ) as resp:
@@ -891,12 +894,14 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
                     "backend": "agent-browser",
                     "command_timeout": 45,
                     "session_timeout": 600,
+                    "launch_args": "--no-sandbox",
                     "tool_updated": True,
                     "tool_removed": False,
                 }
                 assert payload["browser"]["enabled"] is True
                 assert payload["browser"]["command_timeout"] == 45
                 assert payload["browser"]["cdp_url"] == "http://127.0.0.1:9222"
+                assert payload["browser"]["launch_args"] == "--no-sandbox"
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/browser",
@@ -942,6 +947,7 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.browser.command_timeout == 45
         assert loaded.tools.browser.session_timeout == 600
         assert loaded.tools.browser.cdp_url == ""
+        assert loaded.tools.browser.launch_args == "--no-sandbox"
         assert loaded.tools.browser.allow_private_urls is True
         assert loaded.tools.browser.browserbase_api_key == "bb-key"
         assert loaded.tools.browser.browserbase_project_id == "project-1"
