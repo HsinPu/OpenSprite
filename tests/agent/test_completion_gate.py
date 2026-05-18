@@ -1330,6 +1330,41 @@ def test_completion_gate_rejects_web_research_coverage_gaps():
     assert "ai browser pricing" in (completion.active_task_detail or "")
 
 
+def test_completion_gate_rejects_empty_web_research_even_when_assistant_asks_user():
+    intent = TaskIntentService().classify("你再去網路上找更多 GPT Image 影片流程資料")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    response = "網路搜尋被阻擋，請提供可存取的網頁連結，我再幫你分析。"
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(
+            content=response,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(
+                    name="web_research",
+                    ok=False,
+                    metadata={
+                        "source_count": 0,
+                        "fetched_count": 0,
+                        "coverage": {"target_fetch_count": 4, "target_met": False, "fetched_count": 0},
+                    },
+                ),
+            ),
+            task_artifacts=(),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
+
+
 def test_completion_gate_rejects_terse_web_research_final_answer():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
