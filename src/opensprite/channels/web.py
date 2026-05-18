@@ -44,6 +44,12 @@ from ..config.defaults import (
     DEFAULT_BROWSER_LAUNCH_ARGS,
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
+    DEFAULT_LOG_ENABLED,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_LOG_REASONING_DETAILS,
+    DEFAULT_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_SYSTEM_PROMPT,
+    DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_FRESHNESS,
@@ -51,6 +57,7 @@ from ..config.defaults import (
     DEFAULT_WEB_SEARCH_PROVIDER,
     WEB_SEARCH_FRESHNESS_OPTIONS,
     BROWSER_BACKENDS as DEFAULT_BROWSER_BACKENDS,
+    LOG_LEVELS as DEFAULT_LOG_LEVELS,
     WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
 from ..config.channel_settings import (
@@ -95,7 +102,7 @@ from .web_api import WebApiHandlers
 class WebAdapter(MessageAdapter):
     """WebSocket adapter for browser-based chat clients."""
 
-    LOG_LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
+    LOG_LEVELS = DEFAULT_LOG_LEVELS
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
     WEB_SEARCH_PROVIDERS = DEFAULT_WEB_SEARCH_PROVIDERS
     WEB_SEARCH_FRESHNESS = WEB_SEARCH_FRESHNESS_OPTIONS
@@ -799,18 +806,18 @@ class WebAdapter(MessageAdapter):
     def _log_payload(cls, config: Config) -> dict[str, Any]:
         log = getattr(config, "log", None)
         return {
-            "enabled": bool(getattr(log, "enabled", False)),
-            "level": str(getattr(log, "level", "INFO") or "INFO").upper(),
-            "retention_days": int(getattr(log, "retention_days", 365) or 365),
-            "log_system_prompt": bool(getattr(log, "log_system_prompt", True)),
-            "log_system_prompt_lines": int(getattr(log, "log_system_prompt_lines", 0) or 0),
-            "log_reasoning_details": bool(getattr(log, "log_reasoning_details", False)),
+            "enabled": bool(getattr(log, "enabled", DEFAULT_LOG_ENABLED)),
+            "level": str(getattr(log, "level", DEFAULT_LOG_LEVEL) or DEFAULT_LOG_LEVEL).upper(),
+            "retention_days": int(getattr(log, "retention_days", DEFAULT_LOG_RETENTION_DAYS) or DEFAULT_LOG_RETENTION_DAYS),
+            "log_system_prompt": bool(getattr(log, "log_system_prompt", DEFAULT_LOG_SYSTEM_PROMPT)),
+            "log_system_prompt_lines": int(getattr(log, "log_system_prompt_lines", DEFAULT_LOG_SYSTEM_PROMPT_LINES) or DEFAULT_LOG_SYSTEM_PROMPT_LINES),
+            "log_reasoning_details": bool(getattr(log, "log_reasoning_details", DEFAULT_LOG_REASONING_DETAILS)),
             "levels": list(cls.LOG_LEVELS),
         }
 
     @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
-        level = str(value or "INFO").strip().upper()
+        level = str(value or DEFAULT_LOG_LEVEL).strip().upper()
         if level not in cls.LOG_LEVELS:
             raise web.HTTPBadRequest(text=f"level must be one of: {', '.join(cls.LOG_LEVELS)}")
         return level

@@ -1,4 +1,5 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
+import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
 export function createSettingsForm(state) {
@@ -180,23 +181,8 @@ export function createSettingsState() {
     logLoading: false,
     logError: "",
     logNotice: "",
-    log: {
-      enabled: true,
-      level: "INFO",
-      retention_days: 365,
-      log_system_prompt: true,
-      log_system_prompt_lines: 0,
-      log_reasoning_details: false,
-      levels: ["DEBUG", "INFO", "WARNING", "ERROR"],
-    },
-    logForm: {
-      enabled: true,
-      level: "INFO",
-      retentionDays: 365,
-      logSystemPrompt: true,
-      logSystemPromptLines: 0,
-      logReasoningDetails: false,
-    },
+    log: createDefaultLogState(),
+    logForm: createDefaultLogForm(),
     dataLoading: false,
     dataError: "",
     dataStatus: {

@@ -13,6 +13,12 @@ from .defaults import (
     DEFAULT_BROWSER_USE_BASE_URL,
     DEFAULT_BROWSERBASE_BASE_URL,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
+    DEFAULT_LOG_ENABLED,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_LOG_REASONING_DETAILS,
+    DEFAULT_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_SYSTEM_PROMPT,
+    DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_SEARXNG_URL,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_SEARXNG_MAX_PAGES,
@@ -309,12 +315,12 @@ class MessagesConfig(BaseModel):
 
 
 class LogConfig(BaseModel):
-    enabled: bool = False
-    retention_days: int = 365
-    level: str = "INFO"
-    log_system_prompt: bool = True  # 是否印出 system prompt
-    log_system_prompt_lines: int = 0  # 印出多少行，0 = 全部
-    log_reasoning_details: bool = False  # 是否印出完整 LLM reasoning/thinking 內容
+    enabled: bool = DEFAULT_LOG_ENABLED
+    retention_days: int = DEFAULT_LOG_RETENTION_DAYS
+    level: str = DEFAULT_LOG_LEVEL
+    log_system_prompt: bool = DEFAULT_LOG_SYSTEM_PROMPT  # 是否印出 system prompt
+    log_system_prompt_lines: int = DEFAULT_LOG_SYSTEM_PROMPT_LINES  # 印出多少行，0 = 全部
+    log_reasoning_details: bool = DEFAULT_LOG_REASONING_DETAILS  # 是否印出完整 LLM reasoning/thinking 內容
 
 
 class NetworkConfig(BaseModel):

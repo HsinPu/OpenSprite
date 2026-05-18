@@ -15,6 +15,12 @@ from opensprite.config.defaults import (
     DEFAULT_BROWSERBASE_BASE_URL,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
+    DEFAULT_LOG_ENABLED,
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_LOG_REASONING_DETAILS,
+    DEFAULT_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_SYSTEM_PROMPT,
+    DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_PROVIDER,
@@ -367,6 +373,19 @@ def test_template_browser_defaults_match_backend_defaults():
     assert browser["browserbase_base_url"] == DEFAULT_BROWSERBASE_BASE_URL
     assert browser["browser_use_base_url"] == DEFAULT_BROWSER_USE_BASE_URL
     assert browser["firecrawl_base_url"] == DEFAULT_FIRECRAWL_BROWSER_BASE_URL
+
+
+def test_template_log_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    log = template["log"]
+
+    assert log["enabled"] == DEFAULT_LOG_ENABLED
+    assert log["retention_days"] == DEFAULT_LOG_RETENTION_DAYS
+    assert log["level"] == DEFAULT_LOG_LEVEL
+    assert log["log_system_prompt"] == DEFAULT_LOG_SYSTEM_PROMPT
+    assert log["log_system_prompt_lines"] == DEFAULT_LOG_SYSTEM_PROMPT_LINES
+    assert log["log_reasoning_details"] == DEFAULT_LOG_REASONING_DETAILS
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():

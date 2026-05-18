@@ -1,28 +1,12 @@
-const DEFAULT_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"];
-
-function normalizeLogSettings(log = {}) {
-  const levels = Array.isArray(log.levels) && log.levels.length
-    ? log.levels.map((level) => String(level || "").toUpperCase()).filter(Boolean)
-    : DEFAULT_LOG_LEVELS;
-  const level = String(log.level || "INFO").toUpperCase();
-  return {
-    enabled: Boolean(log.enabled),
-    level: levels.includes(level) ? level : "INFO",
-    retention_days: Number(log.retention_days || 365),
-    log_system_prompt: log.log_system_prompt !== false,
-    log_system_prompt_lines: Number(log.log_system_prompt_lines || 0),
-    log_reasoning_details: Boolean(log.log_reasoning_details),
-    levels,
-  };
-}
+import { DEFAULT_LOG_LEVEL, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT_LINES, normalizeLogSettings } from "./logDefaults";
 
 function syncLogForm(settingsState) {
   settingsState.logForm.enabled = Boolean(settingsState.log.enabled);
-  settingsState.logForm.level = settingsState.log.level || "INFO";
-  settingsState.logForm.retentionDays = Number(settingsState.log.retention_days || 365);
+  settingsState.logForm.level = settingsState.log.level || DEFAULT_LOG_LEVEL;
+  settingsState.logForm.retentionDays = Number(settingsState.log.retention_days || DEFAULT_LOG_RETENTION_DAYS);
   settingsState.logForm.logSystemPrompt = Boolean(settingsState.log.log_system_prompt);
-  settingsState.logForm.logSystemPromptLines = Number(settingsState.log.log_system_prompt_lines || 0);
-  settingsState.logForm.logReasoningDetails = Boolean(settingsState.log.log_reasoning_details);
+  settingsState.logForm.logSystemPromptLines = Number(settingsState.log.log_system_prompt_lines || DEFAULT_LOG_SYSTEM_PROMPT_LINES);
+  settingsState.logForm.logReasoningDetails = Boolean(settingsState.log.log_reasoning_details || DEFAULT_LOG_REASONING_DETAILS);
 }
 
 export function useLogSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
@@ -49,10 +33,10 @@ export function useLogSettingsActions({ settingsState, requestSettingsJson, copy
         method: "PUT",
         body: JSON.stringify({
           enabled: Boolean(settingsState.logForm.enabled),
-          level: settingsState.logForm.level || "INFO",
-          retention_days: Number(settingsState.logForm.retentionDays || 365),
+          level: settingsState.logForm.level || DEFAULT_LOG_LEVEL,
+          retention_days: Number(settingsState.logForm.retentionDays || DEFAULT_LOG_RETENTION_DAYS),
           log_system_prompt: Boolean(settingsState.logForm.logSystemPrompt),
-          log_system_prompt_lines: Number(settingsState.logForm.logSystemPromptLines || 0),
+          log_system_prompt_lines: Number(settingsState.logForm.logSystemPromptLines || DEFAULT_LOG_SYSTEM_PROMPT_LINES),
           log_reasoning_details: Boolean(settingsState.logForm.logReasoningDetails),
         }),
       });
