@@ -77,10 +77,12 @@ def _web_research_has_no_sources(tool_name: str, result: str) -> bool:
     payload = _parse_json_object(result)
     if not isinstance(payload, dict):
         return False
-    source_count = _coerce_int(payload.get("source_count"), default=0)
-    fetched_count = _coerce_int(payload.get("fetched_count"), default=0)
     sources = payload.get("sources")
     fetched_sources = payload.get("fetched_sources")
+    list_source_count = len(sources) if isinstance(sources, list) else 0
+    list_fetched_count = len(fetched_sources) if isinstance(fetched_sources, list) else 0
+    source_count = _coerce_int(payload.get("source_count"), default=list_source_count)
+    fetched_count = _coerce_int(payload.get("fetched_count"), default=max(list_fetched_count, list_source_count))
     coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
     target_met = bool(coverage.get("target_met")) if isinstance(coverage, dict) else False
     has_sources = source_count > 0 or _non_empty_list(sources) or _non_empty_list(fetched_sources)

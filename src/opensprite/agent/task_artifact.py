@@ -52,6 +52,8 @@ def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
     kind = _TOOL_ARTIFACT_KINDS.get(evidence.name)
     if kind is None:
         return None
+    if kind == "web_source" and not _has_traceable_sources(evidence.metadata):
+        return None
     metadata = {"tool_args": dict(evidence.args)}
     metadata.update(dict(evidence.metadata))
     return TaskArtifact(
@@ -62,3 +64,18 @@ def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
         ok=evidence.ok,
         metadata=metadata,
     )
+
+
+def _has_traceable_sources(metadata: dict[str, Any]) -> bool:
+    sources = metadata.get("sources") if isinstance(metadata, dict) else None
+    if not isinstance(sources, list):
+        return False
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or "").strip()
+        title = str(source.get("title") or "").strip()
+        snippet = str(source.get("snippet") or "").strip()
+        if url and (title or snippet):
+            return True
+    return False

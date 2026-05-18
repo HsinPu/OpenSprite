@@ -4,7 +4,7 @@ import json
 from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
 from opensprite.search.base import SearchHit
-from opensprite.tools.evidence import build_tool_evidence
+from opensprite.tools.evidence import ToolEvidence, build_tool_evidence
 from opensprite.tools.web_search import _format_results
 from opensprite.tools.web_research import WebResearchTool
 
@@ -530,3 +530,29 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
     assert artifact.source_tool == "web_research"
     assert artifact.metadata["coverage"]["target_met"] is False
     assert artifact.metadata["coverage"]["queries_without_successful_fetch"] == ["sqlite pricing"]
+
+
+def test_web_research_evidence_without_sources_builds_no_web_source_artifact():
+    result = json.dumps(
+        {
+            "type": "web_research",
+            "query": "sqlite",
+            "sources": [],
+            "fetched_sources": [],
+            "source_count": 0,
+            "fetched_count": 0,
+            "coverage": {"target_fetch_count": 2, "target_met": False, "fetched_count": 0},
+        },
+        ensure_ascii=False,
+    )
+
+    evidence = build_tool_evidence("web_research", {"query": "sqlite"}, result, ok=True)
+
+    assert evidence.ok is False
+    assert build_task_artifact(evidence) is None
+
+
+def test_web_source_artifact_requires_traceable_source_metadata():
+    evidence = ToolEvidence(name="web_research", ok=True, metadata={"source_count": 0})
+
+    assert build_task_artifact(evidence) is None
