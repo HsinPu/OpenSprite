@@ -222,6 +222,28 @@ class CompletionGateService:
                     review_prompt_types=review["prompt_types"],
                     review_finding_count=review["finding_count"],
                 )
+            immediate_transition = infer_immediate_task_transition(
+                response_text,
+                had_tool_error=True,
+            )
+            if immediate_transition is not None and immediate_transition[0] == "blocked":
+                _, detail = immediate_transition
+                return CompletionGateResult(
+                    status="blocked",
+                    reason="assistant reported a blocker",
+                    active_task_status="blocked",
+                    active_task_detail=detail,
+                    should_update_active_task=True,
+                    verification_required=verification_required,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
+                    review_required=review_required,
+                    review_attempted=review["attempted"],
+                    review_passed=review["passed"],
+                    review_summary=review["summary"],
+                    review_prompt_types=review["prompt_types"],
+                    review_finding_count=review["finding_count"],
+                )
             return CompletionGateResult(
                 status="incomplete",
                 reason="tool execution reported an error without a clear blocker handoff",
