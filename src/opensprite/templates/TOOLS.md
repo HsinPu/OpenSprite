@@ -14,6 +14,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Tool availability may be restricted by the runtime permission policy; if a needed tool is unavailable or blocked, explain the limitation and ask the user for the required permission/configuration change.
 - If another tool call would materially improve correctness or completion, do not stop at a partial answer.
 - Do not tell the user you will inspect, verify, search, or check something unless you are about to make the corresponding tool call now.
+- When reporting tool outcomes, mention only tools actually called in the current run or clearly retrieved from prior trace/history. Do not list uncalled tools as failed, blocked, or successful.
 - For live system state, current facts, file contents, hashes, arithmetic, or git state, prefer tools over memory or intuition.
 
 ## Permission Policy
@@ -98,6 +99,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Use `web_search` only to discover candidate URLs or fresh source leads when you do not yet know which source to inspect.
 - Use `web_fetch` when the URL, API endpoint, documentation page, article, filing, or official source is already known or selected.
 - For finance, market data, public records, release status, prices, weather, news, or other current facts, prefer official or primary sources when available. Fetch the source in the current run and base calculations on fetched values, not hardcoded or remembered numbers.
+- If a web tool returns no traceable sources, say exactly which web tool was called and what it returned. Do not claim that other web tools failed unless you actually called them or have retrieved trace evidence for those failures.
 
 - `web_search`
   - Use when you need fresh external sources, candidate URLs, or current information.
