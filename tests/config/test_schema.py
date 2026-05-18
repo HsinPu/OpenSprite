@@ -21,6 +21,9 @@ from opensprite.config.defaults import (
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
+    DEFAULT_HTTP_PROXY,
+    DEFAULT_HTTPS_PROXY,
+    DEFAULT_NO_PROXY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_PROVIDER,
@@ -386,6 +389,16 @@ def test_template_log_defaults_match_backend_defaults():
     assert log["log_system_prompt"] == DEFAULT_LOG_SYSTEM_PROMPT
     assert log["log_system_prompt_lines"] == DEFAULT_LOG_SYSTEM_PROMPT_LINES
     assert log["log_reasoning_details"] == DEFAULT_LOG_REASONING_DETAILS
+
+
+def test_template_network_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    network = template["network"]
+
+    assert network["http_proxy"] == DEFAULT_HTTP_PROXY
+    assert network["https_proxy"] == DEFAULT_HTTPS_PROXY
+    assert network["no_proxy"] == DEFAULT_NO_PROXY
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():

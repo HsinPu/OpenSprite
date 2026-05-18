@@ -50,6 +50,9 @@ from ..config.defaults import (
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
+    DEFAULT_HTTP_PROXY,
+    DEFAULT_HTTPS_PROXY,
+    DEFAULT_NO_PROXY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_FRESHNESS,
@@ -509,9 +512,9 @@ class WebAdapter(MessageAdapter):
     def _network_payload(config: Config) -> dict[str, Any]:
         network = getattr(config, "network", None)
         return {
-            "http_proxy": str(getattr(network, "http_proxy", "") or ""),
-            "https_proxy": str(getattr(network, "https_proxy", "") or ""),
-            "no_proxy": str(getattr(network, "no_proxy", "") or ""),
+            "http_proxy": str(getattr(network, "http_proxy", DEFAULT_HTTP_PROXY) or DEFAULT_HTTP_PROXY),
+            "https_proxy": str(getattr(network, "https_proxy", DEFAULT_HTTPS_PROXY) or DEFAULT_HTTPS_PROXY),
+            "no_proxy": str(getattr(network, "no_proxy", DEFAULT_NO_PROXY) or DEFAULT_NO_PROXY),
         }
 
     @staticmethod

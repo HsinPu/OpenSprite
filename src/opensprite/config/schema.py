@@ -19,6 +19,9 @@ from .defaults import (
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
+    DEFAULT_HTTP_PROXY,
+    DEFAULT_HTTPS_PROXY,
+    DEFAULT_NO_PROXY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_SEARXNG_MAX_PAGES,
@@ -326,9 +329,9 @@ class LogConfig(BaseModel):
 class NetworkConfig(BaseModel):
     """Process-wide outbound network settings."""
 
-    http_proxy: str = ""
-    https_proxy: str = ""
-    no_proxy: str = "127.0.0.1,localhost"
+    http_proxy: str = DEFAULT_HTTP_PROXY
+    https_proxy: str = DEFAULT_HTTPS_PROXY
+    no_proxy: str = DEFAULT_NO_PROXY
 
 
 class MCPServerConfig(BaseModel):

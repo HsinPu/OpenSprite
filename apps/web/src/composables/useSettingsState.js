@@ -1,5 +1,6 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
+import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
 export function createSettingsForm(state) {
@@ -149,16 +150,8 @@ export function createSettingsState() {
     networkLoading: false,
     networkError: "",
     networkNotice: "",
-    network: {
-      http_proxy: "",
-      https_proxy: "",
-      no_proxy: "127.0.0.1,localhost",
-    },
-    networkForm: {
-      httpProxy: "",
-      httpsProxy: "",
-      noProxy: "127.0.0.1,localhost",
-    },
+    network: createDefaultNetworkState(),
+    networkForm: createDefaultNetworkForm(),
     searchLoading: false,
     searchOptionsLoading: false,
     searchError: "",

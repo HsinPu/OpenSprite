@@ -1,10 +1,4 @@
-function normalizeNetworkSettings(network = {}) {
-  return {
-    http_proxy: network.http_proxy || "",
-    https_proxy: network.https_proxy || "",
-    no_proxy: network.no_proxy || "127.0.0.1,localhost",
-  };
-}
+import { normalizeNetworkSettings } from "./networkDefaults";
 
 function syncNetworkForm(settingsState) {
   settingsState.networkForm.httpProxy = settingsState.network.http_proxy;
