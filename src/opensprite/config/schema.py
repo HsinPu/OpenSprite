@@ -22,7 +22,13 @@ from .defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
+    DEFAULT_CHANNELS_FILE,
+    DEFAULT_LLM_PROVIDERS_FILE,
+    DEFAULT_MCP_SERVERS_FILE,
+    DEFAULT_MEDIA_FILE,
+    DEFAULT_MESSAGES_FILE,
     DEFAULT_NO_PROXY,
+    DEFAULT_SEARCH_FILE,
     DEFAULT_SEARXNG_URL,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_SEARXNG_MAX_PAGES,
@@ -58,7 +64,7 @@ class LLMsConfig(BaseModel):
     """LLM configuration with support for multiple providers."""
 
     providers: dict[str, ProviderConfig] = {}
-    providers_file: str = "llm.providers.json"
+    providers_file: str = DEFAULT_LLM_PROVIDERS_FILE
     default: str | None = None
     api_key: str = ""
     model: str = ""
@@ -523,7 +529,7 @@ class ToolsConfig(BaseModel):
     browser: BrowserToolConfig = Field(default_factory=BrowserToolConfig)
     cron: CronToolConfig = Field(default_factory=CronToolConfig)
     permissions: ToolPermissionsConfig = Field(default_factory=ToolPermissionsConfig)
-    mcp_servers_file: str = "mcp_servers.json"
+    mcp_servers_file: str = DEFAULT_MCP_SERVERS_FILE
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
@@ -604,8 +610,8 @@ class Config:
                  ocr: OcrConfig | None = None, speech: SpeechConfig | None = None, video: VideoConfig | None = None,
                  active_task: ActiveTaskConfig | None = None,
                  recent_summary: RecentSummaryConfig | None = None, source_path: str | Path | None = None,
-                 channels_file: str = "channels.json", search_file: str = "search.json", media_file: str = "media.json",
-                 messages: MessagesConfig | None = None, messages_file: str = "messages.json"):
+                 channels_file: str = DEFAULT_CHANNELS_FILE, search_file: str = DEFAULT_SEARCH_FILE, media_file: str = DEFAULT_MEDIA_FILE,
+                 messages: MessagesConfig | None = None, messages_file: str = DEFAULT_MESSAGES_FILE):
         self.llm = llm
         self.agent = agent
         self.storage = storage
@@ -811,27 +817,27 @@ class Config:
 
     @classmethod
     def _build_default_mcp_servers_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "mcp_servers.json"
+        return config_path.parent / DEFAULT_MCP_SERVERS_FILE
 
     @classmethod
     def _build_default_channels_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "channels.json"
+        return config_path.parent / DEFAULT_CHANNELS_FILE
 
     @classmethod
     def _build_default_search_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "search.json"
+        return config_path.parent / DEFAULT_SEARCH_FILE
 
     @classmethod
     def _build_default_media_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "media.json"
+        return config_path.parent / DEFAULT_MEDIA_FILE
 
     @classmethod
     def _build_default_messages_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "messages.json"
+        return config_path.parent / DEFAULT_MESSAGES_FILE
 
     @classmethod
     def _build_default_llm_providers_path(cls, config_path: Path) -> Path:
-        return config_path.parent / "llm.providers.json"
+        return config_path.parent / DEFAULT_LLM_PROVIDERS_FILE
 
     @classmethod
     def get_mcp_servers_file_path(
@@ -1236,10 +1242,10 @@ class Config:
             speech=SpeechConfig(**merged_speech) if (merged_speech or "speech" in data or media_path is not None) else None,
             video=VideoConfig(**merged_video) if (merged_video or "video" in data or media_path is not None) else None,
             source_path=path,
-            channels_file=data.get("channels_file") or "channels.json",
-            search_file=data.get("search_file") or "search.json",
-            media_file=data.get("media_file") or "media.json",
-            messages_file=data.get("messages_file") or "messages.json",
+            channels_file=data.get("channels_file") or DEFAULT_CHANNELS_FILE,
+            search_file=data.get("search_file") or DEFAULT_SEARCH_FILE,
+            media_file=data.get("media_file") or DEFAULT_MEDIA_FILE,
+            messages_file=data.get("messages_file") or DEFAULT_MESSAGES_FILE,
         )
 
     @classmethod

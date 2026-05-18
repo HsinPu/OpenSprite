@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .provider_settings import load_json_dict, write_json_dict
+from .defaults import DEFAULT_MCP_SERVERS_FILE
 from .schema import Config, MCPServerConfig
 
 
@@ -110,7 +111,7 @@ class MCPSettingsService:
             raise MCPSettingsValidationError("tools config must be an object")
 
         tools.pop("mcp_servers", None)
-        tools.setdefault("mcp_servers_file", "mcp_servers.json")
+        tools.setdefault("mcp_servers_file", DEFAULT_MCP_SERVERS_FILE)
         write_json_dict(self.config_path, main_data)
 
         mcp_path = Config.ensure_mcp_servers_file(self.config_path, main_data)

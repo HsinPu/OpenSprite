@@ -13,6 +13,7 @@ from opensprite.config.defaults import (
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_BROWSER_USE_BASE_URL,
     DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_CHANNELS_FILE,
     DEFAULT_CRON_TIMEZONE,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
@@ -24,7 +25,12 @@ from opensprite.config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
+    DEFAULT_LLM_PROVIDERS_FILE,
+    DEFAULT_MCP_SERVERS_FILE,
+    DEFAULT_MEDIA_FILE,
+    DEFAULT_MESSAGES_FILE,
     DEFAULT_NO_PROXY,
+    DEFAULT_SEARCH_FILE,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_PROVIDER,
@@ -408,6 +414,18 @@ def test_template_cron_defaults_match_backend_defaults():
     cron = template["tools"]["cron"]
 
     assert cron["default_timezone"] == DEFAULT_CRON_TIMEZONE
+
+
+def test_template_split_file_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+
+    assert template["llm"]["providers_file"] == DEFAULT_LLM_PROVIDERS_FILE
+    assert template["channels_file"] == DEFAULT_CHANNELS_FILE
+    assert template["search_file"] == DEFAULT_SEARCH_FILE
+    assert template["media_file"] == DEFAULT_MEDIA_FILE
+    assert template["messages_file"] == DEFAULT_MESSAGES_FILE
+    assert template["tools"]["mcp_servers_file"] == DEFAULT_MCP_SERVERS_FILE
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():

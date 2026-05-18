@@ -17,6 +17,7 @@ from ..auth.credentials import (
     set_provider_default,
 )
 from ..utils.url import join_url_path
+from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
 from .schema import Config
 
@@ -694,7 +695,7 @@ class ProviderSettingsService:
         if not isinstance(llm_data, dict):
             raise ProviderSettingsValidationError("llm config must be an object")
         llm_data.pop("providers", None)
-        llm_data.setdefault("providers_file", "llm.providers.json")
+        llm_data.setdefault("providers_file", DEFAULT_LLM_PROVIDERS_FILE)
         write_json_dict(self.config_path, main_data)
         Config.ensure_llm_providers_file(self.config_path, main_data)
         Config.write_llm_providers_file(self.config_path, providers, llm_data)

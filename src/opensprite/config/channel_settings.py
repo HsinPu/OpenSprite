@@ -15,6 +15,7 @@ from ..channels.registry import (
     make_unique_instance_id,
 )
 from .provider_settings import load_json_dict, write_json_dict
+from .defaults import DEFAULT_CHANNELS_FILE
 from .schema import Config
 
 
@@ -106,7 +107,7 @@ class ChannelSettingsService:
 
     def _persist_instances_state(self, main_data: dict[str, Any], instances: dict[str, dict[str, Any]]) -> None:
         main_data.pop("channels", None)
-        main_data.setdefault("channels_file", "channels.json")
+        main_data.setdefault("channels_file", DEFAULT_CHANNELS_FILE)
         write_json_dict(self.config_path, main_data)
         Config.ensure_channels_file(self.config_path, main_data)
         Config.write_channels_file(self.config_path, {"instances": instances}, main_data)

@@ -34,3 +34,10 @@ DEFAULT_HTTPS_PROXY = ""
 DEFAULT_NO_PROXY = "127.0.0.1,localhost"
 
 DEFAULT_CRON_TIMEZONE = "UTC"
+
+DEFAULT_LLM_PROVIDERS_FILE = "llm.providers.json"
+DEFAULT_CHANNELS_FILE = "channels.json"
+DEFAULT_SEARCH_FILE = "search.json"
+DEFAULT_MEDIA_FILE = "media.json"
+DEFAULT_MESSAGES_FILE = "messages.json"
+DEFAULT_MCP_SERVERS_FILE = "mcp_servers.json"
