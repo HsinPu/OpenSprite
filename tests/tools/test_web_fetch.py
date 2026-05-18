@@ -107,6 +107,24 @@ def test_web_fetch_execute_uses_configured_max_response_size(monkeypatch):
     assert created_fetchers[-1].max_response_size == 2048
 
 
+def test_web_fetch_execute_runs_fetcher_in_thread(monkeypatch):
+    calls = []
+
+    async def fake_to_thread(func, *args):
+        calls.append((func, args))
+        return func(*args)
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.WebFetcher", lambda *args, **kwargs: _FakeFetcher())
+    monkeypatch.setattr("opensprite.tools.web_fetch.asyncio.to_thread", fake_to_thread)
+    tool = WebFetchTool()
+
+    payload = json.loads(asyncio.run(tool._execute("https://sqlite.org/fts5.html")))
+
+    assert payload["url"] == "https://sqlite.org/fts5.html"
+    assert len(calls) == 1
+    assert calls[0][1] == ("https://sqlite.org/fts5.html",)
+
+
 def test_web_fetch_execute_allows_max_chars_override(monkeypatch):
     created_fetchers = []
 

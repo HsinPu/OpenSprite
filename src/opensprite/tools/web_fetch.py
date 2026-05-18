@@ -170,6 +170,7 @@ import json
 import ipaddress
 import re
 import socket
+import asyncio
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.error import URLError, HTTPError
@@ -846,13 +847,14 @@ class WebFetchTool(Tool):
 
     async def _execute(self, url: str, max_chars: int | None = None, **kwargs) -> str:
         effective_max_chars = max_chars if max_chars is not None else self.fetcher.max_chars
-        result = WebFetcher(
+        fetcher = WebFetcher(
             max_chars=effective_max_chars,
             max_response_size=self.fetcher.max_response_size,
             timeout=self.fetcher.timeout,
             prefer_trafilatura=self.fetcher.prefer_trafilatura,
             firecrawl_api_key=self.fetcher.firecrawl_api_key,
-        ).fetch(url)
+        )
+        result = await asyncio.to_thread(fetcher.fetch, url)
         content = str(result.get("text") or "")
         content_chars = len(content.strip())
         return json.dumps(
