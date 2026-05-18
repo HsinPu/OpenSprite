@@ -131,9 +131,11 @@ class ToolResultPersistence:
         *,
         save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
         search_store: SearchStore | None = None,
+        emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.save_message = save_message
         self.search_store = search_store
+        self._emit_index_failure = emit_index_failure
 
     async def persist(
         self,
@@ -159,6 +161,17 @@ class ToolResultPersistence:
                 await self.search_store.index_tool_result(session_id, tool_name, tool_args, result)
             except Exception as e:
                 logger.warning("[{}] Failed to index tool result for search: {}", session_id, e)
+                if self._emit_index_failure is not None:
+                    await self._emit_index_failure(
+                        session_id,
+                        "search_index.tool_result_failed",
+                        {
+                            "tool_name": tool_name,
+                            "args_keys": sorted(str(key) for key in (tool_args or {}).keys()),
+                            "result_len": len(str(result or "")),
+                            "error": str(e),
+                        },
+                    )
 
 
 class ExecutionEngine:
@@ -261,6 +274,7 @@ Output exactly these sections when applicable:
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
         context_compaction_llm: DocumentLlmConfig | None = None,
+        emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.provider = provider
         self.tools = tools
@@ -289,6 +303,7 @@ Output exactly these sections when applicable:
         self.tool_result_persistence = ToolResultPersistence(
             save_message=save_message,
             search_store=search_store,
+            emit_index_failure=emit_index_failure,
         )
 
     @staticmethod

@@ -634,6 +634,7 @@ class AgentLoop:
             storage=self.storage,
             search_store=self.search_store,
             max_history_getter=lambda: self.config.max_history,
+            emit_index_failure=self._emit_search_index_failure,
         )
         self.retrieval = ProactiveRetrievalService(search_store=self.search_store)
         self._context_builder = self._setup_context_builder(context_builder)
@@ -1094,6 +1095,20 @@ class AgentLoop:
             context_compaction_min_messages=self.config.context_compaction_min_messages,
             context_compaction_strategy=self.config.context_compaction_strategy,
             context_compaction_llm=self.config.context_compaction_llm,
+            emit_index_failure=self._emit_search_index_failure,
+        )
+
+    async def _emit_search_index_failure(self, session_id: str, event_type: str, payload: dict[str, Any]) -> None:
+        run_id = self.turn_context.current_run_id()
+        if run_id is None:
+            return
+        await self._emit_run_event(
+            session_id,
+            run_id,
+            event_type,
+            {"schema_version": 1, **dict(payload or {})},
+            channel=self.turn_context.current_channel(),
+            external_chat_id=self.turn_context.current_external_chat_id(),
         )
 
     def _setup_user_profile_update(self) -> UserProfileUpdateService:

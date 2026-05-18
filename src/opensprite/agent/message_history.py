@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from ..llms import ChatMessage
 from ..search.base import SearchStore
@@ -25,10 +25,12 @@ class MessageHistoryService:
         storage: StorageProvider,
         search_store: SearchStore | None,
         max_history_getter: Callable[[], int],
+        emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.storage = storage
         self.search_store = search_store
         self._max_history_getter = max_history_getter
+        self._emit_index_failure = emit_index_failure
 
     async def load_history(self, session_id: str) -> list[ChatMessage]:
         """Load conversation history as ChatMessage objects for LLM consumption."""
@@ -89,3 +91,14 @@ class MessageHistoryService:
             )
         except Exception as e:
             logger.warning("[{}] Failed to index message for search: {}", session_id, e)
+            if self._emit_index_failure is not None:
+                await self._emit_index_failure(
+                    session_id,
+                    "search_index.message_failed",
+                    {
+                        "role": role,
+                        "tool_name": tool_name,
+                        "content_len": len(str(content or "")),
+                        "error": str(e),
+                    },
+                )
