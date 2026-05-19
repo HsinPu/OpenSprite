@@ -1,4 +1,5 @@
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 
 
@@ -39,3 +40,21 @@ def test_harness_profile_selects_chat_for_plain_question():
 
     assert profile.name == "chat"
     assert profile.continuation_policy == "minimal"
+
+
+def test_task_contract_uses_research_harness_profile_for_source_requirements():
+    intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert contract.task_type == "web_research"
+    assert "harness_profile" in contract.contract_sources
+    assert contract.allow_no_tool_final is False
+    assert any(item.kind == "tool_group" and item.tool_group == "web_research" for item in contract.requirements)
+    assert any(item.kind == "source_reference" for item in contract.acceptance_criteria)
+    assert contract.to_metadata()["harness_profile"]["name"] == "research"

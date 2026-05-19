@@ -908,6 +908,7 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
+            select_harness_profile=lambda task_intent: self.harness_profiles.select(task_intent),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,
                 run_id,

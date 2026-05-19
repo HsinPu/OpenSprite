@@ -9,6 +9,7 @@ from typing import Any
 
 from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
+from .harness_profile import HarnessProfile
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
 from .tool_groups import TOOL_GROUPS
@@ -104,6 +105,7 @@ class TaskContract:
     final_answer_required: bool = True
     allow_no_tool_final: bool = True
     contract_sources: tuple[str, ...] = ("deterministic",)
+    harness_profile: dict[str, Any] | None = None
     semantic_contract: dict[str, Any] | None = None
 
     def to_metadata(self) -> dict[str, Any]:
@@ -120,6 +122,8 @@ class TaskContract:
         }
         if self.semantic_contract:
             payload["semantic_contract"] = dict(self.semantic_contract)
+        if self.harness_profile:
+            payload["harness_profile"] = dict(self.harness_profile)
         return payload
 
 
@@ -206,6 +210,7 @@ class TaskContractService:
         current_video_files: list[str] | None = None,
         task_context_decision: TaskContextDecision | None = None,
         semantic_decision: SemanticContractDecision | None = None,
+        harness_profile: HarnessProfile | None = None,
     ) -> TaskContract:
         deterministic = cls.build_deterministic(
             task_intent=task_intent,
@@ -215,6 +220,7 @@ class TaskContractService:
             current_audio_files=current_audio_files,
             current_video_files=current_video_files,
             task_context_decision=task_context_decision,
+            harness_profile=harness_profile,
         )
         return merge_semantic_contract(deterministic, semantic_decision)
 
@@ -229,6 +235,7 @@ class TaskContractService:
         current_audio_files: list[str] | None = None,
         current_video_files: list[str] | None = None,
         task_context_decision: TaskContextDecision | None = None,
+        harness_profile: HarnessProfile | None = None,
     ) -> TaskContract:
         objective = str(task_intent.objective or current_message or "").strip()
         text = f"{objective}\n{current_message or ''}"
@@ -405,6 +412,14 @@ class TaskContractService:
                 )
             )
 
+        requirements, acceptance_criteria, task_type, contract_sources, profile_metadata = _apply_harness_profile(
+            requirements=requirements,
+            acceptance_criteria=acceptance_criteria,
+            task_type=task_type,
+            harness_profile=harness_profile,
+            selected_resources=selected,
+        )
+
         return TaskContract(
             objective=objective,
             task_type=task_type,
@@ -413,7 +428,8 @@ class TaskContractService:
             selected_resources=tuple(selected),
             final_answer_required=True,
             allow_no_tool_final=not requirements,
-            contract_sources=("deterministic",),
+            contract_sources=contract_sources,
+            harness_profile=profile_metadata,
         )
 
     @staticmethod
@@ -479,6 +495,7 @@ def merge_semantic_contract(
             final_answer_required=contract.final_answer_required,
             allow_no_tool_final=contract.allow_no_tool_final,
             contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
+            harness_profile=contract.harness_profile,
             semantic_contract=metadata,
         )
 
@@ -522,7 +539,113 @@ def merge_semantic_contract(
         final_answer_required=contract.final_answer_required,
         allow_no_tool_final=contract.allow_no_tool_final and not requirements,
         contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
+        harness_profile=contract.harness_profile,
         semantic_contract=metadata,
+    )
+
+
+def _apply_harness_profile(
+    *,
+    requirements: list[EvidenceRequirement],
+    acceptance_criteria: list[AcceptanceCriterion],
+    task_type: str,
+    harness_profile: HarnessProfile | None,
+    selected_resources: list[ResourceRef],
+) -> tuple[list[EvidenceRequirement], list[AcceptanceCriterion], str, tuple[str, ...], dict[str, Any] | None]:
+    """Tighten deterministic contract requirements from the selected harness profile."""
+    contract_sources = ("deterministic",)
+    if harness_profile is None:
+        return requirements, acceptance_criteria, task_type, contract_sources, None
+
+    profile_metadata = harness_profile.to_metadata()
+    contract_sources = _append_unique(contract_sources, "harness_profile")
+    profile_name = harness_profile.name
+
+    if profile_name == "research":
+        if not _has_requirement(requirements, kind="tool_group", tool_group="web_research"):
+            requirements.append(
+                EvidenceRequirement(
+                    kind="tool_group",
+                    tool_group="web_research",
+                    coverage="any",
+                    min_count=1,
+                    description="Use web research tools before answering this external information request.",
+                )
+            )
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (
+                AcceptanceCriterion(
+                    kind="source_artifact",
+                    min_count=1,
+                    description="Produce at least one traceable web source before finalizing the answer.",
+                ),
+                AcceptanceCriterion(
+                    kind="source_detail",
+                    min_count=1,
+                    description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
+                ),
+                _web_final_answer_criterion(),
+                _web_source_reference_criterion(),
+            ),
+        )
+        task_type = "web_research"
+    elif profile_name == "coding":
+        if not _has_requirement(requirements, kind="tool_group", tool_group="workspace_read"):
+            requirements.append(
+                EvidenceRequirement(
+                    kind="tool_group",
+                    tool_group="workspace_read",
+                    coverage="any",
+                    min_count=1,
+                    description="Inspect the relevant workspace files or code context before answering.",
+                )
+            )
+        if harness_profile.task_type == "workspace_change" and not _has_requirement(requirements, kind="file_change"):
+            requirements.append(
+                EvidenceRequirement(
+                    kind="file_change",
+                    min_count=1,
+                    description="Record at least one workspace file change.",
+                )
+            )
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (_workspace_final_answer_criterion(),),
+        )
+        task_type = "code_change" if harness_profile.task_type == "workspace_change" else "workspace_read"
+    elif profile_name == "media":
+        if selected_resources:
+            acceptance_criteria = _append_acceptance_criteria(
+                acceptance_criteria,
+                (_media_final_answer_criterion(),),
+            )
+            task_type = "media_extraction"
+    elif profile_name == "ops":
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (
+                AcceptanceCriterion(
+                    kind="substantive_final_answer",
+                    min_response_chars=80,
+                    description="Report the operation performed, approval or validation status, and any remaining risk.",
+                ),
+            ),
+        )
+        task_type = "operations"
+
+    return requirements, acceptance_criteria, task_type, contract_sources, profile_metadata
+
+
+def _has_requirement(
+    requirements: list[EvidenceRequirement],
+    *,
+    kind: str,
+    tool_group: str = "",
+) -> bool:
+    return any(
+        item.kind == kind and (not tool_group or item.tool_group == tool_group)
+        for item in requirements
     )
 
 

@@ -211,7 +211,17 @@ class HarnessProfileService:
 
 
 def _has_marker(lowered: str, markers: tuple[str, ...]) -> bool:
-    return any(marker in lowered for marker in markers)
+    for marker in markers:
+        if _is_ascii_word_marker(marker):
+            if re.search(rf"(?<![A-Za-z0-9_]){re.escape(marker)}(?![A-Za-z0-9_])", lowered):
+                return True
+        elif marker in lowered:
+            return True
+    return False
+
+
+def _is_ascii_word_marker(marker: str) -> bool:
+    return bool(re.fullmatch(r"[a-z0-9_]+", marker))
 
 
 def _looks_like_research(lowered: str) -> bool:

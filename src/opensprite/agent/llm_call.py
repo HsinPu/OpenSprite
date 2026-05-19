@@ -11,6 +11,7 @@ from .retrieval import ProactiveRetrievalService
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
+from .harness_profile import HarnessProfile
 from .task_contract import (
     SemanticContractDecision,
     TaskContract,
@@ -74,6 +75,7 @@ class LlmCallService:
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         classify_semantic_contract: Callable[..., Awaitable[SemanticContractDecision | None]],
+        select_harness_profile: Callable[[TaskIntent], HarnessProfile],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -107,6 +109,7 @@ class LlmCallService:
         self._resolve_task_context = resolve_task_context
         self._resolve_task_objective = resolve_task_objective
         self._classify_semantic_contract = classify_semantic_contract
+        self._select_harness_profile = select_harness_profile
         self._emit_run_event = emit_run_event
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
@@ -291,6 +294,7 @@ class LlmCallService:
         )
         task_contract = None
         if effective_task_intent is not None:
+            harness_profile = self._select_harness_profile(effective_task_intent)
             deterministic_contract = TaskContractService.build_deterministic(
                 task_intent=effective_task_intent,
                 current_message=prompt_message,
@@ -299,6 +303,7 @@ class LlmCallService:
                 current_audio_files=user_audio_files,
                 current_video_files=user_video_files,
                 task_context_decision=task_context_decision,
+                harness_profile=harness_profile,
             )
             semantic_decision = None
             semantic_classifier_status = "disabled"
@@ -343,6 +348,14 @@ class LlmCallService:
                     run_id,
                     "task_contract.semantic_classified",
                     semantic_metadata,
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_contract.created",
+                    task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
