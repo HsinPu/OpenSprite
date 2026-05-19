@@ -44,6 +44,7 @@ const [
   toastStack,
   sidebarNav,
   curatorSettingsPage,
+  generalSettingsPage,
   app,
   settingsModal,
   chatClient,
@@ -72,6 +73,7 @@ const [
   read("src/components/ToastStack.vue"),
   read("src/components/SidebarNav.vue"),
   read("src/components/CuratorSettingsPage.vue"),
+  read("src/components/GeneralSettingsPage.vue"),
   read("src/App.vue"),
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
@@ -93,6 +95,7 @@ const [
 ]);
 
 const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsUi = `${settingsModal}\n${generalSettingsPage}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
@@ -148,7 +151,7 @@ assertIncludes(app, "deleteSessions: deleteSessionsNow", "conversation delete sk
 assertIncludes(app, "clearWebSessions: clearWebSessionsNow", "web conversation clear skips native confirm in client action");
 assertIncludes(app, "clearTaskCompletionHistory: clearTaskCompletionHistoryNow", "eval history clear skips native confirm in client action");
 assertIncludes(app, "confirmClearHistoryTitle", "eval history clear custom confirm title");
-assertIncludes(settingsModal, "clear-web-sessions", "settings clear web sessions event");
+assertIncludes(settingsUi, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
 assertIncludes(settingsModal, "run-browser-test", "browser settings manual test event");
@@ -202,9 +205,9 @@ assertNotIncludes(settingsModal, "@change=\"$emit('select-model', settingsState.
 assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot auth code rendering");
 assertIncludes(settingsModal, "showCodexAuthCard", "conditional Codex auth card");
 assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth card");
-assertIncludes(settingsModal, "form.showWorkState", "work state settings switch");
-assertIncludes(settingsModal, "form.showRunHistory", "run history settings switch");
-assertIncludes(settingsModal, "form.accessToken", "gateway access token setting");
+assertIncludes(settingsUi, "form.showWorkState", "work state settings switch");
+assertIncludes(settingsUi, "form.showRunHistory", "run history settings switch");
+assertIncludes(settingsUi, "form.accessToken", "gateway access token setting");
 assertIncludes(settingsModal, "run-task-completion-smoke", "task completion eval action");
 assertIncludes(settingsModal, "run-task-completion-live", "live task completion eval action");
 assertIncludes(settingsModal, "refresh-task-completion-history", "task completion history refresh action");
@@ -261,7 +264,7 @@ assertIncludes(settingsModal, "data-timeline-table", "data timeline table render
 assertIncludes(settingsModal, "toggleTimelineEntry", "data timeline row expansion");
 assertIncludes(settingsModal, "timelineItemLabel", "data timeline item labels");
 assertIncludes(copy, "timelineColumns", "data timeline table copy");
-assertNotIncludes(settingsModal, "props.copy.settings.general.update.branch", "update description hides branch");
+assertNotIncludes(settingsUi, "props.copy.settings.general.update.branch", "update description hides branch");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(chatClient, "buildSessionDeletePath", "conversation delete API path");
