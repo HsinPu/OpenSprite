@@ -1063,6 +1063,154 @@
           </div>
         </section>
 
+        <section v-if="section === 'permissions'" class="settings-page">
+          <p v-if="settingsState.permissionsLoading" class="settings-inline-status">{{ copy.settings.permissions.loading }}</p>
+          <p v-if="settingsState.permissionsNotice" class="settings-inline-status">{{ settingsState.permissionsNotice }}</p>
+          <p v-if="settingsState.permissionsError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.permissionsError }}
+          </p>
+
+          <h3>{{ copy.settings.permissions.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--switch">
+              <div>
+                <strong>{{ copy.settings.permissions.enabled.title }}</strong>
+                <span>{{ copy.settings.permissions.enabled.description }}</span>
+              </div>
+              <input v-model="settingsState.permissionsForm.enabled" type="checkbox" :disabled="settingsState.permissionsLoading" />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.permissions.approvalMode.title }}</strong>
+                <span>{{ copy.settings.permissions.approvalMode.description }}</span>
+              </div>
+              <select v-model="settingsState.permissionsForm.approvalMode" :disabled="settingsState.permissionsLoading">
+                <option value="">{{ copy.settings.permissions.inheritMode }}</option>
+                <option v-for="mode in permissionApprovalModeOptions" :key="mode" :value="mode">
+                  {{ copy.settings.permissions.approvalModes[mode] || mode }}
+                </option>
+              </select>
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.permissions.timeout.title }}</strong>
+                <span>{{ copy.settings.permissions.timeout.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.permissionsForm.approvalTimeoutSeconds"
+                type="number"
+                min="1"
+                step="1"
+                :disabled="settingsState.permissionsLoading"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field settings-row--stacked">
+              <div>
+                <strong>{{ copy.settings.permissions.allowedTools.title }}</strong>
+                <span>{{ copy.settings.permissions.allowedTools.description }}</span>
+              </div>
+              <textarea
+                v-model="settingsState.permissionsForm.allowedTools"
+                rows="3"
+                :placeholder="copy.settings.permissions.toolListPlaceholder"
+                :disabled="settingsState.permissionsLoading"
+              ></textarea>
+            </label>
+
+            <label class="settings-row settings-row--field settings-row--stacked">
+              <div>
+                <strong>{{ copy.settings.permissions.deniedTools.title }}</strong>
+                <span>{{ copy.settings.permissions.deniedTools.description }}</span>
+              </div>
+              <textarea
+                v-model="settingsState.permissionsForm.deniedTools"
+                rows="3"
+                :placeholder="copy.settings.permissions.toolListPlaceholder"
+                :disabled="settingsState.permissionsLoading"
+              ></textarea>
+            </label>
+          </div>
+
+          <h3>{{ copy.settings.permissions.riskLevelsTitle }}</h3>
+          <div class="settings-card settings-card--form">
+            <fieldset class="settings-fieldset">
+              <legend>{{ copy.settings.permissions.allowedRiskLevels.title }}</legend>
+              <p>{{ copy.settings.permissions.allowedRiskLevels.description }}</p>
+              <label v-for="riskLevel in permissionRiskLevelOptions" :key="`allow-${riskLevel}`" class="settings-check-row">
+                <input
+                  v-model="settingsState.permissionsForm.allowedRiskLevels"
+                  type="checkbox"
+                  :value="riskLevel"
+                  :disabled="settingsState.permissionsLoading"
+                />
+                <span>{{ permissionRiskLabel(riskLevel) }}</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="settings-fieldset">
+              <legend>{{ copy.settings.permissions.deniedRiskLevels.title }}</legend>
+              <p>{{ copy.settings.permissions.deniedRiskLevels.description }}</p>
+              <label v-for="riskLevel in permissionRiskLevelOptions" :key="`deny-${riskLevel}`" class="settings-check-row">
+                <input
+                  v-model="settingsState.permissionsForm.deniedRiskLevels"
+                  type="checkbox"
+                  :value="riskLevel"
+                  :disabled="settingsState.permissionsLoading"
+                />
+                <span>{{ permissionRiskLabel(riskLevel) }}</span>
+              </label>
+            </fieldset>
+          </div>
+
+          <h3>{{ copy.settings.permissions.approvalTitle }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--field settings-row--stacked">
+              <div>
+                <strong>{{ copy.settings.permissions.approvalRequiredTools.title }}</strong>
+                <span>{{ copy.settings.permissions.approvalRequiredTools.description }}</span>
+              </div>
+              <textarea
+                v-model="settingsState.permissionsForm.approvalRequiredTools"
+                rows="3"
+                :placeholder="copy.settings.permissions.toolListPlaceholder"
+                :disabled="settingsState.permissionsLoading"
+              ></textarea>
+            </label>
+
+            <fieldset class="settings-fieldset">
+              <legend>{{ copy.settings.permissions.approvalRequiredRiskLevels.title }}</legend>
+              <p>{{ copy.settings.permissions.approvalRequiredRiskLevels.description }}</p>
+              <label v-for="riskLevel in permissionRiskLevelOptions" :key="`approval-${riskLevel}`" class="settings-check-row">
+                <input
+                  v-model="settingsState.permissionsForm.approvalRequiredRiskLevels"
+                  type="checkbox"
+                  :value="riskLevel"
+                  :disabled="settingsState.permissionsLoading"
+                />
+                <span>{{ permissionRiskLabel(riskLevel) }}</span>
+              </label>
+            </fieldset>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.permissions.currentTitle }}</strong>
+                <span>{{ permissionSummary }}</span>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.permissionsLoading"
+                @click="$emit('save-permissions-settings')"
+              >
+                {{ copy.settings.permissions.save }}
+              </button>
+            </div>
+          </div>
+        </section>
+
         <section v-if="section === 'search'" class="settings-page">
           <p v-if="settingsState.searchLoading" class="settings-inline-status">{{ copy.settings.search.loading }}</p>
           <p v-if="settingsState.searchNotice" class="settings-inline-status">{{ settingsState.searchNotice }}</p>
@@ -3727,6 +3875,34 @@ const networkSummary = computed(() => {
   return props.copy.settings.network.proxyConfigured(active);
 });
 
+const permissionRiskLevelOptions = computed(() => {
+  const options = props.settingsState.permissions?.risk_level_options;
+  return Array.isArray(options) && options.length ? options : [];
+});
+
+const permissionApprovalModeOptions = computed(() => {
+  const options = props.settingsState.permissions?.approval_mode_options;
+  return Array.isArray(options) && options.length ? options : ["ask", "auto", "block"];
+});
+
+const permissionSummary = computed(() => {
+  const form = props.settingsState.permissionsForm || {};
+  const mode = form.approvalMode || props.copy.settings.permissions.inheritMode;
+  const required = [
+    ...(Array.isArray(form.approvalRequiredRiskLevels) ? form.approvalRequiredRiskLevels : []),
+    ...String(form.approvalRequiredTools || "").split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
+  ];
+  return props.copy.settings.permissions.summary(
+    form.enabled !== false,
+    props.copy.settings.permissions.approvalModes[mode] || mode,
+    required.length,
+  );
+});
+
+function permissionRiskLabel(riskLevel) {
+  return props.copy.settings.permissions.riskLevels?.[riskLevel] || riskLevel;
+}
+
 const logLevelOptions = computed(() => {
   const levels = props.settingsState.log?.levels;
   return Array.isArray(levels) && levels.length ? levels : ["DEBUG", "INFO", "WARNING", "ERROR"];
@@ -3844,6 +4020,7 @@ const emit = defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "save-permissions-settings",
   "load-search-searxng-options",
   "save-search-settings",
   "save-browser-settings",

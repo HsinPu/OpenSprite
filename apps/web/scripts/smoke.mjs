@@ -59,7 +59,9 @@ const [
   scheduleDefaults,
   searchDefaults,
   settingsNormalizers,
+  permissionsDefaults,
   networkSettingsActions,
+  permissionsSettingsActions,
   providerSettingsActions,
   scheduleSettingsActions,
   copy,
@@ -89,14 +91,16 @@ const [
   read("src/composables/scheduleDefaults.js"),
   read("src/composables/searchDefaults.js"),
   read("src/composables/settingsNormalizers.js"),
+  read("src/composables/permissionsDefaults.js"),
   read("src/composables/useNetworkSettingsActions.js"),
+  read("src/composables/usePermissionsSettingsActions.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useScheduleSettingsActions.js"),
   read("src/i18n/copy.js"),
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${permissionsDefaults}\n${networkSettingsActions}\n${permissionsSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 const settingsUi = `${settingsModal}\n${generalSettingsPage}\n${shortcutsSettingsPage}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
@@ -279,6 +283,8 @@ assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch")
 assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
+assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch");
+assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
 assertIncludes(browserDefaults, 'DEFAULT_BROWSER_LAUNCH_ARGS = "--no-sandbox"', "browser default launch args");
@@ -286,6 +292,11 @@ assertIncludes(browserDefaults, 'DEFAULT_BROWSER_BACKEND = "agent-browser"', "br
 assertIncludes(browserDefaults, "createDefaultBrowserState", "browser default state factory");
 assertIncludes(browserSettingsActions, "normalizeBrowserSettings", "browser actions use shared normalizer");
 assertIncludes(settingsLogic, "createDefaultBrowserForm", "settings state uses shared browser form factory");
+assertIncludes(settingsLogic, "createDefaultPermissionsForm", "settings state uses shared permissions form factory");
+assertIncludes(settingsModal, "section === 'permissions'", "permissions settings section");
+assertIncludes(settingsModal, "save-permissions-settings", "permissions settings save event");
+assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
+assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");

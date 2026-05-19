@@ -56,6 +56,7 @@ const groups = computed(() => [
       { section: "mcp", icon: "◇", title: props.copy.settingsTitles.mcp },
       { section: "schedule", icon: "◷", title: props.copy.settingsTitles.schedule },
       { section: "network", icon: "⇄", title: props.copy.settingsTitles.network },
+      { section: "permissions", icon: "⚑", title: props.copy.settingsTitles.permissions },
       { section: "search", icon: "⌕", title: props.copy.settingsTitles.search },
       { section: "browser", icon: "◉", title: props.copy.settingsTitles.browser },
       { section: "log", icon: "≋", title: props.copy.settingsTitles.log },

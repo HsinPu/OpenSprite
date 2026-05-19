@@ -1,6 +1,7 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
+import { createDefaultPermissionsForm, createDefaultPermissionsState } from "./permissionsDefaults";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
@@ -148,6 +149,11 @@ export function createSettingsState() {
     networkNotice: "",
     network: createDefaultNetworkState(),
     networkForm: createDefaultNetworkForm(),
+    permissionsLoading: false,
+    permissionsError: "",
+    permissionsNotice: "",
+    permissions: createDefaultPermissionsState(),
+    permissionsForm: createDefaultPermissionsForm(),
     searchLoading: false,
     searchOptionsLoading: false,
     searchError: "",

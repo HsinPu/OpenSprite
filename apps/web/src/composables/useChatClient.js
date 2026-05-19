@@ -7,6 +7,7 @@ import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
 import { useNetworkSettingsActions } from "./useNetworkSettingsActions";
+import { usePermissionsSettingsActions } from "./usePermissionsSettingsActions";
 import { useProviderSettingsActions } from "./useProviderSettingsActions";
 import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
@@ -1921,6 +1922,13 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
+  const { loadPermissionsSettings, savePermissionsSettings } = usePermissionsSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy,
+    setSettingsSuccess,
+  });
+
   const { loadSearchSettings, loadSearxngOptions, saveSearchSettings } = useSearchSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -3040,6 +3048,10 @@ export function useChatClient() {
       loadNetworkSettings();
       return;
     }
+    if (sectionName === "permissions") {
+      loadPermissionsSettings();
+      return;
+    }
     if (sectionName === "search") {
       loadSearchSettings();
       return;
@@ -3970,6 +3982,7 @@ export function useChatClient() {
     loadChannelSettings,
     loadScheduleSettings,
     loadNetworkSettings,
+    loadPermissionsSettings,
     loadSearchSettings,
     loadSearxngOptions,
     loadBrowserSettings,
@@ -4021,6 +4034,7 @@ export function useChatClient() {
     applyMcpJson,
     saveScheduleSettings,
     saveNetworkSettings,
+    savePermissionsSettings,
     saveSearchSettings,
     saveBrowserSettings,
     runBrowserTest,

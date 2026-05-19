@@ -390,7 +390,10 @@
 :root[data-color-scheme="dark"] .settings-row input[type="number"]:focus,
 :root[data-color-scheme="dark"] .settings-row--field input[type="text"],
 :root[data-color-scheme="dark"] .settings-row--field input[type="number"],
+:root[data-color-scheme="dark"] .settings-row--field textarea,
 :root[data-color-scheme="dark"] .settings-row--field select,
+:root[data-color-scheme="dark"] .settings-fieldset,
+:root[data-color-scheme="dark"] .settings-check-row,
 :root[data-color-scheme="dark"] .settings-choice,
 :root[data-color-scheme="dark"] kbd {
   background: var(--surface);
@@ -420,6 +423,11 @@
 :root[data-color-scheme="dark"] .switch:checked {
   border-color: var(--accent);
   background: var(--accent);
+}
+
+:root[data-color-scheme="dark"] .settings-fieldset legend,
+:root[data-color-scheme="dark"] .settings-check-row {
+  color: var(--text);
 }
 
 * {
@@ -5326,13 +5334,62 @@ button:disabled {
   grid-template-columns: minmax(220px, 0.72fr) minmax(220px, 1fr);
 }
 
+.settings-row--stacked {
+  grid-template-columns: 1fr;
+}
+
 .settings-row--field input[type="text"],
 .settings-row--field input[type="number"],
+.settings-row--field textarea,
 .settings-row--field select {
   width: 100%;
   min-width: 0;
   background: #ffffff;
   border-color: #d7d7d7;
+}
+
+.settings-row--field textarea {
+  min-height: 76px;
+  resize: vertical;
+  color: inherit;
+  font: inherit;
+}
+
+.settings-fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.settings-fieldset legend {
+  padding: 0 6px;
+  color: #151515;
+  font-weight: 700;
+}
+
+.settings-fieldset p {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  color: #777777;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.settings-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #242424;
+  font-size: 0.85rem;
 }
 
 .settings-row--choice-list {
