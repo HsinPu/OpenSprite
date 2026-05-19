@@ -443,23 +443,34 @@ const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 
 const harnessSummaryRows = computed(() => {
   const labels = props.copy.trace.harnessLabels || {};
   const profilePayload = latestEventPayload("harness_profile.selected");
+  const policyPayload = latestEventPayload("harness_policy.selected");
+  const checkpointPayload = latestEventPayload("harness_checkpoint.recorded");
   const contractPayload = latestEventPayload("task_contract.created");
   const completionPayload = latestEventPayload("completion_gate.evaluated");
   const autoContinueEvent = latestEventWithPrefix("auto_continue.");
-  const contractProfile = contractPayload.harness_profile || contractPayload.harnessProfile || {};
+  const checkpointContract = checkpointPayload.task_contract || checkpointPayload.taskContract || {};
+  const checkpointCompletion = checkpointPayload.completion || {};
+  const checkpointProgress = checkpointPayload.work_progress || checkpointPayload.workProgress || {};
+  const contractSource = Object.keys(checkpointContract).length ? checkpointContract : contractPayload;
+  const contractProfile = contractSource.harness_profile || contractSource.harnessProfile || checkpointPayload.harness_profile || checkpointPayload.harnessProfile || {};
+  const policySource = Object.keys(policyPayload).length ? policyPayload : (checkpointPayload.harness_policy || checkpointPayload.harnessPolicy || {});
+  const completionSource = Object.keys(checkpointCompletion).length ? checkpointCompletion : completionPayload;
   const profileName = profilePayload.name || contractProfile.name || "";
-  const taskType = contractPayload.task_type || contractPayload.taskType || profilePayload.task_type || profilePayload.taskType || "";
-  if (!profileName && !taskType && !Object.keys(contractPayload).length) {
+  const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
+  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length) {
     return [];
   }
   const rows = [
     { label: labels.profile || "Profile", value: profileName },
     { label: labels.taskType || "Task", value: taskType },
+    { label: labels.policy || "Policy", value: policySource.name },
     { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy },
     { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy },
-    { label: labels.evidence || "Evidence", value: countPayloadItems(contractPayload.requirements) },
-    { label: labels.criteria || "Criteria", value: countPayloadItems(contractPayload.acceptance_criteria || contractPayload.acceptanceCriteria) },
-    { label: labels.completion || "Completion", value: compactJoin([completionPayload.status, completionPayload.reason], " · ") },
+    { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements) },
+    { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria) },
+    { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · ") },
+    { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction },
+    { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount },
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
@@ -642,6 +653,13 @@ function eventSummary(event) {
   const payload = event.payload || {};
   if (event.eventType === "harness_profile.selected") {
     return compactJoin([payload.name, payload.task_type || payload.taskType, payload.reason], " · ");
+  }
+  if (event.eventType === "harness_policy.selected") {
+    return compactJoin([payload.name, `${countPayloadItems(payload.allowed_tools || payload.allowedTools)} tools`, payload.reason], " · ");
+  }
+  if (event.eventType === "harness_checkpoint.recorded") {
+    const completion = payload.completion || {};
+    return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");
   }
   if (event.eventType === "task_contract.created") {
     return compactJoin([
