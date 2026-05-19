@@ -678,6 +678,9 @@ function eventSummary(event) {
     const completion = payload.completion || {};
     return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");
   }
+  if (String(event.eventType || "").startsWith("tool_permission.")) {
+    return compactJoin([payload.tool_name || payload.toolName, payload.decision, payload.reason], " · ");
+  }
   if (event.eventType === "task_contract.created") {
     return compactJoin([
       payload.task_type || payload.taskType,

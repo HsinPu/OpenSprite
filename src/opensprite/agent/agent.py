@@ -497,6 +497,26 @@ class AgentLoop:
         """Create an ask-mode approval request for the current run context."""
         return await self.permissions.handle_tool_permission_request(tool_name, params, decision)
 
+    async def _emit_tool_permission_decision(
+        self,
+        event_type: str,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Persist and publish a tool permission decision for the current run."""
+        session_id = self.turn_context.current_session_id()
+        run_id = self.turn_context.current_run_id()
+        if not session_id or not run_id:
+            return
+        await self._emit_run_event(
+            session_id,
+            run_id,
+            event_type,
+            payload,
+            channel=self.turn_context.current_channel(),
+            external_chat_id=self.turn_context.current_external_chat_id(),
+        )
+
     async def _emit_permission_request_event(
         self,
         event_type: str,
@@ -768,6 +788,7 @@ class AgentLoop:
         )
         self.tools = self._setup_tools(tools)
         self.tools.set_permission_request_handler(self._handle_tool_permission_request)
+        self.tools.set_permission_decision_hook(self._emit_tool_permission_decision)
         self.subagents = SubagentRunService(
             storage=self.storage,
             tools=self.tools,

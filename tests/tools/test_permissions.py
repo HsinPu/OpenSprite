@@ -68,6 +68,39 @@ def test_registry_blocks_denied_risk_levels():
     assert result == "Error: Tool 'web_fetch' blocked by permission policy: risk level(s) denied: network."
 
 
+def test_registry_emits_permission_decision_trace_events():
+    async def scenario():
+        events = []
+        registry = ToolRegistry(
+            permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"], denied_tools=["exec"])
+        )
+        registry.register(EchoTool("read_file"))
+        registry.register(EchoTool("exec"))
+
+        async def on_decision(event_type, tool_name, payload):
+            events.append((event_type, tool_name, payload))
+
+        registry.set_permission_decision_hook(on_decision)
+        allowed_result = await registry.execute("read_file", {})
+        denied_result = await registry.execute("exec", {})
+        return allowed_result, denied_result, events
+
+    allowed_result, denied_result, events = asyncio.run(scenario())
+
+    assert allowed_result == "ran:read_file"
+    assert denied_result == "Error: Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools."
+    assert [event[0] for event in events] == [
+        "tool_permission.checked",
+        "tool_permission.allowed",
+        "tool_permission.checked",
+        "tool_permission.denied",
+    ]
+    assert events[0][2]["risk_levels"] == ["read"]
+    assert events[1][2]["decision"] == "allowed"
+    assert events[3][2]["decision"] == "denied"
+    assert events[3][2]["matched_denied_tools"] == ["exec"]
+
+
 def test_browser_actions_are_network_side_effect_tools():
     assert ToolPermissionPolicy.risk_levels_for_tool("browser_navigate") == frozenset(
         {"network", "external_side_effect"}

@@ -75,6 +75,14 @@ class PermissionDecision:
     allowed: bool
     reason: str = ""
     requires_approval: bool = False
+    risk_levels: tuple[str, ...] = ()
+    approval_mode: str | None = None
+    matched_allowed_tools: tuple[str, ...] = ()
+    matched_denied_tools: tuple[str, ...] = ()
+    matched_allowed_risk_levels: tuple[str, ...] = ()
+    matched_denied_risk_levels: tuple[str, ...] = ()
+    matched_approval_required_tools: tuple[str, ...] = ()
+    matched_approval_required_risk_levels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -139,6 +147,10 @@ class ToolPermissionPolicy:
         return any(fnmatch.fnmatch(value, pattern) for pattern in patterns)
 
     @staticmethod
+    def _matching_patterns(value: str, patterns: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(pattern for pattern in patterns if fnmatch.fnmatch(value, pattern))
+
+    @staticmethod
     def risk_levels_for_tool(tool_name: str, tool_risk_levels: Any = None) -> frozenset[str]:
         declared_risks = _normalize_tool_risk_levels(tool_risk_levels)
         if declared_risks is not None:
@@ -175,35 +187,109 @@ class ToolPermissionPolicy:
         tool_risk_levels: Any = None,
     ) -> PermissionDecision:
         if not self.enabled:
-            return PermissionDecision(True)
+            return self._decision(True, tool_name, frozenset(), reason="permission policy disabled")
 
         risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
-        if not self._matches_any(tool_name, self.allowed_tools):
-            return PermissionDecision(False, f"tool '{tool_name}' is not in allowed_tools")
-        if self._matches_any(tool_name, self.denied_tools):
-            return PermissionDecision(False, f"tool '{tool_name}' is listed in denied_tools")
+        matched_allowed_tools = self._matching_patterns(tool_name, self.allowed_tools)
+        matched_denied_tools = self._matching_patterns(tool_name, self.denied_tools)
+        matched_allowed_risks = tuple(sorted(risk for risk in risks if risk in self.allowed_risk_levels))
+        matched_denied_risks = tuple(sorted(risks & self.denied_risk_levels))
+        if not matched_allowed_tools:
+            return self._decision(False, tool_name, risks, reason=f"tool '{tool_name}' is not in allowed_tools")
+        if matched_denied_tools:
+            return self._decision(
+                False,
+                tool_name,
+                risks,
+                reason=f"tool '{tool_name}' is listed in denied_tools",
+                matched_allowed_tools=matched_allowed_tools,
+                matched_denied_tools=matched_denied_tools,
+                matched_allowed_risk_levels=matched_allowed_risks,
+                matched_denied_risk_levels=matched_denied_risks,
+            )
         denied_risks = sorted(risks & self.denied_risk_levels)
         if denied_risks:
-            return PermissionDecision(False, f"risk level(s) denied: {', '.join(denied_risks)}")
+            return self._decision(
+                False,
+                tool_name,
+                risks,
+                reason=f"risk level(s) denied: {', '.join(denied_risks)}",
+                matched_allowed_tools=matched_allowed_tools,
+                matched_allowed_risk_levels=matched_allowed_risks,
+                matched_denied_risk_levels=matched_denied_risks,
+            )
         disallowed_risks = sorted(risk for risk in risks if risk not in self.allowed_risk_levels)
         if disallowed_risks:
-            return PermissionDecision(False, f"risk level(s) not allowed: {', '.join(disallowed_risks)}")
+            return self._decision(
+                False,
+                tool_name,
+                risks,
+                reason=f"risk level(s) not allowed: {', '.join(disallowed_risks)}",
+                matched_allowed_tools=matched_allowed_tools,
+                matched_allowed_risk_levels=matched_allowed_risks,
+            )
         if include_approval:
-            if self._matches_any(tool_name, self.approval_required_tools):
-                return PermissionDecision(
+            matched_approval_tools = self._matching_patterns(tool_name, self.approval_required_tools)
+            if matched_approval_tools:
+                return self._decision(
                     False,
+                    tool_name,
+                    risks,
                     f"tool '{tool_name}' requires user approval",
                     requires_approval=approval_requires_callback,
+                    matched_allowed_tools=matched_allowed_tools,
+                    matched_allowed_risk_levels=matched_allowed_risks,
+                    matched_approval_required_tools=matched_approval_tools,
                 )
             approval_risks = sorted(risks & self.approval_required_risk_levels)
             if approval_risks:
-                return PermissionDecision(
+                return self._decision(
                     False,
+                    tool_name,
+                    risks,
                     f"risk level(s) require user approval: {', '.join(approval_risks)}",
                     requires_approval=approval_requires_callback,
+                    matched_allowed_tools=matched_allowed_tools,
+                    matched_allowed_risk_levels=matched_allowed_risks,
+                    matched_approval_required_risk_levels=tuple(approval_risks),
                 )
 
-        return PermissionDecision(True)
+        return self._decision(
+            True,
+            tool_name,
+            risks,
+            matched_allowed_tools=matched_allowed_tools,
+            matched_allowed_risk_levels=matched_allowed_risks,
+        )
+
+    def _decision(
+        self,
+        allowed: bool,
+        tool_name: str,
+        risks: frozenset[str],
+        reason: str = "",
+        *,
+        requires_approval: bool = False,
+        matched_allowed_tools: tuple[str, ...] = (),
+        matched_denied_tools: tuple[str, ...] = (),
+        matched_allowed_risk_levels: tuple[str, ...] = (),
+        matched_denied_risk_levels: tuple[str, ...] = (),
+        matched_approval_required_tools: tuple[str, ...] = (),
+        matched_approval_required_risk_levels: tuple[str, ...] = (),
+    ) -> PermissionDecision:
+        return PermissionDecision(
+            allowed,
+            reason,
+            requires_approval=requires_approval,
+            risk_levels=tuple(sorted(risks)),
+            approval_mode=self.approval_mode,
+            matched_allowed_tools=matched_allowed_tools,
+            matched_denied_tools=matched_denied_tools,
+            matched_allowed_risk_levels=matched_allowed_risk_levels,
+            matched_denied_risk_levels=matched_denied_risk_levels,
+            matched_approval_required_tools=matched_approval_required_tools,
+            matched_approval_required_risk_levels=matched_approval_required_risk_levels,
+        )
 
 
 class CompositeToolPermissionPolicy(ToolPermissionPolicy):
@@ -220,7 +306,8 @@ class CompositeToolPermissionPolicy(ToolPermissionPolicy):
             decision = policy.check(tool_name, params, tool_risk_levels=tool_risk_levels)
             if not decision.allowed:
                 return decision
-        return PermissionDecision(True)
+        risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
+        return PermissionDecision(True, risk_levels=tuple(sorted(risks)))
 
 
 def _normalize_tool_risk_levels(value: Any) -> frozenset[str] | None:
