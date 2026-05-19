@@ -18,5 +18,8 @@ apps/web/dist/
 # local agent instructions
 AGENTS.md
 
+# local research notes
+ai-agent-harness-report.md
+
 # opensprite runtime data (should live in user home)
 ~/.opensprite/
