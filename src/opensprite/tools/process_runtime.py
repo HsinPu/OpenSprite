@@ -250,6 +250,39 @@ class BackgroundProcessManager:
             return
         await self._persist_stored_process(stored_process, event_type=event_type)
 
+    async def _add_session_run_event(
+        self,
+        session: BackgroundSession,
+        event_type: str,
+        payload: dict[str, object],
+    ) -> None:
+        if self.storage is None or session.owner_session_id is None or session.owner_run_id is None:
+            return
+        try:
+            run = await self.storage.get_run(session.owner_session_id, session.owner_run_id)
+            if run is None:
+                return
+            await self.storage.add_run_event(
+                session.owner_session_id,
+                session.owner_run_id,
+                event_type,
+                payload={
+                    "process_session_id": session.session_id,
+                    "command": session.command,
+                    "cwd": session.cwd,
+                    "termination_reason": session.termination_reason,
+                    "exit_code": session.exit_code,
+                    **payload,
+                },
+                created_at=time.time(),
+            )
+        except Exception:
+            logger.exception(
+                "background.process.event-persist-failed | session_id={} event_type={}",
+                session.session_id,
+                event_type,
+            )
+
     def _schedule_persist_session(self, session: BackgroundSession, *, event_type: str | None = None) -> None:
         if self.storage is None or session.owner_session_id is None:
             return
@@ -359,11 +392,21 @@ class BackgroundProcessManager:
             if self._should_notify_on_exit(session):
                 try:
                     await session.exit_notifier(session)
+                    await self._add_session_run_event(
+                        session,
+                        "background_process.notification_sent",
+                        {"status": "sent"},
+                    )
                 except Exception:
                     logger.exception(
                         "background.process.notify-failed | session_id={} reason={}",
                         session.session_id,
                         session.termination_reason or "unknown",
+                    )
+                    await self._add_session_run_event(
+                        session,
+                        "background_process.notification_failed",
+                        {"status": "failed"},
                     )
 
     async def _settle_session(self, session: BackgroundSession) -> BackgroundSession:

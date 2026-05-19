@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from opensprite.storage import MemoryStorage
 from opensprite.tools.process import ProcessTool
 from opensprite.tools.process_runtime import BackgroundProcessManager
 import opensprite.tools.shell as shell_module
@@ -276,6 +277,88 @@ def test_background_session_exit_notifier_runs_on_natural_completion(tmp_path):
         assert notifications == [(session_id, "exit", "notify done")]
 
     asyncio.run(run())
+
+
+def test_background_session_exit_notifier_records_sent_event(tmp_path):
+    async def run() -> list[str]:
+        storage = MemoryStorage()
+        await storage.create_run("chat-1", "run-1", status="running")
+        manager = BackgroundProcessManager(storage=storage)
+
+        async def notify(_session):
+            return None
+
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_notification_factory=lambda: notify,
+            background_session_owner_factory=lambda: {
+                "session_id": "chat-1",
+                "run_id": "run-1",
+            },
+        )
+
+        await exec_tool.execute(
+            command=_python_shell_command("print('notify done', flush=True)"),
+            background=True,
+            timeout_seconds=5,
+        )
+        deadline = asyncio.get_running_loop().time() + 5
+        events = await storage.get_run_events("chat-1", "run-1")
+        while len(events) < 3 and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.05)
+            events = await storage.get_run_events("chat-1", "run-1")
+        return [event.event_type for event in events]
+
+    assert asyncio.run(run()) == [
+        "background_process.started",
+        "background_process.completed",
+        "background_process.notification_sent",
+    ]
+
+
+def test_background_session_exit_notifier_records_failed_event(tmp_path):
+    async def run() -> tuple[list[str], dict]:
+        storage = MemoryStorage()
+        await storage.create_run("chat-1", "run-1", status="running")
+        manager = BackgroundProcessManager(storage=storage)
+
+        async def notify(_session):
+            raise RuntimeError("notify boom")
+
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_notification_factory=lambda: notify,
+            background_session_owner_factory=lambda: {
+                "session_id": "chat-1",
+                "run_id": "run-1",
+            },
+        )
+
+        await exec_tool.execute(
+            command=_python_shell_command("print('notify done', flush=True)"),
+            background=True,
+            timeout_seconds=5,
+        )
+        deadline = asyncio.get_running_loop().time() + 5
+        events = await storage.get_run_events("chat-1", "run-1")
+        while len(events) < 3 and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.05)
+            events = await storage.get_run_events("chat-1", "run-1")
+        return [event.event_type for event in events], events[-1].payload
+
+    event_types, payload = asyncio.run(run())
+
+    assert event_types == [
+        "background_process.started",
+        "background_process.completed",
+        "background_process.notification_failed",
+    ]
+    assert payload["status"] == "failed"
+    assert payload["process_session_id"]
 
 
 def test_background_session_quiet_success_does_not_notify_by_default(tmp_path):
