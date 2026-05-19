@@ -446,7 +446,9 @@ const harnessSummaryRows = computed(() => {
   const policyPayload = latestEventPayload("harness_policy.selected");
   const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
   const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
-  const checkpointPayload = Object.keys(eventCheckpointPayload).length ? eventCheckpointPayload : partCheckpointPayload;
+  const hasEventCheckpoint = Object.keys(eventCheckpointPayload).length > 0;
+  const checkpointPayload = hasEventCheckpoint ? eventCheckpointPayload : partCheckpointPayload;
+  const checkpointSource = hasEventCheckpoint ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
   const contractPayload = latestEventPayload("task_contract.created");
   const completionPayload = latestEventPayload("completion_gate.evaluated");
   const autoContinueEvent = latestEventWithPrefix("auto_continue.");
@@ -470,9 +472,12 @@ const harnessSummaryRows = computed(() => {
     { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy },
     { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements) },
     { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria) },
+    { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence) },
+    { label: labels.policyRisks || "Risk", value: formatPolicyRisks(policySource, labels) },
     { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · ") },
     { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction },
     { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount },
+    { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels) },
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
@@ -734,6 +739,55 @@ function countPayloadItems(value) {
 
 function compactJoin(values, separator) {
   return values.map((value) => String(value || "").trim()).filter(Boolean).join(separator);
+}
+
+function payloadList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function formatPayloadList(items, maxItems = 3, separator = ", ") {
+  const values = payloadList(items);
+  if (!values.length) {
+    return "";
+  }
+  const visible = values.slice(0, maxItems).join(separator);
+  const remaining = values.length - maxItems;
+  return remaining > 0 ? `${visible} +${remaining}` : visible;
+}
+
+function formatMissingEvidence(value) {
+  return formatPayloadList(payloadList(value).map(previewText), 2, "; ");
+}
+
+function formatPolicyRisks(policy, labels) {
+  if (!policy || !Object.keys(policy).length) {
+    return "";
+  }
+  const allowed = formatPayloadList(policy.allowed_risk_levels || policy.allowedRiskLevels);
+  const denied = formatPayloadList(policy.denied_risk_levels || policy.deniedRiskLevels);
+  const approval = formatPayloadList(policy.approval_required_risk_levels || policy.approvalRequiredRiskLevels);
+  return compactJoin([
+    allowed ? `${labels.policyAllowed || "allow"} ${allowed}` : "",
+    denied ? `${labels.policyDenied || "deny"} ${denied}` : "",
+    approval ? `${labels.policyApproval || "approval"} ${approval}` : "",
+  ], " · ");
+}
+
+function formatCheckpoint(payload, source, labels) {
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+  const passIndex = payload.pass_index ?? payload.passIndex;
+  const attempts = payload.auto_continue_attempts ?? payload.autoContinueAttempts;
+  return compactJoin([
+    passIndex !== undefined && passIndex !== null ? `${labels.checkpointPass || "pass"} ${passIndex}` : "",
+    attempts !== undefined && attempts !== null ? `${labels.checkpointAttempts || "attempts"} ${attempts}` : "",
+    source === "part" ? (labels.checkpointPart || "durable part") : "",
+    source === "event" ? (labels.checkpointEvent || "event") : "",
+  ], " · ");
 }
 
 function partSummary(part) {
