@@ -1212,16 +1212,22 @@
 
           <h3>{{ copy.settings.permissions.harnessPreview.title }}</h3>
           <div class="settings-card provider-card">
+            <p v-if="settingsState.harnessPolicyPreviewLoading" class="settings-inline-status">
+              {{ copy.settings.permissions.harnessPreview.loading }}
+            </p>
+            <p v-if="settingsState.harnessPolicyPreviewError" class="settings-inline-status settings-inline-status--error">
+              {{ settingsState.harnessPolicyPreviewError }}
+            </p>
             <div class="provider-row provider-row--empty">
               <div>
                 <strong>{{ copy.settings.permissions.harnessPreview.effectiveTitle }}</strong>
                 <span>{{ copy.settings.permissions.harnessPreview.effectiveDescription }}</span>
               </div>
             </div>
-            <div v-for="row in harnessPolicyPreviewRows" :key="row.profile" class="provider-row provider-row--stacked">
+            <div v-for="row in harnessPolicyPreviewRows" :key="row.key" class="provider-row provider-row--stacked">
               <div class="provider-row__content">
                 <div class="provider-row__main">
-                  <span class="provider-row__mark" aria-hidden="true">{{ row.profile.slice(0, 2) }}</span>
+                  <span class="provider-row__mark" aria-hidden="true">{{ row.profileName.slice(0, 2) }}</span>
                   <div>
                     <div class="provider-row__title">
                       <strong>{{ row.title }}</strong>
@@ -1232,9 +1238,12 @@
                 </div>
               </div>
               <div class="settings-policy-preview">
-                <span>{{ copy.settings.permissions.harnessPreview.allowed(row.allowed) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.harnessAllowed(row.harnessAllowed) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.userAllowed(row.userAllowed) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.effectiveAllowed(row.effectiveAllowed) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.denied(row.denied) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.approval(row.approval) }}</span>
+                <span v-if="row.maxIterations">{{ copy.settings.permissions.harnessPreview.maxIterations(row.maxIterations) }}</span>
               </div>
             </div>
           </div>
@@ -3932,7 +3941,38 @@ function permissionRiskLabel(riskLevel) {
   return props.copy.settings.permissions.riskLevels?.[riskLevel] || riskLevel;
 }
 
-const harnessPolicyPreviewRows = computed(() => props.copy.settings.permissions.harnessPreview.rows);
+const harnessPolicyPreviewRows = computed(() => {
+  const rows = Array.isArray(props.settingsState.harnessPolicyPreview?.rows) ? props.settingsState.harnessPolicyPreview.rows : [];
+  const userPermissions = props.settingsState.harnessPolicyPreview?.user_permissions || props.settingsState.permissions || {};
+  return rows.map((row) => {
+    const profile = row.profile || {};
+    const policy = row.policy || {};
+    const effective = row.effective || {};
+    const profileName = profile.name || "unknown";
+    const taskType = profile.task_type || "task";
+    return {
+      key: `${profileName}:${taskType}:${policy.name || "policy"}`,
+      profileName,
+      title: props.copy.settings.permissions.harnessPreview.rowTitle(profileName, taskType),
+      policy: policy.name || "policy",
+      description: policy.reason || profile.reason || "",
+      harnessAllowed: formatRiskList(policy.allowed_risk_levels),
+      userAllowed: formatRiskList(userPermissions.allowed_risk_levels),
+      effectiveAllowed: formatRiskList(effective.allowed_risk_levels),
+      denied: formatRiskList(effective.denied_risk_levels),
+      approval: formatRiskList(effective.approval_required_risk_levels),
+      maxIterations: policy.max_tool_iterations || null,
+    };
+  });
+});
+
+function formatRiskList(value) {
+  const risks = Array.isArray(value) ? value : [];
+  if (!risks.length) {
+    return props.copy.settings.permissions.harnessPreview.none;
+  }
+  return risks.map(permissionRiskLabel).join(", ");
+}
 
 const logLevelOptions = computed(() => {
   const levels = props.settingsState.log?.levels;

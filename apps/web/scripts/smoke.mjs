@@ -284,6 +284,7 @@ assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings te
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
 assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch");
+assertIncludes(settingsLogic, "/api/settings/harness-policy-preview", "harness policy preview fetch");
 assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
@@ -298,7 +299,6 @@ assertIncludes(settingsModal, "save-permissions-settings", "permissions settings
 assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
 assertIncludes(settingsModal, "harnessPolicyPreviewRows", "permissions harness policy preview rendering");
 assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
-assertIncludes(copy, "operations_approval_policy", "harness policy preview copy");
 assertIncludes(styles, ".settings-policy-preview", "harness policy preview styling");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");

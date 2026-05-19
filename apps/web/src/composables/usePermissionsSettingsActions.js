@@ -8,10 +8,24 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
       const payload = await requestSettingsJson("/api/settings/permissions");
       settingsState.permissions = normalizePermissionsSettings(payload.permissions || {});
       syncPermissionsForm(settingsState);
+      await loadHarnessPolicyPreview();
     } catch (error) {
       settingsState.permissionsError = error?.message || copy.value.notices.permissionsLoadFailed;
     } finally {
       settingsState.permissionsLoading = false;
+    }
+  }
+
+  async function loadHarnessPolicyPreview() {
+    settingsState.harnessPolicyPreviewLoading = true;
+    settingsState.harnessPolicyPreviewError = "";
+    try {
+      const payload = await requestSettingsJson("/api/settings/harness-policy-preview");
+      settingsState.harnessPolicyPreview = payload.harness_policy_preview || { rows: [], user_permissions: null };
+    } catch (error) {
+      settingsState.harnessPolicyPreviewError = error?.message || copy.value.notices.permissionsLoadFailed;
+    } finally {
+      settingsState.harnessPolicyPreviewLoading = false;
     }
   }
 
@@ -36,6 +50,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
       });
       settingsState.permissions = normalizePermissionsSettings(payload.permissions || {});
       syncPermissionsForm(settingsState);
+      await loadHarnessPolicyPreview();
       setSettingsSuccess(
         "permissionsNotice",
         payload.restart_required ? copy.value.notices.permissionsRestartRequired : copy.value.notices.permissionsSaved,
@@ -49,6 +64,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
 
   return {
     loadPermissionsSettings,
+    loadHarnessPolicyPreview,
     savePermissionsSettings,
   };
 }
