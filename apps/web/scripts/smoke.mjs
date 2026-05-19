@@ -45,6 +45,7 @@ const [
   sidebarNav,
   curatorSettingsPage,
   generalSettingsPage,
+  shortcutsSettingsPage,
   app,
   settingsModal,
   chatClient,
@@ -74,6 +75,7 @@ const [
   read("src/components/SidebarNav.vue"),
   read("src/components/CuratorSettingsPage.vue"),
   read("src/components/GeneralSettingsPage.vue"),
+  read("src/components/ShortcutsSettingsPage.vue"),
   read("src/App.vue"),
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
@@ -95,7 +97,7 @@ const [
 ]);
 
 const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
-const settingsUi = `${settingsModal}\n${generalSettingsPage}`;
+const settingsUi = `${settingsModal}\n${generalSettingsPage}\n${shortcutsSettingsPage}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");

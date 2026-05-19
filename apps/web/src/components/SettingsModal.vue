@@ -42,24 +42,7 @@
           />
         </section>
 
-        <section v-if="section === 'shortcuts'" class="settings-page">
-          <div class="settings-card">
-            <div class="settings-row">
-              <div>
-                <strong>{{ copy.settings.shortcuts.openSettings }}</strong>
-                <span>{{ copy.settings.shortcuts.openSettingsDescription }}</span>
-              </div>
-              <div class="shortcut-keys"><kbd>Ctrl</kbd><kbd>,</kbd></div>
-            </div>
-            <div class="settings-row">
-              <div>
-                <strong>{{ copy.settings.shortcuts.sendMessage }}</strong>
-                <span>{{ copy.settings.shortcuts.sendMessageDescription }}</span>
-              </div>
-              <div class="shortcut-keys"><kbd>Enter</kbd></div>
-            </div>
-          </div>
-        </section>
+        <ShortcutsSettingsPage v-if="section === 'shortcuts'" :copy="copy" />
 
         <section v-if="section === 'channels'" class="settings-page">
           <p v-if="settingsState.channelsLoading" class="settings-inline-status">{{ copy.settings.channels.loading }}</p>
@@ -2505,6 +2488,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import CuratorSettingsPage from "./CuratorSettingsPage.vue";
 import GeneralSettingsPage from "./GeneralSettingsPage.vue";
 import SettingsNav from "./SettingsNav.vue";
+import ShortcutsSettingsPage from "./ShortcutsSettingsPage.vue";
 import {
   providerSupportsModelMetadata,
   providerSupportsRequestOption,
