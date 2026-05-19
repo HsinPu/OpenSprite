@@ -116,6 +116,7 @@ assertIncludes(runTraceViewer, "downloadDebugBundle", "run trace debug export ac
 assertIncludes(runTraceViewer, "run-trace__harness-dashboard", "harness dashboard rendering");
 assertIncludes(runTraceViewer, "data-kind", "harness dashboard card categories");
 assertIncludes(runTraceViewer, "formatProfileSelection", "harness profile selection explanation rendering");
+assertIncludes(runTraceViewer, "formatOperationAudit", "operation audit trace rendering");
 assertIncludes(runTraceViewer, "const artifactsExpanded = ref(false)", "run artifacts default collapsed");
 assertIncludes(runTraceViewer, "<summary class=\"run-trace__artifact-group-title\">", "run artifact groups are collapsible");
 assertNotIncludes(runTraceViewer, "class=\"run-trace__artifact-group\" open", "run artifact groups default collapsed");

@@ -893,6 +893,11 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert payload["permissions"]["denied_tools"] == ["dangerous_tool"]
                 assert payload["permissions"]["approval_required_risk_levels"] == ["external_side_effect", "configuration"]
                 assert payload["permissions"]["profile_overrides"]["research"]["denied_risk_levels"] == ["network"]
+                assert payload["operation_audit"]["operation_type"] == "settings.permissions.update"
+                assert payload["operation_audit"]["target"] == "tools.permissions"
+                assert payload["operation_audit"]["rollback_available"] is True
+                assert payload["operation_audit"]["before"]["approval_mode"] == "auto"
+                assert payload["operation_audit"]["after"]["approval_mode"] == "ask"
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
                 assert resp.status == 200

@@ -452,6 +452,7 @@ const harnessSummaryRows = computed(() => {
   const policyPayload = latestEventPayload("harness_policy.selected");
   const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
   const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
+  const operationAuditPayload = latestPartMetadata("operation_audit");
   const hasEventCheckpoint = Object.keys(eventCheckpointPayload).length > 0;
   const checkpointPayload = hasEventCheckpoint ? eventCheckpointPayload : partCheckpointPayload;
   const checkpointSource = hasEventCheckpoint ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
@@ -487,6 +488,7 @@ const harnessSummaryRows = computed(() => {
     { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount, kind: "evidence" },
     { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels), kind: "checkpoint" },
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "", kind: "next" },
+    { label: labels.operationAudit || "Audit", value: formatOperationAudit(operationAuditPayload), kind: "checkpoint" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 });
@@ -804,6 +806,17 @@ function formatCheckpoint(payload, source, labels) {
     attempts !== undefined && attempts !== null ? `${labels.checkpointAttempts || "attempts"} ${attempts}` : "",
     source === "part" ? (labels.checkpointPart || "durable part") : "",
     source === "event" ? (labels.checkpointEvent || "event") : "",
+  ], " · ");
+}
+
+function formatOperationAudit(payload) {
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+  return compactJoin([
+    payload.operation_type || payload.operationType,
+    payload.target,
+    payload.rollback_available || payload.rollbackAvailable ? "rollback available" : "",
   ], " · ");
 }
 

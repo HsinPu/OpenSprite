@@ -95,6 +95,7 @@ from ..config.schedule_settings import (
     ScheduleSettingsValidationError,
 )
 from ..cron import CronJob, CronSchedule
+from ..ops import OperationAuditRecord
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
@@ -2487,6 +2488,7 @@ class WebAdapter(MessageAdapter):
         config_path = self._get_config_path()
         config = Config.load(config_path)
         permissions = config.tools.permissions
+        before_permissions = self._permissions_payload(config)
         permissions.enabled = self._coerce_bool(body.get("enabled"), field="enabled", default=permissions.enabled)
         permissions.approval_mode = self._coerce_approval_mode(body.get("approval_mode", permissions.approval_mode))
         permissions.approval_timeout_seconds = self._coerce_float_range(
@@ -2527,6 +2529,14 @@ class WebAdapter(MessageAdapter):
         config.save(config_path)
         payload = {"permissions": self._permissions_payload(config), "restart_required": True}
         payload = self._reload_permissions_from_config(payload)
+        payload["operation_audit"] = OperationAuditRecord(
+            operation_type="settings.permissions.update",
+            target="tools.permissions",
+            before=before_permissions,
+            after=payload["permissions"],
+            validation={"runtime_reloaded": bool(payload.get("runtime_reloaded")), "restart_required": bool(payload.get("restart_required"))},
+            rollback_available=True,
+        ).to_metadata()
         return web.json_response(payload)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:

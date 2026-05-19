@@ -84,6 +84,31 @@ def test_run_trace_recorder_persists_task_checklist_part():
     assert parts[0].metadata["todos"] == todos
 
 
+def test_run_trace_recorder_persists_operation_audit_part():
+    async def scenario():
+        storage = MemoryStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await storage.create_run("web:browser-1", "run-1")
+        await recorder.record_operation_audit_part(
+            "web:browser-1",
+            "run-1",
+            {
+                "operation_id": "op-1",
+                "operation_type": "settings.permissions.update",
+                "target": "tools.permissions",
+                "rollback_available": True,
+            },
+        )
+        return await storage.get_run_parts("web:browser-1", "run-1")
+
+    parts = asyncio.run(scenario())
+
+    assert len(parts) == 1
+    assert parts[0].part_type == "operation_audit"
+    assert "settings.permissions.update" in parts[0].content
+    assert parts[0].metadata["rollback_available"] is True
+
+
 def test_run_trace_recorder_persists_llm_step_part():
     async def scenario():
         storage = MemoryStorage()

@@ -305,6 +305,30 @@ class RunTraceRecorder:
             metadata=checkpoint,
         )
 
+    async def record_operation_audit_part(
+        self,
+        session_id: str,
+        run_id: str,
+        audit: dict[str, Any],
+    ) -> None:
+        """Persist an operation audit snapshot for rollback and review."""
+        content = " · ".join(
+            item
+            for item in (
+                f"operation={audit.get('operation_type')}",
+                f"target={audit.get('target')}",
+                f"rollback={bool(audit.get('rollback_available'))}",
+            )
+            if item
+        )
+        await self.add_part(
+            session_id,
+            run_id,
+            "operation_audit",
+            content=content,
+            metadata=audit,
+        )
+
     async def record_task_checklist_part(
         self,
         session_id: str,
