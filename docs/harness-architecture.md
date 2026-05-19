@@ -52,6 +52,21 @@ User Input
 | `media` | 圖片、音訊、影片分析或轉錄 | 需要 media artifact 與具體結果。 |
 | `ops` | 設定、credential、排程、外部副作用 | 權限較嚴格，外部副作用優先要求 approval。 |
 
+## Harness Policy Matrix
+
+`HarnessPolicyService` 會把 profile 轉成每回合的工具可見性、risk level 與 approval 規則。Profile 決定任務語意，policy 決定 runtime 可以暴露與執行哪些工具。
+
+| Profile | Task type | Runtime policy | 可用工具 / risk | Approval 風險 | Contract 重點 |
+|---------|-----------|----------------|-----------------|---------------|---------------|
+| `chat` | `question`、`conversation` 等低風險回答 | `chat_read_policy` | 僅允許 `read` risk；可暴露宣告為 read-only 的工具。 | 無預設 approval。 | `pure_answer` 可無工具完成。 |
+| `research` | `web_research` | `research_source_policy` | 允許 read / network；暴露 read-only、`web_search`、`web_fetch`、`web_research` 與 browser read tools。 | `external_side_effect`。 | 需要 `web_research` tool evidence、source artifact、source detail 與 source reference。 |
+| `coding` | `workspace_analysis` | `workspace_analysis_policy` | 允許 read / network / delegation；禁止 write、execute、configuration、memory、MCP。 | 無預設 approval。 | 需要 workspace evidence 與 substantive final answer。 |
+| `coding` | `workspace_change` | `workspace_change_policy` | 允許除 MCP 外的 workspace tool risks；可 edit 與 verify。 | `external_side_effect`、`configuration`。 | 需要 workspace read、file change，且需要 verification 或 explicit verification gap。 |
+| `media` | `media_extraction` | `media_artifact_policy` | 允許 read / network / external_side_effect；暴露 image/audio/video extraction 與 media send tools。 | 無預設 approval。 | 有附件時需要 media artifact、resource coverage 與 substantive final answer。 |
+| `ops` | `operations` | `operations_approval_policy` | 允許完整 risk set，但高風險操作進入 approval flow。 | `external_side_effect`、`configuration`、`mcp`。 | 需要 operation report、validation 或 remaining-risk 說明。 |
+
+目前 selector 的優先序是 `ops` -> `media` -> `coding` -> `research` -> `chat`。這避免「更新 MCP 設定並重啟」被誤判成一般 coding task，也避免有附件的 OCR 任務被 web/coding marker 搶走。
+
 ## Profile 驅動流程
 
 加入 `HarnessProfile` 後，流程調整為：
@@ -94,25 +109,30 @@ OpenSprite 的 context 應維持分層策略：
 
 ## Observability 事件
 
-後續 run trace 應逐步加入以下事件：
+run trace 會記錄以下 Harness 事件與 durable parts：
 
 ```text
 harness_profile.selected
+harness_policy.selected
 task_contract.created
-verification_policy.selected
 completion_gate.evaluated
-auto_continue.decided
+work_progress.updated
+harness_checkpoint.recorded
+harness_checkpoint run part
+auto_continue.scheduled / auto_continue.completed
 ```
 
-這些事件可以讓 Web UI 顯示 Agent 為何可信、失敗在哪一層，以及下一步應如何修正。
+這些事件可以讓 Web UI 顯示 Agent 為何可信、失敗在哪一層，以及下一步應如何修正。`harness_checkpoint` 同步保存成 run part，因此即使 trace event 被 compaction，仍能從 durable parts 找到最新 profile、policy、contract、completion 與 next action。
 
-## 最小實作順序
+## 目前落地順序
 
 1. 新增 `HarnessProfile` 與 `HarnessProfileService`。
 2. 在 `AgentTurnRunner` 選取 profile，並 emit `harness_profile.selected`。
 3. 讓 `TaskContractService` 參考 profile 補強 requirements 與 acceptance criteria。
-4. 讓 `WorkProgressService`、`CompletionGateService`、`AutoContinueService` 逐步參考 profile。
-5. 在 Web UI 將 profile、contract、evidence、verification、completion 狀態整理成 Harness dashboard。
+4. 讓 `WorkProgressService`、`CompletionGateService`、`AutoContinueService` 參考 profile。
+5. 讓 `HarnessPolicyService` 依 profile 套用 tool visibility、risk level 與 approval 規則。
+6. 將 `harness_checkpoint.recorded` 同步保存成 durable `harness_checkpoint` run part。
+7. 在 Web UI 將 profile、policy、contract、evidence、verification、completion 狀態整理成 Harness dashboard。
 
 ## 設計原則
 
