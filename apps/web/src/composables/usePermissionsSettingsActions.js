@@ -1,4 +1,4 @@
-import { normalizePermissionsSettings, splitPermissionList, syncPermissionsForm } from "./permissionsDefaults";
+import { normalizePermissionsSettings, serializeProfileOverrides, splitPermissionList, syncPermissionsForm } from "./permissionsDefaults";
 
 export function usePermissionsSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
   async function loadPermissionsSettings() {
@@ -46,6 +46,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
           denied_risk_levels: settingsState.permissionsForm.deniedRiskLevels,
           approval_required_tools: splitPermissionList(settingsState.permissionsForm.approvalRequiredTools),
           approval_required_risk_levels: settingsState.permissionsForm.approvalRequiredRiskLevels,
+          profile_overrides: serializeProfileOverrides(settingsState.permissionsForm.profileOverrides),
         }),
       });
       settingsState.permissions = normalizePermissionsSettings(payload.permissions || {});
