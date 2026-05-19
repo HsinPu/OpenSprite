@@ -105,6 +105,17 @@ from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
 
+
+def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:
+    if event_type == "permission_requested":
+        return "tool_approval.requested"
+    if event_type == "permission_granted":
+        return "tool_approval.approved"
+    if event_type == "permission_denied":
+        return "tool_approval.expired" if request.timed_out else "tool_approval.denied"
+    return None
+
+
 class AgentLoop:
     """
     Agent Loop
@@ -524,6 +535,9 @@ class AgentLoop:
     ) -> None:
         """Persist and publish permission approval lifecycle events for a run."""
         await self.permissions.emit_request_event(event_type, request)
+        approval_event_type = _tool_approval_event_type(event_type, request)
+        if approval_event_type is not None:
+            await self.permissions.emit_request_event(approval_event_type, request)
 
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:

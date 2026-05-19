@@ -688,6 +688,9 @@ function eventSummary(event) {
   if (String(event.eventType || "").startsWith("tool_permission.")) {
     return compactJoin([payload.tool_name || payload.toolName, payload.decision, payload.reason], " · ");
   }
+  if (String(event.eventType || "").startsWith("tool_approval.")) {
+    return compactJoin([payload.tool_name || payload.toolName, payload.status, payload.resolution_reason || payload.resolutionReason || payload.reason], " · ");
+  }
   if (event.eventType === "task_contract.created") {
     return compactJoin([
       payload.task_type || payload.taskType,

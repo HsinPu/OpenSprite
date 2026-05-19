@@ -710,14 +710,19 @@ def test_agent_tool_permission_requests_emit_run_events(tmp_path):
 
     assert result == "ok"
     assert [event.event_type for event in stored_events] == [
+        "tool_permission.checked",
+        "tool_permission.approval_required",
         "permission_requested",
+        "tool_approval.requested",
         "permission_granted",
+        "tool_approval.approved",
     ]
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
-    assert stored_events[0].payload["tool_name"] == "dummy"
-    assert stored_events[0].payload["status"] == "pending"
-    assert stored_events[1].payload["status"] == "approved"
-    assert stored_events[1].payload["resolution_reason"] == "approved once"
+    assert stored_events[2].payload["tool_name"] == "dummy"
+    assert stored_events[2].payload["status"] == "pending"
+    assert stored_events[4].payload["status"] == "approved"
+    assert stored_events[4].payload["resolution_reason"] == "approved once"
+    assert stored_events[5].payload["resolution_reason"] == "approved once"
 
 
 def test_agent_process_persists_media_only_message_without_llm(tmp_path):
