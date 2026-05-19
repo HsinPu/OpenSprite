@@ -8,146 +8,7 @@
     ></button>
 
     <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <aside class="settings-nav" aria-label="Settings sections">
-        <div class="settings-nav__group">
-          <p>{{ copy.settings.web }}</p>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'general' }"
-            type="button"
-            @click="$emit('select-section', 'general')"
-          >
-            <span aria-hidden="true">⌘</span>
-            {{ copy.settingsTitles.general }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'shortcuts' }"
-            type="button"
-            @click="$emit('select-section', 'shortcuts')"
-          >
-            <span aria-hidden="true">⌗</span>
-            {{ copy.settingsTitles.shortcuts }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'curator' }"
-            type="button"
-            @click="$emit('select-section', 'curator')"
-          >
-            <span aria-hidden="true">◌</span>
-            {{ copy.settingsTitles.curator }}
-          </button>
-        </div>
-
-        <div class="settings-nav__group">
-          <p>{{ copy.settings.server }}</p>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'providers' }"
-            type="button"
-            @click="$emit('select-section', 'providers')"
-          >
-            <span aria-hidden="true">⚙</span>
-            {{ copy.settingsTitles.providers }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'models' }"
-            type="button"
-            @click="$emit('select-section', 'models')"
-          >
-            <span aria-hidden="true">✦</span>
-            {{ copy.settingsTitles.models }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'channels' }"
-            type="button"
-            @click="$emit('select-section', 'channels')"
-          >
-            <span aria-hidden="true">☷</span>
-            {{ copy.settingsTitles.channels }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'mcp' }"
-            type="button"
-            @click="$emit('select-section', 'mcp')"
-          >
-            <span aria-hidden="true">◇</span>
-            {{ copy.settingsTitles.mcp }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'schedule' }"
-            type="button"
-            @click="$emit('select-section', 'schedule')"
-          >
-            <span aria-hidden="true">◷</span>
-            {{ copy.settingsTitles.schedule }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'network' }"
-            type="button"
-            @click="$emit('select-section', 'network')"
-          >
-            <span aria-hidden="true">⇄</span>
-            {{ copy.settingsTitles.network }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'search' }"
-            type="button"
-            @click="$emit('select-section', 'search')"
-          >
-            <span aria-hidden="true">⌕</span>
-            {{ copy.settingsTitles.search }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'browser' }"
-            type="button"
-            @click="$emit('select-section', 'browser')"
-          >
-            <span aria-hidden="true">◉</span>
-            {{ copy.settingsTitles.browser }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'log' }"
-            type="button"
-            @click="$emit('select-section', 'log')"
-          >
-            <span aria-hidden="true">≋</span>
-            {{ copy.settingsTitles.log }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'data' }"
-            type="button"
-            @click="$emit('select-section', 'data')"
-          >
-            <span aria-hidden="true">▣</span>
-            {{ copy.settingsTitles.data }}
-          </button>
-          <button
-            class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'eval' }"
-            type="button"
-            @click="$emit('select-section', 'eval')"
-          >
-            <span aria-hidden="true">✓</span>
-            {{ copy.settingsTitles.eval }}
-          </button>
-        </div>
-
-        <div class="settings-nav__footer">
-          <strong>OpenSprite Web</strong>
-          <span>{{ copy.settings.version }}</span>
-        </div>
-      </aside>
+      <SettingsNav :copy="copy" :section="section" @select-section="$emit('select-section', $event)" />
 
       <div class="settings-content">
         <header class="settings-content__header">
@@ -2800,6 +2661,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import CuratorSettingsPage from "./CuratorSettingsPage.vue";
+import SettingsNav from "./SettingsNav.vue";
 import {
   providerSupportsModelMetadata,
   providerSupportsRequestOption,
