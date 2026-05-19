@@ -3,7 +3,7 @@ const DEFAULT_RISK_LEVELS = ["read", "write", "execute", "network", "external_si
 export function createDefaultPermissionsState() {
   return {
     enabled: true,
-    approval_mode: "",
+    approval_mode: "auto",
     approval_timeout_seconds: 300,
     allowed_tools: ["*"],
     denied_tools: [],
@@ -19,7 +19,7 @@ export function createDefaultPermissionsState() {
 export function createDefaultPermissionsForm() {
   return {
     enabled: true,
-    approvalMode: "",
+    approvalMode: "auto",
     approvalTimeoutSeconds: 300,
     allowedTools: "*",
     deniedTools: "",
@@ -37,7 +37,7 @@ export function normalizePermissionsSettings(value) {
   return {
     ...defaults,
     enabled: payload.enabled !== false,
-    approval_mode: String(payload.approval_mode ?? payload.approvalMode ?? "").trim(),
+    approval_mode: String(payload.approval_mode ?? payload.approvalMode ?? defaults.approval_mode).trim(),
     approval_timeout_seconds: positiveNumber(payload.approval_timeout_seconds ?? payload.approvalTimeoutSeconds, defaults.approval_timeout_seconds),
     allowed_tools: normalizeList(payload.allowed_tools || payload.allowedTools || defaults.allowed_tools),
     denied_tools: normalizeList(payload.denied_tools || payload.deniedTools),
@@ -53,7 +53,7 @@ export function normalizePermissionsSettings(value) {
 export function syncPermissionsForm(settingsState) {
   const permissions = settingsState.permissions || createDefaultPermissionsState();
   settingsState.permissionsForm.enabled = permissions.enabled;
-  settingsState.permissionsForm.approvalMode = permissions.approval_mode || "";
+  settingsState.permissionsForm.approvalMode = permissions.approval_mode || "auto";
   settingsState.permissionsForm.approvalTimeoutSeconds = permissions.approval_timeout_seconds;
   settingsState.permissionsForm.allowedTools = permissions.allowed_tools.join("\n");
   settingsState.permissionsForm.deniedTools = permissions.denied_tools.join("\n");

@@ -349,7 +349,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.browser.firecrawl_api_key == ""
     assert config.cron.default_timezone == "UTC"
     assert config.permissions.enabled is True
-    assert config.permissions.approval_mode is None
+    assert config.permissions.approval_mode == "auto"
     assert config.permissions.approval_timeout_seconds == 300.0
     assert config.permissions.allowed_tools == ["*"]
     assert config.permissions.denied_tools == []

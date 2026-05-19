@@ -826,7 +826,7 @@ class WebAdapter(MessageAdapter):
         permissions = getattr(getattr(config, "tools", None), "permissions", None)
         return {
             "enabled": bool(getattr(permissions, "enabled", True)),
-            "approval_mode": getattr(permissions, "approval_mode", None),
+            "approval_mode": getattr(permissions, "approval_mode", "auto") or "auto",
             "approval_timeout_seconds": float(getattr(permissions, "approval_timeout_seconds", 300.0) or 300.0),
             "allowed_tools": list(getattr(permissions, "allowed_tools", ["*"]) or ["*"]),
             "denied_tools": list(getattr(permissions, "denied_tools", []) or []),
