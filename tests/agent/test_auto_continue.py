@@ -1,6 +1,7 @@
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 
@@ -29,6 +30,29 @@ def test_auto_continue_allows_missing_verification_once():
     assert decision.direct_verify_path == "."
     assert "Verification is required" in decision.prompt
     assert "verify(action=\"pytest\", path=\".\")" in decision.prompt
+
+
+def test_auto_continue_prompt_includes_harness_profile_guidance():
+    intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
+    profile = HarnessProfileService().select(intent)
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required task evidence was not produced",
+        missing_evidence=("Use web research tools before answering.",),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="我會查一下。"),
+        attempts_used=0,
+        previous_response="我會查一下。",
+        harness_profile=profile,
+    )
+
+    assert decision.should_continue is True
+    assert decision.harness_profile_name == "research"
+    assert "Harness profile: research" in decision.prompt
 
 
 def test_auto_continue_skips_direct_verify_when_verify_tool_is_unavailable():

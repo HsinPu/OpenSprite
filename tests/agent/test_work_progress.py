@@ -1,5 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
@@ -21,6 +22,31 @@ def test_work_progress_creates_coding_plan_from_intent():
         "verify the result",
     )
     assert "relevant tests or checks pass" in plan.done_criteria[2]
+
+
+def test_work_progress_uses_harness_profile_plan_steps():
+    intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
+    profile = HarnessProfileService().select(intent)
+
+    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
+
+    assert plan is not None
+    assert plan.harness_profile == "research"
+    assert plan.verification_policy == "source_grounded"
+    assert plan.steps == (
+        "search for relevant sources",
+        "fetch or inspect source details",
+        "answer with cited evidence",
+    )
+
+
+def test_work_progress_uses_harness_profile_continuation_budget():
+    service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
+    intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")
+    profile = HarnessProfileService().select(intent)
+
+    assert profile.name == "chat"
+    assert service.continuation_budget(intent, harness_profile=profile) == 0
 
 
 def test_work_progress_tracks_verification_and_next_action():

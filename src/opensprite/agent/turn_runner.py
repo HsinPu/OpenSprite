@@ -14,7 +14,7 @@ from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
-from .harness_profile import HarnessProfileService
+from .harness_profile import HarnessProfile, HarnessProfileService
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
@@ -222,7 +222,7 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        work_plan = self.work_progress.create_plan(task_intent)
+        work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
         current_work_state = self.work_progress.build_initial_state(
             session_id=turn.session_id,
             task_intent=task_intent,
@@ -270,6 +270,7 @@ class AgentTurnRunner:
                         turn=turn,
                         run_id=run_id,
                         task_intent=task_intent,
+                        harness_profile=harness_profile,
                         work_plan=work_plan,
                         current_work_state=current_work_state,
                     )
@@ -371,6 +372,7 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         run_id: str,
         task_intent: TaskIntent,
+        harness_profile: HarnessProfile | None,
         execution_results: list[ExecutionResult],
         response: str,
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...],
@@ -442,6 +444,7 @@ class AgentTurnRunner:
             execution_result=aggregate_result,
             auto_continue_attempts=auto_continue_attempts,
             pass_index=len(execution_results),
+            harness_profile=harness_profile,
         )
         await self._emit_run_event(
             turn.session_id,
@@ -479,6 +482,7 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         run_id: str,
         task_intent: TaskIntent,
+        harness_profile: HarnessProfile | None,
         work_plan: WorkPlan | None,
         current_work_state: StoredWorkState | None,
     ) -> AssistantMessage:
@@ -568,6 +572,7 @@ class AgentTurnRunner:
                 turn=turn,
                 run_id=run_id,
                 task_intent=task_intent,
+                harness_profile=harness_profile,
                 execution_results=execution_results,
                 response=response,
                 collected_delegated_tasks=collected_delegated_tasks,
@@ -596,6 +601,7 @@ class AgentTurnRunner:
                 same_target_verify_attempts=same_target_verify_attempts,
                 verification_available=self._verification_available(),
                 compaction_handoff=aggregate_result.compaction_handoff,
+                harness_profile=harness_profile,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
                 await self._emit_run_event(

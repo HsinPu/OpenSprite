@@ -7,6 +7,7 @@ from typing import Any
 
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
+from .harness_profile import HarnessProfile
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
@@ -86,6 +87,7 @@ class AutoContinueDecision:
     direct_verify_action: str | None = None
     direct_verify_path: str | None = None
     direct_verify_pytest_args: tuple[str, ...] = ()
+    harness_profile_name: str = ""
     emit_skipped_event: bool = False
 
     def to_metadata(self) -> dict[str, Any]:
@@ -109,6 +111,8 @@ class AutoContinueDecision:
             payload["direct_verify_path"] = self.direct_verify_path
         if self.direct_verify_pytest_args:
             payload["direct_verify_pytest_args"] = list(self.direct_verify_pytest_args)
+        if self.harness_profile_name:
+            payload["harness_profile"] = self.harness_profile_name
         return payload
 
 
@@ -144,8 +148,10 @@ class AutoContinueService:
         same_target_verify_attempts: int = 0,
         verification_available: bool = True,
         compaction_handoff: str | None = None,
+        harness_profile: HarnessProfile | None = None,
     ) -> AutoContinueDecision:
         """Return whether another bounded pass should run."""
+        profile_name = harness_profile.name if harness_profile is not None else ""
         next_attempt = attempts_used + 1
         max_attempts = work_progress.continuation_budget if work_progress is not None else self.max_auto_continues
         if completion_result.status in _TERMINAL_STATUSES:
@@ -256,12 +262,14 @@ class AutoContinueService:
                 completion_result=completion_result,
                 previous_response=previous_response,
                 compaction_handoff=compaction_handoff,
+                harness_profile=harness_profile,
             ),
             direct_workflow=direct_workflow,
             direct_start_step=direct_start_step,
             direct_verify_action=direct_verify_action,
             direct_verify_path=direct_verify_path,
             direct_verify_pytest_args=direct_verify_pytest_args,
+            harness_profile_name=profile_name,
         )
 
     def build_prompt(
@@ -271,6 +279,7 @@ class AutoContinueService:
         completion_result: CompletionGateResult,
         previous_response: str,
         compaction_handoff: str | None = None,
+        harness_profile: HarnessProfile | None = None,
     ) -> str:
         """Build the synthetic continuation instruction for the next pass."""
         previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
@@ -349,12 +358,14 @@ class AutoContinueService:
                 "Use this as continuity context only. It does not satisfy missing verification, review, evidence, or quality requirements."
             )
         quality_instruction = _quality_follow_up_instruction(completion_result)
+        profile_instruction = _profile_follow_up_instruction(harness_profile)
 
         return (
             "Continue the current task without asking the user unless you are blocked.\n"
             f"- Original objective: {task_intent.objective}\n"
             f"- Completion gate status: {completion_result.status}\n"
             f"- Completion gate reason: {completion_result.reason}"
+            f"{profile_instruction}\n"
             f"{verification_instruction}\n"
             f"{review_instruction}\n"
             f"{incomplete_instruction}\n"
@@ -543,6 +554,30 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
         return (
             "\n- Evidence follow-up: required tool evidence is missing. "
             "Call the appropriate tools for the requested resources or external information before giving the final answer."
+        )
+    return ""
+
+
+def _profile_follow_up_instruction(harness_profile: HarnessProfile | None) -> str:
+    if harness_profile is None:
+        return ""
+    if harness_profile.name == "research":
+        return (
+            "\n- Harness profile: research. Gather source evidence first, fetch or inspect at least one substantive source, "
+            "and reference gathered sources in the final answer."
+        )
+    if harness_profile.name == "coding":
+        return (
+            "\n- Harness profile: coding. Inspect workspace context before changing files, make the smallest safe change, "
+            "and run focused verification when possible."
+        )
+    if harness_profile.name == "media":
+        return (
+            "\n- Harness profile: media. Use the relevant media tool to produce the required artifact before finalizing."
+        )
+    if harness_profile.name == "ops":
+        return (
+            "\n- Harness profile: ops. Do not perform external side effects without required approval; report validation or blockers explicitly."
         )
     return ""
 

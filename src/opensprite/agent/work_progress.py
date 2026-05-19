@@ -10,6 +10,7 @@ from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
+from .harness_profile import HarnessProfile
 from .task_intent import TaskIntent
 
 
@@ -108,6 +109,9 @@ class WorkPlan:
     coding_task: bool
     expects_code_change: bool
     expects_verification: bool
+    harness_profile: str = ""
+    verification_policy: str = ""
+    continuation_policy: str = ""
 
     def to_metadata(self) -> dict[str, Any]:
         return {
@@ -121,6 +125,9 @@ class WorkPlan:
             "coding_task": self.coding_task,
             "expects_code_change": self.expects_code_change,
             "expects_verification": self.expects_verification,
+            "harness_profile": self.harness_profile,
+            "verification_policy": self.verification_policy,
+            "continuation_policy": self.continuation_policy,
         }
 
 
@@ -193,13 +200,27 @@ class WorkProgressService:
         self.default_continuation_budget = max(0, default_continuation_budget)
         self.long_running_continuation_budget = max(self.default_continuation_budget, long_running_continuation_budget)
 
-    def create_plan(self, task_intent: TaskIntent) -> WorkPlan | None:
+    def create_plan(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> WorkPlan | None:
         """Return a plan only for actionable tasks, not casual conversation."""
         if not task_intent.should_seed_active_task:
             return None
 
+        profile_name = harness_profile.name if harness_profile is not None else ""
         steps: list[str]
-        if task_intent.expects_code_change:
+        if profile_name == "research":
+            steps = ["search for relevant sources", "fetch or inspect source details", "answer with cited evidence"]
+        elif profile_name == "coding":
+            steps = [
+                "inspect relevant workspace context",
+                "make the smallest correct change" if task_intent.expects_code_change else "collect concrete workspace evidence",
+                "run focused verification or state the verification gap",
+                "summarize changes, evidence, and remaining risk",
+            ]
+        elif profile_name == "media":
+            steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
+        elif profile_name == "ops":
+            steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
+        elif task_intent.expects_code_change:
             steps = [
                 "inspect relevant code",
                 "make the smallest correct change",
@@ -224,6 +245,9 @@ class WorkProgressService:
             coding_task=task_intent.kind in _CODING_KINDS,
             expects_code_change=task_intent.expects_code_change,
             expects_verification=task_intent.expects_verification,
+            harness_profile=profile_name,
+            verification_policy=harness_profile.verification_policy if harness_profile is not None else "",
+            continuation_policy=harness_profile.continuation_policy if harness_profile is not None else "",
         )
 
     def resolve_intent(self, task_intent: TaskIntent, state: StoredWorkState | None) -> TaskIntent:
@@ -308,7 +332,13 @@ class WorkProgressService:
             verification_attempted=False,
             verification_passed=False,
             last_next_action="continue_work",
-            metadata={"source": "work_progress", "schema_version": 1},
+            metadata={
+                "source": "work_progress",
+                "schema_version": 1,
+                "harness_profile": work_plan.harness_profile,
+                "verification_policy": work_plan.verification_policy,
+                "continuation_policy": work_plan.continuation_policy,
+            },
             created_at=now,
             updated_at=now,
         )
@@ -508,10 +538,11 @@ class WorkProgressService:
         execution_result: ExecutionResult,
         auto_continue_attempts: int,
         pass_index: int,
+        harness_profile: HarnessProfile | None = None,
     ) -> WorkProgressUpdate:
         """Summarize the current pass and choose the next high-level action."""
         signals = self._progress_signals(execution_result)
-        continuation_budget = self.continuation_budget(task_intent)
+        continuation_budget = self.continuation_budget(task_intent, harness_profile=harness_profile)
         status = self._status(completion_result)
         return WorkProgressUpdate(
             status=status,
@@ -530,7 +561,14 @@ class WorkProgressService:
             continuation_budget=continuation_budget,
         )
 
-    def continuation_budget(self, task_intent: TaskIntent) -> int:
+    def continuation_budget(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> int:
+        profile_name = harness_profile.name if harness_profile is not None else ""
+        if profile_name == "chat":
+            return 0
+        if profile_name in {"coding", "research"}:
+            return self.long_running_continuation_budget
+        if profile_name in {"media", "ops"}:
+            return self.default_continuation_budget
         if task_intent.long_running or task_intent.kind in _CODING_KINDS:
             return self.long_running_continuation_budget
         return self.default_continuation_budget
