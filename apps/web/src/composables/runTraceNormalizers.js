@@ -1,7 +1,7 @@
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
 
-const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "completion", "file", "process", "text", "system", "other"]);
+const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "harness", "completion", "file", "process", "text", "system", "other"]);
 
 function randomToken() {
   return Math.random().toString(36).slice(2, 8);
@@ -70,6 +70,9 @@ export function inferRunEventKind(eventType) {
   }
   if (normalized.startsWith("permission_")) {
     return "permission";
+  }
+  if (normalized.startsWith("harness_") || normalized.startsWith("task_contract.")) {
+    return "harness";
   }
   if (normalized.startsWith("work_") || normalized.startsWith("task_")) {
     return "work";

@@ -43,6 +43,13 @@
         <span v-if="retentionCounts.textTotal > 0">{{ copy.trace.retentionText(retentionCounts.textReturned, retentionCounts.textTotal) }}</span>
       </div>
 
+      <div v-if="harnessSummaryRows.length" class="run-trace__retention run-trace__harness" aria-label="Harness summary">
+        <strong>{{ copy.trace.harnessTitle }}</strong>
+        <span v-for="row in harnessSummaryRows" :key="row.label">
+          {{ row.label }}: {{ row.value }}
+        </span>
+      </div>
+
       <div class="run-trace__artifacts" aria-label="Run artifacts">
         <div class="run-trace__section-head">
           <button class="run-trace__section-toggle" type="button" :aria-expanded="artifactsExpanded" @click="artifactsExpanded = !artifactsExpanded">
@@ -398,6 +405,7 @@ const processEventCount = computed(() => countEventsByCategory("process"));
 const verificationEventCount = computed(() => countEventsByCategory("verification"));
 const permissionEventCount = computed(() => countEventsByCategory("permission"));
 const textEventCount = computed(() => countEventsByCategory("text"));
+const harnessEventCount = computed(() => countEventsByCategory("harness"));
 const artifactCount = computed(() => artifacts.value.length);
 const eventCountLabel = computed(() => {
   const counts = props.run?.eventCounts || {};
@@ -431,6 +439,31 @@ const retentionCounts = computed(() => {
 });
 
 const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 || retentionCounts.value.textTotal > retentionCounts.value.textReturned);
+
+const harnessSummaryRows = computed(() => {
+  const labels = props.copy.trace.harnessLabels || {};
+  const profilePayload = latestEventPayload("harness_profile.selected");
+  const contractPayload = latestEventPayload("task_contract.created");
+  const completionPayload = latestEventPayload("completion_gate.evaluated");
+  const autoContinueEvent = latestEventWithPrefix("auto_continue.");
+  const contractProfile = contractPayload.harness_profile || contractPayload.harnessProfile || {};
+  const profileName = profilePayload.name || contractProfile.name || "";
+  const taskType = contractPayload.task_type || contractPayload.taskType || profilePayload.task_type || profilePayload.taskType || "";
+  if (!profileName && !taskType && !Object.keys(contractPayload).length) {
+    return [];
+  }
+  const rows = [
+    { label: labels.profile || "Profile", value: profileName },
+    { label: labels.taskType || "Task", value: taskType },
+    { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy },
+    { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy },
+    { label: labels.evidence || "Evidence", value: countPayloadItems(contractPayload.requirements) },
+    { label: labels.criteria || "Criteria", value: countPayloadItems(contractPayload.acceptance_criteria || contractPayload.acceptanceCriteria) },
+    { label: labels.completion || "Completion", value: compactJoin([completionPayload.status, completionPayload.reason], " · ") },
+    { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "" },
+  ];
+  return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
+});
 
 const parallelDelegationGroups = computed(() => {
   const groups = new Map();
@@ -550,6 +583,7 @@ const filterOptions = computed(() => [
   { value: "tool", label: props.copy.trace.filters.tool, count: toolEventCount.value },
   { value: "verification", label: props.copy.trace.filters.verification, count: verificationEventCount.value },
   { value: "permission", label: props.copy.trace.filters.permission, count: permissionEventCount.value },
+  { value: "harness", label: props.copy.trace.filters.harness, count: harnessEventCount.value },
   { value: "process", label: props.copy.trace.filters.process, count: processEventCount.value },
   { value: "text", label: props.copy.trace.filters.text, count: textEventCount.value },
   { value: "system", label: props.copy.trace.filters.system, count: countEventsByCategory("system") },
@@ -563,7 +597,7 @@ function countEventsByCategory(category) {
 
 function eventCategory(eventType) {
   const event = typeof eventType === "object" ? eventType : null;
-  if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work"].includes(event?.kind)) {
+  if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work", "harness"].includes(event?.kind)) {
     return event.kind;
   }
   if (event?.kind) {
@@ -588,6 +622,9 @@ function eventCategory(eventType) {
   if (eventType.startsWith("permission_")) {
     return "permission";
   }
+  if (eventType.startsWith("harness_") || eventType.startsWith("task_contract.")) {
+    return "harness";
+  }
   if (eventType === "run_part_delta" || eventType === "message_part_delta") {
     return "text";
   }
@@ -603,6 +640,16 @@ function eventSummary(event) {
     return [artifact.title, artifact.detail].filter(Boolean).join(" · ");
   }
   const payload = event.payload || {};
+  if (event.eventType === "harness_profile.selected") {
+    return compactJoin([payload.name, payload.task_type || payload.taskType, payload.reason], " · ");
+  }
+  if (event.eventType === "task_contract.created") {
+    return compactJoin([
+      payload.task_type || payload.taskType,
+      `${countPayloadItems(payload.requirements)} req`,
+      `${countPayloadItems(payload.acceptance_criteria || payload.acceptanceCriteria)} criteria`,
+    ], " · ");
+  }
   if (payload.tool_name) {
     return [payload.tool_name, payload.input_delta].filter(Boolean).join(" · ");
   }
@@ -625,6 +672,38 @@ function eventSummary(event) {
     return payload.error;
   }
   return "";
+}
+
+function latestEventPayload(eventType) {
+  const event = latestEventByType(eventType);
+  return event?.payload && typeof event.payload === "object" ? event.payload : {};
+}
+
+function latestEventByType(eventType) {
+  for (let index = events.value.length - 1; index >= 0; index -= 1) {
+    if (events.value[index]?.eventType === eventType) {
+      return events.value[index];
+    }
+  }
+  return null;
+}
+
+function latestEventWithPrefix(prefix) {
+  for (let index = events.value.length - 1; index >= 0; index -= 1) {
+    const event = events.value[index];
+    if (String(event?.eventType || "").startsWith(prefix)) {
+      return event;
+    }
+  }
+  return null;
+}
+
+function countPayloadItems(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function compactJoin(values, separator) {
+  return values.map((value) => String(value || "").trim()).filter(Boolean).join(separator);
 }
 
 function partSummary(part) {
