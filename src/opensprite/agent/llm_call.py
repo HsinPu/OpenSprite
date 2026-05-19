@@ -11,6 +11,7 @@ from .retrieval import ProactiveRetrievalService
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
+from .harness_policy import HarnessPolicy
 from .harness_profile import HarnessProfile
 from .task_contract import (
     SemanticContractDecision,
@@ -76,6 +77,8 @@ class LlmCallService:
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         classify_semantic_contract: Callable[..., Awaitable[SemanticContractDecision | None]],
         select_harness_profile: Callable[[TaskIntent], HarnessProfile],
+        select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
+        build_harness_tool_registry: Callable[[ToolRegistry, HarnessPolicy], ToolRegistry],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -110,6 +113,8 @@ class LlmCallService:
         self._resolve_task_objective = resolve_task_objective
         self._classify_semantic_contract = classify_semantic_contract
         self._select_harness_profile = select_harness_profile
+        self._select_harness_policy = select_harness_policy
+        self._build_harness_tool_registry = build_harness_tool_registry
         self._emit_run_event = emit_run_event
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
@@ -293,8 +298,22 @@ class LlmCallService:
             user_video_files=user_video_files,
         )
         task_contract = None
+        harness_policy = None
+        harness_tool_registry = None
+        base_tool_registry = self._get_tool_registry()
         if effective_task_intent is not None:
             harness_profile = self._select_harness_profile(effective_task_intent)
+            harness_policy = self._select_harness_policy(harness_profile)
+            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_policy)
+            if run_id is not None:
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "harness_policy.selected",
+                    harness_policy.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
             deterministic_contract = TaskContractService.build_deterministic(
                 task_intent=effective_task_intent,
                 current_message=prompt_message,
@@ -368,8 +387,8 @@ class LlmCallService:
                 f"acceptance_criteria={len(task_contract.acceptance_criteria)} "
                 f"allow_no_tool_final={task_contract.allow_no_tool_final}"
             )
-        planning_mode = resolve_planning_mode(effective_current_message, base_registry=self._get_tool_registry())
-        selected_tool_registry = planning_mode.tool_registry
+        planning_mode = resolve_planning_mode(effective_current_message, base_registry=harness_tool_registry or base_tool_registry)
+        selected_tool_registry = planning_mode.tool_registry or harness_tool_registry
         if planning_mode.enabled and selected_tool_registry is not None:
             logger.info(
                 f"[{session_id}] prompt.mode | planning_mode=true allowed_tools={','.join(selected_tool_registry.tool_names)}"
@@ -536,6 +555,8 @@ class LlmCallService:
             "should_cancel": lambda: self._should_cancel_run(session_id, run_id),
             "work_state_summary": work_state_summary,
         }
+        if harness_policy is not None and harness_policy.max_tool_iterations is not None:
+            execute_kwargs["max_tool_iterations"] = harness_policy.max_tool_iterations
         if on_tool_after_execute is not None:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
         try:

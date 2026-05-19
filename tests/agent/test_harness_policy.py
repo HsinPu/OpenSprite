@@ -1,6 +1,28 @@
 from opensprite.agent.harness_policy import HarnessPolicyService
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_intent import TaskIntentService
+from opensprite.tools.base import Tool
+from opensprite.tools.registry import ToolRegistry
+
+
+class DummyTool(Tool):
+    def __init__(self, name: str):
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return f"Dummy {self._name} tool"
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    async def _execute(self, **kwargs) -> str:
+        return "ok"
 
 
 def _policy(text: str):
@@ -74,3 +96,18 @@ def test_media_policy_allows_media_tools_without_workspace_writes():
     assert permission_policy.is_tool_exposed("analyze_image") is True
     assert permission_policy.is_tool_exposed("ocr_image") is True
     assert permission_policy.is_tool_exposed("edit_file") is False
+
+
+def test_harness_policy_filters_tool_registry_for_research_turns():
+    registry = ToolRegistry()
+    for name in ("read_file", "web_search", "web_fetch", "edit_file", "verify"):
+        registry.register(DummyTool(name))
+    policy = _policy("Search the web and cite sources for the latest release")
+
+    filtered = HarnessPolicyService().build_tool_registry(registry, policy)
+
+    assert "read_file" in filtered.tool_names
+    assert "web_search" in filtered.tool_names
+    assert "web_fetch" in filtered.tool_names
+    assert "edit_file" not in filtered.tool_names
+    assert "verify" not in filtered.tool_names

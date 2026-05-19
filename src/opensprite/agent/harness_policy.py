@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
+from ..tools import BatchTool, ToolRegistry
+from ..tools.permissions import ALL_RISK_LEVELS, CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_profile import HarnessProfile
 
 
@@ -139,3 +140,15 @@ class HarnessPolicyService:
             max_tool_iterations=3,
             reason="chat turns default to read-only local context and avoid external side effects",
         )
+
+    def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy) -> ToolRegistry:
+        """Return a registry constrained by the selected harness policy."""
+        registry = base_registry.filtered(
+            permission_policy=CompositeToolPermissionPolicy(
+                base_registry.permission_policy,
+                harness_policy.to_permission_policy(),
+            )
+        )
+        if "batch" in registry.tool_names:
+            registry.register(BatchTool(registry_resolver=lambda: registry))
+        return registry

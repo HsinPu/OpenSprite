@@ -70,6 +70,7 @@ from .curator import CuratorService, fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
 from .history_reset import HistoryResetService
+from .harness_policy import HarnessPolicyService
 from .harness_profile import HarnessProfileService
 from .learning_ledger import LearningLedger
 from .llm_call import LlmCallService
@@ -657,6 +658,7 @@ class AgentLoop:
         )
         self.task_intents = TaskIntentService()
         self.harness_profiles = HarnessProfileService()
+        self.harness_policies = HarnessPolicyService()
         self.task_context_resolver = TaskContextResolver()
         self.task_objective_resolver = TaskObjectiveResolver()
         self.semantic_contract_classifier = SemanticContractClassifier()
@@ -909,6 +911,8 @@ class AgentLoop:
                 **kwargs,
             ),
             select_harness_profile=lambda task_intent: self.harness_profiles.select(task_intent),
+            select_harness_policy=lambda harness_profile: self.harness_policies.select(harness_profile),
+            build_harness_tool_registry=lambda registry, policy: self.harness_policies.build_tool_registry(registry, policy),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,
                 run_id,
