@@ -499,6 +499,7 @@ export const DISPLAY_COPY = {
       retentionCompacted: (count) => `已壓縮 ${count} 筆舊事件`,
       retentionText: (returned, total) => `文字 delta ${returned}/${total}`,
       harnessTitle: "Harness 狀態",
+      harnessSubtitle: "Profile、policy、contract、completion 與下一步",
       harnessLabels: {
         profile: "Profile",
         taskType: "任務",
@@ -2185,6 +2186,7 @@ export const DISPLAY_COPY = {
       retentionCompacted: (count) => `${count} older event(s) compacted`,
       retentionText: (returned, total) => `Text deltas ${returned}/${total}`,
       harnessTitle: "Harness status",
+      harnessSubtitle: "Profile, policy, contract, completion, and next action",
       harnessLabels: {
         profile: "Profile",
         taskType: "Task",

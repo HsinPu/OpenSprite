@@ -43,11 +43,17 @@
         <span v-if="retentionCounts.textTotal > 0">{{ copy.trace.retentionText(retentionCounts.textReturned, retentionCounts.textTotal) }}</span>
       </div>
 
-      <div v-if="harnessSummaryRows.length" class="run-trace__retention run-trace__harness" aria-label="Harness summary">
-        <strong>{{ copy.trace.harnessTitle }}</strong>
-        <span v-for="row in harnessSummaryRows" :key="row.label">
-          {{ row.label }}: {{ row.value }}
-        </span>
+      <div v-if="harnessSummaryRows.length" class="run-trace__harness-dashboard" aria-label="Harness dashboard">
+        <div class="run-trace__harness-head">
+          <strong>{{ copy.trace.harnessTitle }}</strong>
+          <small>{{ copy.trace.harnessSubtitle }}</small>
+        </div>
+        <div class="run-trace__harness-grid">
+          <article v-for="row in harnessSummaryRows" :key="row.label" class="run-trace__harness-card" :data-kind="row.kind">
+            <small>{{ row.label }}</small>
+            <strong>{{ row.value }}</strong>
+          </article>
+        </div>
       </div>
 
       <div class="run-trace__artifacts" aria-label="Run artifacts">
@@ -465,20 +471,20 @@ const harnessSummaryRows = computed(() => {
     return [];
   }
   const rows = [
-    { label: labels.profile || "Profile", value: profileName },
-    { label: labels.taskType || "Task", value: taskType },
-    { label: labels.policy || "Policy", value: policySource.name },
-    { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy },
-    { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy },
-    { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements) },
-    { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria) },
-    { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence) },
-    { label: labels.policyRisks || "Risk", value: formatPolicyRisks(policySource, labels) },
-    { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · ") },
-    { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction },
-    { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount },
-    { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels) },
-    { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "" },
+    { label: labels.profile || "Profile", value: profileName, kind: "profile" },
+    { label: labels.taskType || "Task", value: taskType, kind: "profile" },
+    { label: labels.policy || "Policy", value: policySource.name, kind: "policy" },
+    { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy, kind: "contract" },
+    { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy, kind: "contract" },
+    { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements), kind: "contract" },
+    { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria), kind: "contract" },
+    { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence), kind: "completion" },
+    { label: labels.policyRisks || "Risk", value: formatPolicyRisks(policySource, labels), kind: "policy" },
+    { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · "), kind: "completion" },
+    { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction, kind: "next" },
+    { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount, kind: "evidence" },
+    { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels), kind: "checkpoint" },
+    { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "", kind: "next" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 });
