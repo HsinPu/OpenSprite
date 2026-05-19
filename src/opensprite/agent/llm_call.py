@@ -665,4 +665,10 @@ def _format_acceptance_criterion(criterion: Any) -> str:
         return "Fetch or inspect at least one source page before finalizing; search result snippets alone are not sufficient."
     if criterion.kind == "source_reference":
         return "Reference at least one gathered source by URL, domain, or title in the final answer."
+    if criterion.kind == "media_artifact":
+        return "Produce the required media artifact before finalizing."
+    if criterion.kind == "verification_or_gap":
+        return "After code changes, run focused verification when possible; if not possible, state the verification gap explicitly."
+    if criterion.kind == "operation_report":
+        return "Report approval, validation, rollback, blocker, or residual risk for the operation."
     return criterion.description or criterion.kind

@@ -15,6 +15,16 @@ from .task_intent import TaskIntent
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
 _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+_VERIFICATION_GAP_RE = re.compile(
+    r"\b(?:tests? not run|not tested|not verified|could not verify|unable to verify|verification gap|untested)\b"
+    r"|(?:未測試|未驗證|未執行|沒有跑測試|無法驗證|無法測試|尚未測試|尚未驗證)",
+    re.IGNORECASE,
+)
+_OPERATION_REPORT_RE = re.compile(
+    r"\b(?:approval|approved|denied|blocked|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
+    r"|(?:核准|批准|拒絕|阻塞|驗證|回滾|風險|審計|權限|設定|配置|部署|重啟)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -68,6 +78,18 @@ class QualityGateService:
                     return result
             elif criterion.kind == "source_reference":
                 result = _evaluate_source_reference(criterion, response_text, execution_result)
+                if result is not None:
+                    return result
+            elif criterion.kind == "media_artifact":
+                result = _evaluate_media_artifact_criterion(criterion, contract, execution_result)
+                if result is not None:
+                    return result
+            elif criterion.kind == "verification_or_gap":
+                result = _evaluate_verification_or_gap(criterion, response_text, execution_result)
+                if result is not None:
+                    return result
+            elif criterion.kind == "operation_report":
+                result = _evaluate_operation_report(criterion, response_text)
                 if result is not None:
                     return result
         workspace_result = _evaluate_workspace_grounding(contract, response_text)
@@ -219,6 +241,60 @@ def _evaluate_source_reference(
             "- Reference at least one gathered source by URL, domain, or title "
             f"(need {min_count}, found {referenced_count})"
         ),
+    )
+
+
+def _evaluate_media_artifact_criterion(
+    criterion: AcceptanceCriterion,
+    contract: TaskContract,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    if not contract.selected_resources:
+        return None
+    min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+    artifact_count = sum(
+        1
+        for artifact in execution_result.task_artifacts
+        if artifact.ok and artifact.kind in _MEDIA_ARTIFACT_KINDS
+    )
+    if artifact_count >= min_count:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="required task artifacts were not produced",
+        active_task_detail=getattr(criterion, "description", "") or None,
+    )
+
+
+def _evaluate_verification_or_gap(
+    criterion: AcceptanceCriterion,
+    response_text: str,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    if execution_result.file_change_count <= 0 or execution_result.verification_attempted:
+        return None
+    if _VERIFICATION_GAP_RE.search(response_text or ""):
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="needs_verification",
+        reason="verification outcome or gap was not reported",
+        active_task_detail=getattr(criterion, "description", "") or None,
+    )
+
+
+def _evaluate_operation_report(
+    criterion: AcceptanceCriterion,
+    response_text: str,
+) -> QualityGateResult | None:
+    if _OPERATION_REPORT_RE.search(response_text or ""):
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="operation validation or risk was not reported",
+        active_task_detail=getattr(criterion, "description", "") or None,
     )
 
 

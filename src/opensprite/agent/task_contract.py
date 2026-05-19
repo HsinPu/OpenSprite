@@ -601,13 +601,18 @@ def _apply_harness_profile(
                     description="Inspect the relevant workspace files or code context before answering.",
                 )
             )
-        if harness_profile.task_type == "workspace_change" and not _has_requirement(requirements, kind="file_change"):
-            requirements.append(
-                EvidenceRequirement(
-                    kind="file_change",
-                    min_count=1,
-                    description="Record at least one workspace file change.",
+        if harness_profile.task_type == "workspace_change":
+            if not _has_requirement(requirements, kind="file_change"):
+                requirements.append(
+                    EvidenceRequirement(
+                        kind="file_change",
+                        min_count=1,
+                        description="Record at least one workspace file change.",
+                    )
                 )
+            acceptance_criteria = _append_acceptance_criteria(
+                acceptance_criteria,
+                (_verification_or_gap_criterion(),),
             )
         acceptance_criteria = _append_acceptance_criteria(
             acceptance_criteria,
@@ -618,13 +623,14 @@ def _apply_harness_profile(
         if selected_resources:
             acceptance_criteria = _append_acceptance_criteria(
                 acceptance_criteria,
-                (_media_final_answer_criterion(),),
+                (_media_artifact_criterion(), _media_final_answer_criterion()),
             )
             task_type = "media_extraction"
     elif profile_name == "ops":
         acceptance_criteria = _append_acceptance_criteria(
             acceptance_criteria,
             (
+                _operation_report_criterion(),
                 AcceptanceCriterion(
                     kind="substantive_final_answer",
                     min_response_chars=80,
@@ -909,6 +915,14 @@ def _media_final_answer_criterion() -> AcceptanceCriterion:
     )
 
 
+def _media_artifact_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="media_artifact",
+        min_count=1,
+        description="Produce a media artifact for the selected image, audio, or video before finalizing.",
+    )
+
+
 def _web_final_answer_criterion() -> AcceptanceCriterion:
     return AcceptanceCriterion(
         kind="substantive_final_answer",
@@ -930,6 +944,20 @@ def _workspace_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=80,
         description="Provide a substantive final answer that uses the inspected workspace context.",
+    )
+
+
+def _verification_or_gap_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="verification_or_gap",
+        description="After code changes, either record a focused verification attempt or state the verification gap clearly.",
+    )
+
+
+def _operation_report_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="operation_report",
+        description="Report approval, validation, rollback, blocker, or residual risk for the operation.",
     )
 
 

@@ -1659,6 +1659,66 @@ def test_quality_gate_uses_contract_acceptance_criteria():
     assert result.reason == "assistant did not provide the requested itemized result"
 
 
+def test_quality_gate_requires_verification_attempt_or_reported_gap_after_code_changes():
+    intent = TaskIntentService().classify("Please fix src/app.py")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="code_change",
+        acceptance_criteria=(
+            AcceptanceCriterion(
+                kind="verification_or_gap",
+                description="State verification outcome or gap.",
+            ),
+        ),
+    )
+
+    missing_gap = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Updated src/app.py.",
+        execution_result=ExecutionResult(content="Updated src/app.py.", file_change_count=1),
+        task_contract=contract,
+    )
+    reported_gap = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Updated src/app.py. Tests not run because pytest is unavailable.",
+        execution_result=ExecutionResult(content="Updated src/app.py.", file_change_count=1),
+        task_contract=contract,
+    )
+
+    assert missing_gap.passed is False
+    assert missing_gap.status == "needs_verification"
+    assert missing_gap.reason == "verification outcome or gap was not reported"
+    assert reported_gap.passed is True
+
+
+def test_quality_gate_requires_operation_validation_or_risk_report():
+    intent = TaskIntentService().classify("Update the MCP server configuration")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="operation_report", description="Report validation or risk."),
+        ),
+    )
+
+    missing_report = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="I changed the setting and finished the task.",
+        execution_result=ExecutionResult(content="I changed the setting and finished the task."),
+        task_contract=contract,
+    )
+    reported_validation = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Configuration validation passed; residual risk is low.",
+        execution_result=ExecutionResult(content="Configuration validation passed; residual risk is low."),
+        task_contract=contract,
+    )
+
+    assert missing_report.passed is False
+    assert missing_report.reason == "operation validation or risk was not reported"
+    assert reported_validation.passed is True
+
+
 def test_completion_gate_marks_direct_reply_instruction_complete_without_marker():
     intent = TaskIntentService().classify("請只回覆這三個英文詞，且不要加入其他文字：alpha beta gamma")
 

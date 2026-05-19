@@ -58,3 +58,48 @@ def test_task_contract_uses_research_harness_profile_for_source_requirements():
     assert any(item.kind == "tool_group" and item.tool_group == "web_research" for item in contract.requirements)
     assert any(item.kind == "source_reference" for item in contract.acceptance_criteria)
     assert contract.to_metadata()["harness_profile"]["name"] == "research"
+
+
+def test_task_contract_adds_coding_harness_verification_gap_criterion():
+    intent = TaskIntentService().classify("Please fix the failing pytest in src/opensprite/agent/task_intent.py")
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert contract.task_type == "code_change"
+    assert any(item.kind == "file_change" for item in contract.requirements)
+    assert any(item.kind == "verification_or_gap" for item in contract.acceptance_criteria)
+
+
+def test_task_contract_adds_ops_harness_operation_report_criterion():
+    intent = TaskIntentService().classify("Update the MCP server configuration and restart the service")
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert contract.task_type == "operations"
+    assert any(item.kind == "operation_report" for item in contract.acceptance_criteria)
+
+
+def test_task_contract_adds_media_artifact_criterion_for_selected_media():
+    intent = TaskIntentService().classify("請 OCR 這張圖片")
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message="User attached 1 image. 請 OCR 這張圖片",
+        current_image_files=["workspace/images/input.png"],
+        harness_profile=profile,
+    )
+
+    assert contract.task_type == "media_extraction"
+    assert contract.selected_resources
+    assert any(item.kind == "media_artifact" for item in contract.acceptance_criteria)
