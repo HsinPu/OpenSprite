@@ -15,6 +15,9 @@ def test_harness_profile_selects_research_for_url_task():
     assert profile.task_type == "web_research"
     assert "web_source" in profile.required_evidence
     assert profile.verification_policy == "source_grounded"
+    metadata = profile.to_metadata()
+    assert metadata["selection"]["priority_order"][:2] == ["ops", "media"]
+    assert "signal:url" in metadata["selection"]["matched_signals"]
 
 
 def test_harness_profile_selects_coding_for_code_change_task():
@@ -25,6 +28,7 @@ def test_harness_profile_selects_coding_for_code_change_task():
     assert "workspace_read" in profile.required_tool_groups
     assert "workspace_write" in profile.required_tool_groups
     assert profile.verification_policy == "focused_if_possible"
+    assert "pattern:code_path" in profile.to_metadata()["selection"]["matched_signals"]
 
 
 def test_harness_profile_selects_ops_before_coding_for_configuration_task():
@@ -33,6 +37,7 @@ def test_harness_profile_selects_ops_before_coding_for_configuration_task():
     assert profile.name == "ops"
     assert profile.continuation_policy == "approval_bounded"
     assert "configuration" in profile.approval_required_risk_levels
+    assert "marker:mcp server" in profile.to_metadata()["selection"]["matched_signals"]
 
 
 def test_harness_profile_selects_chat_for_plain_question():
@@ -40,6 +45,7 @@ def test_harness_profile_selects_chat_for_plain_question():
 
     assert profile.name == "chat"
     assert profile.continuation_policy == "minimal"
+    assert profile.to_metadata()["selection"]["matched_signals"] == ["fallback:chat"]
 
 
 def test_task_contract_uses_research_harness_profile_for_source_requirements():

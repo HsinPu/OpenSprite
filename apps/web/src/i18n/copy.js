@@ -503,6 +503,7 @@ export const DISPLAY_COPY = {
       harnessLabels: {
         profile: "Profile",
         taskType: "任務",
+        selection: "選擇原因",
         policy: "Policy",
         verification: "驗證",
         continuation: "續跑",
@@ -2190,6 +2191,7 @@ export const DISPLAY_COPY = {
       harnessLabels: {
         profile: "Profile",
         taskType: "Task",
+        selection: "Selection",
         policy: "Policy",
         verification: "Verification",
         continuation: "Continuation",

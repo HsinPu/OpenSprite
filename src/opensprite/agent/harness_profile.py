@@ -121,6 +121,7 @@ _OPS_MARKERS = (
     "設定",
     "配置",
 )
+_PROFILE_PRIORITY_ORDER = ("ops", "media", "coding", "research", "chat")
 
 
 @dataclass(frozen=True)
@@ -135,6 +136,7 @@ class HarnessProfile:
     continuation_policy: str = "bounded"
     approval_required_risk_levels: tuple[str, ...] = ()
     reason: str = ""
+    selection_signals: tuple[str, ...] = ()
 
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe run event payload."""
@@ -148,6 +150,11 @@ class HarnessProfile:
             "continuation_policy": self.continuation_policy,
             "approval_required_risk_levels": list(self.approval_required_risk_levels),
             "reason": self.reason,
+            "selection": {
+                "priority_order": list(_PROFILE_PRIORITY_ORDER),
+                "matched_signals": list(self.selection_signals),
+                "selected_by": self.reason,
+            },
         }
 
 
@@ -168,6 +175,7 @@ class HarnessProfileService:
                 continuation_policy="approval_bounded",
                 approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
                 reason="objective references configuration, credentials, scheduling, services, or external side effects",
+                selection_signals=_selection_signals("ops", lowered, _OPS_MARKERS),
             )
         if _looks_like_media(task_intent, lowered):
             return HarnessProfile(
@@ -178,6 +186,7 @@ class HarnessProfileService:
                 verification_policy="artifact_required",
                 continuation_policy="bounded",
                 reason="objective references media analysis or an attachment-only media turn",
+                selection_signals=_selection_signals("media", lowered, _MEDIA_MARKERS, extra=(task_intent.kind,)),
             )
         if _looks_like_coding(task_intent, lowered, text):
             return HarnessProfile(
@@ -189,6 +198,7 @@ class HarnessProfileService:
                 continuation_policy="bounded_with_verification",
                 approval_required_risk_levels=("external_side_effect", "configuration"),
                 reason="objective references code, files, tests, or a repository task",
+                selection_signals=_coding_selection_signals(task_intent, lowered, text),
             )
         if _looks_like_research(lowered):
             return HarnessProfile(
@@ -200,6 +210,7 @@ class HarnessProfileService:
                 continuation_policy="bounded_with_source_fetch",
                 approval_required_risk_levels=("external_side_effect",),
                 reason="objective references web research, URLs, sources, or current information",
+                selection_signals=_selection_signals("research", lowered, _RESEARCH_MARKERS, extra=("url" if _URL_RE.search(lowered) else "",)),
             )
         return HarnessProfile(
             name="chat",
@@ -207,6 +218,7 @@ class HarnessProfileService:
             verification_policy="none",
             continuation_policy="minimal",
             reason="no tool-backed harness profile matched",
+            selection_signals=("fallback:chat",),
         )
 
 
@@ -242,3 +254,27 @@ def _looks_like_media(task_intent: TaskIntent, lowered: str) -> bool:
 
 def _looks_like_ops(lowered: str) -> bool:
     return _has_marker(lowered, _OPS_MARKERS)
+
+
+def _selection_signals(profile: str, lowered: str, markers: tuple[str, ...], *, extra: tuple[str, ...] = ()) -> tuple[str, ...]:
+    signals = [f"priority:{profile}"]
+    signals.extend(f"marker:{marker}" for marker in markers if marker and _marker_matches(lowered, marker))
+    signals.extend(f"signal:{item}" for item in extra if item)
+    return tuple(signals)
+
+
+def _coding_selection_signals(task_intent: TaskIntent, lowered: str, text: str) -> tuple[str, ...]:
+    signals = list(_selection_signals("coding", lowered, _CODING_MARKERS))
+    if task_intent.expects_code_change:
+        signals.append("intent:expects_code_change")
+    if task_intent.kind in {"debug", "refactor", "implementation"}:
+        signals.append(f"intent:{task_intent.kind}")
+    if _CODE_PATH_RE.search(text):
+        signals.append("pattern:code_path")
+    return tuple(signals)
+
+
+def _marker_matches(lowered: str, marker: str) -> bool:
+    if _is_ascii_word_marker(marker):
+        return bool(re.search(rf"(?<![A-Za-z0-9_]){re.escape(marker)}(?![A-Za-z0-9_])", lowered))
+    return marker in lowered

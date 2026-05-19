@@ -467,12 +467,14 @@ const harnessSummaryRows = computed(() => {
   const completionSource = Object.keys(checkpointCompletion).length ? checkpointCompletion : completionPayload;
   const profileName = profilePayload.name || contractProfile.name || "";
   const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
+  const profileSelection = profilePayload.selection || contractProfile.selection || {};
   if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length) {
     return [];
   }
   const rows = [
     { label: labels.profile || "Profile", value: profileName, kind: "profile" },
     { label: labels.taskType || "Task", value: taskType, kind: "profile" },
+    { label: labels.selection || "Selection", value: formatProfileSelection(profileSelection), kind: "profile" },
     { label: labels.policy || "Policy", value: policySource.name, kind: "policy" },
     { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy, kind: "contract" },
     { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy, kind: "contract" },
@@ -780,6 +782,15 @@ function formatPolicyRisks(policy, labels) {
     denied ? `${labels.policyDenied || "deny"} ${denied}` : "",
     approval ? `${labels.policyApproval || "approval"} ${approval}` : "",
   ], " · ");
+}
+
+function formatProfileSelection(selection) {
+  if (!selection || !Object.keys(selection).length) {
+    return "";
+  }
+  const signals = formatPayloadList(selection.matched_signals || selection.matchedSignals, 4);
+  const selectedBy = previewText(selection.selected_by || selection.selectedBy || "");
+  return compactJoin([selectedBy, signals], " · ");
 }
 
 function formatCheckpoint(payload, source, labels) {
