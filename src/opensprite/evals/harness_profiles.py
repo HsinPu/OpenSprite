@@ -28,6 +28,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "expected_contract_requirement_kinds": (),
         "expected_contract_tool_groups": (),
         "expected_contract_acceptance_kinds": (),
+        "expected_scenario_check": "chat_allows_no_tool_final",
     },
     {
         "id": "research_sources",
@@ -45,6 +46,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "expected_contract_requirement_kinds": ("tool_group",),
         "expected_contract_tool_groups": ("web_research",),
         "expected_contract_acceptance_kinds": ("source_artifact", "source_detail", "source_reference"),
+        "expected_scenario_check": "research_requires_source_grounding",
     },
     {
         "id": "coding_change",
@@ -62,6 +64,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "expected_contract_requirement_kinds": ("tool_group", "file_change", "verification"),
         "expected_contract_tool_groups": ("workspace_read", "verification"),
         "expected_contract_acceptance_kinds": ("verification_or_gap", "substantive_final_answer"),
+        "expected_scenario_check": "coding_change_requires_verification_or_gap",
     },
     {
         "id": "media_artifact",
@@ -80,6 +83,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "expected_contract_requirement_kinds": ("resource_coverage",),
         "expected_contract_tool_groups": ("image_text",),
         "expected_contract_acceptance_kinds": ("media_artifact", "substantive_final_answer"),
+        "expected_scenario_check": "media_requires_artifact",
     },
     {
         "id": "operations_approval",
@@ -97,6 +101,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "expected_contract_requirement_kinds": (),
         "expected_contract_tool_groups": (),
         "expected_contract_acceptance_kinds": ("operation_report", "substantive_final_answer"),
+        "expected_scenario_check": "ops_requires_audit_or_remaining_risk",
     },
 )
 
@@ -190,6 +195,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
             [item.kind for item in contract.acceptance_criteria],
             case.get("expected_contract_acceptance_kinds"),
         ),
+        _expect_scenario(case.get("expected_scenario_check"), profile, policy, contract),
     ]
 
     return {
@@ -249,6 +255,27 @@ def _expect_contains_all(id_: str, description: str, observed: Any, expected: An
 
 def _check(id_: str, description: str, ok: bool, detail: str) -> dict[str, Any]:
     return {"id": id_, "description": description, "ok": bool(ok), "detail": detail}
+
+
+def _expect_scenario(expected: Any, profile: Any, policy: Any, contract: Any) -> dict[str, Any]:
+    scenario = _string(expected, default="scenario")
+    acceptance_kinds = {item.kind for item in contract.acceptance_criteria}
+    requirement_kinds = {item.kind for item in contract.requirements}
+    policy_approval = set(getattr(policy, "approval_required_risk_levels", ()) or ())
+    scenario_results = {
+        "chat_allows_no_tool_final": contract.allow_no_tool_final is True and profile.name == "chat",
+        "research_requires_source_grounding": {"source_artifact", "source_detail", "source_reference"}.issubset(acceptance_kinds),
+        "coding_change_requires_verification_or_gap": "file_change" in requirement_kinds and "verification_or_gap" in acceptance_kinds,
+        "media_requires_artifact": "media_artifact" in acceptance_kinds and bool(contract.selected_resources),
+        "ops_requires_audit_or_remaining_risk": "operation_report" in acceptance_kinds and {"configuration", "mcp"}.issubset(policy_approval),
+    }
+    ok = bool(scenario_results.get(scenario, False))
+    return _check(
+        "scenario",
+        "Scenario-level harness behavior matches",
+        ok,
+        f"Scenario {scenario} {'passed' if ok else 'failed'}.",
+    )
 
 
 def _score(checks: list[dict[str, Any]]) -> dict[str, int]:

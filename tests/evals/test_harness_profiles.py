@@ -14,8 +14,8 @@ def test_harness_profile_eval_runs_fixed_cases():
     assert payload["summary"] == {
         "passed_cases": 5,
         "total_cases": 5,
-        "passed_checks": 60,
-        "total_checks": 60,
+        "passed_checks": 65,
+        "total_checks": 65,
     }
     assert {case["id"] for case in payload["cases"]} == {
         "chat_question",
@@ -32,6 +32,7 @@ def test_harness_profile_eval_covers_profile_contract_and_policy_expectations():
     assert cases["chat_question"]["profile"]["name"] == "chat"
     assert cases["chat_question"]["policy"]["name"] == "chat_read_policy"
     assert cases["chat_question"]["contract"]["allow_no_tool_final"] is True
+    assert any(check["id"] == "scenario" and check["ok"] for check in cases["chat_question"]["checks"])
 
     assert cases["research_sources"]["profile"]["required_evidence"] == ["web_source", "source_reference"]
     assert cases["research_sources"]["contract"]["task_type"] == "web_research"
@@ -56,5 +57,5 @@ def test_harness_profile_eval_reports_failed_expectations():
     payload = evaluate_harness_profile_case(case)
 
     assert payload["ok"] is False
-    assert payload["score"] == {"passed": 11, "total": 12}
+    assert payload["score"] == {"passed": 12, "total": 13}
     assert {check["id"] for check in payload["checks"] if not check["ok"]} == {"profile"}
