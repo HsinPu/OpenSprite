@@ -4389,7 +4389,11 @@ export function useChatClient() {
     try {
       const payload = await requestSettingsJson(buildWorktreeCleanupPath(), {
         method: "POST",
-        body: JSON.stringify({ sandbox_path: sandbox.sandboxPath }),
+        body: JSON.stringify({
+          sandbox_path: sandbox.sandboxPath,
+          session_id: run?.sessionId || currentSession.value?.sessionId || "",
+          run_id: run?.runId || "",
+        }),
       });
       sandbox.cleanupResult = payload?.cleanup || null;
       if (!payload?.ok) {

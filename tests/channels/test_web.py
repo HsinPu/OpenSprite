@@ -2839,11 +2839,15 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
     marker_dir.mkdir()
     (marker_dir / ".opensprite-worktree.json").write_text("{}", encoding="utf-8")
     cleanup_calls = []
+    trace_events = []
 
     class WorktreeAgent(EchoAgent):
         def cleanup_worktree_sandbox(self, sandbox_path):
             cleanup_calls.append(sandbox_path)
             return {"ok": True, "status": "removed", "sandbox_path": sandbox_path}
+
+        async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
+            trace_events.append((session_id, run_id, event_type, payload, kwargs))
 
     queue = MessageQueue(WorktreeAgent())
     adapter = WebAdapter(
@@ -2866,7 +2870,7 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
         async with ClientSession() as session:
             async with session.post(
                 f"http://127.0.0.1:{port}/api/worktrees/cleanup",
-                json={"sandbox_path": str(marker_dir)},
+                json={"sandbox_path": str(marker_dir), "session_id": "web:browser-1", "run_id": "run-1"},
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
@@ -2879,6 +2883,12 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
             "cleanup": {"ok": True, "status": "removed", "sandbox_path": str(marker_dir)},
         }
         assert cleanup_calls == [str(marker_dir)]
+        assert [(event[0], event[1], event[2]) for event in trace_events] == [
+            ("web:browser-1", "run-1", "worktree_cleanup.started"),
+            ("web:browser-1", "run-1", "worktree_cleanup.completed"),
+        ]
+        assert trace_events[-1][3]["sandbox_path"] == str(marker_dir)
+        assert trace_events[-1][3]["ok"] is True
     finally:
         adapter_task.cancel()
         try:
