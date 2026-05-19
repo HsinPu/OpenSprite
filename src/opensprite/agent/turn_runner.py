@@ -454,6 +454,21 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "harness_checkpoint.recorded",
+            _harness_checkpoint_metadata(
+                harness_profile=harness_profile,
+                aggregate_result=aggregate_result,
+                completion_result=completion_result,
+                work_progress=work_progress,
+                pass_index=len(execution_results),
+                auto_continue_attempts=auto_continue_attempts,
+            ),
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
         if auto_continue_attempts > 0:
             await self._emit_run_event(
                 turn.session_id,
@@ -1061,8 +1076,16 @@ class AgentTurnRunner:
             task_contract=next(
                 (
                     result.task_contract
-                    for result in results
+                    for result in reversed(results)
                     if result.task_contract is not None
+                ),
+                None,
+            ),
+            harness_policy=next(
+                (
+                    dict(result.harness_policy)
+                    for result in reversed(results)
+                    if result.harness_policy is not None
                 ),
                 None,
             ),
@@ -1096,3 +1119,28 @@ class AgentTurnRunner:
         )
         exec_result.touched_paths = touched_paths
         return exec_result
+
+
+def _harness_checkpoint_metadata(
+    *,
+    harness_profile: HarnessProfile | None,
+    aggregate_result: ExecutionResult,
+    completion_result: CompletionGateResult,
+    work_progress: WorkProgressUpdate,
+    pass_index: int,
+    auto_continue_attempts: int,
+) -> dict[str, Any]:
+    task_contract = getattr(aggregate_result, "task_contract", None)
+    return {
+        "schema_version": 1,
+        "pass_index": max(1, pass_index),
+        "auto_continue_attempts": max(0, auto_continue_attempts),
+        "harness_profile": harness_profile.to_metadata() if harness_profile is not None else None,
+        "harness_policy": dict(aggregate_result.harness_policy or {}),
+        "task_contract": task_contract.to_metadata() if task_contract is not None else None,
+        "completion": completion_result.to_metadata(),
+        "work_progress": work_progress.to_metadata(),
+        "next_action": work_progress.next_action,
+        "tool_evidence_count": len(aggregate_result.tool_evidence),
+        "task_artifact_count": len(aggregate_result.task_artifacts),
+    }

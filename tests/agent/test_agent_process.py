@@ -497,6 +497,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
         "llm_status",
         "completion_gate.evaluated",
         "work_progress.updated",
+        "harness_checkpoint.recorded",
         "run_finished",
     ]
     assert events[0].payload["status"] == "running"
@@ -505,6 +506,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert events[2].payload["name"] == "chat"
     assert events[4].payload["status"] == "complete"
     assert events[5].payload["next_action"] == "finalize"
+    assert events[6].payload["next_action"] == "finalize"
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == ["context_compaction", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
@@ -1286,9 +1288,11 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "llm_status",
         "completion_gate.evaluated",
         "work_progress.updated",
+        "harness_checkpoint.recorded",
         "auto_continue.scheduled",
         "completion_gate.evaluated",
         "work_progress.updated",
+        "harness_checkpoint.recorded",
         "auto_continue.completed",
         "auto_continue.skipped",
         "task_checklist.updated",
@@ -1298,11 +1302,13 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[5].payload["status"] == "incomplete"
     assert events[5].payload["reason"] == "expected code changes were not recorded"
     assert events[6].payload["next_action"] == "continue_work"
-    assert events[8].payload["status"] == "needs_review"
-    assert events[8].payload["reason"] == "delegated review was not recorded for code changes"
-    assert events[9].payload["next_action"] == "collect_review_evidence"
-    assert events[10].payload["completion_status"] == "needs_review"
-    assert events[11].payload["reason"] == "review_evidence_still_missing"
+    assert events[7].payload["next_action"] == "continue_work"
+    assert events[9].payload["status"] == "needs_review"
+    assert events[9].payload["reason"] == "delegated review was not recorded for code changes"
+    assert events[10].payload["next_action"] == "collect_review_evidence"
+    assert events[11].payload["next_action"] == "collect_review_evidence"
+    assert events[12].payload["completion_status"] == "needs_review"
+    assert events[13].payload["reason"] == "review_evidence_still_missing"
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1
     assert assistant_part.metadata["verification_passed"] is True

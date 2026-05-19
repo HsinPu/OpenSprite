@@ -95,6 +95,7 @@ class ExecutionResult:
     reasoning_details: list[dict[str, Any]] | None = None
     assistant_internal_only_response: bool = False
     task_contract: TaskContract | None = None
+    harness_policy: dict[str, Any] | None = None
     tool_evidence: tuple[ToolEvidence, ...] = ()
     task_artifacts: tuple[TaskArtifact, ...] = ()
 

@@ -562,6 +562,7 @@ class LlmCallService:
         try:
             result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
             result.task_contract = task_contract
+            result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
             return result
         except TypeError as exc:
             message = str(exc)
@@ -580,6 +581,7 @@ class LlmCallService:
             execute_kwargs.pop("on_reasoning_delta", None)
             result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
             result.task_contract = task_contract
+            result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
             return result
 
 
