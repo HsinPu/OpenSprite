@@ -38,6 +38,9 @@ def test_start_service_launches_detached_gateway(tmp_path, monkeypatch):
     assert status.running is True
     assert status.pid == 4321
     assert status.pid_file.read_text(encoding="utf-8") == "4321\n"
+    log_text = status.log_file.read_text(encoding="utf-8")
+    assert "starting OpenSprite background gateway" in log_text
+    assert f"command: {python_path.resolve()} -m opensprite gateway --config {(tmp_path / 'opensprite.json').resolve()}" in log_text
     command, kwargs = calls[0]
     assert command[:3] == [str(python_path.resolve()), "-m", "opensprite"]
     assert command[3:] == ["gateway", "--config", str((tmp_path / "opensprite.json").resolve())]
@@ -82,9 +85,11 @@ def test_start_service_reports_early_gateway_exit(tmp_path):
     except RuntimeError as exc:
         assert "exited during startup" in str(exc)
         assert str(tmp_path / "logs" / "gateway.log") in str(exc)
+        assert "starting OpenSprite background gateway" in str(exc)
     else:
         raise AssertionError("Expected early gateway exit to fail")
 
+    assert "starting OpenSprite background gateway" in service_background.get_log_file(tmp_path).read_text(encoding="utf-8")
     assert not service_background.get_pid_file(tmp_path).exists()
 
 

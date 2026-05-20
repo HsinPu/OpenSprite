@@ -297,12 +297,18 @@ def create_cron_manager(config: Config, agent: AgentLoop, mq: MessageQueue) -> C
 
 async def run(config_path: str | Path | None = None) -> None:
     """Start the OpenSprite gateway service."""
+    from .utils.log import setup_log
+
+    # Config loading can fail before the configured log section is available.
+    # Install a default sink first so fresh-install startup errors are visible.
+    early_app_home = Path(config_path).expanduser().resolve().parent if config_path is not None else None
+    setup_log(app_home=early_app_home)
+
     # 讀取設定
     config = Config.load(config_path)
     
     # 初始化日誌
-    from .utils.log import setup_log
-    setup_log(config.log)
+    setup_log(config.log, app_home=config.source_path.parent if config.source_path is not None else early_app_home)
     apply_network_environment(config)
 
     if not config.is_llm_configured:

@@ -24,7 +24,7 @@ _initialized = False
 _current_signature = None
 
 
-def setup_log(config=None, console: bool = True):
+def setup_log(config=None, console: bool = True, app_home: str | Path | None = None):
     """
     初始化日誌
 
@@ -42,7 +42,8 @@ def setup_log(config=None, console: bool = True):
         retention = "365 days"
         level = "INFO"
 
-    signature = (enabled, retention, level, console)
+    log_dir = (Path(app_home).expanduser() if app_home is not None else Path.home() / ".opensprite") / "logs"
+    signature = (enabled, retention, level, console, str(log_dir))
     if _initialized and _current_signature == signature:
         return logger
     logger.remove()
@@ -51,11 +52,11 @@ def setup_log(config=None, console: bool = True):
         _current_signature = signature
         return logger
 
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     # 設定輸出到檔案
     logger.add(
-        LOG_DIR / "opensprite-{time:YYYY-MM-DD}.log",
+        log_dir / "opensprite-{time:YYYY-MM-DD}.log",
         rotation="1 day",           # 每日新檔案
         retention=retention,        # 保留天數
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 import os
 from pathlib import Path
 import platform
@@ -83,6 +84,25 @@ def _cleanup_stale_pid(pid_file: Path) -> None:
         pass
 
 
+def _append_startup_log_preamble(log_file: Path, command: list[str], app_home: Path) -> None:
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    message = (
+        f"\n[{timestamp}] starting OpenSprite background gateway\n"
+        f"command: {' '.join(command)}\n"
+        f"cwd: {app_home}\n"
+    )
+    with log_file.open("ab") as handle:
+        handle.write(message.encode("utf-8", errors="replace"))
+
+
+def _read_log_tail(log_file: Path, limit: int = 2000) -> str:
+    try:
+        data = log_file.read_bytes()
+    except OSError:
+        return ""
+    return data[-limit:].decode("utf-8", errors="replace").strip()
+
+
 def start_service(
     *,
     config_path: Path | None = None,
@@ -111,6 +131,7 @@ def start_service(
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
     creationflags = 0
+    _append_startup_log_preamble(log_file, command, app_home)
     log_handle = log_file.open("ab")
     popen_kwargs: dict[str, object] = {
         "stdin": subprocess.DEVNULL,
@@ -134,9 +155,11 @@ def start_service(
         time.sleep(startup_timeout)
         return_code = process.poll()
         if return_code is not None:
+            log_tail = _read_log_tail(log_file)
+            tail_message = f" Recent log output: {log_tail}" if log_tail else ""
             raise RuntimeError(
                 "OpenSprite gateway exited during startup "
-                f"(exit code {return_code}). Check the log: {log_file}"
+                f"(exit code {return_code}). Check the log: {log_file}.{tail_message}"
             )
 
     pid_file.write_text(f"{process.pid}\n", encoding="utf-8")
