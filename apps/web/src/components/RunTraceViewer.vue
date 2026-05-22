@@ -56,6 +56,42 @@
         </div>
       </div>
 
+      <section v-if="decisionTimelineItems.length" class="run-trace__decision" aria-label="Decision timeline">
+        <div class="run-trace__section-head">
+          <strong>{{ copy.trace.decisionTimeline.title }}</strong>
+          <span>{{ copy.trace.decisionTimeline.count(decisionTimelineItems.length) }}</span>
+        </div>
+
+        <div class="run-trace__decision-list">
+          <details
+            v-for="item in decisionTimelineItems"
+            :key="item.id"
+            class="run-trace__decision-item"
+            :data-phase="item.phase"
+            :data-status="item.status"
+          >
+            <summary>
+              <span class="run-trace__decision-marker" aria-hidden="true"></span>
+              <div class="run-trace__decision-main">
+                <div class="run-trace__decision-title">
+                  <strong>{{ decisionTimelineTitle(item) }}</strong>
+                  <span>{{ decisionTimelinePhaseLabel(item) }}</span>
+                </div>
+                <p v-if="item.summary">{{ item.summary }}</p>
+              </div>
+              <time>{{ formatEventTime(item.createdAt) }}</time>
+            </summary>
+
+            <dl v-if="item.details.length" class="run-trace__decision-details">
+              <div v-for="detail in item.details" :key="`${item.id}:${detail.labelKey}`" :data-tone="detail.tone || 'neutral'">
+                <dt>{{ decisionTimelineDetailLabel(detail) }}</dt>
+                <dd>{{ detail.value }}</dd>
+              </div>
+            </dl>
+          </details>
+        </div>
+      </section>
+
       <div class="run-trace__artifacts" aria-label="Run artifacts">
         <div class="run-trace__section-head">
           <button class="run-trace__section-toggle" type="button" :aria-expanded="artifactsExpanded" @click="artifactsExpanded = !artifactsExpanded">
@@ -373,6 +409,7 @@
 import { computed, ref } from "vue";
 
 import { formatEventTime } from "../composables/useChatClient";
+import { deriveDecisionTimelineItems } from "../composables/runTraceNormalizers";
 
 const props = defineProps({
   copy: {
@@ -398,6 +435,7 @@ const artifacts = computed(() => props.run?.artifacts || []);
 const parts = computed(() => props.run?.parts || []);
 const visibleParts = computed(() => parts.value.slice(-8));
 const codeNavigationResults = computed(() => parts.value.map(normalizeCodeNavigationResult).filter(Boolean));
+const decisionTimelineItems = computed(() => deriveDecisionTimelineItems(events.value));
 
 const filteredEvents = computed(() => {
   if (selectedFilter.value === "all") {
@@ -753,6 +791,18 @@ function formatHarnessEvalResult(payload, summary, labels) {
     summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} ${labels.cases || "cases"}` : "",
     summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks} ${labels.checks || "checks"}` : "",
   ], " · ");
+}
+
+function decisionTimelineTitle(item) {
+  return props.copy.trace.decisionTimeline.titles?.[item.titleKey] || item.title || item.titleKey;
+}
+
+function decisionTimelinePhaseLabel(item) {
+  return props.copy.trace.decisionTimeline.phases?.[item.phase] || item.phase;
+}
+
+function decisionTimelineDetailLabel(detail) {
+  return props.copy.trace.decisionTimeline.details?.[detail.labelKey] || detail.labelKey;
 }
 
 function eventSummary(event) {
