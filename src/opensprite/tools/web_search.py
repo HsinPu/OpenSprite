@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 from datetime import datetime
 from typing import Any
-from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
+from urllib.parse import quote_plus
 
 import httpx
 from loguru import logger
@@ -18,7 +19,10 @@ from ..utils.url import join_url_path
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 
-USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+)
 FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
 BRAVE_FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
@@ -72,21 +76,6 @@ _MONTH_RECENCY_MARKERS = (
 )
 
 
-def _detect_duckduckgo_block(text: str) -> str | None:
-    """Detect common DuckDuckGo bot/rate-limit challenge pages."""
-    normalized = _normalize(_strip_tags(text)).lower()
-    block_markers = (
-        "captcha",
-        "prove you are not a robot",
-        "prove you are human",
-        "unusual traffic",
-        "rate limit",
-    )
-    if any(marker in normalized for marker in block_markers):
-        return "bot or rate-limit challenge"
-    return None
-
-
 def _strip_tags(text: str) -> str:
     """Remove HTML tags and decode entities."""
     text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.I)
@@ -108,19 +97,6 @@ def _normalize_proxy(proxy: Any) -> str | None:
         proxy = proxy.strip()
         return proxy or None
     return str(proxy)
-
-
-def _extract_duckduckgo_url(href: str) -> str:
-    """Extract the real result URL from a DuckDuckGo redirect link."""
-    if not href:
-        return ""
-
-    normalized = f"https:{href}" if href.startswith("//") else href
-    parsed = urlparse(normalized)
-    if parsed.netloc.endswith("duckduckgo.com") and parsed.path == "/l/":
-        target = parse_qs(parsed.query).get("uddg", [""])[0]
-        return unquote(target) if target else ""
-    return normalized
 
 
 def _normalize_freshness(value: Any, default: str = "year") -> str:
@@ -225,74 +201,7 @@ def _searxng_scope_params(engines: Any, categories: Any) -> dict[str, str]:
     return params
 
 
-def _extract_duckduckgo_results(soup: Any) -> list[dict[str, str]]:
-    """Parse result rows from DuckDuckGo Lite HTML."""
-    results: list[dict[str, str]] = []
-    for a in soup.select("a.result-link"):
-        row = a.find_parent("tr")
-        snippet = ""
-        display_url = ""
-
-        if row is not None:
-            sibling_rows = row.find_next_siblings("tr")
-            if sibling_rows:
-                snippet_cell = sibling_rows[0].select_one("td.result-snippet")
-                if snippet_cell is not None:
-                    snippet = snippet_cell.get_text(" ", strip=True)
-            if len(sibling_rows) > 1:
-                url_cell = sibling_rows[1].select_one("span.link-text")
-                if url_cell is not None:
-                    display_url = url_cell.get_text(" ", strip=True)
-
-        results.append({
-            "title": a.get_text(strip=True),
-            "url": _extract_duckduckgo_url(a.get("href", "")) or display_url,
-            "content": snippet,
-        })
-    return results
-
-
-def _duckduckgo_next_request(soup: Any, current_url: str) -> tuple[str, str, dict[str, str]] | None:
-    """Extract the next-page request from DuckDuckGo Lite HTML."""
-    next_label = re.compile(r"next|下一", re.IGNORECASE)
-
-    for form in soup.find_all("form"):
-        submit = None
-        for control in form.find_all(["input", "button"]):
-            label = control.get("value") or control.get_text(" ", strip=True)
-            if label and next_label.search(label):
-                submit = control
-                break
-
-        if submit is None:
-            continue
-
-        payload: dict[str, str] = {}
-        for field in form.find_all("input"):
-            name = field.get("name")
-            if not name:
-                continue
-            field_type = (field.get("type") or "").lower()
-            if field_type in {"submit", "button", "image", "reset"}:
-                continue
-            payload[name] = field.get("value", "")
-
-        submit_name = submit.get("name")
-        if submit_name:
-            payload[submit_name] = submit.get("value", "")
-
-        method = (form.get("method") or "get").lower()
-        action = form.get("action") or current_url
-        return method, urljoin(current_url, action), payload
-
-    for link in soup.find_all("a"):
-        if next_label.search(link.get_text(" ", strip=True)) and link.get("href"):
-            return "get", urljoin(current_url, link["href"]), {}
-
-    return None
-
-
-def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str) -> str:
+def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str, **metadata: Any) -> str:
     """Format search results into the shared web payload schema."""
     normalized_items: list[dict[str, str]] = []
     for item in items[:n]:
@@ -303,8 +212,7 @@ def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider
                 "content": _normalize(_strip_tags(str(item.get("content", "") or ""))),
             }
         )
-    return json.dumps(
-        {
+    payload = {
             "type": "web_search",
             "query": query,
             "url": "",
@@ -318,9 +226,9 @@ def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider
             "truncated": False,
             "content_type": "application/json",
             "items": normalized_items,
-        },
-        ensure_ascii=False,
-    )
+    }
+    payload.update({key: value for key, value in metadata.items() if value is not None})
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _format_error(query: str, provider: str, error: str, **metadata: Any) -> str:
@@ -457,78 +365,64 @@ class WebSearchTool(Tool):
             return _format_error(query, "brave", str(e))
 
     async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
+        """Search DuckDuckGo through the ddgs package."""
         try:
-            from bs4 import BeautifulSoup
+            from ddgs import DDGS  # type: ignore
+        except ImportError:
+            return _format_error(
+                query,
+                "duckduckgo",
+                "ddgs package is not installed. Install OpenSprite dependencies and retry.",
+                backend="ddgs",
+            )
 
-            request_method = "get"
-            request_url = "https://lite.duckduckgo.com/lite/"
-            freshness_payload = _freshness_params("duckduckgo", freshness)
-            request_payload = {"q": query, **freshness_payload}
-            visited_requests = set()
-            seen_results = set()
-            results = []
-            pages_fetched = 0
+        safe_limit = max(1, int(n))
+        timelimit = DUCKDUCKGO_FRESHNESS.get(_normalize_freshness(freshness, default="none"))
 
-            async with httpx.AsyncClient(
-                proxy=self.proxy,
-                headers={"User-Agent": USER_AGENT},
-                follow_redirects=True,
-            ) as client:
-                while len(results) < n and pages_fetched < self.duckduckgo_max_pages:
-                    request_key = (
-                        request_method,
-                        request_url,
-                        tuple(sorted(request_payload.items())),
+        def _run_ddgs_search() -> list[dict[str, str]]:
+            results: list[dict[str, str]] = []
+            search_kwargs: dict[str, Any] = {"max_results": safe_limit}
+            if timelimit:
+                search_kwargs["timelimit"] = timelimit
+            with DDGS() as client:
+                for i, hit in enumerate(client.text(query, **search_kwargs)):
+                    if i >= safe_limit:
+                        break
+                    url = str(hit.get("href") or hit.get("url") or "")
+                    title = str(hit.get("title") or "")
+                    if not title or not url:
+                        continue
+                    results.append(
+                        {
+                            "title": title,
+                            "url": url,
+                            "content": str(hit.get("body") or hit.get("content") or ""),
+                        }
                     )
-                    if request_key in visited_requests:
-                        break
-                    visited_requests.add(request_key)
+            return results
 
-                    if request_method == "post":
-                        r = await client.post(request_url, data=request_payload, timeout=10.0)
-                    else:
-                        r = await client.get(request_url, params=request_payload, timeout=10.0)
-                    r.raise_for_status()
-                    pages_fetched += 1
+        try:
+            items = await asyncio.to_thread(_run_ddgs_search)
+        except TypeError as exc:
+            if timelimit and "timelimit" in str(exc):
+                logger.warning("DDGS does not accept timelimit, retrying without freshness filter")
+                timelimit = None
+                try:
+                    items = await asyncio.to_thread(_run_ddgs_search)
+                except Exception as retry_exc:
+                    logger.warning("DDGS search failed: %s", retry_exc)
+                    return _format_error(query, "duckduckgo", f"DDGS search failed: {retry_exc}", backend="ddgs")
+            else:
+                logger.warning("DDGS search failed: %s", exc)
+                return _format_error(query, "duckduckgo", f"DDGS search failed: {exc}", backend="ddgs")
+        except Exception as exc:
+            logger.warning("DDGS search failed: %s", exc)
+            return _format_error(query, "duckduckgo", f"DDGS search failed: {exc}", backend="ddgs")
 
-                    block_reason = _detect_duckduckgo_block(r.text)
-                    if block_reason:
-                        return _format_error(
-                            query,
-                            "duckduckgo",
-                            (
-                                f"DuckDuckGo blocked the search for '{query}' with a {block_reason}. "
-                                "Try again later or configure another web_search provider."
-                            ),
-                            block_reason=block_reason,
-                        )
-
-                    current_url = str(getattr(r, "url", request_url))
-                    soup = BeautifulSoup(r.text, "html.parser")
-                    for item in _extract_duckduckgo_results(soup):
-                        dedupe_key = item.get("url") or item.get("title")
-                        if dedupe_key in seen_results:
-                            continue
-                        seen_results.add(dedupe_key)
-                        results.append(item)
-                        if len(results) >= n:
-                            break
-
-                    if len(results) >= n:
-                        break
-
-                    next_request = _duckduckgo_next_request(soup, current_url)
-                    if next_request is None:
-                        break
-                    request_method, request_url, request_payload = next_request
-                    request_payload = {**request_payload, **freshness_payload}
-
-            if not results:
-                return _format_error(query, "duckduckgo", f"DuckDuckGo returned no results for '{query}'.")
-
-            return _format_results(query, results, n, provider="duckduckgo")
-        except Exception as e:
-            return _format_error(query, "duckduckgo", str(e))
+        if not items:
+            logger.warning("DDGS returned no results for query: %s", query)
+            return _format_error(query, "duckduckgo", f"DDGS returned no results for '{query}'.", backend="ddgs")
+        return _format_results(query, items, n, provider="duckduckgo", backend="ddgs")
 
     async def _search_tavily(self, query: str, n: int, freshness: str) -> str:
         api_key = self.tavily_api_key

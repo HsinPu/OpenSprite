@@ -193,7 +193,11 @@ class WebResearchTool(Tool):
                 continue
 
             item_search_provider = str(item.get("search_provider") or search_provider)
-            fetch_result = await self.fetch_tool._execute(url=url, max_chars=effective_max_chars)
+            try:
+                fetch_result = await self.fetch_tool._execute(url=url, max_chars=effective_max_chars)
+            except Exception as exc:
+                failed_sources.append({**item, "reason": f"web_fetch failed: {exc}"[:500]})
+                continue
             fetch_payload = _parse_json_object(fetch_result)
             if fetch_payload is None:
                 failed_sources.append({**item, "reason": str(fetch_result or "web_fetch returned no structured result")[:500]})

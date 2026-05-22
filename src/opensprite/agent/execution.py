@@ -328,10 +328,25 @@ Output exactly these sections when applicable:
 
     @staticmethod
     def _tool_result_looks_like_failure(result: str) -> bool:
-        lowered = result.lower()
+        text = str(result or "")
+        stripped = text.lstrip()
+        if stripped.startswith("{"):
+            try:
+                payload = json.loads(stripped)
+            except Exception:
+                payload = None
+            if isinstance(payload, dict):
+                if payload.get("ok") is False:
+                    return True
+                error = payload.get("error")
+                if error is not None and str(error).strip():
+                    return True
+                return False
+
+        lowered = text.lower()
         return (
-            result.startswith("Error:")
-            or result.startswith("Error executing ")
+            text.startswith("Error:")
+            or text.startswith("Error executing ")
             or "timed out" in lowered
             or " failed" in lowered
             or lowered.startswith("(mcp tool call failed")

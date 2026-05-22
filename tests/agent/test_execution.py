@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
@@ -619,6 +620,25 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
     assert tool.calls == 3
     assert "repeated_failure_block" in messages[-1].content
     assert "Blocked failing_tool" in messages[-1].content
+
+
+def test_tool_result_failure_detection_allows_partial_web_research_payload():
+    payload = {
+        "type": "web_research",
+        "query": "Qwen latest model",
+        "fetched_count": 2,
+        "sources": [{"title": "Qwen", "url": "https://qwen.ai/research/"}],
+        "failed_sources": [{"title": "Candidate", "reason": "Search failed for exact query"}],
+        "coverage": {"target_met": True, "fetched_count": 2, "failed_count": 1},
+    }
+
+    assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is False
+
+
+def test_tool_result_failure_detection_honors_structured_error_payload():
+    payload = {"type": "web_search", "ok": False, "error": "Search failed for: Qwen"}
+
+    assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is True
 
 
 def test_execution_engine_warns_then_blocks_repeated_read_only_results():
