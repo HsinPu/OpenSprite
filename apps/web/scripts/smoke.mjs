@@ -319,6 +319,17 @@ assertIncludes(styles, ".eval-copy-fallback", "task completion debug copy fallba
 assertIncludes(chatClient, "STORAGE_KEYS.accessToken", "access token preference persistence");
 assertIncludes(chatClient, "authorizedHeaders", "authorized API requests");
 assertIncludes(chatClient, "access_token", "authorized websocket connection");
+assertIncludes(chatClient, "GATEWAY_RECONNECT_DELAY_MS = 30000", "gateway reconnect interval");
+assertIncludes(chatClient, "scheduleGatewayReconnect", "gateway reconnect scheduler");
+assertIncludes(chatClient, "autoReconnectEnabled", "manual disconnect disables reconnect");
+assertIncludes(chatClient, "SESSION_HISTORY_REFRESH_INTERVAL_MS = 30000", "session history refresh interval");
+assertIncludes(chatClient, "scheduleSessionHistoryRefresh", "session history auto refresh scheduler");
+assertIncludes(chatClient, "loadSessionHistory({ quiet: true })", "session history refresh stays quiet");
+assertIncludes(chatClient, "localDraftSessions", "local draft sessions are persisted");
+assertIncludes(chatClient, "readStoredDraftSessions", "local draft sessions restore after reload");
+assertIncludes(chatClient, "persistLocalDraftSessions", "local draft sessions update with sidebar changes");
+assertIncludes(chatClient, "preserveActiveSession: quiet", "quiet history refresh preserves active trace state");
+assertIncludes(chatClient, "mergeHistorySession(existingSession, historySession", "history refresh reuses existing session objects");
 assertIncludes(chatClient, "/api/evals/task-completion/smoke", "task completion eval fetch");
 assertIncludes(chatClient, "/api/evals/harness/controlled", "controlled harness eval fetch");
 assertIncludes(chatClient, "/api/evals/task-completion/run", "live task completion eval fetch");

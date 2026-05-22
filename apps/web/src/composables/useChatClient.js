@@ -48,6 +48,7 @@ const STORAGE_KEYS = {
   sidebarCollapsed: "opensprite:web:sidebarCollapsed",
   traceInspectorCollapsed: "opensprite:web:traceInspectorCollapsed",
   overlayProfileId: "opensprite:web:overlayProfileId",
+  localDraftSessions: "opensprite:web:localDraftSessions",
 };
 
 const DEFAULT_LANGUAGE = "zh-TW";
@@ -68,6 +69,9 @@ const RUN_SUMMARY_NOT_FOUND_RETRY_DELAY_MS = 1200;
 const RUN_SUMMARY_NOT_FOUND_RETRY_LIMIT = 3;
 const RUN_BACKFILL_COOLDOWN_MS = 2000;
 const BACKGROUND_PROCESS_LIMIT = 30;
+const GATEWAY_RECONNECT_DELAY_MS = 30000;
+const SESSION_HISTORY_REFRESH_INTERVAL_MS = 30000;
+const LOCAL_DRAFT_SESSION_LIMIT = 10;
 const CURATOR_HISTORY_LIMIT = 5;
 const CURATOR_POLL_INTERVAL_MS = 2500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -250,6 +254,60 @@ function createSession(externalChatId) {
     runsLoading: false,
     runsError: "",
   };
+}
+
+function isLocalDraftSession(session) {
+  return Boolean(session)
+    && (!session.channel || session.channel === "web")
+    && !session.sessionId
+    && !session.messages?.length
+    && !session.entries?.length
+    && !session.runs?.length;
+}
+
+function normalizeStoredDraftSession(payload) {
+  const externalChatId = String(payload?.externalChatId || "").trim();
+  if (!externalChatId || isExternalChannelSessionId(externalChatId)) {
+    return null;
+  }
+  const session = createSession(externalChatId);
+  session.title = String(payload?.title || "").trim() || "New chat";
+  session.updatedAt = normalizeEventTimestamp(payload?.updatedAt);
+  session.status = {
+    status: "idle",
+    updatedAt: session.updatedAt,
+    metadata: {},
+  };
+  return session;
+}
+
+function readStoredDraftSessions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.localDraftSessions);
+    const drafts = raw ? JSON.parse(raw) : [];
+    return Array.isArray(drafts)
+      ? drafts.map(normalizeStoredDraftSession).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredDraftSessions(sessions) {
+  try {
+    const drafts = sessions
+      .filter(isLocalDraftSession)
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, LOCAL_DRAFT_SESSION_LIMIT)
+      .map((session) => ({
+        externalChatId: session.externalChatId,
+        title: session.title,
+        updatedAt: session.updatedAt,
+      }));
+    localStorage.setItem(STORAGE_KEYS.localDraftSessions, JSON.stringify(drafts));
+  } catch {
+    return;
+  }
 }
 
 function makeLiveEntry(message) {
@@ -1039,6 +1097,13 @@ export function formatEventTime(timestamp) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function formatReconnectNotice(notice, delayMs) {
+  if (typeof notice === "function") {
+    return notice(Math.max(1, Math.round(delayMs / 1000)));
+  }
+  return notice;
+}
+
 export function useChatClient() {
   const storedExternalChatId = readStoredValue(STORAGE_KEYS.activeExternalChatId, "");
   const storedOverlayProfileId = readStoredValue(STORAGE_KEYS.overlayProfileId, "");
@@ -1048,6 +1113,12 @@ export function useChatClient() {
   const initialSession = createSession(
     isExternalChannelSessionId(storedExternalChatId) ? generateExternalChatId() : storedExternalChatId || generateExternalChatId(),
   );
+  const initialDraftSessions = readStoredDraftSessions()
+    .filter((session) => session.externalChatId !== initialSession.externalChatId);
+  const localDraftExternalChatIds = new Set(initialDraftSessions.map((session) => session.externalChatId));
+  if (storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId)) {
+    localDraftExternalChatIds.add(initialSession.externalChatId);
+  }
 
   const state = reactive({
     wsUrl: readStoredValue(STORAGE_KEYS.wsUrl, DEFAULT_WS_URL),
@@ -1061,7 +1132,7 @@ export function useChatClient() {
     language: initialLanguage,
     colorScheme: initialColorScheme,
     activeExternalChatId: initialSession.externalChatId,
-    sessions: [initialSession],
+    sessions: [initialSession, ...initialDraftSessions],
     connectionState: "disconnected",
     authRequired: false,
     authError: "",
@@ -1107,6 +1178,10 @@ export function useChatClient() {
   let activeSocket = null;
   let colorSchemeMediaQuery = null;
   let clientDisposed = false;
+  let autoReconnectEnabled = true;
+  let gatewayReconnectTimer = null;
+  let sessionHistoryRefreshTimer = null;
+  let sessionHistoryRefreshing = false;
   const runSummaryTimers = new Map();
   const runBackfillTimes = new Map();
   let curatorPollTimer = null;
@@ -1473,6 +1548,16 @@ export function useChatClient() {
     return Boolean(sessionId) && getCuratorSessionId(currentSession.value) === sessionId;
   }
 
+  function persistLocalDraftSessions() {
+    writeStoredDraftSessions(state.sessions);
+    localDraftExternalChatIds.clear();
+    for (const session of state.sessions) {
+      if (isLocalDraftSession(session)) {
+        localDraftExternalChatIds.add(session.externalChatId);
+      }
+    }
+  }
+
   function clearCuratorPollTimer() {
     if (curatorPollTimer) {
       clearTimeout(curatorPollTimer);
@@ -1549,6 +1634,7 @@ export function useChatClient() {
       session.updatedAt = session.status.updatedAt;
       sortSessions();
     }
+    persistLocalDraftSessions();
   }
 
   function viewExternalChatIdForPayload(payload) {
@@ -1571,6 +1657,7 @@ export function useChatClient() {
       session.title = summarizeTitle(message.text);
     }
     sortSessions();
+    persistLocalDraftSessions();
   }
 
   function findOrCreateRun(session, runId, createdAt) {
@@ -1987,6 +2074,7 @@ export function useChatClient() {
     if (!webSession) {
       webSession = createSession();
       state.sessions.unshift(webSession);
+      persistLocalDraftSessions();
     }
     state.activeExternalChatId = webSession.externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, webSession.externalChatId);
@@ -2102,7 +2190,59 @@ export function useChatClient() {
     writeStoredValue(STORAGE_KEYS.traceInspectorCollapsed, String(traceInspectorCollapsed.value));
   }
 
-  function disconnectSocket(reason, tone = "warning") {
+  function clearGatewayReconnectTimer() {
+    if (gatewayReconnectTimer) {
+      clearTimeout(gatewayReconnectTimer);
+      gatewayReconnectTimer = null;
+    }
+  }
+
+  function clearSessionHistoryRefreshTimer() {
+    if (sessionHistoryRefreshTimer) {
+      clearTimeout(sessionHistoryRefreshTimer);
+      sessionHistoryRefreshTimer = null;
+    }
+  }
+
+  function scheduleSessionHistoryRefresh(delayMs = SESSION_HISTORY_REFRESH_INTERVAL_MS) {
+    clearSessionHistoryRefreshTimer();
+    if (clientDisposed || state.authRequired || state.connectionState !== "connected") {
+      return;
+    }
+    sessionHistoryRefreshTimer = window.setTimeout(async () => {
+      sessionHistoryRefreshTimer = null;
+      if (clientDisposed || state.authRequired || state.connectionState !== "connected") {
+        return;
+      }
+      try {
+        await loadSessionHistory({ quiet: true });
+      } finally {
+        scheduleSessionHistoryRefresh();
+      }
+    }, delayMs);
+  }
+
+  function scheduleGatewayReconnect(reason, tone = "warning") {
+    clearGatewayReconnectTimer();
+    if (clientDisposed || !autoReconnectEnabled || state.authRequired || activeSocket || state.connectionState === "connecting") {
+      return;
+    }
+    setNotice(formatReconnectNotice(reason, GATEWAY_RECONNECT_DELAY_MS), tone);
+    gatewayReconnectTimer = window.setTimeout(() => {
+      gatewayReconnectTimer = null;
+      if (clientDisposed || !autoReconnectEnabled || state.authRequired || activeSocket || state.connectionState === "connecting") {
+        return;
+      }
+      connectSocket();
+    }, GATEWAY_RECONNECT_DELAY_MS);
+  }
+
+  function disconnectSocket(reason, tone = "warning", { manual = true } = {}) {
+    if (manual) {
+      autoReconnectEnabled = false;
+    }
+    clearGatewayReconnectTimer();
+    clearSessionHistoryRefreshTimer();
     const socket = activeSocket;
     activeSocket = null;
     state.connectionState = "disconnected";
@@ -2139,6 +2279,9 @@ export function useChatClient() {
         state.authRequired = true;
         state.authError = copy.value.auth.invalidToken;
         state.connectionState = "disconnected";
+        autoReconnectEnabled = false;
+        clearGatewayReconnectTimer();
+        clearSessionHistoryRefreshTimer();
       }
       throw error;
     }
@@ -2807,14 +2950,59 @@ export function useChatClient() {
     return session;
   }
 
-  function mergeHistorySessions(historySessions) {
+  function mergeHistorySession(existing, incoming, { preserveDetails = false } = {}) {
+    existing.channel = incoming.channel;
+    existing.transportExternalChatId = incoming.transportExternalChatId;
+    existing.sessionId = incoming.sessionId;
+    existing.title = incoming.title;
+    existing.updatedAt = incoming.updatedAt;
+    existing.status = incoming.status;
+    if (preserveDetails) {
+      return existing;
+    }
+    existing.messages = incoming.messages;
+    existing.entries = incoming.entries;
+    existing.runs = incoming.runs;
+    existing.activeRunId = incoming.activeRunId;
+    existing.workState = incoming.workState;
+    existing.runsLoaded = incoming.runsLoaded;
+    existing.runsLoading = incoming.runsLoading;
+    existing.runsError = incoming.runsError;
+    return existing;
+  }
+
+  function mergeHistorySessions(historySessions, options = {}) {
+    const preserveActiveSession = Boolean(options?.preserveActiveSession);
     if (!historySessions.length) {
+      persistLocalDraftSessions();
       return;
     }
 
-    const sessionsByExternalChatId = new Map(historySessions.map((session) => [session.externalChatId, session]));
+    const existingSessionsByExternalChatId = new Map(state.sessions.map((session) => [session.externalChatId, session]));
+    const sessionsByExternalChatId = new Map();
+    for (const historySession of historySessions) {
+      const existingSession = existingSessionsByExternalChatId.get(historySession.externalChatId);
+      if (!existingSession) {
+        sessionsByExternalChatId.set(historySession.externalChatId, historySession);
+        continue;
+      }
+      sessionsByExternalChatId.set(
+        historySession.externalChatId,
+        mergeHistorySession(existingSession, historySession, {
+          preserveDetails: preserveActiveSession && historySession.externalChatId === state.activeExternalChatId,
+        }),
+      );
+    }
+
     for (const session of state.sessions) {
-      if (!sessionsByExternalChatId.has(session.externalChatId) && (session.sessionId || session.messages.length > 0)) {
+      const isCurrentDraft = session.externalChatId === state.activeExternalChatId && isLocalDraftSession(session);
+      const isStoredDraft = isLocalDraftSession(session) && localDraftExternalChatIds.has(session.externalChatId);
+      const shouldRetainLocalSession = session.sessionId
+        || session.messages.length > 0
+        || session.entries.length > 0
+        || isStoredDraft
+        || isCurrentDraft;
+      if (!sessionsByExternalChatId.has(session.externalChatId) && shouldRetainLocalSession) {
         sessionsByExternalChatId.set(session.externalChatId, session);
       }
     }
@@ -2824,18 +3012,30 @@ export function useChatClient() {
       state.activeExternalChatId = state.sessions[0]?.externalChatId || state.activeExternalChatId;
       writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
     }
+    persistLocalDraftSessions();
   }
 
-  async function loadSessionHistory() {
+  async function loadSessionHistory(options = {}) {
+    const quiet = Boolean(options?.quiet);
+    if (sessionHistoryRefreshing) {
+      return;
+    }
+    sessionHistoryRefreshing = true;
     try {
       const payload = await requestSettingsJson("/api/sessions?channel=all&limit=50&messages=50");
       const historySessions = Array.isArray(payload.sessions)
         ? payload.sessions.map(normalizeHistorySession)
         : [];
-      mergeHistorySessions(historySessions);
-      scrollMessagesToBottom();
+      mergeHistorySessions(historySessions, { preserveActiveSession: quiet });
+      if (!quiet) {
+        scrollMessagesToBottom();
+      }
     } catch {
-      setNotice(copy.value.notices.historyLoadFailed, "warning");
+      if (!quiet) {
+        setNotice(copy.value.notices.historyLoadFailed, "warning");
+      }
+    } finally {
+      sessionHistoryRefreshing = false;
     }
   }
 
@@ -3428,6 +3628,8 @@ export function useChatClient() {
     if (!session) {
       return;
     }
+    autoReconnectEnabled = true;
+    clearGatewayReconnectTimer();
 
     let socketUrl;
     try {
@@ -3439,7 +3641,7 @@ export function useChatClient() {
     }
 
     if (activeSocket) {
-      disconnectSocket(copy.value.notices.refreshConnection, "info");
+      disconnectSocket(copy.value.notices.refreshConnection, "info", { manual: false });
     }
 
     state.connectionState = "connecting";
@@ -3456,6 +3658,8 @@ export function useChatClient() {
       state.authError = "";
       state.connectionState = "connected";
       setNotice(copy.value.notices.connected, "success");
+      void loadSessionHistory({ quiet: true });
+      scheduleSessionHistoryRefresh();
       void loadBackgroundProcesses({ quiet: true });
     });
 
@@ -3483,7 +3687,7 @@ export function useChatClient() {
       const failedToConnect = state.connectionState === "connecting";
       activeSocket = null;
       state.connectionState = "disconnected";
-      setNotice(
+      scheduleGatewayReconnect(
         failedToConnect ? copy.value.notices.couldNotConnect : copy.value.notices.disconnected,
         failedToConnect ? "error" : "warning",
       );
@@ -3516,6 +3720,7 @@ export function useChatClient() {
     state.sessions.unshift(session);
     state.activeExternalChatId = session.externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, session.externalChatId);
+    persistLocalDraftSessions();
     setNotice(copy.value.notices.newDraft, "info");
     scrollMessagesToBottom();
   }
@@ -3540,6 +3745,7 @@ export function useChatClient() {
     }
     state.activeExternalChatId = nextSession.externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, nextSession.externalChatId);
+    persistLocalDraftSessions();
   }
 
   function removeSessionsFromState(predicate, { preferWeb = false } = {}) {
@@ -3549,6 +3755,7 @@ export function useChatClient() {
     }
     state.sessions = state.sessions.filter((session) => !predicate(session));
     ensureActiveAfterSessionRemoval(preferWeb);
+    persistLocalDraftSessions();
     scrollMessagesToBottom();
     return removed.length;
   }
@@ -3634,6 +3841,7 @@ export function useChatClient() {
       state.activeExternalChatId = session.externalChatId;
       settingsForm.externalChatId = session.externalChatId;
     }
+    persistLocalDraftSessions();
 
     writeStoredValue(STORAGE_KEYS.wsUrl, state.wsUrl);
     writeStoredValue(STORAGE_KEYS.accessToken, state.accessToken);
@@ -3667,7 +3875,8 @@ export function useChatClient() {
       connectSocket();
       return;
     }
-    disconnectSocket(copy.value.notices.disconnected, "warning");
+    autoReconnectEnabled = false;
+    disconnectSocket(copy.value.notices.disconnectedManual, "warning");
   }
 
   async function cancelRun(run) {
@@ -3909,6 +4118,8 @@ export function useChatClient() {
     clearCuratorPollTimer();
     clearCodexAuthPollTimer();
     clearCopilotAuthPollTimer();
+    clearGatewayReconnectTimer();
+    clearSessionHistoryRefreshTimer();
     for (const timer of toastTimers.values()) {
       clearTimeout(timer);
     }
