@@ -455,10 +455,15 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind in {"analysis", "review"} and response_text.strip() and not _looks_incomplete(response_text):
+        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip() and not _looks_incomplete(response_text):
+            completion_reason = (
+                "writing-style task returned a substantive response"
+                if task_intent.kind == "writing"
+                else "analysis-style task returned a substantive response"
+            )
             return CompletionGateResult(
                 status="complete",
-                reason="analysis-style task returned a substantive response",
+                reason=completion_reason,
                 active_task_status="done",
                 should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
@@ -554,7 +559,7 @@ class CompletionGateService:
             execution_result=execution_result,
             verification_passed=verification_passed,
         )
-        if not evidence_result.passed or not _requires_web_research_evidence(evidence_result.task_contract):
+        if not evidence_result.passed:
             return False
 
         if not _has_successful_fetched_web_source_artifact(execution_result):
@@ -577,7 +582,14 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
     failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
     if not failed_evidence:
         return False
-    return all(item.name in {"web_search", "web_research"} for item in failed_evidence)
+    has_successful_fetch_sources = _has_successful_fetched_web_source_artifact(execution_result)
+    for item in failed_evidence:
+        if item.name in {"web_search", "web_research"}:
+            continue
+        if item.name == "web_fetch" and has_successful_fetch_sources:
+            continue
+        return False
+    return True
 
 
 def _requires_web_research_evidence(task_contract: Any) -> bool:

@@ -185,7 +185,16 @@ class RunHookService:
             safe_args = json_safe_payload(tool_args or {})
             result_text = str(result or "")
             result_preview = self._format_log_preview(result_text, max_chars=240)
-            ok = not result_text.lstrip().startswith("Error:")
+            normalized_result = result_text.lstrip()
+            lowered_result = normalized_result.lower()
+            state_text = str(state or "").strip().lower()
+            looks_error = (
+                normalized_result.startswith("Error:")
+                or normalized_result.startswith("Error executing ")
+                or lowered_result.startswith("(mcp tool call failed")
+                or lowered_result.startswith("(mcp tool call timed out")
+            )
+            ok = state_text not in {"error", "failed", "cancelled"} and not looks_error
             finished_at = time.time()
             started_at = self._tool_started_at.pop(
                 self._tool_lifecycle_key(session_id, rid, tool_call_id, tool_name, iteration),

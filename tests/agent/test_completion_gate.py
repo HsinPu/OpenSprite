@@ -1526,6 +1526,62 @@ def test_completion_gate_allows_optional_search_errors_after_successful_fetch_so
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_optional_fetch_errors_after_successful_fetch_sources():
+    intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Qwen's current model line includes Qwen3, with details from qwenlm.github.io, and a recent "
+        "Qwen3 checkpoint listed on Hugging Face. These successful sources are enough to answer the request "
+        "even though one extra model URL returned 404."
+    )
+    second_fetch_artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507",
+                    "title": "Qwen3-30B-A3B-Instruct-2507",
+                    "snippet": "Model card for a recent Qwen3 instruct checkpoint.",
+                    "query": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507",
+                    "provider": "web_fetch",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                    "extractor": "trafilatura",
+                    "truncated": False,
+                }
+            ],
+            "source_count": 1,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=3,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_fetch", ok=True),
+                ToolEvidence(name="web_fetch", ok=False, metadata={"error": "HTTP 404"}),
+            ),
+            task_artifacts=(_web_fetch_artifact(), second_fetch_artifact),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_still_blocks_failed_fetch_tool_errors():
     intent = TaskIntentService().classify("Please summarize https://www.reddit.com/dev/api/")
     contract = TaskContractService.build(

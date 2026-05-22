@@ -1684,6 +1684,7 @@ Output exactly these sections when applicable:
                                     iteration + 1,
                                     active_delegate_task_id if tool_name == "delegate" else None,
                                     active_delegate_prompt_type if tool_name == "delegate" else None,
+                                    "error" if tool_failed else "completed",
                                 )
                             except TypeError:
                                 await on_tool_after_execute(tool_name, display_tool_args, result)
