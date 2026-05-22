@@ -104,7 +104,12 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
 
     assert response.text == "Harness runtime reply."
     assert tool_names_by_call[-1] == ["read_file"]
+    assert "harness_profile.initial_selected" in event_types
+    assert "harness_profile.effective_selected" in event_types
     assert "harness_policy.selected" in event_types
+    effective_profile = next(event for event in events if event.event_type == "harness_profile.effective_selected")
+    assert effective_profile.payload["name"] == "chat"
+    assert effective_profile.payload["selection_phase"] == "effective"
     assert checkpoint.payload["harness_profile"]["name"] == "chat"
     assert checkpoint.payload["harness_policy"]["name"] == "chat_read_policy"
     assert checkpoint.payload["completion"]["status"] == "complete"

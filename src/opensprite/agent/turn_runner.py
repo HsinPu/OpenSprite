@@ -214,11 +214,23 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
         harness_profile = self.harness_profiles.select(task_intent)
+        initial_profile_metadata = {
+            **harness_profile.to_metadata(),
+            "selection_phase": "initial",
+        }
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "harness_profile.initial_selected",
+            initial_profile_metadata,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
         await self._emit_run_event(
             turn.session_id,
             run_id,
             "harness_profile.selected",
-            harness_profile.to_metadata(),
+            initial_profile_metadata,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )

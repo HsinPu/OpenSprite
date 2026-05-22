@@ -302,10 +302,37 @@ class LlmCallService:
         harness_tool_registry = None
         base_tool_registry = self._get_tool_registry()
         if effective_task_intent is not None:
+            initial_harness_profile = self._select_harness_profile(task_intent) if task_intent is not None else None
             harness_profile = self._select_harness_profile(effective_task_intent)
             harness_policy = self._select_harness_policy(harness_profile)
             harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
             if run_id is not None:
+                effective_profile_metadata = {
+                    **harness_profile.to_metadata(),
+                    "selection_phase": "effective",
+                }
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "harness_profile.effective_selected",
+                    effective_profile_metadata,
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+                if initial_harness_profile is not None and _harness_profile_changed(initial_harness_profile, harness_profile):
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        "harness_profile.changed",
+                        {
+                            "schema_version": 1,
+                            "initial": initial_harness_profile.to_metadata(),
+                            "effective": effective_profile_metadata,
+                            "reason": "resolved task objective changed the selected harness profile",
+                        },
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
                 await self._emit_run_event(
                     session_id,
                     run_id,
@@ -605,6 +632,13 @@ def _effective_task_intent(
     if not resolved_objective:
         return task_intent
     return TaskIntentService().classify(resolved_objective)
+
+
+def _harness_profile_changed(initial_profile: Any, effective_profile: Any) -> bool:
+    return (
+        getattr(initial_profile, "name", None) != getattr(effective_profile, "name", None)
+        or getattr(initial_profile, "task_type", None) != getattr(effective_profile, "task_type", None)
+    )
 
 
 def _message_with_resolved_objective(
