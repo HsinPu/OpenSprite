@@ -7326,11 +7326,13 @@ textarea:focus-visible {
   }
 
   .message--user .message__content {
-    width: min(100%, 300px);
+    justify-self: stretch;
+    width: 100%;
   }
 
   .message--user .message__bubble {
-    min-width: min(220px, 100%);
+    width: 100%;
+    min-width: 0;
   }
 
   .topbar__title strong {
@@ -7359,6 +7361,10 @@ textarea:focus-visible {
     grid-template-columns: 28px minmax(0, 1fr);
     gap: 10px;
     padding: 16px 0;
+  }
+
+  .message--user {
+    grid-template-columns: minmax(0, 1fr) 28px;
   }
 
   .message__avatar {

@@ -216,6 +216,11 @@ assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize sty
 assertIncludes(styles, "scrollbar-gutter: stable", "right trace sidebar keeps an internal scrollbar");
 assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded content styling");
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
+assertIncludesNormalized(
+  styles,
+  ".message {\n    grid-template-columns: 28px minmax(0, 1fr);\n    gap: 10px;\n    padding: 16px 0;\n  }\n\n  .message--user {\n    grid-template-columns: minmax(0, 1fr) 28px;\n  }",
+  "mobile user messages keep the text column wider than the avatar column",
+);
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
