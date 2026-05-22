@@ -525,6 +525,54 @@ Output exactly these sections when applicable:
         except TypeError:
             return self.format_log_preview(content, max_chars=max_chars)
 
+    @classmethod
+    def _format_tool_history_for_user(cls, tool_results_history: list[str]) -> str:
+        if not tool_results_history:
+            return ""
+        summaries = [
+            cls._summarize_tool_history_item_for_user(result)
+            for result in tool_results_history[-5:]
+        ]
+        return "\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(
+            f"- {summary}" for summary in summaries
+        )
+
+    @staticmethod
+    def _summarize_tool_history_item_for_user(result: str) -> str:
+        text = str(result or "").strip()
+        if not text:
+            return "工具呼叫沒有回傳可顯示內容。"
+        tool_name, separator, detail = text.partition(":")
+        if not separator:
+            return text[:220]
+        detail = detail.strip()
+        if (
+            "Output truncated for context" in detail
+            or "[tool:" in detail
+            or "--- BEGIN HEAD ---" in detail
+        ):
+            return f"{tool_name}: 工具輸出過長，已省略原始內容；請在 Trace 查看詳細結果。"
+        try:
+            parsed = json.loads(detail)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict):
+            summary = parsed.get("summary") or parsed.get("error") or parsed.get("title")
+            if summary:
+                return f"{tool_name}: {str(summary)[:180]}"
+        summary_marker = '"summary": "'
+        if summary_marker in detail:
+            summary = detail.split(summary_marker, 1)[1].split('"', 1)[0]
+            if summary:
+                return f"{tool_name}: {summary[:180]}"
+        if detail.startswith("Error executing "):
+            parts = detail.split(": ", 1)
+            if len(parts) == 2:
+                return f"{tool_name}: {parts[1][:180]}"
+        if len(detail) > 180:
+            detail = detail[:177].rstrip() + "..."
+        return f"{tool_name}: {detail}"
+
     def _get_token_model(self, provider: LLMProvider | None = None) -> str | None:
         """Best-effort model name lookup for local token estimates."""
         active_provider = provider or self.provider
@@ -1808,11 +1856,7 @@ Output exactly these sections when applicable:
             f"executed_tool_calls={executed_tool_calls} tool_result_count={len(tool_results_history)}"
         )
 
-        history_msg = ""
-        if tool_results_history:
-            history_msg = "\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(
-                f"- {result}" for result in tool_results_history[-5:]
-            )
+        history_msg = self._format_tool_history_for_user(tool_results_history)
 
         content = (
             f"我嘗試完成你的請求，但超過了最大迭代次數（{iteration_limit}次）。"

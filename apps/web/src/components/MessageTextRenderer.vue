@@ -28,6 +28,8 @@
         </template>
       </blockquote>
 
+      <hr v-else-if="block.type === 'rule'" class="message__rule" />
+
       <ul v-else-if="block.type === 'list' && !block.ordered" class="message__list">
         <li v-for="item in block.items" :key="item.id">
           <template v-for="segment in item.segments" :key="segment.id">

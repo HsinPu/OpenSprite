@@ -1918,11 +1918,11 @@ button:disabled {
 
 @media (max-width: 1180px) and (min-width: 861px) {
   .app-shell {
-    grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(460px, 40vw, 720px));
+    grid-template-columns: 268px minmax(0, 1fr) min(var(--trace-sidebar-width, 100vw), clamp(300px, 32vw, 380px));
   }
 
   .app-shell--sidebar-collapsed {
-    grid-template-columns: 52px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(460px, 40vw, 720px));
+    grid-template-columns: 52px minmax(0, 1fr) min(var(--trace-sidebar-width, 100vw), clamp(300px, 32vw, 380px));
   }
 
   .app-shell--trace-collapsed {
@@ -1931,6 +1931,21 @@ button:disabled {
 
   .app-shell--sidebar-collapsed.app-shell--trace-collapsed {
     grid-template-columns: 52px minmax(0, 1fr) 0;
+  }
+
+  .trace-sidebar .work-state-card__header,
+  .trace-sidebar .run-summary-card__header,
+  .trace-sidebar .run-timeline__header,
+  .trace-sidebar .run-trace__header {
+    grid-template-columns: 1fr;
+  }
+
+  .trace-sidebar .work-state-card__actions,
+  .trace-sidebar .run-summary-card__actions,
+  .trace-sidebar .run-timeline__actions,
+  .trace-sidebar .run-trace__actions {
+    justify-content: flex-start;
+    width: 100%;
   }
 }
 
@@ -2140,6 +2155,14 @@ button:disabled {
   font-size: 0.98rem;
   line-height: 1.72;
   overflow-wrap: anywhere;
+}
+
+.message__rule {
+  width: 100%;
+  height: 1px;
+  margin: 2px 0;
+  border: 0;
+  background: var(--border-soft);
 }
 
 .message__heading {

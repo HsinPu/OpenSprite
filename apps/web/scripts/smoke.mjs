@@ -118,14 +118,19 @@ assertIncludes(messageList, "isChatEntry", "run trace entries stay out of the ch
 assertIncludes(messageList, "entryId.startsWith(\"run:\")", "run entry filtering keeps trace artifacts out of chat");
 assertIncludes(messageList, "normalizeTextPart", "message text-only entry filtering");
 assertIncludes(messageList, "system-reminder", "message internal reminder stripping");
+assertIncludes(messageList, "summarizeVisibleToolHistory", "message sanitizer hides raw failed tool history");
+assertIncludes(messageList, "--- BEGIN HEAD ---", "message sanitizer recognizes truncated tool context markers");
 assertIncludes(messageList, "buildMessageBlocks", "message markdown block normalization");
 assertIncludes(messageList, "type: \"strong\"", "message markdown bold segment normalization");
+assertIncludes(messageList, "isMarkdownRule", "message markdown horizontal rule normalization");
 assertIncludes(messageTextRenderer, "segment.type === 'strong'", "message markdown bold rendering");
+assertIncludes(messageTextRenderer, "message__rule", "message markdown horizontal rule rendering");
 assertIncludes(messageTextRenderer, "message__json-card", "message JSON payload collapse rendering");
 assertIncludes(messageTextRenderer, "message__code-block", "message code block rendering");
 assertIncludes(messageTextRenderer, "message__table", "message table rendering");
 assertIncludes(copy, "jsonTitle", "message JSON renderer copy");
 assertIncludes(styles, ".message__rendered", "message markdown rendered layout");
+assertIncludes(styles, ".message__rule", "message markdown horizontal rule styling");
 assertIncludes(styles, ".message__json-card", "message JSON card styling");
 assertIncludes(styles, ".message__code-block", "message code block styling");
 assertIncludes(runSummaryCard, "visibleDiffPathItems", "diff summary file links");
@@ -213,6 +218,16 @@ assertIncludes(styles, "var(--trace-sidebar-width, var(--trace-sidebar-default-w
 assertIncludes(styles, ".app-shell--trace-collapsed", "right trace sidebar collapsed app shell");
 assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
 assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize styling");
+assertIncludes(
+  styles,
+  "min(var(--trace-sidebar-width, 100vw), clamp(300px, 32vw, 380px))",
+  "medium width trace sidebar remains inside the viewport",
+);
+assertIncludesNormalized(
+  styles,
+  ".trace-sidebar .work-state-card__header,\n  .trace-sidebar .run-summary-card__header,\n  .trace-sidebar .run-timeline__header,\n  .trace-sidebar .run-trace__header {\n    grid-template-columns: 1fr;\n  }",
+  "medium width trace card headers do not squeeze titles beside actions",
+);
 assertIncludes(styles, "scrollbar-gutter: stable", "right trace sidebar keeps an internal scrollbar");
 assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded content styling");
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");

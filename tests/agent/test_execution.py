@@ -1074,6 +1074,22 @@ def test_execution_engine_returns_max_iteration_message_when_tool_loop_never_fin
     assert result.llm_step_events[0].tool_calls == 1
 
 
+def test_execution_user_tool_history_hides_raw_truncated_context():
+    summary = ExecutionEngine._format_tool_history_for_user(
+        [
+            "web_fetch: [tool:web_fetch] Output truncated for context. "
+            "Full result was persisted separately (1453 chars total).\n"
+            "--- BEGIN HEAD ---\n{\"type\": \"web_fetch\", \"query\": \"https://example.test\"}",
+            'web_search: {"type": "web_search", "ok": false, "summary": "Search failed for: agentic AI',
+        ]
+    )
+
+    assert "web_fetch: 工具輸出過長" in summary
+    assert "web_search: Search failed for: agentic AI" in summary
+    assert "[tool:web_fetch]" not in summary
+    assert "--- BEGIN HEAD ---" not in summary
+
+
 def test_execution_engine_stops_when_cancel_checker_requests_stop():
     provider = FakeProvider([LLMResponse(content="done", model="fake-model")])
     engine = _make_engine(provider, ToolRegistry(), [])

@@ -60,12 +60,63 @@ const props = defineProps({
 
 const INTERNAL_BLOCK_RE = /<\s*(think|thinking|system-reminder)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
 const INTERNAL_OPEN_BLOCK_RE = /<\s*(think|thinking|system-reminder)\b[^>]*>[\s\S]*$/i;
+const TOOL_HISTORY_MARKER = "我嘗試了以下工具但未能完成任務：";
 
 function sanitizeVisibleText(value) {
-  return String(value || "")
+  return summarizeVisibleToolHistory(String(value || ""))
     .replace(INTERNAL_BLOCK_RE, "")
     .replace(INTERNAL_OPEN_BLOCK_RE, "")
     .trim();
+}
+
+function summarizeVisibleToolHistory(value) {
+  if (!value.includes(TOOL_HISTORY_MARKER)) {
+    return value;
+  }
+  if (
+    !value.includes("[tool:")
+    && !value.includes("Output truncated for context")
+    && !value.includes("--- BEGIN HEAD ---")
+  ) {
+    return value;
+  }
+
+  const [intro, ...rest] = value.split(TOOL_HISTORY_MARKER);
+  const summaries = summarizeToolHistoryLines(rest.join(TOOL_HISTORY_MARKER));
+  return `${intro.trim()}\n\n${TOOL_HISTORY_MARKER}\n${summaries.join("\n")}`;
+}
+
+function summarizeToolHistoryLines(value) {
+  const summaries = [];
+  for (const line of String(value || "").split("\n")) {
+    const match = line.trim().match(/^[-*]\s*([A-Za-z0-9_.-]+):\s*(.+)$/);
+    if (!match) {
+      continue;
+    }
+    summaries.push(`- ${match[1]}：${summarizeToolDetail(match[2])}`);
+    if (summaries.length >= 5) {
+      break;
+    }
+  }
+  return summaries.length ? summaries : ["- 原始工具輸出已省略，請在 Trace 查看詳細結果。"];
+}
+
+function summarizeToolDetail(detail) {
+  const text = String(detail || "").trim();
+  if (!text) {
+    return "沒有回傳可顯示內容。";
+  }
+  if (text.includes("Output truncated for context") || text.includes("[tool:") || text.includes("--- BEGIN HEAD ---")) {
+    return "工具輸出過長，已省略原始內容；請在 Trace 查看詳細結果。";
+  }
+  const summary = text.match(/"summary"\s*:\s*"([^"]+)(?:"|$)/);
+  if (summary?.[1]) {
+    return summary[1];
+  }
+  if (text.includes("Error executing")) {
+    return text.replace(/^Error executing\s+[A-Za-z0-9_.-]+:\s*/, "").slice(0, 180);
+  }
+  return text.length > 180 ? `${text.slice(0, 177).trim()}...` : text;
 }
 
 function normalizeTextPart(part, index) {
@@ -191,6 +242,15 @@ function parseMarkdownBlocks(text, keyPrefix) {
     const line = lines[index];
     const trimmed = line.trim();
     if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (isMarkdownRule(trimmed)) {
+      blocks.push({
+        id: `${keyPrefix}:rule-${blocks.length}`,
+        type: "rule",
+      });
       index += 1;
       continue;
     }
@@ -322,12 +382,17 @@ function isBlockStart(lines, index) {
   if (!trimmed) {
     return false;
   }
-  return /^```/.test(trimmed)
+  return isMarkdownRule(trimmed)
+    || /^```/.test(trimmed)
     || /^(#{1,3})\s+/.test(trimmed)
     || /^[-*]\s+/.test(trimmed)
     || /^\d+[.)]\s+/.test(trimmed)
     || /^>\s?/.test(trimmed)
     || isMarkdownTable(lines, index);
+}
+
+function isMarkdownRule(trimmed) {
+  return /^(?:-{3,}|\*{3,}|_{3,})$/.test(String(trimmed || "").replace(/\s+/g, ""));
 }
 
 function isMarkdownTable(lines, index) {
