@@ -1211,8 +1211,9 @@ export const DISPLAY_COPY = {
         },
         freshness: {
           title: "Freshness",
-          description: "預設套用的搜尋時間範圍；資料型問題通常建議保留最近一年。",
+          description: "預設套用的搜尋時間範圍；Auto 會依照最新、目前等查詢意圖自動收窄時間。",
           options: {
+            auto: "Auto",
             none: "不限時間",
             day: "過去一天",
             week: "過去一週",
@@ -3008,8 +3009,9 @@ export const DISPLAY_COPY = {
         },
         freshness: {
           title: "Freshness",
-          description: "Default recency window for searches. Recent-answer tasks usually benefit from the past-year default.",
+          description: "Default recency window for searches. Auto infers a tighter window for latest/current queries.",
           options: {
+            auto: "Auto",
             none: "Any time",
             day: "Past day",
             week: "Past week",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
@@ -21,6 +22,54 @@ USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
 FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
 BRAVE_FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
+_FRESHNESS_RANK = {"day": 1, "week": 2, "month": 3, "year": 4, "none": 5}
+_DAY_RECENCY_MARKERS = (
+    "today",
+    "today's",
+    "past 24 hours",
+    "last 24 hours",
+    "今天",
+    "今日",
+)
+_WEEK_RECENCY_MARKERS = (
+    "this week",
+    "past week",
+    "last week",
+    "本週",
+    "本周",
+    "這週",
+    "这周",
+    "這星期",
+    "这星期",
+)
+_MONTH_RECENCY_MARKERS = (
+    "latest",
+    "newest",
+    "recent",
+    "current",
+    "currently",
+    "new release",
+    "new releases",
+    "released",
+    "release notes",
+    "announcement",
+    "announced",
+    "updated",
+    "update",
+    "最新",
+    "最近",
+    "近期",
+    "目前",
+    "現在",
+    "现在",
+    "新模型",
+    "新版本",
+    "發布",
+    "发布",
+    "發佈",
+    "推出",
+    "公告",
+)
 
 
 def _detect_duckduckgo_block(text: str) -> str | None:
@@ -101,10 +150,43 @@ def _normalize_freshness(value: Any, default: str = "year") -> str:
     return normalized if normalized in FRESHNESS_VALUES else default
 
 
+def _infer_freshness_from_query(query: Any) -> str | None:
+    """Infer a recency filter from query text when the caller omitted a useful one."""
+    text = str(query or "").strip().lower()
+    if not text:
+        return None
+    if any(marker in text for marker in _DAY_RECENCY_MARKERS):
+        return "day"
+    if any(marker in text for marker in _WEEK_RECENCY_MARKERS):
+        return "week"
+    if any(marker in text for marker in _MONTH_RECENCY_MARKERS):
+        return "month"
+    current_year = datetime.now().year
+    if re.search(rf"(?<!\d){current_year}(?!\d)", text):
+        return "year"
+    return None
+
+
+def _effective_freshness(value: Any, default: str = "year", *, query: Any = None) -> str:
+    """Resolve auto freshness while respecting fixed user settings."""
+    normalized = _normalize_freshness(value, default)
+    default_normalized = _normalize_freshness(default, "year")
+    if default_normalized != "auto":
+        return normalized
+    inferred = _infer_freshness_from_query(query)
+    if inferred is None and normalized != "auto":
+        return normalized
+    auto_freshness = inferred or "year"
+    if normalized in {"day", "week", "month", "year", "none"}:
+        if _FRESHNESS_RANK[normalized] < _FRESHNESS_RANK[auto_freshness]:
+            return normalized
+    return auto_freshness
+
+
 def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
     """Return provider-specific recency parameters for supported engines."""
     normalized = _normalize_freshness(freshness, default="none")
-    if normalized == "none":
+    if normalized in {"auto", "none"}:
         return {}
     if provider == "duckduckgo":
         return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
@@ -268,7 +350,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for new external sources. Defaults to a recent-results filter to avoid stale sources; set freshness='none' for timeless docs. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
+    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()
@@ -290,7 +372,7 @@ class WebSearchTool(Tool):
                 "freshness": {
                     "type": "string",
                     "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter. Defaults to config (year) to reduce stale results; use none for timeless/reference docs.",
+                    "description": "Recency filter. auto infers from latest/current/recent queries; none searches all time; fixed windows are respected.",
                     "default": self.config.freshness,
                 }
             },
@@ -335,7 +417,7 @@ class WebSearchTool(Tool):
 
     async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         n = min(max(count or self.max_results, 1), self.max_results)
-        freshness = _normalize_freshness(kwargs.get("freshness"), self.config.freshness)
+        freshness = _effective_freshness(kwargs.get("freshness"), self.config.freshness, query=query)
 
         provider = self.provider
 

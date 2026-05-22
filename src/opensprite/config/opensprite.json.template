@@ -38,7 +38,7 @@
     },
     "web_search": {
       "provider": "duckduckgo",
-      "freshness": "year",
+        "freshness": "auto",
       "brave_api_key": "",
       "tavily_api_key": "",
       "jina_api_key": "",

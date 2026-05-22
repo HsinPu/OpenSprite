@@ -1408,7 +1408,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert resp.status == 200
                 payload = await resp.json()
                 assert payload["search"]["provider"] == "duckduckgo"
-                assert payload["search"]["freshness"] == "year"
+                assert payload["search"]["freshness"] == "auto"
                 assert payload["search"]["providers"] == ["duckduckgo", "brave", "tavily", "searxng", "jina"]
                 assert payload["search"]["searxng_max_pages"] == 5
                 assert payload["search"]["searxng_engines"] == []

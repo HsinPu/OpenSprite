@@ -12,7 +12,7 @@ from ..search.base import SearchHit, SearchStore
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
-from .web_search import FRESHNESS_VALUES, WebSearchTool, _normalize_freshness
+from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness, _infer_freshness_from_query
 
 
 class WebResearchTool(Tool):
@@ -80,7 +80,7 @@ class WebResearchTool(Tool):
                 "freshness": {
                     "type": "string",
                     "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter passed through to web_search",
+                    "description": "Recency filter passed through to web_search; latest/current/recent queries infer a recent filter",
                     "default": self.search_config.freshness,
                 },
                 "max_chars": {
@@ -105,13 +105,30 @@ class WebResearchTool(Tool):
     ) -> str:
         search_count = min(max(int(count or min(8, self.search_config.max_results)), 1), self.search_config.max_results)
         target_fetches = min(max(int(fetch_count or 2), 1), 5)
-        effective_freshness = _normalize_freshness(freshness, self.search_config.freshness)
-        effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
         research_queries = _research_queries(query, queries)
-        reused_sources, reuse_attempt, reuse_attempts = await self._reuse_knowledge_sources_for_queries(
-            queries=research_queries,
-            target_count=target_fetches,
+        inferred_freshness = _infer_freshness_from_query(" ".join(research_queries))
+        effective_freshness = _effective_freshness(
+            freshness,
+            self.search_config.freshness,
+            query=" ".join(research_queries),
         )
+        effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
+        if _should_skip_knowledge_reuse(
+            freshness=effective_freshness,
+            inferred_freshness=inferred_freshness,
+            requested_freshness=freshness,
+        ):
+            reused_sources: list[dict[str, Any]] = []
+            reuse_attempt = {"source": "search_knowledge", "ok": False, "reason": "skipped for recent query"}
+            reuse_attempts = [
+                {"query": current_query, **reuse_attempt}
+                for current_query in research_queries
+            ]
+        else:
+            reused_sources, reuse_attempt, reuse_attempts = await self._reuse_knowledge_sources_for_queries(
+                queries=research_queries,
+                target_count=target_fetches,
+            )
         fetched_sources: list[dict[str, Any]] = list(reused_sources)
         failed_sources: list[dict[str, Any]] = []
         source_records: list[dict[str, Any]] = [
@@ -428,6 +445,21 @@ def _research_payload(
         },
         ensure_ascii=False,
     )
+
+
+def _should_skip_knowledge_reuse(
+    *,
+    freshness: str,
+    inferred_freshness: str | None,
+    requested_freshness: str | None,
+) -> bool:
+    if freshness in {"day", "week", "month"}:
+        return True
+    if inferred_freshness is not None and freshness != "none":
+        return True
+    if requested_freshness is not None and str(requested_freshness).strip().lower() not in {"", "none"}:
+        return True
+    return False
 
 
 def _research_queries(query: str, queries: list[str] | None) -> list[str]:

@@ -3814,7 +3814,7 @@ const webSearchProviderOptions = computed(() => {
 
 const webSearchFreshnessOptions = computed(() => {
   const freshnessOptions = props.settingsState.search?.freshness_options;
-  const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["none", "day", "week", "month", "year"];
+  const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["auto", "none", "day", "week", "month", "year"];
   return values.map((id) => ({ id, label: webSearchFreshnessLabel(id) }));
 });
 
@@ -3865,7 +3865,7 @@ const webSearchSummary = computed(() => {
   const form = props.settingsState.searchForm || {};
   return props.copy.settings.search.summary(
     webSearchProviderLabel(form.provider || "searxng"),
-    webSearchFreshnessLabel(form.freshness || "year"),
+    webSearchFreshnessLabel(form.freshness || "auto"),
     Number(form.maxResults || 25),
   );
 });

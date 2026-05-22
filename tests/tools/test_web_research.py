@@ -123,6 +123,52 @@ def test_web_research_searches_and_fetches_traceable_sources():
     assert payload["sources"][1]["tool_name"] == "web_fetch"
 
 
+def test_web_research_infers_freshness_for_latest_query_when_config_is_auto():
+    search = _FakeSearchTool(
+        [
+            {"title": "Qwen Release", "url": "https://example.com/qwen", "content": "Recent Qwen release"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/qwen": _fetch_payload("https://example.com/qwen", title="Qwen Release"),
+        }
+    )
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(freshness="auto"),
+        search_tool=search,
+        fetch_tool=fetch,
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("Qwen 最新模型 2026", count=5, fetch_count=1)))
+
+    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 5, "freshness": "month"}]
+    assert payload["freshness"] == "month"
+
+
+def test_web_research_respects_any_time_for_latest_query():
+    search = _FakeSearchTool(
+        [
+            {"title": "Qwen Release", "url": "https://example.com/qwen", "content": "Recent Qwen release"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/qwen": _fetch_payload("https://example.com/qwen", title="Qwen Release"),
+        }
+    )
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(freshness="none"),
+        search_tool=search,
+        fetch_tool=fetch,
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("Qwen latest model 2026", count=5, fetch_count=1)))
+
+    assert search.calls == [{"query": "Qwen latest model 2026", "count": 5, "freshness": "none"}]
+    assert payload["freshness"] == "none"
+
+
 def test_web_research_runs_manual_queries_and_dedupes_fetches():
     search = _FakeSearchToolByQuery(
         {
@@ -347,6 +393,51 @@ def test_web_research_reuses_existing_high_quality_fetch_without_network_search(
     assert payload["fetched_sources"][0]["has_main_content"] is True
     assert payload["coverage"]["target_met"] is True
     assert payload["coverage"]["fetched_domains"] == ["sqlite.org"]
+
+
+def test_web_research_skips_knowledge_reuse_for_recent_queries():
+    knowledge = _FakeKnowledgeStore(
+        [
+            SearchHit(
+                id="old",
+                session_id="chat-1",
+                source_type="web_fetch",
+                content="Old Qwen model notes " * 80,
+                created_at=123.0,
+                title="Old Qwen Notes",
+                url="https://example.com/old-qwen",
+                query="Qwen 最新模型",
+                summary="Old source",
+                provider="web_fetch",
+                extractor="trafilatura",
+                status=200,
+                content_type="text/html",
+                truncated=False,
+            )
+        ]
+    )
+    search = _FakeSearchTool(
+        [{"title": "Fresh Qwen", "url": "https://example.com/fresh-qwen", "content": "Fresh snippet"}]
+    )
+    fetch = _FakeFetchTool({"https://example.com/fresh-qwen": _fetch_payload("https://example.com/fresh-qwen")})
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(freshness="auto"),
+        search_tool=search,
+        fetch_tool=fetch,
+        knowledge_store=knowledge,
+        get_session_id=lambda: "chat-1",
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("Qwen 最新模型 2026", fetch_count=1)))
+
+    assert knowledge.calls == []
+    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 8, "freshness": "month"}]
+    assert payload["reuse_attempt"] == {
+        "source": "search_knowledge",
+        "ok": False,
+        "reason": "skipped for recent query",
+    }
+    assert payload["fetched_sources"][0]["url"] == "https://example.com/fresh-qwen?ref=1"
 
 
 def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():

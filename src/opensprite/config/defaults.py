@@ -4,8 +4,8 @@ from __future__ import annotations
 
 DEFAULT_WEB_SEARCH_PROVIDER = "duckduckgo"
 WEB_SEARCH_PROVIDERS = ("duckduckgo", "brave", "tavily", "searxng", "jina")
-DEFAULT_WEB_SEARCH_FRESHNESS = "year"
-WEB_SEARCH_FRESHNESS_OPTIONS = ("none", "day", "week", "month", "year")
+DEFAULT_WEB_SEARCH_FRESHNESS = "auto"
+WEB_SEARCH_FRESHNESS_OPTIONS = ("auto", "none", "day", "week", "month", "year")
 DEFAULT_SEARXNG_URL = "https://searx.be"
 DEFAULT_WEB_SEARCH_MAX_RESULTS = 25
 DEFAULT_DUCKDUCKGO_MAX_PAGES = 10

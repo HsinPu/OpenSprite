@@ -1,7 +1,7 @@
 export const DEFAULT_SEARCH_PROVIDER = "duckduckgo";
 export const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "brave", "tavily", "searxng", "jina"];
-export const DEFAULT_SEARCH_FRESHNESS = "year";
-export const DEFAULT_FRESHNESS_OPTIONS = ["none", "day", "week", "month", "year"];
+export const DEFAULT_SEARCH_FRESHNESS = "auto";
+export const DEFAULT_FRESHNESS_OPTIONS = ["auto", "none", "day", "week", "month", "year"];
 export const DEFAULT_SEARXNG_URL = "https://searx.be";
 export const DEFAULT_SEARCH_MAX_RESULTS = 25;
 export const DEFAULT_DUCKDUCKGO_MAX_PAGES = 10;

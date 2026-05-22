@@ -3,7 +3,13 @@ import json
 
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_search import _format_error, _format_results, _freshness_params, _normalize_freshness
+from opensprite.tools.web_search import (
+    _effective_freshness,
+    _format_error,
+    _format_results,
+    _freshness_params,
+    _normalize_freshness,
+)
 
 
 class _FakeDuckDuckGoResponse:
@@ -184,8 +190,8 @@ def test_web_search_count_limit_comes_from_config():
 
     assert count_schema["maximum"] == 25
     assert count_schema["description"] == "Results (1-25)"
-    assert freshness_schema["default"] == "year"
-    assert freshness_schema["enum"] == ["none", "day", "week", "month", "year"]
+    assert freshness_schema["default"] == "auto"
+    assert freshness_schema["enum"] == ["auto", "none", "day", "week", "month", "year"]
 
 
 def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
@@ -218,9 +224,46 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
     assert requested_freshness == ["none"]
 
 
+def test_web_search_execute_infers_freshness_for_latest_query(monkeypatch):
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
+    requested_freshness = []
+
+    async def fake_search(query, n, freshness):
+        requested_freshness.append(freshness)
+        return _format_results(query, [], n, provider="duckduckgo")
+
+    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
+
+    asyncio.run(tool._execute("Qwen latest model 2026"))
+
+    assert requested_freshness == ["month"]
+
+
+def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="none"))
+    requested_freshness = []
+
+    async def fake_search(query, n, freshness):
+        requested_freshness.append(freshness)
+        return _format_results(query, [], n, provider="duckduckgo")
+
+    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
+
+    asyncio.run(tool._execute("Qwen latest model 2026"))
+
+    assert requested_freshness == ["none"]
+
+
 def test_web_search_freshness_aliases_and_provider_params():
     assert _normalize_freshness("latest", "year") == "month"
     assert _normalize_freshness("all", "year") == "none"
+    assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness(None, "auto", query="sqlite docs") == "year"
+    assert _effective_freshness("year", "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"
+    assert _effective_freshness("none", "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness("none", "auto", query="sqlite docs") == "none"
+    assert _effective_freshness("none", "year", query="sqlite docs") == "none"
     assert _freshness_params("duckduckgo", "week") == {"df": "w"}
     assert _freshness_params("brave", "month") == {"freshness": "pm"}
     assert _freshness_params("tavily", "year") == {"time_range": "year"}

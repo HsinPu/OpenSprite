@@ -439,7 +439,7 @@ class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
     provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = DEFAULT_WEB_SEARCH_PROVIDER
-    freshness: Literal["none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
+    freshness: Literal["auto", "none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
     brave_api_key: str = ""
     tavily_api_key: str = ""
     jina_api_key: str = ""
