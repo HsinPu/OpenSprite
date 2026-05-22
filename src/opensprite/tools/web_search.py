@@ -25,7 +25,6 @@ USER_AGENT = (
 )
 FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
-BRAVE_FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
 _FRESHNESS_RANK = {"day": 1, "week": 2, "month": 3, "year": 4, "none": 5}
 _DAY_RECENCY_MARKERS = (
     "today",
@@ -166,8 +165,6 @@ def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
         return {}
     if provider == "duckduckgo":
         return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    if provider == "brave":
-        return {"freshness": BRAVE_FRESHNESS[normalized]}
     if provider in {"tavily", "searxng"}:
         return {"time_range": normalized}
     if provider == "jina":
@@ -258,7 +255,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
+    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, Tavily, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()
@@ -290,10 +287,6 @@ class WebSearchTool(Tool):
     @property
     def provider(self) -> str:
         return self.config.provider.strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
-
-    @property
-    def brave_api_key(self) -> str:
-        return self.config.brave_api_key or os.environ.get("BRAVE_API_KEY", "")
 
     @property
     def tavily_api_key(self) -> str:
@@ -337,32 +330,8 @@ class WebSearchTool(Tool):
             return await self._search_searxng(query, n, freshness)
         elif provider == "jina":
             return await self._search_jina(query, n, freshness)
-        elif provider == "brave":
-            return await self._search_brave(query, n, freshness)
         else:
             return _format_error(query, provider, f"unknown search provider '{provider}'")
-
-    async def _search_brave(self, query: str, n: int, freshness: str) -> str:
-        api_key = self.brave_api_key
-        if not api_key:
-            logger.warning("Brave API key not set, falling back to DuckDuckGo")
-            return await self._search_duckduckgo(query, n, freshness)
-        try:
-            async with httpx.AsyncClient(proxy=self.proxy) as client:
-                r = await client.get(
-                    "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": n, **_freshness_params("brave", freshness)},
-                    headers={"Accept": "application/json", "X-Subscription-Token": api_key},
-                    timeout=10.0
-                )
-                r.raise_for_status()
-            items = [
-                {"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("description", "")}
-                for x in r.json().get("web", {}).get("results", [])
-            ]
-            return _format_results(query, items, n, provider="brave")
-        except Exception as e:
-            return _format_error(query, "brave", str(e))
 
     async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
         """Search DuckDuckGo through the ddgs package."""

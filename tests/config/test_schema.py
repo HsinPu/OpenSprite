@@ -534,8 +534,6 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.permissions.approval_timeout_seconds == 12
     assert config.permissions.denied_tools == ["exec"]
     assert config.permissions.denied_risk_levels == ["network"]
-
-
 def test_tools_config_rejects_unknown_approval_mode():
     with pytest.raises(ValidationError):
         ToolsConfig(**{"permissions": {"approval_mode": "sometimes"}})

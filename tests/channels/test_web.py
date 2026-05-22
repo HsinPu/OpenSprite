@@ -1409,16 +1409,15 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 payload = await resp.json()
                 assert payload["search"]["provider"] == "duckduckgo"
                 assert payload["search"]["freshness"] == "auto"
-                assert payload["search"]["providers"] == ["duckduckgo", "brave", "tavily", "searxng", "jina"]
+                assert payload["search"]["providers"] == ["duckduckgo", "tavily", "searxng", "jina"]
                 assert payload["search"]["searxng_max_pages"] == 5
                 assert payload["search"]["searxng_engines"] == []
                 assert payload["search"]["searxng_categories"] == []
-                assert payload["search"]["brave_api_key_configured"] is False
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/search",
                 json={
-                    "provider": "brave",
+                    "provider": "tavily",
                     "freshness": "week",
                     "max_results": 12,
                     "duckduckgo_max_pages": 3,
@@ -1427,7 +1426,6 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                     "searxng_engines": ["google", "bing", "google"],
                     "searxng_categories": "general, news",
                     "proxy": "http://proxy.local:8080",
-                    "brave_api_key": "brave-secret",
                     "tavily_api_key": "tavily-secret",
                 },
             ) as resp:
@@ -1436,7 +1434,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert payload["restart_required"] is False
                 assert payload["runtime_reloaded"] is True
                 assert payload["runtime"] == {
-                    "provider": "brave",
+                    "provider": "tavily",
                     "freshness": "week",
                     "max_results": 12,
                     "searxng_max_pages": 4,
@@ -1445,16 +1443,14 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                     "tool_updated": True,
                     "research_tool_updated": True,
                 }
-                assert payload["search"]["provider"] == "brave"
+                assert payload["search"]["provider"] == "tavily"
                 assert payload["search"]["freshness"] == "week"
                 assert payload["search"]["max_results"] == 12
                 assert payload["search"]["duckduckgo_max_pages"] == 3
                 assert payload["search"]["searxng_max_pages"] == 4
                 assert payload["search"]["searxng_engines"] == ["google", "bing"]
                 assert payload["search"]["searxng_categories"] == ["general", "news"]
-                assert payload["search"]["brave_api_key_configured"] is True
                 assert payload["search"]["tavily_api_key_configured"] is True
-                assert "brave-secret" not in json.dumps(payload)
                 assert "tavily-secret" not in json.dumps(payload)
 
             async with session.put(
@@ -1464,7 +1460,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert resp.status == 400
 
         loaded = Config.from_json(config_path)
-        assert loaded.tools.web_search.provider == "brave"
+        assert loaded.tools.web_search.provider == "tavily"
         assert loaded.tools.web_search.freshness == "week"
         assert loaded.tools.web_search.max_results == 12
         assert loaded.tools.web_search.duckduckgo_max_pages == 3
@@ -1473,9 +1469,8 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.web_search.searxng_categories == ["general", "news"]
         assert loaded.tools.web_search.searxng_url == "https://search.example.test"
         assert loaded.tools.web_search.proxy == "http://proxy.local:8080"
-        assert loaded.tools.web_search.brave_api_key == "brave-secret"
         assert loaded.tools.web_search.tavily_api_key == "tavily-secret"
-        assert agent.reloads[-1].provider == "brave"
+        assert agent.reloads[-1].provider == "tavily"
         assert agent.reloads[-1].freshness == "week"
     finally:
         adapter_task.cancel()
@@ -1488,7 +1483,6 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
 
 
 def test_web_adapter_search_settings_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("JINA_API_KEY", raising=False)
     asyncio.run(_run_web_search_settings_roundtrip(tmp_path))

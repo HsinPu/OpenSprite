@@ -1204,7 +1204,6 @@ export const DISPLAY_COPY = {
         },
         providers: {
           duckduckgo: "DuckDuckGo",
-          brave: "Brave Search",
           tavily: "Tavily",
           searxng: "SearXNG",
           jina: "Jina",
@@ -1272,7 +1271,6 @@ export const DISPLAY_COPY = {
           notConfigured: "未設定",
           placeholder: "留空保留既有 key",
           description: (status) => `${status}。輸入新 key 後儲存即可更新；既有 key 不會顯示。`,
-          brave: { title: "Brave API key" },
           tavily: { title: "Tavily API key" },
           jina: { title: "Jina API key" },
         },
@@ -3003,7 +3001,6 @@ export const DISPLAY_COPY = {
         },
         providers: {
           duckduckgo: "DuckDuckGo",
-          brave: "Brave Search",
           tavily: "Tavily",
           searxng: "SearXNG",
           jina: "Jina",
@@ -3071,7 +3068,6 @@ export const DISPLAY_COPY = {
           notConfigured: "Not configured",
           placeholder: "Leave blank to keep existing key",
           description: (status) => `${status}. Enter a new key and save to update it; existing keys are never shown.`,
-          brave: { title: "Brave API key" },
           tavily: { title: "Tavily API key" },
           jina: { title: "Jina API key" },
         },

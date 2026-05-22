@@ -1455,21 +1455,6 @@
           <div class="settings-card settings-card--form">
             <label class="settings-row settings-row--field">
               <div>
-                <strong>{{ copy.settings.search.credentials.brave.title }}</strong>
-                <span>{{ copy.settings.search.credentials.description(webSearchCredentialStatus('brave')) }}</span>
-              </div>
-              <input
-                v-model="settingsState.searchForm.braveApiKey"
-                type="password"
-                autocomplete="new-password"
-                :placeholder="copy.settings.search.credentials.placeholder"
-                :disabled="settingsState.searchLoading"
-                @keydown.enter.prevent="$emit('save-search-settings')"
-              />
-            </label>
-
-            <label class="settings-row settings-row--field">
-              <div>
                 <strong>{{ copy.settings.search.credentials.tavily.title }}</strong>
                 <span>{{ copy.settings.search.credentials.description(webSearchCredentialStatus('tavily')) }}</span>
               </div>
@@ -3808,7 +3793,7 @@ function toggleSearxngOptions() {
 
 const webSearchProviderOptions = computed(() => {
   const providers = props.settingsState.search?.providers;
-  const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "brave", "tavily", "searxng", "jina"];
+  const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "tavily", "searxng", "jina"];
   return values.map((id) => ({ id, label: webSearchProviderLabel(id) }));
 });
 
