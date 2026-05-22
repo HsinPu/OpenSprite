@@ -147,6 +147,18 @@
   background: #8ff1d0;
 }
 
+:root[data-color-scheme="dark"] .message__code-block,
+:root[data-color-scheme="dark"] .message__json-card,
+:root[data-color-scheme="dark"] .message__table-wrap {
+  background: #15171c;
+}
+
+:root[data-color-scheme="dark"] .message__code-block pre,
+:root[data-color-scheme="dark"] .message__json-card pre {
+  color: #dce3ee;
+  background: #101218;
+}
+
 :root[data-color-scheme="dark"] .notice-banner[data-tone="success"],
 :root[data-color-scheme="dark"] .toast[data-tone="success"],
 :root[data-color-scheme="dark"] .run-trace__status[data-status="completed"],
@@ -2049,8 +2061,180 @@ button:disabled {
   color: var(--text);
   font-size: 0.98rem;
   line-height: 1.72;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.message__rendered {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.message__paragraph,
+.message__quote,
+.message__list {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+}
+
+.message__heading {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.message__heading[data-level="1"] {
+  font-size: 1.12rem;
+}
+
+.message__heading[data-level="2"],
+.message__heading[data-level="3"] {
+  font-size: 1rem;
+}
+
+.message__paragraph code,
+.message__heading code,
+.message__quote code,
+.message__list code {
+  padding: 2px 5px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+
+.message__paragraph a,
+.message__heading a,
+.message__quote a,
+.message__list a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.message__paragraph a:hover,
+.message__heading a:hover,
+.message__quote a:hover,
+.message__list a:hover {
+  text-decoration: underline;
+}
+
+.message__list {
+  display: grid;
+  gap: 5px;
+  padding-left: 1.25rem;
+}
+
+.message__quote {
+  padding: 8px 12px;
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--surface-muted);
+}
+
+.message__code-block,
+.message__json-card {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.message__code-head,
+.message__json-card summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 11px;
+  color: var(--text-muted);
+  background: var(--panel-subtle);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.message__json-card summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.message__json-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.message__json-card summary::after {
+  color: var(--text-soft);
+  content: "+";
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.message__json-card[open] summary::after {
+  content: "-";
+}
+
+.message__json-card summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message__code-block pre,
+.message__json-card pre {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  color: var(--text);
+  background: var(--code-bg);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.message__table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.message__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.message__table th,
+.message__table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message__table th {
+  color: var(--text-muted);
+  background: var(--panel-subtle);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.message__table tr:last-child td {
+  border-bottom: 0;
 }
 
 .message__parts {

@@ -121,6 +121,11 @@ export const DISPLAY_COPY = {
     message: {
       userAvatar: "你",
       assistantAvatar: "OS",
+      codeBlock: "Code",
+      jsonTitle: "JSON 資料",
+      jsonArray: (count) => `${count} 個項目`,
+      jsonObject: (keys, count) => keys ? `${count} 個欄位：${keys}` : `${count} 個欄位`,
+      jsonValue: "JSON value",
       artifactTypes: {
         tool: "工具",
         file: "檔案",
@@ -1913,6 +1918,11 @@ export const DISPLAY_COPY = {
     message: {
       userAvatar: "You",
       assistantAvatar: "OS",
+      codeBlock: "Code",
+      jsonTitle: "JSON data",
+      jsonArray: (count) => `${count} item${count === 1 ? "" : "s"}`,
+      jsonObject: (keys, count) => keys ? `${count} field${count === 1 ? "" : "s"}: ${keys}` : `${count} field${count === 1 ? "" : "s"}`,
+      jsonValue: "JSON value",
       artifactTypes: {
         tool: "Tool",
         file: "File",

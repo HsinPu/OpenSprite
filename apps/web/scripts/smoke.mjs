@@ -40,6 +40,7 @@ function assertOrder(content, firstNeedle, secondNeedle, label) {
 
 const [
   messageList,
+  messageTextRenderer,
   runSummaryCard,
   runTraceViewer,
   runDetailsPanel,
@@ -73,6 +74,7 @@ const [
   styles,
 ] = await Promise.all([
   read("src/components/MessageList.vue"),
+  read("src/components/MessageTextRenderer.vue"),
   read("src/components/RunSummaryCard.vue"),
   read("src/components/RunTraceViewer.vue"),
   read("src/components/RunDetailsPanel.vue"),
@@ -114,6 +116,14 @@ assertIncludes(messageList, "message__artifact-status", "session entry artifact 
 assertIncludes(messageList, "sanitizeVisibleText", "message visible text sanitizer");
 assertIncludes(messageList, "normalizeTextPart", "message text-only entry filtering");
 assertIncludes(messageList, "system-reminder", "message internal reminder stripping");
+assertIncludes(messageList, "buildMessageBlocks", "message markdown block normalization");
+assertIncludes(messageTextRenderer, "message__json-card", "message JSON payload collapse rendering");
+assertIncludes(messageTextRenderer, "message__code-block", "message code block rendering");
+assertIncludes(messageTextRenderer, "message__table", "message table rendering");
+assertIncludes(copy, "jsonTitle", "message JSON renderer copy");
+assertIncludes(styles, ".message__rendered", "message markdown rendered layout");
+assertIncludes(styles, ".message__json-card", "message JSON card styling");
+assertIncludes(styles, ".message__code-block", "message code block styling");
 assertIncludes(runSummaryCard, "visibleDiffPathItems", "diff summary file links");
 assertIncludes(runSummaryCard, "cleanup-worktree", "worktree cleanup action");
 assertIncludes(runTraceViewer, "codeNavigationResults", "code navigation trace rendering");
