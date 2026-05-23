@@ -98,6 +98,31 @@ def _tool_artifact_id(tool_name: str, data: dict[str, Any]) -> str | None:
     return None
 
 
+def _tool_trace_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for key in (
+        "type",
+        "query",
+        "url",
+        "final_url",
+        "provider",
+        "backend",
+        "search_provider",
+        "search_backend",
+        "configured_provider",
+        "extractor",
+        "source_count",
+        "fetched_count",
+        "search_result_count",
+        "returned_items",
+        "error",
+    ):
+        value = data.get(key)
+        if value not in ("", None):
+            metadata[key] = value
+    return json_safe_payload(metadata)
+
+
 def run_event_kind(event_type: str) -> str:
     """Return the stable high-level category for one run event type."""
     normalized = _text(event_type)
@@ -202,7 +227,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
         tool_name = _text(data.get("tool_name"))
         if not tool_name:
             return None
-        return {
+        artifact = {
             "schema_version": RUN_SCHEMA_VERSION,
             "artifact_id": _tool_artifact_id(tool_name, data),
             "artifact_type": "tool",
@@ -215,6 +240,10 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "title": tool_name,
             "detail": _text(data.get("result_preview") or data.get("args_preview")),
         }
+        metadata = _tool_trace_metadata(data) if normalized == "tool_result" else {}
+        if metadata:
+            artifact["metadata"] = metadata
+        return artifact
 
     if normalized in {"verification_started", "verification_result"}:
         return {

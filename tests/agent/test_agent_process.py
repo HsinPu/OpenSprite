@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import hashlib
+import json
 import os
 from pathlib import Path
 import shlex
@@ -634,6 +635,60 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
     assert stored_events[-1].payload["state"] == "error"
     assert stored_parts[-1].metadata["ok"] is False
     assert stored_parts[-1].metadata["state"] == "error"
+
+
+def test_agent_tool_result_hook_records_search_trace_metadata(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        await storage.create_run("web:browser-1", "run-1")
+        after = agent._make_tool_result_hook(
+            channel="web",
+            external_chat_id="browser-1",
+            session_id="web:browser-1",
+            run_id="run-1",
+            enabled=True,
+        )
+        result = json.dumps(
+            {
+                "type": "web_search",
+                "ok": False,
+                "query": "Qwen latest model 2026",
+                "provider": "searxng",
+                "backend": "searxng",
+                "error": "Client error '403 Forbidden'",
+            }
+        )
+
+        await after("web_search", {"query": "Qwen latest model 2026"}, result)
+
+        return await storage.get_run_events("web:browser-1", "run-1"), await storage.get_run_parts("web:browser-1", "run-1")
+
+    stored_events, stored_parts = asyncio.run(scenario())
+
+    payload = stored_events[-1].payload
+    metadata = stored_parts[-1].metadata
+    assert payload["provider"] == "searxng"
+    assert payload["backend"] == "searxng"
+    assert payload["query"] == "Qwen latest model 2026"
+    assert payload["error"] == "Client error '403 Forbidden'"
+    assert metadata["provider"] == "searxng"
+    assert metadata["backend"] == "searxng"
+    assert metadata["search_provider"] == "searxng"
+    assert metadata["search_backend"] == "searxng"
 
 
 def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):

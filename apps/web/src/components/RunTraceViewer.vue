@@ -1291,19 +1291,30 @@ function toolDetailRows(artifact) {
   const sources = toolMetadataSources(artifact);
   const args = firstMetadataRawValue(sources, ["args", "arguments"]);
   const resultPayload = latestToolResultPayload(artifact);
+  const provider =
+    resultPayload?.provider ||
+    resultPayload?.search_provider ||
+    firstMetadataValue(sources, ["provider", "search_provider", "searchProvider", "configured_provider", "configuredProvider"]);
+  const backend =
+    resultPayload?.backend ||
+    resultPayload?.search_backend ||
+    firstMetadataValue(sources, ["backend", "search_backend", "searchBackend"]);
+  const returnedItems = Array.isArray(resultPayload?.items)
+    ? resultPayload.items.length
+    : firstMetadataValue(sources, ["returned_items", "returnedItems"]);
   const rows = [
     { label: labels.toolCallId, value: artifact.toolCallId },
     { label: labels.iteration, value: artifact.iteration },
     { label: labels.phase, value: artifact.phase },
-    { label: labels.query || "Query", value: args?.query || resultPayload?.query },
-    { label: labels.provider || "Provider", value: resultPayload?.provider },
-    { label: labels.backend || "Backend", value: resultPayload?.backend },
+    { label: labels.query || "Query", value: args?.query || resultPayload?.query || firstMetadataValue(sources, ["query"]) },
+    { label: labels.provider || "Provider", value: provider },
+    { label: labels.backend || "Backend", value: backend },
     { label: labels.count || "Count", value: args?.count },
     { label: labels.freshness || "Freshness", value: args?.freshness },
-    { label: labels.url || "URL", value: args?.url || resultPayload?.url },
+    { label: labels.url || "URL", value: args?.url || resultPayload?.url || resultPayload?.final_url || firstMetadataValue(sources, ["url", "final_url", "finalUrl"]) },
     { label: labels.maxChars || "Max chars", value: args?.max_chars ?? args?.maxChars },
     { label: labels.resultLength || "Result length", value: firstMetadataValue(sources, ["result_len", "resultLen"]) },
-    { label: labels.returnedItems || "Returned items", value: Array.isArray(resultPayload?.items) ? resultPayload.items.length : "" },
+    { label: labels.returnedItems || "Returned items", value: returnedItems },
     { label: labels.args, value: firstMetadataValue(sources, ["args_preview", "argsPreview", "arguments", "args"]) },
     { label: labels.result, value: firstMetadataValue(sources, ["result_preview", "resultPreview", "result", "output"]) },
     { label: labels.error, value: firstMetadataValue(sources, ["error", "error_preview", "errorPreview"]), tone: "error" },
@@ -1357,6 +1368,12 @@ function latestToolResultPayload(artifact) {
   const toolParts = relatedToolParts(artifact).filter((part) => part.partType === "tool_result" && part.content);
   for (let index = toolParts.length - 1; index >= 0; index -= 1) {
     const payload = parseJsonObject(toolParts[index].content);
+    if (payload) {
+      return payload;
+    }
+  }
+  for (const candidate of [artifact.detail, artifact.metadata?.result, artifact.metadata?.output, artifact.metadata?.result_preview, artifact.metadata?.resultPreview]) {
+    const payload = parseJsonObject(candidate);
     if (payload) {
       return payload;
     }

@@ -11,6 +11,118 @@ from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
 
 
+_TRACE_TEXT_FIELDS = {
+    "type",
+    "query",
+    "url",
+    "final_url",
+    "provider",
+    "backend",
+    "search_provider",
+    "search_backend",
+    "configured_provider",
+    "extractor",
+    "error",
+}
+
+_TRACE_COUNT_FIELDS = {
+    "source_count",
+    "fetched_count",
+    "search_result_count",
+    "returned_items",
+}
+
+
+def _trace_text(value: Any, *, max_chars: int = 500) -> str:
+    text = str(value or "").strip()
+    if len(text) > max_chars:
+        return f"{text[: max_chars - 3]}..."
+    return text
+
+
+def _trace_count(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_object(value: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(str(value or "").lstrip())
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _trace_attempt_payload(payload: dict[str, Any], key: str) -> dict[str, Any] | None:
+    attempts = payload.get(key)
+    if not isinstance(attempts, list):
+        return None
+    candidates = [attempt for attempt in attempts if isinstance(attempt, dict)]
+    if not candidates:
+        return None
+    for attempt in candidates:
+        if attempt.get("ok") is True:
+            return attempt
+    return candidates[0]
+
+
+def _tool_result_trace_metadata(result_text: str) -> dict[str, Any]:
+    """Extract compact traceable fields from structured tool results."""
+    payload = _json_object(result_text)
+    if payload is None:
+        return {}
+
+    metadata: dict[str, Any] = {}
+    for field in _TRACE_TEXT_FIELDS:
+        value = _trace_text(payload.get(field))
+        if value:
+            metadata[field] = value
+    for field in _TRACE_COUNT_FIELDS:
+        count = _trace_count(payload.get(field))
+        if count is not None:
+            metadata[field] = count
+
+    items = payload.get("items")
+    if isinstance(items, list):
+        metadata.setdefault("returned_items", len(items))
+
+    sources = payload.get("sources")
+    if isinstance(sources, list):
+        metadata.setdefault("source_count", len(sources))
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            provider = _trace_text(source.get("search_provider") or source.get("provider"))
+            backend = _trace_text(source.get("search_backend") or source.get("backend"))
+            if provider:
+                metadata.setdefault("search_provider", provider)
+                metadata.setdefault("provider", provider)
+            if backend:
+                metadata.setdefault("search_backend", backend)
+                metadata.setdefault("backend", backend)
+            if provider or backend:
+                break
+
+    for attempt_key in ("search_attempts", "query_attempts"):
+        attempt = _trace_attempt_payload(payload, attempt_key)
+        if not attempt:
+            continue
+        provider = _trace_text(attempt.get("provider") or attempt.get("configured_provider"))
+        backend = _trace_text(attempt.get("backend"))
+        if provider:
+            metadata.setdefault("provider", provider)
+        if backend:
+            metadata.setdefault("backend", backend)
+
+    if metadata.get("provider") and not metadata.get("search_provider"):
+        metadata["search_provider"] = metadata["provider"]
+    if metadata.get("backend") and not metadata.get("search_backend"):
+        metadata["search_backend"] = metadata["backend"]
+    return metadata
+
+
 class RunHookService:
     """Builds callbacks passed into the LLM/tool execution engine."""
 
@@ -209,6 +321,8 @@ class RunHookService:
                 "state": state or ("completed" if ok else "error"),
                 "finished_at": finished_at,
             }
+            trace_metadata = _tool_result_trace_metadata(result_text)
+            metadata.update(trace_metadata)
             if started_at is not None:
                 metadata["started_at"] = started_at
                 metadata["duration_ms"] = duration_ms
@@ -239,6 +353,7 @@ class RunHookService:
                     "ok": ok,
                     "result_len": len(result_text),
                     "result_preview": result_preview,
+                    **trace_metadata,
                     "tool_call_id": tool_call_id,
                     "iteration": iteration,
                     "delegate_task_id": delegate_task_id,

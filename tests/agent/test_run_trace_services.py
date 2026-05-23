@@ -300,6 +300,43 @@ def test_serialize_run_event_builds_stable_envelope():
     }
 
 
+def test_serialize_run_event_projects_tool_trace_metadata():
+    event = SimpleNamespace(
+        event_id=45,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="tool_result",
+        payload={
+            "tool_name": "web_search",
+            "tool_call_id": "call-1",
+            "ok": False,
+            "result_preview": "{\"type\":\"web_search\",\"provider\":\"searxng\"}",
+            "type": "web_search",
+            "query": "Qwen latest model 2026",
+            "provider": "searxng",
+            "backend": "searxng",
+            "search_provider": "searxng",
+            "search_backend": "searxng",
+            "returned_items": 0,
+            "error": "403 Forbidden",
+        },
+        created_at=13.0,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["artifact"]["metadata"] == {
+        "type": "web_search",
+        "query": "Qwen latest model 2026",
+        "provider": "searxng",
+        "backend": "searxng",
+        "search_provider": "searxng",
+        "search_backend": "searxng",
+        "returned_items": 0,
+        "error": "403 Forbidden",
+    }
+
+
 def test_serialize_run_event_projects_permission_artifacts():
     event = SimpleNamespace(
         event_id=43,
