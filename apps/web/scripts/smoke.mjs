@@ -220,7 +220,7 @@ assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
 assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize styling");
 assertIncludes(
   styles,
-  "min(var(--trace-sidebar-width, 100vw), clamp(300px, 32vw, 380px))",
+  "min(var(--trace-sidebar-width, 100vw), clamp(360px, 38vw, 480px))",
   "medium width trace sidebar remains inside the viewport",
 );
 assertIncludesNormalized(
@@ -230,6 +230,7 @@ assertIncludesNormalized(
 );
 assertIncludes(styles, "scrollbar-gutter: stable", "right trace sidebar keeps an internal scrollbar");
 assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded content styling");
+assertIncludes(styles, ".run-trace__tool-debug-blocks", "tool cards expose debug payload blocks");
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
 assertIncludes(styles, ".message + .message", "chat transcript has separators between messages");
 assertIncludesNormalized(

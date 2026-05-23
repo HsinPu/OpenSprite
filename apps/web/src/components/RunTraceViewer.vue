@@ -185,7 +185,21 @@
                         <dd>{{ row.value }}</dd>
                       </div>
                     </dl>
-                    <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
+                    <div v-if="toolDebugBlocks(artifact).length" class="run-trace__tool-debug-blocks">
+                      <details
+                        v-for="block in toolDebugBlocks(artifact)"
+                        :key="block.key"
+                        class="run-trace__debug-block"
+                        :open="block.open"
+                      >
+                        <summary>
+                          <strong>{{ block.title }}</strong>
+                          <span v-if="block.meta">{{ block.meta }}</span>
+                        </summary>
+                        <pre>{{ block.content }}</pre>
+                      </details>
+                    </div>
+                    <p v-if="!toolDetailRows(artifact).length && !toolDebugBlocks(artifact).length" class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
                   </details>
 
                   <button
@@ -1088,12 +1102,12 @@ function partStateLabel(part) {
   return part?.state || "";
 }
 
-function previewText(value) {
+function previewText(value, maxLength = 96) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
   if (!normalized) {
     return "";
   }
-  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 }
 
 function parallelGroupId(artifact) {
@@ -1267,20 +1281,156 @@ function relatedToolParts(artifact) {
   });
 }
 
+function toolMetadataSources(artifact) {
+  return [artifact.metadata, ...relatedToolParts(artifact).flatMap((part) => [part.metadata, part.artifact?.metadata])]
+    .filter((item) => item && typeof item === "object");
+}
+
 function toolDetailRows(artifact) {
   const labels = props.copy.trace.detailLabels;
-  const sources = [artifact.metadata, ...relatedToolParts(artifact).flatMap((part) => [part.metadata, part.artifact?.metadata])]
-    .filter((item) => item && typeof item === "object");
+  const sources = toolMetadataSources(artifact);
+  const args = firstMetadataRawValue(sources, ["args", "arguments"]);
+  const resultPayload = latestToolResultPayload(artifact);
   const rows = [
     { label: labels.toolCallId, value: artifact.toolCallId },
     { label: labels.iteration, value: artifact.iteration },
     { label: labels.phase, value: artifact.phase },
+    { label: labels.query || "Query", value: args?.query || resultPayload?.query },
+    { label: labels.count || "Count", value: args?.count },
+    { label: labels.freshness || "Freshness", value: args?.freshness },
+    { label: labels.url || "URL", value: args?.url || resultPayload?.url },
+    { label: labels.maxChars || "Max chars", value: args?.max_chars ?? args?.maxChars },
+    { label: labels.resultLength || "Result length", value: firstMetadataValue(sources, ["result_len", "resultLen"]) },
+    { label: labels.returnedItems || "Returned items", value: Array.isArray(resultPayload?.items) ? resultPayload.items.length : "" },
     { label: labels.args, value: firstMetadataValue(sources, ["args_preview", "argsPreview", "arguments", "args"]) },
     { label: labels.result, value: firstMetadataValue(sources, ["result_preview", "resultPreview", "result", "output"]) },
     { label: labels.error, value: firstMetadataValue(sources, ["error", "error_preview", "errorPreview"]), tone: "error" },
     { label: labels.detail, value: artifact.detail },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
+}
+
+function toolDebugBlocks(artifact) {
+  const labels = props.copy.trace.detailLabels;
+  const sources = toolMetadataSources(artifact);
+  const args = firstMetadataRawValue(sources, ["args", "arguments"]);
+  const blocks = [];
+  if (args && typeof args === "object") {
+    blocks.push({
+      key: "args",
+      title: labels.argsFull || "Full args",
+      meta: summarizeToolArgs(args),
+      content: formatMetadata(args),
+      open: true,
+    });
+  }
+
+  const resultPayload = latestToolResultPayload(artifact);
+  if (resultPayload) {
+    const compactPayload = compactToolResultPayload(artifact, resultPayload);
+    blocks.push({
+      key: "result",
+      title: labels.resultFull || "Result payload",
+      meta: summarizeToolResult(resultPayload),
+      content: formatMetadata(compactPayload),
+      open: true,
+    });
+  }
+  return blocks;
+}
+
+function firstMetadataRawValue(sources, keys) {
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = source[key];
+      if (value !== "" && value !== null && value !== undefined) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function latestToolResultPayload(artifact) {
+  const toolParts = relatedToolParts(artifact).filter((part) => part.partType === "tool_result" && part.content);
+  for (let index = toolParts.length - 1; index >= 0; index -= 1) {
+    const payload = parseJsonObject(toolParts[index].content);
+    if (payload) {
+      return payload;
+    }
+  }
+  return null;
+}
+
+function parseJsonObject(value) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === "object") {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function compactToolResultPayload(artifact, payload) {
+  const type = String(payload.type || artifact.toolName || "").trim();
+  if (type === "web_search") {
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    return {
+      type: payload.type,
+      provider: payload.provider,
+      query: payload.query,
+      ok: payload.ok,
+      returned_items: items.length,
+      items: items.slice(0, 10).map((item) => ({
+        title: item?.title,
+        url: item?.url || item?.final_url || item?.finalUrl,
+        snippet: previewText(item?.content || item?.snippet || item?.summary || "", 600),
+      })),
+      error: payload.error,
+    };
+  }
+  if (type === "web_fetch") {
+    const content = String(payload.content || "");
+    return {
+      type: payload.type,
+      url: payload.url,
+      final_url: payload.final_url || payload.finalUrl,
+      title: payload.title,
+      ok: payload.ok,
+      content_chars: content.length,
+      content_preview: previewText(content, 3200),
+      error: payload.error,
+    };
+  }
+  return payload;
+}
+
+function summarizeToolArgs(args) {
+  if (!args || typeof args !== "object") {
+    return "";
+  }
+  return compactJoin([
+    args.query,
+    args.url,
+    args.count !== undefined ? `count ${args.count}` : "",
+    args.freshness ? `freshness ${args.freshness}` : "",
+    args.max_chars !== undefined || args.maxChars !== undefined ? `max ${args.max_chars ?? args.maxChars}` : "",
+  ], " / ");
+}
+
+function summarizeToolResult(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  const items = Array.isArray(payload.items) ? `${payload.items.length} items` : "";
+  const content = payload.content ? `${String(payload.content).length} chars` : "";
+  return compactJoin([payload.provider, items, content, payload.final_url || payload.finalUrl || payload.url], " / ");
 }
 
 function subagentDetailRows(artifact) {
