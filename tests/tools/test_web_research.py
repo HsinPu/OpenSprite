@@ -11,6 +11,7 @@ from opensprite.tools.web_research import WebResearchTool
 
 class _FakeSearchTool:
     provider = "duckduckgo"
+    backend = "ddgs"
 
     def __init__(self, items):
         self.items = items
@@ -18,11 +19,12 @@ class _FakeSearchTool:
 
     async def _execute(self, query, count=None, freshness=None):
         self.calls.append({"query": query, "count": count, "freshness": freshness})
-        return _format_results(query, self.items, count or len(self.items), provider=self.provider)
+        return _format_results(query, self.items, count or len(self.items), provider=self.provider, backend=self.backend)
 
 
 class _FakeSearchToolByQuery:
     provider = "duckduckgo"
+    backend = "ddgs"
 
     def __init__(self, items_by_query):
         self.items_by_query = items_by_query
@@ -31,7 +33,7 @@ class _FakeSearchToolByQuery:
     async def _execute(self, query, count=None, freshness=None):
         self.calls.append({"query": query, "count": count, "freshness": freshness})
         items = self.items_by_query.get(query, [])
-        return _format_results(query, items, count or len(items), provider=self.provider)
+        return _format_results(query, items, count or len(items), provider=self.provider, backend=self.backend)
 
 
 class _FakeFetchTool:
@@ -103,8 +105,11 @@ def test_web_research_searches_and_fetches_traceable_sources():
     assert [call["url"] for call in fetch.calls] == ["https://example.com/one", "https://example.com/two"]
     assert all(call["max_chars"] == 1234 for call in fetch.calls)
     assert payload["type"] == "web_research"
+    assert payload["provider"] == "duckduckgo"
+    assert payload["backend"] == "ddgs"
     assert payload["fetched_count"] == 2
     assert payload["fetched_sources"][0]["source_query"] == "sqlite fts"
+    assert payload["fetched_sources"][0]["search_backend"] == "ddgs"
     assert payload["fetched_sources"][0]["search_rank"] == 1
     assert payload["fetched_sources"][0]["has_main_content"] is True
     assert payload["fetched_sources"][0]["blocked_or_challenge"] is False
@@ -218,6 +223,7 @@ def test_web_research_runs_manual_queries_and_dedupes_fetches():
     assert [attempt["query"] for attempt in payload["query_attempts"]] == ["sqlite fts", "sqlite benchmark"]
     assert all(attempt["ok"] is True for attempt in payload["query_attempts"])
     assert [attempt["result_count"] for attempt in payload["query_attempts"]] == [2, 2]
+    assert all(attempt["backend"] == "ddgs" for attempt in payload["query_attempts"])
 
 
 def test_web_research_diversifies_fetch_candidates_across_queries_and_domains():
@@ -521,6 +527,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
                     "ok": False,
                     "query": query,
                     "provider": "duckduckgo",
+                    "backend": "ddgs",
                     "items": [],
                     "error": "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
                 }
@@ -530,6 +537,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
             [{"title": "SearXNG Result", "url": "https://example.com/searx", "content": "Fallback snippet"}],
             count or 1,
             provider=self.provider,
+            backend="searxng",
         )
 
     monkeypatch.setattr("opensprite.tools.web_research.WebSearchTool._execute", fake_search)
@@ -547,6 +555,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
         {
             "provider": "duckduckgo",
             "configured_provider": "duckduckgo",
+            "backend": "ddgs",
             "ok": False,
             "result_count": 0,
             "fetchable_count": 0,
@@ -555,6 +564,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
         {
             "provider": "searxng",
             "configured_provider": "searxng",
+            "backend": "searxng",
             "ok": True,
             "result_count": 1,
             "fetchable_count": 1,
@@ -562,6 +572,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
         },
     ]
     assert payload["fetched_sources"][0]["search_provider"] == "searxng"
+    assert payload["fetched_sources"][0]["search_backend"] == "searxng"
 
 
 def test_web_research_marks_blocked_fetches_as_low_quality():
@@ -595,6 +606,7 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
             "type": "web_research",
             "query": "sqlite",
             "provider": "duckduckgo",
+            "backend": "ddgs",
             "coverage": {
                 "target_fetch_count": 2,
                 "target_met": False,
@@ -613,6 +625,7 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
                     "is_too_short": False,
                     "min_content_chars": 800,
                     "extractor": "trafilatura",
+                    "search_backend": "ddgs",
                 }
             ],
         },
@@ -625,6 +638,7 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
     assert evidence.metadata["source_count"] == 1
     assert evidence.metadata["sources"][0]["tool_name"] == "web_fetch"
     assert evidence.metadata["sources"][0]["quality_score"] == 0.95
+    assert evidence.metadata["sources"][0]["search_backend"] == "ddgs"
     assert artifact is not None
     assert artifact.kind == "web_source"
     assert artifact.source_tool == "web_research"

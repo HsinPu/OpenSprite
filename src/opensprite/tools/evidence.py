@@ -109,6 +109,9 @@ def _web_search_failure_metadata(args: dict[str, Any], result: str) -> dict[str,
     provider = _clean_source_text(payload.get("provider"))
     if provider:
         metadata["provider"] = provider
+    backend = _clean_source_text(payload.get("backend"))
+    if backend:
+        metadata["backend"] = backend
     return metadata
 
 
@@ -148,6 +151,9 @@ def _web_research_failure_metadata(args: dict[str, Any], result: str) -> dict[st
     query = _clean_source_text(payload.get("query") or args.get("query"))
     if query:
         metadata["query"] = query
+    backend = _clean_source_text(payload.get("backend"))
+    if backend:
+        metadata["backend"] = backend
     metadata["error"] = "web_research returned no traceable sources"
     return metadata
 
@@ -221,6 +227,7 @@ def _web_search_sources(
         return []
     query = _clean_source_text(payload.get("query") or args.get("query"))
     provider = _clean_source_text(payload.get("provider"))
+    backend = _clean_source_text(payload.get("backend"))
     raw_items = payload.get("items", payload.get("results", []))
     if not isinstance(raw_items, list):
         return []
@@ -236,6 +243,7 @@ def _web_search_sources(
             snippet=item.get("content") or item.get("snippet") or item.get("summary"),
             query=query,
             provider=provider,
+            extra={"backend": backend},
         )
         if source:
             sources.append(source)
@@ -290,6 +298,7 @@ def _web_research_sources(
         return []
     query = _clean_source_text(payload.get("query") or args.get("query"))
     provider = _clean_source_text(payload.get("provider"))
+    backend = _clean_source_text(payload.get("backend"))
     raw_sources = payload.get("sources") or payload.get("fetched_sources") or []
     if not isinstance(raw_sources, list):
         return []
@@ -320,6 +329,7 @@ def _web_research_sources(
                 "extractor": _clean_source_text(raw_source.get("extractor")),
                 "search_rank": raw_source.get("search_rank"),
                 "search_provider": _clean_source_text(raw_source.get("search_provider")),
+                "search_backend": _clean_source_text(raw_source.get("search_backend") or backend),
                 "reused": bool(raw_source.get("reused")),
                 "reuse_source": _clean_source_text(raw_source.get("reuse_source")),
             },

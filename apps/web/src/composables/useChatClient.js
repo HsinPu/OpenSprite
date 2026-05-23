@@ -1105,6 +1105,7 @@ function formatReconnectNotice(notice, delayMs) {
 }
 
 export function useChatClient() {
+  const MESSAGE_STAGE_BOTTOM_THRESHOLD = 12;
   const storedExternalChatId = readStoredValue(STORAGE_KEYS.activeExternalChatId, "");
   const storedOverlayProfileId = readStoredValue(STORAGE_KEYS.overlayProfileId, "");
   const initialLanguage = readStoredChoice(STORAGE_KEYS.language, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES);
@@ -1163,6 +1164,7 @@ export function useChatClient() {
   const messageText = ref("");
   const messageInput = ref(null);
   const messageStage = ref(null);
+  const messageStagePinnedToBottom = ref(true);
   const toasts = ref([]);
   const sidebarOpen = ref(false);
   const sidebarCollapsed = ref(readStoredBoolean(STORAGE_KEYS.sidebarCollapsed, false));
@@ -1182,6 +1184,7 @@ export function useChatClient() {
   let gatewayReconnectTimer = null;
   let sessionHistoryRefreshTimer = null;
   let sessionHistoryRefreshing = false;
+  let boundMessageStage = null;
   const runSummaryTimers = new Map();
   const runBackfillTimes = new Map();
   let curatorPollTimer = null;
@@ -1356,10 +1359,56 @@ export function useChatClient() {
     messageInput.value = element;
   }
 
+  function isMessageStageNearBottom(stage) {
+    if (!stage) {
+      return true;
+    }
+    const distanceFromBottom = stage.scrollHeight - stage.scrollTop - stage.clientHeight;
+    return distanceFromBottom <= MESSAGE_STAGE_BOTTOM_THRESHOLD;
+  }
+
+  function updateMessageStagePinnedState(stage = messageStage.value) {
+    messageStagePinnedToBottom.value = isMessageStageNearBottom(stage);
+  }
+
+  function handleMessageStageScroll(event) {
+    updateMessageStagePinnedState(event?.currentTarget || messageStage.value);
+  }
+
+  function detachMessageStageScrollListener(element) {
+    if (!element) {
+      return;
+    }
+    element.removeEventListener("scroll", handleMessageStageScroll);
+    if (boundMessageStage === element) {
+      boundMessageStage = null;
+    }
+  }
+
+  function attachMessageStageScrollListener(element) {
+    if (!element) {
+      return;
+    }
+    if (boundMessageStage && boundMessageStage !== element) {
+      detachMessageStageScrollListener(boundMessageStage);
+    }
+    if (boundMessageStage !== element) {
+      element.addEventListener("scroll", handleMessageStageScroll, { passive: true });
+      boundMessageStage = element;
+    }
+    updateMessageStagePinnedState(element);
+  }
+
   function setMessageStageRef(element) {
+    if (messageStage.value && messageStage.value !== element) {
+      detachMessageStageScrollListener(messageStage.value);
+    }
     messageStage.value = element;
     if (element) {
-      scrollMessagesToBottom();
+      attachMessageStageScrollListener(element);
+      scrollMessagesToBottom({ force: true });
+    } else {
+      messageStagePinnedToBottom.value = true;
     }
   }
 
@@ -1457,7 +1506,7 @@ export function useChatClient() {
       void loadCurrentSessionRuns();
       void refreshCuratorState();
       void loadBackgroundProcesses({ quiet: true });
-      scrollMessagesToBottom();
+      scrollMessagesToBottom({ force: true });
     },
     { immediate: true },
   );
@@ -3028,7 +3077,7 @@ export function useChatClient() {
         : [];
       mergeHistorySessions(historySessions, { preserveActiveSession: quiet });
       if (!quiet) {
-        scrollMessagesToBottom();
+        scrollMessagesToBottom({ force: true });
       }
     } catch {
       if (!quiet) {
@@ -3703,13 +3752,19 @@ export function useChatClient() {
     input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
   }
 
-  function scrollMessagesToBottom() {
+  function scrollMessagesToBottom(options = {}) {
+    const force = Boolean(options?.force);
     nextTick(() => {
       const stage = messageStage.value;
       if (stage) {
+        if (!force && !messageStagePinnedToBottom.value) {
+          return;
+        }
         stage.scrollTop = stage.scrollHeight;
+        messageStagePinnedToBottom.value = true;
         window.requestAnimationFrame?.(() => {
           stage.scrollTop = stage.scrollHeight;
+          messageStagePinnedToBottom.value = true;
         });
       }
     });
@@ -3722,7 +3777,7 @@ export function useChatClient() {
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, session.externalChatId);
     persistLocalDraftSessions();
     setNotice(copy.value.notices.newDraft, "info");
-    scrollMessagesToBottom();
+    scrollMessagesToBottom({ force: true });
   }
 
   function clearSessionRunTimers(session) {
@@ -3756,7 +3811,7 @@ export function useChatClient() {
     state.sessions = state.sessions.filter((session) => !predicate(session));
     ensureActiveAfterSessionRemoval(preferWeb);
     persistLocalDraftSessions();
-    scrollMessagesToBottom();
+    scrollMessagesToBottom({ force: true });
     return removed.length;
   }
 
@@ -4028,7 +4083,7 @@ export function useChatClient() {
       messageText.value = "";
       resizeComposer();
     }
-    scrollMessagesToBottom();
+    scrollMessagesToBottom({ force: true });
     return true;
   }
 
@@ -4104,7 +4159,7 @@ export function useChatClient() {
     applyDocumentPreferences();
     document.addEventListener("keydown", handleGlobalKeydown);
     resizeComposer();
-    scrollMessagesToBottom();
+    scrollMessagesToBottom({ force: true });
     initializeClient();
   });
 
@@ -4127,6 +4182,7 @@ export function useChatClient() {
     removeColorSchemeListener();
     document.removeEventListener("keydown", handleGlobalKeydown);
     document.body.classList.remove("settings-open", "sidebar-open");
+    detachMessageStageScrollListener(boundMessageStage);
     if (activeSocket && activeSocket.readyState !== WebSocket.CLOSED) {
       activeSocket.close(1000, "Client disconnect");
     }

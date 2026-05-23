@@ -283,7 +283,7 @@
                         <strong v-else>{{ source.title || copy.trace.unknownArtifact }}</strong>
                         <small v-if="source.url">{{ source.url }}</small>
                         <p v-if="source.snippet">{{ source.snippet }}</p>
-                        <span v-if="source.meta">{{ source.meta }}</span>
+                        <span v-if="source.meta || source.backend">{{ [source.meta, source.backend].filter(Boolean).join(" / ") }}</span>
                       </article>
                     </div>
                     <p v-else class="run-trace__tool-empty">{{ copy.trace.noTaskArtifactSources }}</p>
@@ -1296,6 +1296,8 @@ function toolDetailRows(artifact) {
     { label: labels.iteration, value: artifact.iteration },
     { label: labels.phase, value: artifact.phase },
     { label: labels.query || "Query", value: args?.query || resultPayload?.query },
+    { label: labels.provider || "Provider", value: resultPayload?.provider },
+    { label: labels.backend || "Backend", value: resultPayload?.backend },
     { label: labels.count || "Count", value: args?.count },
     { label: labels.freshness || "Freshness", value: args?.freshness },
     { label: labels.url || "URL", value: args?.url || resultPayload?.url },
@@ -1384,6 +1386,7 @@ function compactToolResultPayload(artifact, payload) {
     return {
       type: payload.type,
       provider: payload.provider,
+      backend: payload.backend,
       query: payload.query,
       ok: payload.ok,
       returned_items: items.length,
@@ -1391,6 +1394,45 @@ function compactToolResultPayload(artifact, payload) {
         title: item?.title,
         url: item?.url || item?.final_url || item?.finalUrl,
         snippet: previewText(item?.content || item?.snippet || item?.summary || "", 600),
+      })),
+      error: payload.error,
+    };
+  }
+  if (type === "web_research") {
+    const searchAttempts = Array.isArray(payload.search_attempts) ? payload.search_attempts : [];
+    const queryAttempts = Array.isArray(payload.query_attempts) ? payload.query_attempts : [];
+    const sources = Array.isArray(payload.sources) ? payload.sources : [];
+    return {
+      type: payload.type,
+      provider: payload.provider,
+      backend: payload.backend,
+      query: payload.query,
+      fetched_count: payload.fetched_count,
+      source_count: payload.source_count,
+      coverage: payload.coverage || null,
+      search_attempts: searchAttempts.map((attempt) => ({
+        provider: attempt?.provider,
+        configured_provider: attempt?.configured_provider,
+        backend: attempt?.backend,
+        ok: attempt?.ok,
+        result_count: attempt?.result_count,
+        fetchable_count: attempt?.fetchable_count,
+        error: attempt?.error,
+      })),
+      query_attempts: queryAttempts.map((attempt) => ({
+        query: attempt?.query,
+        provider: attempt?.provider,
+        backend: attempt?.backend,
+        ok: attempt?.ok,
+        result_count: attempt?.result_count,
+      })),
+      sources: sources.slice(0, 10).map((source) => ({
+        tool_name: source?.tool_name,
+        title: source?.title,
+        url: source?.url,
+        search_provider: source?.search_provider,
+        search_backend: source?.search_backend,
+        search_rank: source?.search_rank,
       })),
       error: payload.error,
     };
@@ -1430,7 +1472,7 @@ function summarizeToolResult(payload) {
   }
   const items = Array.isArray(payload.items) ? `${payload.items.length} items` : "";
   const content = payload.content ? `${String(payload.content).length} chars` : "";
-  return compactJoin([payload.provider, items, content, payload.final_url || payload.finalUrl || payload.url], " / ");
+  return compactJoin([payload.provider, payload.backend, items, content, payload.final_url || payload.finalUrl || payload.url], " / ");
 }
 
 function subagentDetailRows(artifact) {
@@ -1495,12 +1537,14 @@ function normalizeTaskArtifactSource(source, taskArtifact) {
     return null;
   }
   const provider = String(source.provider || "").trim();
+  const backend = String(source.search_backend || source.backend || "").trim();
   const toolName = String(source.tool_name || source.toolName || taskArtifact?.source_tool || taskArtifact?.sourceTool || "").trim();
   return {
     url,
     title,
     snippet,
     domain: sourceDomain(url),
+    backend,
     meta: [toolName, provider].filter(Boolean).join(" · "),
   };
 }

@@ -142,6 +142,7 @@ class WebResearchTool(Tool):
                 query=query,
                 freshness=effective_freshness,
                 search_provider="search_knowledge",
+                search_backend="",
                 search_items=[],
                 fetched_sources=fetched_sources[:target_fetches],
                 failed_sources=failed_sources,
@@ -154,7 +155,7 @@ class WebResearchTool(Tool):
                 queries=research_queries,
             )
 
-        search_items, search_provider, search_attempts, query_attempts = await self._search_queries_with_fallback(
+        search_items, search_provider, search_backend, search_attempts, query_attempts = await self._search_queries_with_fallback(
             queries=research_queries,
             count=search_count,
             freshness=effective_freshness,
@@ -164,6 +165,7 @@ class WebResearchTool(Tool):
                 query=query,
                 freshness=effective_freshness,
                 search_provider="search_knowledge" if fetched_sources else search_provider,
+                search_backend=search_backend,
                 search_items=[],
                 fetched_sources=fetched_sources,
                 failed_sources=[{"reason": "web_search returned no structured result with fetchable URLs"}],
@@ -193,6 +195,7 @@ class WebResearchTool(Tool):
                 continue
 
             item_search_provider = str(item.get("search_provider") or search_provider)
+            item_search_backend = str(item.get("search_backend") or search_backend)
             try:
                 fetch_result = await self.fetch_tool._execute(url=url, max_chars=effective_max_chars)
             except Exception as exc:
@@ -208,6 +211,7 @@ class WebResearchTool(Tool):
                 fetch_payload,
                 query=str(item.get("source_query") or query),
                 search_provider=item_search_provider,
+                search_backend=item_search_backend,
             )
             if fetched.get("blocked_or_challenge"):
                 failed_sources.append({**fetched, "reason": "fetched content looked blocked or challenged"})
@@ -222,7 +226,16 @@ class WebResearchTool(Tool):
 
         for item in search_items:
             item_search_provider = str(item.get("search_provider") or search_provider)
-            source_records.append({**item, "tool_name": "web_search", "fetched": False, "search_provider": item_search_provider})
+            item_search_backend = str(item.get("search_backend") or search_backend)
+            source_records.append(
+                {
+                    **item,
+                    "tool_name": "web_search",
+                    "fetched": False,
+                    "search_provider": item_search_provider,
+                    "search_backend": item_search_backend,
+                }
+            )
             fetched = fetched_by_candidate_url.get(_candidate_url_key(item))
             if fetched is not None:
                 source_records.append({**fetched, "tool_name": "web_fetch", "fetched": True})
@@ -231,6 +244,7 @@ class WebResearchTool(Tool):
             query=query,
             freshness=effective_freshness,
             search_provider=search_provider,
+            search_backend=search_backend,
             search_items=search_items,
             fetched_sources=fetched_sources,
             failed_sources=failed_sources,
@@ -317,14 +331,16 @@ class WebResearchTool(Tool):
         queries: list[str],
         count: int,
         freshness: str,
-    ) -> tuple[list[dict[str, Any]], str, list[dict[str, Any]], list[dict[str, Any]]]:
+    ) -> tuple[list[dict[str, Any]], str, str, list[dict[str, Any]], list[dict[str, Any]]]:
         all_items: list[dict[str, Any]] = []
         all_attempts: list[dict[str, Any]] = []
         query_attempts: list[dict[str, Any]] = []
         selected_provider = ""
+        selected_backend = ""
         fallback_provider = ""
+        fallback_backend = ""
         for current_query in queries:
-            payload, items, provider, attempts = await self._search_with_fallback(
+            payload, items, provider, backend, attempts = await self._search_with_fallback(
                 query=current_query,
                 count=count,
                 freshness=freshness,
@@ -334,6 +350,7 @@ class WebResearchTool(Tool):
                 {
                     "query": current_query,
                     "provider": provider,
+                    "backend": backend,
                     "ok": payload is not None and bool(items),
                     "result_count": len(items),
                     "search_attempts": attempts,
@@ -341,11 +358,21 @@ class WebResearchTool(Tool):
             )
             if not fallback_provider and provider:
                 fallback_provider = provider
+            if not fallback_backend and backend:
+                fallback_backend = backend
             if items and not selected_provider and provider:
                 selected_provider = provider
+            if items and not selected_backend and backend:
+                selected_backend = backend
             all_items.extend({**item, "source_query": current_query} for item in items)
 
-        return _dedupe_search_items(all_items, limit=max(count * max(len(queries), 1), count)), selected_provider or fallback_provider, all_attempts, query_attempts
+        return (
+            _dedupe_search_items(all_items, limit=max(count * max(len(queries), 1), count)),
+            selected_provider or fallback_provider,
+            selected_backend or fallback_backend,
+            all_attempts,
+            query_attempts,
+        )
 
     async def _search_with_fallback(
         self,
@@ -353,9 +380,10 @@ class WebResearchTool(Tool):
         query: str,
         count: int,
         freshness: str,
-    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, list[dict[str, Any]]]:
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]:
         attempts: list[dict[str, Any]] = []
         last_provider = getattr(self.search_tool, "provider", self.search_config.provider)
+        last_backend = ""
         if self._custom_search_tool:
             providers = [str(last_provider or self.search_config.provider or DEFAULT_WEB_SEARCH_PROVIDER)]
         else:
@@ -368,13 +396,16 @@ class WebResearchTool(Tool):
             result = await tool._execute(query=query, count=count, freshness=freshness)
             payload = _parse_json_object(result)
             provider_name = str((payload or {}).get("provider") or getattr(tool, "provider", provider) or provider)
+            backend_name = str((payload or {}).get("backend") or "")
             last_provider = provider_name
+            last_backend = backend_name
             items = _dedupe_search_items(_coerce_search_items(payload or {}), limit=count) if payload else []
             fetchable_count = sum(1 for item in items if item.get("url"))
             attempts.append(
                 {
                     "provider": provider_name,
                     "configured_provider": provider,
+                    "backend": backend_name,
                     "ok": payload is not None and fetchable_count > 0,
                     "result_count": len(items),
                     "fetchable_count": fetchable_count,
@@ -382,8 +413,14 @@ class WebResearchTool(Tool):
                 }
             )
             if payload is not None and fetchable_count > 0:
-                return payload, [{**item, "search_provider": provider_name, "source_query": query} for item in items], provider_name, attempts
-        return None, [], str(last_provider or ""), attempts
+                return (
+                    payload,
+                    [{**item, "search_provider": provider_name, "search_backend": backend_name, "source_query": query} for item in items],
+                    provider_name,
+                    backend_name,
+                    attempts,
+                )
+        return None, [], str(last_provider or ""), str(last_backend or ""), attempts
 
     def _search_tool_for_provider(self, provider: str) -> WebSearchTool:
         if self._custom_search_tool:
@@ -398,6 +435,7 @@ def _research_payload(
     query: str,
     freshness: str,
     search_provider: str,
+    search_backend: str,
     search_items: list[dict[str, Any]],
     fetched_sources: list[dict[str, Any]],
     failed_sources: list[dict[str, Any]],
@@ -429,6 +467,7 @@ def _research_payload(
             "content": "\n\n".join(str(item.get("content") or "") for item in fetched_sources if item.get("content")),
             "summary": f"Web research for: {query}",
             "provider": search_provider,
+            "backend": search_backend,
             "extractor": "web_research",
             "status": None,
             "truncated": any(bool(item.get("truncated")) for item in fetched_sources),
@@ -709,6 +748,7 @@ def _merge_fetch_source(
     *,
     query: str,
     search_provider: str,
+    search_backend: str,
 ) -> dict[str, Any]:
     url = _clean_text(fetch_payload.get("final_url") or fetch_payload.get("finalUrl") or fetch_payload.get("url") or item.get("url"))
     content = str(fetch_payload.get("content") or fetch_payload.get("text") or "")
@@ -762,6 +802,7 @@ def _merge_fetch_source(
         "reused": False,
         "source_query": query,
         "search_provider": search_provider,
+        "search_backend": search_backend,
         "search_rank": item.get("rank"),
     }
 

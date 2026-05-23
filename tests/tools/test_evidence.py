@@ -56,6 +56,7 @@ def test_structured_web_search_error_marks_evidence_failed():
             "ok": False,
             "query": "sqlite fts",
             "provider": "duckduckgo",
+            "backend": "ddgs",
             "items": [],
             "error": "Error: DuckDuckGo returned no results for 'sqlite fts'.",
         }
@@ -73,6 +74,7 @@ def test_web_search_without_traceable_sources_marks_evidence_failed():
             "type": "web_search",
             "query": "sqlite fts",
             "provider": "duckduckgo",
+            "backend": "ddgs",
             "items": [],
         }
     )
@@ -84,6 +86,7 @@ def test_web_search_without_traceable_sources_marks_evidence_failed():
     assert evidence.metadata["result_count"] == 0
     assert evidence.metadata["query"] == "sqlite fts"
     assert evidence.metadata["provider"] == "duckduckgo"
+    assert evidence.metadata["backend"] == "ddgs"
     assert evidence.metadata["error"] == "web_search returned no traceable sources"
 
 
@@ -93,6 +96,7 @@ def test_web_search_with_traceable_source_remains_successful_evidence():
             "type": "web_search",
             "query": "sqlite fts",
             "provider": "duckduckgo",
+            "backend": "ddgs",
             "items": [
                 {
                     "title": "SQLite FTS5",
@@ -108,6 +112,7 @@ def test_web_search_with_traceable_source_remains_successful_evidence():
     assert evidence.ok is True
     assert evidence.metadata["source_count"] == 1
     assert evidence.metadata["sources"][0]["url"] == "https://sqlite.org/fts5.html"
+    assert evidence.metadata["sources"][0]["backend"] == "ddgs"
 
 
 def test_exec_http_command_records_external_warning_metadata():
@@ -129,6 +134,7 @@ def test_web_research_without_sources_marks_evidence_failed():
         {
             "type": "web_research",
             "query": "GPT Image workflow",
+            "backend": "ddgs",
             "sources": [],
             "fetched_sources": [],
             "failed_sources": [{"reason": "web_search returned no structured result with fetchable URLs"}],
@@ -150,6 +156,7 @@ def test_web_research_without_sources_marks_evidence_failed():
     assert evidence.metadata["source_count"] == 0
     assert evidence.metadata["fetched_count"] == 0
     assert evidence.metadata["coverage"]["target_met"] is False
+    assert evidence.metadata["backend"] == "ddgs"
     assert evidence.metadata["error"] == "web_research returned no traceable sources"
 
 
@@ -158,6 +165,7 @@ def test_web_research_with_sources_remains_successful_evidence():
         {
             "type": "web_research",
             "query": "AI browser pricing",
+            "backend": "ddgs",
             "sources": [
                 {
                     "url": "https://docs.test/browser",
@@ -165,6 +173,7 @@ def test_web_research_with_sources_remains_successful_evidence():
                     "content": "Official AI browser documentation with enough detail.",
                     "content_chars": 1200,
                     "has_main_content": True,
+                    "search_backend": "ddgs",
                 }
             ],
             "source_count": 1,
@@ -178,3 +187,4 @@ def test_web_research_with_sources_remains_successful_evidence():
     assert evidence.ok is True
     assert evidence.metadata["source_count"] == 1
     assert evidence.metadata["sources"][0]["url"] == "https://docs.test/browser"
+    assert evidence.metadata["sources"][0]["search_backend"] == "ddgs"
