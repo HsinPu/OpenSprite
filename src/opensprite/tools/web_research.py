@@ -346,16 +346,7 @@ class WebResearchTool(Tool):
                 freshness=freshness,
             )
             all_attempts.extend(attempts)
-            query_attempts.append(
-                {
-                    "query": current_query,
-                    "provider": provider,
-                    "backend": backend,
-                    "ok": payload is not None and bool(items),
-                    "result_count": len(items),
-                    "search_attempts": attempts,
-                }
-            )
+            query_attempts.append(_query_attempt_payload(current_query, provider, backend, payload, items, attempts))
             if not fallback_provider and provider:
                 fallback_provider = provider
             if not fallback_backend and backend:
@@ -402,15 +393,15 @@ class WebResearchTool(Tool):
             items = _dedupe_search_items(_coerce_search_items(payload or {}), limit=count) if payload else []
             fetchable_count = sum(1 for item in items if item.get("url"))
             attempts.append(
-                {
-                    "provider": provider_name,
-                    "configured_provider": provider,
-                    "backend": backend_name,
-                    "ok": payload is not None and fetchable_count > 0,
-                    "result_count": len(items),
-                    "fetchable_count": fetchable_count,
-                    "error": str((payload or {}).get("error") or ("" if payload is not None else result or ""))[:500],
-                }
+                _search_attempt_payload(
+                    configured_provider=provider,
+                    provider=provider_name,
+                    backend=backend_name,
+                    payload=payload,
+                    items=items,
+                    raw_result=result,
+                    fetchable_count=fetchable_count,
+                )
             )
             if payload is not None and fetchable_count > 0:
                 return (
@@ -550,6 +541,45 @@ def _aggregate_reuse_attempts(attempts: list[dict[str, Any]]) -> dict[str, Any]:
     if reasons and reused_count == 0:
         aggregate["reason"] = "; ".join(reasons)[:500]
     return aggregate
+
+
+def _query_attempt_payload(
+    query: str,
+    provider: str,
+    backend: str,
+    payload: dict[str, Any] | None,
+    items: list[dict[str, Any]],
+    attempts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "query": query,
+        "provider": provider,
+        "backend": backend,
+        "ok": payload is not None and bool(items),
+        "result_count": len(items),
+        "search_attempts": attempts,
+    }
+
+
+def _search_attempt_payload(
+    *,
+    configured_provider: str,
+    provider: str,
+    backend: str,
+    payload: dict[str, Any] | None,
+    items: list[dict[str, Any]],
+    raw_result: str,
+    fetchable_count: int,
+) -> dict[str, Any]:
+    return {
+        "provider": provider,
+        "configured_provider": configured_provider,
+        "backend": backend,
+        "ok": payload is not None and fetchable_count > 0,
+        "result_count": len(items),
+        "fetchable_count": fetchable_count,
+        "error": str((payload or {}).get("error") or ("" if payload is not None else raw_result or ""))[:500],
+    }
 
 
 def _research_coverage(

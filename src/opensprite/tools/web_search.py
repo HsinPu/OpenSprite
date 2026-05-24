@@ -318,14 +318,18 @@ class WebSearchTool(Tool):
 
         provider = self.provider
 
-        if provider == "duckduckgo":
-            return await self._search_duckduckgo(query, n, freshness)
-        elif provider == "searxng":
-            return await self._search_searxng(query, n, freshness)
-        elif provider == "jina":
-            return await self._search_jina(query, n, freshness)
-        else:
+        searcher = self._provider_searcher(provider)
+        if searcher is None:
             return _format_error(query, provider, f"unknown search provider '{provider}'")
+        return await searcher(query, n, freshness)
+
+    def _provider_searcher(self, provider: str):
+        searchers = {
+            "duckduckgo": self._search_duckduckgo,
+            "searxng": self._search_searxng,
+            "jina": self._search_jina,
+        }
+        return searchers.get(provider)
 
     async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
         """Search DuckDuckGo through the ddgs package."""
