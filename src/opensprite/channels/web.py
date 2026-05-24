@@ -106,6 +106,7 @@ from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, ToolPermissionP
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
+from . import web_cron_api
 from . import web_frontend_runtime
 from . import web_settings_handlers_core
 from . import web_settings_handlers_app
@@ -835,105 +836,27 @@ class WebAdapter(MessageAdapter):
         return updated
 
     def _cron_default_timezone(self) -> str:
-        try:
-            return Config.load(self._get_config_path()).tools.cron.default_timezone or DEFAULT_CRON_TIMEZONE
-        except Exception:
-            return DEFAULT_CRON_TIMEZONE
+        return web_cron_api.cron_default_timezone(self)
 
     def _require_cron_manager(self) -> Any:
-        agent = self._get_agent()
-        cron_manager = getattr(agent, "cron_manager", None) if agent is not None else None
-        if cron_manager is None:
-            raise web.HTTPServiceUnavailable(text="Cron manager is not available")
-        return cron_manager
+        return web_cron_api.require_cron_manager(self)
 
     async def _get_cron_service(self, session_id: str):
-        return await self._require_cron_manager().get_or_create_service(session_id)
+        return await web_cron_api.get_cron_service(self, session_id)
 
     @staticmethod
     def _require_session_id(value: Any) -> str:
-        session_id = str(value or "").strip()
-        if not session_id:
-            raise web.HTTPBadRequest(text="session_id is required")
-        return session_id
+        return web_cron_api.require_session_id(value)
 
     @staticmethod
     def _split_session_for_cron(session_id: str) -> tuple[str, str]:
-        if ":" in session_id:
-            channel, external_chat_id = session_id.split(":", 1)
-            return channel or "default", external_chat_id or "default"
-        return "default", session_id or "default"
+        return web_cron_api.split_session_for_cron(session_id)
 
     def _build_cron_schedule_from_payload(self, body: dict[str, Any]) -> tuple[CronSchedule, bool]:
-        mode = str(body.get("kind") or body.get("mode") or "").strip().lower()
-        default_timezone = self._cron_default_timezone()
-
-        if mode == "every":
-            try:
-                every_seconds = int(body.get("every_seconds") or 0)
-            except (TypeError, ValueError) as exc:
-                raise web.HTTPBadRequest(text="every_seconds must be an integer") from exc
-            if every_seconds <= 0:
-                raise web.HTTPBadRequest(text="every_seconds must be greater than zero")
-            return CronSchedule(kind="every", every_ms=every_seconds * 1000), False
-
-        if mode == "cron":
-            expr = str(body.get("cron_expr") or body.get("expr") or "").strip()
-            if not expr:
-                raise web.HTTPBadRequest(text="cron_expr is required")
-            tz = str(body.get("tz") or body.get("timezone") or default_timezone).strip() or default_timezone
-            return CronSchedule(kind="cron", expr=expr, tz=tz), False
-
-        if mode == "at":
-            raw_at = str(body.get("at") or "").strip()
-            if not raw_at:
-                raise web.HTTPBadRequest(text="at is required")
-            try:
-                dt = datetime.fromisoformat(raw_at)
-            except ValueError as exc:
-                raise web.HTTPBadRequest(text="at must use ISO format like 2026-04-10T09:00:00") from exc
-            if dt.tzinfo is None:
-                from zoneinfo import ZoneInfo
-
-                dt = dt.replace(tzinfo=ZoneInfo(default_timezone))
-            return CronSchedule(kind="at", at_ms=int(dt.timestamp() * 1000)), True
-
-        raise web.HTTPBadRequest(text="kind must be one of every, cron, or at")
+        return web_cron_api.build_cron_schedule_from_payload(self, body)
 
     def _serialize_cron_job(self, job: CronJob, *, default_timezone: str, session_id: str | None = None) -> dict[str, Any]:
-        next_run_display = None
-        if job.state.next_run_at_ms:
-            next_run_display = format_cron_timestamp(job.state.next_run_at_ms, job.schedule.tz or default_timezone)
-        return {
-            "id": job.id,
-            "session_id": session_id,
-            "name": job.name,
-            "enabled": job.enabled,
-            "schedule": {
-                "kind": job.schedule.kind,
-                "at_ms": job.schedule.at_ms,
-                "every_ms": job.schedule.every_ms,
-                "expr": job.schedule.expr,
-                "tz": job.schedule.tz,
-                "display": format_cron_timing(job.schedule, default_timezone),
-            },
-            "payload": {
-                "message": job.payload.message,
-                "deliver": job.payload.deliver,
-                "channel": job.payload.channel,
-                "external_chat_id": job.payload.external_chat_id,
-            },
-            "state": {
-                "next_run_at_ms": job.state.next_run_at_ms,
-                "next_run_display": next_run_display,
-                "last_run_at_ms": job.state.last_run_at_ms,
-                "last_status": job.state.last_status,
-                "last_error": job.state.last_error,
-            },
-            "created_at_ms": job.created_at_ms,
-            "updated_at_ms": job.updated_at_ms,
-            "delete_after_run": job.delete_after_run,
-        }
+        return web_cron_api.serialize_cron_job(job, default_timezone=default_timezone, session_id=session_id)
 
     def _serialize_run(self, run: Any) -> dict[str, Any]:
         return {
@@ -1506,130 +1429,19 @@ class WebAdapter(MessageAdapter):
         return await web_settings_handlers_tools.handle_settings_mcp_reload(self, request)
 
     async def _handle_cron_jobs(self, request: web.Request) -> web.Response:
-        default_timezone = self._cron_default_timezone()
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if session_id:
-            service = await self._get_cron_service(session_id)
-            jobs = [
-                self._serialize_cron_job(job, default_timezone=default_timezone, session_id=session_id)
-                for job in service.list_jobs(include_disabled=True)
-            ]
-        else:
-            services = await self._require_cron_manager().get_all_services()
-            jobs = [
-                self._serialize_cron_job(job, default_timezone=default_timezone, session_id=job_session_id)
-                for job_session_id, service in sorted(services.items())
-                for job in service.list_jobs(include_disabled=True)
-            ]
-        return web.json_response(
-            {
-                "session_id": session_id,
-                "default_timezone": default_timezone,
-                "jobs": jobs,
-            }
-        )
+        return await web_cron_api.handle_cron_jobs(self, request)
 
     async def _handle_cron_job_create(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        session_id = self._require_session_id(body.get("session_id"))
-        message = self._coerce_optional_text(body.get("message"), default="") or ""
-        if not message:
-            raise web.HTTPBadRequest(text="message is required")
-
-        schedule, delete_after_run = self._build_cron_schedule_from_payload(body)
-        channel, external_chat_id = self._split_session_for_cron(session_id)
-        service = await self._get_cron_service(session_id)
-        try:
-            job = service.add_job(
-                name=self._coerce_optional_text(body.get("name"), default=message[:30]) or message[:30],
-                schedule=schedule,
-                message=message,
-                deliver=bool(body.get("deliver", True)),
-                channel=channel,
-                external_chat_id=external_chat_id,
-                delete_after_run=delete_after_run,
-            )
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-
-        return web.json_response(
-            {
-                "ok": True,
-                "session_id": session_id,
-                "job": self._serialize_cron_job(job, default_timezone=self._cron_default_timezone(), session_id=session_id),
-            }
-        )
+        return await web_cron_api.handle_cron_job_create(self, request)
 
     async def _handle_cron_job_update(self, request: web.Request) -> web.Response:
-        job_id = self._coerce_optional_text(request.match_info.get("job_id"), default="") or ""
-        body = await self._read_json_body(request)
-        session_id = self._require_session_id(body.get("session_id"))
-        message = self._coerce_optional_text(body.get("message"), default="") or ""
-        if not message:
-            raise web.HTTPBadRequest(text="message is required")
-
-        schedule, delete_after_run = self._build_cron_schedule_from_payload(body)
-        channel, external_chat_id = self._split_session_for_cron(session_id)
-        service = await self._get_cron_service(session_id)
-        try:
-            job = service.update_job(
-                job_id,
-                name=self._coerce_optional_text(body.get("name"), default=message[:30]) or message[:30],
-                schedule=schedule,
-                message=message,
-                deliver=bool(body.get("deliver", True)),
-                channel=channel,
-                external_chat_id=external_chat_id,
-                delete_after_run=delete_after_run,
-            )
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        if job is None:
-            raise web.HTTPNotFound(text="Cron job not found")
-
-        return web.json_response(
-            {
-                "ok": True,
-                "session_id": session_id,
-                "job": self._serialize_cron_job(job, default_timezone=self._cron_default_timezone(), session_id=session_id),
-            }
-        )
+        return await web_cron_api.handle_cron_job_update(self, request)
 
     async def _handle_cron_job_delete(self, request: web.Request) -> web.Response:
-        job_id = self._coerce_optional_text(request.match_info.get("job_id"), default="") or ""
-        session_id = self._require_session_id(request.query.get("session_id"))
-        service = await self._get_cron_service(session_id)
-        if not service.remove_job(job_id):
-            raise web.HTTPNotFound(text="Cron job not found")
-        return web.json_response({"ok": True, "session_id": session_id, "job_id": job_id})
+        return await web_cron_api.handle_cron_job_delete(self, request)
 
     async def _handle_cron_job_action(self, request: web.Request) -> web.Response:
-        job_id = self._coerce_optional_text(request.match_info.get("job_id"), default="") or ""
-        action = self._coerce_optional_text(request.match_info.get("action"), default="") or ""
-        body = await self._read_json_body(request)
-        session_id = self._require_session_id(body.get("session_id"))
-        service = await self._get_cron_service(session_id)
-
-        if action == "pause":
-            ok = service.pause_job(job_id)
-        elif action == "enable":
-            ok = service.enable_job(job_id)
-        elif action == "run":
-            ok = await service.run_job(job_id)
-        else:
-            raise web.HTTPBadRequest(text="Unsupported cron job action")
-
-        if not ok:
-            raise web.HTTPNotFound(text="Cron job not found")
-        job = service.get_job(job_id)
-        return web.json_response(
-            {
-                "ok": True,
-                "session_id": session_id,
-                "job_id": job_id,
-                "job": self._serialize_cron_job(job, default_timezone=self._cron_default_timezone(), session_id=session_id) if job else None,
-            }
-        )
+        return await web_cron_api.handle_cron_job_action(self, request)
 
     async def _handle_frontend_index(self, request: web.Request) -> web.FileResponse:
         if self._frontend_dir is None:
