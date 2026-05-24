@@ -148,7 +148,7 @@ def test_web_research_defaults_count_to_configured_max_results():
     payload = json.loads(asyncio.run(tool._execute("coding model comparison", fetch_count=1)))
 
     assert tool.parameters["properties"]["count"]["default"] == 25
-    assert search.calls == [{"query": "coding model comparison", "count": 25, "freshness": "year"}]
+    assert search.calls == [{"query": "coding model comparison", "count": 25, "freshness": "month"}]
     assert payload["coverage"]["search_result_count"] == 1
 
 
@@ -225,8 +225,8 @@ def test_web_research_runs_manual_queries_and_dedupes_fetches():
     )
 
     assert search.calls == [
-        {"query": "sqlite fts", "count": 3, "freshness": "year"},
-        {"query": "sqlite benchmark", "count": 3, "freshness": "year"},
+        {"query": "sqlite fts", "count": 3, "freshness": "month"},
+        {"query": "sqlite benchmark", "count": 3, "freshness": "month"},
     ]
     assert [call["url"] for call in fetch.calls] == [
         "https://example.com/shared",
@@ -397,7 +397,7 @@ def test_web_research_reuses_existing_high_quality_fetch_without_network_search(
         get_session_id=lambda: "chat-1",
     )
 
-    payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
+    payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1, freshness="none")))
 
     assert knowledge.calls == [
         {
@@ -421,6 +421,7 @@ def test_web_research_reuses_existing_high_quality_fetch_without_network_search(
     assert payload["fetched_sources"][0]["reused"] is True
     assert payload["fetched_sources"][0]["reuse_source"] == "search_knowledge"
     assert payload["fetched_sources"][0]["has_main_content"] is True
+    assert payload["freshness"] == "none"
     assert payload["coverage"]["target_met"] is True
     assert payload["coverage"]["fetched_domains"] == ["sqlite.org"]
 
@@ -501,14 +502,14 @@ def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():
 
     payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
 
-    assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "year"}]
+    assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "month"}]
     assert [call["url"] for call in fetch.calls] == ["https://example.com/fresh"]
     assert payload["reused_count"] == 0
+    assert knowledge.calls == []
     assert payload["reuse_attempt"] == {
         "source": "search_knowledge",
         "ok": False,
-        "result_count": 1,
-        "reused_count": 0,
+        "reason": "skipped for recent query",
     }
     assert payload["fetched_sources"][0]["reused"] is False
 

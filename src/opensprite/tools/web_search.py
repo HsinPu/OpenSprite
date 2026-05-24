@@ -180,7 +180,7 @@ def _effective_freshness(value: Any, default: str = "year", *, query: Any = None
     inferred = _infer_freshness_from_query(query)
     if inferred is None and normalized != "auto":
         return normalized
-    auto_freshness = inferred or "year"
+    auto_freshness = inferred or "month"
     if normalized in {"day", "week", "month", "year", "none"}:
         if _FRESHNESS_RANK[normalized] < _FRESHNESS_RANK[auto_freshness]:
             return normalized

@@ -185,7 +185,7 @@ def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
 
     asyncio.run(tool._execute("sqlite", count=50))
 
-    assert requested_counts == [(25, "year")]
+    assert requested_counts == [(25, "month")]
 
 
 def test_web_search_execute_allows_freshness_override(monkeypatch):
@@ -253,7 +253,7 @@ def test_web_search_freshness_aliases_and_provider_params():
     assert _normalize_freshness("all", "year") == "none"
     assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
     assert _effective_freshness(None, "auto", query="現在寫 code 最好的語言模型") == "month"
-    assert _effective_freshness(None, "auto", query="sqlite docs") == "year"
+    assert _effective_freshness(None, "auto", query="sqlite docs") == "month"
     assert _effective_freshness("year", "auto", query="latest Qwen models") == "month"
     assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"
     assert _effective_freshness("none", "auto", query="latest Qwen models") == "month"
