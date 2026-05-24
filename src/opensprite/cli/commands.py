@@ -19,7 +19,7 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing, rende
 from ..runtime import gateway as run_gateway
 from ..search.base import SearchHit
 from ..storage.base import StoredMessage
-from . import commands_service, commands_status, commands_update, service_background, service_linux, update as update_cli
+from . import commands_auth, commands_service, commands_status, commands_update, service_background, service_linux, update as update_cli
 
 app = typer.Typer(
     name="opensprite",
@@ -220,12 +220,6 @@ def config_validate(
     )
 
 
-def _require_codex_provider(provider: str) -> None:
-    if provider not in {"openai-codex", "copilot"}:
-        typer.secho("Error: only openai-codex and copilot auth are supported right now.", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
-
-
 @auth_app.command("status")
 def auth_status(
     provider: str = typer.Argument("openai-codex", help="Provider id."),
@@ -233,59 +227,13 @@ def auth_status(
     json_output: bool = typer.Option(False, "--json", help="Output status as JSON."),
 ) -> None:
     """Show provider authentication status."""
-    _require_codex_provider(provider)
-    if provider == "copilot":
-        from ..auth.copilot import CopilotAuthError, get_copilot_status
-
-        try:
-            status = get_copilot_status(_resolve_app_home(config))
-            payload = {"provider": provider, "configured": status.configured, "path": str(status.path)}
-        except CopilotAuthError as exc:
-            payload = {"provider": provider, "configured": False, "error": str(exc)}
-            if json_output:
-                typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-                return
-            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-            raise typer.Exit(code=1) from exc
-        if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        typer.echo(f"Provider: {provider}")
-        typer.echo(f"Configured: {_format_presence(status.configured)}")
-        typer.echo(f"Token file: {status.path}")
-        return
-
-    from ..auth.codex import CodexAuthError, get_codex_status
-    try:
-        status = get_codex_status(_resolve_app_home(config))
-        payload = {
-            "provider": provider,
-            "configured": status.configured,
-            "path": str(status.path),
-            "expires_at": status.expires_at,
-            "expired": status.expired,
-            "account_id": status.account_id,
-        }
-    except CodexAuthError as exc:
-        payload = {"provider": provider, "configured": False, "error": str(exc)}
-        if json_output:
-            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-            return
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-
-    if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-        return
-    typer.echo(f"Provider: {provider}")
-    typer.echo(f"Configured: {_format_presence(status.configured)}")
-    typer.echo(f"Token file: {status.path}")
-    if status.configured:
-        typer.echo(f"Expired: {_format_presence(bool(status.expired))}")
-        if status.expires_at is not None:
-            typer.echo(f"Expires at: {status.expires_at}")
-        if status.account_id:
-            typer.echo(f"Account: {status.account_id}")
+    commands_auth.auth_status_command(
+        provider=provider,
+        config=config,
+        json_output=json_output,
+        resolve_app_home=_resolve_app_home,
+        format_presence=_format_presence,
+    )
 
 
 @auth_app.command("logout")
@@ -294,22 +242,11 @@ def auth_logout(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
 ) -> None:
     """Remove stored provider credentials."""
-    _require_codex_provider(provider)
-    if provider == "copilot":
-        from ..auth.copilot import copilot_auth_path, delete_copilot_token
-
-        path = copilot_auth_path(_resolve_app_home(config))
-        removed = delete_copilot_token(_resolve_app_home(config))
-        typer.echo(f"Removed GitHub Copilot credentials: {path}" if removed else f"No GitHub Copilot credentials found: {path}")
-        return
-
-    from ..auth.codex import codex_auth_path, delete_codex_token
-    path = codex_auth_path(_resolve_app_home(config))
-    removed = delete_codex_token(_resolve_app_home(config))
-    if removed:
-        typer.echo(f"Removed OpenAI Codex credentials: {path}")
-    else:
-        typer.echo(f"No OpenAI Codex credentials found: {path}")
+    commands_auth.auth_logout_command(
+        provider=provider,
+        config=config,
+        resolve_app_home=_resolve_app_home,
+    )
 
 
 @auth_app.command("login")
@@ -319,45 +256,12 @@ def auth_login(
     timeout_seconds: float = typer.Option(900.0, "--timeout", help="Maximum seconds to wait for browser authorization."),
 ) -> None:
     """Start provider login."""
-    _require_codex_provider(provider)
-    app_home = _resolve_app_home(config)
-    if provider == "copilot":
-        import time
-        from ..auth.copilot import CopilotAuthError, copilot_auth_path, copilot_poll_device_auth, copilot_start_device_auth
-
-        typer.echo("Signing in to GitHub Copilot...")
-        try:
-            device = copilot_start_device_auth()
-            typer.echo("To continue, open this URL in your browser:")
-            typer.echo(f"  {device.verification_uri}")
-            typer.echo("Enter this code:")
-            typer.echo(f"  {device.user_code}")
-            deadline = time.monotonic() + max(1.0, float(timeout_seconds))
-            while time.monotonic() < deadline:
-                time.sleep(device.poll_interval)
-                result = copilot_poll_device_auth(device.device_code, app_home=app_home)
-                if result.status == "authorized":
-                    typer.echo("Login successful.")
-                    typer.echo(f"Token file: {copilot_auth_path(app_home)}")
-                    return
-                if result.status in {"expired_token", "access_denied"}:
-                    raise CopilotAuthError(f"GitHub Copilot login failed: {result.status}")
-        except CopilotAuthError as exc:
-            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-            raise typer.Exit(code=1) from exc
-        typer.secho("Error: GitHub Copilot login timed out waiting for browser authorization.", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
-
-    from ..auth.codex import CodexAuthError, codex_device_login, codex_auth_path
-
-    typer.echo("Signing in to OpenAI Codex...")
-    try:
-        codex_device_login(app_home, timeout_seconds=timeout_seconds, announce=typer.echo)
-    except CodexAuthError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo("Login successful.")
-    typer.echo(f"Token file: {codex_auth_path(app_home)}")
+    commands_auth.auth_login_command(
+        provider=provider,
+        config=config,
+        timeout_seconds=timeout_seconds,
+        resolve_app_home=_resolve_app_home,
+    )
 
 
 @credential_app.command("list")
@@ -367,14 +271,13 @@ def auth_credentials_list(
     json_output: bool = typer.Option(False, "--json", help="Output credentials as JSON."),
 ) -> None:
     """List stored API-key credentials without revealing secrets."""
-    from ..auth.credentials import CredentialStoreError, list_credentials
-
-    try:
-        payload = {"credentials": list_credentials(provider, app_home=_resolve_app_home(config))}
-    except CredentialStoreError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-    _emit_credential_listing(payload, json_output)
+    commands_auth.auth_credentials_list_command(
+        provider=provider,
+        config=config,
+        json_output=json_output,
+        resolve_app_home=_resolve_app_home,
+        emit_credential_listing=_emit_credential_listing,
+    )
 
 
 @credential_app.command("add")
@@ -388,27 +291,16 @@ def auth_credentials_add(
     json_output: bool = typer.Option(False, "--json", help="Output created credential as JSON."),
 ) -> None:
     """Store an API key in the local credential vault."""
-    from ..auth.credentials import CredentialStoreError, add_credential
-
-    value = (secret or "").strip()
-    if not value:
-        value = typer.prompt("API key", hide_input=True).strip()
-    try:
-        credential = add_credential(
-            provider,
-            value,
-            label=label,
-            base_url=base_url,
-            scopes=capability,
-            app_home=_resolve_app_home(config),
-        )
-    except CredentialStoreError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-    if json_output:
-        typer.echo(json.dumps({"credential": credential}, ensure_ascii=False, indent=2))
-        return
-    typer.echo(f"Stored {provider} credential: {credential['id']} ({credential['secret_preview']})")
+    commands_auth.auth_credentials_add_command(
+        provider=provider,
+        secret=secret,
+        label=label,
+        base_url=base_url,
+        capability=capability,
+        config=config,
+        json_output=json_output,
+        resolve_app_home=_resolve_app_home,
+    )
 
 
 @credential_app.command("remove")
@@ -418,20 +310,13 @@ def auth_credentials_remove(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
 ) -> None:
     """Remove one stored credential."""
-    from ..auth.credentials import CredentialStoreError, remove_credential
-    from ..config.provider_settings import ProviderSettingsService
-
-    app_home = _resolve_app_home(config)
-    try:
-        payload = remove_credential(provider, credential_id, app_home=app_home)
-        config_path = _resolve_config_path(config)
-        if config_path.exists():
-            cleanup = ProviderSettingsService(config_path).remove_credential_references(provider, credential_id)
-            payload.update(cleanup)
-    except CredentialStoreError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-    typer.echo(f"Removed {provider} credential: {payload['credential_id']}")
+    commands_auth.auth_credentials_remove_command(
+        provider=provider,
+        credential_id=credential_id,
+        config=config,
+        resolve_app_home=_resolve_app_home,
+        resolve_config_path=_resolve_config_path,
+    )
 
 
 @credential_app.command("default")
@@ -443,25 +328,14 @@ def auth_credentials_default(
     json_output: bool = typer.Option(False, "--json", help="Output updated default as JSON."),
 ) -> None:
     """Set a provider or capability default credential."""
-    from ..auth.credentials import CredentialStoreError, set_capability_default, set_provider_default
-
-    if not provider and not capability:
-        typer.secho("Error: pass --provider or --capability.", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1)
-    try:
-        if provider:
-            credential = set_provider_default(provider, credential_id, app_home=_resolve_app_home(config))
-            target = f"provider {provider}"
-        else:
-            credential = set_capability_default(capability or "", credential_id, app_home=_resolve_app_home(config))
-            target = f"capability {capability}"
-    except CredentialStoreError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-    if json_output:
-        typer.echo(json.dumps({"credential": credential}, ensure_ascii=False, indent=2))
-        return
-    typer.echo(f"Set default credential for {target}: {credential_id}")
+    commands_auth.auth_credentials_default_command(
+        credential_id=credential_id,
+        provider=provider,
+        capability=capability,
+        config=config,
+        json_output=json_output,
+        resolve_app_home=_resolve_app_home,
+    )
 
 
 @search_app.command("rebuild")
