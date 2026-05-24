@@ -107,6 +107,7 @@ from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
+from . import web_settings_handlers_core
 from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
 from . import web_settings_payloads
@@ -1290,343 +1291,73 @@ class WebAdapter(MessageAdapter):
         return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
 
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
-        try:
-            payload = self._get_provider_settings().list_providers()
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_providers(self, request)
 
     async def _handle_settings_codex_auth_status(self, request: web.Request) -> web.Response:
-        from ..auth.codex import CodexAuthError, get_codex_status
-
-        try:
-            status = get_codex_status(self._get_app_home())
-        except CodexAuthError as exc:
-            return web.json_response(
-                {
-                    "provider": "openai-codex",
-                    "configured": False,
-                    "error": str(exc),
-                },
-                status=400,
-            )
-        return web.json_response(
-            {
-                "provider": "openai-codex",
-                "configured": status.configured,
-                "path": str(status.path),
-                "expires_at": status.expires_at,
-                "expired": status.expired,
-                "account_id": status.account_id,
-            }
-        )
+        return await web_settings_handlers_core.handle_settings_codex_auth_status(self, request)
 
     async def _handle_settings_codex_auth_login(self, request: web.Request) -> web.Response:
-        from ..auth.codex import CodexAuthError, codex_start_device_auth
-
-        try:
-            device_auth = codex_start_device_auth()
-        except CodexAuthError as exc:
-            return web.json_response({"ok": False, "provider": "openai-codex", "error": str(exc)}, status=502)
-        return web.json_response(
-            {
-                "ok": True,
-                "provider": "openai-codex",
-                "mode": "web_device_code",
-                "verification_uri": device_auth.verification_uri,
-                "user_code": device_auth.user_code,
-                "device_auth_id": device_auth.device_auth_id,
-                "interval": device_auth.poll_interval,
-                "expires_in": device_auth.expires_in,
-                "message": "Open the verification URL and enter the code to complete OpenAI Codex login.",
-            }
-        )
+        return await web_settings_handlers_core.handle_settings_codex_auth_login(self, request)
 
     async def _handle_settings_codex_auth_poll(self, request: web.Request) -> web.Response:
-        from ..auth.codex import CodexAuthError, codex_poll_device_auth, get_codex_status
-
-        body = await self._read_json_body(request)
-        try:
-            result = codex_poll_device_auth(
-                self._coerce_optional_text(body.get("device_auth_id")),
-                self._coerce_optional_text(body.get("user_code")),
-                app_home=self._get_app_home(),
-            )
-            status = get_codex_status(self._get_app_home()) if result.status == "authorized" else None
-        except CodexAuthError as exc:
-            return web.json_response({"ok": False, "provider": "openai-codex", "error": str(exc)}, status=400)
-        payload: dict[str, Any] = {"ok": True, "provider": "openai-codex", "status": result.status}
-        if status is not None:
-            payload["auth"] = {
-                "configured": status.configured,
-                "path": str(status.path),
-                "expires_at": status.expires_at,
-                "expired": status.expired,
-                "account_id": status.account_id,
-            }
-            payload = self._reload_agent_llm_from_config(payload, force=True)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_codex_auth_poll(self, request)
 
     async def _handle_settings_codex_auth_logout(self, request: web.Request) -> web.Response:
-        from ..auth.codex import codex_auth_path, delete_codex_token
-
-        app_home = self._get_app_home()
-        path = codex_auth_path(app_home)
-        removed = delete_codex_token(app_home)
-        return web.json_response(
-            {
-                "ok": True,
-                "provider": "openai-codex",
-                "removed": removed,
-                "path": str(path),
-            }
-        )
+        return await web_settings_handlers_core.handle_settings_codex_auth_logout(self, request)
 
     async def _handle_settings_copilot_auth_status(self, request: web.Request) -> web.Response:
-        from ..auth.copilot import CopilotAuthError, get_copilot_status
-
-        try:
-            status = get_copilot_status(self._get_app_home())
-        except CopilotAuthError as exc:
-            return web.json_response({"provider": "copilot", "configured": False, "error": str(exc)}, status=400)
-        return web.json_response({"provider": "copilot", "configured": status.configured, "path": str(status.path)})
+        return await web_settings_handlers_core.handle_settings_copilot_auth_status(self, request)
 
     async def _handle_settings_copilot_auth_login(self, request: web.Request) -> web.Response:
-        from ..auth.copilot import CopilotAuthError, copilot_start_device_auth
-
-        try:
-            device_auth = copilot_start_device_auth()
-        except CopilotAuthError as exc:
-            return web.json_response({"ok": False, "provider": "copilot", "error": str(exc)}, status=502)
-        return web.json_response(
-            {
-                "ok": True,
-                "provider": "copilot",
-                "mode": "web_device_code",
-                "verification_uri": device_auth.verification_uri,
-                "user_code": device_auth.user_code,
-                "device_code": device_auth.device_code,
-                "interval": device_auth.poll_interval,
-                "expires_in": device_auth.expires_in,
-            }
-        )
+        return await web_settings_handlers_core.handle_settings_copilot_auth_login(self, request)
 
     async def _handle_settings_copilot_auth_poll(self, request: web.Request) -> web.Response:
-        from ..auth.copilot import CopilotAuthError, copilot_poll_device_auth, get_copilot_status
-
-        body = await self._read_json_body(request)
-        try:
-            result = copilot_poll_device_auth(
-                self._coerce_optional_text(body.get("device_code")),
-                app_home=self._get_app_home(),
-            )
-            status = get_copilot_status(self._get_app_home()) if result.status == "authorized" else None
-        except CopilotAuthError as exc:
-            return web.json_response({"ok": False, "provider": "copilot", "error": str(exc)}, status=400)
-        payload: dict[str, Any] = {"ok": True, "provider": "copilot", "status": result.status}
-        if status is not None:
-            payload["auth"] = {"configured": status.configured, "path": str(status.path)}
-            payload = self._reload_agent_llm_from_config(payload, force=True)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_copilot_auth_poll(self, request)
 
     async def _handle_settings_copilot_auth_logout(self, request: web.Request) -> web.Response:
-        from ..auth.copilot import copilot_auth_path, delete_copilot_token
-
-        app_home = self._get_app_home()
-        path = copilot_auth_path(app_home)
-        removed = delete_copilot_token(app_home)
-        return web.json_response({"ok": True, "provider": "copilot", "removed": removed, "path": str(path)})
+        return await web_settings_handlers_core.handle_settings_copilot_auth_logout(self, request)
 
     async def _handle_settings_channels(self, request: web.Request) -> web.Response:
-        try:
-            payload = self._get_channel_settings().list_channels()
-        except ChannelSettingsError as exc:
-            self._raise_channel_settings_error(exc)
-        payload = await self._reload_channels_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_channels(self, request)
 
     async def _handle_settings_channel_create(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        channel_type = self._coerce_optional_text(body.get("type"))
-        if channel_type is None:
-            raise web.HTTPBadRequest(text="type is required")
-        try:
-            payload = self._get_channel_settings().create_channel(
-                channel_type,
-                name=self._coerce_optional_text(body.get("name")),
-                token=self._coerce_optional_text(body.get("token")),
-            )
-        except ChannelSettingsError as exc:
-            self._raise_channel_settings_error(exc)
-        payload = await self._reload_channels_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_channel_create(self, request)
 
     async def _handle_settings_channel_update(self, request: web.Request) -> web.Response:
-        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
-        if channel_id is None:
-            raise web.HTTPBadRequest(text="channel_id is required")
-        body = await self._read_json_body(request)
-        try:
-            payload = self._get_channel_settings().update_channel(
-                channel_id,
-                enabled=body.get("enabled") if "enabled" in body else None,
-                settings=body.get("settings", {}),
-            )
-        except ChannelSettingsError as exc:
-            self._raise_channel_settings_error(exc)
-        payload = await self._reload_channels_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_channel_update(self, request)
 
     async def _handle_settings_channel_connect(self, request: web.Request) -> web.Response:
-        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
-        if channel_id is None:
-            raise web.HTTPBadRequest(text="channel_id is required")
-        body = await self._read_json_body(request)
-        try:
-            payload = self._get_channel_settings().connect_channel(
-                channel_id,
-                token=self._coerce_optional_text(body.get("token")),
-                name=self._coerce_optional_text(body.get("name")),
-            )
-        except ChannelSettingsError as exc:
-            self._raise_channel_settings_error(exc)
-        payload = await self._reload_channels_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_channel_connect(self, request)
 
     async def _handle_settings_channel_disconnect(self, request: web.Request) -> web.Response:
-        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
-        if channel_id is None:
-            raise web.HTTPBadRequest(text="channel_id is required")
-        try:
-            payload = self._get_channel_settings().disconnect_channel(channel_id)
-        except ChannelSettingsError as exc:
-            self._raise_channel_settings_error(exc)
-        payload = await self._reload_channels_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_channel_disconnect(self, request)
 
     async def _handle_settings_provider_connect(self, request: web.Request) -> web.Response:
-        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
-        if provider_id is None:
-            raise web.HTTPBadRequest(text="provider_id is required")
-        body = await self._read_json_body(request)
-        try:
-            payload = self._get_provider_settings().connect_provider(
-                provider_id,
-                api_key=self._coerce_optional_text(body.get("api_key")),
-                base_url=self._coerce_optional_text(body.get("base_url")),
-                name=self._coerce_optional_text(body.get("name")),
-            )
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_provider_connect(self, request)
 
     async def _handle_settings_provider_disconnect(self, request: web.Request) -> web.Response:
-        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
-        if provider_id is None:
-            raise web.HTTPBadRequest(text="provider_id is required")
-        try:
-            payload = self._get_provider_settings().disconnect_provider(provider_id)
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload, force=True)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_provider_disconnect(self, request)
 
     async def _handle_settings_provider_options_update(self, request: web.Request) -> web.Response:
-        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
-        if provider_id is None:
-            raise web.HTTPBadRequest(text="provider_id is required")
-        body = await self._read_json_body(request)
-        try:
-            payload = self._get_provider_settings().update_provider_options(provider_id, body)
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload, force=True)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_provider_options_update(self, request)
 
     async def _handle_settings_credentials(self, request: web.Request) -> web.Response:
-        provider = self._coerce_optional_text(request.query.get("provider"))
-        try:
-            credentials = list_credentials(provider, app_home=self._get_config_path().parent)
-        except CredentialStoreError as exc:
-            self._raise_credential_store_error(exc)
-        return web.json_response({"credentials": credentials})
+        return await web_settings_handlers_core.handle_settings_credentials(self, request)
 
     async def _handle_settings_credential_create(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        provider = self._coerce_optional_text(body.get("provider"))
-        secret = self._coerce_optional_text(body.get("secret")) or self._coerce_optional_text(body.get("api_key"))
-        if provider is None or secret is None:
-            raise web.HTTPBadRequest(text="provider and secret are required")
-        scopes = body.get("scopes")
-        if not isinstance(scopes, list):
-            scopes = None
-        try:
-            credential = add_credential(
-                provider,
-                secret,
-                label=self._coerce_optional_text(body.get("label")),
-                auth_type=self._coerce_optional_text(body.get("auth_type"), default="api_key") or "api_key",
-                base_url=self._coerce_optional_text(body.get("base_url")),
-                scopes=scopes,
-                app_home=self._get_config_path().parent,
-            )
-        except CredentialStoreError as exc:
-            self._raise_credential_store_error(exc)
-        return web.json_response({"ok": True, "credential": credential})
+        return await web_settings_handlers_core.handle_settings_credential_create(self, request)
 
     async def _handle_settings_credential_delete(self, request: web.Request) -> web.Response:
-        provider = self._coerce_optional_text(request.match_info.get("provider"))
-        credential_id = self._coerce_optional_text(request.match_info.get("credential_id"))
-        if provider is None or credential_id is None:
-            raise web.HTTPBadRequest(text="provider and credential_id are required")
-        try:
-            payload = remove_credential(provider, credential_id, app_home=self._get_config_path().parent)
-            cleanup = self._get_provider_settings().remove_credential_references(provider, credential_id)
-            payload.update(cleanup)
-        except CredentialStoreError as exc:
-            self._raise_credential_store_error(exc)
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload, force=bool(payload.get("restart_required")))
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_credential_delete(self, request)
 
     async def _handle_settings_credential_default(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        provider = self._coerce_optional_text(body.get("provider"))
-        capability = self._coerce_optional_text(body.get("capability"))
-        credential_id = self._coerce_optional_text(body.get("credential_id"))
-        if credential_id is None or (provider is None and capability is None):
-            raise web.HTTPBadRequest(text="credential_id plus provider or capability is required")
-        try:
-            if provider is not None:
-                credential = set_provider_default(provider, credential_id, app_home=self._get_config_path().parent)
-            else:
-                credential = set_capability_default(capability or "", credential_id, app_home=self._get_config_path().parent)
-        except CredentialStoreError as exc:
-            self._raise_credential_store_error(exc)
-        return web.json_response({"ok": True, "credential": credential})
+        return await web_settings_handlers_core.handle_settings_credential_default(self, request)
 
     async def _handle_settings_provider_credential(self, request: web.Request) -> web.Response:
-        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
-        if provider_id is None:
-            raise web.HTTPBadRequest(text="provider_id is required")
-        body = await self._read_json_body(request)
-        credential_id = self._coerce_optional_text(body.get("credential_id"))
-        if credential_id is None:
-            raise web.HTTPBadRequest(text="credential_id is required")
-        try:
-            payload = self._get_provider_settings().set_provider_credential(provider_id, credential_id)
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload, force=True)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_provider_credential(self, request)
 
     async def _handle_settings_models(self, request: web.Request) -> web.Response:
-        try:
-            payload = self._get_provider_settings().list_models()
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        return web.json_response(payload)
+        return await web_settings_handlers_core.handle_settings_models(self, request)
 
     async def _handle_settings_llm(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
