@@ -5,12 +5,13 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from aiohttp import ClientSession, WSServerHandshakeError
+from aiohttp import ClientSession, WSServerHandshakeError, web
 
 from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.events import RunEvent, SessionStatusEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
+from opensprite.channels.web_routes import register_web_routes
 from opensprite.config import Config, ProviderConfig
 from opensprite.auth.codex import CodexToken, delete_codex_token, save_codex_token
 import opensprite.auth.codex as codex_module
@@ -70,6 +71,44 @@ class _FakeSearxngConfigClient:
     async def get(self, url, headers=None, timeout=None):
         self.requests.append((url, headers, timeout))
         return _FakeSearxngConfigResponse(error=self.error)
+
+
+async def _stub_handler(request):
+    return web.json_response({"ok": True})
+
+
+class _FakeWebApi:
+    def __getattr__(self, name):
+        if name.startswith("handle_"):
+            return _stub_handler
+        raise AttributeError(name)
+
+
+class _FakeRouteAdapter:
+    def __init__(self):
+        self.app = web.Application()
+        self._api = _FakeWebApi()
+        self._frontend_dir = None
+
+    def __getattr__(self, name):
+        if name.startswith("_handle_"):
+            return _stub_handler
+        raise AttributeError(name)
+
+
+def test_register_web_routes_keeps_core_entrypoints():
+    adapter = _FakeRouteAdapter()
+
+    register_web_routes(adapter, ws_path="/ws", health_path="/healthz")
+
+    routes = {(route.method, route.resource.canonical) for route in adapter.app.router.routes()}
+
+    assert ("GET", "/ws") in routes
+    assert ("GET", "/healthz") in routes
+    assert ("GET", "/api/runs") in routes
+    assert ("GET", "/api/settings/llm") in routes
+    assert ("POST", "/api/settings/update") in routes
+    assert ("GET", "/") in routes
 
 
 async def _run_web_roundtrip():

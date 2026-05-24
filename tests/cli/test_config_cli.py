@@ -206,6 +206,22 @@ def test_cli_help_does_not_promote_onboard():
     assert "onboard" not in result.stdout
 
 
+def test_cli_help_lists_stable_top_level_commands():
+    result = runner.invoke(app, ["--help"])
+
+    assert result.exit_code == 0
+    for command in ("gateway", "status", "update", "service", "cron", "search", "config", "auth"):
+        assert command in result.stdout
+
+
+def test_service_help_lists_stable_subcommands():
+    result = runner.invoke(app, ["service", "--help"])
+
+    assert result.exit_code == 0
+    for command in ("install", "uninstall", "start", "stop", "restart", "status"):
+        assert command in result.stdout
+
+
 def test_onboard_command_is_removed():
     result = runner.invoke(app, ["onboard"])
 
