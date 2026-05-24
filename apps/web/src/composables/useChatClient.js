@@ -23,6 +23,13 @@ import {
   buildSessionsClearPath as buildSessionsClearPathBase,
   buildWorktreeCleanupPath as buildWorktreeCleanupPathBase,
 } from "./chatClientPaths";
+import {
+  channelFromSessionId as channelFromSessionIdBase,
+  externalChatIdFromSessionId as externalChatIdFromSessionIdBase,
+  generateExternalChatId as generateExternalChatIdBase,
+  generateOverlayProfileId as generateOverlayProfileIdBase,
+  isExternalChannelSessionId as isExternalChannelSessionIdBase,
+} from "./chatClientSessionIds";
 import { normalizeRunSummary } from "./runSummaryNormalizers";
 import {
   coerceEventPayload,
@@ -201,31 +208,23 @@ function randomToken() {
 }
 
 function generateExternalChatId() {
-  return `browser-${Date.now().toString(36)}-${randomToken()}`;
+  return generateExternalChatIdBase();
 }
 
 function generateOverlayProfileId() {
-  return `profile-${Date.now().toString(36)}-${randomToken()}`;
+  return generateOverlayProfileIdBase();
 }
 
 function externalChatIdFromSessionId(sessionId) {
-  const normalized = String(sessionId || "").trim();
-  const separatorIndex = normalized.indexOf(":");
-  if (separatorIndex < 0) {
-    return normalized;
-  }
-  return normalized.slice(separatorIndex + 1).trim();
+  return externalChatIdFromSessionIdBase(sessionId);
 }
 
 function channelFromSessionId(sessionId) {
-  const normalized = String(sessionId || "").trim();
-  const separatorIndex = normalized.indexOf(":");
-  return separatorIndex > 0 ? normalized.slice(0, separatorIndex).trim() : "web";
+  return channelFromSessionIdBase(sessionId);
 }
 
 function isExternalChannelSessionId(value) {
-  const normalized = String(value || "").trim();
-  return normalized.includes(":") && channelFromSessionId(normalized) !== "web";
+  return isExternalChannelSessionIdBase(value);
 }
 
 function summarizeTitle(text) {
