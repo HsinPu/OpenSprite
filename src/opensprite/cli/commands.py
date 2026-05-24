@@ -19,7 +19,7 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing, rende
 from ..runtime import gateway as run_gateway
 from ..search.base import SearchHit
 from ..storage.base import StoredMessage
-from . import service_background, service_linux, update as update_cli
+from . import commands_service, commands_status, commands_update, service_background, service_linux, update as update_cli
 
 app = typer.Typer(
     name="opensprite",
@@ -89,54 +89,17 @@ def update_command(
     ),
 ) -> None:
     """Update a source-checkout OpenSprite install."""
-    try:
-        if check:
-            count = update_cli.check_update_available(branch=branch)
-            if count:
-                typer.echo(f"Update available: {count} commit(s) behind origin/{branch}.")
-            else:
-                typer.echo("OpenSprite is up to date.")
-            return
-
-        typer.echo("Updating OpenSprite...")
-        result = update_cli.update_checkout(branch=branch, install_dev=dev)
-    except update_cli.UpdateError as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-
-    if result.updated:
-        typer.echo(f"Updated {result.before_rev[:7]} -> {result.after_rev[:7]} on {result.branch}.")
-    else:
-        typer.echo(f"Already up to date on {result.branch}.")
-    typer.echo(f"Project: {result.project_root}")
-    typer.echo(f"Python: {result.python_executable}")
-    if result.frontend_build == "built":
-        typer.echo("Web frontend: built")
-
-    if restart:
-        try:
-            if _use_linux_service():
-                service_linux.restart_service()
-                typer.echo("Restarted OpenSprite service.")
-            else:
-                try:
-                    service_background.stop_service()
-                except FileNotFoundError:
-                    pass
-                status = service_background.start_service()
-                typer.echo(f"Restarted OpenSprite background gateway (PID {status.pid}).")
-                typer.echo(f"Log: {status.log_file}")
-        except (FileNotFoundError, RuntimeError) as exc:
-            _handle_service_error(exc)
-
-
-def _start_gateway(config: str | None = None) -> None:
-    """Start the OpenSprite gateway with optional config override."""
-    try:
-        run_gateway(config_path=config)
-    except (FileNotFoundError, ValueError) as exc:
-        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
+    commands_update.update_command(
+        branch=branch,
+        check=check,
+        dev=dev,
+        restart=restart,
+        update_cli_module=update_cli,
+        use_linux_service=_use_linux_service,
+        service_linux_module=service_linux,
+        service_background_module=service_background,
+        handle_service_error=_handle_service_error,
+    )
 
 
 def _resolve_config_path(config: str | None = None) -> Path:
@@ -196,182 +159,6 @@ def _iter_channel_status(config_obj) -> list[tuple[str, bool]]:
     return results
 
 
-def _emit_status(payload: dict[str, object], json_output: bool) -> None:
-    """Render status output in text or JSON format."""
-    if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-        return
-
-    typer.echo("OpenSprite Status")
-    typer.echo(f"Version: {payload['version']}")
-    typer.echo(
-        f"Config: {payload['config_path']} [{_format_presence(bool(payload['config_exists']))}]"
-    )
-    typer.echo(
-        f"App Home: {payload['app_home']} [{_format_presence(bool(payload['app_home_exists']))}]"
-    )
-    typer.echo(
-        "Workspace Root: "
-        f"{payload['workspace_root']} [{_format_presence(bool(payload['workspace_root_exists']))}]"
-    )
-
-    if not bool(payload["config_loaded"]):
-        typer.echo(f"LLM Configured: {_format_presence(bool(payload['llm_configured']))}")
-        typer.echo("Channels: unavailable (config file missing)")
-        hint = payload.get("hint")
-        if isinstance(hint, str) and hint:
-            typer.echo(f"Hint: {hint}")
-        return
-
-    provider = payload["provider"]
-    storage = payload["storage"]
-    search = payload["search"]
-    channels = payload["channels"]
-    enabled_channels = [name for name, enabled in channels.items() if enabled]
-
-    typer.echo(f"LLM Configured: {_format_presence(bool(payload['llm_configured']))}")
-    typer.echo(
-        "Provider: "
-        f"{provider['name'] or '<unset>'} "
-        f"(enabled={_format_presence(bool(provider['enabled']))}, "
-        f"api_key={_format_presence(bool(provider['api_key_configured']))})"
-    )
-    typer.echo(f"Model: {provider['model']}")
-    typer.echo(f"Storage: {storage['type']} -> {storage['path']}")
-    typer.echo(
-        "Search: "
-        f"enabled={_format_presence(bool(search['enabled']))} "
-        f"backend={search['backend']} "
-        f"(history_top_k={search['history_top_k']}, knowledge_top_k={search['knowledge_top_k']})"
-    )
-    typer.echo(
-        "Channels: " + (", ".join(enabled_channels) if enabled_channels else "none enabled")
-    )
-
-
-def _build_config_validate_payload(config: str | None = None) -> dict[str, object]:
-    """Validate the main config and external split config files."""
-    from ..config import Config
-
-    config_path = _resolve_config_path(config)
-    payload: dict[str, object] = {
-        "config_path": str(config_path),
-        "config_exists": config_path.exists(),
-        "valid": False,
-        "files": [],
-    }
-
-    if not config_path.exists():
-        payload["error"] = f"Config file does not exist: {config_path}"
-        return payload
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            raw_data = json.load(f)
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        payload["error"] = str(exc)
-        return payload
-
-    if not isinstance(raw_data, dict):
-        payload["error"] = f"Config file must contain a JSON object: {config_path}"
-        return payload
-
-    files = [
-        ("main", config_path),
-        ("llm.providers", Config.get_llm_providers_file_path(config_path, raw_data.get("llm", {}))),
-        ("channels", Config.get_channels_file_path(config_path, raw_data)),
-        ("search", Config.get_search_file_path(config_path, raw_data)),
-        ("media", Config.get_media_file_path(config_path, raw_data)),
-        ("messages", Config.get_messages_file_path(config_path, raw_data)),
-        ("mcp_servers", Config.get_mcp_servers_file_path(config_path, raw_data.get("tools", {}))),
-    ]
-
-    file_payloads: list[dict[str, object]] = []
-    missing_files: list[str] = []
-    parse_errors: list[str] = []
-    for label, file_path in files:
-        exists = file_path.exists()
-        entry: dict[str, object] = {
-            "name": label,
-            "path": str(file_path),
-            "exists": exists,
-            "valid_json": False,
-        }
-        if exists:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                entry["valid_json"] = isinstance(loaded, dict)
-                if not isinstance(loaded, dict):
-                    entry["error"] = "JSON root must be an object"
-                    parse_errors.append(f"{label}: JSON root must be an object")
-            except (OSError, json.JSONDecodeError, ValueError) as exc:
-                entry["error"] = str(exc)
-                parse_errors.append(f"{label}: {exc}")
-        else:
-            missing_files.append(label)
-        file_payloads.append(entry)
-
-    payload["files"] = file_payloads
-
-    if missing_files:
-        payload["error"] = "Missing config files: " + ", ".join(missing_files)
-        return payload
-    if parse_errors:
-        payload["error"] = "; ".join(parse_errors)
-        return payload
-
-    try:
-        loaded = Config.load(config_path)
-    except (FileNotFoundError, ValueError) as exc:
-        payload["error"] = str(exc)
-        return payload
-
-    payload.update(
-        {
-            "valid": True,
-            "llm_default": loaded.llm.default,
-            "enabled_channels": [name for name, enabled in _iter_channel_status(loaded) if enabled],
-            "search_enabled": loaded.search.enabled,
-            "mcp_servers": sorted(loaded.tools.mcp_servers),
-        }
-    )
-    return payload
-
-
-def _emit_config_validate(payload: dict[str, object], json_output: bool) -> None:
-    """Render config validation output."""
-    if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-        return
-
-    typer.echo("OpenSprite Config Validation")
-    typer.echo(f"Config: {payload['config_path']}")
-    typer.echo(f"Exists: {_format_presence(bool(payload.get('config_exists')))}")
-    typer.echo(f"Valid: {_format_presence(bool(payload.get('valid')))}")
-    for entry in payload.get("files", []):
-        if not isinstance(entry, dict):
-            continue
-        status = _format_presence(bool(entry.get("exists")))
-        valid_json = _format_presence(bool(entry.get("valid_json")))
-        typer.echo(f"- {entry.get('name')}: {entry.get('path')} [exists={status}, json={valid_json}]")
-        error = entry.get("error")
-        if isinstance(error, str) and error:
-            typer.echo(f"  error: {error}")
-
-    if payload.get("valid"):
-        typer.echo(f"LLM default: {payload.get('llm_default') or '<unset>'}")
-        enabled_channels = payload.get("enabled_channels") or []
-        typer.echo("Enabled channels: " + (", ".join(enabled_channels) if enabled_channels else "none"))
-        typer.echo(f"Search enabled: {_format_presence(bool(payload.get('search_enabled')))}")
-        typer.echo("MCP servers: " + (", ".join(payload.get("mcp_servers") or []) or "none"))
-        return
-
-    error = payload.get("error")
-    if isinstance(error, str) and error:
-        typer.echo(f"Error: {error}")
-
-
 @app.command()
 def status(
     config: str | None = typer.Option(
@@ -387,76 +174,14 @@ def status(
     ),
 ) -> None:
     """Show OpenSprite configuration and runtime status."""
-    from ..config import Config
-
-    config_path = _resolve_config_path(config)
-    app_home = (Path.home() / ".opensprite").resolve()
-    workspace_root = (app_home / "workspace").resolve()
-
-    payload: dict[str, object] = {
-        "version": __version__,
-        "config_path": str(config_path),
-        "config_exists": config_path.exists(),
-        "config_loaded": False,
-        "app_home": str(app_home),
-        "app_home_exists": app_home.exists(),
-        "workspace_root": str(workspace_root),
-        "workspace_root_exists": workspace_root.exists(),
-        "llm_configured": False,
-    }
-
-    if not config_path.exists():
-        payload["hint"] = "run `opensprite gateway`; it creates defaults, then configure OpenSprite from the Web UI Settings."
-        _emit_status(payload, json_output)
-        return
-
-    try:
-        loaded = Config.load(config_path)
-    except (FileNotFoundError, ValueError) as exc:
-        if json_output:
-            payload["error"] = str(exc)
-            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(code=1) from exc
-
-    selected_provider = loaded.llm.default if loaded.llm.default in loaded.llm.providers else None
-    if selected_provider is not None:
-        active_provider = loaded.llm.providers[selected_provider]
-        provider_enabled = bool(getattr(active_provider, "enabled", False))
-        provider_has_key = bool(active_provider.api_key)
-        model_name = active_provider.model or "<unset>"
-    else:
-        provider_enabled = False
-        provider_has_key = False
-        model_name = "<unset>"
-    storage_path = Path(loaded.storage.path).expanduser()
-    channels = {name: enabled for name, enabled in _iter_channel_status(loaded)}
-
-    payload.update(
-        {
-            "config_loaded": True,
-            "llm_configured": loaded.is_llm_configured,
-            "provider": {
-                "name": selected_provider,
-                "enabled": provider_enabled,
-                "api_key_configured": provider_has_key,
-                "model": model_name,
-            },
-            "storage": {
-                "type": loaded.storage.type,
-                "path": str(storage_path),
-            },
-            "search": {
-                "enabled": loaded.search.enabled,
-                "backend": loaded.search.backend,
-                "history_top_k": loaded.search.history_top_k,
-                "knowledge_top_k": loaded.search.knowledge_top_k,
-            },
-            "channels": channels,
-        }
+    commands_status.status_command(
+        config_path=_resolve_config_path(config),
+        json_output=json_output,
+        home_root=Path.home(),
+        version=__version__,
+        format_presence=_format_presence,
+        iter_channel_status=_iter_channel_status,
     )
-    _emit_status(payload, json_output)
 
 
 @app.command()
@@ -469,7 +194,7 @@ def gateway(
     ),
 ) -> None:
     """Start the OpenSprite gateway."""
-    _start_gateway(config=config)
+    commands_status.start_gateway(config=config, run_gateway=run_gateway)
 
 
 @config_app.command("validate")
@@ -487,10 +212,12 @@ def config_validate(
     ),
 ) -> None:
     """Validate the main config and all split external config files."""
-    payload = _build_config_validate_payload(config)
-    _emit_config_validate(payload, json_output)
-    if not bool(payload.get("valid")):
-        raise typer.Exit(code=1)
+    commands_status.config_validate_command(
+        config_path=_resolve_config_path(config),
+        json_output=json_output,
+        format_presence=_format_presence,
+        iter_channel_status=_iter_channel_status,
+    )
 
 
 def _require_codex_provider(provider: str) -> None:
@@ -1613,30 +1340,22 @@ def service_install(
     ),
 ) -> None:
     """Install OpenSprite as a Linux systemd user service."""
-    try:
-        config_path = _resolve_config_path(config)
-        service_file = service_linux.install_service(config_path, start=start)
-    except (FileNotFoundError, RuntimeError, ValueError) as exc:
-        _handle_service_error(exc)
-
-    typer.echo(f"Installed service: {service_file}")
-    typer.echo(f"Config: {config_path}")
-    typer.echo(f"Started: {'yes' if start else 'no'}")
-    typer.echo("Tip: run `loginctl enable-linger $USER` if you want the user service to stay up after logout.")
+    commands_service.service_install_command(
+        config=config,
+        start=start,
+        resolve_config_path=_resolve_config_path,
+        service_linux_module=service_linux,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @service_app.command("uninstall")
 def service_uninstall() -> None:
     """Uninstall the OpenSprite Linux systemd user service."""
-    try:
-        removed = service_linux.uninstall_service()
-    except RuntimeError as exc:
-        _handle_service_error(exc)
-
-    if removed:
-        typer.echo("Removed OpenSprite service.")
-    else:
-        typer.echo("OpenSprite service is not installed.")
+    commands_service.service_uninstall_command(
+        service_linux_module=service_linux,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @service_app.command("start")
@@ -1649,29 +1368,24 @@ def service_start(
     ),
 ) -> None:
     """Start the OpenSprite gateway in the background."""
-    try:
-        if _use_linux_service():
-            service_linux.start_service()
-            typer.echo("Started OpenSprite service.")
-            return
-        status = service_background.start_service(config_path=Path(config) if config else None)
-    except (FileNotFoundError, RuntimeError) as exc:
-        _handle_service_error(exc)
-    typer.echo(f"Started OpenSprite background gateway (PID {status.pid}).")
-    typer.echo(f"Log: {status.log_file}")
+    commands_service.service_start_command(
+        config=config,
+        use_linux_service=_use_linux_service(),
+        service_linux_module=service_linux,
+        service_background_module=service_background,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @service_app.command("stop")
 def service_stop() -> None:
     """Stop the OpenSprite background gateway."""
-    try:
-        if _use_linux_service():
-            service_linux.stop_service()
-        else:
-            service_background.stop_service()
-    except (FileNotFoundError, RuntimeError) as exc:
-        _handle_service_error(exc)
-    typer.echo("Stopped OpenSprite service.")
+    commands_service.service_stop_command(
+        use_linux_service=_use_linux_service(),
+        service_linux_module=service_linux,
+        service_background_module=service_background,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @service_app.command("restart")
@@ -1684,44 +1398,25 @@ def service_restart(
     ),
 ) -> None:
     """Restart the OpenSprite background gateway."""
-    try:
-        if _use_linux_service():
-            service_linux.restart_service()
-            typer.echo("Restarted OpenSprite service.")
-            return
-        try:
-            service_background.stop_service()
-        except FileNotFoundError:
-            pass
-        status = service_background.start_service(config_path=Path(config) if config else None)
-    except (FileNotFoundError, RuntimeError) as exc:
-        _handle_service_error(exc)
-    typer.echo(f"Restarted OpenSprite background gateway (PID {status.pid}).")
-    typer.echo(f"Log: {status.log_file}")
+    commands_service.service_restart_command(
+        config=config,
+        use_linux_service=_use_linux_service(),
+        service_linux_module=service_linux,
+        service_background_module=service_background,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @service_app.command("status")
 def service_status() -> None:
     """Show OpenSprite background gateway status."""
-    try:
-        if _use_linux_service():
-            status = service_linux.get_service_status()
-            typer.echo("OpenSprite Service")
-            typer.echo(f"Service File: {status.service_file}")
-            typer.echo(f"Installed: {_format_presence(status.installed)}")
-            typer.echo(f"Enabled: {_format_presence(status.enabled)}")
-            typer.echo(f"Active: {_format_presence(status.active)}")
-            return
-        status = service_background.get_service_status()
-    except RuntimeError as exc:
-        _handle_service_error(exc)
-
-    typer.echo("OpenSprite Service")
-    typer.echo("Mode: detached process")
-    typer.echo(f"Active: {_format_presence(status.running)}")
-    typer.echo(f"PID: {status.pid or '<none>'}")
-    typer.echo(f"PID File: {status.pid_file}")
-    typer.echo(f"Log: {status.log_file}")
+    commands_service.service_status_command(
+        use_linux_service=_use_linux_service(),
+        service_linux_module=service_linux,
+        service_background_module=service_background,
+        format_presence=_format_presence,
+        handle_service_error=_handle_service_error,
+    )
 
 
 @cron_app.command("list")
