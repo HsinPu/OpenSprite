@@ -9,6 +9,7 @@ class FakeConfig:
         self.log = object()
         self.channels = object()
         self.is_llm_configured = True
+        self.source_path = None
 
 
 class FakeAgent:
@@ -73,7 +74,7 @@ def test_runtime_run_starts_and_stops_cron_manager(monkeypatch):
 
     monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
     monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True: None)
+    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True, app_home=None: None)
     monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
     monkeypatch.setattr(runtime.asyncio, "Event", FakeEvent)
 
