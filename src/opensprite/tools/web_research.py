@@ -6,16 +6,15 @@ import asyncio
 import json
 import re
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
-from ..search.base import SearchHit, SearchStore
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
-from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness, _infer_freshness_from_query
+from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 
 _WEB_RESEARCH_FETCH_CONCURRENCY = 4
 _WEB_RESEARCH_SEARCH_CONCURRENCY = 3
@@ -51,9 +50,6 @@ class WebResearchTool(Tool):
         fetch_config: WebFetchToolConfig | None = None,
         search_tool: WebSearchTool | None = None,
         fetch_tool: WebFetchTool | None = None,
-        knowledge_store: SearchStore | None = None,
-        get_session_id: Callable[[], str | None] | None = None,
-        knowledge_limit: int = 5,
     ):
         self.search_config = search_config or WebSearchToolConfig()
         self.fetch_config = fetch_config or WebFetchToolConfig()
@@ -66,9 +62,6 @@ class WebResearchTool(Tool):
             prefer_trafilatura=self.fetch_config.prefer_trafilatura,
             firecrawl_api_key=self.fetch_config.firecrawl_api_key,
         )
-        self.knowledge_store = knowledge_store
-        self.get_session_id = get_session_id or (lambda: None)
-        self.knowledge_limit = max(1, int(knowledge_limit or 1))
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -125,54 +118,16 @@ class WebResearchTool(Tool):
         search_count = min(max(int(count or self.search_config.max_results), 1), self.search_config.max_results)
         target_fetches = min(max(int(fetch_count or 2), 1), 5)
         research_queries = _research_queries(query, queries)
-        inferred_freshness = _infer_freshness_from_query(" ".join(research_queries))
         effective_freshness = _effective_freshness(
             freshness,
             self.search_config.freshness,
             query=" ".join(research_queries),
         )
         effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
-        if _should_skip_knowledge_reuse(
-            freshness=effective_freshness,
-            inferred_freshness=inferred_freshness,
-            requested_freshness=freshness,
-        ):
-            reused_sources: list[dict[str, Any]] = []
-            reuse_attempt = {"source": "search_knowledge", "ok": False, "reason": "skipped for recent query"}
-            reuse_attempts = [
-                {"query": current_query, **reuse_attempt}
-                for current_query in research_queries
-            ]
-        else:
-            reused_sources, reuse_attempt, reuse_attempts = await self._reuse_knowledge_sources_for_queries(
-                queries=research_queries,
-                target_count=target_fetches,
-            )
-        fetched_sources: list[dict[str, Any]] = list(reused_sources)
+        fetched_sources: list[dict[str, Any]] = []
         failed_sources: list[dict[str, Any]] = []
-        source_records: list[dict[str, Any]] = [
-            {**source, "tool_name": "web_fetch", "fetched": True, "reused": True}
-            for source in reused_sources
-        ]
-        reused_urls = {str(source.get("canonical_url") or source.get("url") or "") for source in reused_sources}
-
-        if len(fetched_sources) >= target_fetches:
-            return _research_payload(
-                query=query,
-                freshness=effective_freshness,
-                search_provider="search_knowledge",
-                search_backend="",
-                search_items=[],
-                fetched_sources=fetched_sources[:target_fetches],
-                failed_sources=failed_sources,
-                sources=source_records[:target_fetches],
-                target_fetch_count=target_fetches,
-                search_attempts=[],
-                query_attempts=[],
-                reuse_attempt=reuse_attempt,
-                reuse_attempts=reuse_attempts,
-                queries=research_queries,
-            )
+        source_records: list[dict[str, Any]] = []
+        fetched_urls: set[str] = set()
 
         search_items, search_provider, search_backend, search_attempts, query_attempts = await self._search_queries_with_fallback(
             queries=research_queries,
@@ -183,7 +138,7 @@ class WebResearchTool(Tool):
             return _research_payload(
                 query=query,
                 freshness=effective_freshness,
-                search_provider="search_knowledge" if fetched_sources else search_provider,
+                search_provider=search_provider,
                 search_backend=search_backend,
                 search_items=[],
                 fetched_sources=fetched_sources,
@@ -192,8 +147,6 @@ class WebResearchTool(Tool):
                 target_fetch_count=target_fetches,
                 search_attempts=search_attempts,
                 query_attempts=query_attempts,
-                reuse_attempt=reuse_attempt,
-                reuse_attempts=reuse_attempts,
                 queries=research_queries,
             )
 
@@ -207,7 +160,7 @@ class WebResearchTool(Tool):
             candidates=fetch_candidates,
             fetched_sources=fetched_sources,
             failed_sources=failed_sources,
-            reused_urls=reused_urls,
+            fetched_urls=fetched_urls,
             target_fetches=target_fetches,
             max_chars=effective_max_chars,
             query=query,
@@ -243,8 +196,6 @@ class WebResearchTool(Tool):
             target_fetch_count=target_fetches,
             search_attempts=search_attempts,
             query_attempts=query_attempts,
-            reuse_attempt=reuse_attempt,
-            reuse_attempts=reuse_attempts,
             queries=research_queries,
         )
 
@@ -254,7 +205,7 @@ class WebResearchTool(Tool):
         candidates: list[dict[str, Any]],
         fetched_sources: list[dict[str, Any]],
         failed_sources: list[dict[str, Any]],
-        reused_urls: set[str],
+        fetched_urls: set[str],
         target_fetches: int,
         max_chars: int,
         query: str,
@@ -282,7 +233,7 @@ class WebResearchTool(Tool):
                     failed_sources.append({**item, "reason": "unsupported url"})
                     continue
                 canonical_url = _candidate_url_key(item)
-                if canonical_url in reused_urls:
+                if canonical_url in fetched_urls:
                     continue
                 tasks.append(
                     self._fetch_single_candidate(
@@ -304,7 +255,7 @@ class WebResearchTool(Tool):
                 if fetched is None:
                     continue
                 final_url_key = str(fetched.get("canonical_url") or fetched.get("url") or "")
-                if final_url_key and final_url_key in reused_urls and final_url_key != canonical_url:
+                if final_url_key and final_url_key in fetched_urls and final_url_key != canonical_url:
                     failed_sources.append({**fetched, "reason": "duplicate final url"})
                     continue
                 if fetched.get("blocked_or_challenge"):
@@ -316,9 +267,9 @@ class WebResearchTool(Tool):
 
                 fetched_sources.append(fetched)
                 fetched_by_candidate_url[canonical_url] = fetched
-                reused_urls.add(canonical_url)
+                fetched_urls.add(canonical_url)
                 if final_url_key:
-                    reused_urls.add(final_url_key)
+                    fetched_urls.add(final_url_key)
                 if len(fetched_sources) >= target_fetches:
                     break
 
@@ -355,74 +306,6 @@ class WebResearchTool(Tool):
             search_provider=item_search_provider,
             search_backend=item_search_backend,
         ), None
-
-    async def _reuse_knowledge_sources_for_queries(
-        self,
-        *,
-        queries: list[str],
-        target_count: int,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
-        sources: list[dict[str, Any]] = []
-        attempts: list[dict[str, Any]] = []
-        seen_urls: set[str] = set()
-        for current_query in queries:
-            remaining = max(0, target_count - len(sources))
-            if remaining <= 0:
-                break
-            query_sources, attempt = await self._reuse_knowledge_sources(query=current_query, target_count=remaining)
-            attempts.append({"query": current_query, **attempt})
-            for source in query_sources:
-                key = str(source.get("canonical_url") or source.get("url") or "")
-                if not key or key in seen_urls:
-                    continue
-                seen_urls.add(key)
-                sources.append(source)
-                if len(sources) >= target_count:
-                    break
-
-        return sources, _aggregate_reuse_attempts(attempts), attempts
-
-    async def _reuse_knowledge_sources(
-        self,
-        *,
-        query: str,
-        target_count: int,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        if self.knowledge_store is None:
-            return [], {"source": "search_knowledge", "ok": False, "reason": "not configured"}
-        session_id = self.get_session_id()
-        if not session_id:
-            return [], {"source": "search_knowledge", "ok": False, "reason": "missing session_id"}
-        try:
-            hits = await self.knowledge_store.search_knowledge(
-                session_id=session_id,
-                query=query,
-                limit=max(self.knowledge_limit, target_count * 3),
-                source_type="web_fetch",
-            )
-        except Exception as exc:
-            return [], {"source": "search_knowledge", "ok": False, "reason": str(exc)[:500]}
-
-        sources: list[dict[str, Any]] = []
-        seen_urls: set[str] = set()
-        for hit in hits:
-            source = _reuse_source_from_hit(hit, query=query)
-            if source is None:
-                continue
-            key = str(source.get("canonical_url") or source.get("url") or "")
-            if not key or key in seen_urls:
-                continue
-            seen_urls.add(key)
-            sources.append(source)
-            if len(sources) >= target_count:
-                break
-
-        return sources, {
-            "source": "search_knowledge",
-            "ok": bool(sources),
-            "result_count": len(hits),
-            "reused_count": len(sources),
-        }
 
     async def _search_queries_with_fallback(
         self,
@@ -552,10 +435,7 @@ def _research_payload(
     target_fetch_count: int | None = None,
     search_attempts: list[dict[str, Any]] | None = None,
     query_attempts: list[dict[str, Any]] | None = None,
-    reuse_attempt: dict[str, Any] | None = None,
-    reuse_attempts: list[dict[str, Any]] | None = None,
 ) -> str:
-    reused_count = sum(1 for item in fetched_sources if item.get("reused"))
     research_queries = queries or [query]
     coverage = _research_coverage(
         queries=research_queries,
@@ -589,28 +469,10 @@ def _research_payload(
             "fetched_count": len(fetched_sources),
             "search_attempts": search_attempts or [],
             "query_attempts": query_attempts or [],
-            "reuse_attempt": reuse_attempt or {"source": "search_knowledge", "ok": False, "reason": "not configured"},
-            "reuse_attempts": reuse_attempts or [],
-            "reused_count": reused_count,
             "coverage": coverage,
         },
         ensure_ascii=False,
     )
-
-
-def _should_skip_knowledge_reuse(
-    *,
-    freshness: str,
-    inferred_freshness: str | None,
-    requested_freshness: str | None,
-) -> bool:
-    if freshness in {"day", "week", "month"}:
-        return True
-    if inferred_freshness is not None and freshness != "none":
-        return True
-    if requested_freshness is not None and str(requested_freshness).strip().lower() not in {"", "none"}:
-        return True
-    return False
 
 
 def _research_queries(query: str, queries: list[str] | None) -> list[str]:
@@ -629,36 +491,6 @@ def _research_queries(query: str, queries: list[str] | None) -> list[str]:
         seen.add(key)
         out.append(value)
     return out or [_clean_text(query)]
-
-
-def _aggregate_reuse_attempts(attempts: list[dict[str, Any]]) -> dict[str, Any]:
-    if not attempts:
-        return {"source": "search_knowledge", "ok": False, "reason": "not configured"}
-    if len(attempts) == 1:
-        return {key: value for key, value in attempts[0].items() if key != "query"}
-
-    result_count = sum(_coerce_int(attempt.get("result_count"), default=0) for attempt in attempts)
-    reused_count = sum(_coerce_int(attempt.get("reused_count"), default=0) for attempt in attempts)
-    reasons: list[str] = []
-    seen_reasons: set[str] = set()
-    for attempt in attempts:
-        reason = str(attempt.get("reason") or "").strip()
-        key = reason.lower()
-        if not reason or key in seen_reasons:
-            continue
-        seen_reasons.add(key)
-        reasons.append(reason)
-    aggregate: dict[str, Any] = {
-        "source": "search_knowledge",
-        "ok": reused_count > 0,
-        "query_count": len(attempts),
-        "result_count": result_count,
-        "reused_count": reused_count,
-    }
-    if reasons and reused_count == 0:
-        aggregate["reason"] = "; ".join(reasons)[:500]
-    return aggregate
-
 
 def _query_attempt_payload(
     query: str,
@@ -982,73 +814,11 @@ def _merge_fetch_source(
                 "quality_score": quality_score,
             }
         ],
-        "reused": False,
         "source_query": query,
         "search_provider": search_provider,
         "search_backend": search_backend,
         "search_freshness": _clean_text(item.get("search_freshness")),
         "search_rank": item.get("rank"),
-    }
-
-
-def _reuse_source_from_hit(hit: SearchHit, *, query: str) -> dict[str, Any] | None:
-    content = str(hit.content or "")
-    content_chars = len(content.strip())
-    min_content_chars = WEB_FETCH_MIN_CONTENT_CHARS
-    title = _clean_text(hit.title)
-    url = _clean_text(hit.url)
-    status = hit.status
-    extractor = _clean_text(hit.extractor)
-    truncated = bool(hit.truncated)
-    blocked_or_challenge = _blocked_or_challenge(title=title, content=content, status=status)
-    is_too_short = content_chars < min_content_chars
-    has_main_content = bool(content.strip()) and not is_too_short and not blocked_or_challenge
-    if not has_main_content:
-        return None
-    quality_score = _quality_score(
-        content_chars=content_chars,
-        min_content_chars=min_content_chars,
-        has_title=bool(title),
-        blocked_or_challenge=blocked_or_challenge,
-        truncated=truncated,
-        extractor=extractor,
-    )
-    canonical_url = _canonicalize_url(url)
-    return {
-        "rank": None,
-        "title": title,
-        "url": url,
-        "canonical_url": canonical_url,
-        "domain": _domain_from_url(url),
-        "snippet": _clean_text(hit.summary or content[:500]),
-        "content": content,
-        "content_chars": content_chars,
-        "has_title": bool(title),
-        "has_main_content": has_main_content,
-        "is_too_short": is_too_short,
-        "blocked_or_challenge": blocked_or_challenge,
-        "quality_score": quality_score,
-        "min_content_chars": min_content_chars,
-        "truncated": truncated,
-        "extractor": extractor,
-        "status": status,
-        "content_type": _clean_text(hit.content_type),
-        "fetch_attempts": [
-            {
-                "tool": "search_knowledge",
-                "extractor": extractor,
-                "status": status,
-                "content_chars": content_chars,
-                "is_too_short": is_too_short,
-                "blocked_or_challenge": blocked_or_challenge,
-                "quality_score": quality_score,
-            }
-        ],
-        "reused": True,
-        "reuse_source": "search_knowledge",
-        "source_query": _clean_text(hit.query) or query,
-        "search_provider": _clean_text(hit.provider),
-        "search_rank": None,
     }
 
 

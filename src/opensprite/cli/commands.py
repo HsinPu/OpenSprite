@@ -470,19 +470,13 @@ def search_run_queue(
 def search_benchmark(
     query: str = typer.Option(..., "--query", help="Search query to benchmark."),
     session_id: str = typer.Option(..., "--session-id", help="Session id to benchmark against."),
-    kind: str = typer.Option("knowledge", "--kind", help="Benchmark `history` or `knowledge` search."),
+    kind: str = typer.Option("history", "--kind", help="Benchmark history search."),
     strategy: str = typer.Option("both", "--strategy", help="Benchmark `fts`, `vector`, or `both`."),
     vector_backend: str | None = typer.Option(None, "--vector-backend", help="Override vector backend for this benchmark: `exact`, `sqlite_vec`, `auto`, or `both` (compare exact vs sqlite_vec)."),
     limit: int = typer.Option(5, "--limit", help="Maximum hits to show per strategy."),
     repeat: int = typer.Option(3, "--repeat", help="How many runs to execute per strategy."),
     json_output: bool = typer.Option(False, "--json", help="Emit benchmark output as JSON."),
     demo_embeddings: bool = typer.Option(False, "--demo-embeddings", help="Use a deterministic local embedding provider so vector benchmarks can run without a remote API key."),
-    source_type: str | None = typer.Option(None, "--source-type", help="Knowledge source filter for knowledge benchmarks."),
-    provider: str | None = typer.Option(None, "--provider", help="Knowledge provider filter for knowledge benchmarks."),
-    extractor: str | None = typer.Option(None, "--extractor", help="Knowledge extractor filter for knowledge benchmarks."),
-    status: int | None = typer.Option(None, "--status", help="Knowledge status filter for knowledge benchmarks."),
-    content_type: str | None = typer.Option(None, "--content-type", help="Knowledge content type filter for knowledge benchmarks."),
-    truncated: bool | None = typer.Option(None, "--truncated", help="Knowledge truncation filter for knowledge benchmarks."),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
 ) -> None:
     """Benchmark FTS and vector candidate strategies for one session query."""
@@ -496,12 +490,6 @@ def search_benchmark(
         repeat=repeat,
         json_output=json_output,
         demo_embeddings=demo_embeddings,
-        source_type=source_type,
-        provider=provider,
-        extractor=extractor,
-        status=status,
-        content_type=content_type,
-        truncated=truncated,
         config=config,
         build_sqlite_search_store=_build_sqlite_search_store,
         handle_search_error=_handle_search_error,
@@ -516,7 +504,7 @@ def search_seed_demo(
     session_id: str = typer.Option("demo:search-benchmark", "--session-id", help="Session id that will receive the synthetic benchmark dataset."),
     reset: bool = typer.Option(True, "--reset/--append", help="Replace any existing demo chat data before seeding."),
 ) -> None:
-    """Seed synthetic session history and web knowledge so benchmark commands can run without real user data."""
+    """Seed synthetic session history so benchmark commands can run without real user data."""
     commands_search.search_seed_demo_command(
         session_id=session_id,
         reset=reset,
@@ -633,12 +621,6 @@ def _benchmark_one_strategy(
     session_id: str,
     query: str,
     limit: int,
-    source_type: str | None = None,
-    provider: str | None = None,
-    extractor: str | None = None,
-    status: int | None = None,
-    content_type: str | None = None,
-    truncated: bool | None = None,
 ):
     """Run one benchmark query and return elapsed time with hits."""
     return commands_search.benchmark_one_strategy(
@@ -647,27 +629,11 @@ def _benchmark_one_strategy(
         session_id=session_id,
         query=query,
         limit=limit,
-        source_type=source_type,
-        provider=provider,
-        extractor=extractor,
-        status=status,
-        content_type=content_type,
-        truncated=truncated,
     )
 
 
-def _demo_search_payload(query: str, title: str, url: str, content: str, *, provider: str = "duckduckgo") -> str:
-    """Build a demo web_search payload."""
-    return commands_search.demo_search_payload(query, title, url, content, provider=provider)
-
-
-def _demo_fetch_payload(url: str, title: str, content: str, *, extractor: str = "trafilatura") -> str:
-    """Build a demo web_fetch payload."""
-    return commands_search.demo_fetch_payload(url, title, content, extractor=extractor)
-
-
 async def _seed_demo_search_data(loaded, search_store, *, session_id: str, reset: bool) -> dict[str, int]:
-    """Seed one synthetic session with history and stored web knowledge."""
+    """Seed one synthetic session with searchable history."""
     return await commands_search.seed_demo_search_data(loaded, search_store, session_id=session_id, reset=reset)
 
 

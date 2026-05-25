@@ -60,7 +60,6 @@ def _write_split_config(root):
             {
                 "enabled": False,
                 "history_top_k": 5,
-                "knowledge_top_k": 5,
                 "embedding": {
                     "enabled": False,
                     "provider": "openai",

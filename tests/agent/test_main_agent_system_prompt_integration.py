@@ -173,9 +173,6 @@ class _FakeSearchStore:
     async def index_message(self, session_id, role, content, tool_name=None, created_at=None):
         return None
 
-    async def index_tool_result(self, session_id, tool_name, tool_args, result, created_at=None):
-        return None
-
     async def search_history(self, session_id, query, limit=5):
         return [
             SearchHit(
@@ -185,20 +182,6 @@ class _FakeSearchStore:
                 content="Earlier we fixed the failing cleanup path in src/cleanup.py.",
                 created_at=1.0,
                 role="assistant",
-            )
-        ]
-
-    async def search_knowledge(self, session_id, query, limit=5, **kwargs):
-        return [
-            SearchHit(
-                id="knowledge-1",
-                session_id=session_id,
-                source_type="web_fetch",
-                content="Stored docs mention the cleanup path requirement.",
-                created_at=2.0,
-                title="Cleanup docs",
-                url="https://example.com/docs",
-                summary="Cleanup path requirement.",
             )
         ]
 

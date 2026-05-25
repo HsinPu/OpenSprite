@@ -376,7 +376,7 @@ class TaskContractService:
                     tool_group="history_retrieval",
                     coverage="any",
                     min_count=1,
-                    description="Search prior chat history or retrieved knowledge before answering this recall request.",
+                    description="Search prior chat history before answering this recall request.",
                 )
             )
             task_type = "history_retrieval"
@@ -800,7 +800,7 @@ def _build_semantic_contract_prompt(
         "Use this for ambiguous, multilingual, shorthand, typo-heavy, or code-mixed requests.\n"
         "Classify requests for current/external facts, prices, finance/stock data, weather, news, web pages, or public data as web_research.\n"
         "Classify requests about local files, repo contents, code paths, configs, TODOs, or project structure as workspace_read.\n"
-        "Classify requests about earlier chat decisions, previously mentioned items, or prior fetched session knowledge as history_retrieval.\n"
+        "Classify requests about earlier chat decisions or previously mentioned items as history_retrieval.\n"
         "Do not require tools for opinions, brainstorming, casual chat, or answers that can be completed from existing context.\n"
         "Return only JSON with keys: requires_tool_evidence, required_tool_group, task_type, allow_no_tool_final, confidence, reason.\n"
         "required_tool_group must be one of: web_research, workspace_read, history_retrieval, or null.\n"

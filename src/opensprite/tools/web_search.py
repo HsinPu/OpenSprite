@@ -284,7 +284,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, SearXNG, Jina."
+    description = "Search the web for external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()

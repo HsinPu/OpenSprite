@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-import json
 from pathlib import Path
 import statistics
 import time
@@ -139,7 +138,6 @@ def build_sqlite_search_store(
     return SQLiteSearchStore(
         path=loaded.storage.path,
         history_top_k=loaded.search.history_top_k,
-        knowledge_top_k=loaded.search.knowledge_top_k,
         embedding_provider=embedding_provider,
         hybrid_candidate_count=loaded.search.embedding.candidate_count,
         embedding_candidate_strategy=strategy,
@@ -156,81 +154,18 @@ def benchmark_one_strategy(
     session_id: str,
     query: str,
     limit: int,
-    source_type: str | None = None,
-    provider: str | None = None,
-    extractor: str | None = None,
-    status: int | None = None,
-    content_type: str | None = None,
-    truncated: bool | None = None,
 ):
     """Run one benchmark query and return elapsed time with hits."""
+    if kind != "history":
+        raise ValueError("search benchmark only supports history after cached web knowledge was removed")
     started = time.perf_counter()
-    if kind == "history":
-        hits = asyncio.run(search_store.search_history(session_id, query, limit=limit))
-    else:
-        hits = asyncio.run(
-            search_store.search_knowledge(
-                session_id,
-                query,
-                limit=limit,
-                source_type=source_type,
-                provider=provider,
-                extractor=extractor,
-                status=status,
-                content_type=content_type,
-                truncated=truncated,
-            )
-        )
+    hits = asyncio.run(search_store.search_history(session_id, query, limit=limit))
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     return elapsed_ms, hits
 
 
-def demo_search_payload(query: str, title: str, url: str, content: str, *, provider: str = "duckduckgo") -> str:
-    """Build a demo web_search payload."""
-    return json.dumps(
-        {
-            "type": "web_search",
-            "query": query,
-            "url": "",
-            "final_url": "",
-            "title": "",
-            "content": "",
-            "summary": f"Search results for: {query}",
-            "provider": provider,
-            "extractor": "search",
-            "status": None,
-            "truncated": False,
-            "content_type": "application/json",
-            "items": [{"title": title, "url": url, "content": content}],
-        },
-        ensure_ascii=False,
-    )
-
-
-def demo_fetch_payload(url: str, title: str, content: str, *, extractor: str = "trafilatura") -> str:
-    """Build a demo web_fetch payload."""
-    return json.dumps(
-        {
-            "type": "web_fetch",
-            "query": url,
-            "url": url,
-            "final_url": url,
-            "title": title,
-            "content": content,
-            "summary": title,
-            "provider": "web_fetch",
-            "extractor": extractor,
-            "status": 200,
-            "content_type": "text/html",
-            "truncated": False,
-            "items": [],
-        },
-        ensure_ascii=False,
-    )
-
-
 async def seed_demo_search_data(loaded, search_store, *, session_id: str, reset: bool) -> dict[str, int]:
-    """Seed one synthetic session with history and stored web knowledge."""
+    """Seed one synthetic session with searchable history."""
     from ..storage.sqlite import SQLiteStorage
 
     storage = SQLiteStorage(loaded.storage.path)
@@ -254,73 +189,9 @@ async def seed_demo_search_data(loaded, search_store, *, session_id: str, reset:
             created_at=message.timestamp,
         )
 
-    demo_knowledge = [
-        (
-            "web_search",
-            {"query": "orchard irrigation guide", "provider": "duckduckgo"},
-            demo_search_payload(
-                "orchard irrigation guide",
-                "Orchard Irrigation Guide",
-                "https://example.com/orchard-irrigation",
-                "Irrigation scheduling, soil moisture, and orchard planning checklist.",
-            ),
-            20.0,
-        ),
-        (
-            "web_fetch",
-            {"url": "https://example.com/orchard-irrigation"},
-            demo_fetch_payload(
-                "https://example.com/orchard-irrigation",
-                "Orchard Irrigation Guide",
-                "This guide covers orchard layout, irrigation timing, soil moisture targets, and benchmark-friendly notes about planning healthy trees.",
-            ),
-            21.0,
-        ),
-        (
-            "web_search",
-            {"query": "soil amendment notes", "provider": "duckduckgo"},
-            demo_search_payload(
-                "soil amendment notes",
-                "Soil Amendment Notes",
-                "https://example.com/soil-notes",
-                "Soil notes on compost, drainage, and amendment timing for orchards.",
-            ),
-            22.0,
-        ),
-        (
-            "web_fetch",
-            {"url": "https://example.com/soil-notes"},
-            demo_fetch_payload(
-                "https://example.com/soil-notes",
-                "Soil Amendment Notes",
-                "Detailed soil notes covering compost rates, drainage fixes, and orchard soil preparation steps.",
-            ),
-            23.0,
-        ),
-    ]
-
-    for tool_name, tool_args, payload, created_at in demo_knowledge:
-        tool_message = StoredMessage(role="tool", content=payload, timestamp=created_at, tool_name=tool_name)
-        await storage.add_message(session_id, tool_message)
-        await search_store.index_message(
-            session_id,
-            role=tool_message.role,
-            content=tool_message.content,
-            tool_name=tool_message.tool_name,
-            created_at=tool_message.timestamp,
-        )
-        await search_store.index_tool_result(
-            session_id,
-            tool_name=tool_name,
-            tool_args=tool_args,
-            result=payload,
-            created_at=created_at,
-        )
-
     status = await search_store.wait_for_embedding_idle()
     return {
-        "messages": len(seeded_messages) + len(demo_knowledge),
-        "knowledge_sources": 4,
+        "messages": len(seeded_messages),
         "chunks": status["chunk_count"],
         "completed": status["completed"],
     }
@@ -339,7 +210,6 @@ def search_rebuild_command(*, config: str | None, session_id: str | None, load_s
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
     typer.echo(f"Sessions: {result['session_count']}")
     typer.echo(f"Messages: {result['message_count']}")
-    typer.echo(f"Knowledge sources: {result['knowledge_count']}")
     typer.echo(f"Chunks: {result['chunk_count']}")
     typer.echo(
         "Embeddings: "
@@ -360,7 +230,6 @@ def search_status_command(*, config: str | None, session_id: str | None, load_sq
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
     typer.echo(f"Sessions: {status['session_count']}")
     typer.echo(f"Messages: {status['message_count']}")
-    typer.echo(f"Knowledge sources: {status['knowledge_count']}")
     typer.echo(f"Chunks: {status['chunk_count']}")
     typer.echo(
         "Embedding: "
@@ -444,9 +313,9 @@ def search_run_queue_command(*, config: str | None, watch: bool, poll_interval: 
     typer.echo(f"Queue run: refreshed={status['refreshed']} processed={status['processed_chunks']} failed={status['failed_chunks_run']}")
 
 
-def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy: str, vector_backend: str | None, limit: int, repeat: int, json_output: bool, demo_embeddings: bool, source_type: str | None, provider: str | None, extractor: str | None, status: int | None, content_type: str | None, truncated: bool | None, config: str | None, build_sqlite_search_store: Callable[..., Any], handle_search_error: Callable[[Exception | str], None], resolve_config_path: Callable[[str | None], Path], benchmark_one_strategy_fn: Callable[..., Any]) -> None:
-    if kind not in {"history", "knowledge"}:
-        handle_search_error("--kind must be 'history' or 'knowledge'")
+def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy: str, vector_backend: str | None, limit: int, repeat: int, json_output: bool, demo_embeddings: bool, config: str | None, build_sqlite_search_store: Callable[..., Any], handle_search_error: Callable[[Exception | str], None], resolve_config_path: Callable[[str | None], Path], benchmark_one_strategy_fn: Callable[..., Any]) -> None:
+    if kind != "history":
+        handle_search_error("--kind must be 'history'")
     if strategy not in {"fts", "vector", "both"}:
         handle_search_error("--strategy must be 'fts', 'vector', or 'both'")
     if vector_backend is not None and vector_backend not in {"exact", "sqlite_vec", "auto", "both"}:
@@ -471,21 +340,6 @@ def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy
 
     backend_overrides = [vector_backend] if vector_backend not in {None, "both"} else (["exact", "sqlite_vec"] if vector_backend == "both" else [None])
 
-    filters = []
-    if kind == "knowledge":
-        if source_type:
-            filters.append(f"source_type={source_type}")
-        if provider:
-            filters.append(f"provider={provider}")
-        if extractor:
-            filters.append(f"extractor={extractor}")
-        if status is not None:
-            filters.append(f"status={status}")
-        if content_type:
-            filters.append(f"content_type={content_type}")
-        if truncated is not None:
-            filters.append(f"truncated={'yes' if truncated else 'no'}")
-
     if "vector" in strategies and not vector_available:
         if not json_output:
             typer.echo("Vector benchmark skipped because embeddings are disabled.")
@@ -498,7 +352,7 @@ def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy
         "repeat": repeat,
         "demo_embeddings": demo_embeddings,
         "vector_backend": vector_backend or getattr(loaded.search.embedding, "vector_backend", "exact"),
-        "filters": filters,
+        "filters": [],
         "strategies": [],
         "comparison": {},
     }
@@ -508,8 +362,6 @@ def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy
         typer.echo(f"Query: {query}")
         if vector_backend:
             typer.echo(f"Vector backend override: {vector_backend}")
-        if kind == "knowledge":
-            typer.echo(f"Filters: {', '.join(filters) if filters else '<none>'}")
 
     for candidate_strategy in strategies:
         strategy_backends = backend_overrides if candidate_strategy == "vector" else [None]
@@ -533,12 +385,6 @@ def search_benchmark_command(*, query: str, session_id: str, kind: str, strategy
                         session_id=session_id,
                         query=query,
                         limit=limit,
-                        source_type=source_type,
-                        provider=provider,
-                        extractor=extractor,
-                        status=status,
-                        content_type=content_type,
-                        truncated=truncated,
                     )
                     elapsed_runs.append(elapsed_ms)
             except (FileNotFoundError, ValueError, RuntimeError) as exc:
@@ -617,7 +463,6 @@ def search_seed_demo_command(*, session_id: str, reset: bool, config: str | None
 
     typer.echo(f"Seeded demo search data for {session_id}.")
     typer.echo(f"Messages: {result['messages']}")
-    typer.echo(f"Knowledge sources: {result['knowledge_sources']}")
     typer.echo(f"Chunks: {result['chunks']}")
     typer.echo(f"Completed embeddings: {result['completed']}")
 

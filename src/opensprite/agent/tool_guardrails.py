@@ -17,7 +17,6 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
         "batch",
         "read_skill",
         "search_history",
-        "search_knowledge",
         "web_search",
         "web_fetch",
         "web_research",

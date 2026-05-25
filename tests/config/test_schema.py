@@ -696,7 +696,6 @@ def test_config_load_reads_search_from_external_file(tmp_path):
                 "enabled": True,
                 "backend": "sqlite",
                 "history_top_k": 7,
-                "knowledge_top_k": 9,
                 "embedding": {
                     "enabled": True,
                     "provider": "openai",
@@ -724,7 +723,6 @@ def test_config_load_reads_search_from_external_file(tmp_path):
     assert config.search.enabled is True
     assert config.search.backend == "sqlite"
     assert config.search.history_top_k == 7
-    assert config.search.knowledge_top_k == 9
     assert config.search.embedding.enabled is True
     assert config.search.embedding.model == "text-embedding-3-small"
     assert config.search.embedding.candidate_count == 33

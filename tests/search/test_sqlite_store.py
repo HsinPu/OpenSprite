@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 import sqlite3
 
@@ -48,12 +48,12 @@ class FailingThenPassingEmbeddingProvider:
         return [[1.0, 0.0] for _ in texts]
 
 
-def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path):
+def test_sqlite_search_store_indexes_and_filters_history(tmp_path):
     db_path = tmp_path / "search.db"
 
     async def scenario():
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        search = SQLiteSearchStore(db_path, history_top_k=5)
 
         await storage.add_message(
             "chat-a",
@@ -77,134 +77,23 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
             created_at=10.0,
         )
 
-        await search.index_tool_result(
-            "chat-a",
-            tool_name="web_search",
-            tool_args={"query": "sqlite fts5"},
-            result=json.dumps(
-                {
-                    "type": "web_search",
-                    "query": "sqlite fts5",
-                    "url": "",
-                    "final_url": "",
-                    "title": "",
-                    "content": "",
-                    "summary": "Search results for: sqlite fts5",
-                    "provider": "duckduckgo",
-                    "extractor": "search",
-                    "status": None,
-                    "content_type": "application/json",
-                    "items": [
-                        {
-                            "title": "SQLite FTS5",
-                            "url": "https://sqlite.org/fts5.html",
-                            "content": "Official full text search docs",
-                        }
-                    ],
-                }
-            ),
-            created_at=11.0,
-        )
-        await search.index_tool_result(
-            "chat-a",
-            tool_name="web_fetch",
-            tool_args={"url": "https://sqlite.org/fts5.html"},
-            result=json.dumps(
-                {
-                    "type": "web_fetch",
-                    "query": "https://sqlite.org/fts5.html",
-                    "title": "SQLite FTS5",
-                    "url": "https://sqlite.org/fts5.html",
-                    "final_url": "https://sqlite.org/fts5.html",
-                    "content": "SQLite FTS5 supports full text search docs and examples.",
-                    "summary": "SQLite FTS5",
-                    "provider": "web_fetch",
-                    "extractor": "trafilatura",
-                    "status": 200,
-                    "content_type": "text/html",
-                    "truncated": False,
-                    "items": [],
-                }
-            ),
-            created_at=12.0,
-        )
-
         history_hits = await search.search_history("chat-a", "sqlite docs")
         other_chat_hits = await search.search_history("chat-b", "sqlite docs")
-        knowledge_hits = await search.search_knowledge("chat-a", "SQLite!! full-text docs???")
-        fetch_only_hits = await search.search_knowledge("chat-a", "examples", source_type="web_fetch")
-        provider_hits = await search.search_knowledge("chat-a", "full text docs", provider="duckduckgo")
-        extractor_hits = await search.search_knowledge("chat-a", "examples", extractor="trafilatura")
-        status_hits = await search.search_knowledge("chat-a", "examples", status=200)
-        content_type_hits = await search.search_knowledge("chat-a", "examples", content_type="text/html")
-        truncated_hits = await search.search_knowledge("chat-a", "examples", truncated=False)
-
-        import sqlite3
-
-        conn = sqlite3.connect(str(db_path))
-        metadata_rows = conn.execute(
-            "SELECT source_type, provider, extractor, status, content_type, truncated FROM knowledge_sources ORDER BY id ASC"
-        ).fetchall()
-        conn.close()
 
         await search.clear_session("chat-a")
         cleared_history_hits = await search.search_history("chat-a", "sqlite docs")
         remaining_messages = await storage.get_messages("chat-a")
 
-        return (
-            history_hits,
-            other_chat_hits,
-            knowledge_hits,
-            fetch_only_hits,
-            provider_hits,
-            extractor_hits,
-            status_hits,
-            content_type_hits,
-            truncated_hits,
-            cleared_history_hits,
-            remaining_messages,
-            metadata_rows,
-        )
+        return history_hits, other_chat_hits, cleared_history_hits, remaining_messages
 
-    (
-        history_hits,
-        other_chat_hits,
-        knowledge_hits,
-        fetch_only_hits,
-        provider_hits,
-        extractor_hits,
-        status_hits,
-        content_type_hits,
-        truncated_hits,
-        cleared_history_hits,
-        remaining_messages,
-        metadata_rows,
-    ) = asyncio.run(scenario())
+    history_hits, other_chat_hits, cleared_history_hits, remaining_messages = asyncio.run(scenario())
 
     assert len(history_hits) == 1
     assert history_hits[0].source_type == "history"
     assert "sqlite fts docs" in history_hits[0].content.lower()
     assert other_chat_hits == []
-    assert len(knowledge_hits) == 1
-    assert knowledge_hits[0].source_type == "web_fetch"
-    assert len(fetch_only_hits) == 1
-    assert fetch_only_hits[0].source_type == "web_fetch"
-    assert knowledge_hits[0].provider == "web_fetch"
-    assert [hit.extractor for hit in knowledge_hits] == ["trafilatura"]
-    assert fetch_only_hits[0].status == 200
-    assert fetch_only_hits[0].content_type == "text/html"
-    assert fetch_only_hits[0].truncated is False
-    assert [hit.provider for hit in provider_hits] == ["duckduckgo"]
-    assert [hit.extractor for hit in extractor_hits] == ["trafilatura"]
-    assert [hit.status for hit in status_hits] == [200]
-    assert [hit.content_type for hit in content_type_hits] == ["text/html"]
-    assert [hit.truncated for hit in truncated_hits] == [False]
     assert cleared_history_hits == []
     assert [message.content for message in remaining_messages] == ["Please keep sqlite fts docs handy"]
-    assert metadata_rows == [
-        ("web_search", "duckduckgo", "search", None, "application/json", 0),
-        ("web_fetch", "web_fetch", "trafilatura", 200, "text/html", 0),
-    ]
 
 
 def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
@@ -220,47 +109,29 @@ def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
             "chat-a",
             StoredMessage(
                 role="tool",
-                content=json.dumps(
-                    {
-                        "type": "web_search",
-                        "query": "sqlite fts5",
-                        "url": "",
-                        "final_url": "",
-                        "title": "",
-                        "content": "",
-                        "summary": "Search results for: sqlite fts5",
-                        "provider": "duckduckgo",
-                        "extractor": "search",
-                        "status": None,
-                        "content_type": "application/json",
-                        "items": [
-                            {
-                                "title": "SQLite FTS5",
-                                "url": "https://sqlite.org/fts5.html",
-                                "content": "Official full text search docs",
-                            }
-                        ],
-                    }
-                ),
+                content=json.dumps({"type": "web_search", "query": "sqlite fts5", "items": []}),
                 timestamp=11.0,
                 tool_name="web_search",
             ),
         )
 
-        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        search = SQLiteSearchStore(db_path, history_top_k=5)
         await search.sync_from_storage(storage)
 
         history_hits = await search.search_history("chat-a", "sqlite handy")
-        knowledge_hits = await search.search_knowledge("chat-a", "official full text docs")
+        conn = sqlite3.connect(str(db_path))
+        knowledge_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_sources'"
+        ).fetchone()
+        conn.close()
 
-        return history_hits, knowledge_hits
+        return history_hits, knowledge_table
 
-    history_hits, knowledge_hits = asyncio.run(scenario())
+    history_hits, knowledge_table = asyncio.run(scenario())
 
     assert history_hits
     assert history_hits[0].source_type == "history"
-    assert knowledge_hits
-    assert knowledge_hits[0].source_type == "web_search"
+    assert knowledge_table is None
 
 
 def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):
@@ -268,7 +139,7 @@ def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):
 
     async def seed():
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        search = SQLiteSearchStore(db_path, history_top_k=5)
         await storage.add_message(
             "chat-a",
             StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
@@ -320,7 +191,6 @@ def test_sqlite_search_store_persists_embeddings_and_reranks_candidates(tmp_path
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -381,7 +251,6 @@ def test_sqlite_search_store_can_use_vector_candidate_strategy(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
             embedding_candidate_strategy="vector",
@@ -434,7 +303,6 @@ def test_sqlite_search_store_falls_back_to_exact_when_sqlite_vec_is_unavailable(
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
             embedding_candidate_strategy="vector",
@@ -518,7 +386,6 @@ def test_sqlite_search_store_uses_sqlite_vec_dispatch_when_available(tmp_path, m
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
             embedding_candidate_strategy="vector",
@@ -546,7 +413,6 @@ def test_sqlite_search_store_processes_embeddings_in_background(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -585,7 +451,6 @@ def test_sqlite_search_store_can_retry_failed_embeddings(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -630,7 +495,6 @@ def test_sqlite_search_store_requeues_processing_embeddings_on_startup(tmp_path)
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -660,7 +524,6 @@ def test_sqlite_search_store_requeues_processing_embeddings_on_startup(tmp_path)
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -683,7 +546,6 @@ def test_sqlite_search_store_can_retry_failed_embeddings_on_startup(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -709,7 +571,6 @@ def test_sqlite_search_store_can_retry_failed_embeddings_on_startup(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
             retry_failed_on_startup=True,
@@ -732,7 +593,6 @@ def test_sqlite_search_store_refreshes_missing_and_stale_embeddings(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -781,7 +641,6 @@ def test_sqlite_search_store_status_reports_missing_embeddings(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -821,7 +680,6 @@ def test_sqlite_search_store_sync_refreshes_stale_embeddings(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -851,7 +709,6 @@ def test_sqlite_search_store_sync_refreshes_stale_embeddings(tmp_path):
         search = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -873,12 +730,10 @@ def test_sqlite_search_store_run_queue_records_last_run_metadata(tmp_path):
         indexing_store = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
         )
         worker_store = SQLiteSearchStore(
             db_path,
             history_top_k=2,
-            knowledge_top_k=2,
             embedding_provider=embedder,
             hybrid_candidate_count=4,
         )
@@ -913,7 +768,6 @@ def test_sqlite_search_store_run_queue_rejects_active_worker_lease(tmp_path):
     search = SQLiteSearchStore(
         db_path,
         history_top_k=2,
-        knowledge_top_k=2,
         embedding_provider=embedder,
         hybrid_candidate_count=4,
     )

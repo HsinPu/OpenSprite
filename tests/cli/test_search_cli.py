@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 from types import SimpleNamespace
 
@@ -14,7 +14,7 @@ from opensprite.storage.sqlite import SQLiteStorage
 runner = CliRunner()
 
 
-def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, knowledge_top_k=5, embedding=None):
+def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, embedding=None):
     path.write_text(
         json.dumps(
             {
@@ -36,7 +36,6 @@ def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, knowle
                     "enabled": search_enabled,
                     "backend": "sqlite",
                     "history_top_k": history_top_k,
-                    "knowledge_top_k": knowledge_top_k,
                     "embedding": embedding
                     or {
                         "enabled": False,
@@ -105,30 +104,32 @@ def test_search_rebuild_cli_rebuilds_index_from_messages(tmp_path):
     assert "Rebuilt search index for all sessions." in result.stdout
     assert "Sessions: 1" in result.stdout
     assert "Messages: 2" in result.stdout
-    assert "Knowledge sources: 1" in result.stdout
+    assert "Knowledge sources:" not in result.stdout
 
     async def verify():
         search = SQLiteSearchStore(db_path)
         history_hits = await search.search_history("chat-a", "keep sqlite handy")
-        knowledge_hits = await search.search_knowledge("chat-a", "official full text docs")
-        return history_hits, knowledge_hits
+        async with search._connect() as db:  # noqa: SLF001 - schema-level assertion.
+            row = await db.execute_fetchone(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_sources'"
+            )
+        return history_hits, row
 
-    history_hits, knowledge_hits = asyncio.run(verify())
+    history_hits, knowledge_table = asyncio.run(verify())
 
     assert history_hits
-    assert knowledge_hits
-    assert knowledge_hits[0].source_type == "web_search"
+    assert knowledge_table is None
 
 
 def test_status_command_renders_search_top_k_values(tmp_path):
     db_path = tmp_path / "sessions.db"
     config_path = tmp_path / "opensprite.json"
-    _write_config(config_path, db_path, search_enabled=True, history_top_k=7, knowledge_top_k=9)
+    _write_config(config_path, db_path, search_enabled=True, history_top_k=7)
 
     result = runner.invoke(app, ["status", "--config", str(config_path)])
 
     assert result.exit_code == 0
-    assert "Search: enabled=yes backend=sqlite (history_top_k=7, knowledge_top_k=9)" in result.stdout
+    assert "Search: enabled=yes backend=sqlite (history_top_k=7)" in result.stdout
 
 
 def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
@@ -138,7 +139,7 @@ def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
 
     async def scenario():
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        search = SQLiteSearchStore(db_path, history_top_k=5)
         await storage.add_message(
             "chat-a",
             StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
@@ -389,7 +390,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
         hit = SearchHit(
             id=f"{store.strategy}-1",
             session_id="telegram:user-a",
-            source_type="web_fetch",
+            source_type="message",
             title=f"{store.strategy} result",
             content="content",
             created_at=1.0,
@@ -417,7 +418,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
-    assert "Search benchmark for telegram:user-a (knowledge)." in result.stdout
+    assert "Search benchmark for telegram:user-a (history)." in result.stdout
     assert "Strategy: fts" in result.stdout
     assert "Strategy: vector" in result.stdout
     assert "Elapsed: avg=" in result.stdout
@@ -500,7 +501,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
         hit = SearchHit(
             id="hit-1",
             session_id="telegram:user-a",
-            source_type="web_fetch",
+            source_type="message",
             title="vector result",
             content="content",
             created_at=1.0,
@@ -552,8 +553,8 @@ def test_search_seed_demo_cli_seeds_benchmark_ready_data(tmp_path):
 
     assert seed_result.exit_code == 0
     assert "Seeded demo search data for demo:bench." in seed_result.stdout
-    assert "Messages: 7" in seed_result.stdout
-    assert "Knowledge sources: 4" in seed_result.stdout
+    assert "Messages: 3" in seed_result.stdout
+    assert "Knowledge sources:" not in seed_result.stdout
 
     benchmark_result = runner.invoke(
         app,
@@ -572,9 +573,9 @@ def test_search_seed_demo_cli_seeds_benchmark_ready_data(tmp_path):
     )
 
     assert benchmark_result.exit_code == 0
-    assert "Search benchmark for demo:bench (knowledge)." in benchmark_result.stdout
+    assert "Search benchmark for demo:bench (history)." in benchmark_result.stdout
     assert "Strategy: fts" in benchmark_result.stdout
-    assert "Orchard Irrigation Guide" in benchmark_result.stdout
+    assert "Focus on orchard planning, irrigation, and soil notes." in benchmark_result.stdout
 
 
 def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
@@ -620,7 +621,7 @@ def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
         hit = SearchHit(
             id="hit-1",
             session_id="demo:bench",
-            source_type="web_fetch",
+            source_type="message",
             title="demo vector result",
             content="content",
             created_at=1.0,
@@ -683,7 +684,7 @@ def test_search_benchmark_cli_passes_vector_backend_override(monkeypatch):
         hit = SearchHit(
             id="hit-1",
             session_id="telegram:user-a",
-            source_type="web_fetch",
+            source_type="message",
             title="sqlite vec result",
             content="content",
             created_at=1.0,
@@ -748,7 +749,7 @@ def test_search_benchmark_cli_can_compare_vector_backends(monkeypatch):
         hit = SearchHit(
             id=f"{store.vector_backend_requested}-1",
             session_id="telegram:user-a",
-            source_type="web_fetch",
+            source_type="message",
             title=title,
             content="content",
             created_at=1.0,

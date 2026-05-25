@@ -79,7 +79,6 @@ def create_search_store(config: Config) -> SearchStore | None:
         return SQLiteSearchStore(
             path=config.storage.path,
             history_top_k=config.search.history_top_k,
-            knowledge_top_k=config.search.knowledge_top_k,
             embedding_provider=embedding_provider,
             hybrid_candidate_count=config.search.embedding.candidate_count,
             embedding_candidate_strategy=config.search.embedding.candidate_strategy,

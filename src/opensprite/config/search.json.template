@@ -2,7 +2,6 @@
   "enabled": true,
   "backend": "sqlite",
   "history_top_k": 5,
-  "knowledge_top_k": 5,
   "embedding": {
     "enabled": false,
     "provider": "openai",

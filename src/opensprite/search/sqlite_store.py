@@ -10,17 +10,15 @@ import re
 import socket
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from .base import SearchHit, SearchStore
 from .embeddings import EmbeddingProvider
-from .indexing import build_history_chunks, build_knowledge_documents, build_knowledge_documents_from_message
+from .indexing import build_history_chunks
 from .sqlite_vec_backend import load_sqlite_vec_extension
-from ..storage.base import StorageProvider, StoredMessage
+from ..storage.base import StorageProvider
 from ..storage.sqlite import (
     ensure_sqlite_schema,
     find_message_owner_id,
-    insert_knowledge_document,
     insert_search_chunks,
     open_sqlite_connection,
     pack_embedding,
@@ -40,13 +38,12 @@ SQLITE_VEC_INDEX_STATE_KEY = "sqlite_vec_index_state"
 
 
 class SQLiteSearchStore(SearchStore):
-    """Per-chat searchable history and knowledge index backed by SQLite."""
+    """Per-chat searchable history index backed by SQLite."""
 
     def __init__(
         self,
         path: str | Path,
         history_top_k: int = 5,
-        knowledge_top_k: int = 5,
         chunk_size: int = 1200,
         chunk_overlap: int = 200,
         embedding_provider: EmbeddingProvider | None = None,
@@ -59,16 +56,15 @@ class SQLiteSearchStore(SearchStore):
         self.path = Path(path).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.history_top_k = history_top_k
-        self.knowledge_top_k = knowledge_top_k
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.embedding_provider = embedding_provider
-        self.hybrid_candidate_count = max(hybrid_candidate_count, max(history_top_k, knowledge_top_k))
+        self.hybrid_candidate_count = max(hybrid_candidate_count, history_top_k)
         self.embedding_candidate_strategy = embedding_candidate_strategy
         self.vector_backend_requested = vector_backend
         self.vector_backend_effective = "exact"
         self._sqlite_vec_warning_emitted = False
-        self.vector_candidate_count = max(vector_candidate_count, max(history_top_k, knowledge_top_k))
+        self.vector_candidate_count = max(vector_candidate_count, history_top_k)
         self.retry_failed_on_startup = retry_failed_on_startup
         self._lock = asyncio.Lock()
         self._embedding_task: asyncio.Task | None = None
@@ -250,12 +246,7 @@ class SQLiteSearchStore(SearchStore):
                         embedding float[{vector_dim}] distance_metric=cosine,
                         session_id text,
                         owner_type text,
-                        source_type text,
-                        provider text,
-                        extractor text,
-                        status integer,
-                        content_type text,
-                        truncated boolean
+                        source_type text
                     )
                     """
                 )
@@ -279,16 +270,10 @@ class SQLiteSearchStore(SearchStore):
                 c.session_id,
                 c.owner_type,
                 c.source_type,
-                COALESCE(ks.provider, '') AS provider,
-                COALESCE(ks.extractor, '') AS extractor,
-                COALESCE(ks.status, -1) AS status,
-                COALESCE(ks.content_type, '') AS content_type,
-                COALESCE(ks.truncated, 0) AS truncated,
                 ce.embedding,
                 ce.embedding_dim
             FROM search_chunks c
             JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE ce.embedding_status = 'completed'
               AND COALESCE(ce.embedding_provider, '') = ?
               AND COALESCE(ce.embedding_model, '') = ?
@@ -307,13 +292,8 @@ class SQLiteSearchStore(SearchStore):
                     embedding,
                     session_id,
                     owner_type,
-                    source_type,
-                    provider,
-                    extractor,
-                    status,
-                    content_type,
-                    truncated
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_type
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     int(row["id"]),
@@ -321,11 +301,6 @@ class SQLiteSearchStore(SearchStore):
                     str(row["session_id"] or ""),
                     str(row["owner_type"] or ""),
                     str(row["source_type"] or ""),
-                    str(row["provider"] or ""),
-                    str(row["extractor"] or ""),
-                    row["status"],
-                    str(row["content_type"] or ""),
-                    row["truncated"],
                 ),
             )
 
@@ -353,15 +328,9 @@ class SQLiteSearchStore(SearchStore):
                 c.session_id,
                 c.owner_type,
                 c.source_type,
-                COALESCE(ks.provider, '') AS provider,
-                COALESCE(ks.extractor, '') AS extractor,
-                COALESCE(ks.status, -1) AS status,
-                COALESCE(ks.content_type, '') AS content_type,
-                COALESCE(ks.truncated, 0) AS truncated,
                 ce.embedding
             FROM search_chunks c
             JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE c.id IN ({placeholders})
               AND ce.embedding_status = 'completed'
               AND COALESCE(ce.embedding_provider, '') = ?
@@ -384,13 +353,8 @@ class SQLiteSearchStore(SearchStore):
                     embedding,
                     session_id,
                     owner_type,
-                    source_type,
-                    provider,
-                    extractor,
-                    status,
-                    content_type,
-                    truncated
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_type
+                ) VALUES (?, ?, ?, ?, ?)
                 """,
                 (
                     int(row["id"]),
@@ -398,11 +362,6 @@ class SQLiteSearchStore(SearchStore):
                     str(row["session_id"] or ""),
                     str(row["owner_type"] or ""),
                     str(row["source_type"] or ""),
-                    str(row["provider"] or ""),
-                    str(row["extractor"] or ""),
-                    row["status"],
-                    str(row["content_type"] or ""),
-                    row["truncated"],
                 ),
             )
 
@@ -803,10 +762,6 @@ class SQLiteSearchStore(SearchStore):
                     f"SELECT COUNT(DISTINCT session_id) FROM search_chunks{filters}",
                     params,
                 ).fetchone()[0]
-                knowledge = conn.execute(
-                    f"SELECT COUNT(*) FROM knowledge_sources{filters}",
-                    params,
-                ).fetchone()[0]
                 chunks = conn.execute(
                     f"SELECT COUNT(*) FROM search_chunks{filters}",
                     params,
@@ -905,7 +860,6 @@ class SQLiteSearchStore(SearchStore):
         return {
             "session_count": int(chats or 0),
             "message_count": int(messages or 0),
-            "knowledge_count": int(knowledge or 0),
             "chunk_count": int(chunks or 0),
             "embedding_total": int(total_embeddings),
             "queued": counts.get("pending", 0) + counts.get("processing", 0),
@@ -978,7 +932,7 @@ class SQLiteSearchStore(SearchStore):
             coverage_component = self._coverage_score(query_tokens, row)
             embedding_similarity = embedding_similarities.get(int(row["id"]))
             embedding_component = ((embedding_similarity + 1.0) / 2.0) if embedding_similarity is not None else 0.0
-            source_bonus = self._source_bonus(row["source_type"] if owner_type == "knowledge" else None)
+            source_bonus = 0.0
 
             if embedding_similarity is not None:
                 combined_score = (0.25 * fts_component) + (0.25 * coverage_component) + (0.45 * embedding_component) + source_bonus
@@ -992,15 +946,12 @@ class SQLiteSearchStore(SearchStore):
         scored_rows.sort(
             key=lambda row: (
                 float(row["score"] or 0),
-                self._source_rank(str(row["source_type"] or "")) if owner_type == "knowledge" else 0,
                 float(row["created_at"] or 0),
                 int(row["id"]),
             ),
             reverse=True,
         )
 
-        if owner_type == "knowledge":
-            return self._dedupe_knowledge_rows(scored_rows, limit)
         return scored_rows[: max(limit, 1)]
 
     async def _vector_candidate_rows(
@@ -1011,12 +962,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ) -> list[dict]:
         """Select candidates using the configured vector backend with safe fallback."""
         if self.embedding_provider is None:
@@ -1029,12 +974,6 @@ class SQLiteSearchStore(SearchStore):
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
-                source_type=source_type,
-                provider=provider,
-                extractor=extractor,
-                status=status,
-                content_type=content_type,
-                truncated=truncated,
             )
             if rows:
                 return rows
@@ -1045,12 +984,6 @@ class SQLiteSearchStore(SearchStore):
             query=query,
             owner_type=owner_type,
             limit=limit,
-            source_type=source_type,
-            provider=provider,
-            extractor=extractor,
-            status=status,
-            content_type=content_type,
-            truncated=truncated,
         )
 
     async def _exact_vector_candidate_rows(
@@ -1061,12 +994,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ) -> list[dict]:
         """Select candidates by exact vector similarity over stored embeddings."""
         if self.embedding_provider is None:
@@ -1095,17 +1022,10 @@ class SQLiteSearchStore(SearchStore):
                 c.title,
                 c.url,
                 c.query,
-                ks.summary,
-                ks.provider,
-                ks.extractor,
-                ks.status,
-                ks.content_type,
-                ks.truncated,
                 ce.embedding,
                 ce.embedding_dim
             FROM search_chunks c
             JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE c.session_id = ?
               AND c.owner_type = ?
               AND ce.embedding_status = 'completed'
@@ -1118,25 +1038,6 @@ class SQLiteSearchStore(SearchStore):
             self.embedding_provider.provider_name,
             self.embedding_provider.model_name,
         ]
-        if source_type:
-            sql += " AND c.source_type = ?"
-            params.append(source_type)
-        if provider:
-            sql += " AND ks.provider = ?"
-            params.append(provider)
-        if extractor:
-            sql += " AND ks.extractor = ?"
-            params.append(extractor)
-        if status is not None:
-            sql += " AND ks.status = ?"
-            params.append(status)
-        if content_type:
-            sql += " AND ks.content_type = ?"
-            params.append(content_type)
-        if truncated is not None:
-            sql += " AND ks.truncated = ?"
-            params.append(1 if truncated else 0)
-
         rows = conn.execute(sql, params).fetchall()
         scored_rows: list[dict] = []
         for row in rows:
@@ -1152,7 +1053,6 @@ class SQLiteSearchStore(SearchStore):
         scored_rows.sort(
             key=lambda row: (
                 float(row.get("embedding_similarity") or 0),
-                self._source_rank(str(row.get("source_type") or "")) if owner_type == "knowledge" else 0,
                 float(row.get("created_at") or 0),
                 int(row.get("id") or 0),
             ),
@@ -1168,12 +1068,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ) -> list[dict]:
         """Select candidates from the sqlite-vec virtual table."""
         if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
@@ -1203,24 +1097,6 @@ class SQLiteSearchStore(SearchStore):
                   AND owner_type = ?
         """
         params: list[object] = [query_blob, max(limit, 1), session_id, owner_type]
-        if source_type:
-            sql += " AND source_type = ?"
-            params.append(source_type)
-        if provider:
-            sql += " AND provider = ?"
-            params.append(provider)
-        if extractor:
-            sql += " AND extractor = ?"
-            params.append(extractor)
-        if status is not None:
-            sql += " AND status = ?"
-            params.append(status)
-        if content_type:
-            sql += " AND content_type = ?"
-            params.append(content_type)
-        if truncated is not None:
-            sql += " AND truncated = ?"
-            params.append(1 if truncated else 0)
 
         sql += f"""
             )
@@ -1236,16 +1112,9 @@ class SQLiteSearchStore(SearchStore):
                 c.title,
                 c.url,
                 c.query,
-                ks.summary,
-                ks.provider,
-                ks.extractor,
-                ks.status,
-                ks.content_type,
-                ks.truncated,
                 vm.distance
             FROM vector_matches vm
             JOIN search_chunks c ON c.id = vm.chunk_id
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             ORDER BY vm.distance ASC, c.created_at DESC, c.id DESC
         """
 
@@ -1297,85 +1166,13 @@ class SQLiteSearchStore(SearchStore):
             return 0.0
         haystack = " ".join(
             str(row.get(key, "") or "")
-            for key in ("title", "query", "summary", "content", "url")
+            for key in ("title", "query", "content", "url")
         )
         haystack_tokens = set(cls._query_tokens(haystack))
         if not haystack_tokens:
             return 0.0
         matched = sum(1 for token in query_tokens if token in haystack_tokens)
         return matched / max(len(query_tokens), 1)
-
-    @staticmethod
-    def _source_rank(source_type: str | None) -> int:
-        """Return a stable rank for knowledge source preference."""
-        if source_type == "web_fetch":
-            return 2
-        if source_type == "web_search":
-            return 1
-        return 0
-
-    @classmethod
-    def _source_bonus(cls, source_type: str | None) -> float:
-        """Apply a modest bonus to higher-fidelity knowledge sources."""
-        rank = cls._source_rank(source_type)
-        if rank == 2:
-            return 0.08
-        if rank == 1:
-            return 0.03
-        return 0.0
-
-    @staticmethod
-    def _canonicalize_url(url: str | None) -> str | None:
-        """Normalize URLs so related knowledge hits can be deduplicated."""
-        if not url:
-            return None
-        parsed = urlsplit(url.strip())
-        host = parsed.netloc.lower()
-        path = parsed.path.rstrip("/") or "/"
-        if not host and not path:
-            return None
-        if host:
-            return f"{host}{path}"
-        return path
-
-    @classmethod
-    def _dedupe_knowledge_rows(cls, rows: list[dict], limit: int) -> list[dict]:
-        """Deduplicate knowledge rows by canonical URL or document owner."""
-        best_by_key: dict[str, dict] = {}
-        for row in rows:
-            canonical_url = cls._canonicalize_url(str(row.get("url") or ""))
-            owner_id = int(row.get("owner_id") or row.get("id") or 0)
-            dedupe_key = canonical_url or f"owner:{owner_id}"
-            current = best_by_key.get(dedupe_key)
-            if current is None:
-                best_by_key[dedupe_key] = row
-                continue
-            candidate_key = (
-                cls._source_rank(str(row.get("source_type") or "")),
-                float(row.get("score") or 0),
-                float(row.get("created_at") or 0),
-                int(row.get("id") or 0),
-            )
-            current_key = (
-                cls._source_rank(str(current.get("source_type") or "")),
-                float(current.get("score") or 0),
-                float(current.get("created_at") or 0),
-                int(current.get("id") or 0),
-            )
-            if candidate_key > current_key:
-                best_by_key[dedupe_key] = row
-
-        deduped = sorted(
-            best_by_key.values(),
-            key=lambda row: (
-                float(row.get("score") or 0),
-                cls._source_rank(str(row.get("source_type") or "")),
-                float(row.get("created_at") or 0),
-                int(row.get("id") or 0),
-            ),
-            reverse=True,
-        )
-        return deduped[: max(limit, 1)]
 
     async def sync_from_storage(self, storage: StorageProvider) -> None:
         """Backfill the shared SQLite index when search is enabled after history already exists."""
@@ -1393,9 +1190,6 @@ class SQLiteSearchStore(SearchStore):
                     conn.execute(
                         "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'message'"
                     ).fetchone()[0]
-                )
-                knowledge_source_count = int(
-                    conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
                 )
                 pending_embedding_count = int(
                     conn.execute(
@@ -1438,16 +1232,6 @@ class SQLiteSearchStore(SearchStore):
                             ),
                         ).fetchone()[0]
                     )
-                indexed_knowledge_count = int(
-                    conn.execute(
-                        "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'knowledge'"
-                    ).fetchone()[0]
-                )
-                has_tool_knowledge_candidates = bool(
-                    conn.execute(
-                        "SELECT 1 FROM messages WHERE tool_name IN ('web_search', 'web_fetch', 'web_research') LIMIT 1"
-                    ).fetchone()
-                )
             finally:
                 conn.close()
 
@@ -1455,10 +1239,6 @@ class SQLiteSearchStore(SearchStore):
         if persisted_signature != self._index_signature:
             needs_rebuild = True
         elif indexable_message_count > indexed_message_count:
-            needs_rebuild = True
-        elif knowledge_source_count > indexed_knowledge_count:
-            needs_rebuild = True
-        elif has_tool_knowledge_candidates and knowledge_source_count == 0:
             needs_rebuild = True
 
         if not needs_rebuild:
@@ -1475,13 +1255,11 @@ class SQLiteSearchStore(SearchStore):
             return None
 
         logger.info(
-            "search.sync | rebuilding sqlite index signature={} expected={} messages={} indexed_messages={} knowledge={} indexed_knowledge={}",
+            "search.sync | rebuilding sqlite index signature={} expected={} messages={} indexed_messages={}",
             persisted_signature,
             self._index_signature,
             indexable_message_count,
             indexed_message_count,
-            knowledge_source_count,
-            indexed_knowledge_count,
         )
         await self.rebuild_index()
         self._schedule_pending_embeddings()
@@ -1532,42 +1310,6 @@ class SQLiteSearchStore(SearchStore):
                 conn.close()
         self._schedule_pending_embeddings()
 
-    async def index_tool_result(
-        self,
-        session_id: str,
-        tool_name: str,
-        tool_args: dict,
-        result: str,
-        created_at: float | None = None,
-    ) -> None:
-        documents = build_knowledge_documents(
-            tool_name=tool_name,
-            tool_args=tool_args,
-            result=result,
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-        )
-        if not documents:
-            return
-
-        current_created_at = created_at or time.time()
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                for document in documents:
-                    _, chunk_ids = insert_knowledge_document(
-                        conn,
-                        session_id=session_id,
-                        document=document,
-                        created_at=current_created_at,
-                    )
-                    self._queue_chunk_embeddings(conn, chunk_ids)
-                self._write_index_signature(conn)
-                conn.commit()
-            finally:
-                conn.close()
-        self._schedule_pending_embeddings()
-
     async def search_history(self, session_id: str, query: str, limit: int = 5) -> list[SearchHit]:
         async with self._lock:
             conn = self._get_conn()
@@ -1591,46 +1333,6 @@ class SQLiteSearchStore(SearchStore):
             finally:
                 conn.close()
 
-    async def search_knowledge(
-        self,
-        session_id: str,
-        query: str,
-        limit: int = 5,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
-    ) -> list[SearchHit]:
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                requested_limit = limit or self.knowledge_top_k
-                rows = await self._select_candidate_rows(
-                    conn,
-                    session_id=session_id,
-                    query=query,
-                    owner_type="knowledge",
-                    limit=requested_limit,
-                    source_type=source_type,
-                    provider=provider,
-                    extractor=extractor,
-                    status=status,
-                    content_type=content_type,
-                    truncated=truncated,
-                )
-                rows = await self._rerank_rows(
-                    conn,
-                    query,
-                    rows,
-                    requested_limit,
-                    owner_type="knowledge",
-                )
-                return [self._row_to_hit(row) for row in rows]
-            finally:
-                conn.close()
-
     async def _select_candidate_rows(
         self,
         conn,
@@ -1639,12 +1341,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ):
         """Select candidate rows using the configured retrieval strategy."""
         if self.embedding_candidate_strategy == "vector" and self.embedding_provider is not None:
@@ -1654,12 +1350,6 @@ class SQLiteSearchStore(SearchStore):
                 query=query,
                 owner_type=owner_type,
                 limit=self._vector_limit(limit),
-                source_type=source_type,
-                provider=provider,
-                extractor=extractor,
-                status=status,
-                content_type=content_type,
-                truncated=truncated,
             )
             if rows:
                 return rows
@@ -1670,12 +1360,6 @@ class SQLiteSearchStore(SearchStore):
             query=query,
             owner_type=owner_type,
             limit=self._candidate_limit(limit),
-            source_type=source_type,
-            provider=provider,
-            extractor=extractor,
-            status=status,
-            content_type=content_type,
-            truncated=truncated,
         )
 
     async def clear_session(self, session_id: str) -> None:
@@ -1685,13 +1369,12 @@ class SQLiteSearchStore(SearchStore):
                 if self.vector_backend_effective == "sqlite_vec":
                     conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
                 conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
-                conn.execute("DELETE FROM knowledge_sources WHERE session_id = ?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()
 
     async def rebuild_index(self, session_id: str | None = None) -> dict[str, int]:
-        """Rebuild indexed history and knowledge rows from persisted messages."""
+        """Rebuild indexed history rows from persisted messages."""
         async with self._lock:
             conn = self._get_conn()
             try:
@@ -1701,7 +1384,6 @@ class SQLiteSearchStore(SearchStore):
                     if self.vector_backend_effective == "sqlite_vec":
                         conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
                     conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
-                    conn.execute("DELETE FROM knowledge_sources WHERE session_id = ?", (session_id,))
                     rows = conn.execute(
                         """
                         SELECT id, session_id, role, content, tool_name, created_at
@@ -1715,7 +1397,6 @@ class SQLiteSearchStore(SearchStore):
                     if self.vector_backend_effective == "sqlite_vec":
                         conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE}")
                     conn.execute("DELETE FROM search_chunks")
-                    conn.execute("DELETE FROM knowledge_sources")
                     rows = conn.execute(
                         """
                         SELECT id, session_id, role, content, tool_name, created_at
@@ -1725,7 +1406,6 @@ class SQLiteSearchStore(SearchStore):
                     ).fetchall()
 
                 message_count = 0
-                knowledge_count = 0
                 chunk_count = 0
                 for row in rows:
                     created_at = float(row["created_at"] or 0)
@@ -1748,35 +1428,12 @@ class SQLiteSearchStore(SearchStore):
                     chunk_count += len(history_chunks)
                     message_count += 1
 
-                    message = StoredMessage(
-                        role=str(row["role"]),
-                        content=str(row["content"]),
-                        timestamp=created_at,
-                        tool_name=row["tool_name"],
-                    )
-                    documents = build_knowledge_documents_from_message(
-                        message,
-                        chunk_size=self.chunk_size,
-                        chunk_overlap=self.chunk_overlap,
-                    )
-                    for document in documents:
-                        _, knowledge_chunk_ids = insert_knowledge_document(
-                            conn,
-                            session_id=str(row["session_id"]),
-                            document=document,
-                            created_at=created_at,
-                        )
-                        self._queue_chunk_embeddings(conn, knowledge_chunk_ids)
-                        knowledge_count += 1
-                        chunk_count += len(document.chunks)
-
                 self._write_index_signature(conn)
                 conn.commit()
                 self._schedule_pending_embeddings()
                 return {
                     "session_count": len({str(row["session_id"]) for row in rows}),
                     "message_count": message_count,
-                    "knowledge_count": knowledge_count,
                     "chunk_count": chunk_count,
                 }
             except Exception:
@@ -1793,12 +1450,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ):
         match_query = self._compile_match_query(query)
         if match_query is None:
@@ -1808,12 +1459,6 @@ class SQLiteSearchStore(SearchStore):
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
-                source_type=source_type,
-                provider=provider,
-                extractor=extractor,
-                status=status,
-                content_type=content_type,
-                truncated=truncated,
             )
 
         sql = """
@@ -1829,39 +1474,14 @@ class SQLiteSearchStore(SearchStore):
                 c.title,
                 c.url,
                 c.query,
-                ks.summary,
-                ks.provider,
-                ks.extractor,
-                ks.status,
-                ks.content_type,
-                ks.truncated,
                 bm25(search_chunks_fts) AS score
             FROM search_chunks_fts
             JOIN search_chunks c ON c.id = search_chunks_fts.rowid
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE search_chunks_fts MATCH ?
               AND c.session_id = ?
               AND c.owner_type = ?
         """
         params: list[object] = [match_query, session_id, owner_type]
-        if source_type:
-            sql += " AND c.source_type = ?"
-            params.append(source_type)
-        if provider:
-            sql += " AND ks.provider = ?"
-            params.append(provider)
-        if extractor:
-            sql += " AND ks.extractor = ?"
-            params.append(extractor)
-        if status is not None:
-            sql += " AND ks.status = ?"
-            params.append(status)
-        if content_type:
-            sql += " AND ks.content_type = ?"
-            params.append(content_type)
-        if truncated is not None:
-            sql += " AND ks.truncated = ?"
-            params.append(1 if truncated else 0)
         sql += " ORDER BY score ASC, c.created_at DESC, c.id DESC LIMIT ?"
         params.append(max(limit, 1))
 
@@ -1874,12 +1494,6 @@ class SQLiteSearchStore(SearchStore):
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
-                source_type=source_type,
-                provider=provider,
-                extractor=extractor,
-                status=status,
-                content_type=content_type,
-                truncated=truncated,
             )
 
     def _search_rows_fallback(
@@ -1890,12 +1504,6 @@ class SQLiteSearchStore(SearchStore):
         query: str,
         owner_type: str,
         limit: int,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
     ):
         sql = """
             SELECT
@@ -1909,37 +1517,12 @@ class SQLiteSearchStore(SearchStore):
                 c.tool_name,
                 c.title,
                 c.url,
-                c.query,
-                ks.summary,
-                ks.provider,
-                ks.extractor,
-                ks.status,
-                ks.content_type,
-                ks.truncated
+                c.query
             FROM search_chunks c
-            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE c.session_id = ?
               AND c.owner_type = ?
         """
         params: list[object] = [session_id, owner_type]
-        if source_type:
-            sql += " AND c.source_type = ?"
-            params.append(source_type)
-        if provider:
-            sql += " AND ks.provider = ?"
-            params.append(provider)
-        if extractor:
-            sql += " AND ks.extractor = ?"
-            params.append(extractor)
-        if status is not None:
-            sql += " AND ks.status = ?"
-            params.append(status)
-        if content_type:
-            sql += " AND ks.content_type = ?"
-            params.append(content_type)
-        if truncated is not None:
-            sql += " AND ks.truncated = ?"
-            params.append(1 if truncated else 0)
         sql += " ORDER BY c.created_at DESC, c.id DESC"
 
         rows = conn.execute(sql, params).fetchall()
@@ -1996,10 +1579,4 @@ class SQLiteSearchStore(SearchStore):
             title=row["title"],
             url=row["url"],
             query=row["query"],
-            summary=row["summary"],
-            provider=row["provider"],
-            extractor=row["extractor"],
-            status=int(row["status"]) if row["status"] is not None else None,
-            content_type=row["content_type"],
-            truncated=bool(row["truncated"]) if row["truncated"] is not None else None,
         )

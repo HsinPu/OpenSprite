@@ -351,7 +351,7 @@ def _evaluate_history_grounding(
             passed=False,
             status="incomplete",
             reason="assistant final answer did not reference retrieved prior context",
-            active_task_detail="- Make clear that the answer is based on retrieved prior chat or knowledge context.",
+            active_task_detail="- Make clear that the answer is based on retrieved prior chat context.",
         )
 
     requested_count = _requested_history_item_count(contract.objective)
@@ -513,7 +513,7 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
     evidence = [
         item
         for item in execution_result.tool_evidence
-        if item.ok and item.name in {"search_history", "search_knowledge"}
+        if item.ok and item.name == "search_history"
     ]
     if not evidence:
         return False

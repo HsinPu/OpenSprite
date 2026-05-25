@@ -1124,7 +1124,6 @@ class AgentLoop:
             provider=self.provider,
             tools=self.tools,
             tools_config=self.tools_config,
-            search_store=self.search_store,
             empty_response_fallback=self.messages.agent.empty_response_fallback,
             save_message=self._save_message,
             format_log_preview=self._format_log_preview,
@@ -1144,7 +1143,6 @@ class AgentLoop:
             context_compaction_min_messages=self.config.context_compaction_min_messages,
             context_compaction_strategy=self.config.context_compaction_strategy,
             context_compaction_llm=self.config.context_compaction_llm,
-            emit_index_failure=self._emit_search_index_failure,
         )
 
     async def _emit_search_index_failure(self, session_id: str, event_type: str, payload: dict[str, Any]) -> None:

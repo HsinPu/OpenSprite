@@ -19,7 +19,6 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         "batch",
         "read_skill",
         "search_history",
-        "search_knowledge",
         "list_run_file_changes",
         "preview_run_file_change_revert",
         "web_search",

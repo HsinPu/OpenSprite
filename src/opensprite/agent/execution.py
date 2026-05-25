@@ -11,7 +11,6 @@ from typing import Any, Awaitable, Callable
 from ..config import DocumentLlmConfig, ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..llms.retry import retry_delay_from_error
-from ..search.base import SearchStore
 from ..storage.base import StoredDelegatedTask
 from ..tools import ToolRegistry
 from ..tools.evidence import ToolEvidence
@@ -125,18 +124,14 @@ class _ProactiveCompactionResult:
 
 
 class ToolResultPersistence:
-    """Persist tool execution results to storage and optional search indexes."""
+    """Persist tool execution results to storage."""
 
     def __init__(
         self,
         *,
         save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
-        search_store: SearchStore | None = None,
-        emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.save_message = save_message
-        self.search_store = search_store
-        self._emit_index_failure = emit_index_failure
 
     async def persist(
         self,
@@ -157,22 +152,6 @@ class ToolResultPersistence:
             tool_name,
             {"tool_args": dict(tool_args or {})},
         )
-        if self.search_store is not None:
-            try:
-                await self.search_store.index_tool_result(session_id, tool_name, tool_args, result)
-            except Exception as e:
-                logger.warning("[{}] Failed to index tool result for search: {}", session_id, e)
-                if self._emit_index_failure is not None:
-                    await self._emit_index_failure(
-                        session_id,
-                        "search_index.tool_result_failed",
-                        {
-                            "tool_name": tool_name,
-                            "args_keys": sorted(str(key) for key in (tool_args or {}).keys()),
-                            "result_len": len(str(result or "")),
-                            "error": str(e),
-                        },
-                    )
 
 
 class ExecutionEngine:
@@ -255,7 +234,6 @@ Output exactly these sections when applicable:
         provider: LLMProvider,
         tools: ToolRegistry,
         tools_config: ToolsConfig | None = None,
-        search_store: SearchStore | None = None,
         empty_response_fallback: str,
         save_message: Callable[[str, str, str, str | None], Awaitable[None]],
         format_log_preview: Callable[..., str],
@@ -275,7 +253,6 @@ Output exactly these sections when applicable:
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
         context_compaction_llm: DocumentLlmConfig | None = None,
-        emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.provider = provider
         self.tools = tools
@@ -296,15 +273,12 @@ Output exactly these sections when applicable:
         self.tools_config = tools_config or ToolsConfig()
         self.tool_result_max_chars = max(200, self.tools_config.tool_result_max_chars)
         self.exec_result_max_chars = max(200, self.tools_config.exec_result_max_chars)
-        self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
         self.format_log_preview = format_log_preview
         self.summarize_messages = summarize_messages
         self.sanitize_response_content = sanitize_response_content
         self.tool_result_persistence = ToolResultPersistence(
             save_message=save_message,
-            search_store=search_store,
-            emit_index_failure=emit_index_failure,
         )
 
     @staticmethod

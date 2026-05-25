@@ -31,7 +31,7 @@ from .skill_config import ConfigureSkillTool
 from .process import ProcessTool
 from .shell import ExecTool
 from .verify import VerifyTool
-from .search import SearchHistoryTool, SearchKnowledgeTool
+from .search import SearchHistoryTool
 from .web_search import WebSearchTool
 from .web_fetch import WebFetchTool
 from .web_research import WebResearchTool
@@ -77,7 +77,6 @@ __all__ = [
     "ExecTool",
     "VerifyTool",
     "SearchHistoryTool",
-    "SearchKnowledgeTool",
     "WebSearchTool",
     "WebFetchTool",
     "WebResearchTool",

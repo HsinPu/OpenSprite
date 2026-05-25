@@ -1,10 +1,9 @@
-import asyncio
+﻿import asyncio
 import json
 from datetime import datetime
 
 from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
-from opensprite.search.base import SearchHit
 from opensprite.tools.evidence import ToolEvidence, build_tool_evidence
 from opensprite.tools.web_search import _format_results
 from opensprite.tools.web_research import WebResearchTool
@@ -46,16 +45,6 @@ class _FakeFetchTool:
         self.calls.append({"url": url, "max_chars": max_chars})
         payload = self.payloads[url]
         return json.dumps(payload, ensure_ascii=False)
-
-
-class _FakeKnowledgeStore:
-    def __init__(self, hits):
-        self.hits = hits
-        self.calls = []
-
-    async def search_knowledge(self, **kwargs):
-        self.calls.append(kwargs)
-        return self.hits
 
 
 def _fetch_payload(url, *, title="Fetched", content="x" * 900, too_short=False, status=200, extractor="trafilatura"):
@@ -170,9 +159,9 @@ def test_web_research_infers_freshness_for_latest_query_when_config_is_auto():
         fetch_tool=fetch,
     )
 
-    payload = json.loads(asyncio.run(tool._execute("Qwen 最新模型 2026", count=5, fetch_count=1)))
+    payload = json.loads(asyncio.run(tool._execute("Qwen ??唳芋??2026", count=5, fetch_count=1)))
 
-    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 5, "freshness": "month"}]
+    assert search.calls == [{"query": "Qwen ??唳芋??2026", "count": 5, "freshness": "month"}]
     assert payload["freshness"] == "month"
 
 
@@ -477,86 +466,30 @@ def test_web_research_reports_source_coverage_and_gaps():
     }
 
 
-def test_web_research_reuses_existing_high_quality_fetch_without_network_search():
-    knowledge = _FakeKnowledgeStore(
-        [
-            SearchHit(
-                id="1",
-                session_id="chat-1",
-                source_type="web_fetch",
-                content="SQLite FTS5 documentation " * 40,
-                created_at=123.0,
-                title="SQLite Docs",
-                url="https://sqlite.org/fts5.html",
-                query="sqlite fts",
-                summary="Official docs",
-                provider="web_fetch",
-                extractor="trafilatura",
-                status=200,
-                content_type="text/html",
-                truncated=False,
-            )
-        ]
-    )
-    search = _FakeSearchTool([{"title": "Should not run", "url": "https://example.com", "content": "unused"}])
-    fetch = _FakeFetchTool({})
+def test_web_research_always_searches_and_fetches_without_cached_knowledge_reuse():
+    search = _FakeSearchTool([{"title": "SQLite Docs", "url": "https://sqlite.org/fts5.html", "content": "Official docs"}])
+    fetch = _FakeFetchTool({"https://sqlite.org/fts5.html": _fetch_payload("https://sqlite.org/fts5.html")})
     tool = WebResearchTool(
         search_tool=search,
         fetch_tool=fetch,
-        knowledge_store=knowledge,
-        get_session_id=lambda: "chat-1",
     )
 
     payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1, freshness="none")))
 
-    assert knowledge.calls == [
-        {
-            "session_id": "chat-1",
-            "query": "sqlite fts",
-            "limit": 5,
-            "source_type": "web_fetch",
-        }
-    ]
-    assert search.calls == []
-    assert fetch.calls == []
-    assert payload["provider"] == "search_knowledge"
+    assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "none"}]
+    assert [call["url"] for call in fetch.calls] == ["https://sqlite.org/fts5.html"]
+    assert payload["provider"] == "duckduckgo"
     assert payload["fetched_count"] == 1
-    assert payload["reused_count"] == 1
-    assert payload["reuse_attempt"] == {
-        "source": "search_knowledge",
-        "ok": True,
-        "result_count": 1,
-        "reused_count": 1,
-    }
-    assert payload["fetched_sources"][0]["reused"] is True
-    assert payload["fetched_sources"][0]["reuse_source"] == "search_knowledge"
+    assert "reused_count" not in payload
+    assert "reuse_attempt" not in payload
+    assert "reuse_source" not in payload["fetched_sources"][0]
     assert payload["fetched_sources"][0]["has_main_content"] is True
     assert payload["freshness"] == "none"
     assert payload["coverage"]["target_met"] is True
     assert payload["coverage"]["fetched_domains"] == ["sqlite.org"]
 
 
-def test_web_research_skips_knowledge_reuse_for_recent_queries():
-    knowledge = _FakeKnowledgeStore(
-        [
-            SearchHit(
-                id="old",
-                session_id="chat-1",
-                source_type="web_fetch",
-                content="Old Qwen model notes " * 80,
-                created_at=123.0,
-                title="Old Qwen Notes",
-                url="https://example.com/old-qwen",
-                query="Qwen 最新模型",
-                summary="Old source",
-                provider="web_fetch",
-                extractor="trafilatura",
-                status=200,
-                content_type="text/html",
-                truncated=False,
-            )
-        ]
-    )
+def test_web_research_uses_network_search_for_recent_queries():
     search = _FakeSearchTool(
         [{"title": "Fresh Qwen", "url": "https://example.com/fresh-qwen", "content": "Fresh snippet"}]
     )
@@ -565,40 +498,16 @@ def test_web_research_skips_knowledge_reuse_for_recent_queries():
         search_config=WebSearchToolConfig(freshness="auto"),
         search_tool=search,
         fetch_tool=fetch,
-        knowledge_store=knowledge,
-        get_session_id=lambda: "chat-1",
     )
 
-    payload = json.loads(asyncio.run(tool._execute("Qwen 最新模型 2026", fetch_count=1)))
+    payload = json.loads(asyncio.run(tool._execute("Qwen latest model 2026", fetch_count=1)))
 
-    assert knowledge.calls == []
-    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 25, "freshness": "month"}]
-    assert payload["reuse_attempt"] == {
-        "source": "search_knowledge",
-        "ok": False,
-        "reason": "skipped for recent query",
-    }
+    assert search.calls == [{"query": "Qwen latest model 2026", "count": 25, "freshness": "month"}]
+    assert "reuse_attempt" not in payload
     assert payload["fetched_sources"][0]["url"] == "https://example.com/fresh-qwen?ref=1"
 
 
-def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():
-    knowledge = _FakeKnowledgeStore(
-        [
-            SearchHit(
-                id="1",
-                session_id="chat-1",
-                source_type="web_fetch",
-                content="short",
-                created_at=123.0,
-                title="Short Docs",
-                url="https://sqlite.org/short.html",
-                extractor="trafilatura",
-                status=200,
-                content_type="text/html",
-                truncated=False,
-            )
-        ]
-    )
+def test_web_research_fetches_new_source_when_search_returns_fetchable_candidate():
     search = _FakeSearchTool(
         [{"title": "Fresh", "url": "https://example.com/fresh", "content": "Fresh snippet"}]
     )
@@ -606,22 +515,15 @@ def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():
     tool = WebResearchTool(
         search_tool=search,
         fetch_tool=fetch,
-        knowledge_store=knowledge,
-        get_session_id=lambda: "chat-1",
     )
 
     payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
 
     assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "month"}]
     assert [call["url"] for call in fetch.calls] == ["https://example.com/fresh"]
-    assert payload["reused_count"] == 0
-    assert knowledge.calls == []
-    assert payload["reuse_attempt"] == {
-        "source": "search_knowledge",
-        "ok": False,
-        "reason": "skipped for recent query",
-    }
-    assert payload["fetched_sources"][0]["reused"] is False
+    assert "reused_count" not in payload
+    assert "reuse_attempt" not in payload
+    assert "reused" not in payload["fetched_sources"][0]
 
 
 def test_web_research_dedupes_urls_and_skips_too_short_fetches():

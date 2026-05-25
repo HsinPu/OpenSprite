@@ -144,7 +144,7 @@ def _web_research_failure_metadata(args: dict[str, Any], result: str) -> dict[st
     coverage = payload.get("coverage")
     if isinstance(coverage, dict):
         metadata["coverage"] = dict(coverage)
-    for key in ("failed_sources", "search_attempts", "query_attempts", "reuse_attempt", "reuse_attempts"):
+    for key in ("failed_sources", "search_attempts", "query_attempts"):
         value = payload.get(key)
         if value:
             metadata[key] = value
@@ -330,8 +330,6 @@ def _web_research_sources(
                 "search_rank": raw_source.get("search_rank"),
                 "search_provider": _clean_source_text(raw_source.get("search_provider")),
                 "search_backend": _clean_source_text(raw_source.get("search_backend") or backend),
-                "reused": bool(raw_source.get("reused")),
-                "reuse_source": _clean_source_text(raw_source.get("reuse_source")),
             },
         )
         if source:

@@ -21,12 +21,6 @@ class SearchHit:
     title: str | None = None
     url: str | None = None
     query: str | None = None
-    summary: str | None = None
-    provider: str | None = None
-    extractor: str | None = None
-    status: int | None = None
-    content_type: str | None = None
-    truncated: bool | None = None
 
 
 class SearchStore(ABC):
@@ -48,34 +42,8 @@ class SearchStore(ABC):
         """Index one conversation message for history search."""
 
     @abstractmethod
-    async def index_tool_result(
-        self,
-        session_id: str,
-        tool_name: str,
-        tool_args: dict,
-        result: str,
-        created_at: float | None = None,
-    ) -> None:
-        """Index structured tool results for knowledge search."""
-
-    @abstractmethod
     async def search_history(self, session_id: str, query: str, limit: int = 5) -> list[SearchHit]:
         """Search conversation history within a single chat."""
-
-    @abstractmethod
-    async def search_knowledge(
-        self,
-        session_id: str,
-        query: str,
-        limit: int = 5,
-        source_type: str | None = None,
-        provider: str | None = None,
-        extractor: str | None = None,
-        status: int | None = None,
-        content_type: str | None = None,
-        truncated: bool | None = None,
-    ) -> list[SearchHit]:
-        """Search stored knowledge within a single chat."""
 
     @abstractmethod
     async def clear_session(self, session_id: str) -> None:

@@ -12,11 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from ..search.indexing import (
-    KnowledgeDocument,
     SearchChunkPayload,
     build_history_chunks,
-    build_knowledge_chunks,
-    build_knowledge_documents_from_message,
 )
 from ..utils.json_safe import json_safe_value as json_safe
 from ..utils.log import logger
@@ -219,30 +216,6 @@ CREATE INDEX IF NOT EXISTS idx_eval_runs_kind_created
 CREATE INDEX IF NOT EXISTS idx_eval_runs_run
     ON eval_runs(run_id);
 
-CREATE TABLE IF NOT EXISTS knowledge_sources (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
-    source_type TEXT NOT NULL,
-    tool_name TEXT NOT NULL,
-    query TEXT,
-    title TEXT,
-    url TEXT,
-    summary TEXT,
-    provider TEXT,
-    extractor TEXT,
-    status INTEGER,
-    content_type TEXT,
-    truncated INTEGER,
-    raw_result TEXT NOT NULL,
-    created_at REAL NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_knowledge_chat_created
-    ON knowledge_sources(session_id, created_at, id);
-
-CREATE INDEX IF NOT EXISTS idx_knowledge_chat_source
-    ON knowledge_sources(session_id, source_type);
-
 CREATE TABLE IF NOT EXISTS search_chunks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
@@ -350,24 +323,11 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
 def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     """Apply additive schema upgrades for existing normalized databases."""
-    if not table_exists(conn, "knowledge_sources"):
-        return
-    existing_columns = {
-        str(row[1])
-        for row in conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()
-    }
-    required_columns = {
-        "summary": "TEXT",
-        "provider": "TEXT",
-        "extractor": "TEXT",
-        "status": "INTEGER",
-        "content_type": "TEXT",
-        "truncated": "INTEGER",
-    }
-    for column_name, column_type in required_columns.items():
-        if column_name in existing_columns:
-            continue
-        conn.execute(f"ALTER TABLE knowledge_sources ADD COLUMN {column_name} {column_type}")
+    if table_exists(conn, "search_chunks"):
+        conn.execute("DELETE FROM search_chunks WHERE owner_type <> 'message'")
+    if table_exists(conn, "search_chunk_vec_index"):
+        conn.execute("DELETE FROM search_chunk_vec_index WHERE owner_type <> 'message'")
+    conn.execute("DROP TABLE IF EXISTS knowledge_sources")
 
     if table_exists(conn, "run_file_changes"):
         file_change_columns = {
@@ -626,63 +586,6 @@ def upsert_chunk_embedding(
     )
 
 
-def insert_knowledge_document(
-    conn: sqlite3.Connection,
-    *,
-    session_id: str,
-    document: KnowledgeDocument,
-    created_at: float,
-) -> tuple[int, list[int]]:
-    """Insert one knowledge source and its searchable chunks."""
-    ensure_chat_row(conn, session_id, created_at=created_at, updated_at=created_at)
-    cursor = conn.execute(
-        """
-        INSERT INTO knowledge_sources (
-            session_id,
-            source_type,
-            tool_name,
-            query,
-            title,
-            url,
-            summary,
-            provider,
-            extractor,
-            status,
-            content_type,
-            truncated,
-            raw_result,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            session_id,
-            document.source_type,
-            document.tool_name,
-            document.query,
-            document.title,
-            document.url,
-            document.summary,
-            document.provider,
-            document.extractor,
-            document.status,
-            document.content_type,
-            1 if document.truncated is True else 0 if document.truncated is False else None,
-            document.raw_result,
-            created_at,
-        ),
-    )
-    source_id = int(cursor.lastrowid)
-    chunk_ids = insert_search_chunks(
-        conn,
-        session_id=session_id,
-        owner_type="knowledge",
-        owner_id=source_id,
-        chunks=build_knowledge_chunks(document, created_at=created_at),
-    )
-    return source_id, chunk_ids
-
-
 def find_message_owner_id(
     conn: sqlite3.Connection,
     *,
@@ -797,9 +700,6 @@ def _migrate_legacy_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
                 created_at=created_at,
             ),
         )
-        for document in build_knowledge_documents_from_message(message):
-            insert_knowledge_document(conn, session_id=session_id, document=document, created_at=created_at)
-
 
 class SQLiteStorage(StorageProvider):
     """Normalized SQLite storage implementation."""

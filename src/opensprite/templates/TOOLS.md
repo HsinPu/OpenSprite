@@ -47,7 +47,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 - `batch`
   - Use to run multiple read-only lookups concurrently when exploring a workspace or retrieving related context.
-  - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, `search_history`, and `search_knowledge`.
+  - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, and `search_history`.
   - Do not use it for writes, edits, shell commands, delegation, scheduling, media sending, config changes, or MCP tools.
   - Each child call still follows normal validation and permission policy; do not use `batch` to bypass blocked tools.
 
@@ -105,7 +105,6 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - `web_search`
   - Use when you need fresh external sources, candidate URLs, or current information.
   - Prefer this before `web_fetch` when you do not yet know which page to read.
-  - If the topic may already have been researched in the current chat, prefer `search_knowledge` first.
 
 - `web_research`
   - Use when the user asks for current external information and you need both search results and inspected source pages.
@@ -115,12 +114,11 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - For current/latest/now/recent requests, keep recency words and the current year in the search query when helpful, and leave `freshness` as `auto` unless the user requests all-time results.
   - Use the optional `queries` argument for broad, ambiguous, comparative, current, or contested topics where one search phrase may miss important angles.
   - Keep `query` as the main user-facing question and add 1-4 focused `queries` variants for complementary angles, such as official docs, release notes, pricing, reviews, limitations, or regional policy terms.
-  - Do not add extra `queries` for simple lookups, user-provided URLs, or cases where `search_knowledge` already has enough current fetched content.
+  - Do not add extra `queries` for simple lookups or user-provided URLs.
 
 - `web_fetch`
   - Use to retrieve readable content from a specific URL.
   - Prefer this after `web_search`, for a specific source selected from `web_research`, or when the user already provided a URL.
-  - If the current chat may already contain fetched content for the same page, prefer `search_knowledge` before fetching again unless freshness matters.
 
 - Browser tools (`browser_navigate`, `browser_snapshot`, and related interaction tools)
   - Use for interaction, authenticated user-approved workflows, UI inspection, JavaScript-rendered public pages, scrolling, clicking, forms, screenshots, console state, or DOM/browser-state checks.
@@ -229,13 +227,6 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Search before claiming you do not remember earlier discussion in this chat.
   - Strongly prefer this when the user references earlier turns implicitly, such as "the previous fix", "what you said before", "again", "earlier", "之前", or "剛剛".
 
-- `search_knowledge`
-  - Use to retrieve previously stored `web_research`, `web_search`, and `web_fetch` results from the current chat.
-  - Prefer this when the user refers to earlier research instead of current local files.
-  - Prefer this before repeating `web_research`, `web_search`, or `web_fetch` on the same topic in the same chat.
-  - Use filters such as `provider`, `extractor`, `status`, `content_type`, and `truncated` when narrowing large result sets.
-  - If a topic sounds like follow-up on prior web research, check this before launching a fresh network search.
-
 ## Scheduling Tool
 
 - `cron`
@@ -269,4 +260,4 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - `USER.md` lives at the session workspace root and stores durable user-focused context for this session.
 - `MEMORY.md` lives under `~/.opensprite/memory/` and stores durable chat continuity.
 - Prefer `configure_skill` and `configure_subagent` for those trees rather than ad-hoc edits elsewhere.
-- `search_history` and `search_knowledge` are retrieval tools, not always-on memory.
+- `search_history` is a retrieval tool, not always-on memory.

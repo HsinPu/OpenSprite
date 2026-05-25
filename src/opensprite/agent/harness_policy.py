@@ -18,7 +18,6 @@ _READ_ONLY_TOOLS = (
     "code_navigation",
     "read_skill",
     "search_history",
-    "search_knowledge",
     "list_run_file_changes",
     "preview_run_file_change_revert",
     "batch",

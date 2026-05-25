@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
 from datetime import datetime
-from typing import Any
 
 from ..search.base import SearchHit, SearchStore
 
@@ -56,21 +54,16 @@ class ProactiveRetrievalService:
         if self.search_store is None or not self.should_retrieve(current_message):
             return ""
 
-        history_hits, knowledge_hits = await asyncio.gather(
-            self.search_store.search_history(session_id=session_id, query=current_message, limit=3),
-            self.search_store.search_knowledge(session_id=session_id, query=current_message, limit=2),
-        )
-        if not history_hits and not knowledge_hits:
+        history_hits = await self.search_store.search_history(session_id=session_id, query=current_message, limit=3)
+        if not history_hits:
             return ""
 
         sections = [
             "# Proactive Retrieval Context",
-            "This turn appears to refer to earlier chat context or prior research. Use the snippets below before asking the user to restate information.",
+            "This turn appears to refer to earlier chat context. Use the snippets below before asking the user to restate information.",
         ]
         if history_hits:
             sections.extend(["", "## Retrieved History", *self._format_history_hits(history_hits)])
-        if knowledge_hits:
-            sections.extend(["", "## Retrieved Knowledge", *self._format_knowledge_hits(knowledge_hits)])
         return "\n".join(sections).strip()
 
     @staticmethod
@@ -93,17 +86,5 @@ class ProactiveRetrievalService:
             if hit.tool_name:
                 label = f"{label}:{hit.tool_name}"
             lines.append(f"{index}. [{label}] {self._format_time(hit.created_at)}")
-            lines.append(f"   {self._truncate(hit.content)}")
-        return lines
-
-    def _format_knowledge_hits(self, hits: list[SearchHit]) -> list[str]:
-        lines: list[str] = []
-        for index, hit in enumerate(hits, start=1):
-            title = hit.title or hit.source_type
-            lines.append(f"{index}. [{hit.source_type}] {title}")
-            if hit.url:
-                lines.append(f"   {hit.url}")
-            if hit.summary:
-                lines.append(f"   summary: {self._truncate(hit.summary, limit=120)}")
             lines.append(f"   {self._truncate(hit.content)}")
         return lines

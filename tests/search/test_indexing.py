@@ -1,60 +1,21 @@
-import json
-
-from opensprite.search.indexing import build_knowledge_documents, guess_tool_name
+from opensprite.search.indexing import build_history_chunks, chunk_text
 
 
-def test_guess_tool_name_detects_web_research_before_generic_payloads():
-    payload = json.dumps(
-        {
-            "type": "web_research",
-            "query": "sqlite",
-            "url": "",
-            "content": "combined fetched content",
-            "items": [],
-            "fetched_sources": [],
-        }
+def test_chunk_text_normalizes_and_splits_overlap():
+    chunks = chunk_text("alpha   beta gamma delta", chunk_size=12, chunk_overlap=4)
+
+    assert chunks == ["alpha beta g", "ta gamma del", "delta"]
+
+
+def test_build_history_chunks_marks_message_source():
+    chunks = build_history_chunks(
+        role="assistant",
+        content="Earlier we fixed the cleanup path.",
+        tool_name=None,
+        created_at=10.0,
     )
 
-    assert guess_tool_name(payload) == "web_research"
-
-
-def test_build_knowledge_documents_indexes_web_research_sources():
-    result = json.dumps(
-        {
-            "type": "web_research",
-            "query": "sqlite fts5",
-            "provider": "duckduckgo",
-            "content_type": "application/json",
-            "items": [
-                {
-                    "title": "SQLite FTS5",
-                    "url": "https://sqlite.org/fts5.html",
-                    "content": "Official full text search docs",
-                }
-            ],
-            "fetched_sources": [
-                {
-                    "title": "SQLite FTS5",
-                    "url": "https://sqlite.org/fts5.html",
-                    "content": "SQLite FTS5 supports full text search docs and examples.",
-                    "snippet": "Official full text search docs",
-                    "search_provider": "duckduckgo",
-                    "extractor": "trafilatura",
-                    "status": 200,
-                    "content_type": "text/html",
-                    "truncated": False,
-                }
-            ],
-        }
-    )
-
-    docs = build_knowledge_documents(tool_name="web_research", tool_args={"query": "sqlite fts5"}, result=result)
-
-    assert [doc.source_type for doc in docs] == ["web_search", "web_fetch"]
-    assert [doc.tool_name for doc in docs] == ["web_research", "web_research"]
-    assert docs[0].provider == "duckduckgo"
-    assert docs[0].extractor == "search"
-    assert docs[1].provider == "duckduckgo"
-    assert docs[1].extractor == "trafilatura"
-    assert docs[1].status == 200
-    assert docs[1].content_type == "text/html"
+    assert len(chunks) == 1
+    assert chunks[0].source_type == "history"
+    assert chunks[0].role == "assistant"
+    assert chunks[0].content == "Earlier we fixed the cleanup path."

@@ -392,9 +392,8 @@ This request appears to be a workspace or project task. Use the active workspace
             return ""
         return """# Retrieval Guidance
 
-This message appears to depend on earlier conversation state or prior research. Before asking the user to repeat context:
+This message appears to depend on earlier conversation state. Before asking the user to repeat context:
 - prefer `search_history` for prior chat details, decisions, commands, errors, task outcomes, and transcript-specific facts.
-- prefer `search_knowledge` for previously fetched web pages or web-search results in this session.
 - Do not copy detailed past transcripts into MEMORY.md just to make them easier to recall; keep MEMORY.md for compact durable chat continuity and retrieve details on demand.
 """
 

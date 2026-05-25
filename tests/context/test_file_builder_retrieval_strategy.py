@@ -15,11 +15,9 @@ def test_file_builder_includes_retrieval_strategy_in_system_prompt(tmp_path):
 
     prompt = builder.build_system_prompt("telegram:room-1")
 
-    assert "# Retrieval Strategy" in prompt
-    assert "Prefer `search_knowledge` before repeating `web_research`, `web_search`, or `web_fetch`" in prompt
-    assert "If `search_knowledge` already returns a relevant `web_fetch` result" in prompt
-    assert "Use `web_research` when you need new sources plus inspected page content" in prompt
-    assert "use multiple specific `web_research` queries" in prompt
+    assert "## External Knowledge Tools" in prompt
+    assert "Use `web_research` for broad, current, comparative, ambiguous, or public-information questions" in prompt
+    assert "search_knowledge" not in prompt
     assert "Use the optional `queries` argument" in prompt
 
 

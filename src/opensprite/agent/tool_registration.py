@@ -42,7 +42,6 @@ from ..tools import (
     VerifyTool,
     ProcessTool,
     SearchHistoryTool,
-    SearchKnowledgeTool,
     WebSearchTool,
     WebFetchTool,
     WebResearchTool,
@@ -283,8 +282,6 @@ def register_web_tools(
     registry: ToolRegistry,
     *,
     tools_config: ToolsConfig | None = None,
-    search_store: SearchStore | None = None,
-    search_config: SearchConfig | None = None,
     get_session_id: Callable[[], str | None] | None = None,
 ) -> None:
     """Register web search and fetch tools."""
@@ -306,9 +303,6 @@ def register_web_tools(
         WebResearchTool(
             search_config=web_search_config,
             fetch_config=web_fetch_config,
-            knowledge_store=search_store,
-            get_session_id=get_session_id,
-            knowledge_limit=(search_config or SearchConfig()).knowledge_top_k,
         )
     )
 
@@ -452,13 +446,6 @@ def register_search_tools(
             default_limit=current_search_config.history_top_k,
         )
     )
-    registry.register(
-        SearchKnowledgeTool(
-            store=search_store,
-            get_session_id=get_session_id,
-            default_limit=current_search_config.knowledge_top_k,
-        )
-    )
 
 
 def register_cron_tools(
@@ -566,8 +553,6 @@ def register_default_tools(
     register_web_tools(
         registry,
         tools_config=current_tools_config,
-        search_store=search_store,
-        search_config=search_config,
         get_session_id=get_session_id,
     )
     register_browser_tools(registry, get_session_id=get_session_id, tools_config=current_tools_config)

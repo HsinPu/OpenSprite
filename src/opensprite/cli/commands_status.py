@@ -210,7 +210,7 @@ def emit_status(
         "Search: "
         f"enabled={format_presence(bool(search['enabled']))} "
         f"backend={search['backend']} "
-        f"(history_top_k={search['history_top_k']}, knowledge_top_k={search['knowledge_top_k']})"
+        f"(history_top_k={search['history_top_k']})"
     )
     typer.echo("Channels: " + (", ".join(enabled_channels) if enabled_channels else "none enabled"))
 
@@ -288,7 +288,6 @@ def status_command(
                 "enabled": loaded.search.enabled,
                 "backend": loaded.search.backend,
                 "history_top_k": loaded.search.history_top_k,
-                "knowledge_top_k": loaded.search.knowledge_top_k,
             },
             "channels": channels,
         }

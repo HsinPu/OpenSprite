@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from pathlib import Path
 
 from opensprite.agent.tool_registration import register_default_tools
@@ -14,7 +14,7 @@ from opensprite.tools.skill_config import ConfigureSkillTool
 from opensprite.tools.subagent_config import ConfigureSubagentTool
 from opensprite.tools.shell import ExecTool
 from opensprite.tools.verify import VerifyTool
-from opensprite.tools.search import SearchKnowledgeTool
+from opensprite.tools.search import SearchHistoryTool
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.web_research import WebResearchTool
@@ -43,9 +43,6 @@ class FakeSearchStore:
     async def search_history(self, session_id: str, query: str, limit: int = 5):
         return []
 
-    async def search_knowledge(self, session_id: str, query: str, limit: int = 5, **kwargs):
-        return []
-
 
 def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_path):
     registry = ToolRegistry()
@@ -62,7 +59,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         reload_mcp=_fake_reload_mcp,
         skills_loader=SkillsLoader(default_skills_dir=tmp_path / "skills"),
         search_store=FakeSearchStore(),
-        search_config=SearchConfig(history_top_k=7, knowledge_top_k=9),
+        search_config=SearchConfig(history_top_k=7),
     )
 
     assert registry.tool_names == [
@@ -95,7 +92,6 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "delegate_many",
         "run_workflow",
         "search_history",
-        "search_knowledge",
         "cron",
         "batch",
     ]
@@ -104,7 +100,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
     assert isinstance(registry.get("configure_subagent"), ConfigureSubagentTool)
     assert isinstance(registry.get("send_media"), SendMediaTool)
     assert isinstance(registry.get("batch"), BatchTool)
-    assert registry.get("web_research").knowledge_store is not None
+    assert isinstance(registry.get("search_history"), SearchHistoryTool)
 
 
 def test_register_default_tools_skips_optional_skill_and_search_tools_when_dependencies_missing():
@@ -216,7 +212,6 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
     assert web_research_tool.search_tool.provider == "jina"
     assert web_research_tool.fetch_tool.fetcher.max_chars == 1234
-    assert web_research_tool.knowledge_store is None
 
 
 async def _fake_preview_run_file_change_revert(session_id: str, run_id: str, change_id: int):
@@ -270,7 +265,7 @@ def test_register_default_tools_applies_permission_policy():
     assert "batch" in registry.tool_names
 
 
-def test_search_and_web_tools_describe_retrieval_preference():
+def test_search_and_web_tools_describe_current_research_behavior():
     registry = ToolRegistry()
 
     register_default_tools(
@@ -284,24 +279,23 @@ def test_search_and_web_tools_describe_retrieval_preference():
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         search_store=FakeSearchStore(),
-        search_config=SearchConfig(history_top_k=7, knowledge_top_k=9),
+        search_config=SearchConfig(history_top_k=7),
     )
 
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
     web_research_tool = registry.get("web_research")
-    search_knowledge_tool = registry.get("search_knowledge")
+    search_history_tool = registry.get("search_history")
 
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
     assert isinstance(web_research_tool, WebResearchTool)
-    assert isinstance(search_knowledge_tool, SearchKnowledgeTool)
-    assert web_research_tool.knowledge_store is search_knowledge_tool.store
-    assert "prefer search_knowledge first" in web_search_tool.description.lower()
-    assert "stored web_fetch results" in web_fetch_tool.description.lower()
+    assert isinstance(search_history_tool, SearchHistoryTool)
+    assert "search_knowledge" not in registry.tool_names
+    assert "search_knowledge" not in web_search_tool.description.lower()
+    assert "search_knowledge" not in web_fetch_tool.description.lower()
     assert "instead of separate web_search + web_fetch" in web_research_tool.description.lower()
-    assert "prefer this before repeating web_research" in search_knowledge_tool.description.lower()
-    assert "use search_history for chat decisions" in search_knowledge_tool.description.lower()
+    assert "conversation history" in search_history_tool.description.lower()
 
 
 def test_register_default_tools_applies_cron_default_timezone_from_tools_config():

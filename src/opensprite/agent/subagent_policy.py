@@ -30,7 +30,6 @@ READ_ONLY_TOOLS = frozenset(
         "batch",
         "read_skill",
         "search_history",
-        "search_knowledge",
     }
 )
 WEB_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
