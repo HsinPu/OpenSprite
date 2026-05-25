@@ -36,7 +36,7 @@ service_app = typer.Typer(help="Manage the OpenSprite background gateway service
 app.add_typer(service_app, name="service")
 cron_app = typer.Typer(help="Manage per-session scheduled jobs.")
 app.add_typer(cron_app, name="cron")
-search_app = typer.Typer(help="Inspect and rebuild the chat history search index.")
+search_app = typer.Typer(help="Inspect the chat history search index.")
 app.add_typer(search_app, name="search")
 config_app = typer.Typer(help="Inspect and validate configuration files.")
 app.add_typer(config_app, name="config")
@@ -297,7 +297,7 @@ def search_status(
         help="Optional session id to inspect instead of the full chat history search index.",
     ),
 ) -> None:
-    """Show chat history search index and embedding status."""
+    """Show chat history search index status."""
     commands_search.search_status_command(
         config=config,
         session_id=session_id,
