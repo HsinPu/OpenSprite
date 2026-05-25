@@ -432,6 +432,19 @@ install_agent_browser_chrome() {
   fi
 }
 
+run_agent_browser_doctor() {
+  if ! command -v npx >/dev/null 2>&1; then
+    return 0
+  fi
+
+  log_info "Checking agent-browser runtime"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 60s npx --yes agent-browser doctor || log_warn "agent-browser doctor did not pass within 60s; browser tools may need manual setup."
+  else
+    npx --yes agent-browser doctor || log_warn "agent-browser doctor reported issues; browser tools may need manual setup."
+  fi
+}
+
 ensure_browser_runtime() {
   if [[ "$INSTALL_BROWSER" -ne 1 ]]; then
     return 0
@@ -453,10 +466,7 @@ ensure_browser_runtime() {
   fi
 
   ensure_browser_no_sandbox_arg
-  if command -v npx >/dev/null 2>&1; then
-    log_info "Checking agent-browser runtime"
-    npx --yes agent-browser doctor || log_warn "agent-browser doctor reported issues; browser tools may need manual setup."
-  fi
+  run_agent_browser_doctor
 }
 
 find_python() {
