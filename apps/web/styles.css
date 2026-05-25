@@ -2128,6 +2128,10 @@ button:disabled {
 }
 
 .message__meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
   color: var(--text);
   font-size: 0.82rem;
   font-weight: 650;
@@ -2138,7 +2142,15 @@ button:disabled {
 }
 
 .message--user .message__meta {
+  justify-content: flex-end;
   color: var(--text-muted);
+}
+
+.message__time {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .message__bubble {

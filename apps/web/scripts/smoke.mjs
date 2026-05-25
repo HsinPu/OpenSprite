@@ -121,6 +121,8 @@ assertIncludes(messageList, "system-reminder", "message internal reminder stripp
 assertIncludes(messageList, "summarizeVisibleToolHistory", "message sanitizer hides raw failed tool history");
 assertIncludes(messageList, "--- BEGIN HEAD ---", "message sanitizer recognizes truncated tool context markers");
 assertIncludes(messageList, "buildMessageBlocks", "message markdown block normalization");
+assertIncludes(messageList, "messageTimeFields", "message timestamp normalization");
+assertIncludes(messageList, "class=\"message__time\"", "message timestamp rendering");
 assertIncludes(messageList, "type: \"strong\"", "message markdown bold segment normalization");
 assertIncludes(messageList, "isMarkdownRule", "message markdown horizontal rule normalization");
 assertIncludes(messageTextRenderer, "segment.type === 'strong'", "message markdown bold rendering");
@@ -233,6 +235,7 @@ assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded cont
 assertIncludes(styles, ".run-trace__tool-debug-blocks", "tool cards expose debug payload blocks");
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
 assertIncludes(styles, ".message + .message", "chat transcript has separators between messages");
+assertIncludes(styles, ".message__time", "chat message timestamp styling");
 assertIncludesNormalized(
   styles,
   ".message {\n    grid-template-columns: 28px minmax(0, 1fr);\n    gap: 10px;\n    padding: 16px 0;\n  }\n\n  .message--user {\n    grid-template-columns: minmax(0, 1fr) 28px;\n  }",

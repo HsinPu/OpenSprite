@@ -9,7 +9,15 @@
       <div class="message__avatar">{{ message.role === "user" ? copy.message.userAvatar : copy.message.assistantAvatar }}</div>
       <div class="message__content">
         <div class="message__meta">
-          {{ message.meta || (message.role === "user" ? displayName : "OpenSprite") }}
+          <span>{{ message.meta || (message.role === "user" ? displayName : "OpenSprite") }}</span>
+          <time
+            v-if="message.timeLabel"
+            class="message__time"
+            :datetime="message.isoTime"
+            :title="message.fullTimeLabel"
+          >
+            {{ message.timeLabel }}
+          </time>
         </div>
         <div v-if="message.textBlocks.length" class="message__bubble">
           <MessageTextRenderer :blocks="message.textBlocks" :copy="copy" />
@@ -149,6 +157,7 @@ function normalizeEntry(entry, index) {
     text,
     textBlocks: buildMessageBlocks(text, `entry-${index}`),
     meta: entry.meta || (role === "user" ? props.displayName : "OpenSprite"),
+    ...messageTimeFields(entry.createdAt ?? entry.created_at),
     content,
   };
 }
@@ -171,6 +180,7 @@ function normalizeMessage(message) {
     ...message,
     text,
     textBlocks: buildMessageBlocks(text, message.id || "message"),
+    ...messageTimeFields(message.createdAt ?? message.created_at),
     content: [],
   };
 }
@@ -191,6 +201,40 @@ function artifactTypeLabel(type) {
 function artifactStatusLabel(status) {
   const labels = props.copy.run?.statusLabels || {};
   return labels[status] || status;
+}
+
+function messageTimeFields(value) {
+  const timestamp = Number(value || 0);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return {
+      isoTime: "",
+      timeLabel: "",
+      fullTimeLabel: "",
+    };
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return {
+      isoTime: "",
+      timeLabel: "",
+      fullTimeLabel: "",
+    };
+  }
+  return {
+    isoTime: date.toISOString(),
+    timeLabel: new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date),
+    fullTimeLabel: new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(date),
+  };
 }
 
 function buildMessageBlocks(value, keyPrefix) {
