@@ -14,6 +14,7 @@ from ..cron import CronService
 from ..runtime import gateway as run_gateway
 from . import (
     commands_auth,
+    commands_chat,
     commands_cron,
     commands_search,
     commands_service,
@@ -198,6 +199,53 @@ def gateway(
 ) -> None:
     """Start the OpenSprite gateway."""
     commands_status.start_gateway(config=config, run_gateway=run_gateway)
+
+
+@app.command("chat")
+def chat(
+    message: str = typer.Argument(..., help="Message text to send through the one-shot CLI channel."),
+    config: str | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to an OpenSprite JSON config file.",
+    ),
+    external_chat_id: str = typer.Option(
+        "default",
+        "--external-chat-id",
+        help="CLI external chat id used to build the session id.",
+    ),
+    session_id: str | None = typer.Option(
+        None,
+        "--session-id",
+        help="Optional explicit session id, for example cli:smoke.",
+    ),
+    sender_name: str = typer.Option(
+        "OpenSprite CLI",
+        "--sender-name",
+        help="Sender name attached to the test message.",
+    ),
+    timeout_seconds: float = typer.Option(
+        120.0,
+        "--timeout",
+        help="Maximum seconds to wait for a reply.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output machine-readable JSON.",
+    ),
+) -> None:
+    """Send one message through a local one-shot CLI channel."""
+    commands_chat.chat_command(
+        message=message,
+        config=config,
+        external_chat_id=external_chat_id,
+        session_id=session_id,
+        sender_name=sender_name,
+        timeout_seconds=timeout_seconds,
+        json_output=json_output,
+    )
 
 
 @config_app.command("validate")
