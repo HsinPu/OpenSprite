@@ -123,15 +123,9 @@ def default_instance_config(channel_type: str, *, name: str | None = None) -> di
 def coerce_channel_instances(channels_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Normalize channels config into an instance mapping."""
     raw_instances = channels_data.get("instances")
-    if isinstance(raw_instances, dict):
-        return {str(instance_id): dict(config) for instance_id, config in raw_instances.items() if isinstance(config, dict)}
-
     instances: dict[str, dict[str, Any]] = {}
-    for channel_type, value in channels_data.items():
-        if channel_type not in CHANNEL_TYPES or not isinstance(value, dict):
-            continue
-        instance_id = normalize_identifier(channel_type, fallback=channel_type)
-        instances[instance_id] = {"type": channel_type, "name": CHANNEL_TYPES[channel_type].name, **dict(value)}
+    if isinstance(raw_instances, dict):
+        instances = {str(instance_id): dict(config) for instance_id, config in raw_instances.items() if isinstance(config, dict)}
 
     if "web" not in instances:
         instances.update(default_channel_instances())

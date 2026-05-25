@@ -829,7 +829,7 @@ def test_config_load_reads_channels_from_external_file(tmp_path):
     assert config.channels_file == "channels.json"
 
 
-def test_config_load_accepts_legacy_top_level_channels(tmp_path):
+def test_config_load_ignores_legacy_top_level_channels(tmp_path):
     config_path = tmp_path / "opensprite.json"
     config_path.write_text(
         json.dumps(
@@ -844,9 +844,7 @@ def test_config_load_accepts_legacy_top_level_channels(tmp_path):
 
     config = Config.from_json(config_path)
 
-    assert config.channels.instances["telegram"]["type"] == "telegram"
-    assert config.channels.instances["telegram"]["enabled"] is True
-    assert config.channels.instances["telegram"]["token"] == "abc"
+    assert "telegram" not in config.channels.instances
     assert config.channels.instances["web"]["enabled"] is True
 
 
