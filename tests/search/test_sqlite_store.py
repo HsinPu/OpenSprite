@@ -120,18 +120,18 @@ def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
 
         history_hits = await search.search_history("chat-a", "sqlite handy")
         conn = sqlite3.connect(str(db_path))
-        knowledge_table = conn.execute(
+        removed_knowledge_table = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_sources'"
         ).fetchone()
         conn.close()
 
-        return history_hits, knowledge_table
+        return history_hits, removed_knowledge_table
 
-    history_hits, knowledge_table = asyncio.run(scenario())
+    history_hits, removed_knowledge_table = asyncio.run(scenario())
 
     assert history_hits
     assert history_hits[0].source_type == "history"
-    assert knowledge_table is None
+    assert removed_knowledge_table is None
 
 
 def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):

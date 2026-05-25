@@ -1,4 +1,4 @@
-"""Search index providers."""
+"""History search index providers."""
 
 from .base import SearchHit, SearchStore
 
