@@ -283,64 +283,6 @@ def auth_credentials_list(
     )
 
 
-@credential_app.command("add")
-def auth_credentials_add(
-    provider: str = typer.Argument(..., help="Provider id, for example openrouter or openai."),
-    secret: str | None = typer.Option(None, "--secret", "--api-key", help="API key value. If omitted, prompts securely."),
-    label: str | None = typer.Option(None, "--label", help="Display label for this credential."),
-    base_url: str | None = typer.Option(None, "--base-url", help="Optional runtime base URL."),
-    capability: list[str] | None = typer.Option(None, "--capability", help="Capability this credential can satisfy. Repeatable."),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-    json_output: bool = typer.Option(False, "--json", help="Output created credential as JSON."),
-) -> None:
-    """Store an API key in the local credential vault."""
-    commands_auth.auth_credentials_add_command(
-        provider=provider,
-        secret=secret,
-        label=label,
-        base_url=base_url,
-        capability=capability,
-        config=config,
-        json_output=json_output,
-        resolve_app_home=_resolve_app_home,
-    )
-
-
-@credential_app.command("remove")
-def auth_credentials_remove(
-    provider: str = typer.Argument(..., help="Provider id."),
-    credential_id: str = typer.Argument(..., help="Credential id to remove."),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-) -> None:
-    """Remove one stored credential."""
-    commands_auth.auth_credentials_remove_command(
-        provider=provider,
-        credential_id=credential_id,
-        config=config,
-        resolve_app_home=_resolve_app_home,
-        resolve_config_path=_resolve_config_path,
-    )
-
-
-@credential_app.command("default")
-def auth_credentials_default(
-    credential_id: str = typer.Argument(..., help="Credential id to use by default."),
-    provider: str | None = typer.Option(None, "--provider", help="Set the default credential for this provider."),
-    capability: str | None = typer.Option(None, "--capability", help="Set the default credential for this capability."),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-    json_output: bool = typer.Option(False, "--json", help="Output updated default as JSON."),
-) -> None:
-    """Set a provider or capability default credential."""
-    commands_auth.auth_credentials_default_command(
-        credential_id=credential_id,
-        provider=provider,
-        capability=capability,
-        config=config,
-        json_output=json_output,
-        resolve_app_home=_resolve_app_home,
-    )
-
-
 @search_app.command("rebuild")
 def search_rebuild(
     config: str | None = typer.Option(

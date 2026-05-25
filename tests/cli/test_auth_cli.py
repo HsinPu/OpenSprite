@@ -2,6 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
+from opensprite.auth.credentials import add_credential
 from opensprite.auth.codex import CodexToken, save_codex_token
 from opensprite.cli.commands import app
 
@@ -66,31 +67,14 @@ def test_auth_login_runs_codex_device_flow(tmp_path, monkeypatch):
     assert "device message" in result.stdout
 
 
-def test_auth_credentials_add_list_default_and_remove(tmp_path):
+def test_auth_credentials_list_reports_stored_credentials(tmp_path):
     config_path = tmp_path / "opensprite.json"
-
-    add_result = runner.invoke(
-        app,
-        [
-            "auth",
-            "credentials",
-            "add",
-            "openrouter",
-            "--secret",
-            "router-secret",
-            "--label",
-            "Router",
-            "--config",
-            str(config_path),
-            "--json",
-        ],
+    credential = add_credential(
+        "openrouter",
+        "router-secret",
+        label="Router",
+        app_home=tmp_path,
     )
-
-    assert add_result.exit_code == 0
-    credential = json.loads(add_result.stdout)["credential"]
-    assert credential["id"].startswith("cred_")
-    assert credential["secret_preview"] == "rout...cret"
-    assert "secret" not in credential
 
     list_result = runner.invoke(
         app,
@@ -103,39 +87,12 @@ def test_auth_credentials_add_list_default_and_remove(tmp_path):
     assert listed["is_default"] is True
     assert "secret" not in listed
 
-    default_result = runner.invoke(
-        app,
-        [
-            "auth",
-            "credentials",
-            "default",
-            credential["id"],
-            "--capability",
-            "llm.chat",
-            "--config",
-            str(config_path),
-        ],
-    )
 
-    assert default_result.exit_code == 0
-    assert "Set default credential for capability llm.chat" in default_result.stdout
+def test_auth_credentials_help_only_exposes_list():
+    result = runner.invoke(app, ["auth", "credentials", "--help"])
 
-    remove_result = runner.invoke(
-        app,
-        ["auth", "credentials", "remove", "openrouter", credential["id"], "--config", str(config_path)],
-    )
-
-    assert remove_result.exit_code == 0
-    assert f"Removed openrouter credential: {credential['id']}" in remove_result.stdout
-
-
-def test_auth_credentials_default_requires_target(tmp_path):
-    config_path = tmp_path / "opensprite.json"
-
-    result = runner.invoke(
-        app,
-        ["auth", "credentials", "default", "cred_missing", "--config", str(config_path)],
-    )
-
-    assert result.exit_code == 1
-    assert "pass --provider or --capability" in result.stderr
+    assert result.exit_code == 0
+    assert "list" in result.stdout
+    assert "add" not in result.stdout
+    assert "remove" not in result.stdout
+    assert "default" not in result.stdout
