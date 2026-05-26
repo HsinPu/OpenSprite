@@ -210,8 +210,10 @@ async def run_web_chat(
             error_type=exc.__class__.__name__,
         )
 
+    terminal_status = run_status.strip().lower()
+    ok = terminal_status not in {"failed", "incomplete", "cancelled", "canceled", "error"}
     return _web_chat_payload(
-        ok=True,
+        ok=ok,
         gateway_url=gateway_url,
         socket_url=socket_url,
         resolved_session_id=resolved_session_id,
@@ -221,6 +223,8 @@ async def run_web_chat(
         reply_text=reply_text,
         run_events=run_events,
         started=started,
+        error=("Web gateway run ended with status: " + run_status) if not ok else "",
+        error_type="RunStatusError" if not ok else "",
     )
 
 
