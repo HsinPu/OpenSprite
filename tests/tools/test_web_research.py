@@ -159,9 +159,9 @@ def test_web_research_infers_freshness_for_latest_query_when_config_is_auto():
         fetch_tool=fetch,
     )
 
-    payload = json.loads(asyncio.run(tool._execute("Qwen ??唳芋??2026", count=5, fetch_count=1)))
+    payload = json.loads(asyncio.run(tool._execute("Qwen latest model 2026", count=5, fetch_count=1)))
 
-    assert search.calls == [{"query": "Qwen ??唳芋??2026", "count": 5, "freshness": "month"}]
+    assert search.calls == [{"query": "Qwen latest model 2026", "count": 5, "freshness": "month"}]
     assert payload["freshness"] == "month"
 
 
@@ -347,6 +347,48 @@ def test_web_research_prioritizes_current_year_candidates_for_recent_searches():
 
     assert [call["url"] for call in fetch.calls] == ["https://example.com/current"]
     assert payload["fetched_sources"][0]["search_freshness"] == "month"
+
+
+def test_web_research_deprioritizes_platform_sources_for_fetching():
+    search = _FakeSearchTool(
+        [
+            {"title": "Video Overview", "url": "https://www.youtube.com/watch?v=abc", "content": "Video snippet"},
+            {"title": "Official Release Notes", "url": "https://vendor.test/release-notes", "content": "Release notes"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://vendor.test/release-notes": _fetch_payload("https://vendor.test/release-notes", title="Official"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("latest release notes", count=2, fetch_count=1, freshness="month")))
+
+    assert [call["url"] for call in fetch.calls] == ["https://vendor.test/release-notes"]
+    assert payload["fetched_sources"][0]["domain"] == "vendor.test"
+
+
+def test_web_research_deprioritizes_old_year_for_current_queries():
+    current_year = datetime.now().year
+    previous_year = current_year - 1
+    search = _FakeSearchTool(
+        [
+            {"title": f"Market guide {previous_year}", "url": "https://old.test/guide", "content": "Old report"},
+            {"title": "Current market guide", "url": "https://current.test/guide", "content": f"Updated {current_year} report"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://current.test/guide": _fetch_payload("https://current.test/guide", title="Current"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute(f"latest market guide {current_year}", count=2, fetch_count=1, freshness="month")))
+
+    assert [call["url"] for call in fetch.calls] == ["https://current.test/guide"]
+    assert payload["fetched_sources"][0]["domain"] == "current.test"
 
 
 def test_web_research_diversifies_fetch_candidates_across_queries_and_domains():

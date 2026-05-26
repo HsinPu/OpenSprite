@@ -31,6 +31,19 @@ _RECENT_TEXT_MARKERS = (
     "announcement",
     "announced",
 )
+_LOW_SIGNAL_DOMAIN_SUFFIXES = (
+    "youtube.com",
+    "youtu.be",
+    "linkedin.com",
+    "facebook.com",
+    "instagram.com",
+    "tiktok.com",
+    "x.com",
+    "twitter.com",
+    "medium.com",
+    "substack.com",
+    "pinterest.com",
+)
 
 
 class WebResearchTool(Tool):
@@ -711,11 +724,13 @@ def _prioritize_research_candidates(
     return selected
 
 
-def _candidate_priority(item: dict[str, Any], freshness: str) -> tuple[int, int, int]:
+def _candidate_priority(item: dict[str, Any], freshness: str) -> tuple[int, int, int, int, int]:
     fetchable_penalty = 0 if _is_fetchable_url(item.get("url")) else 1
+    low_signal_penalty = _candidate_low_signal_penalty(item)
+    stale_penalty = _candidate_staleness_penalty(item, freshness)
     recent_bonus = _candidate_recent_score(item) if freshness in _RECENT_FRESHNESS_VALUES else 0
     rank = _coerce_int(item.get("rank"), default=9999)
-    return (fetchable_penalty, -recent_bonus, rank)
+    return (fetchable_penalty, low_signal_penalty, stale_penalty, -recent_bonus, rank)
 
 
 def _candidate_recent_score(item: dict[str, Any]) -> int:
@@ -734,6 +749,33 @@ def _candidate_recent_score(item: dict[str, Any]) -> int:
     if any(marker in text for marker in _RECENT_TEXT_MARKERS):
         score += 1
     return score
+
+
+def _candidate_low_signal_penalty(item: dict[str, Any]) -> int:
+    domain = _candidate_domain(item)
+    if not domain:
+        return 0
+    return 1 if any(domain == suffix or domain.endswith(f".{suffix}") for suffix in _LOW_SIGNAL_DOMAIN_SUFFIXES) else 0
+
+
+def _candidate_staleness_penalty(item: dict[str, Any], freshness: str) -> int:
+    if freshness not in _RECENT_FRESHNESS_VALUES:
+        return 0
+    text = " ".join(
+        _clean_text(item.get(key)).lower()
+        for key in ("title", "content", "snippet", "url", "source_query", "query")
+    )
+    if not text:
+        return 0
+    current_year = datetime.now().year
+    years = [int(match) for match in re.findall(r"\b20\d{2}\b", text)]
+    if not years or current_year in years:
+        return 0
+    query_text = _clean_text(item.get("source_query") or item.get("query")).lower()
+    wants_current = str(current_year) in query_text or any(marker in query_text for marker in _RECENT_TEXT_MARKERS)
+    if wants_current and max(years) < current_year:
+        return 1
+    return 0
 
 
 def _is_fetchable_url(url: Any) -> bool:
