@@ -1781,6 +1781,30 @@ def test_task_contract_records_itemized_acceptance_criterion():
     assert contract.to_metadata()["acceptance_criteria"][0]["kind"] == "itemized_output"
 
 
+def test_task_contract_ignores_numbers_inside_identifiers_for_itemized_count():
+    intent = TaskIntentService().classify("Please answer in one sentence: ORCHID-924 是什麼？")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    assert not any(criterion.kind == "itemized_output" for criterion in contract.acceptance_criteria)
+
+
+def test_completion_gate_accepts_one_sentence_identifier_recall():
+    intent = TaskIntentService().classify("Please answer in one sentence: ORCHID-924 是什麼？")
+    answer = "ORCHID-924 是你之前要我記住的代號。"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(content=answer),
+    )
+
+    assert result.status == "complete"
+
+
 def test_quality_gate_uses_contract_acceptance_criteria():
     intent = TaskIntentService().classify("請整理結果")
     contract = TaskContract(

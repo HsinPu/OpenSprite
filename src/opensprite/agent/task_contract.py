@@ -788,7 +788,7 @@ def _is_pure_answer_request(text: str) -> bool:
 
 
 def _requested_item_count(objective: str) -> int:
-    counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,3}(?!\d)", str(objective or ""))]
+    counts = [int(match) for match in re.findall(r"(?<![A-Za-z0-9_-])(\d{1,3})(?![A-Za-z0-9_-])", str(objective or ""))]
     return max(counts, default=0)
 
 
