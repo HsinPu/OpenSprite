@@ -49,6 +49,9 @@ USER_OVERLAY_INDEX_FILENAME = "user_overlay_index.json"
 USER_OVERLAY_STATE_FILENAME = ".user_overlay_state.json"
 
 BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "AGENTS.md", "TOOLS.md", "USER.md"]
+STALE_BOOTSTRAP_REPAIRS = {
+    "TOOLS.md": ("search_knowledge",),
+}
 
 
 def ensure_dir(path: Path) -> Path:
@@ -463,7 +466,13 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
     if templates_root.is_dir():
         for item in templates_root.iterdir():
             if item.name.endswith(".md"):
-                _write(item, bootstrap_dir / item.name)
+                dest = bootstrap_dir / item.name
+                overwrite_stale = False
+                stale_markers = STALE_BOOTSTRAP_REPAIRS.get(item.name, ())
+                if stale_markers and dest.exists():
+                    current = dest.read_text(encoding="utf-8")
+                    overwrite_stale = any(marker in current for marker in stale_markers)
+                _write(item, dest, overwrite=overwrite_stale)
 
         memory_templates = templates_root / "memory"
         if memory_templates.is_dir():
