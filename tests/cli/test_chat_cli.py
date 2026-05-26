@@ -267,6 +267,60 @@ def test_run_web_chat_ignores_intermediate_messages_until_run_finishes():
     assert payload["run_event_count"] == 2
 
 
+def test_run_web_chat_returns_trace_ids_when_gateway_fails_after_run_start():
+    async def scenario():
+        async def handle_ws(request):
+            ws = web.WebSocketResponse()
+            await ws.prepare(request)
+            external_chat_id = request.query.get("external_chat_id") or "default"
+            session_id = f"web:{external_chat_id}"
+            await ws.send_json({"type": "session", "external_chat_id": external_chat_id, "session_id": session_id})
+            await ws.receive_json(timeout=2)
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-failed",
+                    "event_type": "run_started",
+                    "status": "running",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-failed",
+                    "event_type": "run_failed",
+                    "status": "failed",
+                }
+            )
+            await ws.close()
+            return ws
+
+        app = web.Application()
+        app.router.add_get("/ws", handle_ws)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = getattr(site, "_server").sockets[0].getsockname()[1]
+        try:
+            return await run_web_chat("ping", gateway_url=f"http://127.0.0.1:{port}", external_chat_id="web-smoke")
+        finally:
+            await runner.cleanup()
+
+    payload = asyncio.run(scenario())
+
+    assert payload["ok"] is False
+    assert payload["session_id"] == "web:web-smoke"
+    assert payload["run_id"] == "run-failed"
+    assert payload["run_status"] == "failed"
+    assert payload["run_event_count"] == 2
+    assert payload["error_type"] == "RuntimeError"
+
+
 def test_chat_command_outputs_json(monkeypatch):
     runner = CliRunner()
 
@@ -320,3 +374,33 @@ def test_chat_command_via_web_outputs_json(monkeypatch):
     assert result.exit_code == 0
     assert '"mode": "web"' in result.output
     assert '"reply": "web-pong"' in result.output
+
+
+def test_chat_command_via_web_outputs_failure_json(monkeypatch):
+    runner = CliRunner()
+
+    async def fake_run_web_chat(*args, **kwargs):
+        return {
+            "ok": False,
+            "mode": "web",
+            "session_id": "web:cli-smoke",
+            "external_chat_id": "cli-smoke",
+            "run_id": "run-failed",
+            "run_status": "failed",
+            "reply": "",
+            "run_event_count": 2,
+            "tool_call_count": 0,
+            "elapsed_seconds": 0.1,
+            "recent_events": [],
+            "error": "Web gateway chat failed: boom",
+            "error_type": "RuntimeError",
+        }
+
+    monkeypatch.setattr(commands.commands_chat, "run_web_chat", fake_run_web_chat)
+
+    result = runner.invoke(commands.app, ["chat", "ping", "--via-web", "--json"])
+
+    assert result.exit_code == 1
+    assert '"ok": false' in result.output
+    assert '"run_id": "run-failed"' in result.output
+    assert '"error_type": "RuntimeError"' in result.output

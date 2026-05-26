@@ -74,6 +74,52 @@ def _echo_json(payload: dict[str, Any]) -> None:
     typer.echo(_json_for_stdout(payload))
 
 
+def _web_chat_payload(
+    *,
+    ok: bool,
+    gateway_url: str,
+    socket_url: str,
+    resolved_session_id: str,
+    resolved_external_chat_id: str,
+    run_id: str | None,
+    run_status: str,
+    reply_text: str,
+    run_events: list[dict[str, Any]],
+    started: float,
+    error: str = "",
+    error_type: str = "",
+) -> dict[str, Any]:
+    tool_call_count = sum(1 for event in run_events if event.get("event_type") == "tool_started")
+    payload: dict[str, Any] = {
+        "ok": ok,
+        "mode": "web",
+        "gateway_url": gateway_url,
+        "ws_url": socket_url,
+        "session_id": resolved_session_id,
+        "external_chat_id": resolved_external_chat_id,
+        "run_id": run_id,
+        "run_status": run_status,
+        "reply": reply_text,
+        "run_event_count": len(run_events),
+        "tool_call_count": tool_call_count,
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "recent_events": [
+            {
+                "run_id": event.get("run_id"),
+                "event_type": event.get("event_type"),
+                "status": event.get("status"),
+                "created_at": event.get("created_at"),
+            }
+            for event in run_events[-8:]
+        ],
+    }
+    if error:
+        payload["error"] = error
+    if error_type:
+        payload["error_type"] = error_type
+    return payload
+
+
 async def run_web_chat(
     message: str,
     *,
@@ -148,33 +194,34 @@ async def run_web_chat(
                         reply_text = str(frame.get("text") or "")
                         if terminal_run_seen or not run_id:
                             break
-    except (ClientError, asyncio.TimeoutError, TimeoutError, OSError) as exc:
-        raise RuntimeError(f"Web gateway chat failed: {exc}") from exc
+    except (ClientError, asyncio.TimeoutError, TimeoutError, OSError, RuntimeError) as exc:
+        return _web_chat_payload(
+            ok=False,
+            gateway_url=gateway_url,
+            socket_url=socket_url,
+            resolved_session_id=resolved_session_id,
+            resolved_external_chat_id=resolved_external_chat_id,
+            run_id=run_id,
+            run_status=run_status,
+            reply_text=reply_text,
+            run_events=run_events,
+            started=started,
+            error=f"Web gateway chat failed: {exc}",
+            error_type=exc.__class__.__name__,
+        )
 
-    tool_call_count = sum(1 for event in run_events if event.get("event_type") == "tool_started")
-    return {
-        "ok": True,
-        "mode": "web",
-        "gateway_url": gateway_url,
-        "ws_url": socket_url,
-        "session_id": resolved_session_id,
-        "external_chat_id": resolved_external_chat_id,
-        "run_id": run_id,
-        "run_status": run_status,
-        "reply": reply_text,
-        "run_event_count": len(run_events),
-        "tool_call_count": tool_call_count,
-        "elapsed_seconds": round(time.monotonic() - started, 3),
-        "recent_events": [
-            {
-                "run_id": event.get("run_id"),
-                "event_type": event.get("event_type"),
-                "status": event.get("status"),
-                "created_at": event.get("created_at"),
-            }
-            for event in run_events[-8:]
-        ],
-    }
+    return _web_chat_payload(
+        ok=True,
+        gateway_url=gateway_url,
+        socket_url=socket_url,
+        resolved_session_id=resolved_session_id,
+        resolved_external_chat_id=resolved_external_chat_id,
+        run_id=run_id,
+        run_status=run_status,
+        reply_text=reply_text,
+        run_events=run_events,
+        started=started,
+    )
 
 
 async def run_cli_chat(
@@ -320,6 +367,8 @@ def chat_command(
                 _echo_json(payload)
             else:
                 _render_web_payload(payload)
+            if not payload.get("ok", False):
+                raise typer.Exit(code=1)
             return
 
         result, trace_summary = asyncio.run(
