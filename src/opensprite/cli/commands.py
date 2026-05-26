@@ -15,6 +15,7 @@ from ..runtime import gateway as run_gateway
 from . import (
     commands_auth,
     commands_chat,
+    commands_chat_smoke,
     commands_cron,
     commands_search,
     commands_service,
@@ -269,6 +270,62 @@ def chat(
         gateway_url=gateway_url,
         ws_url=ws_url,
         access_token=access_token,
+    )
+
+
+@app.command("chat-smoke")
+def chat_smoke(
+    gateway_url: str = typer.Option(
+        "http://127.0.0.1:8765",
+        "--gateway-url",
+        help="Running Web gateway base URL.",
+    ),
+    ws_url: str | None = typer.Option(
+        None,
+        "--ws-url",
+        help="Explicit WebSocket URL when it differs from --gateway-url.",
+    ),
+    access_token: str | None = typer.Option(
+        None,
+        "--access-token",
+        help="Web auth token used when auth_token is configured.",
+    ),
+    timeout_seconds: float = typer.Option(
+        180.0,
+        "--timeout",
+        help="Maximum seconds to wait for each case.",
+    ),
+    external_chat_prefix: str = typer.Option(
+        "cli-trace-smoke",
+        "--external-chat-prefix",
+        help="Prefix for generated Web external chat ids.",
+    ),
+    db_path: str | None = typer.Option(
+        None,
+        "--db-path",
+        help="SQLite sessions.db path to inspect. Defaults to ~/.opensprite/data/sessions.db.",
+    ),
+    case_ids: list[str] | None = typer.Option(
+        None,
+        "--case",
+        help="Run only the named case id. May be provided more than once.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output machine-readable JSON.",
+    ),
+) -> None:
+    """Run the 10-case Web chat trace smoke suite."""
+    commands_chat_smoke.chat_smoke_command(
+        gateway_url=gateway_url,
+        ws_url=ws_url,
+        access_token=access_token,
+        timeout_seconds=timeout_seconds,
+        external_chat_prefix=external_chat_prefix,
+        db_path=db_path,
+        case_ids=case_ids,
+        json_output=json_output,
     )
 
 
