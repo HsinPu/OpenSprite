@@ -102,6 +102,25 @@ def test_generic_python_debug_question_does_not_require_workspace_or_web():
     assert contract.requirements == ()
 
 
+def test_standalone_connection_timeout_question_does_not_require_workspace_with_history():
+    text = "What can cause Connection timed out?"
+    intent = TaskIntentService().classify(text)
+    profile = HarnessProfileService().select(intent)
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
+            {"role": "assistant", "content": "I inspected task_contract.py."},
+        ],
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.requirements == ()
+    assert contract.task_type in {"question", "pure_answer"}
+
+
 def test_explicit_no_web_and_no_file_constraints_hide_tools():
     text = "\u4e0d\u8981\u8b80\u6a94\u4e5f\u4e0d\u8981\u4e0a\u7db2\uff0c\u53ea\u56de\u7b54\u9019\u662f\u4ec0\u9ebc\u985e\u578b\u7684\u554f\u984c"
     intent = TaskIntentService().classify(text)

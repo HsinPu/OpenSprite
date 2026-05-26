@@ -476,6 +476,56 @@ def test_task_context_inherits_recent_workspace_tool_context_without_llm():
     assert decision.inherited_tool_group == "workspace_read"
 
 
+def test_task_context_does_not_inherit_workspace_for_standalone_error_question():
+    provider = _JsonProvider(
+        '{"is_follow_up": true, "inherited_task_type": "workspace_read", '
+        '"inherited_tool_group": "workspace_read", "confidence": 0.9}'
+    )
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="What can cause Connection timed out?",
+            history=[
+                {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
+                {"role": "assistant", "content": "I inspected task_contract.py."},
+            ],
+            task_intent=TaskIntentService().classify("What can cause Connection timed out?"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert provider.calls == []
+    assert decision.is_follow_up is False
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
+
+
+def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
+    provider = _JsonProvider(
+        '{"is_follow_up": true, "inherited_task_type": "workspace_read", '
+        '"inherited_tool_group": "workspace_read", "confidence": 0.9}'
+    )
+
+    message = "I have a Python script but have not pasted it yet. What info should I prepare?"
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message=message,
+            history=[
+                {"role": "assistant", "content": "I can help write code, inspect files, and run tests."},
+            ],
+            task_intent=TaskIntentService().classify(message),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert provider.calls == []
+    assert decision.is_follow_up is False
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
+
+
 def test_task_context_inherits_recent_history_tool_context_without_llm():
     provider = _FailingProvider()
 
