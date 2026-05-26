@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any, Awaitable, Callable
 
@@ -120,6 +121,38 @@ def _tool_result_trace_metadata(result_text: str) -> dict[str, Any]:
         metadata["search_provider"] = metadata["provider"]
     if metadata.get("backend") and not metadata.get("search_backend"):
         metadata["search_backend"] = metadata["backend"]
+    return metadata
+
+
+def _tool_error_trace_metadata(result_text: str) -> dict[str, Any]:
+    """Extract structured error fields from failed plain-text tool results."""
+    text = str(result_text or "").strip()
+    if not text:
+        return {}
+    error = ""
+    error_type = ""
+    if text.startswith("Error executing "):
+        _, _, detail = text.partition(":")
+        error = detail.strip() or text
+        error_type = "ToolExecutionError"
+    elif text.startswith("Error:"):
+        error = text.removeprefix("Error:").strip() or text
+        error_type = "ToolError"
+    else:
+        lowered = text.lower()
+        if lowered.startswith("(mcp tool call failed") or lowered.startswith("(mcp tool call timed out"):
+            error = text
+            error_type = "McpToolError"
+    if not error:
+        return {}
+
+    metadata: dict[str, Any] = {
+        "error": error,
+        "error_type": error_type,
+    }
+    status_match = re.search(r"\b(?:HTTP(?:\s+Error)?|status(?:\s+code)?)[:\s]+(\d{3})\b", error, re.IGNORECASE)
+    if status_match:
+        metadata["status_code"] = int(status_match.group(1))
     return metadata
 
 
@@ -323,6 +356,8 @@ class RunHookService:
             }
             trace_metadata = _tool_result_trace_metadata(result_text)
             metadata.update(trace_metadata)
+            if not ok:
+                metadata.update(_tool_error_trace_metadata(result_text))
             if started_at is not None:
                 metadata["started_at"] = started_at
                 metadata["duration_ms"] = duration_ms
@@ -354,6 +389,7 @@ class RunHookService:
                     "result_len": len(result_text),
                     "result_preview": result_preview,
                     **trace_metadata,
+                    **({} if ok else _tool_error_trace_metadata(result_text)),
                     "tool_call_id": tool_call_id,
                     "iteration": iteration,
                     "delegate_task_id": delegate_task_id,

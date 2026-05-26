@@ -685,8 +685,14 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
     assert stored_events[-1].event_type == "tool_result"
     assert stored_events[-1].payload["ok"] is False
     assert stored_events[-1].payload["state"] == "error"
+    assert stored_events[-1].payload["error"] == "HTTP Error: 404 Not Found"
+    assert stored_events[-1].payload["error_type"] == "ToolExecutionError"
+    assert stored_events[-1].payload["status_code"] == 404
     assert stored_parts[-1].metadata["ok"] is False
     assert stored_parts[-1].metadata["state"] == "error"
+    assert stored_parts[-1].metadata["error"] == "HTTP Error: 404 Not Found"
+    assert stored_parts[-1].metadata["error_type"] == "ToolExecutionError"
+    assert stored_parts[-1].metadata["status_code"] == 404
 
 
 def test_agent_tool_result_hook_records_search_trace_metadata(tmp_path):
