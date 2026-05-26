@@ -1471,6 +1471,8 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[12].payload["next_action"] == "collect_review_evidence"
     assert events[13].payload["completion_status"] == "needs_review"
     assert events[14].payload["reason"] == "review_evidence_still_missing"
+    assert events[-1].payload["status"] == "needs_review"
+    assert events[-1].payload["completion_gate"]["status"] == "needs_review"
     assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1

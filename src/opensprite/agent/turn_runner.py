@@ -784,6 +784,7 @@ class AgentTurnRunner:
             delegate_task_id=aggregate_result.active_delegate_task_id,
             delegate_prompt_type=aggregate_result.active_delegate_prompt_type,
         )
+        run_finish_status = "completed" if completion_result.status == "complete" else (completion_result.status or "incomplete")
 
         async def after_response_saved() -> None:
             await self._save_work_state(updated_work_state)
@@ -827,7 +828,7 @@ class AgentTurnRunner:
             assistant_metadata=turn.assistant_metadata,
             persisted_assistant_metadata=persisted_assistant_metadata,
             run_part_metadata=response_metadata,
-            run_event_payload={"status": "completed", **response_metadata},
+            run_event_payload={"status": run_finish_status, **response_metadata},
             status_metadata=status_metadata,
             images=outbound_media["images"] or None,
             voices=outbound_media["voices"] or None,
