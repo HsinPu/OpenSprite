@@ -77,6 +77,24 @@ def test_task_contract_uses_research_harness_profile_for_source_requirements():
     assert contract.to_metadata()["harness_profile"]["name"] == "research"
 
 
+def test_task_contract_treats_web_named_code_file_as_workspace_not_web():
+    intent = TaskIntentService().classify(
+        "Read src/opensprite/tools/web_research.py and explain the fetch flow."
+    )
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "coding"
+    assert contract.task_type == "workspace_read"
+    assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
+    assert not any(item.kind == "tool_group" and item.tool_group == "web_research" for item in contract.requirements)
+
+
 def test_task_contract_adds_coding_harness_verification_gap_criterion():
     intent = TaskIntentService().classify("Please fix the failing pytest in src/opensprite/agent/task_intent.py")
     profile = HarnessProfileService().select(intent)

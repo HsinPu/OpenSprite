@@ -29,6 +29,11 @@ _WORKSPACE_TASK_HINT_RE = re.compile(
     r"|(?:程式|程式碼|檔案|函式|類別|專案|錯誤|測試|建置|設定|原始碼)",
     re.IGNORECASE,
 )
+_CODE_PATH_RE = re.compile(
+    r"(?:^|\s)(?:[\w.-]+[\\/])+[\w.-]+|"
+    r"(?:^|\s)[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)(?:\s|$)",
+    re.IGNORECASE,
+)
 _HISTORY_TASK_HINT_RE = re.compile(
     r"\b(?:again|before|earlier|history|last time|previous|revisit|repeat)\b"
     r"|(?:之前|先前|剛剛|上次|剛才|前面|剛提到|提過|說過)",
@@ -474,11 +479,12 @@ class TaskContractService:
         text = text or ""
         if has_no_web_constraint(text) or _LOCAL_RUNTIME_RE.search(text) or _is_pure_answer_request(text):
             return False
+        text_without_code_paths = _CODE_PATH_RE.sub(" ", text)
         return bool(
             _URL_RE.search(text)
-            or _WEB_KEYWORD_RE.search(text)
-            or _WEB_TASK_HINT_RE.search(text)
-            or (_WEB_SEARCH_TERM_RE.search(text) and _WEB_KEYWORD_RE.search(text))
+            or _WEB_KEYWORD_RE.search(text_without_code_paths)
+            or _WEB_TASK_HINT_RE.search(text_without_code_paths)
+            or (_WEB_SEARCH_TERM_RE.search(text_without_code_paths) and _WEB_KEYWORD_RE.search(text_without_code_paths))
         )
 
     @staticmethod
