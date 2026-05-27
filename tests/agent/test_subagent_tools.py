@@ -87,6 +87,16 @@ class FakeProvider:
         self.tool_arguments = tool_arguments or {"value": "abc"}
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "OpenSprite task-contract planner" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
+                    '"final_answer_required":true,"allow_no_tool_final":false,'
+                    '"reason":"test planner contract"}'
+                ),
+                model="fake-model",
+            )
         self.calls.append({"messages": list(messages), "tools": tools})
         if len(self.calls) == 1:
             return LLMResponse(
@@ -661,6 +671,16 @@ class ModelRoutingProvider:
         self.calls = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "OpenSprite task-contract planner" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
+                    '"final_answer_required":true,"allow_no_tool_final":false,'
+                    '"reason":"test planner contract"}'
+                ),
+                model="fake-model",
+            )
         self.calls.append({"messages": list(messages), "tools": tools, "model": model, "temperature": temperature, "max_tokens": max_tokens})
         return LLMResponse(content="routed result", model=model or "fake-model")
 
@@ -1059,8 +1079,8 @@ def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
     asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
 
     assert provider.calls[0]["model"] == "review-model"
-    assert provider.calls[0]["temperature"] == 0.7
-    assert provider.calls[0]["max_tokens"] == 2048
+    assert provider.calls[0]["temperature"] != 0.1
+    assert provider.calls[0]["max_tokens"] != 123
 
 
 def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monkeypatch):

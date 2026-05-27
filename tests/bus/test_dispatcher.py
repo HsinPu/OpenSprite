@@ -30,6 +30,15 @@ class FakeAgent:
 
 class ReplyProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "OpenSprite task-contract planner" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+                    '"allow_no_tool_final":true,"reason":"test planner contract"}'
+                ),
+                model="fake-model",
+            )
         return LLMResponse(content="trace pong", model="fake-model")
 
     def get_default_model(self) -> str:
@@ -53,6 +62,15 @@ class ToolReplyProvider:
         ]
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "OpenSprite task-contract planner" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+                    '"allow_no_tool_final":true,"reason":"test planner tool trace contract"}'
+                ),
+                model="fake-model",
+            )
         return self.responses.pop(0)
 
     def get_default_model(self) -> str:
@@ -924,9 +942,14 @@ def test_message_queue_persists_run_trace_for_telegram_message(tmp_path):
     assert "run_finished" in event_types
     assert events[0].payload["status"] == "running"
     assert events[-1].payload["status"] == "completed"
-    assert [part.part_type for part in parts] == ["llm_step", "harness_checkpoint", "assistant_message"]
+    assert [part.part_type for part in parts] == [
+        "llm_step",
+        "harness_checkpoint",
+        "harness_scorecard",
+        "assistant_message",
+    ]
     assert parts[1].metadata["harness_profile"]["name"] == "chat"
-    assert parts[2].content == "trace pong"
+    assert parts[-1].content == "trace pong"
 
 
 def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
@@ -969,7 +992,15 @@ def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
     assert "run_finished" in event_types
     tool_events = [event for event in events if event.event_type in {"tool_started", "tool_result"}]
     assert [event.payload["tool_name"] for event in tool_events] == ["dummy", "dummy"]
-    assert [part.part_type for part in parts] == ["tool_call", "tool_result", "llm_step", "llm_step", "harness_checkpoint", "assistant_message"]
+    assert [part.part_type for part in parts] == [
+        "tool_call",
+        "tool_result",
+        "llm_step",
+        "llm_step",
+        "harness_checkpoint",
+        "harness_scorecard",
+        "assistant_message",
+    ]
     tool_parts = [part for part in parts if part.part_type in {"tool_call", "tool_result"}]
     assert [part.tool_name for part in tool_parts] == ["dummy", "dummy"]
     assert tool_parts[0].metadata["tool_call_id"] == "tc1"

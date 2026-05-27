@@ -112,6 +112,7 @@ const TIMELINE_EVENT_TYPES = new Set([
   "task_contract.planning_started",
   "task_contract.planned",
   "task_contract.validated",
+  "task_contract.validation_failed",
   "task_contract.created",
   "llm_status",
   "tool_started",
@@ -991,6 +992,9 @@ function taskContractLabel(eventType, copy) {
   }
   if (eventType === "task_contract.validated") {
     return copy.run.taskContractValidated || "Task contract validated";
+  }
+  if (eventType === "task_contract.validation_failed") {
+    return copy.run.taskContractValidationFailed || "Task contract validation failed";
   }
   return copy.run.taskContractCreated || "Task contract created";
 }

@@ -33,7 +33,16 @@ class RecordingProvider:
         self.system_prompts = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        self.system_prompts.append(str(messages[0].content))
+        system_prompt = str(messages[0].content)
+        if "OpenSprite task-contract planner" in system_prompt:
+            return LLMResponse(
+                content=(
+                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+                    '"allow_no_tool_final":true,"reason":"test planner contract"}'
+                ),
+                model="fake-model",
+            )
+        self.system_prompts.append(system_prompt)
         return LLMResponse(content=f"reply-{len(self.system_prompts)}", model="fake-model")
 
     def get_default_model(self) -> str:

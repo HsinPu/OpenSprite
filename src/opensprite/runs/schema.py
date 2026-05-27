@@ -27,6 +27,7 @@ _EVENT_KINDS = {
     "task_contract.planning_started": "work",
     "task_contract.planned": "work",
     "task_contract.validated": "work",
+    "task_contract.validation_failed": "work",
     "curator.started": "work",
     "curator.job.started": "work",
     "curator.job.completed": "work",

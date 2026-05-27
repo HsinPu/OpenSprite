@@ -189,6 +189,27 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        planner_status = _task_contract_planner_status(execution_result.task_contract)
+        if planner_status in {"blocked", "invalid"}:
+            reason = "task contract planner did not produce a validated contract"
+            detail = _task_contract_planner_reason(execution_result.task_contract) or reason
+            return CompletionGateResult(
+                status="blocked",
+                reason=reason,
+                active_task_status="blocked",
+                active_task_detail=detail,
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         if execution_result.stop_reason == "max_tool_iterations":
             return CompletionGateResult(
                 status="incomplete",
@@ -627,6 +648,20 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
+
+
+def _task_contract_planner_status(task_contract: Any) -> str:
+    metadata = getattr(task_contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get("planner_status") or "").strip()
+    return ""
+
+
+def _task_contract_planner_reason(task_contract: Any) -> str:
+    metadata = getattr(task_contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get("reason") or "").strip()
+    return ""
 
 
 def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult) -> bool:

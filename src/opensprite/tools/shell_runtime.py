@@ -92,14 +92,19 @@ async def start_shell_process(
         cwd=cwd,
         **_process_creation_kwargs(),
     )
-    read_tasks = [
-        asyncio.create_task(
-            _read_process_stream(process.stdout, stream_name="stdout", output_chunks=output_chunks)
-        ),
-        asyncio.create_task(
-            _read_process_stream(process.stderr, stream_name="stderr", output_chunks=output_chunks)
-        ),
-    ]
+    read_tasks = []
+    if process.stdout is not None:
+        read_tasks.append(
+            asyncio.create_task(
+                _read_process_stream(process.stdout, stream_name="stdout", output_chunks=output_chunks)
+            )
+        )
+    if process.stderr is not None:
+        read_tasks.append(
+            asyncio.create_task(
+                _read_process_stream(process.stderr, stream_name="stderr", output_chunks=output_chunks)
+            )
+        )
     return process, read_tasks
 
 

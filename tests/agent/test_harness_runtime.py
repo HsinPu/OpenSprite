@@ -42,14 +42,27 @@ class NamedTool(Tool):
 
 
 class RecordingProvider:
-    def __init__(self, content: str | list[str] = "Harness runtime reply."):
+    def __init__(
+        self,
+        content: str | list[str] = "Harness runtime reply.",
+        *,
+        planner_content: str | None = None,
+    ):
         self.contents = list(content) if isinstance(content, list) else [content]
+        self.planner_content = planner_content
         self.tool_names_by_call: list[list[str]] = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         tool_names = [tool["function"]["name"] for tool in tools or []]
         self.tool_names_by_call.append(tool_names)
-        content = self.contents.pop(0) if self.contents else "Harness runtime reply."
+        joined_messages = "\n".join(
+            str(message.get("content", "") if isinstance(message, dict) else getattr(message, "content", ""))
+            for message in messages
+        )
+        if self.planner_content is not None and "task-contract planner" in joined_messages:
+            content = self.planner_content
+        else:
+            content = self.contents.pop(0) if self.contents else "Harness runtime reply."
         return LLMResponse(content=content, model=model or "fake-model")
 
     def get_default_model(self) -> str:
@@ -82,7 +95,13 @@ def _agent(tmp_path: Path, provider: RecordingProvider) -> AgentLoop:
 
 def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     async def scenario():
-        provider = RecordingProvider()
+        provider = RecordingProvider(
+            "Harness runtime reply.",
+            planner_content=(
+                '{"task_type":"pure_answer","required_tool_groups":[],"allow_no_tool_final":true,'
+                '"reason":"plain chat"}'
+            ),
+        )
         agent = _agent(tmp_path, provider)
 
         response = await agent.process(
@@ -134,13 +153,40 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert "profile=chat" in scorecard_part.content
 
 
+def test_harness_runtime_records_validation_failed_for_invalid_planner_json(tmp_path):
+    async def scenario():
+        provider = RecordingProvider(
+            "I could not select a reliable tool profile.",
+            planner_content="this is not valid planner json",
+        )
+        agent = _agent(tmp_path, provider)
+        response = await agent.process(
+            UserMessage(
+                text="Find the latest stock price for TSMC",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+        run = next(iter(agent.storage._runs.values()))
+        events = await agent.storage.get_run_events("web:browser-1", run.run_id)
+        return response, [event.event_type for event in events]
+
+    result, event_types = asyncio.run(scenario())
+
+    assert result.text == "I could not select a reliable tool profile."
+    assert "task_contract.validation_failed" in event_types
+    assert "task_contract.validated" not in event_types
+
+
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
     async def scenario():
         provider = RecordingProvider(
-            content=[
-                '{"task_type":"web_research","required_tool_groups":["web_research"],"allow_no_tool_final":false,"reason":"needs sources"}',
-                "I will use source-grounded research.",
-            ]
+            "I will use source-grounded research.",
+            planner_content=(
+                '{"task_type":"web_research","required_tool_groups":["web_research"],'
+                '"allow_no_tool_final":false,"reason":"needs sources"}'
+            ),
         )
         agent = _agent(tmp_path, provider)
         intent = agent.task_intents.classify("Search the web for the latest OpenSprite release and cite sources")

@@ -1,10 +1,12 @@
 import asyncio
 import json
+from dataclasses import replace
 
 import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
+from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
@@ -497,10 +499,14 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
     assert source["snippet"] == "Official Reddit API documentation for listings and search."
 
     intent = TaskIntentService().classify("Please find Reddit API search sources")
+    task_contract = TaskContractService.build(
+        task_intent=intent,
+        current_message="Please find Reddit API search sources",
+    )
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text=result.content,
-        execution_result=result,
+        execution_result=replace(result, task_contract=task_contract),
     )
     assert completion.status == "incomplete"
     assert completion.reason == "required source material was insufficient"

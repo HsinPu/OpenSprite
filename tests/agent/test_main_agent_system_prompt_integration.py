@@ -35,6 +35,8 @@ class CapturingProvider:
         self.calls: list[list] = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
         self.calls.append(list(messages))
         return LLMResponse(content="done", model="fake-model")
 
@@ -46,6 +48,8 @@ class TaskContextDecisionProvider(CapturingProvider):
     """Returns a task-context JSON decision before the main assistant response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
         if "You classify whether the latest user turn inherits task context" in system_text:
@@ -65,6 +69,8 @@ class AmbiguousBoundaryDecisionProvider(CapturingProvider):
     """Returns an ambiguous boundary decision before the main assistant response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
         if "You classify whether the latest user turn inherits task context" in system_text:
@@ -85,6 +91,8 @@ class TaskObjectiveDecisionProvider(CapturingProvider):
     """Returns an objective JSON decision before the main assistant response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
         if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
@@ -98,6 +106,29 @@ class TaskObjectiveDecisionProvider(CapturingProvider):
                 model="fake-model",
             )
         return LLMResponse(content="done", model="fake-model")
+
+
+def _is_task_contract_planner_call(messages) -> bool:
+    system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+    return "OpenSprite task-contract planner" in system_text
+
+
+def _task_contract_response(messages) -> LLMResponse:
+    prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in messages)
+    if "please update README" in prompt_text or "tests/test_app.py" in prompt_text:
+        content = (
+            '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
+            '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner workspace change"}'
+        )
+    else:
+        content = (
+            '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+            '"allow_no_tool_final":true,"reason":"test planner contract"}'
+        )
+    return LLMResponse(
+        content=content,
+        model="fake-model",
+    )
 
 
 class _MinimalTool(Tool):

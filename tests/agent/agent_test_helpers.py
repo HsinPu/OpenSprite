@@ -48,6 +48,19 @@ class FakeContextBuilder:
 
 class NoCallProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "OpenSprite task-contract planner" in system_text:
+            return type(
+                "FakePlannerResponse",
+                (),
+                {
+                    "content": (
+                        '{"task_type":"media_analysis","required_tool_groups":["media"],'
+                        '"final_answer_required":true,"allow_no_tool_final":false,'
+                        '"reason":"test planner media contract"}'
+                    )
+                },
+            )()
         raise AssertionError("provider.chat should not be called in this test")
 
     def get_default_model(self) -> str:

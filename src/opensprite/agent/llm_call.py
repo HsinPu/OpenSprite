@@ -304,10 +304,15 @@ class LlmCallService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
+                validation_event_type = (
+                    "task_contract.validated"
+                    if _task_contract_planner_status(task_contract) == "validated"
+                    else "task_contract.validation_failed"
+                )
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_contract.validated",
+                    validation_event_type,
                     task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
@@ -595,7 +600,7 @@ def _build_task_contract_guidance(contract: TaskContract) -> str:
         return ""
     lines = [
         "## Runtime Task Contract",
-        "Satisfy these deterministic completion requirements before giving the final answer.",
+        "Satisfy these runtime completion requirements before giving the final answer.",
         f"- Task type: {contract.task_type}",
     ]
     if contract.selected_resources:
@@ -648,3 +653,10 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     if criterion.kind == "operation_report":
         return "Report approval, validation, rollback, blocker, or residual risk for the operation."
     return criterion.description or criterion.kind
+
+
+def _task_contract_planner_status(contract: TaskContract | None) -> str:
+    metadata = getattr(contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get("planner_status") or "").strip()
+    return ""

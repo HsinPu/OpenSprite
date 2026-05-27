@@ -145,8 +145,9 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     )
 
     assert len(provider.calls) == 1
-    assert provider.calls[0]["temperature"] == 0.2
-    assert provider.calls[0]["max_tokens"] == 321
+    task_context_config = Config.load_agent_template_config().task_context_llm
+    assert provider.calls[0]["temperature"] == task_context_config.temperature
+    assert provider.calls[0]["max_tokens"] == task_context_config.max_tokens
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"

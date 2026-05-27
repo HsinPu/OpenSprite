@@ -93,13 +93,14 @@ class _FakeResponse:
 
 
 class _FakePlannerProvider:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict | str):
         self.payload = payload
         self.messages = []
 
     async def chat(self, messages, *, model=None, **kwargs):
         self.messages = messages
-        return _FakeResponse(json.dumps(self.payload))
+        content = self.payload if isinstance(self.payload, str) else json.dumps(self.payload)
+        return _FakeResponse(content)
 
 
 @pytest.mark.anyio
@@ -155,3 +156,23 @@ async def test_task_contract_planner_builds_workspace_change_contract_from_llm_j
     assert contract.task_type == "code_change"
     assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
     assert any(item.kind == "file_change" for item in contract.requirements)
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_marks_invalid_json_as_unvalidated():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("Find the latest stock price for TSMC")
+    provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "planning_error"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "invalid"
+    assert "invalid JSON" in contract.planner_metadata["reason"]

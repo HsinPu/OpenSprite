@@ -76,6 +76,30 @@ def _web_research_artifacts() -> tuple[TaskArtifact, ...]:
     return (_web_source_artifact(), _web_fetch_artifact())
 
 
+def test_completion_gate_blocks_unvalidated_task_contract():
+    intent = TaskIntentService().classify("Find the latest stock price for TSMC")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="planning_error",
+        allow_no_tool_final=False,
+        contract_sources=("llm_planner",),
+        planner_metadata={
+            "planner_status": "invalid",
+            "reason": "task contract planner returned invalid JSON",
+        },
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="I could not select a reliable tool profile.",
+        execution_result=ExecutionResult(content="I could not select a reliable tool profile.", task_contract=contract),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason == "task contract planner did not produce a validated contract"
+    assert result.active_task_detail == "task contract planner returned invalid JSON"
+
+
 def _web_research_coverage_gap_artifact() -> TaskArtifact:
     return TaskArtifact(
         kind="web_source",

@@ -238,7 +238,15 @@ class TaskContractPlanner:
             model=model,
             **self.llm_config.decoding_kwargs(),
         )
-        payload = _parse_json_object(str(getattr(response, "content", "") or ""))
+        response_text = str(getattr(response, "content", "") or "")
+        payload = _parse_json_object(response_text)
+        if not payload:
+            return _planner_blocked_contract(
+                objective=str(task_intent.objective or current_message or "").strip(),
+                status="invalid",
+                reason="task contract planner returned invalid JSON",
+                raw_response_preview=_truncate(response_text, max_chars=240),
+            )
         return _contract_from_planner_payload(
             payload,
             task_intent=task_intent,
@@ -775,17 +783,32 @@ def _build_planner_contract_prompt(
     )
 
 
-def _planner_blocked_contract(*, objective: str, reason: str) -> TaskContract:
+def _planner_blocked_contract(
+    *,
+    objective: str,
+    reason: str,
+    status: str = "blocked",
+    raw_response_preview: str = "",
+) -> TaskContract:
+    metadata: dict[str, Any] = {
+        "planner_status": status,
+        "reason": reason,
+    }
+    if raw_response_preview:
+        metadata["raw_response_preview"] = raw_response_preview
     return TaskContract(
         objective=objective,
-        task_type="pure_answer",
+        task_type="planning_error",
         final_answer_required=True,
-        allow_no_tool_final=True,
+        allow_no_tool_final=False,
         contract_sources=("llm_planner",),
-        planner_metadata={
-            "planner_status": "blocked",
-            "reason": reason,
-        },
+        acceptance_criteria=(
+            AcceptanceCriterion(
+                kind="planner_error_report",
+                description="Explain that task contract planning failed and a reliable tool profile could not be selected.",
+            ),
+        ),
+        planner_metadata=metadata,
     )
 
 
@@ -808,7 +831,14 @@ def _contract_from_planner_payload(
         current_audio_files=current_audio_files,
         current_video_files=current_video_files,
     )
-    raw_task_type = _allowed_string(payload.get("task_type"), _ALLOWED_PLANNER_TASK_TYPES) or "pure_answer"
+    raw_task_type = _allowed_string(payload.get("task_type"), _ALLOWED_PLANNER_TASK_TYPES)
+    if not raw_task_type:
+        return _planner_blocked_contract(
+            objective=objective,
+            status="invalid",
+            reason="task contract planner returned an unsupported or missing task_type",
+            raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
+        )
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
@@ -837,24 +867,44 @@ def _contract_from_planner_payload(
                 )
             acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
         elif tool_group == "media":
-            media_resources = (
-                resource_index.by_kind("image")
-                + resource_index.by_kind("audio")
-                + resource_index.by_kind("video")
-            )
-            selected.extend(media_resources)
-            if media_resources:
+            image_resources = resource_index.by_kind("image")
+            audio_resources = resource_index.by_kind("audio")
+            video_resources = resource_index.by_kind("video")
+            selected.extend(image_resources + audio_resources + video_resources)
+            if image_resources:
                 requirements.append(
                     EvidenceRequirement(
                         kind="resource_coverage",
-                        tool_group="media",
-                        resource_ids=tuple(item.id for item in media_resources),
+                        tool_group="image_text",
+                        resource_ids=tuple(item.id for item in image_resources),
                         coverage="all",
-                        min_count=len(media_resources),
-                        description="Inspect each referenced media resource before finalizing the answer.",
+                        min_count=len(image_resources),
+                        description="Inspect each referenced image before finalizing the answer.",
                     )
                 )
-            else:
+            if audio_resources:
+                requirements.append(
+                    EvidenceRequirement(
+                        kind="resource_coverage",
+                        tool_group="audio_text",
+                        resource_ids=tuple(item.id for item in audio_resources),
+                        coverage="all",
+                        min_count=len(audio_resources),
+                        description="Transcribe each referenced audio clip before finalizing the answer.",
+                    )
+                )
+            if video_resources:
+                requirements.append(
+                    EvidenceRequirement(
+                        kind="resource_coverage",
+                        tool_group="video_understanding",
+                        resource_ids=tuple(item.id for item in video_resources),
+                        coverage="all",
+                        min_count=len(video_resources),
+                        description="Analyze each referenced video before finalizing the answer.",
+                    )
+                )
+            if not (image_resources or audio_resources or video_resources):
                 requirements.append(_tool_group_requirement("media"))
             acceptance_criteria = _append_acceptance_criteria(
                 acceptance_criteria,

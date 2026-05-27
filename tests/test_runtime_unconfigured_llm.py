@@ -9,6 +9,7 @@ def test_create_agent_uses_fallback_llm_when_unconfigured(tmp_path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
     config = Config.from_json(config_path)
+    config.storage.path = str(tmp_path / "messages.sqlite3")
 
     assert config.is_llm_configured is False
 

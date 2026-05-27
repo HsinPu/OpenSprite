@@ -526,7 +526,7 @@ export function deriveDecisionTimelineItems(events = []) {
       item = policySelectedDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "harness_policy.merge_resolved") {
       item = policyMergedDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated") {
+    } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated" || eventType === "task_contract.validation_failed") {
       item = taskContractDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "completion_gate.evaluated") {
       item = completionGateDecision(payload, eventWithTimestamp, items.length);
