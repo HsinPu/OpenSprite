@@ -502,6 +502,9 @@ class ToolPermissionProfileOverrideConfig(BaseModel):
     approval_required_risk_levels: list[str] = Field(default_factory=list)
 
 
+PERMISSION_PROFILE_NAMES = frozenset({"chat", "research", "coding", "media", "ops"})
+
+
 def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOverrideConfig]:
     return {
         "chat": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read"]),
@@ -517,14 +520,7 @@ def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOv
             "memory",
         ], denied_risk_levels=["mcp"]),
         "media": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read", "network", "external_side_effect"]),
-        "ops": ToolPermissionProfileOverrideConfig(
-            approval_mode="ask",
-            approval_required_risk_levels=["external_side_effect", "configuration", "mcp"],
-        ),
     }
-
-
-PERMISSION_PROFILE_NAMES = frozenset(_default_permission_profile_overrides().keys())
 
 
 class ToolPermissionsConfig(BaseModel):
