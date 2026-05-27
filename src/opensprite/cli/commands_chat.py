@@ -129,7 +129,7 @@ async def run_web_chat(
     session_id: str | None = None,
     sender_name: str = "OpenSprite CLI",
     access_token: str | None = None,
-    timeout_seconds: float = 120.0,
+    timeout_seconds: float = 300.0,
 ) -> dict[str, Any]:
     """Send one message through an already-running Web gateway."""
     if not message.strip():
@@ -259,7 +259,7 @@ async def run_cli_chat(
     external_chat_id: str = "default",
     session_id: str | None = None,
     sender_name: str = "OpenSprite CLI",
-    timeout_seconds: float = 120.0,
+    timeout_seconds: float = 300.0,
 ) -> tuple[CliChatResult, dict[str, Any]]:
     """Run a one-shot local CLI channel turn through the normal agent queue."""
     if not message.strip():

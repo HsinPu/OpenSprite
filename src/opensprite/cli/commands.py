@@ -228,7 +228,7 @@ def chat(
         help="Sender name attached to the test message.",
     ),
     timeout_seconds: float = typer.Option(
-        120.0,
+        300.0,
         "--timeout",
         help="Maximum seconds to wait for a reply.",
     ),
@@ -292,7 +292,7 @@ def chat_smoke(
         help="Web auth token used when auth_token is configured.",
     ),
     timeout_seconds: float = typer.Option(
-        180.0,
+        300.0,
         "--timeout",
         help="Maximum seconds to wait for each case.",
     ),
