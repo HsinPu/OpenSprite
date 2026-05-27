@@ -3,11 +3,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent.subagent_policy import build_subagent_tool_registry
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.schema import serialize_run_artifacts
 from opensprite.storage import MemoryStorage
+from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -267,6 +269,47 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
     assert "delegate_many" not in tool_names
     assert "run_workflow" not in tool_names
     assert "web_search" not in tool_names
+
+
+def test_subagent_tool_registry_uses_overlay_resolver_metadata():
+    registry = ToolRegistry(permission_policy=ToolPermissionPolicy(denied_risk_levels=["execute"]))
+    for name in ["read_file", "apply_patch", "exec", "batch"]:
+        registry.register(DummyTool(name))
+
+    child_registry = build_subagent_tool_registry(registry, "implementer")
+
+    assert set(child_registry.tool_names) == {"read_file", "apply_patch", "batch"}
+    metadata = child_registry.permission_resolution_metadata
+    assert metadata["kind"] == "subagent:implementation"
+    assert metadata["overlay_permission_policy"]["allowed_tools"] == [
+        "apply_patch",
+        "batch",
+        "edit_file",
+        "exec",
+        "glob_files",
+        "grep_files",
+        "list_dir",
+        "process",
+        "read_file",
+        "read_skill",
+        "search_history",
+        "write_file",
+    ]
+    blocked = {item["name"]: item for item in metadata["tool_access"]["blocked_tools"]}
+    assert blocked["exec"]["reason"] == "risk level(s) denied: execute"
+
+
+def test_test_writer_registry_records_write_path_policy_metadata():
+    registry = ToolRegistry()
+    for name in ["read_file", "apply_patch", "batch"]:
+        registry.register(DummyTool(name))
+
+    child_registry = build_subagent_tool_registry(registry, "test-writer")
+
+    metadata = child_registry.permission_resolution_metadata
+    assert metadata["kind"] == "subagent:testing"
+    assert metadata["extra_permission_policies"][0]["kind"] == "subagent_write_path"
+    assert "tests/**" in metadata["extra_permission_policies"][0]["allowed_patterns"]
 
 
 def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):

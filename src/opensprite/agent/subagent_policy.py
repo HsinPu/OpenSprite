@@ -12,13 +12,12 @@ from .subagent_profiles import (
     normalize_metadata_value,
 )
 from ..subagent_prompts import load_metadata
-from ..tools.batch import BatchTool
 from ..tools.permissions import (
-    CompositeToolPermissionPolicy,
     PermissionDecision,
     ToolPermissionPolicy,
 )
 from ..tools.registry import ToolRegistry
+from .tool_access import ToolAccessResolver
 
 
 READ_ONLY_TOOLS = frozenset(
@@ -142,6 +141,13 @@ class WritePathPermissionPolicy(ToolPermissionPolicy):
     def __init__(self, allowed_patterns: frozenset[str]):
         self.allowed_patterns = allowed_patterns
 
+    def to_metadata(self) -> dict[str, Any]:
+        """Return a JSON-safe snapshot of the write path guardrail."""
+        return {
+            "kind": "subagent_write_path",
+            "allowed_patterns": sorted(self.allowed_patterns),
+        }
+
     def is_tool_exposed(self, tool_name: str, tool_risk_levels: Any = None) -> bool:
         del tool_name, tool_risk_levels
         return True
@@ -196,17 +202,20 @@ def build_subagent_tool_registry(
         app_home=app_home,
         session_workspace=session_workspace,
     )
-    policies: list[ToolPermissionPolicy] = [base_registry.permission_policy]
-    if profile.write_path_patterns:
-        policies.append(WritePathPermissionPolicy(profile.write_path_patterns))
-
-    child_registry = base_registry.filtered(
-        include_names=profile.allowed_tools,
-        permission_policy=CompositeToolPermissionPolicy(*policies),
+    overlay_policy = ToolPermissionPolicy(allowed_tools=sorted(profile.allowed_tools))
+    extra_policies: tuple[ToolPermissionPolicy, ...] = (
+        (WritePathPermissionPolicy(profile.write_path_patterns),)
+        if profile.write_path_patterns
+        else ()
     )
-    if "batch" in child_registry.tool_names:
-        child_registry.register(BatchTool(registry_resolver=lambda: child_registry))
-    return child_registry
+    resolution = ToolAccessResolver().resolve_overlay(
+        base_registry,
+        overlay_policy=overlay_policy,
+        include_names=profile.allowed_tools,
+        extra_policies=extra_policies,
+        metadata_kind=f"subagent:{profile.name}",
+    )
+    return resolution.registry
 
 
 def supports_parallel_delegation(
