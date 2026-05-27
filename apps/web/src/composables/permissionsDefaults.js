@@ -98,11 +98,6 @@ export function syncPermissionsForm(settingsState) {
   settingsState.permissionsForm.profileOverrides = normalizeProfileOverrides(permissions.profile_overrides);
 }
 
-export function serializeProfileOverrides(profileOverrides) {
-  const normalized = normalizeProfileOverrides(profileOverrides);
-  return Object.fromEntries(PERMISSION_PROFILES.map((profile) => [profile, normalized[profile]]));
-}
-
 export function splitPermissionList(value) {
   return String(value || "")
     .split(/[\n,]/)

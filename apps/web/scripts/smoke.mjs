@@ -373,7 +373,7 @@ assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings
 assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch");
 assertIncludes(settingsLogic, "/api/settings/harness-policy-preview", "harness policy preview fetch");
 assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
-assertIncludes(settingsLogic, "profile_overrides", "permission profile override save payload");
+assertNotIncludes(permissionsSettingsActions, "profile_overrides", "permission profile override is preserved by backend when not edited");
 assertNotIncludes(settingsLogic, "applyPermissionProfilePreset", "unused permission profile preset helper removed");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
