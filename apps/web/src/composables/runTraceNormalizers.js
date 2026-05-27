@@ -396,7 +396,7 @@ function taskContractDecision(payload, event, index) {
     eventIds: decisionEventId(event),
     phase: "contract",
     status: "success",
-    titleKey: event.eventType === "task_contract.semantic_classified" ? "semanticContract" : "taskContract",
+    titleKey: "taskContract",
     title: "Task contract",
     summary: compactJoin([
       payload.task_type || payload.taskType,
@@ -554,7 +554,7 @@ export function deriveDecisionTimelineItems(events = []) {
       item = policySelectedDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "harness_policy.merge_resolved") {
       item = policyMergedDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "task_contract.created" || eventType === "task_contract.semantic_classified") {
+    } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated") {
       item = taskContractDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "completion_gate.evaluated") {
       item = completionGateDecision(payload, eventWithTimestamp, items.length);

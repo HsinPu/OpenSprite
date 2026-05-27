@@ -109,7 +109,10 @@ const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "task_context.resolved",
   "task_objective.resolved",
-  "task_contract.semantic_classified",
+  "task_contract.planning_started",
+  "task_contract.planned",
+  "task_contract.validated",
+  "task_contract.created",
   "llm_status",
   "tool_started",
   "file_changed",
@@ -616,11 +619,11 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
-  if (eventType === "task_contract.semantic_classified") {
+  if (eventType.startsWith("task_contract.")) {
     return {
-      label: semanticContractLabel(payload, copy),
-      detail: formatSemanticContractDetail(payload),
-      tone: payload.applied === true ? "running" : payload.requires_tool_evidence ? "warning" : "neutral",
+      label: taskContractLabel(eventType, copy),
+      detail: formatTaskContractDetail(payload),
+      tone: eventType === "task_contract.planning_started" ? "running" : "neutral",
     };
   }
 
@@ -962,45 +965,34 @@ function formatTaskObjectiveDetail(payload = {}) {
   return [method, useText, confidenceText, objectiveText, reason].filter(Boolean).join(" · ");
 }
 
-function formatSemanticContractDetail(payload = {}) {
-  const requiredToolGroup = String(payload.required_tool_group || payload.requiredToolGroup || "").trim();
+
+function formatTaskContractDetail(payload = {}) {
+  const metadata = payload.planner_metadata || payload.plannerMetadata || {};
   const taskType = String(payload.task_type || payload.taskType || "").trim();
-  const classifierStatus = String(payload.classifier_status || payload.classifierStatus || "").trim();
-  const confidence = Number(payload.confidence);
-  const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
-  const applied = payload.applied === true ? "applied" : payload.applied === false ? "not applied" : "";
-  const requiresEvidence = payload.requires_tool_evidence || payload.requiresToolEvidence ? "requires evidence" : "";
   const contractSources = coerceStringList(payload.contract_sources || payload.contractSources);
-  const source = contractSources.length
-    ? contractSources.join(", ")
-    : String(payload.contract_source || payload.contractSource || payload.source || "task contract").trim();
-  const reason = String(payload.reason || "").trim();
-  const fallbackReason = String(payload.fallback_reason || payload.fallbackReason || "").trim();
+  const plannerStatus = String(metadata.planner_status || metadata.plannerStatus || "").trim();
+  const requiredToolGroups = coerceStringList(metadata.required_tool_groups || metadata.requiredToolGroups);
+  const reason = String(metadata.reason || payload.reason || "").trim();
   return [
-    classifierStatus ? `classifier ${classifierStatus}` : "",
+    plannerStatus ? `planner ${plannerStatus}` : "",
     taskType,
-    requiredToolGroup,
-    requiresEvidence,
-    applied,
-    confidenceText,
-    source ? `source ${source}` : "",
-    fallbackReason ? `fallback ${fallbackReason}` : reason,
-  ].filter(Boolean).join(" · ");
+    requiredToolGroups.length ? `groups ${requiredToolGroups.join(", ")}` : "",
+    contractSources.length ? `source ${contractSources.join(", ")}` : "",
+    reason,
+  ].filter(Boolean).join(" | ");
 }
 
-function semanticContractLabel(payload = {}, copy) {
-  const requiresEvidence = payload.requires_tool_evidence || payload.requiresToolEvidence;
-  const requiredToolGroup = String(payload.required_tool_group || payload.requiredToolGroup || "").trim();
-  if (requiresEvidence && requiredToolGroup === "web_research") {
-    return copy.run.needsWebResearch || "Needs web research";
+function taskContractLabel(eventType, copy) {
+  if (eventType === "task_contract.planning_started") {
+    return copy.run.taskContractPlanning || "Planning task contract";
   }
-  if (requiresEvidence && requiredToolGroup === "workspace_read") {
-    return copy.run.needsWorkspaceInspection || "Needs workspace inspection";
+  if (eventType === "task_contract.planned") {
+    return copy.run.taskContractPlanned || "Task contract planned";
   }
-  if (requiresEvidence && requiredToolGroup === "history_retrieval") {
-    return copy.run.needsHistoryRetrieval || "Needs history retrieval";
+  if (eventType === "task_contract.validated") {
+    return copy.run.taskContractValidated || "Task contract validated";
   }
-  return copy.run.semanticContractClassified || "Semantic contract classified";
+  return copy.run.taskContractCreated || "Task contract created";
 }
 
 function formatCompletionGateDetail(payload = {}) {

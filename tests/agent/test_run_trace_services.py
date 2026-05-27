@@ -477,7 +477,7 @@ def test_serialize_run_event_classifies_planned_contract_event():
         payload={
             "task_type": "web_research",
             "requirements": [{"kind": "tool_group", "tool_group": "web_research"}],
-            "semantic_contract": {"reason": "Current stock price needs web evidence."},
+            "planner_metadata": {"reason": "Current stock price needs web evidence."},
         },
         created_at=12.9,
     )
@@ -501,7 +501,7 @@ def test_serialize_run_events_preserves_planned_contract_routes():
                 payload={
                     "task_type": tool_group,
                     "requirements": [{"kind": "tool_group", "tool_group": tool_group}],
-                    "semantic_contract": {"planner_status": "validated", "reason": f"Route to {tool_group}."},
+                    "planner_metadata": {"planner_status": "validated", "reason": f"Route to {tool_group}."},
                 },
                 created_at=12.0 + event_id,
             )
@@ -515,7 +515,7 @@ def test_serialize_run_events_preserves_planned_contract_routes():
         "workspace_read",
         "history_retrieval",
     ]
-    assert all(event["payload"]["semantic_contract"]["planner_status"] == "validated" for event in payload)
+    assert all(event["payload"]["planner_metadata"]["planner_status"] == "validated" for event in payload)
 
 
 def test_serialize_run_event_projects_curator_artifact():

@@ -158,7 +158,7 @@ class TaskContract:
     allow_no_tool_final: bool = True
     contract_sources: tuple[str, ...] = ("deterministic",)
     harness_profile: dict[str, Any] | None = None
-    semantic_contract: dict[str, Any] | None = None
+    planner_metadata: dict[str, Any] | None = None
 
     def to_metadata(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -172,8 +172,8 @@ class TaskContract:
             "allow_no_tool_final": self.allow_no_tool_final,
             "contract_sources": list(self.contract_sources),
         }
-        if self.semantic_contract:
-            payload["semantic_contract"] = dict(self.semantic_contract)
+        if self.planner_metadata:
+            payload["planner_metadata"] = dict(self.planner_metadata)
         if self.harness_profile:
             payload["harness_profile"] = dict(self.harness_profile)
         return payload
@@ -188,7 +188,7 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
         final_answer_required=True,
         allow_no_tool_final=True,
         contract_sources=("missing_runtime_contract",),
-        semantic_contract={
+        planner_metadata={
             "planner_status": "missing",
             "reason": "execution result did not include a task contract",
         },
@@ -782,7 +782,7 @@ def _planner_blocked_contract(*, objective: str, reason: str) -> TaskContract:
         final_answer_required=True,
         allow_no_tool_final=True,
         contract_sources=("llm_planner",),
-        semantic_contract={
+        planner_metadata={
             "planner_status": "blocked",
             "reason": reason,
         },
@@ -889,7 +889,7 @@ def _contract_from_planner_payload(
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
         allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
         contract_sources=("llm_planner",),
-        semantic_contract=metadata,
+        planner_metadata=metadata,
     )
 
 
