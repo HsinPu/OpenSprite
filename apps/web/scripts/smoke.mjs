@@ -387,7 +387,7 @@ assertIncludes(settingsModal, "section === 'permissions'", "permissions settings
 assertIncludes(settingsModal, "save-permissions-settings", "permissions settings save event");
 assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
 assertIncludes(settingsModal, "harnessPolicyPreviewRows", "permissions harness policy preview rendering");
-assertIncludes(settingsModal, "permissionProfiles", "permission profile override rendering");
+assertNotIncludes(settingsModal, "permissionProfiles", "unused permission profile list removed");
 assertNotIncludes(settingsModal, "permissionProfilePresets", "unused permission profile preset rendering removed");
 assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
 assertIncludes(styles, ".settings-policy-preview", "harness policy preview styling");
