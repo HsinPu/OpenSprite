@@ -114,6 +114,7 @@ _WORKSPACE_DENIED_TOOLS = (
     "read_skill",
     "list_run_file_changes",
     "preview_run_file_change_revert",
+    "verify",
 )
 _NO_TOOL_DENIED_TOOLS = tuple(
     dict.fromkeys(

@@ -72,6 +72,15 @@ def test_task_intent_keeps_chinese_translation_with_test_word_as_direct_question
     assert intent.expects_verification is False
 
 
+def test_task_intent_treats_testing_notes_as_discussion_not_verification():
+    intent = TaskIntentService().classify(
+        "\u6211\u5011\u8981\u6e2c\u8a66\u4e00\u6bb5\u591a\u8f2a\u5c0d\u8a71\u3002\u4e0d\u8981\u8b80\u6a94\u6848\u3001\u4e0d\u8981\u4e0a\u7db2\uff0c\u8acb\u5217\u51fa\u6e2c\u8a66\u91cd\u9ede\u3002"
+    )
+
+    assert intent.expects_verification is False
+    assert intent.verification_hint is None
+
+
 def test_task_intent_keeps_calculation_as_direct_question():
     intent = TaskIntentService().classify("請計算 17 * 23 + 19，最後只輸出答案。")
 

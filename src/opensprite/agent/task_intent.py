@@ -165,6 +165,13 @@ _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u6210\u4e2d\u6587",
     "\u8a08\u7b97",
 )
+_VERIFICATION_DISCUSSION_PHRASES = (
+    "\u6e2c\u8a66\u91cd\u9ede",
+    "\u6e2c\u8a66\u7d00\u9304",
+    "\u6e2c\u8a66\u6458\u8981",
+    "\u6e2c\u8a66\u6d41\u7a0b",
+    "\u9a57\u8b49\u65b9\u5f0f",
+)
 _NO_CODE_CHANGE_RE = re.compile(
     r"\b(?:do not|don't|dont|without|no)\s+(?:edit|modify|change|write|patch|implement)\b"
     r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:edit|modify|change|write|patch|implement)\s+(?:files?|code)?\b"
@@ -432,6 +439,8 @@ def _expects_verification(kind: str, text: str) -> bool:
     if _NO_VERIFICATION_RE.search(text):
         return False
     if _is_pure_answer_request(text):
+        return False
+    if any(phrase in text for phrase in _VERIFICATION_DISCUSSION_PHRASES):
         return False
     if any(marker in lowered for marker in ("pytest", "verify", "verification", "測試", "驗證", "建置", "編譯")):
         return True

@@ -55,6 +55,7 @@ def test_harness_profile_respects_explicit_no_web_and_no_file_constraints():
     assert profile.name == "chat"
     assert "web_research" in profile.denied_tools
     assert "read_file" in profile.denied_tools
+    assert "verify" in profile.denied_tools
     assert "constraint:no_web" in metadata["selection"]["matched_signals"]
     assert "constraint:no_workspace" in metadata["selection"]["matched_signals"]
 

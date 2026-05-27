@@ -2373,7 +2373,7 @@ def test_completion_gate_respects_pure_answer_contract_over_code_intent():
     )
 
     assert intent.expects_code_change is True
-    assert intent.expects_verification is True
+    assert intent.expects_verification is False
     assert result.status == "complete"
     assert result.verification_required is False
 
