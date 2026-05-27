@@ -327,7 +327,6 @@ def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM search_chunks WHERE owner_type <> 'message'")
     if table_exists(conn, "search_chunk_vec_index"):
         conn.execute("DELETE FROM search_chunk_vec_index WHERE owner_type <> 'message'")
-    conn.execute("DROP TABLE IF EXISTS knowledge_sources")
 
     if table_exists(conn, "run_file_changes"):
         file_change_columns = {
