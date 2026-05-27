@@ -6,7 +6,14 @@ import fnmatch
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPROVAL_MODES
+from ..permission_constants import (
+    ALL_RISK_LEVELS,
+    ALL_RISK_LEVELS_ORDER,
+    APPROVAL_MODE_ASK,
+    APPROVAL_MODE_AUTO,
+    APPROVAL_MODE_BLOCK,
+    APPROVAL_MODES,
+)
 
 DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
     "read_file": frozenset({"read"}),
@@ -147,7 +154,7 @@ class ToolPermissionPolicy:
         decision = self._check(
             tool_name,
             {},
-            include_approval=self.approval_mode in {None, "block"},
+            include_approval=self.approval_mode in {None, APPROVAL_MODE_BLOCK},
             tool_risk_levels=tool_risk_levels,
         )
         return decision.allowed
@@ -156,8 +163,8 @@ class ToolPermissionPolicy:
         return self._check(
             tool_name,
             params,
-            include_approval=self.approval_mode != "auto",
-            approval_requires_callback=self.approval_mode == "ask",
+            include_approval=self.approval_mode != APPROVAL_MODE_AUTO,
+            approval_requires_callback=self.approval_mode == APPROVAL_MODE_ASK,
             tool_risk_levels=tool_risk_levels,
         )
 

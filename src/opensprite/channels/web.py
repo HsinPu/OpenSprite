@@ -43,7 +43,7 @@ from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
 from ..config.schema import PERMISSION_PROFILE_NAMES
-from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES
+from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES, DEFAULT_APPROVAL_MODE
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -550,7 +550,7 @@ class WebAdapter(MessageAdapter):
     @classmethod
     def _harness_policy_preview_payload(cls, config: Config) -> dict[str, Any]:
         user_permissions = cls._permissions_payload(config)
-        user_approval_mode = user_permissions.get("approval_mode") or "auto"
+        user_approval_mode = user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE
         profile_overrides = user_permissions.get("profile_overrides") or {}
         policy_service = HarnessPolicyService()
         resolver = ToolAccessResolver(harness_policies=policy_service)

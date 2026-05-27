@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, denied_risks_except
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODE_ASK, APPROVAL_MODE_AUTO, denied_risks_except
 from ..tools import ToolRegistry
 from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
 from .harness_profile import HarnessProfile
@@ -47,7 +47,7 @@ class HarnessPolicy:
 
     def to_permission_policy(self) -> ToolPermissionPolicy:
         """Build the executable tool permission policy for this harness turn."""
-        approval_mode = "ask" if self.approval_required_tools or self.approval_required_risk_levels else None
+        approval_mode = APPROVAL_MODE_ASK if self.approval_required_tools or self.approval_required_risk_levels else None
         return ToolPermissionPolicy(
             allowed_tools=list(self.allowed_tools),
             denied_tools=list(self.denied_tools),
@@ -240,12 +240,12 @@ def _blocked_relaxations(
                     "risk_levels": relaxed_risks,
                 }
             )
-        if policy.approval_mode == "auto" and (harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels):
+        if policy.approval_mode == APPROVAL_MODE_AUTO and (harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels):
             blocked.append(
                 {
                     "source": source,
                     "field": "approval_mode",
-                    "value": "auto",
+                    "value": APPROVAL_MODE_AUTO,
                     "blocked_by": "harness_policy",
                     "reason": "harness approval requirements cannot be relaxed by user settings",
                 }

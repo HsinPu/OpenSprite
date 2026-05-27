@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..channels.registry import coerce_channel_instances, default_channel_instances
-from ..permission_constants import ALL_RISK_LEVELS_ORDER
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, DEFAULT_APPROVAL_MODE
 from .defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -527,7 +527,7 @@ class ToolPermissionsConfig(BaseModel):
     """Centralized tool exposure and execution policy."""
 
     enabled: bool = True
-    approval_mode: Literal["auto", "ask", "block"] | None = "auto"
+    approval_mode: Literal["auto", "ask", "block"] | None = DEFAULT_APPROVAL_MODE
     approval_timeout_seconds: float = Field(default=300.0, gt=0)
     allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
     denied_tools: list[str] = Field(default_factory=list)

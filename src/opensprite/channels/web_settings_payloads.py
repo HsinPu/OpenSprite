@@ -10,7 +10,7 @@ from aiohttp import web
 from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
 from ..config.llm_presets import provider_profile_defaults, provider_request_options
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODES_ORDER
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODES_ORDER, DEFAULT_APPROVAL_MODE
 
 
 def network_payload(config: Config, *, default_http_proxy: str, default_https_proxy: str, default_no_proxy: str) -> dict[str, Any]:
@@ -259,7 +259,7 @@ def permissions_payload(
     approval_options = _ordered_subset(approval_modes, APPROVAL_MODES_ORDER)
     return {
         "enabled": bool(getattr(permissions, "enabled", True)),
-        "approval_mode": getattr(permissions, "approval_mode", "auto") or "auto",
+        "approval_mode": getattr(permissions, "approval_mode", DEFAULT_APPROVAL_MODE) or DEFAULT_APPROVAL_MODE,
         "approval_timeout_seconds": float(getattr(permissions, "approval_timeout_seconds", 300.0) or 300.0),
         "allowed_tools": list(getattr(permissions, "allowed_tools", ["*"]) or ["*"]),
         "denied_tools": list(getattr(permissions, "denied_tools", []) or []),
