@@ -2688,6 +2688,7 @@ import {
   providerSupportsRequestOption,
   providerSupportsRequestOptions,
 } from "../composables/settingsNormalizers";
+import { DEFAULT_PERMISSION_APPROVAL_MODE } from "../composables/permissionsDefaults";
 
 const props = defineProps({
   copy: {
@@ -3933,7 +3934,7 @@ const permissionApprovalModeOptions = computed(() => {
 
 const permissionSummary = computed(() => {
   const form = props.settingsState.permissionsForm || {};
-  const mode = form.approvalMode || "auto";
+  const mode = form.approvalMode || DEFAULT_PERMISSION_APPROVAL_MODE;
   const required = [
     ...(Array.isArray(form.approvalRequiredRiskLevels) ? form.approvalRequiredRiskLevels : []),
     ...String(form.approvalRequiredTools || "").split(/[\n,]/).map((item) => item.trim()).filter(Boolean),

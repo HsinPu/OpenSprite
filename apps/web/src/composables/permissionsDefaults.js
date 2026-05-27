@@ -1,3 +1,5 @@
+export const DEFAULT_PERMISSION_APPROVAL_MODE = "auto";
+
 function createProfileOverride(overrides = {}) {
   return {
     enabled: true,
@@ -15,7 +17,7 @@ function createProfileOverride(overrides = {}) {
 export function createDefaultPermissionsState() {
   return {
     enabled: true,
-    approval_mode: "auto",
+    approval_mode: DEFAULT_PERMISSION_APPROVAL_MODE,
     approval_timeout_seconds: 300,
     allowed_tools: ["*"],
     denied_tools: [],
@@ -32,7 +34,7 @@ export function createDefaultPermissionsState() {
 export function createDefaultPermissionsForm() {
   return {
     enabled: true,
-    approvalMode: "auto",
+    approvalMode: DEFAULT_PERMISSION_APPROVAL_MODE,
     approvalTimeoutSeconds: 300,
     allowedTools: "*",
     deniedTools: "",
@@ -67,7 +69,7 @@ export function normalizePermissionsSettings(value) {
 export function syncPermissionsForm(settingsState) {
   const permissions = settingsState.permissions || createDefaultPermissionsState();
   settingsState.permissionsForm.enabled = permissions.enabled;
-  settingsState.permissionsForm.approvalMode = permissions.approval_mode || "auto";
+  settingsState.permissionsForm.approvalMode = permissions.approval_mode || DEFAULT_PERMISSION_APPROVAL_MODE;
   settingsState.permissionsForm.approvalTimeoutSeconds = permissions.approval_timeout_seconds;
   settingsState.permissionsForm.allowedTools = permissions.allowed_tools.join("\n");
   settingsState.permissionsForm.deniedTools = permissions.denied_tools.join("\n");
