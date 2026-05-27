@@ -500,13 +500,7 @@ const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 
 
 const harnessSummaryRows = computed(() => {
   const labels = props.copy.trace.harnessLabels || {};
-  const initialProfilePayload = latestEventPayload("harness_profile.initial_selected");
-  const legacyProfilePayload = latestEventPayload("harness_profile.selected");
-  const effectiveProfilePayload = latestEventPayload("harness_profile.effective_selected");
-  const changedProfilePayload = latestEventPayload("harness_profile.changed");
-  const profilePayload = Object.keys(effectiveProfilePayload).length
-    ? effectiveProfilePayload
-    : (Object.keys(legacyProfilePayload).length ? legacyProfilePayload : initialProfilePayload);
+  const profilePayload = latestEventPayload("harness_profile.selected");
   const policyPayload = latestEventPayload("harness_policy.selected");
   const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
   const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
@@ -535,7 +529,7 @@ const harnessSummaryRows = computed(() => {
   const profileName = profilePayload.name || contractProfile.name || "";
   const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
   const profileSelection = profilePayload.selection || contractProfile.selection || {};
-  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length && !Object.keys(scorecardPayload).length && !Object.keys(changedProfilePayload).length) {
+  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length && !Object.keys(scorecardPayload).length) {
     return [];
   }
   const toolPermissionCounts = countToolPermissionDecisions();
@@ -543,9 +537,6 @@ const harnessSummaryRows = computed(() => {
   const evalSummary = evalSource.summary || {};
   const rows = [
     { label: labels.profile || "Profile", value: profileName, kind: "profile" },
-    { label: labels.initialProfile || "Initial profile", value: formatHarnessProfilePayload(initialProfilePayload), kind: "profile" },
-    { label: labels.effectiveProfile || "Effective profile", value: formatHarnessProfilePayload(effectiveProfilePayload), kind: "profile" },
-    { label: labels.profileChange || "Profile change", value: formatHarnessProfileChange(changedProfilePayload), kind: "profile" },
     { label: labels.taskType || "Task", value: taskType, kind: "profile" },
     { label: labels.selection || "Selection", value: formatProfileSelection(profileSelection), kind: "profile" },
     { label: labels.policy || "Policy", value: policySource.name, kind: "policy" },
@@ -846,11 +837,8 @@ function eventSummary(event) {
     return [artifact.title, artifact.detail].filter(Boolean).join(" · ");
   }
   const payload = event.payload || {};
-  if (event.eventType === "harness_profile.selected" || event.eventType === "harness_profile.initial_selected" || event.eventType === "harness_profile.effective_selected") {
+  if (event.eventType === "harness_profile.selected") {
     return compactJoin([payload.selection_phase || payload.selectionPhase, payload.name, payload.task_type || payload.taskType, payload.reason], " / ");
-  }
-  if (event.eventType === "harness_profile.changed") {
-    return formatHarnessProfileChange(payload);
   }
   if (event.eventType === "harness_policy.selected") {
     return compactJoin([payload.name, `${countPayloadItems(payload.allowed_tools || payload.allowedTools)} tools`, payload.reason], " · ");
@@ -1008,18 +996,6 @@ function formatHarnessProfilePayload(payload) {
     payload.name,
     payload.task_type || payload.taskType,
     payload.selection_phase || payload.selectionPhase,
-  ], " / ");
-}
-
-function formatHarnessProfileChange(payload) {
-  if (!payload || !Object.keys(payload).length) {
-    return "";
-  }
-  const initial = formatHarnessProfilePayload(payload.initial || {});
-  const effective = formatHarnessProfilePayload(payload.effective || {});
-  return compactJoin([
-    initial && effective ? `${initial} -> ${effective}` : "",
-    payload.reason,
   ], " / ");
 }
 

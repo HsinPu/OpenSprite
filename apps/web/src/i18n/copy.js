@@ -510,9 +510,6 @@ export const DISPLAY_COPY = {
       harnessSubtitle: "Profile、policy、contract、completion 與下一步",
       harnessLabels: {
         profile: "Profile",
-        initialProfile: "初始 Profile",
-        effectiveProfile: "實際 Profile",
-        profileChange: "Profile 變更",
         taskType: "任務",
         selection: "選擇原因",
         policy: "Policy",
@@ -560,9 +557,6 @@ export const DISPLAY_COPY = {
         count: (count) => `${count} 個決策點`,
         titles: {
           profileSelected: "Profile selected",
-          initialProfile: "初始 Profile",
-          effectiveProfile: "實際 Profile",
-          profileChanged: "Profile 重新判斷",
           policySelected: "Policy selected",
           policyMerged: "Policy merged",
           taskContract: "Task contract",
@@ -582,8 +576,6 @@ export const DISPLAY_COPY = {
         },
         details: {
           profile: "Profile",
-          initialProfile: "初始 Profile",
-          effectiveProfile: "實際 Profile",
           taskType: "任務",
           selection: "選擇",
           verification: "驗證策略",
@@ -2244,9 +2236,6 @@ export const DISPLAY_COPY = {
       harnessSubtitle: "Profile, policy, contract, completion, and next action",
       harnessLabels: {
         profile: "Profile",
-        initialProfile: "Initial profile",
-        effectiveProfile: "Effective profile",
-        profileChange: "Profile change",
         taskType: "Task",
         selection: "Selection",
         policy: "Policy",
@@ -2294,9 +2283,6 @@ export const DISPLAY_COPY = {
         count: (count) => `${count} decision point${count === 1 ? "" : "s"}`,
         titles: {
           profileSelected: "Profile selected",
-          initialProfile: "Initial profile",
-          effectiveProfile: "Effective profile",
-          profileChanged: "Profile re-evaluated",
           policySelected: "Policy selected",
           policyMerged: "Policy merged",
           taskContract: "Task contract",
@@ -2316,8 +2302,6 @@ export const DISPLAY_COPY = {
         },
         details: {
           profile: "Profile",
-          initialProfile: "Initial profile",
-          effectiveProfile: "Effective profile",
           taskType: "Task",
           selection: "Selection",
           verification: "Verification",

@@ -152,7 +152,7 @@ assertIncludes(runTraceViewer, "decisionTimelineItems", "trace decision timeline
 assertIncludes(runTraceViewer, "deriveDecisionTimelineItems", "trace decision timeline uses shared normalizer");
 assertIncludes(runTraceViewer, "run-trace__decision", "trace decision timeline section");
 assertIncludes(runTraceNormalizers, "deriveDecisionTimelineItems", "trace decision timeline normalizer export");
-assertIncludes(runTraceNormalizers, "harness_profile.effective_selected", "trace timeline captures effective profile decisions");
+assertIncludes(runTraceNormalizers, "harness_profile.selected", "trace timeline captures selected profile decisions");
 assertIncludes(runTraceNormalizers, "completion_gate.evaluated", "trace timeline captures completion gate decisions");
 assertIncludes(runTraceNormalizers, "harness_checkpoint.recorded", "trace timeline captures checkpoint decisions");
 assertIncludes(runTraceViewer, "const artifactsExpanded = ref(false)", "run artifacts default collapsed");

@@ -298,17 +298,12 @@ function decisionEventId(event) {
 
 function profileDecision(eventType, payload, event, index) {
   const selection = payload.selection || {};
-  const titleKey = eventType === "harness_profile.effective_selected"
-    ? "effectiveProfile"
-    : eventType === "harness_profile.initial_selected"
-      ? "initialProfile"
-      : "profileSelected";
   return {
     id: decisionId(event, index),
     eventIds: decisionEventId(event),
     phase: "profile",
     status: "info",
-    titleKey,
+    titleKey: "profileSelected",
     title: "Profile selected",
     summary: compactJoin([profileName(payload), payload.reason]),
     reason: coerceText(payload.reason),
@@ -319,27 +314,6 @@ function profileDecision(eventType, payload, event, index) {
       decisionDetail("selection", compactJoin([selection.selected_by || selection.selectedBy, formatShortList(selection.matched_signals || selection.matchedSignals, 4)])),
       decisionDetail("verification", payload.verification_policy || payload.verificationPolicy),
       decisionDetail("continuation", payload.continuation_policy || payload.continuationPolicy),
-    ]),
-  };
-}
-
-function profileChangedDecision(payload, event, index) {
-  const initial = payload.initial || {};
-  const effective = payload.effective || {};
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "profile",
-    status: "warning",
-    titleKey: "profileChanged",
-    title: "Profile changed",
-    summary: compactJoin([`${profileName(initial) || "unknown"} -> ${profileName(effective) || "unknown"}`, payload.reason], " / "),
-    reason: coerceText(payload.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("initialProfile", profileName(initial)),
-      decisionDetail("effectiveProfile", profileName(effective)),
-      decisionDetail("reason", payload.reason),
     ]),
   };
 }
@@ -546,10 +520,8 @@ export function deriveDecisionTimelineItems(events = []) {
       createdAt: normalizeEventTimestamp(event?.createdAt ?? event?.created_at),
     };
     let item = null;
-    if (eventType === "harness_profile.selected" || eventType === "harness_profile.initial_selected" || eventType === "harness_profile.effective_selected") {
+    if (eventType === "harness_profile.selected") {
       item = profileDecision(eventType, payload, eventWithTimestamp, items.length);
-    } else if (eventType === "harness_profile.changed") {
-      item = profileChangedDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "harness_policy.selected") {
       item = policySelectedDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "harness_policy.merge_resolved") {
