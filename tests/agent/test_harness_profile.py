@@ -105,6 +105,24 @@ def test_no_tool_constraint_forces_chat_and_denies_tools():
     assert "constraint:no_tools" in metadata["selection"]["matched_signals"]
 
 
+def test_task_contract_no_tool_chat_profile_does_not_require_code_change():
+    intent = TaskIntentService().classify(
+        "\u8acb\u5e6b\u6211\u898f\u5283\u4e00\u500b\u5b89\u5168\u7684\u4e09\u968e\u6bb5\u4fee\u6b63\u6d41\u7a0b\uff0c\u8981\u5305\u542b\u6bcf\u968e\u6bb5\u9a57\u8b49\u65b9\u5f0f\uff1b\u4e0d\u8981\u547c\u53eb\u5de5\u5177\u3002"
+    )
+    profile = HarnessProfileService().select(intent)
+
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.task_type == "pure_answer"
+    assert contract.requirements == ()
+    assert contract.allow_no_tool_final is True
+
+
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
     intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)

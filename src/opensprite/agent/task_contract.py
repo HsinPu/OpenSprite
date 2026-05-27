@@ -10,7 +10,7 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
-from .harness_profile import HarnessProfile, has_no_web_constraint, has_no_workspace_constraint
+from .harness_profile import HarnessProfile, has_no_tool_constraint, has_no_web_constraint, has_no_workspace_constraint
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
 from .tool_groups import TOOL_GROUPS
@@ -292,6 +292,10 @@ class TaskContractService:
         inherited_tool_group = task_context_decision.inherited_tool_group
         no_web_constraint = has_no_web_constraint(text)
         no_workspace_constraint = has_no_workspace_constraint(text)
+        no_tool_constraint = has_no_tool_constraint(text)
+        chat_no_tool_profile = harness_profile is not None and harness_profile.name == "chat" and no_tool_constraint
+        if chat_no_tool_profile:
+            task_type = "pure_answer"
 
         if image_resources and (
             cls._looks_like_image_task(text, task_intent, current_image_files)
@@ -412,7 +416,7 @@ class TaskContractService:
             )
             task_type = "history_retrieval"
 
-        if task_intent.expects_code_change:
+        if task_intent.expects_code_change and not chat_no_tool_profile:
             requirements.append(
                 EvidenceRequirement(
                     kind="file_change",
@@ -422,7 +426,7 @@ class TaskContractService:
             )
             task_type = "code_change"
 
-        if task_intent.expects_verification:
+        if task_intent.expects_verification and not chat_no_tool_profile:
             requirements.append(
                 EvidenceRequirement(
                     kind="verification",
