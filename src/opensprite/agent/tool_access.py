@@ -6,8 +6,21 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..tools import BatchTool, ToolRegistry
-from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
+from ..tools.permissions import ALL_RISK_LEVELS, CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_policy import HarnessPolicy, HarnessPolicyService
+
+
+_RISK_PROBE_TOOLS = {
+    "configuration": "configure_mcp",
+    "delegation": "delegate",
+    "execute": "exec",
+    "external_side_effect": "browser_click",
+    "mcp": "mcp_probe_tool",
+    "memory": "task_update",
+    "network": "web_search",
+    "read": "read_file",
+    "write": "apply_patch",
+}
 
 
 @dataclass(frozen=True)
@@ -15,6 +28,14 @@ class ToolAccessResolution:
     """Resolved tool registry and metadata for one agent turn."""
 
     registry: ToolRegistry
+    effective_policy: ToolPermissionPolicy
+    metadata: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class EffectivePolicyResolution:
+    """Resolved effective policy without requiring a concrete tool registry."""
+
     effective_policy: ToolPermissionPolicy
     metadata: dict[str, Any]
 
@@ -32,18 +53,14 @@ class ToolAccessResolver:
         profile_permission_policy: ToolPermissionPolicy | None = None,
     ) -> ToolAccessResolution:
         """Return a registry constrained by the selected effective tool policy."""
-        policies = [base_registry.permission_policy]
-        if profile_permission_policy is not None:
-            policies.append(profile_permission_policy)
-        policies.append(harness_policy.to_permission_policy())
-        effective_policy = CompositeToolPermissionPolicy(*policies)
-        registry = base_registry.filtered(permission_policy=effective_policy)
-        metadata = self._harness_policies.policy_resolution_metadata(
+        policy_resolution = self.resolve_policy(
             base_registry.permission_policy,
-            profile_permission_policy,
             harness_policy,
-            effective_policy,
+            profile_permission_policy,
         )
+        effective_policy = policy_resolution.effective_policy
+        metadata = policy_resolution.metadata
+        registry = base_registry.filtered(permission_policy=effective_policy)
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
         metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
@@ -53,6 +70,52 @@ class ToolAccessResolver:
             effective_policy=effective_policy,
             metadata=metadata,
         )
+
+    def resolve_policy(
+        self,
+        global_policy: ToolPermissionPolicy,
+        harness_policy: HarnessPolicy,
+        profile_permission_policy: ToolPermissionPolicy | None = None,
+    ) -> EffectivePolicyResolution:
+        """Return the effective policy and metadata for one harness turn."""
+        policies = [global_policy]
+        if profile_permission_policy is not None:
+            policies.append(profile_permission_policy)
+        policies.append(harness_policy.to_permission_policy())
+        effective_policy = CompositeToolPermissionPolicy(*policies)
+        metadata = self._harness_policies.policy_resolution_metadata(
+            global_policy,
+            profile_permission_policy,
+            harness_policy,
+            effective_policy,
+        )
+        metadata["effective_risks"] = summarize_effective_risks(effective_policy)
+        return EffectivePolicyResolution(
+            effective_policy=effective_policy,
+            metadata=metadata,
+        )
+
+
+def summarize_effective_risks(policy: ToolPermissionPolicy) -> dict[str, list[str]]:
+    """Summarize effective risk exposure and approval requirements for previews."""
+    allowed: list[str] = []
+    denied: list[str] = []
+    approval_required: list[str] = []
+    for risk in sorted(ALL_RISK_LEVELS):
+        tool_name = _RISK_PROBE_TOOLS.get(risk, f"__risk_probe_{risk}")
+        tool_risks = frozenset({risk})
+        if policy.is_tool_exposed(tool_name, tool_risk_levels=tool_risks):
+            allowed.append(risk)
+            decision = policy.check(tool_name, {}, tool_risk_levels=tool_risks)
+            if decision.requires_approval:
+                approval_required.append(risk)
+        else:
+            denied.append(risk)
+    return {
+        "allowed_risk_levels": allowed,
+        "denied_risk_levels": denied,
+        "approval_required_risk_levels": approval_required,
+    }
 
 
 def _tool_access_metadata(

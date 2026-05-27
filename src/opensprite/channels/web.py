@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from .identity import build_session_id, normalize_identifier
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfile
+from ..agent.tool_access import ToolAccessResolver
 from ..auth.credentials import (
     CredentialNotFoundError,
     CredentialStoreError,
@@ -547,44 +548,39 @@ class WebAdapter(MessageAdapter):
     @classmethod
     def _harness_policy_preview_payload(cls, config: Config) -> dict[str, Any]:
         user_permissions = cls._permissions_payload(config)
-        user_allowed_risks = set(user_permissions["allowed_risk_levels"])
-        user_denied_risks = set(user_permissions["denied_risk_levels"])
         user_approval_mode = user_permissions.get("approval_mode") or "auto"
-        user_approval_risks = set(user_permissions["approval_required_risk_levels"])
         profile_overrides = user_permissions.get("profile_overrides") or {}
         policy_service = HarnessPolicyService()
+        resolver = ToolAccessResolver(harness_policies=policy_service)
+        global_permission_policy = ToolPermissionPolicy.from_config(config.tools.permissions)
         profiles = cls._harness_policy_preview_profiles()
         rows = []
         for profile in profiles:
             policy = policy_service.select(profile)
             profile_override = profile_overrides.get(profile.name) or {}
-            override_allowed_risks = set(profile_override.get("allowed_risk_levels") or sorted(ALL_RISK_LEVELS))
-            override_denied_risks = set(profile_override.get("denied_risk_levels") or [])
             override_approval_mode = profile_override.get("approval_mode") or user_approval_mode
-            override_approval_risks = set(profile_override.get("approval_required_risk_levels") or [])
-            harness_allowed_risks = set(policy.allowed_risk_levels)
-            harness_denied_risks = set(policy.denied_risk_levels)
-            effective_allowed = sorted((user_allowed_risks & override_allowed_risks & harness_allowed_risks) - user_denied_risks - override_denied_risks - harness_denied_risks)
-            effective_denied = sorted(user_denied_risks | override_denied_risks | harness_denied_risks | (ALL_RISK_LEVELS - set(effective_allowed)))
-            effective_approval = set(policy.approval_required_risk_levels)
-            if user_approval_mode != "auto":
-                effective_approval |= user_approval_risks
-            if override_approval_mode != "auto":
-                effective_approval |= override_approval_risks
-            effective_approval = sorted(effective_approval & set(effective_allowed))
+            profile_permission_config = config.tools.permissions.profile_overrides.get(profile.name)
+            profile_permission_policy = (
+                ToolPermissionPolicy.from_config(profile_permission_config)
+                if profile_permission_config is not None
+                else None
+            )
+            resolution = resolver.resolve_policy(global_permission_policy, policy, profile_permission_policy)
+            effective_risks = resolution.metadata["effective_risks"]
             rows.append(
                 {
                     "profile": profile.to_metadata(),
                     "profile_override": profile_override,
                     "policy": policy.to_metadata(),
                     "effective": {
-                        "allowed_risk_levels": effective_allowed,
-                        "denied_risk_levels": effective_denied,
-                        "approval_required_risk_levels": effective_approval,
+                        "allowed_risk_levels": effective_risks["allowed_risk_levels"],
+                        "denied_risk_levels": effective_risks["denied_risk_levels"],
+                        "approval_required_risk_levels": effective_risks["approval_required_risk_levels"],
                         "user_approval_mode": user_approval_mode,
                         "profile_approval_mode": override_approval_mode,
                         "user_permissions_enabled": bool(user_permissions["enabled"]),
                     },
+                    "resolution": resolution.metadata,
                 }
             )
         return {
