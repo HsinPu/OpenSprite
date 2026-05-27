@@ -50,6 +50,6 @@ def test_resolve_planning_mode_returns_overlay_and_restricted_registry():
     assert tool_names == {"read_file", "web_fetch", "batch"}
     assert state.tool_registry.permission_resolution_metadata["kind"] == "planning_mode"
     assert state.tool_registry.permission_resolution_metadata["effective_risks"]["allowed_risk_levels"] == [
-        "network",
         "read",
+        "network",
     ]
