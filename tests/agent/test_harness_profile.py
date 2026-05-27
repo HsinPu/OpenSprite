@@ -93,6 +93,18 @@ def test_chinese_no_edit_and_no_test_constraints_downgrade_code_change():
     assert profile.task_type == "workspace_analysis"
 
 
+def test_no_tool_constraint_forces_chat_and_denies_tools():
+    profile = _profile(
+        "\u8acb\u5e6b\u6211\u898f\u5283\u4e00\u500b\u5b89\u5168\u7684\u4e09\u968e\u6bb5\u4fee\u6b63\u6d41\u7a0b\uff0c\u8981\u5305\u542b\u6bcf\u968e\u6bb5\u9a57\u8b49\u65b9\u5f0f\uff1b\u4e0d\u8981\u547c\u53eb\u5de5\u5177\u3002"
+    )
+    metadata = profile.to_metadata()
+
+    assert profile.name == "chat"
+    assert "verify" in profile.denied_tools
+    assert "read_file" in profile.denied_tools
+    assert "constraint:no_tools" in metadata["selection"]["matched_signals"]
+
+
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
     intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)

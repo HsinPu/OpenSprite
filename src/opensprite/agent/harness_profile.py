@@ -61,6 +61,11 @@ _NO_WORKSPACE_EN_RE = re.compile(
     r"|\b(?:no\s+file\s+access|no\s+workspace\s+access)\b",
     re.IGNORECASE,
 )
+_NO_TOOL_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\s+(?:call|use|invoke|run)\s+(?:any\s+)?tools?\b"
+    r"|(?:不要|不用|別)[^。！？\n]{0,30}(?:呼叫|使用|執行)[^。！？\n]{0,20}(?:工具|tool)",
+    re.IGNORECASE,
+)
 _NO_WEB_LITERAL_PHRASES = (
     "\u4e0d\u8981\u4e0a\u7db2",
     "\u4e0d\u7528\u4e0a\u7db2",
@@ -109,6 +114,36 @@ _WORKSPACE_DENIED_TOOLS = (
     "read_skill",
     "list_run_file_changes",
     "preview_run_file_change_revert",
+)
+_NO_TOOL_DENIED_TOOLS = tuple(
+    dict.fromkeys(
+        _WEB_DENIED_TOOLS
+        + _WORKSPACE_DENIED_TOOLS
+        + (
+            "apply_patch",
+            "write_file",
+            "edit_file",
+            "configure_skill",
+            "task_update",
+            "configure_mcp",
+            "configure_subagent",
+            "credential_store",
+            "exec",
+            "process",
+            "verify",
+            "analyze_image",
+            "ocr_image",
+            "transcribe_audio",
+            "analyze_video",
+            "send_media",
+            "delegate",
+            "delegate_many",
+            "run_workflow",
+            "search_history",
+            "cron",
+            "batch",
+        )
+    )
 )
 _LOCAL_RUNTIME_RE = re.compile(
     r"\b(?:channel|session id|current time|trace metrics?|cli chat)\b|(?:目前時間|現在時間|對話|工作階段|執行階段)",
@@ -426,6 +461,8 @@ def _looks_like_ops(lowered: str) -> bool:
 def _looks_like_direct_chat(task_intent: TaskIntent, lowered: str, text: str) -> bool:
     if _PURE_ANSWER_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
         return True
+    if has_no_tool_constraint(text):
+        return True
     if has_no_web_constraint(text) and not _CODE_PATH_RE.search(text):
         if task_intent.kind == "debug" or not _has_marker(lowered, _CODING_MARKERS):
             return True
@@ -455,9 +492,16 @@ def has_no_workspace_constraint(text: str) -> bool:
     return bool(_NO_WORKSPACE_EN_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_WORKSPACE_LITERAL_PHRASES))
 
 
+def has_no_tool_constraint(text: str) -> bool:
+    """Return whether the user explicitly forbids tool calls."""
+    return bool(_NO_TOOL_RE.search(text or ""))
+
+
 def denied_tools_for_constraints(text: str) -> tuple[str, ...]:
     """Return exact tools that must not be exposed for explicit user constraints."""
     denied: list[str] = []
+    if has_no_tool_constraint(text):
+        denied.extend(_NO_TOOL_DENIED_TOOLS)
     if has_no_web_constraint(text):
         denied.extend(_WEB_DENIED_TOOLS)
     if has_no_workspace_constraint(text):
@@ -471,6 +515,8 @@ def _constraint_signals(denied_tools: tuple[str, ...]) -> tuple[str, ...]:
         signals.append("constraint:no_web")
     if any(tool in denied_tools for tool in _WORKSPACE_DENIED_TOOLS):
         signals.append("constraint:no_workspace")
+    if any(tool in denied_tools for tool in _NO_TOOL_DENIED_TOOLS):
+        signals.append("constraint:no_tools")
     return tuple(signals)
 
 
