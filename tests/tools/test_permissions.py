@@ -127,6 +127,22 @@ def test_registry_uses_declared_tool_risk_levels():
     )
 
 
+def test_registry_evidence_includes_permission_block_metadata():
+    registry = ToolRegistry(
+        permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"])
+    )
+    registry.register(EchoTool("custom_write", risk_levels=frozenset({"write"})))
+
+    result = asyncio.run(registry.execute("custom_write", {}))
+    evidence = registry.build_evidence("custom_write", {}, result, ok=False)
+
+    assert evidence.ok is False
+    assert evidence.metadata["permission"]["blocked"] is True
+    assert evidence.metadata["permission"]["exposure"] == "not_exposed"
+    assert evidence.metadata["permission"]["reason"] == "risk level(s) not allowed: write"
+    assert evidence.metadata["permission"]["risk_levels"] == ["write"]
+
+
 def test_registry_restricts_allowed_tools_by_glob():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(allowed_tools=["read_*", "grep_files"])

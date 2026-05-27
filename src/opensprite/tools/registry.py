@@ -1,5 +1,6 @@
 """Tool registry for managing available tools."""
 
+from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
 from .base import Tool
@@ -156,7 +157,28 @@ class ToolRegistry:
         safe_params = params if isinstance(params, dict) else {}
         if tool is None:
             return build_tool_evidence(name, safe_params, result, ok=ok)
-        return tool.build_evidence(safe_params, result, ok=ok)
+        evidence = tool.build_evidence(safe_params, result, ok=ok)
+        if ok or not _looks_like_permission_block(result):
+            return evidence
+        exposed = self._permission_policy.is_tool_exposed(name, tool_risk_levels=tool.risk_levels)
+        decision = self._permission_policy.check(name, safe_params, tool_risk_levels=tool.risk_levels)
+        metadata = dict(evidence.metadata)
+        metadata["permission"] = {
+            "blocked": True,
+            "exposed": exposed,
+            "exposure": "exposed" if exposed else "not_exposed",
+            "reason": decision.reason,
+            "requires_approval": decision.requires_approval,
+            "risk_levels": list(decision.risk_levels),
+            "approval_mode": decision.approval_mode,
+            "matched_allowed_tools": list(decision.matched_allowed_tools),
+            "matched_denied_tools": list(decision.matched_denied_tools),
+            "matched_allowed_risk_levels": list(decision.matched_allowed_risk_levels),
+            "matched_denied_risk_levels": list(decision.matched_denied_risk_levels),
+            "matched_approval_required_tools": list(decision.matched_approval_required_tools),
+            "matched_approval_required_risk_levels": list(decision.matched_approval_required_risk_levels),
+        }
+        return replace(evidence, metadata=metadata)
 
     @property
     def tool_names(self) -> list[str]:
@@ -176,3 +198,7 @@ def _decision_label(event_type: str, decision: PermissionDecision) -> str:
     if event_type.endswith(".allowed"):
         return "allowed"
     return "checked"
+
+
+def _looks_like_permission_block(result: str) -> bool:
+    return str(result or "").startswith("Error: Tool ") and " blocked by permission policy:" in str(result or "")
