@@ -500,6 +500,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
         "completion_gate.evaluated",
         "work_progress.updated",
         "harness_checkpoint.recorded",
+        "harness_scorecard.recorded",
         "run_finished",
     ]
     assert events[0].payload["status"] == "running"
@@ -511,15 +512,19 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert events[5].payload["status"] == "complete"
     assert events[6].payload["next_action"] == "finalize"
     assert events[7].payload["next_action"] == "finalize"
+    assert events[8].payload["profile"]["name"] == "chat"
+    assert events[8].payload["completion"]["status"] == "complete"
     assert events[-1].payload["status"] == "completed"
-    assert [part.part_type for part in parts] == ["context_compaction", "harness_checkpoint", "assistant_message"]
+    assert [part.part_type for part in parts] == ["context_compaction", "harness_checkpoint", "harness_scorecard", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
     assert parts[0].metadata["messages_before"] == 8
     assert parts[1].metadata["harness_profile"]["name"] == "chat"
     assert parts[1].metadata["next_action"] == "finalize"
-    assert parts[2].content == "assistant reply"
-    assert parts[2].metadata["executed_tool_calls"] == 0
-    assert parts[2].metadata["context_compactions"] == 1
+    assert parts[2].metadata["profile"]["name"] == "chat"
+    assert parts[2].metadata["completion"]["status"] == "complete"
+    assert parts[3].content == "assistant reply"
+    assert parts[3].metadata["executed_tool_calls"] == 0
+    assert parts[3].metadata["context_compactions"] == 1
 
 
 def test_agent_process_schedules_curator_after_run_finished(tmp_path):
@@ -1456,10 +1461,12 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "completion_gate.evaluated",
         "work_progress.updated",
         "harness_checkpoint.recorded",
+        "harness_scorecard.recorded",
         "auto_continue.scheduled",
         "completion_gate.evaluated",
         "work_progress.updated",
         "harness_checkpoint.recorded",
+        "harness_scorecard.recorded",
         "auto_continue.completed",
         "auto_continue.skipped",
         "task_checklist.updated",
@@ -1471,15 +1478,17 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[6].payload["status"] == "incomplete"
     assert events[6].payload["reason"] == "expected code changes were not recorded"
     assert events[7].payload["next_action"] == "continue_work"
-    assert events[10].payload["status"] == "needs_review"
-    assert events[10].payload["reason"] == "delegated review was not recorded for code changes"
-    assert events[11].payload["next_action"] == "collect_review_evidence"
+    assert events[11].payload["status"] == "needs_review"
+    assert events[11].payload["reason"] == "delegated review was not recorded for code changes"
     assert events[12].payload["next_action"] == "collect_review_evidence"
-    assert events[13].payload["completion_status"] == "needs_review"
-    assert events[14].payload["reason"] == "review_evidence_still_missing"
+    assert events[13].payload["next_action"] == "collect_review_evidence"
+    assert events[14].payload["completion"]["status"] == "needs_review"
+    assert events[15].payload["completion_status"] == "needs_review"
+    assert events[16].payload["reason"] == "review_evidence_still_missing"
     assert events[-1].payload["status"] == "needs_review"
     assert events[-1].payload["completion_gate"]["status"] == "needs_review"
     assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
+    assert sum(1 for part in parts if part.part_type == "harness_scorecard") == 2
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1
     assert assistant_part.metadata["verification_passed"] is True

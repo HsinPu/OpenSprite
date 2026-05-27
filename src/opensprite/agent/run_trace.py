@@ -306,6 +306,33 @@ class RunTraceRecorder:
             metadata=checkpoint,
         )
 
+    async def record_harness_scorecard_part(
+        self,
+        session_id: str,
+        run_id: str,
+        scorecard: dict[str, Any],
+    ) -> None:
+        """Persist the latest harness scorecard as a durable run part."""
+        profile = scorecard.get("profile") if isinstance(scorecard, dict) else {}
+        contract = scorecard.get("contract") if isinstance(scorecard, dict) else {}
+        completion = scorecard.get("completion") if isinstance(scorecard, dict) else {}
+        content = " 繚 ".join(
+            item
+            for item in (
+                f"profile={profile.get('name')}" if isinstance(profile, dict) and profile.get("name") else "",
+                f"contract={contract.get('task_type')}" if isinstance(contract, dict) and contract.get("task_type") else "",
+                f"completion={completion.get('status')}" if isinstance(completion, dict) and completion.get("status") else "",
+            )
+            if item
+        )
+        await self.add_part(
+            session_id,
+            run_id,
+            "harness_scorecard",
+            content=content,
+            metadata=scorecard,
+        )
+
     async def record_operation_audit_part(
         self,
         session_id: str,

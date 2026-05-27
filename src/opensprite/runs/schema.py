@@ -52,6 +52,7 @@ _EVENT_KINDS = {
     "harness_profile.changed": "harness",
     "harness_policy.selected": "harness",
     "harness_checkpoint.recorded": "harness",
+    "harness_scorecard.recorded": "harness",
     "task_contract.created": "harness",
     "execution.stopped": "llm",
     "auto_continue.scheduled": "run",
@@ -557,7 +558,7 @@ def run_part_kind(part_type: str) -> str:
         return "llm"
     if normalized == "worktree_sandbox":
         return "work"
-    if normalized == "harness_checkpoint":
+    if normalized in {"harness_checkpoint", "harness_scorecard"}:
         return "harness"
     return "other"
 
@@ -649,6 +650,10 @@ def run_part_artifact(
                 if item
             )
         )
+    if part_type == "harness_scorecard":
+        completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
+        title = "Harness scorecard"
+        detail = _text(content or completion.get("status"))
     if not detail and kind == "text":
         detail = str(content or "")[:240]
     artifact_id = f"part:{part_id}" if part_id is not None else None

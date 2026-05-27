@@ -177,6 +177,35 @@ def test_run_trace_recorder_persists_harness_checkpoint_part():
     assert serialized["artifact"]["title"] == "Harness checkpoint"
 
 
+def test_run_trace_recorder_persists_harness_scorecard_part():
+    async def scenario():
+        storage = MemoryStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await storage.create_run("web:browser-1", "run-1")
+        await recorder.record_harness_scorecard_part(
+            "web:browser-1",
+            "run-1",
+            {
+                "schema_version": 1,
+                "kind": "harness_scorecard",
+                "profile": {"name": "coding"},
+                "contract": {"task_type": "code_change"},
+                "completion": {"status": "incomplete"},
+            },
+        )
+        return await storage.get_run_parts("web:browser-1", "run-1")
+
+    parts = asyncio.run(scenario())
+
+    assert len(parts) == 1
+    assert parts[0].part_type == "harness_scorecard"
+    assert parts[0].content == "profile=coding 繚 contract=code_change 繚 completion=incomplete"
+    assert parts[0].metadata["profile"]["name"] == "coding"
+    serialized = serialize_run_part(parts[0])
+    assert serialized["kind"] == "harness"
+    assert serialized["artifact"]["title"] == "Harness scorecard"
+
+
 def test_worktree_sandbox_inspector_reports_disabled(tmp_path):
     metadata = WorktreeSandboxInspector(enabled=False, workspace_root=tmp_path).inspect().to_payload()
 

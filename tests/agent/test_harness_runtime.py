@@ -100,7 +100,9 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     response, tool_names_by_call, events, parts = asyncio.run(scenario())
     event_types = [event.event_type for event in events]
     checkpoint = next(event for event in events if event.event_type == "harness_checkpoint.recorded")
+    scorecard = next(event for event in events if event.event_type == "harness_scorecard.recorded")
     checkpoint_part = next(part for part in parts if part.part_type == "harness_checkpoint")
+    scorecard_part = next(part for part in parts if part.part_type == "harness_scorecard")
 
     assert response.text == "Harness runtime reply."
     assert tool_names_by_call[-1] == ["read_file"]
@@ -114,9 +116,15 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert checkpoint.payload["harness_policy"]["name"] == "chat_read_policy"
     assert checkpoint.payload["completion"]["status"] == "complete"
     assert checkpoint.payload["next_action"] == "finalize"
+    assert scorecard.payload["profile"]["name"] == "chat"
+    assert scorecard.payload["permissions"]["harness_policy"]["name"] == "chat_read_policy"
+    assert scorecard.payload["trace_health"]["status"] == "pass"
     assert checkpoint_part.metadata["harness_profile"]["name"] == "chat"
     assert checkpoint_part.metadata["completion"]["status"] == "complete"
     assert "profile=chat" in checkpoint_part.content
+    assert scorecard_part.metadata["profile"]["name"] == "chat"
+    assert scorecard_part.metadata["completion"]["status"] == "complete"
+    assert "profile=chat" in scorecard_part.content
 
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):

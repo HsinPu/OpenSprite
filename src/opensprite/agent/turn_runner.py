@@ -15,6 +15,7 @@ from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
+from .harness_scorecard import HarnessScorecard
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
@@ -483,6 +484,20 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
         await self.run_trace.record_harness_checkpoint_part(turn.session_id, run_id, harness_checkpoint)
+        harness_scorecard = _harness_scorecard_metadata(
+            harness_profile=harness_profile,
+            aggregate_result=aggregate_result,
+            completion_result=completion_result,
+        )
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "harness_scorecard.recorded",
+            harness_scorecard,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+        await self.run_trace.record_harness_scorecard_part(turn.session_id, run_id, harness_scorecard)
         if auto_continue_attempts > 0:
             await self._emit_run_event(
                 turn.session_id,
@@ -1160,3 +1175,35 @@ def _harness_checkpoint_metadata(
         "tool_evidence_count": len(aggregate_result.tool_evidence),
         "task_artifact_count": len(aggregate_result.task_artifacts),
     }
+
+
+def _harness_scorecard_metadata(
+    *,
+    harness_profile: HarnessProfile | None,
+    aggregate_result: ExecutionResult,
+    completion_result: CompletionGateResult,
+) -> dict[str, Any]:
+    task_contract = getattr(aggregate_result, "task_contract", None)
+    scorecard = HarnessScorecard(
+        profile=harness_profile.to_metadata() if harness_profile is not None else {},
+        contract=task_contract.to_metadata() if task_contract is not None else {},
+        tools={
+            "executed_tool_calls": aggregate_result.executed_tool_calls,
+            "had_tool_error": aggregate_result.had_tool_error,
+            "file_change_count": aggregate_result.file_change_count,
+            "tool_evidence_count": len(aggregate_result.tool_evidence),
+            "task_artifact_count": len(aggregate_result.task_artifacts),
+        },
+        permissions={
+            "harness_policy": dict(aggregate_result.harness_policy or {}),
+        },
+        sensors=(),
+        completion=completion_result.to_metadata(),
+        trace_health={
+            "status": "pass",
+            "has_profile": harness_profile is not None,
+            "has_contract": task_contract is not None,
+            "has_completion": bool(completion_result.status),
+        },
+    )
+    return scorecard.to_metadata()
