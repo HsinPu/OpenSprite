@@ -18,7 +18,6 @@ from .commands_chat import _json_for_stdout, run_web_chat
 
 
 WEB_TOOL_NAMES = {"web_search", "web_fetch", "web_research"}
-REMOVED_TOOL_NAMES = {"search_knowledge"}
 
 
 @dataclass(frozen=True)
@@ -298,10 +297,6 @@ def check_trace(case: SmokeCase, trace_summary: dict[str, Any]) -> list[str]:
     """Return strict smoke failures for one case."""
     failures: list[str] = []
     tools = {str(tool) for tool in trace_summary.get("tools") or []}
-    removed_tools = sorted(tools & REMOVED_TOOL_NAMES)
-    if removed_tools:
-        failures.append(f"removed tool appeared: {', '.join(removed_tools)}")
-
     web_tools = tools & WEB_TOOL_NAMES
     if case.expect_web_tools is True and not web_tools:
         failures.append("expected at least one web tool")

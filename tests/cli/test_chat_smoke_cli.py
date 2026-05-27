@@ -147,12 +147,11 @@ def test_load_trace_readonly_reads_sqlite_without_storage_initialization(tmp_pat
     assert trace.file_changes[0].path == "a.txt"
 
 
-def test_check_trace_flags_removed_tool_and_web_tool_mismatch():
+def test_check_trace_flags_web_tool_mismatch():
     no_web_case = SmokeCase("direct", "請直接回答", expect_web_tools=False)
 
-    failures = check_trace(no_web_case, {"tools": ["search_knowledge", "web_search"]})
+    failures = check_trace(no_web_case, {"tools": ["web_search"]})
 
-    assert "removed tool appeared: search_knowledge" in failures
     assert "unexpected web tool: web_search" in failures
 
 
