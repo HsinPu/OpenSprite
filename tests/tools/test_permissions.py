@@ -96,8 +96,12 @@ def test_registry_emits_permission_decision_trace_events():
         "tool_permission.denied",
     ]
     assert events[0][2]["risk_levels"] == ["read"]
+    assert events[0][2]["exposed"] is True
+    assert events[0][2]["exposure"] == "exposed"
     assert events[1][2]["decision"] == "allowed"
     assert events[3][2]["decision"] == "denied"
+    assert events[3][2]["exposed"] is False
+    assert events[3][2]["exposure"] == "not_exposed"
     assert events[3][2]["matched_denied_tools"] == ["exec"]
 
 

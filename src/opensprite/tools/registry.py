@@ -94,11 +94,12 @@ class ToolRegistry:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
         display_params = tool.sanitize_params_for_display(params)
 
+        exposed = self._permission_policy.is_tool_exposed(name, tool_risk_levels=tool.risk_levels)
         decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
-        await self._emit_permission_decision("tool_permission.checked", name, decision, display_params)
+        await self._emit_permission_decision("tool_permission.checked", name, decision, display_params, exposed=exposed)
         if not decision.allowed:
             if decision.requires_approval and self._permission_request_handler is not None:
-                await self._emit_permission_decision("tool_permission.approval_required", name, decision, display_params)
+                await self._emit_permission_decision("tool_permission.approval_required", name, decision, display_params, exposed=exposed)
                 approval = await self._permission_request_handler(name, display_params, decision)
                 if approval.approved:
                     if on_before_execute is not None:
@@ -106,10 +107,10 @@ class ToolRegistry:
                     return await tool.execute_validated(params)
                 reason = approval.reason or decision.reason or "user denied approval"
                 return f"Error: Tool '{name}' blocked by permission policy: {reason}."
-            await self._emit_permission_decision("tool_permission.denied", name, decision, display_params)
+            await self._emit_permission_decision("tool_permission.denied", name, decision, display_params, exposed=exposed)
             return f"Error: Tool '{name}' blocked by permission policy: {decision.reason}."
 
-        await self._emit_permission_decision("tool_permission.allowed", name, decision, display_params)
+        await self._emit_permission_decision("tool_permission.allowed", name, decision, display_params, exposed=exposed)
         if on_before_execute is not None:
             await on_before_execute(name, display_params if isinstance(display_params, dict) else {})
         return await tool.execute_validated(params)
@@ -120,6 +121,8 @@ class ToolRegistry:
         tool_name: str,
         decision: PermissionDecision,
         params: Any,
+        *,
+        exposed: bool,
     ) -> None:
         if self._permission_decision_hook is None:
             return
@@ -129,6 +132,8 @@ class ToolRegistry:
             "decision": _decision_label(event_type, decision),
             "reason": decision.reason,
             "requires_approval": decision.requires_approval,
+            "exposed": exposed,
+            "exposure": "exposed" if exposed else "not_exposed",
             "risk_levels": list(decision.risk_levels),
             "approval_mode": decision.approval_mode,
             "matched_allowed_tools": list(decision.matched_allowed_tools),
