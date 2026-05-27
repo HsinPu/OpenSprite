@@ -76,8 +76,11 @@ def test_task_objective_resolver_enriches_short_web_follow_up():
         '"reason": "The short turn refers to the prior ETF lookup."}'
     )
 
+    llm_config = Config.load_agent_template_config().task_objective_llm.model_copy(
+        update={"temperature": 0.3, "max_tokens": 322}
+    )
     decision = asyncio.run(
-        _resolver().resolve(
+        TaskObjectiveResolver(llm_config).resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -88,6 +91,8 @@ def test_task_objective_resolver_enriches_short_web_follow_up():
     )
 
     assert len(provider.calls) == 1
+    assert provider.calls[0]["temperature"] == 0.3
+    assert provider.calls[0]["max_tokens"] == 322
     assert decision.method == "llm"
     assert decision.should_use_resolved_objective is True
     assert decision.effective_objective == "Research 00981T ETF price and basic public information using web sources."

@@ -107,8 +107,11 @@ _WEB_RESEARCH_HISTORY = [
 def test_task_context_uses_deterministic_follow_up_without_llm():
     provider = _FailingProvider()
 
+    llm_config = Config.load_agent_template_config().task_context_llm.model_copy(
+        update={"temperature": 0.2, "max_tokens": 321}
+    )
     decision = asyncio.run(
-        _resolver().resolve(
+        TaskContextResolver(llm_config).resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -142,6 +145,8 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     )
 
     assert len(provider.calls) == 1
+    assert provider.calls[0]["temperature"] == 0.2
+    assert provider.calls[0]["max_tokens"] == 321
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"

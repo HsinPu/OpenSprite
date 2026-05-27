@@ -897,8 +897,11 @@ def test_semantic_contract_classifier_parses_web_research_decision():
         current_message=intent.objective,
     )
 
+    llm_config = Config.load_agent_template_config().task_contract_llm.model_copy(
+        update={"temperature": 0.4, "max_tokens": 323}
+    )
     decision = asyncio.run(
-        _semantic_classifier().classify(
+        SemanticContractClassifier(llm_config).classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,
@@ -909,6 +912,8 @@ def test_semantic_contract_classifier_parses_web_research_decision():
     )
 
     assert len(provider.calls) == 1
+    assert provider.calls[0]["temperature"] == 0.4
+    assert provider.calls[0]["max_tokens"] == 323
     assert decision is not None
     assert decision.requires_tool_evidence is True
     assert decision.required_tool_group == "web_research"
