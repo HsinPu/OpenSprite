@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODE_ASK, APPROVAL_MODE_AUTO, denied_risks_except
+from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPROVAL_MODE_ASK, APPROVAL_MODE_AUTO, denied_risks_except
 from ..tools import ToolRegistry
-from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
+from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import HarnessProfile
 
 
