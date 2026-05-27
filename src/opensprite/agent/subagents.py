@@ -207,26 +207,6 @@ class SubagentRunService:
         except (TypeError, ValueError):
             return DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS
 
-    @staticmethod
-    def _parse_optional_float(value: Any) -> float | None:
-        text = str(value or "").strip()
-        if not text:
-            return None
-        try:
-            return float(text)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _parse_optional_int(value: Any) -> int | None:
-        text = str(value or "").strip()
-        if not text:
-            return None
-        try:
-            return int(text)
-        except (TypeError, ValueError):
-            return None
-
     def _resolve_provider_override(
         self,
         prompt_type: str,
@@ -237,9 +217,7 @@ class SubagentRunService:
         metadata = load_metadata(prompt_type, app_home=app_home, session_workspace=workspace)
         llm_provider = str(metadata.get("llm_provider") or "").strip()
         llm_model = str(metadata.get("llm_model") or "").strip()
-        llm_temperature = self._parse_optional_float(metadata.get("llm_temperature"))
-        llm_max_tokens = self._parse_optional_int(metadata.get("llm_max_tokens"))
-        if not llm_provider and not llm_model and llm_temperature is None and llm_max_tokens is None:
+        if not llm_provider and not llm_model:
             return None
 
         base_provider = self._provider_getter()
@@ -287,14 +265,9 @@ class SubagentRunService:
         if not llm_model:
             llm_model = current_model
 
-        if llm_model == current_model and llm_temperature is None and llm_max_tokens is None:
+        if llm_model == current_model:
             return None
-        return ModelRoutedProvider(
-            provider_override,
-            model=llm_model,
-            temperature=llm_temperature,
-            max_tokens=llm_max_tokens,
-        )
+        return ModelRoutedProvider(provider_override, model=llm_model)
 
     async def _prepare_task(
         self,

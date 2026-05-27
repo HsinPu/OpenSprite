@@ -1022,7 +1022,7 @@ def test_run_subagent_uses_prompt_model_override_when_present(tmp_path):
     assert provider.calls[0]["model"] == "review-model"
 
 
-def test_run_subagent_uses_prompt_decoding_overrides_when_present(tmp_path):
+def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
     workspace = tmp_path / "workspace"
     session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
     prompt_dir = session_workspace / "subagent_prompts"
@@ -1030,7 +1030,7 @@ def test_run_subagent_uses_prompt_decoding_overrides_when_present(tmp_path):
     (prompt_dir / "custom-reviewer.md").write_text(
         "---\n"
         "name: custom-reviewer\n"
-        "description: Custom reviewer with routed decoding params.\n"
+        "description: Custom reviewer with ignored decoding params.\n"
         "tool_profile: read-only\n"
         "llm_model: review-model\n"
         "llm_temperature: 0.1\n"
@@ -1059,8 +1059,8 @@ def test_run_subagent_uses_prompt_decoding_overrides_when_present(tmp_path):
     asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
 
     assert provider.calls[0]["model"] == "review-model"
-    assert provider.calls[0]["temperature"] == 0.1
-    assert provider.calls[0]["max_tokens"] == 123
+    assert provider.calls[0]["temperature"] == 0.7
+    assert provider.calls[0]["max_tokens"] == 2048
 
 
 def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monkeypatch):
