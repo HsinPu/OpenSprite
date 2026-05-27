@@ -1724,6 +1724,7 @@ function buildDebugBundle() {
       event_counts: props.run.eventCounts || {},
     },
     summary: props.run.summary || null,
+    harness_scorecard: debugHarnessScorecard(),
     diff_summary: props.run.diffSummary || null,
     worktree_sandbox: props.run.worktreeSandbox || null,
     file_changes: props.run.fileChanges || [],
@@ -1731,6 +1732,17 @@ function buildDebugBundle() {
     parts: parts.value,
     events: (props.run.rawEvents || []).length ? props.run.rawEvents : events.value,
     localized_events: props.run.events || [],
+  };
+}
+
+function debugHarnessScorecard() {
+  const summary = props.run?.summary?.harnessScorecard || null;
+  const eventPayload = latestEventPayload("harness_scorecard.recorded");
+  const partPayload = latestPartMetadata("harness_scorecard");
+  return {
+    summary,
+    event: Object.keys(eventPayload).length ? eventPayload : null,
+    part: Object.keys(partPayload).length ? partPayload : null,
   };
 }
 
