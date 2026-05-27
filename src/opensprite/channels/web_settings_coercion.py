@@ -8,6 +8,7 @@ from aiohttp import web
 from pydantic import ValidationError
 
 from ..config import ToolPermissionProfileOverrideConfig
+from ..permission_constants import APPROVAL_MODES_ORDER
 from ..utils.url import join_url_path
 
 
@@ -16,7 +17,9 @@ def coerce_approval_mode(value: Any, *, approval_modes: set[str] | frozenset[str
         return None
     mode = str(value or "").strip().lower()
     if mode not in approval_modes:
-        raise web.HTTPBadRequest(text=f"approval_mode must be one of: {', '.join(sorted(approval_modes))}")
+        options = [item for item in APPROVAL_MODES_ORDER if item in approval_modes]
+        options.extend(sorted(set(approval_modes) - set(APPROVAL_MODES_ORDER)))
+        raise web.HTTPBadRequest(text=f"approval_mode must be one of: {', '.join(options)}")
     return mode
 
 

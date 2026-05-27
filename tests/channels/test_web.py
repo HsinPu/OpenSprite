@@ -888,7 +888,18 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert resp.status == 200
                 payload = await resp.json()
                 assert payload["permissions"]["enabled"] is True
-                assert "external_side_effect" in payload["permissions"]["risk_level_options"]
+                assert payload["permissions"]["risk_level_options"] == [
+                    "read",
+                    "write",
+                    "execute",
+                    "network",
+                    "external_side_effect",
+                    "configuration",
+                    "delegation",
+                    "memory",
+                    "mcp",
+                ]
+                assert payload["permissions"]["approval_mode_options"] == ["auto", "ask", "block"]
                 assert payload["permissions"]["profile_overrides"]["chat"]["allowed_risk_levels"] == ["read"]
                 assert "ops" not in payload["permissions"]["profile_overrides"]
 

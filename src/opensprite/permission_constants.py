@@ -14,7 +14,9 @@ ALL_RISK_LEVELS_ORDER = (
 
 ALL_RISK_LEVELS = frozenset(ALL_RISK_LEVELS_ORDER)
 
-APPROVAL_MODES = frozenset({"auto", "ask", "block"})
+APPROVAL_MODES_ORDER = ("auto", "ask", "block")
+
+APPROVAL_MODES = frozenset(APPROVAL_MODES_ORDER)
 
 
 def denied_risks_except(allowed: tuple[str, ...] | list[str] | set[str] | frozenset[str]) -> tuple[str, ...]:
