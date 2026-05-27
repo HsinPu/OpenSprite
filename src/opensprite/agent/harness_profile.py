@@ -316,6 +316,68 @@ class HarnessProfileService:
         )
 
 
+def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
+    """Return representative profiles for settings policy previews."""
+    return (
+        HarnessProfile(
+            name="chat",
+            task_type="conversation",
+            verification_policy="none",
+            continuation_policy="minimal",
+            reason="preview profile for low-risk chat turns",
+        ),
+        HarnessProfile(
+            name="research",
+            task_type="web_research",
+            required_tool_groups=("web_research",),
+            required_evidence=("web_source", "source_reference"),
+            verification_policy="source_grounded",
+            continuation_policy="bounded_with_source_fetch",
+            approval_required_risk_levels=("external_side_effect",),
+            reason="preview profile for source-grounded web research turns",
+        ),
+        HarnessProfile(
+            name="coding",
+            task_type="workspace_analysis",
+            required_tool_groups=("workspace_read",),
+            required_evidence=("workspace_evidence",),
+            verification_policy="focused_if_possible",
+            continuation_policy="bounded_with_verification",
+            approval_required_risk_levels=("external_side_effect", "configuration"),
+            reason="preview profile for workspace analysis turns",
+        ),
+        HarnessProfile(
+            name="coding",
+            task_type="workspace_change",
+            required_tool_groups=("workspace_read", "workspace_write"),
+            required_evidence=("file_change",),
+            verification_policy="focused_if_possible",
+            continuation_policy="bounded_with_verification",
+            approval_required_risk_levels=("external_side_effect", "configuration"),
+            reason="preview profile for workspace change turns",
+        ),
+        HarnessProfile(
+            name="media",
+            task_type="media_extraction",
+            required_tool_groups=("media",),
+            required_evidence=("media_artifact",),
+            verification_policy="artifact_required",
+            continuation_policy="bounded",
+            reason="preview profile for media extraction turns",
+        ),
+        HarnessProfile(
+            name="ops",
+            task_type="operations",
+            required_tool_groups=("workspace_read",),
+            required_evidence=("audit_trace",),
+            verification_policy="validate_or_report",
+            continuation_policy="approval_bounded",
+            approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
+            reason="preview profile for operations turns",
+        ),
+    )
+
+
 def _has_marker(lowered: str, markers: tuple[str, ...]) -> bool:
     for marker in markers:
         if _is_ascii_word_marker(marker):
