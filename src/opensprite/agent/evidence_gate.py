@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .execution import ExecutionResult
-from .task_contract import TaskContract, TaskContractService, missing_evidence
+from .task_contract import TaskContract, missing_evidence, neutral_task_contract
 from .task_intent import TaskIntent
 
 
@@ -35,10 +35,7 @@ class EvidenceGateService:
         execution_result: ExecutionResult,
         verification_passed: bool,
     ) -> EvidenceGateResult:
-        task_contract = execution_result.task_contract or TaskContractService.build(
-            task_intent=task_intent,
-            current_message=task_intent.objective,
-        )
+        task_contract = execution_result.task_contract or neutral_task_contract(task_intent)
         missing = missing_evidence(
             task_contract,
             tuple(execution_result.tool_evidence or ()),

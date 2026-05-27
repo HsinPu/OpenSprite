@@ -185,6 +185,22 @@ class TaskContract:
         return payload
 
 
+def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | None = None) -> TaskContract:
+    """Return a no-tool fallback when a caller bypasses the planner path."""
+    objective = str(getattr(task_intent, "objective", "") or current_message or "").strip()
+    return TaskContract(
+        objective=objective,
+        task_type="pure_answer",
+        final_answer_required=True,
+        allow_no_tool_final=True,
+        contract_sources=("missing_runtime_contract",),
+        semantic_contract={
+            "planner_status": "missing",
+            "reason": "execution result did not include a task contract",
+        },
+    )
+
+
 @dataclass(frozen=True)
 class SemanticContractDecision:
     """Optional semantic contract signal from a classifier or test stub."""

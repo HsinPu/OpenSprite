@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from .execution import ExecutionResult
 from .resource_index import ResourceIndex
-from .task_contract import AcceptanceCriterion, TaskContract, TaskContractService
+from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
 from .task_intent import TaskIntent
 
 
@@ -48,10 +48,7 @@ class QualityGateService:
         execution_result: ExecutionResult,
         task_contract: TaskContract | None = None,
     ) -> QualityGateResult:
-        contract = task_contract or execution_result.task_contract or TaskContractService.build(
-            task_intent=task_intent,
-            current_message=task_intent.objective,
-        )
+        contract = task_contract or execution_result.task_contract or neutral_task_contract(task_intent)
         artifact_result = _evaluate_media_artifacts(contract, execution_result)
         if artifact_result is not None:
             return artifact_result

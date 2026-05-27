@@ -4,26 +4,19 @@ from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.llm_call import _semantic_classifier_trace_metadata
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
-    SemanticContractClassifier,
-    SemanticContractDecision,
+    EvidenceRequirement,
     TaskContract,
     TaskContractService,
-    semantic_contract_skip_reason,
 )
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config import Config
 from opensprite.llms.base import LLMResponse
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
-
-
-def _semantic_classifier() -> SemanticContractClassifier:
-    return SemanticContractClassifier(Config.load_agent_template_config().task_contract_llm)
 
 
 def _web_source_artifact() -> TaskArtifact:
@@ -191,6 +184,38 @@ def _web_research_partial_query_artifact() -> TaskArtifact:
                 "queries_without_successful_fetch": ["ai browser pricing"],
             },
         },
+    )
+
+
+def _tool_group_contract(intent, task_type: str, tool_group: str) -> TaskContract:
+    return TaskContract(
+        objective=intent.objective,
+        task_type=task_type,
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group=tool_group),),
+        allow_no_tool_final=False,
+        contract_sources=("test",),
+    )
+
+
+def _web_contract(intent) -> TaskContract:
+    return _tool_group_contract(intent, "web_research", "web_research")
+
+
+def _workspace_contract(intent) -> TaskContract:
+    return _tool_group_contract(intent, "workspace_read", "workspace_read")
+
+
+def _history_contract(intent) -> TaskContract:
+    return _tool_group_contract(intent, "history_retrieval", "history_retrieval")
+
+
+def _itemized_contract(intent) -> TaskContract:
+    return TaskContract(
+        objective=intent.objective,
+        task_type="pure_answer",
+        acceptance_criteria=(AcceptanceCriterion(kind="itemized_output", min_count=3, max_response_chars=260),),
+        allow_no_tool_final=True,
+        contract_sources=("test",),
     )
 
 
@@ -412,31 +437,31 @@ def test_completion_gate_completes_debug_answer_even_when_it_contains_questions(
 
 def test_completion_gate_requires_web_evidence_for_external_search_task():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = _web_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="正在幫你搜尋 Reddit 搜尋相關的開源專案...",
-        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案..."),
+        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案...", task_contract=contract),
     )
 
     assert result.status == "incomplete"
     assert result.reason == "required task evidence was not produced"
     assert result.missing_evidence
 
-
 def test_evidence_gate_reports_missing_contract_items():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = _web_contract(intent)
 
     result = EvidenceGateService().evaluate(
         task_intent=intent,
-        execution_result=ExecutionResult(content="我會搜尋 Reddit。"),
+        execution_result=ExecutionResult(content="我會搜尋 Reddit。", task_contract=contract),
         verification_passed=False,
     )
 
     assert result.passed is False
     assert result.reason == "required task evidence was not produced"
     assert result.missing_evidence
-
 
 def test_task_contract_records_web_source_acceptance_criteria():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
@@ -534,17 +559,17 @@ def test_task_contract_requires_workspace_read_for_direct_repo_lookup():
 
 def test_completion_gate_requires_workspace_evidence_for_direct_repo_lookup():
     intent = TaskIntentService().classify("search the repo for auth config")
+    contract = _workspace_contract(intent)
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="I will inspect the repo for auth config.",
-        execution_result=ExecutionResult(content="I will inspect the repo for auth config."),
+        execution_result=ExecutionResult(content="I will inspect the repo for auth config.", task_contract=contract),
     )
 
     assert completion.status == "incomplete"
     assert completion.reason == "required task evidence was not produced"
     assert completion.missing_evidence
-
 
 def test_completion_gate_rejects_terse_workspace_answer_after_reading():
     intent = TaskIntentService().classify("請看 src/opensprite/agent/task_contract.py")
@@ -621,17 +646,7 @@ def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_
 
 def test_completion_gate_requires_workspace_location_for_where_question():
     intent = TaskIntentService().classify("auth config 在哪")
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="workspace_read",
-            task_type="workspace_read",
-            confidence=0.9,
-            reason="repo-local config lookup",
-        ),
-    )
+    contract = _workspace_contract(intent)
     answer = "我查到 auth config 是在設定載入流程中處理，主要由設定服務負責解析與套用。"
 
     completion = CompletionGateService().evaluate(
@@ -648,20 +663,9 @@ def test_completion_gate_requires_workspace_location_for_where_question():
     assert completion.status == "incomplete"
     assert completion.reason == "assistant final answer did not identify the workspace location"
 
-
 def test_completion_gate_completes_workspace_location_answer_with_path():
     intent = TaskIntentService().classify("auth config 在哪")
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="workspace_read",
-            task_type="workspace_read",
-            confidence=0.9,
-            reason="repo-local config lookup",
-        ),
-    )
+    contract = _workspace_contract(intent)
     answer = (
         "我查到 auth config 相關邏輯在 src/opensprite/config/schema.py，"
         "其中 Config 與 provider settings 會處理認證與模型設定的載入。"
@@ -680,7 +684,6 @@ def test_completion_gate_completes_workspace_location_answer_with_path():
 
     assert completion.status == "complete"
 
-
 def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
 
@@ -697,17 +700,17 @@ def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
 
 def test_completion_gate_requires_history_evidence_for_prior_context_lookup():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
+    contract = _history_contract(intent)
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="我先回頭查一下剛剛的內容。",
-        execution_result=ExecutionResult(content="我先回頭查一下剛剛的內容。"),
+        execution_result=ExecutionResult(content="我先回頭查一下剛剛的內容。", task_contract=contract),
     )
 
     assert completion.status == "incomplete"
     assert completion.reason == "required task evidence was not produced"
     assert completion.missing_evidence
-
 
 def test_completion_gate_rejects_terse_history_answer_after_retrieval():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
@@ -864,358 +867,25 @@ def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval()
     assert completion.status == "complete"
 
 
-def test_semantic_contract_can_add_web_research_requirement():
-    intent = TaskIntentService().classify("2330 現在多少")
-
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="web_research",
-            task_type="web_research",
-            allow_no_tool_final=False,
-            confidence=0.86,
-            reason="User asks for current stock market data.",
-        ),
-    )
-
-    assert contract.task_type == "web_research"
-    assert contract.allow_no_tool_final is False
-    assert contract.contract_sources == ("deterministic", "semantic_classifier")
-    assert contract.semantic_contract
-    assert contract.semantic_contract["applied"] is True
-    assert contract.semantic_contract["reason"] == "User asks for current stock market data."
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
-    assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
-        "source_artifact",
-        "source_detail",
-        "substantive_final_answer",
-        "source_reference",
-    }
-
-
-def test_semantic_contract_can_add_workspace_read_requirement():
-    intent = TaskIntentService().classify("auth config 在哪")
-
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="workspace_read",
-            task_type="workspace_read",
-            allow_no_tool_final=False,
-            confidence=0.84,
-            reason="User is asking for a repo-local config location.",
-        ),
-    )
-
-    assert contract.task_type == "workspace_read"
-    assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "workspace_read" for requirement in contract.requirements)
-    assert contract.semantic_contract
-    assert contract.semantic_contract["applied"] is True
-
-
-def test_semantic_contract_can_add_history_retrieval_requirement():
-    intent = TaskIntentService().classify("那個 threshold 呢")
-
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="history_retrieval",
-            task_type="history_retrieval",
-            allow_no_tool_final=False,
-            confidence=0.83,
-            reason="User is referring to a previously discussed threshold.",
-        ),
-    )
-
-    assert contract.task_type == "history_retrieval"
-    assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
-    assert contract.semantic_contract
-    assert contract.semantic_contract["applied"] is True
-
-
-def test_semantic_contract_classifier_parses_web_research_decision():
-    provider = _JsonProvider(
-        '{"requires_tool_evidence": true, "required_tool_group": "web_research", '
-        '"task_type": "web_research", "allow_no_tool_final": false, '
-        '"confidence": 0.88, "reason": "Current stock price needs web evidence."}'
-    )
-    intent = TaskIntentService().classify("2330 現在多少")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    llm_config = Config.load_agent_template_config().task_contract_llm.model_copy(
-        update={"temperature": 0.4, "max_tokens": 323}
-    )
-    decision = asyncio.run(
-        SemanticContractClassifier(llm_config).classify(
-            provider=provider,
-            model=provider.get_default_model(),
-            task_intent=intent,
-            current_message=intent.objective,
-            history=[],
-            deterministic_contract=deterministic,
-        )
-    )
-
-    assert len(provider.calls) == 1
-    assert provider.calls[0]["temperature"] == 0.4
-    assert provider.calls[0]["max_tokens"] == 323
-    assert decision is not None
-    assert decision.requires_tool_evidence is True
-    assert decision.required_tool_group == "web_research"
-    assert decision.task_type == "web_research"
-    assert decision.allow_no_tool_final is False
-    assert decision.confidence == 0.88
-
-
-def test_semantic_contract_classifier_parses_workspace_read_decision():
-    provider = _JsonProvider(
-        '{"requires_tool_evidence": true, "required_tool_group": "workspace_read", '
-        '"task_type": "workspace_read", "allow_no_tool_final": false, '
-        '"confidence": 0.81, "reason": "Repo-local config lookup needs workspace inspection."}'
-    )
-    intent = TaskIntentService().classify("auth config 在哪")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    decision = asyncio.run(
-        _semantic_classifier().classify(
-            provider=provider,
-            model=provider.get_default_model(),
-            task_intent=intent,
-            current_message=intent.objective,
-            history=[],
-            deterministic_contract=deterministic,
-        )
-    )
-
-    assert decision is not None
-    assert decision.required_tool_group == "workspace_read"
-    assert decision.task_type == "workspace_read"
-    assert decision.confidence == 0.81
-
-
-def test_semantic_contract_classifier_parses_history_retrieval_decision():
-    provider = _JsonProvider(
-        '{"requires_tool_evidence": true, "required_tool_group": "history_retrieval", '
-        '"task_type": "history_retrieval", "allow_no_tool_final": false, '
-        '"confidence": 0.82, "reason": "Prior chat recall needs retrieval evidence."}'
-    )
-    intent = TaskIntentService().classify("那個 threshold 呢")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    decision = asyncio.run(
-        _semantic_classifier().classify(
-            provider=provider,
-            model=provider.get_default_model(),
-            task_intent=intent,
-            current_message=intent.objective,
-            history=[],
-            deterministic_contract=deterministic,
-        )
-    )
-
-    assert decision is not None
-    assert decision.required_tool_group == "history_retrieval"
-    assert decision.task_type == "history_retrieval"
-    assert decision.confidence == 0.82
-
-
-def test_semantic_contract_classifier_skips_deterministic_requirements():
-    provider = _JsonProvider("{}")
-    intent = TaskIntentService().classify("Please summarize https://example.com/docs")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    decision = asyncio.run(
-        _semantic_classifier().classify(
-            provider=provider,
-            model=provider.get_default_model(),
-            task_intent=intent,
-            current_message=intent.objective,
-            history=[],
-            deterministic_contract=deterministic,
-        )
-    )
-
-    assert decision is None
-    assert provider.calls == []
-    assert semantic_contract_skip_reason(
-        current_message=intent.objective,
-        task_intent=intent,
-        deterministic_contract=deterministic,
-    ) == "deterministic contract already requires evidence"
-
-
-def test_semantic_contract_classifier_skips_casual_conversation():
-    provider = _JsonProvider("{}")
-    intent = TaskIntentService().classify("hello")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    decision = asyncio.run(
-        _semantic_classifier().classify(
-            provider=provider,
-            model=provider.get_default_model(),
-            task_intent=intent,
-            current_message=intent.objective,
-            history=[],
-            deterministic_contract=deterministic,
-        )
-    )
-
-    assert decision is None
-    assert provider.calls == []
-    assert semantic_contract_skip_reason(
-        current_message=intent.objective,
-        task_intent=intent,
-        deterministic_contract=deterministic,
-    ) == "conversation does not look like an evidence lookup"
-
-
-def test_semantic_classifier_trace_metadata_records_invoked_health():
-    intent = TaskIntentService().classify("2330 現在多少")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-    decision = SemanticContractDecision(
-        requires_tool_evidence=True,
-        required_tool_group="web_research",
-        task_type="web_research",
-        confidence=0.88,
-        reason="Current stock price needs web evidence.",
-    )
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=decision,
-    )
-
-    metadata = _semantic_classifier_trace_metadata(
-        enabled=True,
-        status="invoked",
-        reason=None,
-        task_contract=contract,
-        semantic_decision=decision,
-    )
-
-    assert metadata["classifier_enabled"] is True
-    assert metadata["classifier_status"] == "invoked"
-    assert metadata["classifier_invoked"] is True
-    assert metadata["classifier_skipped"] is False
-    assert metadata["applied"] is True
-    assert metadata["confidence"] == 0.88
-    assert metadata["contract_sources"] == ["deterministic", "semantic_classifier"]
-
-
-def test_semantic_classifier_trace_metadata_records_skipped_health():
-    intent = TaskIntentService().classify("hello")
-    deterministic = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-    reason = semantic_contract_skip_reason(
-        current_message=intent.objective,
-        task_intent=intent,
-        deterministic_contract=deterministic,
-    )
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-
-    metadata = _semantic_classifier_trace_metadata(
-        enabled=True,
-        status="skipped",
-        reason=reason,
-        task_contract=contract,
-        semantic_decision=None,
-    )
-
-    assert metadata["classifier_status"] == "skipped"
-    assert metadata["classifier_invoked"] is False
-    assert metadata["classifier_skipped"] is True
-    assert metadata["applied"] is False
-    assert metadata["fallback_reason"] == "conversation does not look like an evidence lookup"
-
-
-def test_semantic_contract_cannot_remove_deterministic_requirement():
-    intent = TaskIntentService().classify("Please summarize https://example.com/docs")
-
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=False,
-            allow_no_tool_final=True,
-            confidence=0.95,
-            reason="Incorrectly says no tool evidence is required.",
-        ),
-    )
-
-    assert contract.task_type == "web_research"
-    assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
-    assert contract.semantic_contract
-    assert contract.semantic_contract["applied"] is False
-
-
-def test_low_confidence_semantic_contract_only_records_trace_metadata():
-    intent = TaskIntentService().classify("2330 怎麼樣")
-
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-        semantic_decision=SemanticContractDecision(
-            requires_tool_evidence=True,
-            required_tool_group="web_research",
-            task_type="web_research",
-            allow_no_tool_final=False,
-            confidence=0.42,
-            reason="Low confidence market lookup guess.",
-        ),
-    )
-
-    assert contract.requirements == ()
-    assert contract.allow_no_tool_final is True
-    assert contract.semantic_contract
-    assert contract.semantic_contract["applied"] is False
-    assert contract.to_metadata()["semantic_contract"]["reason"] == "Low confidence market lookup guess."
-
-
 def test_completion_gate_requires_web_evidence_for_chinese_market_lookup():
     intent = TaskIntentService().classify("查一下 2330市值")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        allow_no_tool_final=False,
+        contract_sources=("test",),
+    )
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="讓我查一下最新市值：",
-        execution_result=ExecutionResult(content="讓我查一下最新市值："),
+        execution_result=ExecutionResult(content="讓我查一下最新市值：", task_contract=contract),
     )
 
     assert completion.status == "incomplete"
     assert completion.reason == "required task evidence was not produced"
     assert completion.missing_evidence
-
 
 def test_task_contract_inherits_web_research_for_short_follow_up():
     intent = TaskIntentService().classify("那00981t呢")
@@ -1884,30 +1554,30 @@ def test_completion_gate_accepts_browser_source_artifact_for_web_research():
 
 def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
+    contract = _itemized_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="好，幫你抓 r/taiwan 熱門文章 20 筆！",
-        execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！"),
+        execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！", task_contract=contract),
     )
 
     assert result.status == "incomplete"
     assert result.reason == "assistant did not provide the requested itemized result"
 
-
 def test_quality_gate_reports_missing_requested_items():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
+    contract = _itemized_contract(intent)
 
     result = QualityGateService().evaluate(
         task_intent=intent,
         response_text="好，幫你抓 r/taiwan 熱門文章 20 筆！",
-        execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！"),
+        execution_result=ExecutionResult(content="好，幫你抓 r/taiwan 熱門文章 20 筆！", task_contract=contract),
     )
 
     assert result.passed is False
     assert result.status == "incomplete"
     assert result.reason == "assistant did not provide the requested itemized result"
-
 
 def test_task_contract_records_itemized_acceptance_criterion():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
@@ -2051,16 +1721,17 @@ def test_completion_gate_marks_direct_reply_instruction_complete_without_marker(
 
 def test_auto_continue_allows_first_retry_after_missing_web_evidence():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = _web_contract(intent)
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="正在幫你搜尋 Reddit 搜尋相關的開源專案...",
-        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案..."),
+        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案...", task_contract=contract),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案..."),
+        execution_result=ExecutionResult(content="正在幫你搜尋 Reddit 搜尋相關的開源專案...", task_contract=contract),
         attempts_used=0,
         previous_response="正在幫你搜尋 Reddit 搜尋相關的開源專案...",
     )
@@ -2070,20 +1741,20 @@ def test_auto_continue_allows_first_retry_after_missing_web_evidence():
     assert "Continue the current task" in (decision.prompt or "")
     assert "Required follow-up" in (decision.prompt or "")
 
-
 def test_auto_continue_allows_first_retry_after_progress_only_fetch_response():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
+    contract = _itemized_contract(intent)
     response = "好，幫你抓 r/taiwan 熱門文章 20 筆！"
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text=response,
-        execution_result=ExecutionResult(content=response),
+        execution_result=ExecutionResult(content=response, task_contract=contract),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content=response),
+        execution_result=ExecutionResult(content=response, task_contract=contract),
         attempts_used=0,
         previous_response=response,
     )
@@ -2091,7 +1762,6 @@ def test_auto_continue_allows_first_retry_after_progress_only_fetch_response():
     assert decision.should_continue is True
     assert decision.reason == "completion_gate_incomplete"
     assert "Continue the current task" in (decision.prompt or "")
-
 
 def test_completion_gate_marks_chinese_action_ack_response_incomplete():
     intent = TaskIntentService().classify(
