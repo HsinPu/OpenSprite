@@ -332,6 +332,26 @@ def test_completion_gate_marks_chinese_missing_files_as_blocked():
     assert result.active_task_status == "blocked"
 
 
+def test_completion_gate_marks_blocker_heading_as_blocked():
+    intent = TaskIntentService().classify(
+        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
+    )
+    response = "## Blocker\n\nRequired project files were not found."
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(
+            content=response,
+            executed_tool_calls=1,
+            had_tool_error=True,
+        ),
+    )
+
+    assert result.status == "blocked"
+    assert result.active_task_status == "blocked"
+
+
 def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():
     intent = TaskIntentService().classify(
         "\u5ef6\u7e8c\u525b\u525b\u7684\u7a0b\u5f0f\u78bc\u89c0\u5bdf\uff0c\u8acb\u8a2d\u8a08\u6700\u5c0f regression test \u6848\u4f8b\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\u3001\u4e0d\u8981\u57f7\u884c\u6e2c\u8a66\u3002"

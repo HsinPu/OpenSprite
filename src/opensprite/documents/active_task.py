@@ -192,6 +192,7 @@ _BLOCKED_PATTERNS = (
     "現在無法繼續",
     "卡住",
     "受阻",
+    "blocker",
     "blocked",
     "cannot continue",
     "can't continue",
