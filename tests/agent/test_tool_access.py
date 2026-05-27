@@ -65,3 +65,29 @@ def test_tool_access_resolver_composes_profile_override_with_harness_policy():
     assert resolution.metadata["profile_override"]["allowed_risk_levels"] == ["read"]
     assert "profile permission override" in resolution.metadata["constraints_applied"]
     assert resolution.metadata["tool_access"]["blocked_tool_count"] == 3
+
+
+def test_tool_access_resolver_resolves_overlay_policy_and_metadata():
+    registry = _registry()
+    overlay = ToolPermissionPolicy(
+        allowed_tools=["read_file", "batch"],
+        allowed_risk_levels=["read"],
+        denied_risk_levels=["write", "network"],
+    )
+
+    resolution = ToolAccessResolver().resolve_overlay(
+        registry,
+        overlay_policy=overlay,
+        include_names={"read_file", "web_search", "apply_patch", "batch"},
+        metadata_kind="planning",
+    )
+
+    assert resolution.registry.tool_names == ["read_file", "batch"]
+    assert resolution.registry.permission_policy is resolution.effective_policy
+    assert resolution.registry.permission_resolution_metadata == resolution.metadata
+    assert resolution.metadata["kind"] == "planning"
+    assert resolution.metadata["overlay_permission_policy"]["allowed_tools"] == ["read_file", "batch"]
+    assert resolution.metadata["effective_risks"]["allowed_risk_levels"] == ["read"]
+    blocked = {item["name"]: item for item in resolution.metadata["tool_access"]["blocked_tools"]}
+    assert blocked["web_search"]["reason"] == "tool 'web_search' is not in allowed_tools"
+    assert blocked["apply_patch"]["reason"] == "tool 'apply_patch' is not in allowed_tools"

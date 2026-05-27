@@ -95,6 +95,42 @@ class ToolAccessResolver:
             metadata=metadata,
         )
 
+    def resolve_overlay(
+        self,
+        base_registry: ToolRegistry,
+        *,
+        overlay_policy: ToolPermissionPolicy,
+        include_names: set[str] | frozenset[str] | None = None,
+        extra_policies: tuple[ToolPermissionPolicy, ...] = (),
+        metadata_kind: str,
+    ) -> ToolAccessResolution:
+        """Return a registry constrained by a non-harness overlay policy."""
+        policies: list[ToolPermissionPolicy] = [base_registry.permission_policy, overlay_policy]
+        policies.extend(extra_policies)
+        effective_policy = CompositeToolPermissionPolicy(*policies)
+        registry = base_registry.filtered(
+            include_names=include_names,
+            permission_policy=effective_policy,
+        )
+        if "batch" in registry.tool_names:
+            registry.register(BatchTool(registry_resolver=lambda: registry))
+        metadata: dict[str, Any] = {
+            "schema_version": 1,
+            "kind": metadata_kind,
+            "base_permission_policy": base_registry.permission_policy.to_metadata(),
+            "overlay_permission_policy": overlay_policy.to_metadata(),
+            "extra_permission_policies": [policy.to_metadata() for policy in extra_policies],
+            "effective_policy": effective_policy.to_metadata(),
+            "effective_risks": summarize_effective_risks(effective_policy),
+        }
+        metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
+        registry.permission_resolution_metadata = metadata
+        return ToolAccessResolution(
+            registry=registry,
+            effective_policy=effective_policy,
+            metadata=metadata,
+        )
+
 
 def summarize_effective_risks(policy: ToolPermissionPolicy) -> dict[str, list[str]]:
     """Summarize effective risk exposure and approval requirements for previews."""
