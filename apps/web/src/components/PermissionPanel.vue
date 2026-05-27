@@ -19,9 +19,9 @@
             <dt>{{ copy.permissions.actionType }}</dt>
             <dd>{{ request.actionType }}</dd>
           </div>
-          <div v-if="request.riskLevel">
+          <div v-if="request.riskLevel || request.riskLevels?.length">
             <dt>{{ copy.permissions.riskLevel }}</dt>
-            <dd>{{ request.riskLevel }}</dd>
+            <dd>{{ formatRiskLevels(request) }}</dd>
           </div>
           <div v-if="request.resource">
             <dt>{{ copy.permissions.resource }}</dt>
@@ -73,4 +73,14 @@ defineProps({
 });
 
 defineEmits(["resolve-permission"]);
+
+function formatRiskLevels(request) {
+  const risks = Array.isArray(request?.riskLevels)
+    ? request.riskLevels.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  if (risks.length) {
+    return risks.join(", ");
+  }
+  return String(request?.riskLevel || "").trim();
+}
 </script>
