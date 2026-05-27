@@ -2351,6 +2351,33 @@ def test_completion_gate_requires_recorded_code_changes_for_implementation():
     assert result.reason == "expected code changes were not recorded"
 
 
+def test_completion_gate_respects_pure_answer_contract_over_code_intent():
+    intent = TaskIntentService().classify(
+        "請幫我規劃一個安全的三階段修正流程，要包含每階段驗證方式；不要呼叫工具。"
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="pure_answer",
+        requirements=(),
+        acceptance_criteria=(),
+        allow_no_tool_final=True,
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="第一階段先隔離問題，第二階段做最小修正，第三階段驗證結果。",
+        execution_result=ExecutionResult(
+            content="第一階段先隔離問題，第二階段做最小修正，第三階段驗證結果。",
+            task_contract=contract,
+        ),
+    )
+
+    assert intent.expects_code_change is True
+    assert intent.expects_verification is True
+    assert result.status == "complete"
+    assert result.verification_required is False
+
+
 def test_completion_gate_requires_review_for_code_changes_without_review_evidence():
     intent = TaskIntentService().classify("Please implement the final cleanup.")
 
