@@ -3,7 +3,12 @@ import asyncio
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveResolver
+from opensprite.config import Config
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
+
+
+def _resolver() -> TaskObjectiveResolver:
+    return TaskObjectiveResolver(Config.load_agent_template_config().task_objective_llm)
 
 
 class _JsonProvider:
@@ -72,7 +77,7 @@ def test_task_objective_resolver_enriches_short_web_follow_up():
     )
 
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -101,7 +106,7 @@ def test_task_objective_resolver_skips_continue_active_task():
     )
 
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="繼續",
             history=[],
             task_intent=TaskIntentService().classify("繼續"),
@@ -128,7 +133,7 @@ def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
     )
 
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="switch",
             history=[],
             task_intent=TaskIntentService().classify("switch"),
@@ -147,7 +152,7 @@ def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
 
 def test_task_objective_resolver_falls_back_when_provider_is_unconfigured():
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -169,7 +174,7 @@ def test_task_objective_resolver_ignores_low_confidence_objective():
     )
 
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -188,7 +193,7 @@ def test_task_objective_resolver_falls_back_on_invalid_json():
     provider = _JsonProvider("not json")
 
     decision = asyncio.run(
-        TaskObjectiveResolver().resolve(
+        _resolver().resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),

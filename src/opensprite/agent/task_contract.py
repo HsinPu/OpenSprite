@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
 from .harness_profile import HarnessProfile, has_no_web_constraint, has_no_workspace_constraint
@@ -182,6 +183,9 @@ class SemanticContractDecision:
 class SemanticContractClassifier:
     """LLM-backed classifier for ambiguous task contracts."""
 
+    def __init__(self, llm_config: DocumentLlmConfig):
+        self.llm_config = llm_config
+
     async def classify(
         self,
         *,
@@ -215,8 +219,7 @@ class SemanticContractClassifier:
                 ),
             ],
             model=model,
-            temperature=0.0,
-            max_tokens=400,
+            **self.llm_config.decoding_kwargs(),
         )
         return _semantic_decision_from_payload(_parse_json_object(str(getattr(response, "content", "") or "")))
 

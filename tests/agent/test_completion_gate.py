@@ -16,9 +16,14 @@ from opensprite.agent.task_contract import (
     semantic_contract_skip_reason,
 )
 from opensprite.agent.task_intent import TaskIntentService
+from opensprite.config import Config
 from opensprite.llms.base import LLMResponse
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
+
+
+def _semantic_classifier() -> SemanticContractClassifier:
+    return SemanticContractClassifier(Config.load_agent_template_config().task_contract_llm)
 
 
 def _web_source_artifact() -> TaskArtifact:
@@ -893,7 +898,7 @@ def test_semantic_contract_classifier_parses_web_research_decision():
     )
 
     decision = asyncio.run(
-        SemanticContractClassifier().classify(
+        _semantic_classifier().classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,
@@ -925,7 +930,7 @@ def test_semantic_contract_classifier_parses_workspace_read_decision():
     )
 
     decision = asyncio.run(
-        SemanticContractClassifier().classify(
+        _semantic_classifier().classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,
@@ -954,7 +959,7 @@ def test_semantic_contract_classifier_parses_history_retrieval_decision():
     )
 
     decision = asyncio.run(
-        SemanticContractClassifier().classify(
+        _semantic_classifier().classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,
@@ -979,7 +984,7 @@ def test_semantic_contract_classifier_skips_deterministic_requirements():
     )
 
     decision = asyncio.run(
-        SemanticContractClassifier().classify(
+        _semantic_classifier().classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,
@@ -1007,7 +1012,7 @@ def test_semantic_contract_classifier_skips_casual_conversation():
     )
 
     decision = asyncio.run(
-        SemanticContractClassifier().classify(
+        _semantic_classifier().classify(
             provider=provider,
             model=provider.get_default_model(),
             task_intent=intent,

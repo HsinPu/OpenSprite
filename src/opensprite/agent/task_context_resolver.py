@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
+from ..config.schema import DocumentLlmConfig
 from ..documents.active_task import should_replace_active_task
 from ..llms import ChatMessage
 from ..utils.log import logger
@@ -143,6 +144,9 @@ class TaskContextDecision:
 
 class TaskContextResolver:
     """Resolve whether a turn should inherit recent task context."""
+
+    def __init__(self, llm_config: DocumentLlmConfig):
+        self.llm_config = llm_config
 
     async def resolve(
         self,
@@ -329,8 +333,7 @@ class TaskContextResolver:
                 ChatMessage(role="user", content=prompt),
             ],
             model=model,
-            temperature=0.0,
-            max_tokens=500,
+            **self.llm_config.decoding_kwargs(),
         )
         payload = _parse_json_object(str(getattr(response, "content", "") or ""))
         return _decision_from_payload(payload, has_active_task=_has_active_task(active_task))

@@ -683,9 +683,9 @@ class AgentLoop:
         self.task_intents = TaskIntentService()
         self.harness_profiles = HarnessProfileService()
         self.harness_policies = HarnessPolicyService()
-        self.task_context_resolver = TaskContextResolver()
-        self.task_objective_resolver = TaskObjectiveResolver()
-        self.semantic_contract_classifier = SemanticContractClassifier()
+        self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
+        self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
+        self.semantic_contract_classifier = SemanticContractClassifier(self.config.task_contract_llm)
         self.completion_gate = CompletionGateService()
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
@@ -1398,6 +1398,9 @@ class AgentLoop:
         self.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
         self.llm_context_window_tokens = cfg.context_window_tokens
         self.llm_configured = config.is_llm_configured
+        self.task_context_resolver.llm_config = config.agent.task_context_llm
+        self.task_objective_resolver.llm_config = config.agent.task_objective_llm
+        self.semantic_contract_classifier.llm_config = config.agent.task_contract_llm
 
         self.prompt_budget.provider = provider
         self.execution_engine.provider = provider

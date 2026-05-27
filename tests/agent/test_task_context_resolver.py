@@ -7,8 +7,13 @@ from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
+from opensprite.config import Config
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
+
+
+def _resolver() -> TaskContextResolver:
+    return TaskContextResolver(Config.load_agent_template_config().task_context_llm)
 
 
 class _Storage:
@@ -103,7 +108,7 @@ def test_task_context_uses_deterministic_follow_up_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那00981t呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那00981t呢"),
@@ -127,7 +132,7 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     )
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那這個呢",
             history=[],
             task_intent=TaskIntentService().classify("那這個呢"),
@@ -157,7 +162,7 @@ def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
         )
 
         decision = asyncio.run(
-            TaskContextResolver().resolve(
+            _resolver().resolve(
                 current_message=message,
                 history=_WEB_RESEARCH_HISTORY,
                 task_intent=TaskIntentService().classify(message),
@@ -178,7 +183,7 @@ def test_task_context_handles_chinese_typo_follow_up_deterministically():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="這ㄍ呢",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("這ㄍ呢"),
@@ -197,7 +202,7 @@ def test_task_context_acknowledgement_skips_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="thanks",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("thanks"),
@@ -215,7 +220,7 @@ def test_task_context_falls_back_when_llm_json_is_invalid():
     provider = _JsonProvider("not json")
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那這個呢",
             history=[],
             task_intent=TaskIntentService().classify("那這個呢"),
@@ -239,7 +244,7 @@ def test_task_context_ignores_low_confidence_llm_decision():
     )
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那這個呢",
             history=[],
             task_intent=TaskIntentService().classify("那這個呢"),
@@ -263,7 +268,7 @@ def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
     message = "好，現在請直接修掉 tests/test_app.py 的問題"
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message=message,
             history=[],
             task_intent=TaskIntentService().classify(message),
@@ -290,7 +295,7 @@ def test_task_context_downgrades_low_confidence_task_switch_to_ambiguous_boundar
     message = "please update README"
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message=message,
             history=[],
             task_intent=TaskIntentService().classify(message),
@@ -321,7 +326,7 @@ def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
     message = "please update README"
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message=message,
             history=[],
             task_intent=TaskIntentService().classify(message),
@@ -344,7 +349,7 @@ def test_task_context_skips_llm_when_provider_is_unconfigured():
     message = "那這個呢"
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message=message,
             history=[],
             task_intent=TaskIntentService().classify(message),
@@ -361,7 +366,7 @@ def test_task_context_continues_active_task_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="繼續",
             history=[],
             task_intent=TaskIntentService().classify("繼續"),
@@ -381,7 +386,7 @@ def test_task_context_confirms_pending_boundary_switch_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="switch",
             history=[],
             task_intent=TaskIntentService().classify("switch"),
@@ -401,7 +406,7 @@ def test_task_context_confirms_pending_boundary_continue_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="continue",
             history=[],
             task_intent=TaskIntentService().classify("continue"),
@@ -420,7 +425,7 @@ def test_task_context_supports_legacy_boundary_question_format():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="switch",
             history=[],
             task_intent=TaskIntentService().classify("switch"),
@@ -438,7 +443,7 @@ def test_task_context_continue_without_active_task_inherits_recent_web_context()
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="繼續",
             history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("繼續"),
@@ -458,7 +463,7 @@ def test_task_context_inherits_recent_workspace_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那這個呢",
             history=[
                 {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
@@ -483,7 +488,7 @@ def test_task_context_does_not_inherit_workspace_for_standalone_error_question()
     )
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="What can cause Connection timed out?",
             history=[
                 {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
@@ -509,7 +514,7 @@ def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
 
     message = "I have a Python script but have not pasted it yet. What info should I prepare?"
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message=message,
             history=[
                 {"role": "assistant", "content": "I can help write code, inspect files, and run tests."},
@@ -530,7 +535,7 @@ def test_task_context_inherits_recent_history_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
-        TaskContextResolver().resolve(
+        _resolver().resolve(
             current_message="那這個呢",
             history=[
                 {"role": "tool", "tool_name": "search_history", "content": "matched prior discussion about thresholds"},
