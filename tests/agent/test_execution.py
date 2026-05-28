@@ -1163,6 +1163,32 @@ def test_execution_engine_retries_when_minimax_text_tool_call_is_visible_content
     assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
 
 
+def test_execution_engine_retries_when_bracket_text_tool_call_is_visible_content():
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content=(
+                    "[TOOL_CALL]\n"
+                    "{tool => \"web_fetch\", args => { --url \"https://example.com\" }}\n"
+                    "[/TOOL_CALL]"
+                ),
+                model="fake-model",
+            ),
+            LLMResponse(content="plain final answer", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, ToolRegistry(), [])
+    engine.sanitize_response_content = PromptLoggingService.sanitize_response_content
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)
+    )
+
+    assert result.content == "plain final answer"
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
+
+
 def test_execution_engine_falls_back_after_second_blank_visible_response():
     provider = FakeProvider(
         [

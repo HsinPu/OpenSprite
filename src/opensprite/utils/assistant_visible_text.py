@@ -7,10 +7,14 @@ import re
 
 FENCED_CODE_RE = re.compile(r"(^|\n)(```|~~~)[^\n]*\n[\s\S]*?(?:\n\2|$)")
 INLINE_CODE_RE = re.compile(r"`+[^`]+`+")
-QUICK_INTERNAL_TAG_RE = re.compile(r"<\s*/?\s*(?:think(?:ing)?|system-reminder|minimax:tool_call)\b", re.IGNORECASE)
+QUICK_INTERNAL_TAG_RE = re.compile(
+    r"<\s*/?\s*(?:think(?:ing)?|system-reminder|minimax:tool_call)\b|\[\s*tool_call\s*\]",
+    re.IGNORECASE,
+)
 THINKING_TAG_RE = re.compile(r"<\s*(/?)\s*(?:think(?:ing)?)\b[^<>]*>", re.IGNORECASE)
 SYSTEM_REMINDER_TAG_RE = re.compile(r"<\s*(/?)\s*system-reminder\b[^<>]*>", re.IGNORECASE)
 MINIMAX_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*minimax:tool_call\b[^<>]*>", re.IGNORECASE)
+BRACKET_TOOL_CALL_RE = re.compile(r"\[\s*(/?)\s*tool_call\s*\]", re.IGNORECASE)
 
 
 def _find_code_regions(text: str) -> list[tuple[int, int]]:
@@ -82,6 +86,7 @@ def strip_assistant_internal_scaffolding(text: str) -> str:
     cleaned = _strip_tag_blocks(text, THINKING_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, SYSTEM_REMINDER_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, MINIMAX_TOOL_CALL_TAG_RE)
+    cleaned = _strip_tag_blocks(cleaned, BRACKET_TOOL_CALL_RE)
     return cleaned
 
 

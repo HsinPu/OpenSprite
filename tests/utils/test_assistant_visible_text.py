@@ -76,3 +76,20 @@ def test_sanitize_assistant_visible_text_preserves_minimax_tool_call_examples_in
     text = "Example:\n```xml\n<minimax:tool_call>literal</minimax:tool_call>\n```\nVisible answer"
 
     assert sanitize_assistant_visible_text(text) == text
+
+
+def test_sanitize_assistant_visible_text_strips_bracket_tool_call_blocks():
+    text = (
+        "[TOOL_CALL]\n"
+        "{tool => \"web_fetch\", args => { --url \"https://example.com\" }}\n"
+        "[/TOOL_CALL]\n"
+        "Visible answer"
+    )
+
+    assert sanitize_assistant_visible_text(text) == "Visible answer"
+
+
+def test_sanitize_assistant_visible_text_preserves_bracket_tool_call_examples_in_code():
+    text = "Example:\n```text\n[TOOL_CALL]literal[/TOOL_CALL]\n```\nVisible answer"
+
+    assert sanitize_assistant_visible_text(text) == text
