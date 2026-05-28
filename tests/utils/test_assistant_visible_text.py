@@ -57,3 +57,22 @@ def test_sanitize_assistant_visible_text_strips_real_tags_while_preserving_liter
     text = "<think>hidden</think>Visible text with `<think>` example."
 
     assert sanitize_assistant_visible_text(text) == "Visible text with `<think>` example."
+
+
+def test_sanitize_assistant_visible_text_strips_minimax_tool_call_blocks():
+    text = (
+        "<minimax:tool_call>\n"
+        "<invoke name=\"web_fetch\">\n"
+        "<parameter name=\"url\">https://example.com</parameter>\n"
+        "</invoke>\n"
+        "</minimax:tool_call>\n"
+        "Visible answer"
+    )
+
+    assert sanitize_assistant_visible_text(text) == "Visible answer"
+
+
+def test_sanitize_assistant_visible_text_preserves_minimax_tool_call_examples_in_code():
+    text = "Example:\n```xml\n<minimax:tool_call>literal</minimax:tool_call>\n```\nVisible answer"
+
+    assert sanitize_assistant_visible_text(text) == text
