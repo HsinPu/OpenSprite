@@ -145,6 +145,48 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
     assert aggregate.task_contract is valid_contract
 
 
+def test_aggregate_execution_results_keeps_valid_contract_over_retry_fallback_contract():
+    valid_contract = TaskContract(
+        objective="Find sources",
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        contract_sources=("llm_planner",),
+        planner_metadata={"planner_status": "validated"},
+    )
+    fallback_contract = TaskContract(
+        objective="Find sources",
+        task_type="history_retrieval",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        contract_sources=("llm_planner", "fallback"),
+        planner_metadata={"planner_status": "fallback", "reason": "invalid JSON"},
+    )
+
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [
+            ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
+            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=fallback_contract),
+        ],
+        content="retry answer",
+    )
+
+    assert aggregate.content == "retry answer"
+    assert aggregate.executed_tool_calls == 1
+    assert aggregate.task_contract is valid_contract
+
+
+def test_aggregate_execution_results_does_not_mark_visible_final_as_internal_only():
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [
+            ExecutionResult(content="first pass", assistant_internal_only_response=False),
+            ExecutionResult(content="", assistant_internal_only_response=True),
+        ],
+        content="first pass",
+    )
+
+    assert aggregate.content == "first pass"
+    assert aggregate.assistant_internal_only_response is False
+
+
 def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract_exists():
     planning_error = TaskContract(
         objective="Find sources",

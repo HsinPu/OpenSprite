@@ -1088,7 +1088,7 @@ class AgentTurnRunner:
                 ),
                 None,
             ),
-            assistant_internal_only_response=any(result.assistant_internal_only_response for result in results),
+            assistant_internal_only_response=bool(latest_result.assistant_internal_only_response and not content.strip()),
             task_contract=AgentTurnRunner._select_aggregate_task_contract(results),
             harness_policy=next(
                 (
@@ -1112,7 +1112,7 @@ class AgentTurnRunner:
 
     @staticmethod
     def _select_aggregate_task_contract(results: list[ExecutionResult]):
-        """Keep a validated contract if a later retry only failed contract planning."""
+        """Keep a validated contract if a later retry only failed or fell back during planning."""
         fallback = next(
             (
                 result.task_contract
@@ -1121,6 +1121,19 @@ class AgentTurnRunner:
             ),
             None,
         )
+        validated = next(
+            (
+                result.task_contract
+                for result in reversed(results)
+                if (
+                    result.task_contract is not None
+                    and _task_contract_planner_status(result.task_contract) == "validated"
+                )
+            ),
+            None,
+        )
+        if validated is not None:
+            return validated
         return next(
             (
                 result.task_contract
@@ -1256,3 +1269,10 @@ def _harness_trace_health(
             "not_applicable": sensor_statuses.count("not_applicable"),
         },
     }
+
+
+def _task_contract_planner_status(task_contract: Any) -> str:
+    metadata = getattr(task_contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get("planner_status") or "").strip()
+    return ""
