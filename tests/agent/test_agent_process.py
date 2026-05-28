@@ -117,6 +117,50 @@ def test_aggregate_execution_results_keeps_only_latest_stop_reason():
     assert aggregate.stop_metadata == {}
 
 
+def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error():
+    valid_contract = TaskContract(
+        objective="Find sources",
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        contract_sources=("llm_planner",),
+        planner_metadata={"planner_status": "validated"},
+    )
+    planning_error = TaskContract(
+        objective="Find sources",
+        task_type="planning_error",
+        contract_sources=("llm_planner",),
+        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
+    )
+
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [
+            ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
+            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error),
+        ],
+        content="retry answer",
+    )
+
+    assert aggregate.content == "retry answer"
+    assert aggregate.executed_tool_calls == 1
+    assert aggregate.task_contract is valid_contract
+
+
+def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract_exists():
+    planning_error = TaskContract(
+        objective="Find sources",
+        task_type="planning_error",
+        contract_sources=("llm_planner",),
+        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
+    )
+
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [ExecutionResult(content="blocked", executed_tool_calls=0, task_contract=planning_error)],
+        content="blocked",
+    )
+
+    assert aggregate.task_contract is planning_error
+
+
 class WorkflowAuthorityProvider:
     def __init__(self):
         self.calls = []

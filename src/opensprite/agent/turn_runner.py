@@ -1089,14 +1089,7 @@ class AgentTurnRunner:
                 None,
             ),
             assistant_internal_only_response=any(result.assistant_internal_only_response for result in results),
-            task_contract=next(
-                (
-                    result.task_contract
-                    for result in reversed(results)
-                    if result.task_contract is not None
-                ),
-                None,
-            ),
+            task_contract=AgentTurnRunner._select_aggregate_task_contract(results),
             harness_policy=next(
                 (
                     dict(result.harness_policy)
@@ -1115,6 +1108,26 @@ class AgentTurnRunner:
                 for result in results
                 for artifact in result.task_artifacts
             ),
+        )
+
+    @staticmethod
+    def _select_aggregate_task_contract(results: list[ExecutionResult]):
+        """Keep a validated contract if a later retry only failed contract planning."""
+        fallback = next(
+            (
+                result.task_contract
+                for result in reversed(results)
+                if result.task_contract is not None
+            ),
+            None,
+        )
+        return next(
+            (
+                result.task_contract
+                for result in reversed(results)
+                if result.task_contract is not None and result.task_contract.task_type != "planning_error"
+            ),
+            fallback,
         )
 
     @staticmethod
