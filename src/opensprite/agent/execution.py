@@ -339,6 +339,34 @@ Output exactly these sections when applicable:
                 prompt_type = line.split(": ", 1)[1].strip() or None
         return task_id, prompt_type
 
+    @staticmethod
+    def _should_force_final_after_web_sources(
+        task_artifacts: list[TaskArtifact],
+        tool_evidence: list[ToolEvidence],
+    ) -> bool:
+        web_artifacts = [
+            artifact
+            for artifact in task_artifacts
+            if artifact.ok and artifact.kind == "web_source" and artifact.metadata.get("sources")
+        ]
+        if not web_artifacts:
+            return False
+
+        for artifact in web_artifacts:
+            if artifact.source_tool != "web_research":
+                continue
+            coverage = artifact.metadata.get("coverage")
+            if isinstance(coverage, dict) and coverage.get("target_met"):
+                return True
+
+        traceable_web_evidence_count = 0
+        for evidence in tool_evidence:
+            if not evidence.ok or evidence.name not in {"web_search", "web_fetch", "web_research"}:
+                continue
+            if evidence.metadata.get("sources"):
+                traceable_web_evidence_count += 1
+        return traceable_web_evidence_count >= 2
+
     @classmethod
     async def _emit_response_deltas(
         cls,
@@ -1745,6 +1773,21 @@ Output exactly these sections when applicable:
                         tool_name=tool_name,
                         tool_args=display_tool_args,
                         result=result,
+                    )
+
+                if self._should_force_final_after_web_sources(task_artifacts, tool_evidence):
+                    tools = None
+                    chat_messages.append(ChatMessage(
+                        role="system",
+                        content=(
+                            "You already have enough traceable web source evidence for this turn. "
+                            "Stop calling tools now and write the final answer from the gathered sources. "
+                            "Cite source URLs or domains, and state uncertainty plainly if exact current data is unavailable."
+                        ),
+                    ))
+                    logger.info(
+                        f"[{log_id}] llm.force-final-after-web-sources | "
+                        f"artifacts={len(task_artifacts)} evidence={len(tool_evidence)}"
                     )
 
                 continue

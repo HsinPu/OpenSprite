@@ -83,6 +83,45 @@ class FailingTool(Tool):
         return "Error: still broken"
 
 
+class TraceableWebResearchTool(Tool):
+    @property
+    def name(self) -> str:
+        return "web_research"
+
+    @property
+    def description(self) -> str:
+        return "Traceable web research"
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {"query": {"type": "string"}}}
+
+    async def _execute(self, query: str, **kwargs) -> str:
+        return json.dumps({
+            "type": "web_research",
+            "query": query,
+            "source_count": 2,
+            "fetched_count": 2,
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "title": "Fresh source",
+                    "url": "https://example.com/fresh",
+                    "snippet": "fresh source text",
+                    "content_chars": 1200,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "title": "Second source",
+                    "url": "https://example.com/second",
+                    "snippet": "second source text",
+                    "content_chars": 1000,
+                },
+            ],
+            "coverage": {"target_met": True, "fetched_count": 2, "failed_count": 0},
+        })
+
+
 class RepeatingReadFileTool(Tool):
     def __init__(self):
         self.calls = 0
@@ -626,6 +665,33 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
     assert tool.calls == 3
     assert "repeated_failure_block" in messages[-1].content
     assert "Blocked failing_tool" in messages[-1].content
+
+
+def test_execution_engine_forces_final_after_complete_web_research_sources():
+    registry = ToolRegistry()
+    registry.register(TraceableWebResearchTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="checking",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc-web", name="web_research", arguments={"query": "fresh news"})],
+            ),
+            LLMResponse(content="final with sources", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [], tools_config=ToolsConfig(max_tool_iterations=5))
+    messages = [ChatMessage(role="user", content="find fresh sources")]
+
+    result = asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=True))
+
+    assert result.content == "final with sources"
+    assert result.executed_tool_calls == 1
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["tools"] is None
+    assert messages[-1].role == "system"
+    assert "Stop calling tools now" in messages[-1].content
+    assert result.task_artifacts[0].kind == "web_source"
 
 
 def test_tool_result_failure_detection_allows_partial_web_research_payload():
