@@ -71,6 +71,14 @@ _GENERIC_PENDING_RESPONSES = frozenset(
         "我來處理",
     }
 )
+_EXISTING_WEB_SOURCE_FINAL_RETRY_REASONS = frozenset(
+    {
+        "assistant only emitted internal control text",
+        "assistant final answer did not reference gathered sources",
+        "assistant final answer was too terse for the task",
+        "assistant did not provide the requested itemized result",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -534,7 +542,7 @@ def _should_answer_from_existing_web_sources(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult,
 ) -> bool:
-    if completion_result.reason != "assistant only emitted internal control text":
+    if completion_result.reason not in _EXISTING_WEB_SOURCE_FINAL_RETRY_REASONS:
         return False
     return bool(_existing_web_source_context(execution_result))
 

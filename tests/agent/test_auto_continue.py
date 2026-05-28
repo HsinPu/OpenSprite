@@ -129,6 +129,46 @@ def test_auto_continue_retries_internal_only_web_answer_without_tools():
     assert "https://example.com/tsmc" in (decision.prompt or "")
 
 
+def test_auto_continue_retries_terse_web_answer_without_tools():
+    intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant final answer was too terse for the task",
+    )
+    execution = ExecutionResult(
+        content="Found it.",
+        executed_tool_calls=1,
+        task_artifacts=(
+            TaskArtifact(
+                kind="web_source",
+                source_tool="web_research",
+                metadata={
+                    "sources": [
+                        {
+                            "title": "TSMC quote",
+                            "url": "https://example.com/tsmc",
+                            "snippet": "Latest market quote.",
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=execution,
+        attempts_used=0,
+        previous_response="Found it.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.allow_tools is False
+    assert "previous final answer was too terse" in (decision.prompt or "")
+    assert "https://example.com/tsmc" in (decision.prompt or "")
+
+
 def test_auto_continue_allows_missing_review_once():
     intent = TaskIntentService().classify("Please implement the cleanup.")
     completion = CompletionGateResult(
