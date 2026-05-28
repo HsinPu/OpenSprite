@@ -165,6 +165,51 @@ def test_web_research_infers_freshness_for_latest_query_when_config_is_auto():
     assert payload["freshness"] == "month"
 
 
+def test_web_research_prefers_current_year_variant_for_current_stale_query():
+    current_year = datetime.now().year
+    stale_year = current_year - 1
+    current_query = f"台積電 2330 股價 {current_year}年5月28日"
+    stale_query = f"台積電 2330 股價 {stale_year}年5月28日"
+    search = _FakeSearchToolByQuery(
+        {
+            current_query: [
+                {"title": f"Current {current_year}", "url": "https://example.com/current", "content": "Current price"},
+            ],
+            stale_query: [
+                {"title": f"Stale {stale_year}", "url": "https://example.com/stale", "content": "Old price"},
+            ],
+            "台積電 2330 今日股價 即時": [],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/current": _fetch_payload("https://example.com/current", title="Current"),
+            "https://example.com/stale": _fetch_payload("https://example.com/stale", title="Stale"),
+        }
+    )
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(freshness="auto"),
+        search_tool=search,
+        fetch_tool=fetch,
+    )
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                stale_query,
+                queries=["台積電 2330 今日股價 即時"],
+                count=2,
+                fetch_count=1,
+            )
+        )
+    )
+
+    assert search.calls[0] == {"query": current_query, "count": 2, "freshness": "day"}
+    assert search.calls[1] == {"query": stale_query, "count": 2, "freshness": "day"}
+    assert payload["queries"][:2] == [current_query, stale_query]
+    assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current")
+
+
 def test_web_research_respects_any_time_for_latest_query():
     search = _FakeSearchTool(
         [

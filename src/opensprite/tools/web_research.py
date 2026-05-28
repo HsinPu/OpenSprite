@@ -31,6 +31,28 @@ _RECENT_TEXT_MARKERS = (
     "announcement",
     "announced",
 )
+_CURRENT_QUERY_MARKERS = (
+    "latest",
+    "newest",
+    "recent",
+    "current",
+    "currently",
+    "today",
+    "now",
+    "as of",
+    "live",
+    "real-time",
+    "realtime",
+    "今日",
+    "今天",
+    "現在",
+    "即時",
+    "最新",
+    "目前",
+    "當前",
+    "今年",
+)
+_YEAR_RE = re.compile(r"(?<!\d)20\d{2}(?!\d)")
 _LOW_SIGNAL_DOMAIN_SUFFIXES = (
     "youtube.com",
     "youtu.be",
@@ -136,6 +158,7 @@ class WebResearchTool(Tool):
             self.search_config.freshness,
             query=" ".join(research_queries),
         )
+        research_queries = _research_queries(query, queries, freshness=effective_freshness)
         effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
         fetched_sources: list[dict[str, Any]] = []
         failed_sources: list[dict[str, Any]] = []
@@ -488,7 +511,7 @@ def _research_payload(
     )
 
 
-def _research_queries(query: str, queries: list[str] | None) -> list[str]:
+def _research_queries(query: str, queries: list[str] | None, *, freshness: str | None = None) -> list[str]:
     values = [_clean_text(query)]
     if isinstance(queries, list):
         values.extend(_clean_text(value) for value in queries[:5])
@@ -503,7 +526,45 @@ def _research_queries(query: str, queries: list[str] | None) -> list[str]:
             continue
         seen.add(key)
         out.append(value)
-    return out or [_clean_text(query)]
+    out = out or [_clean_text(query)]
+    return _prefer_current_year_queries(out, freshness=freshness)
+
+
+def _prefer_current_year_queries(queries: list[str], *, freshness: str | None) -> list[str]:
+    if freshness not in _RECENT_FRESHNESS_VALUES:
+        return queries
+    combined = " ".join(_clean_text(value).lower() for value in queries)
+    if not any(marker in combined for marker in _CURRENT_QUERY_MARKERS):
+        return queries
+
+    current_year = datetime.now().year
+    stale_years = sorted(
+        {
+            int(match)
+            for match in _YEAR_RE.findall(combined)
+            if int(match) < current_year
+        }
+    )
+    if not stale_years:
+        return queries
+
+    corrected: list[str] = []
+    for query in queries:
+        updated = query
+        for year in stale_years:
+            updated = re.sub(rf"(?<!\d){year}(?!\d)", str(current_year), updated)
+        if updated != query:
+            corrected.append(updated)
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in [*corrected, *queries]:
+        key = value.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out
 
 def _query_attempt_payload(
     query: str,
@@ -768,7 +829,7 @@ def _candidate_staleness_penalty(item: dict[str, Any], freshness: str) -> int:
     if not text:
         return 0
     current_year = datetime.now().year
-    years = [int(match) for match in re.findall(r"\b20\d{2}\b", text)]
+    years = [int(match) for match in _YEAR_RE.findall(text)]
     if not years or current_year in years:
         return 0
     query_text = _clean_text(item.get("source_query") or item.get("query")).lower()
