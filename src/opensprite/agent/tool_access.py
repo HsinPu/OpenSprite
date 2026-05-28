@@ -61,7 +61,7 @@ class ToolAccessResolver:
         )
         effective_policy = policy_resolution.effective_policy
         metadata = policy_resolution.metadata
-        registry = base_registry.filtered(permission_policy=effective_policy)
+        registry = base_registry.filtered(permission_policy=effective_policy, exposed_only=True)
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
         metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
@@ -116,6 +116,7 @@ class ToolAccessResolver:
         registry = base_registry.filtered(
             include_names=include_names,
             permission_policy=effective_policy,
+            exposed_only=True,
         )
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))

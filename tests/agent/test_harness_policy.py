@@ -248,11 +248,15 @@ def test_chat_harness_policy_uses_declared_read_only_tool_metadata():
     registry = ToolRegistry()
     registry.register(DummyTool("custom_read", risk_levels=frozenset({"read"})))
     registry.register(DummyTool("custom_unknown"))
+    registry.register(DummyTool("task_update"))
     policy = _policy("hello")
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
 
     assert filtered.tool_names == ["custom_read"]
+    assert filtered.get("custom_read") is not None
+    assert filtered.get("custom_unknown") is None
+    assert filtered.get("task_update") is None
 
 
 def test_profile_permission_override_is_composed_with_harness_policy():

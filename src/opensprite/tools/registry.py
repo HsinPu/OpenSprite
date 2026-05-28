@@ -62,6 +62,7 @@ class ToolRegistry:
         include_names: set[str] | frozenset[str] | None = None,
         exclude_names: set[str] | frozenset[str] | None = None,
         permission_policy: ToolPermissionPolicy | None = None,
+        exposed_only: bool = False,
     ) -> "ToolRegistry":
         """Return a registry copy filtered by included/excluded tool names."""
         filtered_registry = ToolRegistry(permission_policy=permission_policy or self._permission_policy)
@@ -74,6 +75,11 @@ class ToolRegistry:
             if included is not None and name not in included:
                 continue
             if name in excluded:
+                continue
+            if exposed_only and not filtered_registry.permission_policy.is_tool_exposed(
+                name,
+                tool_risk_levels=tool.risk_levels,
+            ):
                 continue
             filtered_registry.register(tool)
         return filtered_registry
@@ -96,10 +102,20 @@ class ToolRegistry:
         """Execute a tool by name with given parameters."""
         tool = self._tools.get(name)
         if not tool:
-            return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
+            return _tool_not_available_result(name, self.tool_names)
         display_params = tool.sanitize_params_for_display(params)
 
         exposed = self._permission_policy.is_tool_exposed(name, tool_risk_levels=tool.risk_levels)
+        if not exposed:
+            decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
+            await self._emit_permission_decision(
+                "tool_permission.not_exposed",
+                name,
+                decision,
+                display_params,
+                exposed=exposed,
+            )
+            return _tool_not_available_result(name, self.tool_names)
         decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
         await self._emit_permission_decision("tool_permission.checked", name, decision, display_params, exposed=exposed)
         if not decision.allowed:
@@ -202,3 +218,11 @@ def _decision_label(event_type: str, decision: PermissionDecision) -> str:
 
 def _looks_like_permission_block(result: str) -> bool:
     return str(result or "").startswith("Error: Tool ") and " blocked by permission policy:" in str(result or "")
+
+
+def _tool_not_available_result(tool_name: str, available_tools: list[str]) -> str:
+    available = ", ".join(available_tools) if available_tools else "none"
+    return (
+        f"Tool '{tool_name}' is not available in this turn. "
+        f"Available tools: {available}. Do not call unavailable tools again; answer directly or use an available tool."
+    )

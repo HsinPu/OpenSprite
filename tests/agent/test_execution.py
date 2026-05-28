@@ -14,6 +14,7 @@ from opensprite.tools.base import Tool
 from opensprite.tools.credential_store import CredentialStoreTool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.image import AnalyzeImageTool
+from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool, _format_results
@@ -81,6 +82,27 @@ class FailingTool(Tool):
     async def _execute(self, value: str, **kwargs) -> str:
         self.calls += 1
         return "Error: still broken"
+
+
+class TaskUpdateLikeTool(Tool):
+    def __init__(self):
+        self.calls = 0
+
+    @property
+    def name(self) -> str:
+        return "task_update"
+
+    @property
+    def description(self) -> str:
+        return "Task update"
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {"action": {"type": "string"}}}
+
+    async def _execute(self, action: str, **kwargs) -> str:
+        self.calls += 1
+        return "updated"
 
 
 class TraceableWebResearchTool(Tool):
@@ -665,6 +687,34 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
     assert tool.calls == 3
     assert "repeated_failure_block" in messages[-1].content
     assert "Blocked failing_tool" in messages[-1].content
+
+
+def test_execution_engine_recovers_from_unavailable_tool_call_without_tool_error():
+    tool = TaskUpdateLikeTool()
+    registry = ToolRegistry(permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"]))
+    registry.register(RepeatingReadFileTool())
+    registry.register(tool)
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="try hidden tool",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="task_update", arguments={"action": "show"})],
+            ),
+            LLMResponse(content="direct answer", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [], tools_config=ToolsConfig(max_tool_iterations=3))
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="plan only")], allow_tools=True)
+    )
+
+    assert result.content == "direct answer"
+    assert result.had_tool_error is False
+    assert result.executed_tool_calls == 1
+    assert tool.calls == 0
+    assert "not available in this turn" in provider.calls[1]["messages"][-1].content
 
 
 def test_execution_engine_forces_final_after_complete_web_research_sources():
