@@ -50,7 +50,7 @@ def test_work_progress_uses_harness_profile_plan_steps():
 def test_work_progress_uses_harness_profile_continuation_budget():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")
-    profile = HarnessProfileService().chat_fallback(intent)
+    profile = HarnessProfileService().default_chat_profile()
 
     assert profile.name == "chat"
     assert service.continuation_budget(intent, harness_profile=profile) == 0

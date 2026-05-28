@@ -78,13 +78,11 @@ def test_harness_profile_derives_ops_from_contract():
     assert "configuration" in profile.approval_required_risk_levels
 
 
-def test_legacy_select_no_longer_routes_by_user_text_markers():
-    intent = TaskIntentService().classify("Find the latest stock price for TSMC")
-
-    profile = HarnessProfileService().chat_fallback(intent)
+def test_default_chat_profile_no_longer_routes_by_user_text_markers():
+    profile = HarnessProfileService().default_chat_profile()
 
     assert profile.name == "chat"
-    assert profile.selection_signals == ("legacy:fallback:chat",)
+    assert profile.selection_signals == ("default:chat",)
 
 
 class _FakeResponse:

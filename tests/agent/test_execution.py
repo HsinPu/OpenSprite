@@ -6,7 +6,7 @@ import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
-from opensprite.agent.task_contract import TaskContractService
+from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall

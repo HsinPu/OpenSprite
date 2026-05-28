@@ -2,114 +2,9 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
-from .task_intent import TaskIntent
-
-
-_NO_WEB_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
-    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
-    r"|\b(?:do not|don't|dont)\s+(?:search|browse|look\s+up|google)\b"
-    r"|\b(?:offline|no\s+internet|no\s+web|no\s+search)\b",
-    re.IGNORECASE,
-)
-_NO_WORKSPACE_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:read|inspect|access|open|use)?\s*(?:files?|workspace|repo|repository|codebase)\b"
-    r"|\b(?:do not|don't|dont)\s+(?:read|inspect|access|open)\s+(?:files?|workspace|repo|repository|codebase)\b"
-    r"|\b(?:no\s+file\s+access|no\s+workspace\s+access)\b",
-    re.IGNORECASE,
-)
-_NO_TOOL_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:call|use|invoke|run)\s+(?:any\s+)?tools?\b",
-    re.IGNORECASE,
-)
-_NO_WEB_LITERAL_PHRASES = (
-    "\u4e0d\u8981\u4e0a\u7db2",
-    "\u4e0d\u7528\u4e0a\u7db2",
-    "\u5225\u4e0a\u7db2",
-    "\u4e0d\u8981\u67e5\u7db2\u8def",
-    "\u4e0d\u7528\u67e5\u7db2\u8def",
-    "\u4e0d\u8981\u641c\u5c0b",
-    "\u4e0d\u7528\u641c\u5c0b",
-    "\u4e0d\u8981\u5916\u90e8\u4f86\u6e90",
-    "\u4e0d\u7528\u5916\u90e8\u4f86\u6e90",
-    "\u4e0d\u8981\u7528 web",
-    "\u4e0d\u8981\u7528web",
-    "\u4e0d\u8981 web_search",
-    "\u4e0d\u8981 web_research",
-)
-_NO_WORKSPACE_LITERAL_PHRASES = (
-    "\u4e0d\u8981\u8b80\u6a94",
-    "\u4e0d\u7528\u8b80\u6a94",
-    "\u4e0d\u8981\u8b80\u53d6\u6a94\u6848",
-    "\u4e0d\u7528\u8b80\u53d6\u6a94\u6848",
-    "\u4e0d\u8981\u8b80\u6587\u4ef6",
-    "\u4e0d\u8981\u770b\u6a94\u6848",
-    "\u4e0d\u8981\u770b\u5c08\u6848",
-    "\u4e0d\u8981\u67e5 workspace",
-    "\u4e0d\u8981\u8b80 AGENTS.md",
-)
-_NO_TOOL_LITERAL_PHRASES = (
-    "\u4e0d\u8981\u7528\u5de5\u5177",
-    "\u4e0d\u7528\u5de5\u5177",
-    "\u4e0d\u8981\u547c\u53eb\u5de5\u5177",
-)
-_WEB_DENIED_TOOLS = (
-    "web_search",
-    "web_fetch",
-    "web_research",
-    "browser_navigate",
-    "browser_snapshot",
-    "browser_click",
-    "browser_type",
-    "browser_press",
-    "browser_scroll",
-    "browser_back",
-    "browser_console",
-)
-_WORKSPACE_DENIED_TOOLS = (
-    "read_file",
-    "list_dir",
-    "glob_files",
-    "grep_files",
-    "code_navigation",
-    "read_skill",
-    "list_run_file_changes",
-    "preview_run_file_change_revert",
-    "verify",
-)
-_NO_TOOL_DENIED_TOOLS = tuple(
-    dict.fromkeys(
-        _WEB_DENIED_TOOLS
-        + _WORKSPACE_DENIED_TOOLS
-        + (
-            "apply_patch",
-            "write_file",
-            "edit_file",
-            "configure_skill",
-            "task_update",
-            "configure_mcp",
-            "configure_subagent",
-            "credential_store",
-            "exec",
-            "process",
-            "analyze_image",
-            "ocr_image",
-            "transcribe_audio",
-            "analyze_video",
-            "send_media",
-            "delegate",
-            "delegate_many",
-            "run_workflow",
-            "search_history",
-            "cron",
-            "batch",
-        )
-    )
-)
 _PROFILE_PRIORITY_ORDER = ("ops", "media", "coding", "research", "chat")
 
 
@@ -225,15 +120,15 @@ class HarnessProfileService:
             selection_signals=("contract:pure_answer",),
         )
 
-    def chat_fallback(self, task_intent: TaskIntent) -> HarnessProfile:
-        """Return the no-tool chat profile when no task contract is available."""
+    def default_chat_profile(self) -> HarnessProfile:
+        """Return the neutral chat profile when no task contract is available."""
         return HarnessProfile(
             name="chat",
-            task_type=task_intent.kind,
+            task_type="pure_answer",
             verification_policy="none",
             continuation_policy="minimal",
-            reason="legacy pre-contract selection defaults to chat",
-            selection_signals=("legacy:fallback:chat",),
+            reason="no task contract available; defaulting to neutral chat profile",
+            selection_signals=("default:chat",),
         )
 
 
@@ -297,42 +192,6 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             reason="preview profile for operations turns",
         ),
     )
-
-
-def has_no_web_constraint(text: str) -> bool:
-    """Return whether the user explicitly forbids web/search evidence."""
-    text = text or ""
-    lowered = text.lower()
-    return bool(_NO_WEB_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_WEB_LITERAL_PHRASES))
-
-
-def has_no_workspace_constraint(text: str) -> bool:
-    """Return whether the user explicitly forbids file/workspace inspection."""
-    text = text or ""
-    lowered = text.lower()
-    return bool(
-        _NO_WORKSPACE_RE.search(text)
-        or any(phrase.lower() in lowered for phrase in _NO_WORKSPACE_LITERAL_PHRASES)
-    )
-
-
-def has_no_tool_constraint(text: str) -> bool:
-    """Return whether the user explicitly forbids tool calls."""
-    text = text or ""
-    lowered = text.lower()
-    return bool(_NO_TOOL_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_TOOL_LITERAL_PHRASES))
-
-
-def denied_tools_for_constraints(text: str) -> tuple[str, ...]:
-    """Return exact tools that must not be exposed for explicit user constraints."""
-    denied: list[str] = []
-    if has_no_tool_constraint(text):
-        denied.extend(_NO_TOOL_DENIED_TOOLS)
-    if has_no_web_constraint(text):
-        denied.extend(_WEB_DENIED_TOOLS)
-    if has_no_workspace_constraint(text):
-        denied.extend(_WORKSPACE_DENIED_TOOLS)
-    return tuple(dict.fromkeys(denied))
 
 
 def _contract_tool_groups(task_contract: Any) -> set[str]:

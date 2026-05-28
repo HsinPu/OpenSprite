@@ -674,6 +674,8 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
             continue
         if item.name == "web_fetch" and has_successful_fetch_sources:
             continue
+        if _is_non_exposed_permission_block(item):
+            continue
         return False
     return True
 
@@ -697,6 +699,15 @@ def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResul
         if artifact.source_tool == "web_research" and _web_research_artifact_has_successful_fetch(artifact):
             return True
     return False
+
+
+def _is_non_exposed_permission_block(evidence: ToolEvidence) -> bool:
+    permission = evidence.metadata.get("permission") if isinstance(evidence.metadata, dict) else None
+    return bool(
+        isinstance(permission, dict)
+        and permission.get("blocked") is True
+        and permission.get("exposed") is False
+    )
 
 
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:

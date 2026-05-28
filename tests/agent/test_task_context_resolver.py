@@ -3,7 +3,7 @@ import asyncio
 from opensprite.agent.active_task_commands import ActiveTaskCommandService
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.task_contract import TaskContractService
+from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision

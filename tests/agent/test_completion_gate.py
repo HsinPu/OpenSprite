@@ -8,11 +8,11 @@ from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
     TaskContract,
-    TaskContractService,
 )
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
+from tests.agent.task_contract_test_helpers import TaskContractService
 
 
 def _web_source_artifact() -> TaskArtifact:
@@ -1511,6 +1511,66 @@ def test_completion_gate_still_blocks_failed_fetch_tool_errors():
 
     assert completion.status == "incomplete"
     assert completion.reason == "tool execution reported an error without a clear blocker handoff"
+
+
+def test_completion_gate_allows_non_exposed_permission_block_after_successful_web_sources():
+    intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Qwen's current model line includes Qwen3, with details from qwenlm.github.io and a fetched "
+        "Hugging Face model card. These successful sources are enough to answer the request."
+    )
+    second_fetch_artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507",
+                    "title": "Qwen3 model card",
+                    "snippet": "Model card for a recent Qwen3 instruct checkpoint.",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                }
+            ],
+            "source_count": 1,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=3,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_fetch", ok=True),
+                ToolEvidence(
+                    name="task_update",
+                    ok=False,
+                    metadata={
+                        "permission": {
+                            "blocked": True,
+                            "exposed": False,
+                            "reason": "risk level(s) not allowed: memory, write",
+                        }
+                    },
+                ),
+            ),
+            task_artifacts=(_web_fetch_artifact(), second_fetch_artifact),
+        ),
+    )
+
+    assert completion.status == "complete"
 
 
 def test_completion_gate_accepts_browser_source_artifact_for_web_research():
