@@ -1083,13 +1083,22 @@ def _string_or_none(value: Any) -> str | None:
 
 def _verification_follow_up(task_intent: TaskIntent, execution_result: ExecutionResult) -> dict[str, Any]:
     touched_paths = _normalized_touched_paths(execution_result.touched_paths)
+    decision_paths = tuple(_strip_repo_snapshot_prefix(path) for path in touched_paths)
     lowered_objective = str(task_intent.objective or "").lower()
-    test_paths = tuple(path for path in touched_paths if path.startswith("tests/") and path.endswith(".py"))
-    if any(path.startswith("apps/web/") or path == "apps/web" for path in touched_paths) and any(
+    test_paths = tuple(path for path in decision_paths if path.startswith("tests/") and path.endswith(".py"))
+    has_web_touched = any(path.startswith("apps/web/") or path == "apps/web" for path in decision_paths)
+    has_python_touched = any(path.endswith(".py") for path in decision_paths)
+    if touched_paths and not has_web_touched and not has_python_touched:
+        return {
+            "action": "auto",
+            "path": _common_verification_path(touched_paths) or ".",
+            "pytest_args": (),
+        }
+    if has_web_touched and any(
         marker in lowered_objective for marker in ("test:smoke", "smoke test", "smoke", "contract check")
     ):
         return {"action": "web_smoke", "path": "apps/web", "pytest_args": ()}
-    if any(path.startswith("apps/web/") or path == "apps/web" for path in touched_paths) or any(
+    if has_web_touched or any(
         marker in lowered_objective for marker in ("web build", "vite build", "frontend build", "frontend", "vite")
     ):
         return {"action": "web_build", "path": "apps/web", "pytest_args": ()}
@@ -1111,6 +1120,13 @@ def _verification_follow_up(task_intent: TaskIntent, execution_result: Execution
 def _normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
     normalized = [str(path or "").replace("\\", "/").strip("/") for path in paths]
     return tuple(path for path in normalized if path)
+
+
+def _strip_repo_snapshot_prefix(path: str) -> str:
+    normalized = str(path or "").replace("\\", "/").strip("/")
+    if normalized.startswith("repo/"):
+        return normalized[5:]
+    return normalized
 
 
 def _common_verification_path(paths: tuple[str, ...]) -> str | None:

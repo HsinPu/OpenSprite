@@ -261,6 +261,43 @@ def test_completion_gate_requires_requested_verification_before_completion():
     assert result.verification_path == "."
 
 
+def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
+    intent = TaskIntentService().classify("Please add a short test session note.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Added the note.",
+        execution_result=ExecutionResult(
+            content="Added the note.",
+            file_change_count=1,
+            touched_paths=("repo/tests/search/SESSION_TOOL_TEST_NOTES.md",),
+        ),
+    )
+
+    assert result.status == "needs_verification"
+    assert result.verification_action == "auto"
+    assert result.verification_path == "repo/tests/search"
+    assert result.verification_pytest_args == ()
+
+
+def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tests():
+    intent = TaskIntentService().classify("Please update the test and run tests.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Updated the test.",
+        execution_result=ExecutionResult(
+            content="Updated the test.",
+            file_change_count=1,
+            touched_paths=("repo/tests/agent/test_sample.py",),
+        ),
+    )
+
+    assert result.status == "needs_verification"
+    assert result.verification_action == "pytest"
+    assert result.verification_pytest_args == ("tests/agent/test_sample.py",)
+
+
 def test_completion_gate_treats_max_tool_iterations_as_incomplete():
     intent = TaskIntentService().classify("Please implement the cleanup and run tests.")
 
