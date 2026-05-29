@@ -11,7 +11,7 @@ from .tool_groups import TOOL_GROUP_BY_TOOL_NAME
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _FOLLOW_UP_RE = re.compile(
-    r"^(?:那|那個|這個|這張|這段|換|再看|再查|再找|再幫我看|what about|how about)\b"
+    r"^(?:那|那個|這個|這張|這段|換|再看|再查|再找|再幫我看|根據剛剛|依照剛剛|基於剛剛|剛剛|剛才|what about|how about)"
     r"|(?:呢|勒|咧|了嗎|如何|怎樣|怎麼樣)[？?]*$",
     re.IGNORECASE,
 )
@@ -91,10 +91,10 @@ def _compact(value: str | None) -> str:
 def _looks_like_follow_up(text: str) -> bool:
     if not text or _NON_FOLLOW_UP_RE.match(text):
         return False
-    if len(text) > 80:
-        return False
     if _FOLLOW_UP_RE.search(text):
         return True
+    if len(text) > 80:
+        return False
     words = re.findall(r"[\w\u4e00-\u9fff]+", text)
     return len(words) == 1 and bool(_ENTITY_ONLY_RE.match(text))
 

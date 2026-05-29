@@ -29,6 +29,19 @@ def test_follow_up_inherits_web_research_from_generic_search_context():
     assert result.inherited_tool_group == "web_research"
 
 
+def test_follow_up_inherits_from_recently_read_content_phrase():
+    result = FollowUpIntentResolver.resolve(
+        current_message="根據剛剛讀到的內容，用一句話說明 API key header，不要再上網。",
+        history=[
+            {"role": "user", "content": "請務必使用 web_fetch 讀取 https://openrouter.ai/docs/api-reference/overview"},
+            {"role": "assistant", "content": "我讀到 OpenRouter API 文件的 Authorization 內容。"},
+        ],
+    )
+
+    assert result.is_follow_up is True
+    assert result.inherited_tool_group == "web_research"
+
+
 def test_follow_up_does_not_inherit_for_acknowledgement():
     result = FollowUpIntentResolver.resolve(
         current_message="謝啦",
