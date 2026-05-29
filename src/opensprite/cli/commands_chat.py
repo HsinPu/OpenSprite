@@ -192,8 +192,15 @@ async def run_web_chat(
                     if frame_session_id and resolved_session_id and frame_session_id != resolved_session_id:
                         continue
                     if frame.get("type") == "run_event":
+                        event_type = str(frame.get("event_type") or "")
+                        frame_run_id = str(frame.get("run_id") or "") or None
+                        if run_id is None:
+                            if event_type not in {"run_started", "run_failed", "run_cancelled"}:
+                                continue
+                            run_id = frame_run_id
+                        elif frame_run_id != run_id:
+                            continue
                         run_events.append(frame)
-                        run_id = run_id or str(frame.get("run_id") or "") or None
                         if frame.get("event_type") in TERMINAL_RUN_EVENTS:
                             terminal_run_seen = True
                             run_status = str(frame.get("status") or "")
