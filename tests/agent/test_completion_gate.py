@@ -1506,6 +1506,39 @@ def test_completion_gate_allows_optional_search_errors_after_successful_fetch_so
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_optional_workspace_discovery_errors_after_successful_read():
+    intent = TaskIntentService().classify("請看目前 OpenSprite 的 trace CLI 怎麼用，只給我測試指令與用途。")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="workspace_read",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        allow_no_tool_final=False,
+    )
+    answer = (
+        "OpenSprite trace CLI 用法：`opensprite trace <run_id> --session-id <session_id>`。"
+        "常用測試指令包含 `opensprite trace run_xxx --session-id web:chat --json` "
+        "以及 `opensprite trace run_xxx --session-id web:chat --full --json`，"
+        "用途是檢查 run 狀態、工具呼叫、completion gate 和完整事件。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="grep_files", ok=False, metadata={"error": "no matches"}),
+                ToolEvidence(name="read_file", ok=True),
+            ),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_allows_optional_fetch_errors_after_successful_fetch_sources():
     intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
     contract = TaskContractService.build(

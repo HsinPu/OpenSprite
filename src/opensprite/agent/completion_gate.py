@@ -34,6 +34,7 @@ _COMPLETE_MARKERS = (
     "已修復",
     "通過",
 )
+_WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _INCOMPLETE_MARKERS = (
     "not complete",
     "not completed",
@@ -651,8 +652,10 @@ class CompletionGateService:
         execution_result: ExecutionResult,
         verification_passed: bool,
     ) -> bool:
-        """Allow optional web discovery failures after required web sources are satisfied."""
-        if not _has_only_optional_web_discovery_failures(execution_result):
+        """Allow exploratory discovery failures after required evidence is satisfied."""
+        has_optional_web_failures = _has_only_optional_web_discovery_failures(execution_result)
+        has_optional_workspace_failures = _has_only_optional_workspace_discovery_failures(execution_result)
+        if not (has_optional_web_failures or has_optional_workspace_failures):
             return False
 
         evidence_result = self.evidence_gate.evaluate(
@@ -663,7 +666,7 @@ class CompletionGateService:
         if not evidence_result.passed:
             return False
 
-        if not _has_successful_fetched_web_source_artifact(execution_result):
+        if has_optional_web_failures and not _has_successful_fetched_web_source_artifact(execution_result):
             return False
 
         quality_result = self.quality_gate.evaluate(
@@ -711,6 +714,21 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
         if item.name in {"web_search", "web_research"}:
             continue
         if item.name == "web_fetch" and has_successful_fetch_sources:
+            continue
+        if _is_non_exposed_permission_block(item):
+            continue
+        return False
+    return True
+
+
+def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionResult) -> bool:
+    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
+    if not failed_evidence:
+        return False
+    if not any(item.ok and item.name in _WORKSPACE_DISCOVERY_TOOLS for item in execution_result.tool_evidence):
+        return False
+    for item in failed_evidence:
+        if item.name in _WORKSPACE_DISCOVERY_TOOLS:
             continue
         if _is_non_exposed_permission_block(item):
             continue
