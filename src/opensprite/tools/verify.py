@@ -266,12 +266,40 @@ class VerifyTool(Tool):
         timeout: int,
     ) -> str:
         args = [str(item) for item in pytest_args]
-        if not args and target != workspace:
-            args = [_display_path(workspace, target)]
-        result = await self._run_command([sys.executable, "-m", "pytest", *args], workspace, timeout)
+        project_dir = self._find_python_project_dir(workspace, target)
+        default_workspace_target = target == workspace and project_dir != workspace
+        if not args and target != project_dir and not default_workspace_target:
+            args = [_display_path(project_dir, target)]
+        result = await self._run_command([sys.executable, "-m", "pytest", *args], project_dir, timeout)
         if result.exit_code == 5 and _pytest_collected_no_tests(result.output):
             return self._format_command_verification("pytest", result, status="skipped")
         return self._format_command_verification("pytest", result)
+
+    def _find_python_project_dir(self, workspace: Path, target: Path) -> Path:
+        candidates: list[Path] = []
+        if target.is_file():
+            candidates.extend(target.parents)
+        elif target.is_dir():
+            candidates.append(target)
+            candidates.extend(target.parents)
+        candidates.append(workspace / "repo")
+        candidates.append(workspace)
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            resolved = candidate.resolve(strict=False)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                resolved.relative_to(workspace)
+            except ValueError:
+                continue
+            if any((resolved / marker).exists() for marker in ("pyproject.toml", "pytest.ini", "setup.cfg", "setup.py")):
+                return resolved
+            if (resolved / "tests" / "conftest.py").is_file():
+                return resolved
+        return workspace
 
     async def _verify_web_build(self, workspace: Path, target: Path, timeout: int) -> str:
         return await self._verify_web_script(workspace, target, timeout, script_name="build", label="web_build")

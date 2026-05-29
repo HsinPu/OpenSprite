@@ -54,6 +54,50 @@ def test_verify_pytest_uses_focused_args(tmp_path):
     assert result.startswith("Verification passed: pytest")
 
 
+def test_verify_pytest_uses_nested_repo_as_project_root(tmp_path):
+    repo = tmp_path / "repo"
+    tests_dir = repo / "tests"
+    tests_dir.mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("[project]\nname = 'sample'\n", encoding="utf-8")
+    tool = VerifyTool(workspace=tmp_path)
+    captured = {}
+
+    async def fake_run_command(command, cwd, timeout):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        return VerifyCommandResult(command=command, cwd=cwd, exit_code=0, output="1 passed")
+
+    tool._run_command = fake_run_command
+
+    result = asyncio.run(tool.execute(action="pytest", path="."))
+
+    assert captured["command"] == [sys.executable, "-m", "pytest"]
+    assert captured["cwd"] == repo.resolve(strict=False)
+    assert result.startswith("Verification passed: pytest")
+
+
+def test_verify_pytest_uses_project_relative_target(tmp_path):
+    repo = tmp_path / "repo"
+    target = repo / "tests" / "search"
+    target.mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("[project]\nname = 'sample'\n", encoding="utf-8")
+    tool = VerifyTool(workspace=tmp_path)
+    captured = {}
+
+    async def fake_run_command(command, cwd, timeout):
+        captured["command"] = command
+        captured["cwd"] = cwd
+        return VerifyCommandResult(command=command, cwd=cwd, exit_code=0, output="1 passed")
+
+    tool._run_command = fake_run_command
+
+    result = asyncio.run(tool.execute(action="pytest", path="repo/tests/search"))
+
+    assert captured["command"] == [sys.executable, "-m", "pytest", "tests/search"]
+    assert captured["cwd"] == repo.resolve(strict=False)
+    assert result.startswith("Verification passed: pytest")
+
+
 def test_verify_pytest_skips_when_no_tests_are_collected(tmp_path):
     tool = VerifyTool(workspace=tmp_path)
 
