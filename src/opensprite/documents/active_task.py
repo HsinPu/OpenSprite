@@ -644,6 +644,7 @@ def infer_immediate_task_transition(
     response_text: str,
     *,
     had_tool_error: bool = False,
+    objective_text: str = "",
 ) -> tuple[str, str | None] | None:
     """Infer a conservative immediate task-state transition from one assistant reply."""
     question = extract_waiting_user_question(response_text)
@@ -651,6 +652,9 @@ def infer_immediate_task_transition(
         return "waiting_user", question
 
     normalized = re.sub(r"\s+", " ", (response_text or "").strip())
+    objective = re.sub(r"\s+", " ", (objective_text or "").strip()).lower()
+    if _is_status_definition_request(objective, normalized):
+        return None
     lowered = normalized.lower()
     has_blocker = any(pattern in lowered for pattern in _BLOCKED_PATTERNS)
     has_strong_blocker = any(pattern in normalized for pattern in _STRONG_BLOCKED_PATTERNS)
@@ -658,6 +662,20 @@ def infer_immediate_task_transition(
         return "blocked", normalized[:240] if normalized else "blocked"
 
     return None
+
+
+def _is_status_definition_request(objective: str, response_text: str) -> bool:
+    if not objective or not response_text:
+        return False
+    objective_mentions_status_terms = (
+        "blocked" in objective
+        and "incomplete" in objective
+        and any(marker in objective for marker in ("差異", "差別", "difference", "explain", "解釋"))
+    )
+    if not objective_mentions_status_terms:
+        return False
+    response = response_text.lower()
+    return "blocked" in response and "incomplete" in response
 
 
 def _extract_task_field(task_block: str, field_name: str) -> str:

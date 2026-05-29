@@ -417,6 +417,25 @@ def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():
     assert result.active_task_status == "blocked"
 
 
+def test_completion_gate_does_not_mark_status_definition_as_blocked():
+    intent = TaskIntentService().classify(
+        "\u4e0d\u8981\u8b80\u6a94\u4e0d\u8981\u4e0a\u7db2\uff0c\u8acb\u7528\u5169\u53e5\u8a71\u89e3\u91cb blocked \u548c incomplete \u7684\u5dee\u7570\u3002"
+    )
+    response = (
+        "- **Blocked**\uff1a\u4efb\u52d9\u56e0\u5916\u90e8\u4f9d\u8cf4\u3001\u7f3a\u5c11\u8cc7\u8a0a\u6216\u6b0a\u9650\u9650\u5236\u800c\u7121\u6cd5\u7e7c\u7e8c\u63a8\u9032\u3002\n"
+        "- **Incomplete**\uff1a\u4efb\u52d9\u5c1a\u672a\u5b8c\u6210\uff0c\u53ea\u8868\u793a\u76ee\u6a19\u9084\u6c92\u6709\u9054\u6210\u3002"
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "generic task returned a response"
+
+
 def test_completion_gate_marks_waiting_when_response_asks_for_input():
     intent = TaskIntentService().classify("繼續做")
 

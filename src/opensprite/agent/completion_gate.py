@@ -247,6 +247,7 @@ class CompletionGateService:
             immediate_transition = infer_immediate_task_transition(
                 response_text,
                 had_tool_error=True,
+                objective_text=task_intent.objective,
             )
             if immediate_transition is not None and immediate_transition[0] == "blocked":
                 _, detail = immediate_transition
@@ -320,6 +321,7 @@ class CompletionGateService:
         immediate_transition = infer_immediate_task_transition(
             response_text,
             had_tool_error=execution_result.had_tool_error,
+            objective_text=task_intent.objective,
         )
         if immediate_transition is not None and immediate_transition[0] == "blocked":
             _, detail = immediate_transition
@@ -444,7 +446,7 @@ class CompletionGateService:
             )
 
         is_direct_reply = _looks_like_direct_reply_instruction(task_intent.objective)
-        if is_direct_reply and response_text.strip() and not _looks_incomplete(response_text):
+        if is_direct_reply and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             return CompletionGateResult(
                 status="complete",
                 reason="direct reply instruction received a response",
@@ -465,6 +467,7 @@ class CompletionGateService:
             immediate_transition = infer_immediate_task_transition(
                 response_text,
                 had_tool_error=execution_result.had_tool_error,
+                objective_text=task_intent.objective,
             )
             if immediate_transition is not None:
                 active_task_status, detail = immediate_transition
@@ -501,7 +504,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip() and not _looks_incomplete(response_text):
+        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             completion_reason = (
                 "writing-style task returned a substantive response"
                 if task_intent.kind == "writing"
@@ -523,7 +526,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "planning" and response_text.strip() and not _looks_incomplete(response_text):
+        if task_intent.kind == "planning" and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             return CompletionGateResult(
                 status="complete",
                 reason="planning task returned concrete steps",
@@ -540,7 +543,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "debug" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text):
+        if task_intent.kind == "debug" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             return CompletionGateResult(
                 status="complete",
                 reason="debug diagnosis was provided without requiring code changes",
@@ -557,7 +560,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "task" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text):
+        if task_intent.kind == "task" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             return CompletionGateResult(
                 status="complete",
                 reason="generic task returned a response",
@@ -574,7 +577,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip() and not _looks_incomplete(response_text):
+        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
             return CompletionGateResult(
                 status="complete",
                 reason="task contract was satisfied",
@@ -760,8 +763,18 @@ def _contract_has_completion_criteria(task_contract: Any) -> bool:
     return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
 
 
-def _looks_incomplete(response_text: str) -> bool:
+def _looks_incomplete(response_text: str, objective_text: str = "") -> bool:
     lowered = re.sub(r"\s+", " ", (response_text or "").strip().lower())
+    objective = re.sub(r"\s+", " ", (objective_text or "").strip().lower())
+    if (
+        objective
+        and "blocked" in objective
+        and "incomplete" in objective
+        and any(marker in objective for marker in ("差異", "差別", "difference", "explain", "解釋"))
+        and "blocked" in lowered
+        and "incomplete" in lowered
+    ):
+        return False
     return any(marker in lowered for marker in _INCOMPLETE_MARKERS) or _looks_like_pending_action_response(lowered)
 
 
