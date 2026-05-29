@@ -170,6 +170,8 @@ _VERIFICATION_DISCUSSION_PHRASES = (
     "\u6e2c\u8a66\u7d00\u9304",
     "\u6e2c\u8a66\u6458\u8981",
     "\u6e2c\u8a66\u6d41\u7a0b",
+    "\u6e2c\u8a66\u6307\u4ee4",
+    "\u6e2c\u8a66\u547d\u4ee4",
     "\u6d41\u7a0b\u98a8\u96aa",
     "\u9a57\u8b49\u65b9\u5f0f",
 )
