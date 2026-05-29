@@ -359,6 +359,28 @@ def test_completion_gate_marks_chinese_missing_files_as_blocked():
     assert result.active_task_status == "blocked"
 
 
+def test_completion_gate_marks_workspace_scope_read_error_as_blocked():
+    intent = TaskIntentService().classify("請看目前工作區，找出 AGENTS.md 裡面跟 verification 有關的重點")
+    response = (
+        "根據工作區 runtime 環境的限制，我無法直接讀取 bootstrap 資料夾下的 `AGENTS.md`，"
+        "因為該路徑不在工作區範圍內。"
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(
+            content=response,
+            executed_tool_calls=1,
+            had_tool_error=True,
+        ),
+    )
+
+    assert result.status == "blocked"
+    assert result.active_task_status == "blocked"
+    assert result.should_update_active_task is True
+
+
 def test_completion_gate_marks_blocker_heading_as_blocked():
     intent = TaskIntentService().classify(
         "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
