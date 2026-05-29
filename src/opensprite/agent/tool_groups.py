@@ -13,7 +13,16 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "video_understanding": frozenset({"analyze_video"}),
     "web_research": frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"}),
     "history_retrieval": frozenset({"search_history"}),
-    "workspace_read": frozenset({"read_file", "glob_files", "grep_files", "code_navigation"}),
+    "workspace_read": frozenset(
+        {
+            "read_file",
+            "glob_files",
+            "grep_files",
+            "code_navigation",
+            "list_run_file_changes",
+            "preview_run_file_change_revert",
+        }
+    ),
     "workspace_write": frozenset({"apply_patch", "write_file", "edit_file"}),
     "verification": frozenset({"verify", "exec"}),
 }

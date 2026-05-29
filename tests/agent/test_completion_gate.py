@@ -357,6 +357,35 @@ def test_completion_gate_allows_read_only_batch_discovery_miss_after_workspace_e
     assert result.status == "complete"
 
 
+def test_completion_gate_accepts_run_file_change_listing_as_read_only_evidence():
+    intent = TaskIntent(
+        kind="analysis",
+        objective="List what changed in this conversation.",
+        expects_code_change=False,
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="workspace_read",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="There is one changed file recorded in the current session.",
+        execution_result=ExecutionResult(
+            content="There is one changed file recorded in the current session.",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(name="list_run_file_changes", ok=True, result_preview='{"count": 1}'),
+            ),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
+
+
 def test_completion_gate_does_not_require_verification_for_operations_report():
     intent = TaskIntentService().classify("Remind me tomorrow to check the test report.")
     contract = TaskContract(
