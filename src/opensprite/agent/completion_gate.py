@@ -681,7 +681,8 @@ class CompletionGateService:
 def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -> bool:
     if _contract_requires_verification(task_contract):
         return True
-    if str(getattr(task_contract, "task_type", "") or "") == "operations":
+    task_type = str(getattr(task_contract, "task_type", "") or "")
+    if task_type in {"operations", "workspace_read", "history_retrieval", "web_research"}:
         return False
     return task_intent.expects_verification
 

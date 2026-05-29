@@ -11,7 +11,7 @@ from opensprite.agent.task_contract import (
     _contract_from_planner_payload,
 )
 from opensprite.agent.task_context_resolver import TaskContextDecision
-from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
 from tests.agent.task_contract_test_helpers import TaskContractService
@@ -296,6 +296,33 @@ def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tes
     assert result.status == "needs_verification"
     assert result.verification_action == "pytest"
     assert result.verification_pytest_args == ("tests/agent/test_sample.py",)
+
+
+def test_completion_gate_does_not_require_verification_for_read_only_workspace_analysis():
+    intent = TaskIntent(
+        kind="analysis",
+        objective="Evaluate the current test coverage gaps.",
+        expects_verification=True,
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="workspace_read",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="I inspected the related files and found missing multi-turn trace coverage.",
+        execution_result=ExecutionResult(
+            content="I inspected the related files and found missing multi-turn trace coverage.",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="read_file", ok=True, result_preview="trace coverage notes"),),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
 
 
 def test_completion_gate_does_not_require_verification_for_operations_report():
