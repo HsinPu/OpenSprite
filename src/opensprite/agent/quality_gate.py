@@ -1,4 +1,4 @@
-"""Response quality checks for one agent turn."""
+﻿"""Response quality checks for one agent turn."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _VERIFICATION_GAP_RE = re.compile(
     r"\b(?:tests? not run|not tested|not verified|could not verify|unable to verify|verification gap|untested)\b"
-    r"|(?:未測試|未驗證|未執行|沒有跑測試|無法驗證|無法測試|尚未測試|尚未驗證)",
+    r"|(?:未測試|沒有測試|尚未測試|未驗證|沒有驗證|尚未驗證|無法驗證)",
     re.IGNORECASE,
 )
 _OPERATION_REPORT_RE = re.compile(
     r"\b(?:approval|approved|denied|blocked|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
-    r"|(?:核准|批准|拒絕|阻塞|驗證|回滾|風險|審計|權限|設定|配置|部署|重啟)",
+    r"|(?:核准|拒絕|封鎖|驗證|回滾|風險|稽核|權限|設定|部署|重啟)",
     re.IGNORECASE,
 )
 
@@ -492,7 +492,20 @@ def _asks_for_workspace_location(text: str) -> bool:
     lowered = str(text or "").lower()
     return bool(
         re.search(r"\b(?:where|which|location|path|file|config|setting|function|class|symbol)\b", lowered)
-        or any(marker in lowered for marker in ("在哪", "哪裡", "哪個", "位置", "路徑", "設定", "檔案", "函式", "類別"))
+        or any(
+            marker in lowered
+            for marker in (
+                "哪裡",
+                "哪個",
+                "位置",
+                "路徑",
+                "檔案",
+                "設定",
+                "函式",
+                "類別",
+                "符號",
+            )
+        )
     )
 
 
@@ -526,7 +539,17 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
                     return False
                 saw_explicit_empty = True
         preview = str(item.result_preview or "").lower()
-        if preview and any(marker in preview for marker in ("no results", "no matches", "not found", "[]", "沒有找到", "找不到")):
+        if preview and any(
+            marker in preview
+            for marker in (
+                "no results",
+                "no matches",
+                "not found",
+                "[]",
+                "沒有結果",
+                "找不到",
+            )
+        ):
             saw_explicit_empty = True
         elif preview:
             return False
@@ -542,9 +565,9 @@ def _states_history_not_found(normalized_response: str) -> bool:
             "not found",
             "could not find",
             "沒有找到",
+            "沒有符合",
             "找不到",
             "查不到",
-            "沒有相關",
         )
     )
 
@@ -558,13 +581,12 @@ def _references_prior_context(normalized_response: str) -> bool:
             "prior",
             "retrieved",
             "history",
+            "對話記錄",
+            "對話紀錄",
+            "根據對話",
             "前面",
             "剛剛",
-            "之前",
             "先前",
-            "上次",
-            "查到",
-            "回頭查",
         )
     )
 
@@ -573,7 +595,14 @@ def _requested_history_item_count(objective: str) -> int:
     text = str(objective or "")
     digit_counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,2}(?!\d)", text)]
     word_counts = []
-    for marker, count in (("一", 1), ("兩", 2), ("二", 2), ("三", 3), ("四", 4), ("五", 5)):
+    for marker, count in (
+        ("一", 1),
+        ("二", 2),
+        ("兩", 2),
+        ("三", 3),
+        ("四", 4),
+        ("五", 5),
+    ):
         if marker in text:
             word_counts.append(count)
     return max([*digit_counts, *word_counts], default=0)

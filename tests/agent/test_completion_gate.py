@@ -763,6 +763,32 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
     assert completion.status == "complete"
 
 
+def test_completion_gate_accepts_chinese_history_grounding_phrase():
+    intent = TaskIntentService().classify("請幫我檢查目前這段對話前面我問過什麼，列出兩點。")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "根據對話記錄，你前面問過：\n"
+        "1. 你要求使用 web_research 搜尋 2026 AI agent tools market trends。\n"
+        "2. 你要求整理成 CEO 可以看的五行摘要。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_requires_history_answer_to_reference_prior_context():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
     contract = TaskContractService.build(
