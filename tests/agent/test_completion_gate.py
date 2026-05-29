@@ -325,6 +325,38 @@ def test_completion_gate_does_not_require_verification_for_read_only_workspace_a
     assert result.status == "complete"
 
 
+def test_completion_gate_allows_read_only_batch_discovery_miss_after_workspace_evidence():
+    intent = TaskIntent(
+        kind="analysis",
+        objective="Evaluate the current test coverage gaps.",
+        expects_verification=True,
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="analysis",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="I inspected the related files and found missing multi-turn trace coverage.",
+        execution_result=ExecutionResult(
+            content="I inspected the related files and found missing multi-turn trace coverage.",
+            executed_tool_calls=3,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="batch", ok=False, result_preview="Batch completed: 4 call(s), 1 failed."),
+                ToolEvidence(name="grep_files", ok=True, result_preview="Found matching trace code."),
+                ToolEvidence(name="read_file", ok=True, result_preview="trace coverage notes"),
+            ),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
+
+
 def test_completion_gate_does_not_require_verification_for_operations_report():
     intent = TaskIntentService().classify("Remind me tomorrow to check the test report.")
     contract = TaskContract(

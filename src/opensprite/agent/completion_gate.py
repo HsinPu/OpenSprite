@@ -682,7 +682,7 @@ def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -
     if _contract_requires_verification(task_contract):
         return True
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {"operations", "workspace_read", "history_retrieval", "web_research"}:
+    if task_type in {"analysis", "operations", "workspace_read", "history_retrieval", "web_research"}:
         return False
     return task_intent.expects_verification
 
@@ -742,6 +742,8 @@ def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionR
         return False
     for item in failed_evidence:
         if item.name in _WORKSPACE_DISCOVERY_TOOLS:
+            continue
+        if item.name == "batch" and execution_result.file_change_count <= 0:
             continue
         if _is_non_exposed_permission_block(item):
             continue
