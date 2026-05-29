@@ -178,6 +178,29 @@ def test_stop_service_uses_taskkill_on_windows(tmp_path, monkeypatch):
     assert not pid_file.exists()
 
 
+def test_stop_service_forces_taskkill_on_windows_after_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    states = [True, True, False]
+    monkeypatch.setattr(service_background, "is_process_running", lambda pid: states.pop(0) if states else False)
+    monkeypatch.setattr(service_background.time, "sleep", lambda seconds: None)
+    pid_file = service_background.get_pid_file(tmp_path)
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text("1234\n", encoding="utf-8")
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0)
+
+    service_background.stop_service(home=tmp_path, timeout=0, force_timeout=1, run=fake_run)
+
+    assert [call[0] for call in calls] == [
+        ["taskkill", "/PID", "1234", "/T"],
+        ["taskkill", "/PID", "1234", "/T", "/F"],
+    ]
+    assert not pid_file.exists()
+
+
 def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
     calls = []

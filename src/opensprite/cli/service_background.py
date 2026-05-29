@@ -290,6 +290,7 @@ def stop_service(
     *,
     home: Path | None = None,
     timeout: float = 10.0,
+    force_timeout: float = 5.0,
     run=subprocess.run,
 ) -> None:
     """Stop the detached gateway process if it is running."""
@@ -310,6 +311,13 @@ def stop_service(
         if not is_process_running(pid):
             break
         time.sleep(0.2)
+    if is_process_running(pid) and platform.system() == "Windows":
+        run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True, check=False)
+        force_deadline = time.monotonic() + force_timeout
+        while time.monotonic() < force_deadline:
+            if not is_process_running(pid):
+                break
+            time.sleep(0.2)
     if is_process_running(pid):
         raise RuntimeError(f"OpenSprite gateway did not stop within {timeout:g} seconds (PID {pid}).")
 
