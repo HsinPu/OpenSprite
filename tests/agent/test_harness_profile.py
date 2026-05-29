@@ -183,6 +183,27 @@ async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
 
 
 @pytest.mark.anyio
+async def test_task_contract_planner_falls_back_for_invalid_json_workspace_request():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("請看目前工作區，找出 CLI chat 相關測試檔案有哪些。")
+    provider = _FakePlannerProvider("I should inspect files, but this is not JSON.")
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "workspace_read"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert "invalid JSON" in contract.planner_metadata["reason"]
+    assert any(item.tool_group == "workspace_read" for item in contract.requirements)
+
+
+@pytest.mark.anyio
 async def test_task_contract_planner_repairs_invalid_json_with_second_llm_call():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")

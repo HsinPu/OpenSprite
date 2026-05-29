@@ -81,6 +81,26 @@ _FALLBACK_HISTORY_MARKERS = (
     "\u9019\u6bb5\u5c0d\u8a71",
     "\u5c0d\u8a71",
 )
+_FALLBACK_WORKSPACE_MARKERS = (
+    "workspace",
+    "repo",
+    "repository",
+    "project",
+    "codebase",
+    "file",
+    "files",
+    "folder",
+    "directory",
+    "test file",
+    "tests",
+    "\u5de5\u4f5c\u5340",
+    "\u5c08\u6848",
+    "\u6a94\u6848",
+    "\u76ee\u9304",
+    "\u8cc7\u6599\u593e",
+    "\u7a0b\u5f0f\u78bc",
+    "\u6e2c\u8a66\u6a94",
+)
 
 
 @dataclass(frozen=True)
@@ -440,6 +460,12 @@ def _fallback_contract_from_intent(
     elif task_intent.expects_code_change:
         task_type = "workspace_change"
         tool_groups = ["workspace_read", "workspace_write"]
+    elif (
+        not _message_forbids_inherited_tool_group(current_message, "workspace_read")
+        and any(marker in text for marker in _FALLBACK_WORKSPACE_MARKERS)
+    ):
+        task_type = "workspace_read"
+        tool_groups = ["workspace_read"]
     elif any(marker in text for marker in _FALLBACK_HISTORY_MARKERS):
         task_type = "history_retrieval"
         tool_groups = ["history_retrieval"]
