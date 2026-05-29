@@ -66,6 +66,29 @@ _LOW_SIGNAL_DOMAIN_SUFFIXES = (
     "substack.com",
     "pinterest.com",
 )
+_OFFICIAL_DOC_MARKERS = (
+    "official",
+    "documentation",
+    "docs",
+    "官方",
+    "文件",
+    "文檔",
+)
+_OFFICIAL_DOMAIN_STOPWORDS = {
+    "api",
+    "docs",
+    "documentation",
+    "official",
+    "rate",
+    "rates",
+    "limit",
+    "limits",
+    "pricing",
+    "tier",
+    "tiers",
+    "free",
+    "paid",
+}
 
 
 class WebResearchTool(Tool):
@@ -170,6 +193,25 @@ class WebResearchTool(Tool):
             count=search_count,
             freshness=effective_freshness,
         )
+        official_domains = _official_domain_hints(" ".join(research_queries), search_items)
+        official_site_queries = _official_site_queries(query, official_domains, existing_queries=research_queries)
+        if official_site_queries:
+            site_items, site_provider, site_backend, site_attempts, site_query_attempts = await self._search_queries_with_fallback(
+                queries=official_site_queries,
+                count=search_count,
+                freshness=effective_freshness,
+            )
+            search_attempts.extend(site_attempts)
+            query_attempts.extend(site_query_attempts)
+            research_queries = _dedupe_query_strings([*research_queries, *official_site_queries])
+            if site_items:
+                search_items = _dedupe_search_items(
+                    [*site_items, *search_items],
+                    limit=max(search_count * max(len(research_queries), 1), search_count),
+                )
+                official_domains.update(_official_domain_hints(" ".join(research_queries), search_items))
+                search_provider = site_provider or search_provider
+                search_backend = site_backend or search_backend
         if not search_items:
             return _research_payload(
                 query=query,
@@ -191,6 +233,7 @@ class WebResearchTool(Tool):
             search_items,
             existing_sources=fetched_sources,
             freshness=effective_freshness,
+            official_domains=official_domains,
         )
         fetched_by_candidate_url = await self._fetch_research_candidates(
             candidates=fetch_candidates,
@@ -741,12 +784,14 @@ def _prioritize_research_candidates(
     *,
     existing_sources: list[dict[str, Any]],
     freshness: str,
+    official_domains: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if len(items) <= 1:
         return items
+    official_domains = set(official_domains or set())
     ordered_items = sorted(
         enumerate(items),
-        key=lambda pair: (_candidate_priority(pair[1], freshness), pair[0]),
+        key=lambda pair: (_candidate_priority(pair[1], freshness, official_domains=official_domains), pair[0]),
     )
     ordered = [item for _, item in ordered_items]
     item_queries = {_candidate_query(item) for item in items}
@@ -785,13 +830,70 @@ def _prioritize_research_candidates(
     return selected
 
 
-def _candidate_priority(item: dict[str, Any], freshness: str) -> tuple[int, int, int, int, int]:
+def _candidate_priority(item: dict[str, Any], freshness: str, *, official_domains: set[str] | None = None) -> tuple[int, int, int, int, int, int]:
     fetchable_penalty = 0 if _is_fetchable_url(item.get("url")) else 1
+    official_penalty = _candidate_official_penalty(item, official_domains or set())
     low_signal_penalty = _candidate_low_signal_penalty(item)
     stale_penalty = _candidate_staleness_penalty(item, freshness)
     recent_bonus = _candidate_recent_score(item) if freshness in _RECENT_FRESHNESS_VALUES else 0
     rank = _coerce_int(item.get("rank"), default=9999)
-    return (fetchable_penalty, low_signal_penalty, stale_penalty, -recent_bonus, rank)
+    return (fetchable_penalty, official_penalty, low_signal_penalty, stale_penalty, -recent_bonus, rank)
+
+
+def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
+    query_text = _clean_text(query).lower()
+    if not any(marker in query_text for marker in _OFFICIAL_DOC_MARKERS):
+        return set()
+    brand_tokens = {
+        token.lower()
+        for token in re.findall(r"\b[A-Za-z][A-Za-z0-9]{2,}\b", str(query or ""))
+        if token.lower() not in _OFFICIAL_DOMAIN_STOPWORDS
+    }
+    if not brand_tokens:
+        return set()
+
+    hints: set[str] = set()
+    for item in items:
+        domain = _candidate_domain(item)
+        compact_domain = domain.removeprefix("www.").replace("-", "")
+        if any(token in compact_domain for token in brand_tokens):
+            hints.add(domain)
+    return hints
+
+
+def _official_site_queries(query: str, official_domains: set[str], *, existing_queries: list[str]) -> list[str]:
+    if not official_domains:
+        return []
+    existing = {value.lower() for value in existing_queries}
+    out: list[str] = []
+    for domain in sorted(official_domains)[:2]:
+        site_query = f"site:{domain} {_clean_text(query)}"
+        key = site_query.lower()
+        if key not in existing:
+            out.append(site_query)
+    return out
+
+
+def _dedupe_query_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        text = _clean_text(value)
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
+def _candidate_official_penalty(item: dict[str, Any], official_domains: set[str]) -> int:
+    if not official_domains:
+        return 0
+    domain = _candidate_domain(item)
+    if any(domain == official or domain.endswith(f".{official}") for official in official_domains):
+        return 0
+    return 1
 
 
 def _candidate_recent_score(item: dict[str, Any]) -> int:
@@ -938,7 +1040,6 @@ def _blocked_or_challenge(*, title: str, content: str, status: Any) -> bool:
         "verify you are human",
         "prove you are human",
         "unusual traffic",
-        "rate limit",
         "too many requests",
     )
     return any(marker in normalized for marker in markers)

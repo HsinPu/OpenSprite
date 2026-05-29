@@ -196,7 +196,6 @@ def _looks_blocked_or_challenge(*, title: str, content: str, status: int | None)
         "verify you are human",
         "prove you are human",
         "unusual traffic",
-        "rate limit",
         "too many requests",
     )
     return any(marker in normalized for marker in markers)

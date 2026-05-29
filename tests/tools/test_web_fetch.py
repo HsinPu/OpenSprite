@@ -91,6 +91,27 @@ def test_web_fetch_marks_blocked_challenge_payload(monkeypatch):
     assert payload["is_too_short"] is True
 
 
+def test_web_fetch_does_not_treat_rate_limit_topic_as_blocked(monkeypatch):
+    class _RateLimitDocsFetcher(_FakeFetcher):
+        def fetch(self, url: str):
+            result = super().fetch(url)
+            result.update(
+                {
+                    "title": "API Rate Limits",
+                    "text": "This documentation explains API rate limits, quotas, and usage controls." * 20,
+                }
+            )
+            return result
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.WebFetcher", lambda *args, **kwargs: _RateLimitDocsFetcher())
+    tool = WebFetchTool()
+
+    payload = json.loads(asyncio.run(tool._execute("https://example.com/rate-limits")))
+
+    assert payload["blocked_or_challenge"] is False
+    assert payload["has_main_content"] is True
+
+
 def test_web_fetch_parameter_default_uses_configured_max_chars():
     tool = WebFetchTool(max_chars=1234)
 

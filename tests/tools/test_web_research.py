@@ -394,6 +394,105 @@ def test_web_research_prioritizes_current_year_candidates_for_recent_searches():
     assert payload["fetched_sources"][0]["search_freshness"] == "month"
 
 
+def test_web_research_prioritizes_official_domain_for_official_docs_query():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "Third Party OpenRouter Guide",
+                "url": "https://example.com/openrouter-rate-limits",
+                "content": "OpenRouter rate limits explained by a third party",
+            },
+            {
+                "title": "OpenRouter Rate Limits",
+                "url": "https://openrouter.ai/docs/api/reference/limits",
+                "content": "Official OpenRouter API rate limits documentation",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/openrouter-rate-limits": _fetch_payload("https://example.com/openrouter-rate-limits"),
+            "https://openrouter.ai/docs/api/reference/limits": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/limits",
+                title="OpenRouter Rate Limits",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                "OpenRouter rate limits official documentation",
+                count=2,
+                fetch_count=1,
+                freshness="month",
+            )
+        )
+    )
+
+    assert [call["url"] for call in fetch.calls] == ["https://openrouter.ai/docs/api/reference/limits"]
+    assert payload["fetched_sources"][0]["domain"] == "openrouter.ai"
+
+
+def test_web_research_adds_official_site_query_for_official_docs_query():
+    search = _FakeSearchToolByQuery(
+        {
+            "OpenRouter rate limits official documentation": [
+                {
+                    "title": "Third Party OpenRouter Guide",
+                    "url": "https://example.com/openrouter-rate-limits",
+                    "content": "OpenRouter rate limits explained by a third party",
+                },
+                {
+                    "title": "OpenRouter Docs",
+                    "url": "https://openrouter.ai/docs",
+                    "content": "Official OpenRouter documentation index",
+                },
+            ],
+            "site:openrouter.ai OpenRouter rate limits official documentation": [
+                {
+                    "title": "API Rate Limits",
+                    "url": "https://openrouter.ai/docs/api/reference/limits",
+                    "content": "Learn about OpenRouter API rate limits and quotas",
+                },
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://openrouter.ai/docs": _fetch_payload("https://openrouter.ai/docs", title="OpenRouter Docs"),
+            "https://openrouter.ai/docs/api/reference/limits": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/limits",
+                title="API Rate Limits",
+            ),
+            "https://example.com/openrouter-rate-limits": _fetch_payload("https://example.com/openrouter-rate-limits"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                "OpenRouter rate limits official documentation",
+                count=3,
+                fetch_count=1,
+                freshness="month",
+            )
+        )
+    )
+
+    assert [call["query"] for call in search.calls] == [
+        "OpenRouter rate limits official documentation",
+        "site:openrouter.ai OpenRouter rate limits official documentation",
+    ]
+    assert [call["url"] for call in fetch.calls] == ["https://openrouter.ai/docs/api/reference/limits"]
+    assert payload["queries"] == [
+        "OpenRouter rate limits official documentation",
+        "site:openrouter.ai OpenRouter rate limits official documentation",
+    ]
+
+
 def test_web_research_deprioritizes_platform_sources_for_fetching():
     search = _FakeSearchTool(
         [
