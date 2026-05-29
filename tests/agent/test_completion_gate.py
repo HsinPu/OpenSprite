@@ -436,6 +436,22 @@ def test_completion_gate_does_not_mark_status_definition_as_blocked():
     assert result.reason == "generic task returned a response"
 
 
+def test_completion_gate_marks_retry_only_conversation_response_incomplete():
+    intent = TaskIntentService().classify(
+        "\u6839\u64da\u525b\u525b\u8b80\u5230\u7684\u5167\u5bb9\uff0c\u7528\u4e00\u53e5\u8a71\u8aaa\u660e API key header\uff0c\u4e0d\u8981\u518d\u4e0a\u7db2\u3002"
+    )
+    response = "\u62b1\u6b49\uff0c\u6211\u525b\u525b\u6c92\u6709\u7522\u751f\u53ef\u986f\u793a\u7684\u56de\u8986\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "assistant response did not explicitly complete the task"
+
+
 def test_completion_gate_marks_waiting_when_response_asks_for_input():
     intent = TaskIntentService().classify("繼續做")
 

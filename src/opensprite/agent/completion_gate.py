@@ -42,6 +42,10 @@ _INCOMPLETE_MARKERS = (
     "can't complete",
     "could not complete",
     "unable to complete",
+    "try again",
+    "no visible reply",
+    "沒有產生可顯示的回覆",
+    "請再試一次",
     "still need",
     "needs more",
     "未完成",
@@ -490,6 +494,20 @@ class CompletionGateService:
                 )
 
         if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
+            if response_text.strip() and _looks_incomplete(response_text, task_intent.objective):
+                return CompletionGateResult(
+                    status="incomplete",
+                    reason="assistant response did not explicitly complete the task",
+                    verification_required=verification_required,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
+                    review_required=review_required,
+                    review_attempted=review["attempted"],
+                    review_passed=review["passed"],
+                    review_summary=review["summary"],
+                    review_prompt_types=review["prompt_types"],
+                    review_finding_count=review["finding_count"],
+                )
             return CompletionGateResult(
                 status="complete" if response_text.strip() else "incomplete",
                 reason="one-turn intent received a response" if response_text.strip() else "assistant response was empty",
