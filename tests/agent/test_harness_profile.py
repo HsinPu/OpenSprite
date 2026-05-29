@@ -89,6 +89,16 @@ def test_harness_profile_derives_ops_scheduling_from_contract():
     assert profile.required_tool_groups == ("scheduling",)
 
 
+def test_harness_profile_derives_ops_execution_from_contract():
+    profile = HarnessProfileService().from_contract(
+        _contract("operations", EvidenceRequirement(kind="tool_group", tool_group="execution"))
+    )
+
+    assert profile.name == "ops"
+    assert profile.task_type == "operations"
+    assert profile.required_tool_groups == ("execution",)
+
+
 def test_default_chat_profile_no_longer_routes_by_user_text_markers():
     profile = HarnessProfileService().default_chat_profile()
 
@@ -195,6 +205,33 @@ async def test_task_contract_planner_builds_scheduling_contract_from_llm_json():
 
     assert contract.task_type == "operations"
     assert any(item.kind == "tool_group" and item.tool_group == "scheduling" for item in contract.requirements)
+    assert any(item.kind == "operation_report" for item in contract.acceptance_criteria)
+    assert contract.allow_no_tool_final is False
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_builds_execution_contract_from_llm_json():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("Check whether git is installed and report the version.")
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "ops",
+            "required_tool_groups": ["execution"],
+            "allow_no_tool_final": False,
+            "reason": "The user asks to inspect a local command version.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "operations"
+    assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
     assert any(item.kind == "operation_report" for item in contract.acceptance_criteria)
     assert contract.allow_no_tool_final is False
 

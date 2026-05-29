@@ -7,6 +7,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "image_text": frozenset({"ocr_image", "analyze_image"}),
     "image_understanding": frozenset({"analyze_image"}),
     "audio_text": frozenset({"transcribe_audio"}),
+    "execution": frozenset({"exec", "process"}),
     "media": frozenset({"analyze_image", "ocr_image", "transcribe_audio", "analyze_video"}),
     "scheduling": frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
@@ -25,6 +26,7 @@ TOOL_GROUP_BY_TOOL_NAME: dict[str, str] = {
 
 TASK_TYPE_BY_TOOL_GROUP: dict[str, str] = {
     "audio_text": "media_extraction",
+    "execution": "operations",
     "history_retrieval": "history_retrieval",
     "image_text": "media_extraction",
     "image_understanding": "media_extraction",

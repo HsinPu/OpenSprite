@@ -43,7 +43,7 @@ _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
     "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, media_analysis, "
     "history_retrieval, ops, task, analysis. Choose required_tool_groups only from: web_research, "
-    "workspace_read, workspace_write, media, history_retrieval, scheduling, verification. If no tool evidence is needed, "
+    "workspace_read, workspace_write, media, history_retrieval, scheduling, execution, verification. If no tool evidence is needed, "
     "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
     "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
 )
@@ -415,11 +415,13 @@ def _build_planner_contract_prompt(
         "If the user asks about local files, repo code, project state, or wants code changes, choose workspace_read or "
         "workspace_change. If the user asks about attached media, choose media_analysis. If the user asks about previous "
     "conversation state, choose history_retrieval. If the user asks to schedule, remind, pause, list, or run reminders "
-    "or recurring jobs, choose ops with required_tool_groups ['scheduling']. If no tool evidence is needed, choose pure_answer.\n"
+    "or recurring jobs, choose ops with required_tool_groups ['scheduling']. If the user asks to inspect the local machine, "
+    "installed commands, command versions, running processes, or local runtime state, choose ops with required_tool_groups "
+    "['execution']. If no tool evidence is needed, choose pure_answer.\n"
         "Return JSON only with this shape:\n"
         "{\n"
         '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | media_analysis | history_retrieval | ops | task | analysis",\n'
-        '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | verification"],\n'
+        '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | execution | verification"],\n'
         '  "final_answer_required": true,\n'
         '  "allow_no_tool_final": true,\n'
         '  "reason": "short explanation for trace only"\n'
@@ -646,6 +648,9 @@ def _contract_from_planner_payload(
             acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
         elif tool_group == "scheduling":
             requirements.append(_tool_group_requirement("scheduling"))
+            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
+        elif tool_group == "execution":
+            requirements.append(_tool_group_requirement("execution"))
             acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
         elif tool_group == "verification":
             requirements.append(
