@@ -127,6 +127,11 @@ class _FakePlannerProvider:
         return _FakeResponse(content)
 
 
+class _FailingPlannerProvider:
+    async def chat(self, messages, *, model=None, **kwargs):
+        raise TimeoutError("planner timed out")
+
+
 @pytest.mark.anyio
 async def test_task_contract_planner_builds_web_contract_from_llm_json():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
@@ -310,6 +315,26 @@ async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
     assert contract.allow_no_tool_final is False
     assert contract.planner_metadata["planner_status"] == "fallback"
     assert "invalid JSON" in contract.planner_metadata["reason"]
+    assert any(item.tool_group == "web_research" for item in contract.requirements)
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_falls_back_when_llm_call_fails():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("Find current OpenRouter API parameter docs and cite sources")
+
+    contract = await planner.plan(
+        provider=_FailingPlannerProvider(),
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "web_research"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert "TimeoutError" in contract.planner_metadata["reason"]
     assert any(item.tool_group == "web_research" for item in contract.requirements)
 
 

@@ -246,34 +246,59 @@ class TaskContractPlanner:
             current_video_files=current_video_files,
             task_context_decision=task_context_decision,
         )
-        response = await provider.chat(
-            [
-                ChatMessage(role="system", content=_PLANNER_CONTRACT_SYSTEM_PROMPT),
-                ChatMessage(role="user", content=planner_prompt),
-            ],
-            model=model,
-            **self.llm_config.decoding_kwargs(),
-        )
-        response_text = str(getattr(response, "content", "") or "")
-        payload = _parse_json_object(response_text)
-        if not payload and response_text.strip():
-            repair_response = await provider.chat(
+        try:
+            response = await provider.chat(
                 [
-                    ChatMessage(role="system", content=_PLANNER_REPAIR_SYSTEM_PROMPT),
-                    ChatMessage(
-                        role="user",
-                        content=(
-                            "Original planner prompt:\n"
-                            f"{planner_prompt}\n\n"
-                            "Invalid planner response:\n"
-                            f"{response_text}\n\n"
-                            "Return only the corrected JSON object."
-                        ),
-                    ),
+                    ChatMessage(role="system", content=_PLANNER_CONTRACT_SYSTEM_PROMPT),
+                    ChatMessage(role="user", content=planner_prompt),
                 ],
                 model=model,
                 **self.llm_config.decoding_kwargs(),
             )
+        except Exception as exc:
+            return _fallback_contract_from_intent(
+                task_intent=task_intent,
+                current_message=current_message,
+                history=history,
+                current_image_files=current_image_files,
+                current_audio_files=current_audio_files,
+                current_video_files=current_video_files,
+                task_context_decision=task_context_decision,
+                reason=_planner_exception_reason(exc),
+            )
+        response_text = str(getattr(response, "content", "") or "")
+        payload = _parse_json_object(response_text)
+        if not payload and response_text.strip():
+            try:
+                repair_response = await provider.chat(
+                    [
+                        ChatMessage(role="system", content=_PLANNER_REPAIR_SYSTEM_PROMPT),
+                        ChatMessage(
+                            role="user",
+                            content=(
+                                "Original planner prompt:\n"
+                                f"{planner_prompt}\n\n"
+                                "Invalid planner response:\n"
+                                f"{response_text}\n\n"
+                                "Return only the corrected JSON object."
+                            ),
+                        ),
+                    ],
+                    model=model,
+                    **self.llm_config.decoding_kwargs(),
+                )
+            except Exception as exc:
+                return _fallback_contract_from_intent(
+                    task_intent=task_intent,
+                    current_message=current_message,
+                    history=history,
+                    current_image_files=current_image_files,
+                    current_audio_files=current_audio_files,
+                    current_video_files=current_video_files,
+                    task_context_decision=task_context_decision,
+                    reason=_planner_exception_reason(exc),
+                    raw_response_preview=_truncate(response_text, max_chars=400),
+                )
             repair_text = str(getattr(repair_response, "content", "") or "")
             payload = _parse_json_object(repair_text)
             if not payload:
@@ -534,6 +559,14 @@ def _fallback_contract_from_intent(
         harness_profile=contract.harness_profile,
         planner_metadata=metadata,
     )
+
+
+def _planner_exception_reason(exc: Exception) -> str:
+    error_type = exc.__class__.__name__
+    message = str(exc).strip()
+    if message:
+        return f"task contract planner LLM call failed: {error_type}: {message}"
+    return f"task contract planner LLM call failed: {error_type}"
 
 
 def _contract_from_planner_payload(
