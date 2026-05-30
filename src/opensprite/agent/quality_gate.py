@@ -15,6 +15,7 @@ from .task_intent import TaskIntent
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
 _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+_URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
 _VERIFICATION_GAP_RE = re.compile(
     r"\b(?:tests? not run|not tested|not verified|could not verify|unable to verify|verification gap|untested)\b"
     r"|(?:未測試|沒有測試|尚未測試|未驗證|沒有驗證|尚未驗證|無法驗證)",
@@ -226,6 +227,17 @@ def _evaluate_source_reference(
     sources = _execution_web_sources(execution_result)
     if not sources:
         return None
+    ungrounded_urls = _ungrounded_response_urls(response_text, sources)
+    if ungrounded_urls:
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant final answer referenced ungathered sources",
+            active_task_detail=(
+                "- Remove or verify source URLs that were not gathered in this run: "
+                + ", ".join(ungrounded_urls[:3])
+            ),
+        )
     min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
     referenced_count = sum(1 for source in sources if _source_is_referenced(source, response_text))
     if referenced_count >= min_count:
@@ -691,6 +703,48 @@ def _source_is_referenced(source: dict[str, object], response_text: str) -> bool
 
     title = re.sub(r"\s+", " ", str(source.get("title") or "").strip().lower())
     return len(title) >= 6 and title in normalized_response
+
+
+def _ungrounded_response_urls(response_text: str, sources: list[dict[str, object]]) -> list[str]:
+    source_urls = {
+        normalized
+        for source in sources
+        if (normalized := _normalize_source_url(str(source.get("url") or "")))
+    }
+    if not source_urls:
+        return []
+
+    ungrounded: list[str] = []
+    seen: set[str] = set()
+    for raw_url in _URL_RE.findall(response_text or ""):
+        url = raw_url.rstrip(".,;:!?，。；：！？")
+        normalized = _normalize_source_url(url)
+        if not normalized or normalized in source_urls:
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ungrounded.append(url)
+    return ungrounded
+
+
+def _normalize_source_url(url: str) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlparse(text)
+    except Exception:
+        return text.rstrip("/").lower()
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    path = parsed.path.rstrip("/")
+    normalized = f"{scheme}://{netloc}{path}"
+    if parsed.params:
+        normalized += f";{parsed.params}"
+    return normalized.lower()
 
 
 def _source_domain(url: str) -> str:

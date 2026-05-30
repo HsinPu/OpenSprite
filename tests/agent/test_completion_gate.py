@@ -1310,6 +1310,61 @@ def test_completion_gate_rejects_search_only_web_source_artifacts():
     assert completion.reason == "required source material was insufficient"
 
 
+def test_completion_gate_rejects_ungathered_source_urls():
+    intent = TaskIntentService().classify("Find current Reddit API search documentation and cite sources")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "I checked the Reddit API docs at https://www.reddit.com/dev/api/ and also found "
+        "a useful changelog at https://example.com/fake-reddit-api-news. The docs cover "
+        "authentication, listings, and search-related endpoints."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
+            task_artifacts=_web_research_artifacts(),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer referenced ungathered sources"
+    assert "https://example.com/fake-reddit-api-news" in (completion.active_task_detail or "")
+
+
+def test_completion_gate_allows_gathered_source_urls_with_punctuation():
+    intent = TaskIntentService().classify("Find current Reddit API search documentation and cite sources")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "I checked the Reddit API docs (https://www.reddit.com/dev/api/). The docs cover "
+        "authentication, listings, and search-related endpoints."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
+            task_artifacts=_web_research_artifacts(),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_rejects_too_short_web_fetch_source_detail():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
