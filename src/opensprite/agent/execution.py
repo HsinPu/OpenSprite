@@ -257,9 +257,11 @@ Output exactly these sections when applicable:
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
         context_compaction_llm: DocumentLlmConfig | None = None,
+        llm_request_timeout_seconds: float = 120.0,
     ):
         self.provider = provider
         self.tools = tools
+        self.llm_request_timeout_seconds = max(0.001, float(llm_request_timeout_seconds))
         self.context_compaction_enabled = context_compaction_enabled
         self.context_compaction_token_budget = max(0, context_compaction_token_budget)
         self.context_window_tokens = context_window_tokens
@@ -1293,13 +1295,16 @@ Output exactly these sections when applicable:
                         f"messages={len(chat_messages)} tools={len(tools or [])} "
                         f"estimated_tokens={estimated_tokens} message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens}"
                     )
-                    response = await active_provider.chat(
-                        messages=chat_messages,
-                        tools=tools,
-                        status_callback=on_llm_status,
-                        response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
-                        tool_input_delta_callback=_provider_tool_input_delta if on_tool_input_delta is not None else None,
-                        reasoning_delta_callback=on_reasoning_delta,
+                    response = await asyncio.wait_for(
+                        active_provider.chat(
+                            messages=chat_messages,
+                            tools=tools,
+                            status_callback=on_llm_status,
+                            response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
+                            tool_input_delta_callback=_provider_tool_input_delta if on_tool_input_delta is not None else None,
+                            reasoning_delta_callback=on_reasoning_delta,
+                        ),
+                        timeout=self.llm_request_timeout_seconds,
                     )
                     duration_ms = int((time.perf_counter() - started_at) * 1000)
                     usage = dict(getattr(response, "usage", {}) or {})

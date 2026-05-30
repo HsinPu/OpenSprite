@@ -178,6 +178,20 @@ class FakeProvider:
         return "fake-model"
 
 
+class SlowProvider:
+    def __init__(self, delay: float = 1.0):
+        self.delay = delay
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools})
+        await asyncio.sleep(self.delay)
+        return LLMResponse(content="too late", model="fake-model")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
 class FakeMediaRouter:
     async def analyze_image(self, *, instruction, images, image_index=0):
         return f"image analysis:{image_index}:{instruction}"
@@ -1165,6 +1179,20 @@ def test_execution_engine_uses_empty_fallback_for_blank_visible_response():
     assert result.content == "retry ok"
     assert len(provider.calls) == 2
     assert provider.calls[1]["messages"][-1].content == ExecutionEngine.EMPTY_RESPONSE_RETRY_MESSAGE
+
+
+def test_execution_engine_times_out_slow_provider_calls():
+    provider = SlowProvider(delay=0.1)
+    engine = _make_engine(provider, ToolRegistry(), [], llm_request_timeout_seconds=0.01)
+
+    try:
+        asyncio.run(engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False))
+    except TimeoutError:
+        pass
+    else:
+        raise AssertionError("expected provider call timeout")
+
+    assert len(provider.calls) == 2
 
 
 def test_execution_engine_uses_sanitized_empty_retry_message_for_hidden_only_content():

@@ -132,6 +132,7 @@ class AgentConfig(BaseModel):
     
     max_history: int
     history_token_budget: int
+    llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
     context_output_reserve_tokens: int = Field(default=32768, ge=1)
     context_compaction_enabled: bool
     context_compaction_threshold_ratio: float = Field(gt=0.0, le=1.0)
@@ -1369,7 +1370,10 @@ class Config:
     @classmethod
     def packaged_execution_engine_chat_kwargs(cls) -> dict[str, Any]:
         """Map packaged ``llm`` to :class:`opensprite.agent.execution.ExecutionEngine` keyword arguments."""
-        return {}
+        agent = cls.load_template_data().get("agent", {})
+        return {
+            "llm_request_timeout_seconds": agent.get("llm_request_timeout_seconds", 120.0),
+        }
 
     @classmethod
     def load_external_template_data(cls, name: str) -> dict[str, Any]:
@@ -1486,6 +1490,7 @@ class Config:
             "agent": {
                 "max_history": self.agent.max_history,
                 "history_token_budget": self.agent.history_token_budget,
+                "llm_request_timeout_seconds": self.agent.llm_request_timeout_seconds,
                 "context_output_reserve_tokens": self.agent.context_output_reserve_tokens,
                 "context_compaction_enabled": self.agent.context_compaction_enabled,
                 "context_compaction_threshold_ratio": self.agent.context_compaction_threshold_ratio,

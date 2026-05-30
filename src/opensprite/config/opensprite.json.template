@@ -93,6 +93,7 @@
   "agent": {
     "max_history": 300,
     "history_token_budget": 200000,
+    "llm_request_timeout_seconds": 120,
     "context_output_reserve_tokens": 32768,
     "context_compaction_enabled": true,
     "context_compaction_threshold_ratio": 0.9,

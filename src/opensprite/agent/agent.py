@@ -1118,6 +1118,7 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
             summarize_messages=self._summarize_messages,
             sanitize_response_content=self._sanitize_response_content,
+            llm_request_timeout_seconds=self.config.llm_request_timeout_seconds,
             context_compaction_enabled=self.config.context_compaction_enabled,
             context_compaction_token_budget=self._effective_context_token_budget(),
             context_window_tokens=self.llm_context_window_tokens,
