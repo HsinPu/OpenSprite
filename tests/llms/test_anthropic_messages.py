@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from opensprite.llms import ChatMessage
 from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 
@@ -28,6 +30,29 @@ def test_anthropic_messages_minimax_enables_thinking_and_headers():
     assert payload["temperature"] == 1
     assert payload["max_tokens"] == 20096
     assert "cache_control" not in str(payload)
+
+
+def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
+    provider = AnthropicMessagesLLM(
+        api_key="minimax-key",
+        base_url="https://api.minimax.io/anthropic/",
+        default_model="MiniMax-M2.7",
+        reasoning_enabled=False,
+    )
+
+    assert provider.context_request_kwargs(output_token_reserve=32768) == {"max_tokens": 32768}
+
+
+def test_anthropic_messages_requires_configured_max_tokens():
+    provider = AnthropicMessagesLLM(
+        api_key="minimax-key",
+        base_url="https://api.minimax.io/anthropic/",
+        default_model="MiniMax-M2.7",
+        reasoning_enabled=False,
+    )
+
+    with pytest.raises(ValueError, match="require max_tokens"):
+        provider._build_payload([ChatMessage(role="user", content="Hello")], tools=None, model=None, max_tokens=None)
 
 
 def test_anthropic_messages_applies_prompt_cache_for_official_anthropic_base_url():
@@ -138,7 +163,13 @@ def test_anthropic_messages_response_maps_text_thinking_and_tools():
     )
     provider._post_messages = fake_post
 
-    response = asyncio.run(provider.chat([ChatMessage(role="user", content="Use a tool")], tools=[{"name": "lookup", "parameters": {"type": "object"}}]))
+    response = asyncio.run(
+        provider.chat(
+            [ChatMessage(role="user", content="Use a tool")],
+            tools=[{"name": "lookup", "parameters": {"type": "object"}}],
+            max_tokens=1024,
+        )
+    )
 
     assert calls[0]["tools"] == [{"name": "lookup", "description": "", "input_schema": {"type": "object"}}]
     assert response.content == "I will call a tool."

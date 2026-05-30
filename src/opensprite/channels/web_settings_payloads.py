@@ -118,10 +118,11 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
         reasoning_source = "anthropic_messages"
         if active.reasoning_enabled:
             budget = anthropic_reasoning_budget(active.reasoning_effort)
+            output_reserve = max(1, int(config.agent.context_output_reserve_tokens))
             reasoning_payload = {
                 "thinking": {"type": "enabled", "budget_tokens": budget},
                 "temperature": 1,
-                "max_tokens": max(131072, budget + 4096),
+                "max_tokens": max(output_reserve, budget + 4096),
             }
     elif provider_name == "minimax":
         reasoning_source = "minimax_chat_completions"

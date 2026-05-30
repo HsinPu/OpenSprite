@@ -178,6 +178,15 @@ class FakeProvider:
         return "fake-model"
 
 
+class ContextKwargsProvider(FakeProvider):
+    def context_request_kwargs(self, *, output_token_reserve: int):
+        return {"max_tokens": output_token_reserve}
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools, "max_tokens": max_tokens})
+        return self.responses.pop(0)
+
+
 class SlowProvider:
     def __init__(self, delay: float = 1.0):
         self.delay = delay
@@ -371,6 +380,21 @@ def _make_engine(provider, registry, save_calls, tools_config=None, **engine_kwa
         sanitize_response_content=lambda text: text.strip(),
         **chat_kwargs,
     )
+
+
+def test_execution_engine_passes_provider_context_request_kwargs():
+    provider = ContextKwargsProvider([LLMResponse(content="done", model="fake-model")])
+    engine = _make_engine(
+        provider,
+        ToolRegistry(),
+        [],
+        context_output_reserve_tokens=12345,
+    )
+
+    result = asyncio.run(engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False))
+
+    assert result.content == "done"
+    assert provider.calls[0]["max_tokens"] == 12345
 
 
 def test_execution_engine_runs_tool_loop_and_persists_tool_result():

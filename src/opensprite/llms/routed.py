@@ -52,5 +52,8 @@ class ModelRoutedProvider(LLMProvider):
     def get_default_model(self) -> str:
         return self.model or self.base_provider.get_default_model()
 
+    def context_request_kwargs(self, *, output_token_reserve: int) -> dict[str, Any]:
+        return self.base_provider.context_request_kwargs(output_token_reserve=output_token_reserve)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self.base_provider, name)

@@ -851,7 +851,7 @@ def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
     assert payload["reasoning"]["payload"] == {
         "thinking": {"type": "enabled", "budget_tokens": 16000},
         "temperature": 1,
-        "max_tokens": 131072,
+        "max_tokens": 32768,
     }
 
 

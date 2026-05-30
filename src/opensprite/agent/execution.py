@@ -281,6 +281,13 @@ Output exactly these sections when applicable:
             save_message=save_message,
         )
 
+    def _context_request_kwargs(self, provider: LLMProvider) -> dict[str, Any]:
+        hook = getattr(provider, "context_request_kwargs", None)
+        if not callable(hook):
+            return {}
+        kwargs = hook(output_token_reserve=self.context_output_reserve_tokens)
+        return dict(kwargs) if isinstance(kwargs, dict) else {}
+
     @staticmethod
     def _should_refresh_main_system_after_tool(tool_name: str, tool_args: dict[str, Any]) -> bool:
         """Skill/subagent definitions on disk may change; optional mid-loop system rebuild."""
@@ -1303,6 +1310,7 @@ Output exactly these sections when applicable:
                             response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
                             tool_input_delta_callback=_provider_tool_input_delta if on_tool_input_delta is not None else None,
                             reasoning_delta_callback=on_reasoning_delta,
+                            **self._context_request_kwargs(active_provider),
                         ),
                         timeout=self.llm_request_timeout_seconds,
                     )

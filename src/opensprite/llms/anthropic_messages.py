@@ -138,6 +138,10 @@ class AnthropicMessagesLLM(LLMProvider):
         )
         self.timeout_seconds = timeout_seconds
 
+    def context_request_kwargs(self, *, output_token_reserve: int) -> dict[str, Any]:
+        """Anthropic Messages requires an explicit output token cap."""
+        return {"max_tokens": max(1, int(output_token_reserve))}
+
     def _headers(self) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -206,11 +210,15 @@ class AnthropicMessagesLLM(LLMProvider):
         model: str | None,
         max_tokens: int | None,
     ) -> dict[str, Any]:
+        if max_tokens is None:
+            raise ValueError(
+                "Anthropic Messages requests require max_tokens; pass the configured context output reserve."
+            )
         system, anthropic_messages = self._build_messages(messages)
         payload: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": anthropic_messages,
-            "max_tokens": max_tokens or 131072,
+            "max_tokens": max_tokens,
         }
         if system:
             payload["system"] = system

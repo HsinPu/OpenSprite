@@ -143,6 +143,11 @@ class LLMProvider(ABC):
         _ = error
         return False
 
+    def context_request_kwargs(self, *, output_token_reserve: int) -> dict[str, Any]:
+        """Provider-required request kwargs derived from centralized context config."""
+        _ = output_token_reserve
+        return {}
+
 
 class UnconfiguredLLM(LLMProvider):
     """Fallback provider used before the user configures an LLM."""
