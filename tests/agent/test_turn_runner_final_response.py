@@ -1,4 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation
 
 
@@ -35,6 +37,44 @@ def test_exhausted_continuation_keeps_clear_blocker_response():
     )
 
     assert response == original
+
+
+def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_response():
+    response = _final_response_after_exhausted_continuation(
+        response="找到了正確網址，讓我抓取主要文件頁面的內容。",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="assistant final answer was too terse for the task",
+            active_task_detail="Provide a substantive final answer that uses the gathered web source results.",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="找到了正確網址，讓我抓取主要文件頁面的內容。",
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://openrouter.ai/docs/api/reference/parameters",
+                                "title": "OpenRouter API Parameters",
+                                "snippet": "Max Tokens sets the upper limit for generated output tokens.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "重點摘要" in response
+    assert "https://openrouter.ai/docs/api/reference/parameters" in response
+    assert "目前還不能可靠完成這次請求" not in response
 
 
 def test_incomplete_fallback_response_is_replaced_without_continuation_attempts():

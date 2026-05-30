@@ -734,7 +734,41 @@ class AgentTurnRunner:
             response=response,
             completion_result=completion_result,
             auto_continue_attempts=auto_continue_attempts,
+            execution_result=aggregate_result,
         )
+        if response != aggregate_result.content:
+            aggregate_result.content = response
+            completion_result = self.completion_gate.evaluate(
+                task_intent=task_intent,
+                response_text=response,
+                execution_result=aggregate_result,
+            )
+            completion_metadata = completion_result.to_metadata()
+            completion_metadata["auto_continue_attempts"] = auto_continue_attempts
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                "completion_gate.evaluated",
+                completion_metadata,
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            work_progress = self.work_progress.evaluate(
+                task_intent=task_intent,
+                completion_result=completion_result,
+                execution_result=aggregate_result,
+                auto_continue_attempts=auto_continue_attempts,
+                pass_index=len(execution_results),
+                harness_profile=harness_profile,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                "work_progress.updated",
+                work_progress.to_metadata(),
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
 
         outbound_media = self._get_queued_outbound_media()
 
@@ -1203,6 +1237,7 @@ def _final_response_after_exhausted_continuation(
     response: str,
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
+    execution_result: ExecutionResult | None = None,
 ) -> str:
     if not _should_replace_nonfinal_response(
         response=response,
@@ -1210,7 +1245,78 @@ def _final_response_after_exhausted_continuation(
         auto_continue_attempts=auto_continue_attempts,
     ):
         return response
+    source_fallback = _source_fallback_response(completion_result, execution_result)
+    if source_fallback:
+        return source_fallback
     return _completion_blocker_response(completion_result)
+
+
+def _source_fallback_response(
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult | None,
+) -> str:
+    if execution_result is None:
+        return ""
+    if completion_result.reason not in {
+        "assistant final answer did not reference gathered sources",
+        "assistant final answer was too terse for the task",
+        "assistant did not provide the requested itemized result",
+    }:
+        return ""
+    sources = _substantive_web_sources(execution_result)
+    if not sources:
+        return ""
+
+    detail_lines: list[str] = []
+    source_lines: list[str] = []
+    for index, source in enumerate(sources[:4], start=1):
+        title = str(source.get("title") or "").strip() or str(source.get("url") or "").strip()
+        url = str(source.get("url") or "").strip()
+        snippet = " ".join(str(source.get("snippet") or source.get("content") or "").split())
+        if snippet:
+            detail_lines.append(f"{index}. {title}: {snippet[:280]}")
+        else:
+            detail_lines.append(f"{index}. {title}")
+        source_lines.append(f"{index}. {url}")
+
+    return "\n\n".join(
+        [
+            "我已根據本輪已成功蒐集到的來源整理如下，避免停在只有進度句的狀態。",
+            "重點摘要：\n" + "\n".join(detail_lines),
+            "來源網址：\n" + "\n".join(source_lines),
+        ]
+    )
+
+
+def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok or artifact.kind != "web_source":
+            continue
+        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
+        if not isinstance(raw_sources, list):
+            continue
+        for raw_source in raw_sources:
+            if not isinstance(raw_source, dict):
+                continue
+            url = str(raw_source.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            content_chars = _coerce_positive_int(raw_source.get("content_chars"))
+            is_too_short = bool(raw_source.get("is_too_short"))
+            has_main_content = bool(raw_source.get("has_main_content"))
+            if raw_source.get("tool_name") == "web_fetch" and (content_chars >= 800 or has_main_content) and not is_too_short:
+                seen_urls.add(url)
+                sources.append(raw_source)
+    return sources
+
+
+def _coerce_positive_int(value: Any) -> int:
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _should_replace_nonfinal_response(
