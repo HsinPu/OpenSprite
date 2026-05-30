@@ -252,14 +252,18 @@ Output exactly these sections when applicable:
         context_compaction_enabled: bool = False,
         context_compaction_token_budget: int = 0,
         context_window_tokens: int | None = None,
-        context_output_reserve_tokens: int = 0,
+        context_output_reserve_tokens: int | None = None,
         context_compaction_threshold_ratio: float = 0.9,
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
         context_compaction_llm: DocumentLlmConfig | None = None,
-        llm_request_timeout_seconds: float = 120.0,
+        llm_request_timeout_seconds: float | None = None,
     ):
         self.provider = provider
+        if llm_request_timeout_seconds is None:
+            raise ValueError("llm_request_timeout_seconds must be provided from agent config")
+        if context_output_reserve_tokens is None:
+            raise ValueError("context_output_reserve_tokens must be provided from agent config")
         self.tools = tools
         self.llm_request_timeout_seconds = max(0.001, float(llm_request_timeout_seconds))
         self.context_compaction_enabled = context_compaction_enabled

@@ -129,11 +129,11 @@ MemoryLlmConfig = DocumentLlmConfig
 
 class AgentConfig(BaseModel):
     """Agent configuration."""
-    
+
     max_history: int
     history_token_budget: int
-    llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
-    context_output_reserve_tokens: int = Field(default=32768, ge=1)
+    llm_request_timeout_seconds: float = Field(gt=0)
+    context_output_reserve_tokens: int = Field(ge=1)
     context_compaction_enabled: bool
     context_compaction_threshold_ratio: float = Field(gt=0.0, le=1.0)
     context_compaction_min_messages: int = Field(ge=2)
@@ -1364,7 +1364,7 @@ class Config:
         """Map packaged ``llm`` to :class:`opensprite.agent.agent.AgentLoop` keyword arguments."""
         agent = cls.load_template_data().get("agent", {})
         return {
-            "llm_output_reserve_tokens": agent.get("context_output_reserve_tokens", 32768),
+            "llm_output_reserve_tokens": agent["context_output_reserve_tokens"],
         }
 
     @classmethod
@@ -1372,7 +1372,8 @@ class Config:
         """Map packaged ``llm`` to :class:`opensprite.agent.execution.ExecutionEngine` keyword arguments."""
         agent = cls.load_template_data().get("agent", {})
         return {
-            "llm_request_timeout_seconds": agent.get("llm_request_timeout_seconds", 120.0),
+            "context_output_reserve_tokens": agent["context_output_reserve_tokens"],
+            "llm_request_timeout_seconds": agent["llm_request_timeout_seconds"],
         }
 
     @classmethod
