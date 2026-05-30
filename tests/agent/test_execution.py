@@ -689,7 +689,7 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
     assert "Blocked failing_tool" in messages[-1].content
 
 
-def test_execution_engine_recovers_from_unavailable_tool_call_without_tool_error():
+def test_execution_engine_records_unavailable_tool_call_as_tool_error():
     tool = TaskUpdateLikeTool()
     registry = ToolRegistry(permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"]))
     registry.register(RepeatingReadFileTool())
@@ -711,10 +711,11 @@ def test_execution_engine_recovers_from_unavailable_tool_call_without_tool_error
     )
 
     assert result.content == "direct answer"
-    assert result.had_tool_error is False
+    assert result.had_tool_error is True
     assert result.executed_tool_calls == 1
     assert tool.calls == 0
     assert "not available in this turn" in provider.calls[1]["messages"][-1].content
+    assert result.tool_evidence[0].ok is False
 
 
 def test_execution_engine_forces_final_after_complete_web_research_sources():

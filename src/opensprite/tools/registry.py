@@ -223,6 +223,6 @@ def _looks_like_permission_block(result: str) -> bool:
 def _tool_not_available_result(tool_name: str, available_tools: list[str]) -> str:
     available = ", ".join(available_tools) if available_tools else "none"
     return (
-        f"Tool '{tool_name}' is not available in this turn. "
+        f"Error: Tool '{tool_name}' is not available in this turn. "
         f"Available tools: {available}. Do not call unavailable tools again; answer directly or use an available tool."
     )
