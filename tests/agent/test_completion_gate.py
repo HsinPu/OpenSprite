@@ -941,6 +941,33 @@ def test_task_contract_does_not_force_search_history_for_immediate_no_research_f
     assert contract.planner_metadata["override_reason"] == "immediate follow-up explicitly asked not to gather new evidence"
 
 
+def test_task_contract_history_retrieval_drops_extra_web_research_group():
+    intent = TaskIntentService().classify(
+        "Which two previous questions in this session were about OpenRouter or TSMC?"
+    )
+
+    contract = _contract_from_planner_payload(
+        {
+            "task_type": "history_retrieval",
+            "required_tool_groups": ["history_retrieval", "web_research"],
+            "final_answer_required": True,
+            "allow_no_tool_final": False,
+            "reason": "The user asks about previous conversation state; OpenRouter and TSMC are only history keywords.",
+        },
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert contract.task_type == "history_retrieval"
+    assert [requirement.tool_group for requirement in contract.requirements] == ["history_retrieval"]
+    assert all(criterion.kind != "source_artifact" for criterion in contract.acceptance_criteria)
+
+
 def test_completion_gate_requires_history_evidence_for_prior_context_lookup():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
     contract = _history_contract(intent)

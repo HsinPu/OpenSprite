@@ -619,6 +619,8 @@ def _contract_from_planner_payload(
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
     if forced_no_tool or forced_recent_context_no_tool:
         tool_groups = []
+    if task_type == "history_retrieval":
+        tool_groups = [tool_group for tool_group in tool_groups if tool_group == "history_retrieval"]
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
     if (
         inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS
