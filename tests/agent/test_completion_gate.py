@@ -2349,6 +2349,32 @@ def test_quality_gate_accepts_operation_report_with_successful_tool_result():
     assert result.passed is True
 
 
+def test_quality_gate_accepts_version_only_operation_answer():
+    intent = TaskIntentService().classify("幫我確認這台環境的 git 版本，回答版本號即可。")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
+        ),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="`2.47.1.windows.2`",
+        execution_result=ExecutionResult(
+            content="`2.47.1.windows.2`",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(name="exec", ok=True, result_preview="git version 2.47.1.windows.2"),
+            ),
+        ),
+        task_contract=contract,
+    )
+
+    assert result.passed is True
+
+
 def test_completion_gate_marks_direct_reply_instruction_complete_without_marker():
     intent = TaskIntentService().classify("請只回覆這三個英文詞，且不要加入其他文字：alpha beta gamma")
 

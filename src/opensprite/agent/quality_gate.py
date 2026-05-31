@@ -320,6 +320,8 @@ def _response_reports_tool_result(response_text: str, execution_result: Executio
         preview = re.sub(r"\s+", " ", str(evidence.result_preview or "")).strip().lower()
         if preview and preview in normalized_response:
             return True
+        if _version_token_overlap(preview, normalized_response):
+            return True
         if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
             return True
     for artifact in execution_result.task_artifacts:
@@ -328,9 +330,22 @@ def _response_reports_tool_result(response_text: str, execution_result: Executio
         preview = re.sub(r"\s+", " ", str(artifact.content_preview or "")).strip().lower()
         if preview and preview in normalized_response:
             return True
+        if _version_token_overlap(preview, normalized_response):
+            return True
         if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
             return True
     return False
+
+
+def _version_token_overlap(expected: str, actual: str) -> bool:
+    if not expected or not actual:
+        return False
+    version_tokens = [
+        token
+        for token in re.split(r"[^0-9a-zA-Z._-]+", expected)
+        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
+    ]
+    return any(token in actual for token in version_tokens)
 
 
 def _meaningful_overlap(expected: str, actual: str) -> bool:
