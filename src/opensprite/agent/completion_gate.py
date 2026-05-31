@@ -692,7 +692,8 @@ class CompletionGateService:
         """Allow exploratory discovery failures after required evidence is satisfied."""
         has_optional_web_failures = _has_only_optional_web_discovery_failures(execution_result)
         has_optional_workspace_failures = _has_only_optional_workspace_discovery_failures(execution_result)
-        if not (has_optional_web_failures or has_optional_workspace_failures):
+        has_optional_history_failures = _has_only_optional_history_retrieval_failures(execution_result)
+        if not (has_optional_web_failures or has_optional_workspace_failures or has_optional_history_failures):
             return False
 
         evidence_result = self.evidence_gate.evaluate(
@@ -794,6 +795,21 @@ def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionR
         if item.name in _WORKSPACE_DISCOVERY_TOOLS:
             continue
         if item.name == "batch" and execution_result.file_change_count <= 0:
+            continue
+        if _is_non_exposed_permission_block(item):
+            continue
+        return False
+    return True
+
+
+def _has_only_optional_history_retrieval_failures(execution_result: ExecutionResult) -> bool:
+    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
+    if not failed_evidence:
+        return False
+    if not any(item.ok and item.name == "search_history" for item in execution_result.tool_evidence):
+        return False
+    for item in failed_evidence:
+        if item.name == "search_history":
             continue
         if _is_non_exposed_permission_block(item):
             continue

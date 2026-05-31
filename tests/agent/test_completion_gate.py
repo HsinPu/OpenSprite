@@ -1031,6 +1031,39 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
     assert completion.status == "complete", (contract.task_type, completion.reason, completion.active_task_detail)
 
 
+def test_completion_gate_allows_partial_history_search_errors_after_successful_history():
+    intent = TaskIntentService().classify(
+        "Which two previous questions in this session were about OpenRouter or TSMC?"
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="history_retrieval",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
+    )
+    answer = (
+        "Based on the retrieved prior chat context, the two relevant questions were: "
+        "1. OpenRouter API base URL, and 2. TSMC stock price or recent quote."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=3,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),
+                ToolEvidence(name="search_history", ok=False, metadata={"error": "history result serialization failed"}),
+            ),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_accepts_chinese_history_grounding_phrase():
     intent = TaskIntentService().classify("請幫我檢查目前這段對話前面我問過什麼，列出兩點。")
     contract = TaskContractService.build(
