@@ -2881,6 +2881,30 @@ def test_completion_gate_does_not_mark_short_answer_as_progress_only():
     assert completion.reason == "one-turn intent received a response"
 
 
+def test_completion_gate_accepts_plain_answer_that_mentions_follow_up_handling():
+    intent = TaskIntentService().classify(
+        "我等等會問你一個暗號，暗號是 ORCHID-728。請先記住，順便用兩句話說明你會怎麼處理後續追問。"
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="pure_answer",
+        allow_no_tool_final=True,
+    )
+    response = (
+        "已記住暗號：**ORCHID-728**。\n\n"
+        "後續若有人以此暗號追問，我會先確認對方是否為你本人或經你授權，再根據你預設的處置方式回應。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response, task_contract=contract),
+    )
+
+    assert completion.status == "complete"
+    assert completion.reason == "plain-answer contract received a response"
+
+
 def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
     intent = TaskIntentService().classify(
         "查一下台積電股價或最近可取得的報價，附來源網址。"
