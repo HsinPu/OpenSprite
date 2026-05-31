@@ -254,6 +254,43 @@ def test_web_fetcher_recovers_openrouter_legacy_docs_markdown_not_found(monkeypa
     assert "Max Tokens" in result["text"]
 
 
+def test_web_fetcher_recovers_openrouter_legacy_docs_after_extraction(monkeypatch):
+    calls = []
+
+    def fake_fetch_url(url, *args, **kwargs):
+        calls.append(url)
+        if "/docs/api-reference/" in url:
+            return (
+                "text/html; charset=utf-8",
+                b"<html><body><main><h1>Page Not Found</h1><p>This page does not exist.</p></main></body></html>",
+                200,
+                f"{url}.md",
+            )
+        return (
+            "text/markdown; charset=utf-8",
+            b"# API Reference Overview\n\nThe API base URL is https://openrouter.ai/api/v1.",
+            200,
+            f"{url}.md",
+        )
+
+    def fake_extract_with_trafilatura(*args, **kwargs):
+        return {"text": "# Page Not Found\n\nThis page does not exist.", "extractor": "trafilatura"}
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.fetch_url", fake_fetch_url)
+    monkeypatch.setattr("opensprite.tools.web_fetch.extract_with_trafilatura", fake_extract_with_trafilatura)
+    fetcher = WebFetcher(max_chars=5000)
+
+    result = fetcher.fetch("https://openrouter.ai/docs/api-reference/overview")
+
+    assert calls == [
+        "https://openrouter.ai/docs/api-reference/overview",
+        "https://openrouter.ai/docs/api/reference/overview",
+    ]
+    assert result["url"] == "https://openrouter.ai/docs/api/reference/overview"
+    assert result["finalUrl"] == "https://openrouter.ai/docs/api/reference/overview.md"
+    assert "https://openrouter.ai/api/v1" in result["text"]
+
+
 def test_web_fetcher_uses_openrouter_full_docs_when_docs_index_is_shell(monkeypatch):
     calls = []
 

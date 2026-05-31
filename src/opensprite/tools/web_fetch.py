@@ -849,6 +849,36 @@ class WebFetcher:
         else:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
 
+        post_extract_alternate_url = _openrouter_docs_alternate_url(
+            url,
+            result.get('finalUrl') or final_url,
+            result.get('text') or '',
+        )
+        if post_extract_alternate_url and post_extract_alternate_url != url:
+            try:
+                content_type, content, status, final_url = fetch_url(
+                    post_extract_alternate_url,
+                    self.timeout,
+                    self.retry_on_403,
+                    self.max_response_size,
+                )
+            except Exception:
+                pass
+            else:
+                url = post_extract_alternate_url
+                text = decode_content(content, content_type)
+                result.update(
+                    {
+                        'url': url,
+                        'finalUrl': final_url,
+                        'status': status,
+                        'contentType': content_type,
+                        'title': f"{url} ({content_type})",
+                        'extractor': 'raw',
+                    }
+                )
+                result['text'], result['truncated'] = truncate_text(text, self.max_chars)
+
         index_fallback_url = _openrouter_docs_index_fallback_url(url, result.get('finalUrl') or final_url, result.get('text') or '')
         if index_fallback_url:
             try:
@@ -898,7 +928,10 @@ def _openrouter_docs_alternate_url(url: str, final_url: str, content: str) -> st
 
 def _looks_like_openrouter_docs_not_found(content: str) -> bool:
     normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
-    return normalized in {"# page not found this page does not exist.", "page not found this page does not exist."}
+    return (
+        normalized in {"# page not found this page does not exist.", "page not found this page does not exist."}
+        or ("page not found" in normalized and "this page does not exist" in normalized)
+    )
 
 
 def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:
