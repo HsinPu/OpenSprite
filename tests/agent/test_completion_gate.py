@@ -2901,6 +2901,24 @@ def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
     assert completion.reason == "assistant response did not explicitly complete the task"
 
 
+def test_completion_gate_marks_shell_style_fetch_control_response_incomplete():
+    intent = TaskIntentService().classify("查一下台積電股價或最近可取得的報價，附來源網址。")
+    response = (
+        '$TYPE = "fetch"\n'
+        '$URL = "https://tickzen.app/stocks/tsm/overview"\n'
+        '$INSTRUCTION = "Extract the current stock price."\n'
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant response did not explicitly complete the task"
+
+
 def test_completion_gate_marks_internal_only_response_incomplete():
     intent = TaskIntentService().classify("幫我抓 Reddit ai 版 20 筆")
 

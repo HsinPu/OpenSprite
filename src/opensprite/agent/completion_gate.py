@@ -906,6 +906,8 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
     ):
         return True
     pending_patterns = (
+        r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)",
+        r"^\s*\$(?:kind|url|instruction)\s*=",
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bfetching\s+in\s+parallel\b",
