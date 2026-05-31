@@ -162,6 +162,54 @@ def test_optional_tool_error_source_fallback_ranks_relevant_sources_first():
     assert response.index("https://tw.stock.yahoo.com/quote/2330.TW") < response.index("https://example.com/general-market-commentary")
 
 
+def test_optional_tool_error_source_fallback_prefers_official_brand_domain():
+    response = _final_response_after_exhausted_continuation(
+        response="Cannot reliably complete this request because one optional fetch failed.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="tool execution reported an error without a clear blocker handoff",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Cannot reliably complete this request.",
+            had_tool_error=True,
+            task_contract=TaskContract(objective="請查一下 OpenRouter 目前文件裡 Authorization header 怎麼寫，附來源網址。", task_type="web_research"),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://dlthub.com/docs/dlt-ecosystem/verified-sources/openrouter",
+                                "domain": "dlthub.com",
+                                "title": "OpenRouter Python API Docs | dltHub",
+                                "snippet": "Third-party OpenRouter pipeline docs.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            },
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://openrouter.ai/docs",
+                                "domain": "openrouter.ai",
+                                "title": "OpenRouter Docs",
+                                "snippet": "Authorization: Bearer <OPENROUTER_API_KEY>",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            },
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert response.index("https://openrouter.ai/docs") < response.index("https://dlthub.com/docs/dlt-ecosystem/verified-sources/openrouter")
+
+
 def test_incomplete_fallback_response_is_replaced_without_continuation_attempts():
     response = _final_response_after_exhausted_continuation(
         response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
