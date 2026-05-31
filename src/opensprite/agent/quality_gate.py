@@ -445,6 +445,8 @@ def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str 
 
         target_fetch_count = _coerce_int(coverage.get("target_fetch_count"), default=0)
         fetched_count = _coerce_int(coverage.get("fetched_count"), default=0)
+        if target_fetch_count > 0 and _substantive_source_detail_count(execution_result) >= target_fetch_count:
+            continue
         too_short_count = _coerce_int(coverage.get("too_short_count"), default=0)
         blocked_count = _coerce_int(coverage.get("blocked_count"), default=0)
         fetched_domains = _string_list(coverage.get("fetched_domains"))
@@ -471,6 +473,21 @@ def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str 
         )
         return "\n".join(details)
     return None
+
+
+def _substantive_source_detail_count(execution_result: ExecutionResult) -> int:
+    seen: set[str] = set()
+    count = 0
+    for source in _execution_web_sources(execution_result):
+        if not _source_has_substantive_detail(source):
+            continue
+        url = str(source.get("url") or "").strip().lower()
+        key = url or f"{source.get('title') or ''}|{source.get('snippet') or ''}"
+        if key in seen:
+            continue
+        seen.add(key)
+        count += 1
+    return count
 
 
 def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "") -> list[dict[str, object]]:

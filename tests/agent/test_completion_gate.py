@@ -1581,6 +1581,59 @@ def test_completion_gate_rejects_web_research_coverage_gaps():
     assert "ai browser pricing" in (completion.active_task_detail or "")
 
 
+def test_completion_gate_accepts_web_research_gap_after_supplemental_fetches():
+    intent = TaskIntentService().classify("Please search online for current AI browser pricing.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "AI Browser Docs at https://docs.test/browser explains the official documentation, "
+        "AI Browser Market at https://market.test/browser adds current market context, and "
+        "AI Browser Pricing at https://pricing.test/browser covers pricing details."
+    )
+    supplemental_fetch = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="pricing source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://pricing.test/browser",
+                    "title": "AI Browser Pricing",
+                    "snippet": "Current pricing details for AI Browser." * 30,
+                    "content_chars": 1200,
+                    "has_main_content": True,
+                    "is_too_short": False,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                }
+            ],
+            "source_count": 1,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_research", ok=True),
+                ToolEvidence(name="web_fetch", ok=True),
+                ToolEvidence(name="web_fetch", ok=False, metadata={"error": "HTTP 404"}),
+            ),
+            task_artifacts=(_web_research_coverage_gap_artifact(), supplemental_fetch),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_accepts_web_research_when_fetch_target_met_with_partial_query_gap():
     intent = TaskIntentService().classify("Please search online for current AI browser pricing.")
     contract = TaskContractService.build(
