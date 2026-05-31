@@ -353,6 +353,41 @@ def test_web_research_expands_and_prioritizes_market_quote_queries():
     assert payload["fetched_sources"][0]["domain"] == "tw.stock.yahoo.com"
 
 
+def test_web_research_penalizes_market_quote_candidates_for_other_symbols():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "TAL - Tal Education Group Adr Stock Price Forecast",
+                "url": "https://stockscan.io/stocks/TAL/forecast",
+                "content": "TAL stock price forecast and analyst price target.",
+            },
+            {
+                "title": "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+                "url": "https://finance.yahoo.com/quote/TSM/",
+                "content": "Find the latest Taiwan Semiconductor Manufacturing Company Limited stock quote.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://stockscan.io/stocks/TAL/forecast": _fetch_payload(
+                "https://stockscan.io/stocks/TAL/forecast",
+                title="TAL forecast",
+            ),
+            "https://finance.yahoo.com/quote/TSM/": _fetch_payload(
+                "https://finance.yahoo.com/quote/TSM/",
+                title="Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("TSMC ADR stock price 2026", count=2, fetch_count=1)))
+
+    assert fetch.calls[0]["url"] == "https://finance.yahoo.com/quote/TSM/"
+    assert payload["fetched_sources"][0]["domain"] == "finance.yahoo.com"
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):

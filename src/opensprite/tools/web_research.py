@@ -104,6 +104,27 @@ _MARKET_QUOTE_DOMAINS = (
     "sinotrade.com.tw",
     "macromicro.me",
 )
+_MARKET_QUOTE_QUERY_STOPWORDS = {
+    "adr",
+    "finance",
+    "latest",
+    "market",
+    "price",
+    "quote",
+    "quotes",
+    "share",
+    "stock",
+    "today",
+    "yahoo",
+    "最新",
+    "目前",
+    "今日",
+    "即時",
+    "股價",
+    "股票",
+    "報價",
+    "行情報價",
+}
 
 
 class WebResearchTool(Tool):
@@ -881,11 +902,32 @@ def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
         return 0
     domain = _candidate_domain(item)
     text = " ".join(_clean_text(item.get(key)).lower() for key in ("title", "content", "url", "domain"))
+    query_terms = _market_quote_entity_terms(query)
+    if query_terms and not any(term in text for term in query_terms):
+        return 2
     if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
         return 0
     if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
         return 0
     return 1
+
+
+def _market_quote_entity_terms(query: str) -> set[str]:
+    text = _clean_text(query).lower()
+    terms: set[str] = set()
+    for token in re.findall(r"\b[a-z][a-z0-9.:-]{1,}\b", text):
+        if token in _MARKET_QUOTE_QUERY_STOPWORDS or token.isdigit() or _YEAR_RE.fullmatch(token):
+            continue
+        terms.add(token)
+    for token in re.findall(r"\b\d{3,6}(?:\.[a-z]{1,4})?\b", text):
+        if not _YEAR_RE.fullmatch(token):
+            terms.add(token)
+    for token in re.findall(r"[\u4e00-\u9fff]{2,}", text):
+        if token not in _MARKET_QUOTE_QUERY_STOPWORDS:
+            terms.add(token)
+    if "tsmc" in terms or "台積電" in terms or "2330" in terms:
+        terms.update({"tsm", "tsmc", "taiwan semiconductor", "台積電", "2330", "2330.tw"})
+    return terms
 
 
 def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
