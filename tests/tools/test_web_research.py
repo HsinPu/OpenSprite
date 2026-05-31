@@ -388,6 +388,50 @@ def test_web_research_penalizes_market_quote_candidates_for_other_symbols():
     assert payload["fetched_sources"][0]["domain"] == "finance.yahoo.com"
 
 
+def test_web_research_prioritizes_quote_pages_over_forums_and_forecasts():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "[閒聊] 2026/05/28 盤中閒聊 - 看板 Stock",
+                "url": "https://www.ptt.best/bbs/Stock/M.1779928206.A.EA7.html",
+                "content": "台積電盤中閒聊與推文。",
+            },
+            {
+                "title": "TSMC STOCK PRICE PREDICTION 2026, 2027, 2028-2030",
+                "url": "https://longforecast.com/tsm-stock",
+                "content": "TSMC stock price prediction and forecast.",
+            },
+            {
+                "title": "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+                "url": "https://finance.yahoo.com/quote/TSM/",
+                "content": "Find the latest Taiwan Semiconductor Manufacturing Company Limited stock quote.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://www.ptt.best/bbs/Stock/M.1779928206.A.EA7.html": _fetch_payload(
+                "https://www.ptt.best/bbs/Stock/M.1779928206.A.EA7.html",
+                title="PTT discussion",
+            ),
+            "https://longforecast.com/tsm-stock": _fetch_payload(
+                "https://longforecast.com/tsm-stock",
+                title="TSMC stock forecast",
+            ),
+            "https://finance.yahoo.com/quote/TSM/": _fetch_payload(
+                "https://finance.yahoo.com/quote/TSM/",
+                title="Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("台積電 TSMC 股票股價 最新報價 2026", count=3, fetch_count=1)))
+
+    assert fetch.calls[0]["url"] == "https://finance.yahoo.com/quote/TSM/"
+    assert payload["fetched_sources"][0]["domain"] == "finance.yahoo.com"
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):

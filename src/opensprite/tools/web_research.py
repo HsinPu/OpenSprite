@@ -104,6 +104,20 @@ _MARKET_QUOTE_DOMAINS = (
     "sinotrade.com.tw",
     "macromicro.me",
 )
+_MARKET_QUOTE_DISCUSSION_DOMAINS = (
+    "ptt.cc",
+    "ptt.best",
+    "reddit.com",
+    "threads.com",
+)
+_MARKET_QUOTE_FORECAST_MARKERS = (
+    "forecast",
+    "prediction",
+    "price target",
+    "analyst target",
+    "預測",
+    "目標價",
+)
 _MARKET_QUOTE_QUERY_STOPWORDS = {
     "adr",
     "finance",
@@ -893,7 +907,17 @@ def _market_quote_queries(query: str) -> list[str]:
     text = _clean_text(query)
     if not text or not _MARKET_QUOTE_QUERY_RE.search(text):
         return []
-    return [f"{text} Yahoo Finance", f"{text} Yahoo \u80a1\u5e02"]
+    queries = [f"{text} Yahoo Finance", f"{text} Yahoo \u80a1\u5e02"]
+    terms = _market_quote_entity_terms(text)
+    if {"tsmc", "台積電", "2330"} & terms:
+        queries.extend(
+            [
+                "TSM quote Yahoo Finance",
+                "2330.TW quote Yahoo Finance",
+                "2330 台積電 Yahoo 股市",
+            ]
+        )
+    return queries
 
 
 def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
@@ -905,6 +929,12 @@ def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
     query_terms = _market_quote_entity_terms(query)
     if query_terms and not any(term in text for term in query_terms):
         return 2
+    if any(domain == blocked or domain.endswith(f".{blocked}") for blocked in _MARKET_QUOTE_DISCUSSION_DOMAINS):
+        return 4
+    if any(marker in text for marker in _MARKET_QUOTE_FORECAST_MARKERS):
+        return 3
+    if "blogspot." in domain or domain.endswith(".blogspot.com"):
+        return 3
     if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
         return 0
     if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
