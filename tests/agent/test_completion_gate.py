@@ -1575,6 +1575,59 @@ def test_completion_gate_allows_openrouter_api_endpoint_in_answer():
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_recommended_alternate_quote_url():
+    intent = TaskIntentService().classify("Find the latest available TSMC quote and cite sources.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "I found the latest available ADR quote from Yahoo Finance at "
+        "https://finance.yahoo.com/quote/TSM/. This is the US ADR quote, not the Taiwan-listed 2330 quote. "
+        "If you need the Taiwan listing, 建議至 https://finance.yahoo.com/quote/2330.TW/ check the local quote page."
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://finance.yahoo.com/quote/TSM/",
+                    "title": "Taiwan Semiconductor Manufacturing Company Limited (TSM)",
+                    "snippet": "Yahoo Finance quote page for TSM ADR.",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_search",
+                    "url": "https://finance.yahoo.com/quote/TSM/history/",
+                    "title": "TSM Historical Data",
+                    "snippet": "Yahoo Finance historical data page for TSM.",
+                },
+            ],
+            "source_count": 2,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=True),),
+            task_artifacts=(artifact,),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_rejects_too_short_web_fetch_source_detail():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
