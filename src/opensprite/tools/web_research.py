@@ -212,7 +212,9 @@ class WebResearchTool(Tool):
             count=search_count,
             freshness=effective_freshness,
         )
-        official_domains = _official_domain_hints(" ".join(research_queries), search_items)
+        official_domains = _official_domain_hints(" ".join(research_queries), search_items) | _site_domain_hints(
+            research_queries
+        )
         official_site_queries = _official_site_queries(query, official_domains, existing_queries=research_queries)
         if official_site_queries:
             site_items, site_provider, site_backend, site_attempts, site_query_attempts = await self._search_queries_with_fallback(
@@ -229,6 +231,7 @@ class WebResearchTool(Tool):
                     limit=max(search_count * max(len(research_queries), 1), search_count),
                 )
                 official_domains.update(_official_domain_hints(" ".join(research_queries), search_items))
+                official_domains.update(_site_domain_hints(research_queries))
                 search_provider = site_provider or search_provider
                 search_backend = site_backend or search_backend
         if not search_items:
@@ -814,6 +817,10 @@ def _prioritize_research_candidates(
         key=lambda pair: (_candidate_priority(pair[1], freshness, official_domains=official_domains), pair[0]),
     )
     ordered = [item for _, item in ordered_items]
+    if official_domains:
+        official = [item for item in ordered if _candidate_official_penalty(item, official_domains) == 0]
+        non_official = [item for item in ordered if _candidate_official_penalty(item, official_domains) != 0]
+        return [*official, *non_official]
     item_queries = {_candidate_query(item) for item in items}
     item_queries.discard("")
     if len(item_queries) <= 1:
@@ -899,6 +906,16 @@ def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
         brand_label = _domain_brand_label(domain)
         if any(token == brand_label for token in brand_tokens):
             hints.add(domain)
+    return hints
+
+
+def _site_domain_hints(queries: list[str]) -> set[str]:
+    hints: set[str] = set()
+    for query in queries:
+        for match in re.findall(r"\bsite:([A-Za-z0-9.-]+\.[A-Za-z]{2,})", str(query or ""), flags=re.IGNORECASE):
+            domain = _clean_text(match).lower().strip(".")
+            if domain:
+                hints.add(domain)
     return hints
 
 

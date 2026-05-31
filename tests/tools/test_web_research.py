@@ -561,6 +561,74 @@ def test_web_research_adds_official_site_query_for_official_docs_query():
     ]
 
 
+def test_web_research_fetches_official_domain_results_before_domain_diversity():
+    search = _FakeSearchToolByQuery(
+        {
+            "OpenRouter official API base URL documentation": [
+                {
+                    "title": "Third Party OpenRouter Base URL",
+                    "url": "https://example.com/openrouter-base-url",
+                    "content": "Third-party OpenRouter base URL guide.",
+                },
+            ],
+            "site:openrouter.ai OpenRouter official API base URL documentation": [
+                {
+                    "title": "API Reference Overview",
+                    "url": "https://openrouter.ai/docs/api/reference/overview",
+                    "content": "Official OpenRouter API reference overview.",
+                },
+                {
+                    "title": "Quickstart",
+                    "url": "https://openrouter.ai/docs/quickstart",
+                    "content": "Official OpenRouter quickstart.",
+                },
+                {
+                    "title": "Authentication",
+                    "url": "https://openrouter.ai/docs/api/reference/authentication",
+                    "content": "Official OpenRouter authentication docs.",
+                },
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/openrouter-base-url": _fetch_payload("https://example.com/openrouter-base-url"),
+            "https://openrouter.ai/docs/api/reference/overview": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/overview",
+                title="API Reference Overview",
+            ),
+            "https://openrouter.ai/docs/quickstart": _fetch_payload(
+                "https://openrouter.ai/docs/quickstart",
+                title="Quickstart",
+            ),
+            "https://openrouter.ai/docs/api/reference/authentication": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/authentication",
+                title="Authentication",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                "OpenRouter official API base URL documentation",
+                queries=["site:openrouter.ai OpenRouter official API base URL documentation"],
+                count=4,
+                fetch_count=3,
+                freshness="month",
+            )
+        )
+    )
+
+    assert [call["url"] for call in fetch.calls[:3]] == [
+        "https://openrouter.ai/docs/api/reference/overview",
+        "https://openrouter.ai/docs/quickstart",
+        "https://openrouter.ai/docs/api/reference/authentication",
+    ]
+    assert payload["coverage"]["fetched_domains"] == ["openrouter.ai"]
+
+
 def test_web_research_does_not_treat_mirror_subdomains_as_official_docs():
     search = _FakeSearchToolByQuery(
         {
