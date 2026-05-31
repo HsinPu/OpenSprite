@@ -749,15 +749,27 @@ def _ungrounded_response_urls(response_text: str, sources: list[dict[str, object
     ungrounded: list[str] = []
     seen: set[str] = set()
     for raw_url in _URL_RE.findall(response_text or ""):
-        url = raw_url.rstrip(".,;:!?，。；：！？")
+        url = raw_url.rstrip(".,;:!?，。；：！？`'\"*)]】")
         normalized = _normalize_source_url(url)
         if not normalized or normalized in source_urls:
+            continue
+        if not _response_url_looks_like_source_reference(normalized):
             continue
         if normalized in seen:
             continue
         seen.add(normalized)
         ungrounded.append(url)
     return ungrounded
+
+
+def _response_url_looks_like_source_reference(normalized_url: str) -> bool:
+    try:
+        parsed = urlparse(normalized_url)
+    except Exception:
+        return True
+    if parsed.netloc == "openrouter.ai" and parsed.path.startswith("/api/"):
+        return False
+    return True
 
 
 def _normalize_source_url(url: str) -> str:

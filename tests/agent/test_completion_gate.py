@@ -1457,6 +1457,64 @@ def test_completion_gate_normalizes_openrouter_docs_legacy_api_reference_urls():
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_openrouter_api_endpoint_in_answer():
+    intent = TaskIntentService().classify("Check OpenRouter API base URL and cite sources")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    contract = replace(
+        contract,
+        acceptance_criteria=contract.acceptance_criteria
+        + (AcceptanceCriterion(kind="source_reference", min_count=1, description="Cite source URLs."),),
+    )
+    answer = (
+        "OpenRouter's API base URL is `https://openrouter.ai/api/v1`; the Responses endpoint is "
+        "`https://openrouter.ai/api/v1/responses`. Source: "
+        "https://openrouter.ai/docs/api/reference/overview."
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://openrouter.ai/docs/api/reference/overview.md",
+                    "title": "OpenRouter API Reference",
+                    "snippet": "The OpenRouter API reference documents the API base URL and endpoints.",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_search",
+                    "url": "https://openrouter.ai/docs/quickstart",
+                    "title": "OpenRouter Quickstart",
+                    "snippet": "OpenRouter quickstart links the API reference and setup flow.",
+                }
+            ],
+            "source_count": 2,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=True),),
+            task_artifacts=(artifact,),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_rejects_too_short_web_fetch_source_detail():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
