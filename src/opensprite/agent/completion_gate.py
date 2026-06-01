@@ -204,10 +204,17 @@ class CompletionGateService:
             else task_intent.expects_code_change
         )
         verification_attempted = execution_result.verification_attempted
-        verification_passed = execution_result.verification_passed
+        verification_passed = execution_result.verification_passed or _verification_skipped_with_reported_gap(
+            response_text,
+            execution_result,
+        )
         verification_follow_up = _verification_follow_up(task_intent, execution_result)
         review = _review_evidence(execution_result.delegated_tasks)
-        review_required = expects_code_change and execution_result.file_change_count > 0
+        review_required = (
+            expects_code_change
+            and execution_result.file_change_count > 0
+            and _requires_delegated_review(execution_result.touched_paths)
+        )
         workflow_gate = _workflow_gate_outcome(
             task_intent=task_intent,
             workflow_outcomes=execution_result.workflow_outcomes,
@@ -384,7 +391,11 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if contract_allows_plain_answer and response_text.strip():
+        if (
+            contract_allows_plain_answer
+            and not _contract_has_completion_criteria(execution_result.task_contract)
+            and response_text.strip()
+        ):
             normalized_response = re.sub(r"\s+", " ", response_text.strip().lower())
             if not _looks_like_internal_control_response(normalized_response) and not _looks_like_retry_or_blocker_response(
                 normalized_response
@@ -744,6 +755,77 @@ def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -
     if task_type in {"analysis", "operations", "workspace_read", "history_retrieval", "web_research"}:
         return False
     return task_intent.expects_verification
+
+
+def _verification_skipped_with_reported_gap(response_text: str, execution_result: ExecutionResult) -> bool:
+    if not execution_result.verification_attempted:
+        return False
+    if not _has_skipped_verification_artifact(execution_result):
+        return False
+    normalized = re.sub(r"\s+", " ", str(response_text or "").strip().lower())
+    return any(marker in normalized for marker in ("verification skipped", "verify skipped", "skipped", "跳過"))
+
+
+def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> bool:
+    for artifact in execution_result.task_artifacts:
+        if artifact.kind != "verification_result" or not artifact.ok:
+            continue
+        preview = str(artifact.content_preview or "")
+        if preview.startswith("Verification skipped:"):
+            return True
+    for evidence in execution_result.tool_evidence:
+        if evidence.name != "verify" or not evidence.ok:
+            continue
+        preview = str(evidence.result_preview or "")
+        if preview.startswith("Verification skipped:"):
+            return True
+    return False
+
+
+def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
+    paths = _normalized_touched_paths(touched_paths)
+    if not paths:
+        return True
+    return any(_path_requires_delegated_review(path) for path in paths)
+
+
+def _path_requires_delegated_review(path: str) -> bool:
+    normalized = _strip_repo_snapshot_prefix(path).lower()
+    if normalized.endswith((
+        ".py",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".vue",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".kts",
+        ".cs",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".php",
+        ".rb",
+        ".swift",
+        ".sql",
+        ".sh",
+        ".ps1",
+        ".bat",
+        ".cmd",
+    )):
+        return True
+    return normalized in {
+        "pyproject.toml",
+        "package.json",
+        "package-lock.json",
+        "vite.config.js",
+        "vite.config.ts",
+    }
 
 
 def _contract_requires_verification(task_contract: Any) -> bool:

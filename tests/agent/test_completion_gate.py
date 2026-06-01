@@ -282,6 +282,36 @@ def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
     assert result.verification_pytest_args == ()
 
 
+def test_completion_gate_accepts_reported_skipped_verification_for_note_change():
+    intent = TaskIntentService().classify("Please add a short test session note.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Completed. Added the note. Verification skipped: no supported Python or package.json build checks were detected.",
+        execution_result=ExecutionResult(
+            content="Added the note.",
+            file_change_count=1,
+            touched_paths=("flow-note.md",),
+            verification_attempted=True,
+            verification_passed=False,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="verification_result",
+                    source_tool="verify",
+                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    ok=True,
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "complete"
+    assert result.verification_required is True
+    assert result.verification_attempted is True
+    assert result.verification_passed is True
+    assert result.review_required is False
+
+
 def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tests():
     intent = TaskIntentService().classify("Please update the test and run tests.")
 
@@ -551,6 +581,32 @@ def test_completion_gate_marks_blocker_heading_as_blocked():
 
     assert result.status == "blocked"
     assert result.active_task_status == "blocked"
+
+
+def test_completion_gate_does_not_mark_preview_only_revert_as_blocked():
+    intent = TaskIntentService().classify("Preview what would be reverted for flow-note.md; do not apply it.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=(
+            "## Revert preview: flow-note.md\n\n"
+            "If applied, this would delete the file because it was newly added. "
+            "This is a read-only preview and has not been applied."
+        ),
+        execution_result=ExecutionResult(
+            content="preview",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="list_run_file_changes", ok=True),),
+            task_contract=TaskContract(
+                objective=intent.objective,
+                task_type="workspace_read",
+                requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+                acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
+            ),
+        ),
+    )
+
+    assert result.status == "complete"
 
 
 def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():

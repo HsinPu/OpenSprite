@@ -655,6 +655,8 @@ def infer_immediate_task_transition(
     objective = re.sub(r"\s+", " ", (objective_text or "").strip()).lower()
     if _is_status_definition_request(objective, normalized):
         return None
+    if _is_preview_only_request(objective, normalized):
+        return None
     lowered = normalized.lower()
     has_blocker = any(pattern in lowered for pattern in _BLOCKED_PATTERNS)
     has_strong_blocker = any(pattern in normalized for pattern in _STRONG_BLOCKED_PATTERNS)
@@ -662,6 +664,16 @@ def infer_immediate_task_transition(
         return "blocked", normalized[:240] if normalized else "blocked"
 
     return None
+
+
+def _is_preview_only_request(objective: str, response_text: str) -> bool:
+    if not objective or not response_text:
+        return False
+    objective_requests_preview = any(marker in objective for marker in ("preview", "預覽", "只預覽"))
+    if not objective_requests_preview:
+        return False
+    response = response_text.lower()
+    return any(marker in response for marker in ("preview", "預覽", "唯讀預覽", "尚未執行", "not applied"))
 
 
 def _is_status_definition_request(objective: str, response_text: str) -> bool:
