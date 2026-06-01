@@ -635,6 +635,29 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        if (
+            expects_code_change
+            and execution_result.file_change_count > 0
+            and response_text.strip()
+            and (not verification_required or verification_passed)
+            and (not review_required or review["passed"])
+        ):
+            return CompletionGateResult(
+                status="complete",
+                reason="required file changes and evidence were recorded",
+                active_task_status="done",
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         return CompletionGateResult(
             status="incomplete",
             reason="assistant response did not explicitly complete the task",

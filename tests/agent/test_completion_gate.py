@@ -1,5 +1,8 @@
 from dataclasses import replace
 
+import pytest
+
+from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
@@ -14,9 +17,49 @@ from opensprite.agent.task_contract import (
 )
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
+from opensprite.config import DocumentLlmConfig
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
 from tests.agent.task_contract_test_helpers import TaskContractService
+
+
+class StaticCompletionJudge:
+    def __init__(self, verdict: CompletionJudgeVerdict):
+        self.verdict = verdict
+        self.calls = []
+
+    async def judge(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.verdict
+
+
+async def _evaluate_with_static_judge(
+    *,
+    status: str,
+    reason: str,
+    task_intent: TaskIntent,
+    response_text: str,
+    execution_result: ExecutionResult,
+):
+    judge = StaticCompletionJudge(CompletionJudgeVerdict(status=status, reason=reason))
+    service = CompletionGateService(
+        llm_config=DocumentLlmConfig(
+            pass_decoding_params=False,
+            temperature=0,
+            max_tokens=700,
+            top_p=None,
+            frequency_penalty=None,
+            presence_penalty=None,
+        ),
+        judge_service=judge,
+    )
+    return await service.evaluate_with_judge(
+        task_intent=task_intent,
+        response_text=response_text,
+        execution_result=execution_result,
+        provider=object(),
+        model="test-model",
+    )
 
 
 def _web_source_artifact() -> TaskArtifact:
@@ -785,20 +828,23 @@ def test_completion_gate_does_not_mark_status_definition_as_blocked():
     assert result.reason == "generic task returned a response"
 
 
-def test_completion_gate_marks_retry_only_conversation_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_retry_only_conversation_response_incomplete():
     intent = TaskIntentService().classify(
         "\u6839\u64da\u525b\u525b\u8b80\u5230\u7684\u5167\u5bb9\uff0c\u7528\u4e00\u53e5\u8a71\u8aaa\u660e API key header\uff0c\u4e0d\u8981\u518d\u4e0a\u7db2\u3002"
     )
     response = "\u62b1\u6b49\uff0c\u6211\u525b\u525b\u6c92\u6709\u7522\u751f\u53ef\u986f\u793a\u7684\u56de\u8986\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002"
 
-    result = CompletionGateService().evaluate(
+    result = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected retry-only response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "assistant response did not explicitly complete the task"
+    assert result.reason == "judge rejected retry-only response"
 
 
 def test_completion_gate_marks_waiting_when_response_asks_for_input():
@@ -2660,32 +2706,38 @@ def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     assert result.reason == "assistant did not provide the requested itemized result"
 
 
-def test_completion_gate_marks_pending_search_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_pending_search_response_incomplete():
     intent = TaskIntentService().classify("幫我查一下今天台積電股價，請列出來源網址。")
     response = "Let我先透过网路搜寻来查今天台积电（TSMC）美股即时股价。"
 
-    result = CompletionGateService().evaluate(
+    result = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected progress-only search response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, executed_tool_calls=1),
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "assistant response did not explicitly complete the task"
+    assert result.reason == "judge rejected progress-only search response"
 
 
-def test_completion_gate_marks_chinese_fetch_progress_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_chinese_fetch_progress_response_incomplete():
     intent = TaskIntentService().classify("幫我查一下今天台積電最近可取得的股價資訊，請附來源。")
     response = "搜尋結果已取得，讓我抓取實質內容頁面來確認股價數據。"
 
-    result = CompletionGateService().evaluate(
+    result = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected progress-only fetch response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, executed_tool_calls=1),
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "assistant response did not explicitly complete the task"
+    assert result.reason == "judge rejected progress-only fetch response"
 
 
 def test_completion_gate_does_not_mark_source_reliability_answer_as_pending():
@@ -3323,7 +3375,8 @@ def test_completion_gate_accepts_plain_answer_that_mentions_follow_up_handling()
     assert completion.reason == "plain-answer contract received a response"
 
 
-def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
     intent = TaskIntentService().classify(
         "查一下台積電股價或最近可取得的報價，附來源網址。"
     )
@@ -3333,17 +3386,20 @@ def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
         "等待所有來源回應後整合結果。"
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected progress-only parallel fetch response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant response did not explicitly complete the task"
+    assert completion.reason == "judge rejected progress-only parallel fetch response"
 
 
-def test_completion_gate_marks_shell_style_fetch_control_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_shell_style_fetch_control_response_incomplete():
     intent = TaskIntentService().classify("查一下台積電股價或最近可取得的報價，附來源網址。")
     response = (
         '$TYPE = "fetch"\n'
@@ -3351,17 +3407,20 @@ def test_completion_gate_marks_shell_style_fetch_control_response_incomplete():
         '$INSTRUCTION = "Extract the current stock price."\n'
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected tool-control response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant response did not explicitly complete the task"
+    assert completion.reason == "judge rejected tool-control response"
 
 
-def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
     intent = TaskIntentService().classify("幫我查目前 OpenRouter 官方文件中 API base URL 是什麼，附來源網址。")
     response = (
         "<toolcall>\n"
@@ -3371,14 +3430,16 @@ def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
         "</toolcall>"
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected tool-control response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant response did not explicitly complete the task"
+    assert completion.reason == "judge rejected tool-control response"
 
 
 def test_completion_gate_marks_internal_only_response_incomplete():
@@ -3397,7 +3458,8 @@ def test_completion_gate_marks_internal_only_response_incomplete():
     assert result.reason == "assistant only emitted internal control text"
 
 
-def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplete():
+@pytest.mark.anyio
+async def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplete():
     intent = TaskIntentService().classify("查一下 OpenRouter 官方文件裡 Authentication header 怎麼寫，附來源網址。")
     contract = TaskContract(
         objective=intent.objective,
@@ -3406,7 +3468,9 @@ def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplete():
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
     )
 
-    result = CompletionGateService().evaluate(
+    result = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected progress-only web research response",
         task_intent=intent,
         response_text="讓我直接抓 OpenRouter 的官方 API 文件來確認。",
         execution_result=ExecutionResult(
@@ -3418,7 +3482,7 @@ def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplete():
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "assistant response did not explicitly complete the task"
+    assert result.reason == "judge rejected progress-only web research response"
 
 
 def test_auto_continue_guides_retry_after_internal_only_response():
