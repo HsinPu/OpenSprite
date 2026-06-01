@@ -2918,6 +2918,55 @@ def test_quality_gate_accepts_operation_report_with_successful_tool_result():
     assert result.passed is True
 
 
+def test_quality_gate_rejects_missing_git_metadata_as_clean_working_tree():
+    intent = TaskIntentService().classify("幫我看目前 repo 是否有未提交的 source 改動")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
+        ),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="沒有未提交的 source 改動，exec 確認 repo 底下 NO_GIT，不是 git repository。",
+        execution_result=ExecutionResult(
+            content="沒有未提交的 source 改動，exec 確認 repo 底下 NO_GIT，不是 git repository。",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview='"NO_GIT"'),),
+        ),
+        task_contract=contract,
+    )
+
+    assert result.passed is False
+    assert result.reason == "repository status answer treated missing git metadata as a clean working tree"
+
+
+def test_quality_gate_accepts_missing_git_metadata_as_blocker():
+    intent = TaskIntentService().classify("幫我看目前 repo 是否有未提交的 source 改動")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
+        ),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Blocked: exec 回傳 NO_GIT，active workspace 不是 git repository，因此無法確認未提交改動。",
+        execution_result=ExecutionResult(
+            content="Blocked: exec 回傳 NO_GIT，active workspace 不是 git repository，因此無法確認未提交改動。",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview='"NO_GIT"'),),
+        ),
+        task_contract=contract,
+    )
+
+    assert result.passed is True
+
+
 def test_quality_gate_accepts_version_only_operation_answer():
     intent = TaskIntentService().classify("幫我確認這台環境的 git 版本，回答版本號即可。")
     contract = TaskContract(

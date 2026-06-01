@@ -60,6 +60,9 @@ class QualityGateService:
             history_result = _evaluate_history_grounding(contract, response_text, execution_result)
             if history_result is not None:
                 return history_result
+        repo_status_result = _evaluate_repository_status_answer(contract, response_text, execution_result)
+        if repo_status_result is not None:
+            return repo_status_result
         for criterion in contract.acceptance_criteria:
             if criterion.kind == "itemized_output":
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
@@ -435,6 +438,85 @@ def _response_reports_command_unavailable(normalized_response: str) -> bool:
             "沒有安裝",
         )
     )
+
+
+def _evaluate_repository_status_answer(
+    contract: TaskContract,
+    response_text: str,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    if contract.task_type != "operations":
+        return None
+    objective = re.sub(r"\s+", " ", str(contract.objective or "")).strip().lower()
+    if not _asks_for_repository_status(objective):
+        return None
+    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
+    if not normalized_response:
+        return None
+    saw_no_git = any(
+        marker in normalized_response
+        for marker in ("no_git", "not a git repository", "not git repository", "不是 git repository", "不是 git repo", "沒有 .git")
+    )
+    if not saw_no_git:
+        return None
+    reports_clean = any(
+        marker in normalized_response
+        for marker in (
+            "no uncommitted",
+            "no changes",
+            "clean working tree",
+            "沒有未提交",
+            "沒有未 commit",
+            "沒有改動",
+            "沒有變更",
+        )
+    )
+    reports_blocker = any(
+        marker in normalized_response
+        for marker in (
+            "blocked",
+            "blocker",
+            "cannot determine",
+            "cannot verify",
+            "unable to determine",
+            "無法判定",
+            "無法確認",
+            "阻礙",
+        )
+    )
+    if reports_clean and not reports_blocker:
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="repository status answer treated missing git metadata as a clean working tree",
+            active_task_detail=(
+                "- If git metadata is missing, report a blocker or uncertainty; "
+                "do not claim there are no uncommitted changes."
+            ),
+        )
+    return None
+
+
+def _asks_for_repository_status(objective: str) -> bool:
+    if re.search(r"\bgit\s+(?:status|diff|branch|log|rev-parse|show|stash)\b", objective):
+        return True
+    repo_markers = ("repo", "repository", "working tree", "worktree", "git", "專案", "分支")
+    status_markers = (
+        "uncommitted",
+        "unstaged",
+        "staged",
+        "dirty",
+        "branch",
+        "status",
+        "diff",
+        "未提交",
+        "尚未提交",
+        "沒 commit",
+        "改動",
+        "變更",
+        "目前分支",
+    )
+    return any(marker in objective for marker in repo_markers) and any(marker in objective for marker in status_markers)
 
 
 def _response_confuses_command_version_with_repo_state(
