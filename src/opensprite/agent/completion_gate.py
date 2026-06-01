@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..documents.active_task import infer_immediate_task_transition
@@ -143,6 +143,7 @@ class CompletionGateResult:
     review_prompt_types: tuple[str, ...] = ()
     review_finding_count: int = 0
     missing_evidence: tuple[str, ...] = ()
+    judge_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe run event payload."""
@@ -180,6 +181,8 @@ class CompletionGateResult:
             payload["verification_path"] = self.verification_path
         if self.verification_pytest_args:
             payload["verification_pytest_args"] = list(self.verification_pytest_args)
+        if self.judge_metadata:
+            payload["judge"] = dict(self.judge_metadata)
         return payload
 
 
@@ -809,6 +812,10 @@ def _completion_result_from_judge_verdict(verdict: CompletionJudgeVerdict) -> Co
         review_prompt_types=verdict.review_prompt_types,
         review_finding_count=verdict.review_finding_count,
         missing_evidence=verdict.missing_evidence,
+        judge_metadata={
+            **dict(verdict.metadata),
+            "raw_response_preview": verdict.raw_response_preview,
+        },
     )
 
 
@@ -819,6 +826,10 @@ def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
         active_task_status="blocked",
         active_task_detail=reason or "completion judge unavailable",
         should_update_active_task=True,
+        judge_metadata={
+            "method": "llm",
+            "error": reason or "completion judge unavailable",
+        },
     )
 
 

@@ -710,6 +710,7 @@ class AgentLoop:
             task_intents=self.task_intents,
             harness_profiles=self.harness_profiles,
             completion_gate=self.completion_gate,
+            completion_judge_context=lambda: (self.provider, self.provider.get_default_model()),
             auto_continue=self.auto_continue,
             work_progress=self.work_progress,
             connect_mcp=lambda: self.connect_mcp(),

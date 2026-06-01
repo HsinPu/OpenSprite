@@ -55,6 +55,7 @@ class AgentTurnRunner:
         task_intents: TaskIntentService,
         harness_profiles: HarnessProfileService,
         completion_gate: CompletionGateService,
+        completion_judge_context: Callable[[], tuple[Any, str | None]],
         auto_continue: AutoContinueService,
         work_progress: WorkProgressService,
         connect_mcp: Callable[[], Awaitable[None]],
@@ -90,6 +91,7 @@ class AgentTurnRunner:
         self.task_intents = task_intents
         self.harness_profiles = harness_profiles
         self.completion_gate = completion_gate
+        self._completion_judge_context = completion_judge_context
         self.auto_continue = auto_continue
         self.work_progress = work_progress
         self._connect_mcp = connect_mcp
@@ -417,13 +419,15 @@ class AgentTurnRunner:
         if collected_workflow_outcomes:
             aggregate_result = self._with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
 
-        completion_result = self.completion_gate.evaluate(
+        completion_result = await self._evaluate_completion(
             task_intent=task_intent,
             response_text=response,
             execution_result=aggregate_result,
         )
-        completion_metadata = completion_result.to_metadata()
-        completion_metadata["auto_continue_attempts"] = auto_continue_attempts
+        completion_metadata = self._completion_metadata(
+            completion_result,
+            auto_continue_attempts=auto_continue_attempts,
+        )
         await self._emit_run_event(
             turn.session_id,
             run_id,
@@ -499,6 +503,38 @@ class AgentTurnRunner:
             collected_delegated_tasks=collected_delegated_tasks,
             collected_workflow_outcomes=collected_workflow_outcomes,
         )
+
+    async def _evaluate_completion(
+        self,
+        *,
+        task_intent: TaskIntent,
+        response_text: str,
+        execution_result: ExecutionResult,
+    ) -> CompletionGateResult:
+        provider, model = self._completion_judge_context()
+        return await self.completion_gate.evaluate_with_judge(
+            task_intent=task_intent,
+            response_text=response_text,
+            execution_result=execution_result,
+            provider=provider,
+            model=model,
+        )
+
+    def _completion_metadata(
+        self,
+        completion_result: CompletionGateResult,
+        *,
+        auto_continue_attempts: int,
+    ) -> dict[str, Any]:
+        metadata = completion_result.to_metadata()
+        metadata["auto_continue_attempts"] = auto_continue_attempts
+        judge = metadata.setdefault("judge", {})
+        if isinstance(judge, dict):
+            provider, model = self._completion_judge_context()
+            judge.setdefault("method", "llm")
+            judge.setdefault("provider", type(provider).__name__ if provider is not None else "")
+            judge.setdefault("model", model or "")
+        return metadata
 
     async def run_normal_turn(
         self,
@@ -739,13 +775,15 @@ class AgentTurnRunner:
         )
         if response != aggregate_result.content:
             aggregate_result.content = response
-            completion_result = self.completion_gate.evaluate(
+            completion_result = await self._evaluate_completion(
                 task_intent=task_intent,
                 response_text=response,
                 execution_result=aggregate_result,
             )
-            completion_metadata = completion_result.to_metadata()
-            completion_metadata["auto_continue_attempts"] = auto_continue_attempts
+            completion_metadata = self._completion_metadata(
+                completion_result,
+                auto_continue_attempts=auto_continue_attempts,
+            )
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
