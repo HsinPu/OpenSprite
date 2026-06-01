@@ -2,7 +2,26 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import TaskContract
-from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation
+from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation, _message_with_runtime_context
+
+
+def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
+    message = _message_with_runtime_context(
+        "幫我確認目前服務 healthz 是否正常",
+        {
+            "source": "cli_via_web",
+            "gateway_url": "http://127.0.0.1:8765",
+            "workspace_snapshot": {
+                "path": "repo",
+                "source": "C:\\Users\\win10\\Desktop\\HsinPuRepository\\opensprite",
+            },
+        },
+    )
+
+    assert "幫我確認目前服務 healthz 是否正常" in message
+    assert "http://127.0.0.1:8765" in message
+    assert "`repo/`" in message
+    assert "omit VCS internals" in message
 
 
 def test_exhausted_continuation_replaces_progress_only_response():

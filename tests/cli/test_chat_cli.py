@@ -238,6 +238,8 @@ def test_run_web_chat_sends_message_to_gateway_websocket(tmp_path):
 
     assert seen_messages[0]["text"] == "ping"
     assert seen_messages[0]["session_id"] == "web:web-smoke"
+    assert seen_messages[0]["metadata"]["gateway_url"].startswith("http://127.0.0.1:")
+    assert seen_messages[0]["metadata"]["ws_url"].startswith("ws://127.0.0.1:")
     assert seen_messages[0]["metadata"]["workspace_snapshot"]["path"] == "repo"
     assert (tmp_path / "app-home" / "workspace" / "sessions" / "web" / "web-smoke" / "repo" / "README.md").exists()
     assert payload["mode"] == "web"

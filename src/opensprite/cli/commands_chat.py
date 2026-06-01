@@ -237,7 +237,11 @@ async def run_web_chat(
                     "external_chat_id": resolved_external_chat_id,
                     "sender_name": sender_name,
                     "text": message,
-                    "metadata": {"source": "cli_via_web"},
+                    "metadata": {
+                        "source": "cli_via_web",
+                        "gateway_url": gateway_url,
+                        "ws_url": socket_url,
+                    },
                 }
                 if snapshot_metadata is not None:
                     outgoing["metadata"]["workspace_snapshot"] = snapshot_metadata

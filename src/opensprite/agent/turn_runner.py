@@ -538,7 +538,7 @@ class AgentTurnRunner:
         last_direct_verify_pytest_args: tuple[str, ...] = ()
         same_target_verify_attempts = 0
         pending_direct_verify: dict[str, Any] | None = self._extract_direct_verify_request(user_message.metadata)
-        current_message = user_message.text
+        current_message = _message_with_runtime_context(user_message.text, turn.user_metadata)
         current_allow_tools = True
 
         pending_direct_resume = self._extract_follow_up_resume_request(user_message.metadata)
@@ -1250,6 +1250,33 @@ def _final_response_after_exhausted_continuation(
     ):
         return response
     return _completion_blocker_response(completion_result)
+
+
+def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None) -> str:
+    data = dict(metadata or {})
+    if data.get("source") != "cli_via_web":
+        return message
+    context_lines: list[str] = []
+    gateway_url = str(data.get("gateway_url") or "").strip()
+    if gateway_url:
+        context_lines.append(
+            f"OpenSprite CLI is connected to the Web gateway at {gateway_url}; "
+            "use that URL for questions about the current gateway or health endpoint."
+        )
+    snapshot = data.get("workspace_snapshot")
+    if isinstance(snapshot, dict):
+        snapshot_path = str(snapshot.get("path") or "").strip()
+        snapshot_source = str(snapshot.get("source") or "").strip()
+        if snapshot_path:
+            context_lines.append(
+                f"The requested workspace snapshot is available inside this session at `{snapshot_path}/`."
+            )
+        if snapshot_source:
+            context_lines.append(f"The snapshot came from local path `{snapshot_source}`.")
+        context_lines.append("Snapshot copies omit VCS internals such as `.git`.")
+    if not context_lines:
+        return message
+    return f"{message}\n\n[Runtime context]\n" + "\n".join(f"- {line}" for line in context_lines)
 
 
 def _source_fallback_response(
