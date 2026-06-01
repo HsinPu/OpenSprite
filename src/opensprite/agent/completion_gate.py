@@ -762,6 +762,8 @@ def _verification_skipped_with_reported_gap(response_text: str, execution_result
         return False
     if not _has_skipped_verification_artifact(execution_result):
         return False
+    if not _requires_delegated_review(execution_result.touched_paths):
+        return True
     normalized = re.sub(r"\s+", " ", str(response_text or "").strip().lower())
     return any(marker in normalized for marker in ("verification skipped", "verify skipped", "skipped", "跳過"))
 

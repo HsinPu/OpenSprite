@@ -312,6 +312,34 @@ def test_completion_gate_accepts_reported_skipped_verification_for_note_change()
     assert result.review_required is False
 
 
+def test_completion_gate_accepts_skipped_verification_for_non_code_note_change():
+    intent = TaskIntentService().classify("Please add a short test session note.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Completed. Added the note.",
+        execution_result=ExecutionResult(
+            content="Added the note.",
+            file_change_count=1,
+            touched_paths=("flow-note.md",),
+            verification_attempted=True,
+            verification_passed=False,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="verification_result",
+                    source_tool="verify",
+                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    ok=True,
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "complete"
+    assert result.verification_passed is True
+    assert result.review_required is False
+
+
 def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tests():
     intent = TaskIntentService().classify("Please update the test and run tests.")
 
