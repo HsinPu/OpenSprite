@@ -191,7 +191,7 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
         execution_result=ExecutionResult(
             content="Cannot reliably complete this request.",
             had_tool_error=True,
-            task_contract=TaskContract(objective="幫我查一下台積電目前股價，請列出來源網址。", task_type="web_research"),
+            task_contract=TaskContract(objective="幫我查 OpenRouter API base URL，請列出來源網址。", task_type="web_research"),
             task_artifacts=(
                 TaskArtifact(
                     kind="web_source",
@@ -229,7 +229,7 @@ def test_optional_tool_error_source_fallback_ranks_relevant_sources_first():
         execution_result=ExecutionResult(
             content="Cannot reliably complete this request.",
             had_tool_error=True,
-            task_contract=TaskContract(objective="幫我查一下台積電目前股價，請列出來源網址。", task_type="web_research"),
+            task_contract=TaskContract(objective="幫我查 OpenRouter API base URL，請列出來源網址。", task_type="web_research"),
             task_artifacts=(
                 TaskArtifact(
                     kind="web_source",
@@ -238,18 +238,18 @@ def test_optional_tool_error_source_fallback_ranks_relevant_sources_first():
                         "sources": [
                             {
                                 "tool_name": "web_fetch",
-                                "url": "https://example.com/general-market-commentary",
-                                "title": "General Market Commentary",
-                                "snippet": "A broad market article without the requested stock quote.",
+                                "url": "https://example.com/general-ai-commentary",
+                                "title": "General AI Commentary",
+                                "snippet": "A broad AI article without the requested API base URL.",
                                 "content_chars": 1200,
                                 "has_main_content": True,
                                 "is_too_short": False,
                             },
                             {
                                 "tool_name": "web_fetch",
-                                "url": "https://tw.stock.yahoo.com/quote/2330.TW",
-                                "title": "台積電(2330.TW) 股價 - Yahoo股市",
-                                "snippet": "台積電 2330 股價 2,355 收盤。",
+                                "url": "https://openrouter.ai/docs/api/reference/overview",
+                                "title": "OpenRouter API Reference",
+                                "snippet": "OpenRouter API requests use the https://openrouter.ai/api/v1 base URL.",
                                 "content_chars": 1200,
                                 "has_main_content": True,
                                 "is_too_short": False,
@@ -261,7 +261,7 @@ def test_optional_tool_error_source_fallback_ranks_relevant_sources_first():
         ),
     )
 
-    assert response.index("https://tw.stock.yahoo.com/quote/2330.TW") < response.index("https://example.com/general-market-commentary")
+    assert response.index("https://openrouter.ai/docs/api/reference/overview") < response.index("https://example.com/general-ai-commentary")
 
 
 def test_optional_tool_error_source_fallback_prefers_official_brand_domain():

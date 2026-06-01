@@ -186,7 +186,7 @@ def _evaluate_concrete_web_answer(
                     reason="assistant summarized sources without answering the requested concrete fact",
                     active_task_detail="- State the Authorization Bearer header directly before listing sources.",
                 )
-        if _objective_requests_market_quote(objective) and not _answer_contains_market_quote(answer):
+        if _objective_requests_market_quote(objective):
             return QualityGateResult(
                 passed=False,
                 status="incomplete",
@@ -208,20 +208,6 @@ def _objective_requests_market_quote(normalized_objective: str) -> bool:
             "quote",
             "股價",
             "報價",
-        )
-    )
-
-
-def _answer_contains_market_quote(normalized_answer: str) -> bool:
-    if not normalized_answer:
-        return False
-    return bool(
-        re.search(
-            r"(?:\$|usd|twd|nt\$|美元|台幣)\s*\d+(?:[,.]\d+)*(?:\.\d+)?"
-            r"|\d+(?:[,.]\d+)*(?:\.\d+)?\s*(?:usd|twd|美元|台幣)"
-            r"|(?:股價|報價|收盤|quote|price)\D{0,24}\d+(?:[,.]\d+)*(?:\.\d+)?",
-            normalized_answer,
-            flags=re.IGNORECASE,
         )
     )
 

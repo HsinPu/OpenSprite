@@ -1298,12 +1298,7 @@ def _source_fallback_response(
     objective = _execution_objective(execution_result)
     sources = _rank_web_sources_for_objective(sources, objective)
     if _objective_requests_market_quote(objective):
-        snippets = " ".join(
-            str(source.get("snippet") or source.get("content") or "")
-            for source in sources[:4]
-        )
-        if not _text_contains_market_quote(snippets):
-            return ""
+        return ""
     if completion_result.reason == "tool execution reported an error without a clear blocker handoff":
         top_score = _web_source_relevance_score(sources[0], objective) if sources else 0
         if top_score <= 0:
@@ -1351,18 +1346,6 @@ def _objective_requests_market_quote(objective: str) -> bool:
             "quote",
             "股價",
             "報價",
-        )
-    )
-
-
-def _text_contains_market_quote(text: str) -> bool:
-    return bool(
-        re.search(
-            r"(?:\$|usd|twd|nt\$|美元|台幣)\s*\d+(?:[,.]\d+)*(?:\.\d+)?"
-            r"|\d+(?:[,.]\d+)*(?:\.\d+)?\s*(?:usd|twd|美元|台幣)"
-            r"|(?:股價|報價|收盤|quote|price)\D{0,24}\d+(?:[,.]\d+)*(?:\.\d+)?",
-            str(text or ""),
-            flags=re.IGNORECASE,
         )
     )
 
