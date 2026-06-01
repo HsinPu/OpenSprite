@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..documents.active_task import infer_immediate_task_transition
+from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
@@ -182,9 +183,11 @@ class CompletionGateService:
     def __init__(
         self,
         *,
+        llm_config: DocumentLlmConfig | None = None,
         evidence_gate: EvidenceGateService | None = None,
         quality_gate: QualityGateService | None = None,
     ):
+        self.llm_config = llm_config
         self.evidence_gate = evidence_gate or EvidenceGateService()
         self.quality_gate = quality_gate or QualityGateService()
 

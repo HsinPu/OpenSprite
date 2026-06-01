@@ -686,7 +686,7 @@ class AgentLoop:
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
         self.task_contract_planner = TaskContractPlanner(self.config.task_contract_llm)
-        self.completion_gate = CompletionGateService()
+        self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
             max_deterministic_actions=self.config.auto_continue_deterministic_action_budget,
@@ -1402,6 +1402,7 @@ class AgentLoop:
         self.task_context_resolver.llm_config = config.agent.task_context_llm
         self.task_objective_resolver.llm_config = config.agent.task_objective_llm
         self.task_contract_planner.llm_config = config.agent.task_contract_llm
+        self.completion_gate.llm_config = config.agent.completion_judge_llm
 
         self.prompt_budget.provider = provider
         self.execution_engine.provider = provider

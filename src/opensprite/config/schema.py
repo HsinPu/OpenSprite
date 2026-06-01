@@ -146,6 +146,7 @@ class AgentConfig(BaseModel):
     task_context_llm: DocumentLlmConfig
     task_objective_llm: DocumentLlmConfig
     task_contract_llm: DocumentLlmConfig
+    completion_judge_llm: DocumentLlmConfig
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
     skill_review_enabled: bool
     skill_review_min_tool_calls: int = Field(ge=1)
@@ -1505,6 +1506,7 @@ class Config:
                 "task_context_llm": self.agent.task_context_llm.model_dump(),
                 "task_objective_llm": self.agent.task_objective_llm.model_dump(),
                 "task_contract_llm": self.agent.task_contract_llm.model_dump(),
+                "completion_judge_llm": self.agent.completion_judge_llm.model_dump(),
                 "skill_review_enabled": self.agent.skill_review_enabled,
                 "skill_review_min_tool_calls": self.agent.skill_review_min_tool_calls,
                 "skill_review_max_tool_iterations": self.agent.skill_review_max_tool_iterations,
