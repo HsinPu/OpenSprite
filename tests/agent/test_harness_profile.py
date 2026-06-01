@@ -269,6 +269,34 @@ async def test_task_contract_planner_forces_execution_for_command_version_even_i
 
 
 @pytest.mark.anyio
+async def test_task_contract_planner_forces_execution_for_repository_status_even_if_llm_downgrades():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    message = "幫我看目前 repo 是否有未提交的 source 改動，忽略 .tmp 這類測試暫存。"
+    intent = TaskIntentService().classify(message)
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "workspace_read",
+            "required_tool_groups": ["workspace_read"],
+            "allow_no_tool_final": False,
+            "reason": "The user asks to inspect the repository files.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=message,
+        history=[],
+    )
+
+    assert contract.task_type == "operations"
+    assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["override_reason"] == "repository status questions require fresh execution evidence"
+
+
+@pytest.mark.anyio
 async def test_task_contract_planner_keeps_current_cli_usage_with_workspace_when_reading_allowed():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     message = "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"
