@@ -1280,7 +1280,7 @@ def _source_fallback_response(
     for index, source in enumerate(sources[:4], start=1):
         title = str(source.get("title") or "").strip() or str(source.get("url") or "").strip()
         url = str(source.get("url") or "").strip()
-        snippet = " ".join(str(source.get("snippet") or source.get("content") or "").split())
+        snippet = _clean_source_fallback_snippet(str(source.get("snippet") or source.get("content") or ""))
         if snippet:
             detail_lines.append(f"{index}. {title}: {snippet[:280]}")
         else:
@@ -1294,6 +1294,14 @@ def _source_fallback_response(
             "來源網址：\n" + "\n".join(source_lines),
         ]
     )
+
+
+def _clean_source_fallback_snippet(snippet: str) -> str:
+    cleaned = str(snippet or "")
+    cleaned = re.sub(r"!\[[^\]]*]\([^)]+\)", "", cleaned)
+    cleaned = re.sub(r"\[([^\]]+)]\((https?://[^)]+)\)", r"\1", cleaned)
+    cleaned = re.sub(r"https?://\S+", "", cleaned)
+    return " ".join(cleaned.split())
 
 
 def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:

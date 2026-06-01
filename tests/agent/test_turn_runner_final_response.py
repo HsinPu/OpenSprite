@@ -78,6 +78,47 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
     assert "目前還不能可靠完成這次請求" not in response
 
 
+def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snippets():
+    response = _final_response_after_exhausted_continuation(
+        response="Let me keep checking that.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="assistant final answer was too terse for the task",
+            active_task_detail="Provide a substantive final answer that uses the gathered web source results.",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Let me keep checking that.",
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://finance.yahoo.com/quote/TSM/",
+                                "title": "TSM Stock Price",
+                                "snippet": (
+                                    "[![](/img/ad.gif)](https://example.com/registration/) "
+                                    "Latest quote details are available on the quote page."
+                                ),
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "Latest quote details" in response
+    assert "https://example.com/registration/" not in response
+    assert "![]" not in response
+
+
 def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_error():
     response = _final_response_after_exhausted_continuation(
         response="Cannot reliably complete this request because one optional fetch failed.",
