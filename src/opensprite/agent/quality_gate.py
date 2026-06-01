@@ -186,7 +186,43 @@ def _evaluate_concrete_web_answer(
                     reason="assistant summarized sources without answering the requested concrete fact",
                     active_task_detail="- State the Authorization Bearer header directly before listing sources.",
                 )
+        if _objective_requests_market_quote(objective) and not _answer_contains_market_quote(answer):
+            return QualityGateResult(
+                passed=False,
+                status="incomplete",
+                reason="assistant summarized sources without answering the requested concrete fact",
+                active_task_detail="- State the current or latest available quote directly before listing sources.",
+            )
     return None
+
+
+def _objective_requests_market_quote(normalized_objective: str) -> bool:
+    return any(
+        marker in normalized_objective
+        for marker in (
+            "stock price",
+            "share price",
+            "market price",
+            "latest price",
+            "current price",
+            "quote",
+            "股價",
+            "報價",
+        )
+    )
+
+
+def _answer_contains_market_quote(normalized_answer: str) -> bool:
+    if not normalized_answer:
+        return False
+    return bool(
+        re.search(
+            r"(?:\$|usd|twd|nt\$|美元|台幣)\s*\d+(?:[,.]\d+)*(?:\.\d+)?"
+            r"|\d+(?:[,.]\d+)*(?:\.\d+)?\s*(?:usd|twd|美元|台幣)",
+            normalized_answer,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _looks_like_source_summary_fallback(normalized_answer: str) -> bool:

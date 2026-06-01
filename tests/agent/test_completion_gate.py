@@ -1649,6 +1649,80 @@ def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answ
     assert completion.reason == "assistant summarized sources without answering the requested concrete fact"
 
 
+def test_completion_gate_rejects_market_quote_source_summary_without_price():
+    intent = TaskIntentService().classify("幫我找一下台積電 ADR 目前最新股價或最接近可查到的報價，並附來源。")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我已根據本輪已成功蒐集到的來源整理如下，避免停在只有進度句的狀態。\n\n"
+        "重點摘要：\n"
+        "1. TSMC - Wikipedia: 台灣積體電路製造股份有限公司...\n\n"
+        "來源網址：\n"
+        "1. https://en.wikipedia.org/wiki/TSMC"
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://finance.yahoo.com/quote/TSM/",
+                    "title": "TSM Stock Price",
+                    "snippet": "Yahoo Finance quote page for Taiwan Semiconductor Manufacturing Company.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://www.marketwatch.com/investing/stock/tsm",
+                    "title": "TSM Overview",
+                    "snippet": "MarketWatch quote overview for TSM.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://en.wikipedia.org/wiki/TSMC",
+                    "title": "TSMC",
+                    "snippet": "Background information about TSMC.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+            ],
+            "source_count": 3,
+            "coverage": {"target_met": True, "target_fetch_count": 3, "fetched_count": 3},
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            executed_tool_calls=1,
+            task_contract=contract,
+            tool_evidence=(ToolEvidence(name="web_research", ok=True),),
+            task_artifacts=(artifact,),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant summarized sources without answering the requested concrete fact"
+
+
 def test_completion_gate_allows_recommended_alternate_quote_url():
     intent = TaskIntentService().classify("Find the latest available TSMC quote and cite sources.")
     contract = TaskContractService.build(
