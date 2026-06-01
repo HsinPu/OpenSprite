@@ -287,7 +287,7 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     assert decision.emit_skipped_event is True
 
 
-def test_auto_continue_allows_concrete_pending_lookup_once():
+def test_auto_continue_does_not_use_pending_lookup_phrases():
     intent = TaskIntentService().classify("幫我找 2330市值")
     completion = CompletionGateResult(
         status="incomplete",
@@ -302,9 +302,8 @@ def test_auto_continue_allows_concrete_pending_lookup_once():
         previous_response="讓我查一下最新市值：",
     )
 
-    assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
-    assert "previous response announced a concrete next action" in (decision.prompt or "")
+    assert decision.should_continue is False
+    assert decision.reason == "no_tool_progress_after_incomplete_response"
 
 
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
