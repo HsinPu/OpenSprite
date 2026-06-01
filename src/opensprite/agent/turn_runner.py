@@ -1499,55 +1499,11 @@ def _should_replace_nonfinal_response(
 ) -> bool:
     if completion_result.status == "complete":
         return False
-    text = (response or "").strip()
-    if not text:
+    if not (response or "").strip():
         return True
-    lower_text = text.lower()
-    blocker_markers = (
-        "無法",
-        "不能",
-        "不足",
-        "缺少",
-        "阻礙",
-        "被封鎖",
-        "未完成",
-        "尚未完成",
-        "cannot",
-        "can't",
-        "unable",
-        "blocked",
-        "insufficient",
-        "missing",
-        "incomplete",
-        "not enough",
-    )
-    if any(marker in lower_text for marker in blocker_markers):
+    if completion_result.status in {"blocked", "waiting_user"}:
         return False
-    fallback_markers = (
-        "no visible reply",
-        "try again",
-        "沒有產生可顯示",
-        "請再試一次",
-    )
-    if any(marker in lower_text for marker in fallback_markers):
-        return True
-    progress_markers = (
-        "讓我",
-        "我會",
-        "我將",
-        "正在",
-        "進一步",
-        "再查",
-        "繼續",
-        "稍等",
-        "let me",
-        "i will",
-        "i'll",
-        "working on",
-        "one moment",
-        "next i",
-    )
-    return len(text) <= 320 and any(marker in lower_text for marker in progress_markers)
+    return completion_result.status in {"incomplete", "needs_verification", "needs_review"}
 
 
 def _completion_blocker_response(completion_result: CompletionGateResult) -> str:

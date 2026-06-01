@@ -44,7 +44,7 @@ def test_exhausted_continuation_replaces_progress_only_response():
     assert "讓我進一步" not in response
 
 
-def test_exhausted_continuation_keeps_clear_blocker_response():
+def test_exhausted_continuation_uses_structured_blocker_status():
     original = "我無法完成查詢，因為來源不足。"
 
     response = _final_response_after_exhausted_continuation(
@@ -56,7 +56,8 @@ def test_exhausted_continuation_keeps_clear_blocker_response():
         auto_continue_attempts=2,
     )
 
-    assert response == original
+    assert response != original
+    assert "required source material was insufficient" in response
 
 
 def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_response():
