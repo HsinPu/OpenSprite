@@ -1575,6 +1575,80 @@ def test_completion_gate_allows_openrouter_api_endpoint_in_answer():
     assert completion.status == "complete"
 
 
+def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answer():
+    intent = TaskIntentService().classify("幫我查目前 OpenRouter 官方文件中 API base URL 是什麼，附來源網址。")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我已根據本輪已成功蒐集到的來源整理如下，避免停在只有進度句的狀態。\n\n"
+        "重點摘要：\n"
+        "1. https://openrouter.ai/docs/quickstart: For clean Markdown of any page...\n\n"
+        "來源網址：\n"
+        "1. https://openrouter.ai/docs/quickstart.md"
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://openrouter.ai/docs/api/reference/overview.md",
+                    "title": "OpenRouter API Reference",
+                    "snippet": "The OpenRouter API reference documents API endpoints.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://openrouter.ai/docs/quickstart.md",
+                    "title": "OpenRouter Quickstart",
+                    "snippet": "The OpenRouter quickstart links setup and API usage docs.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://openrouter.ai/docs/api/reference/parameters.md",
+                    "title": "OpenRouter API Parameters",
+                    "snippet": "The OpenRouter parameters page documents request options.",
+                    "content_chars": 1200,
+                    "min_content_chars": 800,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                }
+            ],
+            "source_count": 3,
+            "coverage": {"target_met": True, "target_fetch_count": 3, "fetched_count": 3},
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            executed_tool_calls=1,
+            task_contract=contract,
+            tool_evidence=(ToolEvidence(name="web_research", ok=True),),
+            task_artifacts=(artifact,),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant summarized sources without answering the requested concrete fact"
+
+
 def test_completion_gate_allows_recommended_alternate_quote_url():
     intent = TaskIntentService().classify("Find the latest available TSMC quote and cite sources.")
     contract = TaskContractService.build(
