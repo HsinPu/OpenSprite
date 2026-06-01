@@ -20,80 +20,7 @@ from .completion_judge import (
 from .quality_gate import QualityGateService
 from .task_intent import TaskIntent
 
-
-_COMPLETE_MARKERS = (
-    "all set",
-    "complete",
-    "completed",
-    "done",
-    "finished",
-    "fixed",
-    "implemented",
-    "resolved",
-    "successfully",
-    "passed",
-    "passes",
-    "verified",
-    "已完成",
-    "完成",
-    "已處理",
-    "已修正",
-    "已修復",
-    "通過",
-)
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
-_INCOMPLETE_MARKERS = (
-    "not complete",
-    "not completed",
-    "not done",
-    "cannot complete",
-    "can't complete",
-    "could not complete",
-    "unable to complete",
-    "try again",
-    "no visible reply",
-    "沒有產生可顯示的回覆",
-    "請再試一次",
-    "still need",
-    "needs more",
-    "未完成",
-    "尚未完成",
-    "無法完成",
-    "還需要",
-)
-_PENDING_ACTION_MARKERS = (
-    "讓我",
-    "让我",
-    "我來",
-    "我来",
-    "我會",
-    "我会",
-    "我將",
-    "我将",
-    "我先",
-    "正在",
-    "稍等",
-)
-_PENDING_ACTION_VERBS = (
-    "查",
-    "搜尋",
-    "搜索",
-    "搜",
-    "抓取",
-    "取得",
-    "確認",
-    "验证",
-    "驗證",
-    "分析",
-    "整理",
-    "處理",
-    "处理",
-    "fetch",
-    "search",
-    "check",
-    "verify",
-    "analyze",
-)
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _DIRECT_REPLY_INSTRUCTION_MARKERS = (
     "only reply",
@@ -560,7 +487,7 @@ class CompletionGateService:
             )
 
         is_direct_reply = _looks_like_direct_reply_instruction(task_intent.objective)
-        if is_direct_reply and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if is_direct_reply and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="direct reply instruction received a response",
@@ -604,20 +531,6 @@ class CompletionGateService:
                 )
 
         if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
-            if response_text.strip() and _looks_incomplete(response_text, task_intent.objective):
-                return CompletionGateResult(
-                    status="incomplete",
-                    reason="assistant response did not explicitly complete the task",
-                    verification_required=verification_required,
-                    verification_attempted=verification_attempted,
-                    verification_passed=verification_passed,
-                    review_required=review_required,
-                    review_attempted=review["attempted"],
-                    review_passed=review["passed"],
-                    review_summary=review["summary"],
-                    review_prompt_types=review["prompt_types"],
-                    review_finding_count=review["finding_count"],
-                )
             return CompletionGateResult(
                 status="complete" if response_text.strip() else "incomplete",
                 reason="one-turn intent received a response" if response_text.strip() else "assistant response was empty",
@@ -632,7 +545,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip():
             completion_reason = (
                 "writing-style task returned a substantive response"
                 if task_intent.kind == "writing"
@@ -654,7 +567,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "planning" and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if task_intent.kind == "planning" and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="planning task returned concrete steps",
@@ -671,7 +584,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "debug" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if task_intent.kind == "debug" and not expects_code_change and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="debug diagnosis was provided without requiring code changes",
@@ -688,7 +601,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "task" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if task_intent.kind == "task" and not expects_code_change and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="generic task returned a response",
@@ -705,27 +618,10 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip() and not _looks_incomplete(response_text, task_intent.objective):
+        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="task contract was satisfied",
-                active_task_status="done",
-                should_update_active_task=task_intent.should_seed_active_task,
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
-
-        if _looks_complete(response_text):
-            return CompletionGateResult(
-                status="complete",
-                reason="assistant response explicitly indicates completion",
                 active_task_status="done",
                 should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
@@ -1057,62 +953,8 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     return False
 
 
-def _looks_complete(response_text: str) -> bool:
-    lowered = re.sub(r"\s+", " ", (response_text or "").strip().lower())
-    if not lowered:
-        return False
-    if _looks_incomplete(response_text):
-        return False
-    return any(marker in lowered for marker in _COMPLETE_MARKERS)
-
-
 def _contract_has_completion_criteria(task_contract: Any) -> bool:
     return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
-
-
-def _looks_incomplete(response_text: str, objective_text: str = "") -> bool:
-    lowered = re.sub(r"\s+", " ", (response_text or "").strip().lower())
-    objective = re.sub(r"\s+", " ", (objective_text or "").strip().lower())
-    if (
-        objective
-        and "blocked" in objective
-        and "incomplete" in objective
-        and any(marker in objective for marker in ("差異", "差別", "difference", "explain", "解釋"))
-        and "blocked" in lowered
-        and "incomplete" in lowered
-    ):
-        return False
-    return any(marker in lowered for marker in _INCOMPLETE_MARKERS) or _looks_like_pending_action_response(lowered)
-
-
-def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
-    text = normalized_lowered.strip()
-    if not text:
-        return False
-    if "我來說明" in text or "我来说明" in text:
-        return False
-    if len(text) <= 180 and any(marker in text for marker in _PENDING_ACTION_MARKERS) and any(
-        verb in text for verb in _PENDING_ACTION_VERBS
-    ):
-        return True
-    pending_patterns = (
-        r"^\s*<toolcall\b",
-        r"^\s*<tool\s+name=",
-        r"^\s*<function_calls\b",
-        r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)",
-        r"^\s*\$(?:kind|url|instruction)\s*=",
-        r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
-        r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
-        r"^.{0,20}(?:我先|先|我來|我来|讓我|让我).{0,40}(?:搜尋|搜寻|查詢|查询|查一下|確認|确认|抓|fetch|官方文件)",
-        r"\bfetching\s+in\s+parallel\b",
-        r"等待.{0,20}(?:來源|source).{0,20}(?:回應|response)",
-        r"(?:先|我會|我要|需要).{0,20}(?:並行|parallel).{0,20}(?:fetch|抓取|取得)",
-        r"(?:先|我會|我要|需要).{0,20}(?:fetch|抓取|取得).{0,20}(?:來源|資料|報價)",
-        r"^.{0,20}\blet.*先.*(?:搜尋|搜寻|查詢|查询|查一下|查)",
-        r"^.{0,16}(?:我先|先|我來|我来|來查|来查|來搜尋|来搜寻|現在.*先|现在.*先).*(?:搜尋|搜寻|查詢|查询|查一下)",
-        r"^.{0,20}(?:透過|通过).*(?:網路|网络|web).*(?:搜尋|搜寻|查詢|查询)",
-    )
-    return any(re.search(pattern, text) for pattern in pending_patterns)
 
 
 def _looks_like_retry_or_blocker_response(normalized_lowered: str) -> bool:
