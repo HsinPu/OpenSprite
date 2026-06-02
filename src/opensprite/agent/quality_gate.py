@@ -557,22 +557,7 @@ def _evaluate_history_grounding(
         return None
 
     if _history_retrieval_was_empty(execution_result):
-        if _states_history_not_found(normalized_response):
-            return None
-        return QualityGateResult(
-            passed=False,
-            status="incomplete",
-            reason="assistant answered despite empty history retrieval",
-            active_task_detail="- State that no matching prior context was found instead of inventing recalled details.",
-        )
-
-    if not _references_prior_context(normalized_response):
-        return QualityGateResult(
-            passed=False,
-            status="incomplete",
-            reason="assistant final answer did not reference retrieved prior context",
-            active_task_detail="- Make clear that the answer is based on retrieved prior chat context.",
-        )
+        return None
 
     requested_count = _requested_history_item_count(contract.objective)
     if requested_count > 1 and _response_item_count(response_text) < requested_count:
@@ -794,47 +779,6 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
         elif preview:
             return False
     return saw_explicit_empty
-
-
-def _states_history_not_found(normalized_response: str) -> bool:
-    return any(
-        marker in normalized_response
-        for marker in (
-            "no matching prior",
-            "no prior",
-            "not found",
-            "could not find",
-            "沒有找到",
-            "沒有符合",
-            "找不到",
-            "查不到",
-        )
-    )
-
-
-def _references_prior_context(normalized_response: str) -> bool:
-    return any(
-        marker in normalized_response
-        for marker in (
-            "previous",
-            "earlier",
-            "prior",
-            "retrieved",
-            "history",
-            "run trace",
-            "list_run_file_changes",
-            "對話記錄",
-            "對話紀錄",
-            "根據對話",
-            "這段對話",
-            "對話的內容",
-            "前面",
-            "剛剛",
-            "剛才",
-            "先前",
-            "搜尋結果",
-        )
-    )
 
 
 def _requested_history_item_count(objective: str) -> int:

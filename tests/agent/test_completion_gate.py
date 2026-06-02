@@ -1562,7 +1562,8 @@ def test_completion_gate_accepts_chinese_previous_search_result_phrase():
     assert completion.status == "complete"
 
 
-def test_completion_gate_requires_history_answer_to_reference_prior_context():
+@pytest.mark.anyio
+async def test_completion_gate_uses_judge_for_ungrounded_history_answer():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -1575,7 +1576,9 @@ def test_completion_gate_requires_history_answer_to_reference_prior_context():
         "3. 補 trace observability。"
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected history answer without retrieved context grounding",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -1587,7 +1590,7 @@ def test_completion_gate_requires_history_answer_to_reference_prior_context():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer did not reference retrieved prior context"
+    assert completion.reason == "judge rejected history answer without retrieved context grounding"
 
 
 def test_completion_gate_requires_enough_history_items():
@@ -1617,7 +1620,8 @@ def test_completion_gate_requires_enough_history_items():
     assert completion.reason == "assistant did not provide enough recalled items"
 
 
-def test_completion_gate_rejects_answer_after_empty_history_retrieval():
+@pytest.mark.anyio
+async def test_completion_gate_uses_judge_for_answer_after_empty_history_retrieval():
     intent = TaskIntentService().classify("前面說過的 threshold 是多少")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -1628,7 +1632,9 @@ def test_completion_gate_rejects_answer_after_empty_history_retrieval():
         "因此我會直接用這個數值作為目前設定的答案。"
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected invented answer after empty history retrieval",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -1640,7 +1646,7 @@ def test_completion_gate_rejects_answer_after_empty_history_retrieval():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant answered despite empty history retrieval"
+    assert completion.reason == "judge rejected invented answer after empty history retrieval"
 
 
 def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval():
