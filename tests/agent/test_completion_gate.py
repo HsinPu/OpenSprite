@@ -276,6 +276,19 @@ def _history_contract(intent) -> TaskContract:
     return _tool_group_contract(intent, "history_retrieval", "history_retrieval")
 
 
+def _web_follow_up_context() -> TaskContextDecision:
+    return TaskContextDecision(
+        is_follow_up=True,
+        should_inherit_active_task=True,
+        inherited_task_type="web_research",
+        inherited_tool_group="web_research",
+        continuation_type="narrowing",
+        confidence=0.86,
+        method="llm",
+        reason="LLM context resolver inherited the prior web research task.",
+    )
+
+
 def _verification_contract(intent) -> TaskContract:
     return TaskContract(
         objective=intent.objective,
@@ -1681,6 +1694,7 @@ def test_task_contract_inherits_web_research_for_short_follow_up():
     contract = TaskContractService.build(
         task_intent=intent,
         current_message=intent.objective,
+        task_context_decision=_web_follow_up_context(),
         history=[
             {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
             {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
@@ -1703,6 +1717,7 @@ def test_completion_gate_requires_web_evidence_for_short_follow_up():
     contract = TaskContractService.build(
         task_intent=intent,
         current_message=intent.objective,
+        task_context_decision=_web_follow_up_context(),
         history=[
             {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
             {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
