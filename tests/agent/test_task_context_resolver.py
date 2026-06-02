@@ -181,6 +181,30 @@ def test_task_context_uses_llm_for_short_recent_context_without_follow_up_marker
     assert decision.inherited_tool_group == "web_research"
 
 
+def test_task_context_uses_llm_for_short_recent_context_without_question_punctuation():
+    provider = _JsonProvider(
+        '{"is_follow_up": true, "should_inherit_active_task": false, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"confidence": 0.83, "reason": "short phrasing depends on prior web lookup"}'
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="same source as before please",
+            history=_WEB_RESEARCH_HISTORY,
+            task_intent=TaskIntentService().classify("same source as before please"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.inherited_task_type == "web_research"
+    assert decision.inherited_tool_group == "web_research"
+
+
 def test_task_context_does_not_backfill_llm_tool_inheritance_from_regex():
     deterministic = TaskContextDecision(
         is_follow_up=True,
