@@ -17,6 +17,13 @@ from ..tools.evidence import ToolEvidence
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
+_ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
+    {
+        "command_version",
+        "repository_status",
+        "workspace_location",
+    }
+)
 _ALLOWED_PLANNER_TASK_TYPES = frozenset(
     {
         "pure_answer",
@@ -353,14 +360,18 @@ def _build_planner_contract_prompt(
         "external, public, financial, weather, news, webpage, or source-grounded facts, choose web_research. "
         "If the user asks about local files, repo code, project state, or wants code changes, choose workspace_read or "
         "workspace_change. If the user asks about attached media, choose media_analysis. If the user asks about previous "
-    "conversation state, choose history_retrieval. If the user asks to schedule, remind, pause, list, or run reminders "
-    "or recurring jobs, choose ops with required_tool_groups ['scheduling']. If the user asks to inspect the local machine, "
-    "installed commands, command versions, running processes, or local runtime state, choose ops with required_tool_groups "
-    "['execution']. If no tool evidence is needed, choose pure_answer.\n"
+        "conversation state, choose history_retrieval. If the user asks to schedule, remind, pause, list, or run reminders "
+        "or recurring jobs, choose ops with required_tool_groups ['scheduling']. If the user asks to inspect the local machine, "
+        "installed commands, command versions, running processes, or local runtime state, choose ops with required_tool_groups "
+        "['execution']. Use quality_checks only for extra answer-specific verification: command_version when the answer must "
+        "report an installed command version, repository_status when it must report git/worktree status, and workspace_location "
+        "when it must name the file path, symbol, or config location found in workspace inspection. If no tool evidence is needed, "
+        "choose pure_answer.\n"
         "Return JSON only with this shape:\n"
         "{\n"
         '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | media_analysis | history_retrieval | ops | task | analysis",\n'
         '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | execution | verification"],\n'
+        '  "quality_checks": ["command_version | repository_status | workspace_location"],\n'
         '  "final_answer_required": true,\n'
         '  "allow_no_tool_final": true,\n'
         '  "reason": "short explanation for trace only"\n'
@@ -434,6 +445,7 @@ def _contract_from_planner_payload(
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
     raw_tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    quality_checks = _normalize_planner_quality_checks(payload.get("quality_checks"))
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = raw_tool_groups
     if task_type == "history_retrieval":
@@ -529,11 +541,15 @@ def _contract_from_planner_payload(
                 )
             )
 
+    if "workspace_location" in quality_checks:
+        acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_workspace_location_criterion(),))
+
     planner_reason = _truncate(str(payload.get("reason") or "llm planner returned a task contract"), max_chars=240)
     metadata = {
         "planner_status": "validated",
         "raw_task_type": raw_task_type,
         "required_tool_groups": list(tool_groups),
+        "quality_checks": list(quality_checks),
         "reason": planner_reason,
     }
     return TaskContract(
@@ -563,6 +579,16 @@ def _normalize_planner_tool_groups(value: Any) -> list[str]:
         if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
             groups.append(text)
     return groups
+
+
+def _normalize_planner_quality_checks(value: Any) -> list[str]:
+    raw_values = value if isinstance(value, list) else []
+    checks: list[str] = []
+    for item in raw_values:
+        text = str(item or "").strip().lower()
+        if text in _ALLOWED_PLANNER_QUALITY_CHECKS and text not in checks:
+            checks.append(text)
+    return checks
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
@@ -729,6 +755,14 @@ def _workspace_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=80,
         description="Provide a substantive final answer that uses the inspected workspace context.",
+    )
+
+
+def _workspace_location_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="workspace_location",
+        min_count=1,
+        description="Identify the relevant workspace file path, symbol, or configuration location in the final answer.",
     )
 
 

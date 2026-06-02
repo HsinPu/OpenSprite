@@ -456,7 +456,8 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
             active_task_detail="- Reference the inspected workspace path or filename in the final answer.",
         )
 
-    if _asks_for_workspace_location(objective) and not _contains_workspace_location_clue(normalized_response):
+    requires_location = any(criterion.kind == "workspace_location" for criterion in contract.acceptance_criteria)
+    if requires_location and not _contains_workspace_location_clue(normalized_response):
         return QualityGateResult(
             passed=False,
             status="incomplete",
@@ -632,27 +633,6 @@ def _path_referenced(path: str, normalized_response: str) -> bool:
         return True
     filename = normalized_path.rsplit("/", 1)[-1]
     return bool(filename and filename in normalized_response)
-
-
-def _asks_for_workspace_location(text: str) -> bool:
-    lowered = str(text or "").lower()
-    return bool(
-        re.search(r"\b(?:where|which|location|path|file|config|setting|function|class|symbol)\b", lowered)
-        or any(
-            marker in lowered
-            for marker in (
-                "哪裡",
-                "哪個",
-                "位置",
-                "路徑",
-                "檔案",
-                "設定",
-                "函式",
-                "類別",
-                "符號",
-            )
-        )
-    )
 
 
 def _contains_workspace_location_clue(normalized_response: str) -> bool:

@@ -685,6 +685,8 @@ def _format_acceptance_criterion(criterion: Any) -> str:
         return "Fetch or inspect at least one source page before finalizing; search result snippets alone are not sufficient."
     if criterion.kind == "source_reference":
         return "Reference at least one gathered source by URL, domain, or title in the final answer."
+    if criterion.kind == "workspace_location":
+        return "Identify the relevant workspace file path, symbol, or configuration location in the final answer."
     if criterion.kind == "media_artifact":
         return "Produce the required media artifact before finalizing."
     if criterion.kind == "verification_or_gap":

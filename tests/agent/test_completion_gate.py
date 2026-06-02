@@ -1280,6 +1280,16 @@ def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_
 def test_completion_gate_requires_workspace_location_for_where_question():
     intent = TaskIntentService().classify("auth config 在哪")
     contract = _workspace_contract(intent)
+    contract = replace(
+        contract,
+        acceptance_criteria=contract.acceptance_criteria
+        + (
+            AcceptanceCriterion(
+                kind="workspace_location",
+                description="Identify the relevant workspace location.",
+            ),
+        ),
+    )
     answer = "我查到 auth config 是在設定載入流程中處理，主要由設定服務負責解析與套用。"
 
     completion = CompletionGateService().evaluate(
@@ -1296,9 +1306,40 @@ def test_completion_gate_requires_workspace_location_for_where_question():
     assert completion.status == "incomplete"
     assert completion.reason == "assistant final answer did not identify the workspace location"
 
+def test_completion_gate_does_not_infer_workspace_location_from_objective_text():
+    intent = TaskIntentService().classify("auth config 在哪")
+    contract = _workspace_contract(intent)
+    answer = (
+        "我查到 auth config 是在設定載入流程中處理，主要由設定服務負責解析與套用，"
+        "並且這次回答使用了 workspace inspection 的結果，而不是只做一般推測。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="grep_files", ok=True),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
 def test_completion_gate_completes_workspace_location_answer_with_path():
     intent = TaskIntentService().classify("auth config 在哪")
     contract = _workspace_contract(intent)
+    contract = replace(
+        contract,
+        acceptance_criteria=contract.acceptance_criteria
+        + (
+            AcceptanceCriterion(
+                kind="workspace_location",
+                description="Identify the relevant workspace location.",
+            ),
+        ),
+    )
     answer = (
         "我查到 auth config 相關邏輯在 src/opensprite/config/schema.py，"
         "其中 Config 與 provider settings 會處理認證與模型設定的載入。"
