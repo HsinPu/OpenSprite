@@ -23,14 +23,7 @@ _NON_TASK_MESSAGES = {
     "cool",
     "nice",
 }
-_VAGUE_TASK_MESSAGES = {
-    "continue",
-    "keep going",
-    "do it",
-    "fix it",
-    "handle it",
-    "make it better",
-}
+_VAGUE_TASK_MESSAGES = {"continue"}
 _PURE_ANSWER_RE = re.compile(r"\b(?:translate|translation|calculate|compute)\b", re.IGNORECASE)
 _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u8b6f",
