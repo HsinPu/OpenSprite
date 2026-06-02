@@ -452,9 +452,9 @@ def test_task_context_continues_active_task_without_llm():
 
     decision = asyncio.run(
         _resolver().resolve(
-            current_message="繼續",
+            current_message="continue",
             history=[],
-            task_intent=TaskIntentService().classify("繼續"),
+            task_intent=TaskIntentService().classify("continue"),
             active_task=_ACTIVE_TASK_BLOCK,
             provider=provider,
             model=provider.get_default_model(),

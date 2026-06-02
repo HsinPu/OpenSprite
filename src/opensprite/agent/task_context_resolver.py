@@ -13,26 +13,6 @@ from ..utils.log import logger
 from .task_intent import TaskIntent
 
 
-_ACK_RE = re.compile(
-    r"^(?:ok|okay|thanks|thank you|thx|好|好的|了解|知道了|謝謝|謝啦|感謝|不用|先不用)[。.!！?？]*$",
-    re.IGNORECASE,
-)
-_CONTINUATION_RE = re.compile(
-    r"^(?:continue|keep going|go on|proceed|繼續|接著|繼續做|繼續處理|繼續吧|往下做)[。.!！?？]*$",
-    re.IGNORECASE,
-)
-_BOUNDARY_SWITCH_CONFIRMATION_RE = re.compile(
-    r"^(?:switch|switch task|switch tasks|switch to the new request|switch to new request|"
-    r"do the new request|use the new request|new request|replace it|change task|"
-    r"切換|切換到新任務|切到新任務|換|換任務|換成新的|換新任務|改做新的|改做新任務|做新的|做新任務)[。.!！?？]*$",
-    re.IGNORECASE,
-)
-_BOUNDARY_CONTINUE_CONFIRMATION_RE = re.compile(
-    r"^(?:continue the active task|continue active task|continue current task|continue the current task|"
-    r"keep current task|keep the current task|keep the active task|stick with current task|"
-    r"繼續原本|繼續原本的|繼續原本任務|繼續目前|繼續目前任務|維持原本|維持目前|不要切換|別切換)[。.!！?？]*$",
-    re.IGNORECASE,
-)
 _BOUNDARY_REQUEST_PATTERNS = (
     re.compile(
         r"Reply `switch` to replace(?: the active task \(.+?\)| it) with the new request \((?P<request>.+?)\),? "
@@ -170,6 +150,7 @@ class TaskContextResolver:
             current_message,
             deterministic,
             active_task,
+            task_intent=task_intent,
             history=history,
             work_state_summary=work_state_summary,
         ):
@@ -213,10 +194,10 @@ class TaskContextResolver:
         active_task: str | None = None,
         work_state_summary: str | None = None,
     ) -> TaskContextDecision:
-        del history, task_intent, work_state_summary
+        del history, work_state_summary
         current = _compact(current_message)
         has_active_task = _has_active_task(active_task)
-        if not current or _ACK_RE.match(current):
+        if not current or (task_intent is not None and task_intent.kind == "conversation"):
             return TaskContextDecision(
                 continuation_type="ack",
                 confidence=0.9,
@@ -241,7 +222,7 @@ class TaskContextResolver:
                 reason="user confirmed continuing the active task after task-boundary prompt",
             )
 
-        if has_active_task and _CONTINUATION_RE.match(current):
+        if has_active_task and task_intent is not None and task_intent.needs_clarification:
             return TaskContextDecision(
                 is_follow_up=True,
                 should_inherit_active_task=True,
@@ -250,7 +231,7 @@ class TaskContextResolver:
                 reason="current message is a continuation of the active task",
             )
 
-        if _CONTINUATION_RE.match(current):
+        if task_intent is not None and task_intent.needs_clarification:
             return TaskContextDecision(
                 is_follow_up=True,
                 continuation_type="continue_last_answer",
@@ -306,11 +287,12 @@ def _should_consult_llm(
     current_message: str,
     decision: TaskContextDecision,
     active_task: str | None,
+    task_intent: TaskIntent | None = None,
     history: list[dict[str, Any]] | None = None,
     work_state_summary: str | None = None,
 ) -> bool:
     current = _compact(current_message)
-    if not current or len(current) > 80 or _ACK_RE.match(current):
+    if not current or len(current) > 80 or (task_intent is not None and task_intent.kind == "conversation"):
         return False
     if decision.is_follow_up and decision.inherited_tool_group:
         return True
@@ -545,8 +527,6 @@ def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary
 
 
 def _is_context_dependent_short_turn(current: str) -> bool:
-    if _CONTINUATION_RE.match(current):
-        return True
     words = re.findall(r"[\w\u4e00-\u9fff]+", current)
     if len(words) <= 4:
         return True
@@ -594,12 +574,11 @@ def extract_pending_boundary_request(active_task: str | None) -> str | None:
 
 
 def _is_boundary_switch_confirmation(current_message: str) -> bool:
-    return bool(_BOUNDARY_SWITCH_CONFIRMATION_RE.match(_compact(current_message)))
+    return _compact(current_message).lower() == "switch"
 
 
 def _is_boundary_continue_confirmation(current_message: str) -> bool:
-    current = _compact(current_message)
-    return bool(_CONTINUATION_RE.match(current) or _BOUNDARY_CONTINUE_CONFIRMATION_RE.match(current))
+    return _compact(current_message).lower() == "continue"
 
 
 def _compact(value: str | None) -> str:
