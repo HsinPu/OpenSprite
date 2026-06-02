@@ -104,7 +104,7 @@ _WEB_RESEARCH_HISTORY = [
 ]
 
 
-def test_task_context_uses_deterministic_follow_up_without_llm():
+def test_task_context_falls_back_to_deterministic_follow_up_without_llm():
     provider = _FailingProvider()
 
     llm_config = Config.load_agent_template_config().task_context_llm.model_copy(
@@ -120,7 +120,7 @@ def test_task_context_uses_deterministic_follow_up_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == "fallback"
     assert decision.is_follow_up is True
     assert decision.inherited_tool_group == "web_research"
     assert decision.continuation_type == "follow_up"
@@ -211,7 +211,7 @@ def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
         assert decision.continuation_type == "follow_up"
 
 
-def test_task_context_handles_chinese_typo_follow_up_deterministically():
+def test_task_context_handles_chinese_typo_follow_up_with_fallback():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -224,7 +224,7 @@ def test_task_context_handles_chinese_typo_follow_up_deterministically():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == "fallback"
     assert decision.is_follow_up is True
     assert decision.inherited_tool_group == "web_research"
     assert decision.continuation_type == "follow_up"
@@ -471,7 +471,7 @@ def test_task_context_supports_legacy_boundary_question_format():
     assert decision.should_replace_active_task is True
 
 
-def test_task_context_continue_without_active_task_inherits_recent_web_context():
+def test_task_context_continue_without_active_task_falls_back_to_recent_web_context():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -484,14 +484,14 @@ def test_task_context_continue_without_active_task_inherits_recent_web_context()
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == "fallback"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"
     assert decision.inherited_tool_group == "web_research"
     assert decision.continuation_type == "follow_up"
 
 
-def test_task_context_inherits_recent_workspace_tool_context_without_llm():
+def test_task_context_falls_back_to_recent_workspace_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -507,7 +507,7 @@ def test_task_context_inherits_recent_workspace_tool_context_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == "fallback"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "workspace_read"
     assert decision.inherited_tool_group == "workspace_read"
@@ -563,7 +563,7 @@ def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
     assert decision.continuation_type == "none"
 
 
-def test_task_context_inherits_recent_history_tool_context_without_llm():
+def test_task_context_falls_back_to_recent_history_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -579,7 +579,7 @@ def test_task_context_inherits_recent_history_tool_context_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == "fallback"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "history_retrieval"
     assert decision.inherited_tool_group == "history_retrieval"

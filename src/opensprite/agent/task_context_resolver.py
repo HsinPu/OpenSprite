@@ -340,6 +340,8 @@ def _should_consult_llm(
     current = _compact(current_message)
     if not current or len(current) > 80 or _ACK_RE.match(current):
         return False
+    if decision.is_follow_up and decision.inherited_tool_group:
+        return True
     if decision.confidence >= 0.7:
         return False
     if decision.is_follow_up:
