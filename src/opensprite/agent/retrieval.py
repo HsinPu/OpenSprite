@@ -2,53 +2,16 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 
 from ..search.base import SearchHit, SearchStore
 
 
 class ProactiveRetrievalService:
-    """Fetch compact prior context when the current turn strongly implies follow-up work."""
-
-    _RETRIEVAL_WORD_KEYWORDS = (
-        "again",
-        "before",
-        "earlier",
-        "history",
-        "last time",
-        "previous",
-        "revisit",
-        "repeat",
-        "that fix",
-        "that search",
-        "that change",
-    )
-    _RETRIEVAL_TEXT_MARKERS = (
-        "之前",
-        "先前",
-        "剛剛",
-        "上次",
-        "剛才",
-        "前面",
-        "那個修復",
-        "那次搜尋",
-    )
-    _RETRIEVAL_WORD_PATTERN = re.compile(
-        r"\b(?:" + "|".join(re.escape(keyword) for keyword in _RETRIEVAL_WORD_KEYWORDS) + r")\b",
-        re.IGNORECASE,
-    )
+    """Fetch compact prior context when the task-context resolver asks for it."""
 
     def __init__(self, *, search_store: SearchStore | None):
         self.search_store = search_store
-
-    @classmethod
-    def should_retrieve(cls, current_message: str) -> bool:
-        text = str(current_message or "").strip()
-        if not text:
-            return False
-        lowered = text.lower()
-        return bool(cls._RETRIEVAL_WORD_PATTERN.search(text)) or any(marker in lowered for marker in cls._RETRIEVAL_TEXT_MARKERS)
 
     async def build_context(
         self,
@@ -57,8 +20,7 @@ class ProactiveRetrievalService:
         current_message: str,
         should_retrieve: bool | None = None,
     ) -> str:
-        resolved_should_retrieve = self.should_retrieve(current_message) if should_retrieve is None else bool(should_retrieve)
-        if self.search_store is None or not resolved_should_retrieve:
+        if self.search_store is None or not bool(should_retrieve):
             return ""
 
         history_hits = await self.search_store.search_history(session_id=session_id, query=current_message, limit=3)
@@ -67,10 +29,11 @@ class ProactiveRetrievalService:
 
         sections = [
             "# Proactive Retrieval Context",
-            "This turn appears to refer to earlier chat context. Use the snippets below before asking the user to restate information.",
+            "The task-context resolver selected prior chat retrieval. Use the snippets below before asking the user to restate information.",
+            "",
+            "## Retrieved History",
+            *self._format_history_hits(history_hits),
         ]
-        if history_hits:
-            sections.extend(["", "## Retrieved History", *self._format_history_hits(history_hits)])
         return "\n".join(sections).strip()
 
     @staticmethod
