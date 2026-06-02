@@ -353,7 +353,7 @@ async def test_task_contract_planner_keeps_command_usage_question_no_tool_when_r
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
+async def test_task_contract_planner_does_not_infer_web_tools_from_invalid_json():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
@@ -366,11 +366,11 @@ async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
         history=[],
     )
 
-    assert contract.task_type == "web_research"
-    assert contract.allow_no_tool_final is False
+    assert contract.task_type == "pure_answer"
+    assert contract.allow_no_tool_final is True
     assert contract.planner_metadata["planner_status"] == "fallback"
     assert "invalid JSON" in contract.planner_metadata["reason"]
-    assert any(item.tool_group == "web_research" for item in contract.requirements)
+    assert contract.requirements == ()
 
 
 @pytest.mark.anyio
@@ -386,15 +386,15 @@ async def test_task_contract_planner_falls_back_when_llm_call_fails():
         history=[],
     )
 
-    assert contract.task_type == "web_research"
-    assert contract.allow_no_tool_final is False
+    assert contract.task_type == "pure_answer"
+    assert contract.allow_no_tool_final is True
     assert contract.planner_metadata["planner_status"] == "fallback"
     assert "TimeoutError" in contract.planner_metadata["reason"]
-    assert any(item.tool_group == "web_research" for item in contract.requirements)
+    assert contract.requirements == ()
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_falls_back_for_invalid_json_workspace_request():
+async def test_task_contract_planner_does_not_infer_workspace_tools_from_invalid_json():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("請看目前工作區，找出 CLI chat 相關測試檔案有哪些。")
     provider = _FakePlannerProvider("I should inspect files, but this is not JSON.")
@@ -407,11 +407,11 @@ async def test_task_contract_planner_falls_back_for_invalid_json_workspace_reque
         history=[],
     )
 
-    assert contract.task_type == "workspace_read"
-    assert contract.allow_no_tool_final is False
+    assert contract.task_type == "pure_answer"
+    assert contract.allow_no_tool_final is True
     assert contract.planner_metadata["planner_status"] == "fallback"
     assert "invalid JSON" in contract.planner_metadata["reason"]
-    assert any(item.tool_group == "workspace_read" for item in contract.requirements)
+    assert contract.requirements == ()
 
 
 @pytest.mark.anyio

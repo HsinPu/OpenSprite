@@ -55,11 +55,16 @@ class RecordingProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         tool_names = [tool["function"]["name"] for tool in tools or []]
         self.tool_names_by_call.append(tool_names)
+        first_message = str(
+            messages[0].get("content", "") if messages and isinstance(messages[0], dict) else getattr(messages[0], "content", "")
+        )
         joined_messages = "\n".join(
             str(message.get("content", "") if isinstance(message, dict) else getattr(message, "content", ""))
             for message in messages
         )
-        if self.planner_content is not None and "task-contract planner" in joined_messages:
+        if "completion judge" in first_message:
+            content = '{"status":"complete","reason":"test judge accepted response","active_task_status":"done"}'
+        elif self.planner_content is not None and first_message.startswith("You are the OpenSprite task-contract planner"):
             content = self.planner_content
         else:
             content = self.contents.pop(0) if self.contents else "Harness runtime reply."
@@ -209,7 +214,7 @@ def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
     assert result.harness_policy["name"] == "research_source_policy"
 
 
-def test_harness_runtime_skips_replanning_when_tools_are_disabled(tmp_path):
+def test_harness_runtime_keeps_tool_schemas_disabled_when_contract_exists(tmp_path):
     async def scenario():
         provider = RecordingProvider(
             "Final answer from existing gathered sources.",
@@ -234,6 +239,8 @@ def test_harness_runtime_skips_replanning_when_tools_are_disabled(tmp_path):
     result, tool_names_by_call = asyncio.run(scenario())
 
     assert result.content == "Final answer from existing gathered sources."
-    assert tool_names_by_call == [[]]
-    assert result.task_contract is None
-    assert result.harness_policy is None
+    assert tool_names_by_call == [[], []]
+    assert result.task_contract is not None
+    assert result.task_contract.task_type == "history_retrieval"
+    assert result.harness_policy is not None
+    assert result.harness_policy["name"] == "chat_read_policy"

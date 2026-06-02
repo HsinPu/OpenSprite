@@ -51,56 +51,6 @@ _PLANNER_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
     "valid JSON object for the same schema. Return JSON only, no markdown, no explanation."
 )
-_FALLBACK_WEB_MARKERS = (
-    "stock price",
-    "share price",
-    "market price",
-    "financial",
-    "weather",
-    "news",
-    "source",
-    "url",
-    "website",
-    "\u80a1\u50f9",
-    "\u4eca\u5929",
-    "\u4eca\u65e5",
-    "\u6700\u65b0",
-    "\u5373\u6642",
-    "\u4f86\u6e90",
-    "\u7db2\u5740",
-    "\u65b0\u805e",
-)
-_FALLBACK_HISTORY_MARKERS = (
-    "previous",
-    "earlier",
-    "conversation",
-    "this chat",
-    "\u525b\u525b",
-    "\u524d\u9762",
-    "\u76ee\u524d\u9019\u6bb5\u5c0d\u8a71",
-    "\u9019\u6bb5\u5c0d\u8a71",
-    "\u5c0d\u8a71",
-)
-_FALLBACK_WORKSPACE_MARKERS = (
-    "workspace",
-    "repo",
-    "repository",
-    "project",
-    "codebase",
-    "file",
-    "files",
-    "folder",
-    "directory",
-    "test file",
-    "tests",
-    "\u5de5\u4f5c\u5340",
-    "\u5c08\u6848",
-    "\u6a94\u6848",
-    "\u76ee\u9304",
-    "\u8cc7\u6599\u593e",
-    "\u7a0b\u5f0f\u78bc",
-    "\u6e2c\u8a66\u6a94",
-)
 _COMMAND_USAGE_DISCUSSION_RE = re.compile(
     r"\b(?:cli|command|commands?|usage|how to use|examples?)\b"
     r"|(?:指令|命令|怎麼用|如何用|用法|用途|範例)",
@@ -508,7 +458,6 @@ def _fallback_contract_from_intent(
     reason: str,
     raw_response_preview: str = "",
 ) -> TaskContract:
-    text = f"{task_intent.objective} {current_message}".lower()
     task_type = "pure_answer"
     tool_groups: list[str] = []
 
@@ -518,21 +467,6 @@ def _fallback_contract_from_intent(
     elif task_intent.expects_code_change:
         task_type = "workspace_change"
         tool_groups = ["workspace_read", "workspace_write"]
-    elif (
-        not _message_forbids_inherited_tool_group(current_message, "workspace_read")
-        and any(marker in text for marker in _FALLBACK_WORKSPACE_MARKERS)
-    ):
-        task_type = "workspace_read"
-        tool_groups = ["workspace_read"]
-    elif any(marker in text for marker in _FALLBACK_HISTORY_MARKERS):
-        task_type = "history_retrieval"
-        tool_groups = ["history_retrieval"]
-    elif (
-        not _message_forbids_inherited_tool_group(current_message, "web_research")
-        and any(marker in text for marker in _FALLBACK_WEB_MARKERS)
-    ):
-        task_type = "web_research"
-        tool_groups = ["web_research"]
 
     contract = _contract_from_planner_payload(
         {
