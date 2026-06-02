@@ -347,6 +347,28 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     assert decision.emit_skipped_event is True
 
 
+def test_auto_continue_uses_stop_reason_for_max_tool_iterations():
+    intent = TaskIntentService().classify("Finish the research task.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="runtime reported an incomplete execution loop",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(
+            content="The tool loop stopped before the task was complete.",
+            stop_reason="max_tool_iterations",
+        ),
+        attempts_used=0,
+        previous_response="The tool loop stopped before the task was complete.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+
+
 def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_generic():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(

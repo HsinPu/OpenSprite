@@ -451,6 +451,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
 ) -> bool:
     if execution_result.assistant_internal_only_response:
         return True
+    if execution_result.stop_reason == "max_tool_iterations":
+        return True
     if _task_contract_requires_evidence(execution_result):
         return True
     if _task_contract_has_acceptance_criterion(execution_result, "itemized_output", "substantive_final_answer"):
@@ -465,7 +467,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
         "required source material was insufficient",
-        "max tool iterations exhausted before completion",
     }
 
 
