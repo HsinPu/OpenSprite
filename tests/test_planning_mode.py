@@ -1,4 +1,5 @@
 from opensprite.agent.planning_mode import resolve_planning_mode
+from opensprite.agent.task_contract import TaskContract
 from opensprite.tools import Tool, ToolRegistry
 
 
@@ -22,7 +23,7 @@ class _NamedTool(Tool):
         return self._name
 
 
-def test_resolve_planning_mode_returns_disabled_state_for_normal_message():
+def test_resolve_planning_mode_returns_disabled_state_without_planning_contract():
     state = resolve_planning_mode("Please fix the failing test.")
 
     assert state.enabled is False
@@ -30,7 +31,7 @@ def test_resolve_planning_mode_returns_disabled_state_for_normal_message():
     assert state.tool_registry is None
 
 
-def test_resolve_planning_mode_returns_overlay_and_restricted_registry():
+def test_resolve_planning_mode_returns_overlay_and_restricted_registry_from_contract():
     registry = ToolRegistry()
     registry.register(_NamedTool("read_file"))
     registry.register(_NamedTool("write_file"))
@@ -39,8 +40,12 @@ def test_resolve_planning_mode_returns_overlay_and_restricted_registry():
     registry.register(_NamedTool("batch"))
 
     state = resolve_planning_mode(
-        "先規劃不要動手，幫我整理修復方案",
+        "Please propose the next step.",
         base_registry=registry,
+        task_contract=TaskContract(
+            objective="Propose the next step.",
+            task_type="planning",
+        ),
     )
 
     assert state.enabled is True

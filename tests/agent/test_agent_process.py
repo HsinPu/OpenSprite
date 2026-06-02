@@ -2658,12 +2658,20 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
     assert work_state.resume_hint == "Resume at current step: 2. change"
 
 
-def test_agent_call_llm_uses_read_only_registry_for_explicit_planning_mode(tmp_path):
+def test_agent_call_llm_uses_read_only_registry_for_planning_contract(tmp_path):
     async def scenario():
+        class PlanningProvider(FakeProvider):
+            async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+                if _is_planner_call(messages, tools):
+                    return _planner_response("planning")
+                if _is_completion_judge_call(messages, tools):
+                    return _completion_judge_response(messages)
+                raise AssertionError("provider.chat should only be called by the planner in this test")
+
         storage = MemoryStorage()
         agent = AgentLoop(
             config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
+            provider=PlanningProvider(),
             storage=storage,
             context_builder=FakeContextBuilder(tmp_path / "workspace"),
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
@@ -2682,11 +2690,13 @@ def test_agent_call_llm_uses_read_only_registry_for_explicit_planning_mode(tmp_p
             return ExecutionResult(content="planning reply", executed_tool_calls=0)
 
         agent._execute_messages = fake_execute_messages
+        message = "先規劃不要動手，幫我整理修復方案"
         await agent.call_llm(
             "web:browser-1",
-            "先規劃不要動手，幫我整理修復方案",
+            message,
             channel="web",
             allow_tools=True,
+            task_intent=agent.task_intents.classify(message),
         )
         return captured
 
@@ -2695,7 +2705,6 @@ def test_agent_call_llm_uses_read_only_registry_for_explicit_planning_mode(tmp_p
     assert captured["tool_names"] is not None
     tool_names = set(captured["tool_names"])
     assert "read_file" in tool_names
-    assert "web_fetch" in tool_names
     assert "write_file" not in tool_names
     assert "edit_file" not in tool_names
     assert "apply_patch" not in tool_names
@@ -2704,12 +2713,24 @@ def test_agent_call_llm_uses_read_only_registry_for_explicit_planning_mode(tmp_p
     assert "delegate" not in tool_names
 
 
-def test_agent_call_llm_returns_to_normal_registry_without_explicit_build_reminder(tmp_path):
+def test_agent_call_llm_returns_to_normal_registry_after_planning_contract(tmp_path):
     async def scenario():
+        class SequencedPlannerProvider(FakeProvider):
+            def __init__(self):
+                self.task_types = ["planning", "code_change"]
+
+            async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+                if _is_planner_call(messages, tools):
+                    task_type = self.task_types.pop(0) if self.task_types else "code_change"
+                    return _planner_response(task_type)
+                if _is_completion_judge_call(messages, tools):
+                    return _completion_judge_response(messages)
+                raise AssertionError("provider.chat should only be called by the planner in this test")
+
         storage = MemoryStorage()
         agent = AgentLoop(
             config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
+            provider=SequencedPlannerProvider(),
             storage=storage,
             context_builder=FakeContextBuilder(tmp_path / "workspace"),
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
@@ -2731,17 +2752,21 @@ def test_agent_call_llm_returns_to_normal_registry_without_explicit_build_remind
             return ExecutionResult(content="reply", executed_tool_calls=0)
 
         agent._execute_messages = fake_execute_messages
+        planning_message = "先規劃不要動手，幫我整理修復方案"
         await agent.call_llm(
             "web:browser-1",
-            "先規劃不要動手，幫我整理修復方案",
+            planning_message,
             channel="web",
             allow_tools=True,
+            task_intent=agent.task_intents.classify(planning_message),
         )
+        build_message = "好，現在請直接修掉 tests/test_app.py 的問題"
         await agent.call_llm(
             "web:browser-1",
-            "好，現在請直接修掉 tests/test_app.py 的問題",
+            build_message,
             channel="web",
             allow_tools=True,
+            task_intent=agent.task_intents.classify(build_message),
         )
         return captured
 

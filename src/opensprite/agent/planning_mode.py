@@ -1,9 +1,8 @@
-"""Explicit plan-before-build mode detection and overlay text."""
+"""Contract-driven plan-before-build mode and overlay text."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -32,51 +31,6 @@ PLANNING_ALLOWED_TOOLS = frozenset(
     }
 )
 
-_EXPLICIT_PLAN_ONLY_PHRASES = (
-    "plan only",
-    "planning only",
-    "read-only planning mode",
-    "do not implement yet",
-    "don't implement yet",
-    "don't start implementing",
-    "先規劃不要動手",
-    "先不要動手",
-    "只要規劃",
-    "先給我計畫",
-    "先給我方案",
-    "先規劃一下",
-    "先不要實作",
-    "先別改",
-)
-_PLAN_MARKERS = (
-    "plan",
-    "planning",
-    "proposal",
-    "outline",
-    "approach",
-    "game plan",
-    "implementation plan",
-    "規劃",
-    "計畫",
-    "方案",
-    "步驟",
-)
-_NO_EXECUTION_MARKERS = (
-    "read-only",
-    "readonly",
-    "do not implement",
-    "don't implement",
-    "do not edit",
-    "don't edit",
-    "do not change code",
-    "不要動手",
-    "不要實作",
-    "不要修改",
-    "不要改",
-    "先不要做",
-    "先別做",
-)
-
 
 @dataclass(frozen=True)
 class PlanningModeState:
@@ -87,23 +41,11 @@ class PlanningModeState:
     tool_registry: "ToolRegistry | None" = None
 
 
-def is_explicit_planning_mode_request(text: str | None) -> bool:
-    """Return whether the user explicitly asked for planning before implementation."""
-    compact = re.sub(r"\s+", " ", str(text or "")).strip().lower()
-    if not compact:
-        return False
-    if any(phrase in compact for phrase in _EXPLICIT_PLAN_ONLY_PHRASES):
-        return True
-    return any(marker in compact for marker in _PLAN_MARKERS) and any(
-        marker in compact for marker in _NO_EXECUTION_MARKERS
-    )
-
-
 def build_planning_mode_overlay() -> str:
-    """Return the temporary system overlay for explicit plan-only turns."""
+    """Return the temporary system overlay for contract-selected planning turns."""
     return """# Planning Mode
 
-The user explicitly asked for planning before implementation. This turn is read-only planning mode.
+The task contract selected read-only planning mode for this turn.
 
 - You MUST NOT edit files, apply patches, write files, run exec/process/verify, change configuration, save memory, schedule jobs, delegate subagents, or cause external side effects.
 - Use only inspection, retrieval, and research actions to understand the current state.
@@ -122,7 +64,8 @@ def resolve_planning_mode(
     task_contract: "TaskContract | None" = None,
 ) -> PlanningModeState:
     """Resolve the full planning-mode state for one user turn."""
-    if not (_contract_requests_planning_mode(task_contract) or is_explicit_planning_mode_request(text)):
+    del text
+    if not _contract_requests_planning_mode(task_contract):
         return PlanningModeState()
     return PlanningModeState(
         enabled=True,
@@ -136,7 +79,7 @@ def resolve_planning_mode(
 
 
 def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolRegistry":
-    """Return a read-only registry used for explicit plan-only turns."""
+    """Return a read-only registry used for plan-only turns."""
     from .tool_access import ToolAccessResolver, planning_mode_permission_policy
 
     resolution = ToolAccessResolver().resolve_overlay(
