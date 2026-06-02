@@ -169,7 +169,6 @@ class AutoContinueService:
         if (
             completion_result.status == "incomplete"
             and execution_result.executed_tool_calls == 0
-            and not task_intent.expects_code_change
             and not direct_action_available
             and completion_result.reason
             not in {
@@ -179,6 +178,7 @@ class AutoContinueService:
                 "required task evidence was not produced",
                 "required task artifacts were not produced",
                 "required task artifacts were not traceable",
+                "expected code changes were not recorded",
                 "required source material was insufficient",
                 "assistant final answer did not reference gathered sources",
                 "assistant final answer was too terse for the task",
