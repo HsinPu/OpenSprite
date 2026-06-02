@@ -1715,6 +1715,28 @@ def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval()
     assert completion.status == "complete"
 
 
+def test_completion_gate_does_not_infer_empty_history_from_preview_text():
+    intent = TaskIntentService().classify("What did we decide earlier about deployment?")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = "I did not find structured history metadata, so I cannot reliably report a prior deployment decision."
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, result_preview="no results"),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_requires_web_evidence_for_chinese_market_lookup():
     intent = TaskIntentService().classify("查一下 2330市值")
     contract = TaskContract(

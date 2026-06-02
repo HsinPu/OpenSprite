@@ -656,21 +656,6 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
                 if _coerce_int(value, default=0) > 0:
                     return False
                 saw_explicit_empty = True
-        preview = str(item.result_preview or "").lower()
-        if preview and any(
-            marker in preview
-            for marker in (
-                "no results",
-                "no matches",
-                "not found",
-                "[]",
-                "沒有結果",
-                "找不到",
-            )
-        ):
-            saw_explicit_empty = True
-        elif preview:
-            return False
     return saw_explicit_empty
 
 
