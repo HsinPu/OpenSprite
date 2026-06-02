@@ -410,21 +410,21 @@ Output exactly these sections when applicable:
 
     @classmethod
     def _summarize_exec_result_for_context(cls, text: str) -> str:
-        """Prefer error markers and the latest lines for shell command output."""
+        """Prefer owned tool error envelopes and the latest lines for shell command output."""
         if len(text) <= cls.EXEC_RESULT_MAX_CHARS:
             return text
 
         lines = [line for line in text.splitlines() if line.strip()]
         first_lines = lines[:6]
         stderr_lines = [line for line in lines if "[stderr]" in line][:4]
-        timeout_lines = [line for line in lines if "timed out" in line.lower()][:2]
+        error_lines = cls._tool_error_highlight_lines(lines)
         tail_lines = lines[-8:]
 
         summary_parts: list[str] = [
             f"[tool:exec] Output truncated for context. Full result was persisted separately ({len(text)} chars total)."
         ]
-        if timeout_lines:
-            summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
+        if error_lines:
+            summary_parts.extend(["Timeout/Error summary:", *error_lines])
         elif not classify_tool_result_status(text).ok:
             summary_parts.extend(["Error summary:", lines[0]])
 
@@ -464,21 +464,21 @@ Output exactly these sections when applicable:
         )
 
     def _summarize_exec_result_for_context_with_config(self, text: str) -> str:
-        """Prefer error markers and latest lines for shell output using configured limits."""
+        """Prefer owned tool error envelopes and latest lines for shell output using configured limits."""
         if len(text) <= self.exec_result_max_chars:
             return text
 
         lines = [line for line in text.splitlines() if line.strip()]
         first_lines = lines[:6]
         stderr_lines = [line for line in lines if "[stderr]" in line][:4]
-        timeout_lines = [line for line in lines if "timed out" in line.lower()][:2]
+        error_lines = self._tool_error_highlight_lines(lines)
         tail_lines = lines[-8:]
 
         summary_parts: list[str] = [
             f"[tool:exec] Output truncated for context. Full result was persisted separately ({len(text)} chars total)."
         ]
-        if timeout_lines:
-            summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
+        if error_lines:
+            summary_parts.extend(["Timeout/Error summary:", *error_lines])
         elif not classify_tool_result_status(text).ok:
             summary_parts.extend(["Error summary:", lines[0]])
 
@@ -496,6 +496,16 @@ Output exactly these sections when applicable:
             return summarized
 
         return summarized[: self.exec_result_max_chars].rstrip() + "\n... (exec context summary truncated)"
+
+    @staticmethod
+    def _tool_error_highlight_lines(lines: list[str], *, limit: int = 2) -> list[str]:
+        highlights: list[str] = []
+        for line in lines:
+            if not classify_tool_result_status(line).ok:
+                highlights.append(line)
+                if len(highlights) >= limit:
+                    break
+        return highlights
 
     @staticmethod
     def _summarize_tool_names(tool_calls: list[Any] | None) -> str:

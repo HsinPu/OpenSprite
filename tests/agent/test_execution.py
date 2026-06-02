@@ -1764,6 +1764,22 @@ def test_exec_tool_result_slimming_keeps_timeout_and_stderr_highlights():
     assert "final line" in summary
 
 
+def test_exec_tool_result_slimming_ignores_incidental_timeout_text():
+    result = (
+        "Command completed successfully.\n"
+        "Troubleshooting note: Connection timed out can mean a firewall dropped packets.\n"
+        + ("line\n" * 400)
+        + "final line\n"
+    )
+
+    summary = ExecutionEngine._summarize_tool_result_for_context("exec", result)
+
+    assert "Output truncated for context" in summary
+    assert "Timeout/Error summary:" not in summary
+    assert "Troubleshooting note: Connection timed out" not in summary.split("output start:", 1)[0]
+    assert "output tail:" in summary
+
+
 def test_exec_tool_result_slimming_marks_structured_failure_summary():
     result = json.dumps(
         {
