@@ -55,22 +55,22 @@ def test_task_intent_respects_no_edit_planning_constraint():
     assert intent.expects_code_change is False
 
 
-def test_task_intent_keeps_translation_as_direct_question():
+def test_task_intent_leaves_translation_semantics_to_task_contract():
     intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
 
-    assert intent.kind == "question"
-    assert intent.should_seed_active_task is False
+    assert intent.kind == "task"
+    assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
 
-def test_task_intent_keeps_chinese_translation_with_test_word_as_direct_question():
+def test_task_intent_leaves_chinese_translation_with_test_word_to_task_contract():
     intent = TaskIntentService().classify(
         "\u8acb\u628a\u9019\u53e5\u7ffb\u6210\u82f1\u6587\uff1a\u4eca\u5929\u6211\u60f3\u6e2c\u8a66 CLI \u5c0d\u8a71\u6d41\u7a0b\u3002"
     )
 
-    assert intent.kind == "question"
-    assert intent.should_seed_active_task is False
+    assert intent.kind == "task"
+    assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
@@ -102,11 +102,11 @@ def test_task_intent_treats_flow_risk_summary_as_discussion_not_verification():
     assert intent.expects_verification is False
 
 
-def test_task_intent_keeps_calculation_as_direct_question():
+def test_task_intent_leaves_calculation_semantics_to_task_contract():
     intent = TaskIntentService().classify("請計算 17 * 23 + 19，最後只輸出答案。")
 
-    assert intent.kind == "question"
-    assert intent.should_seed_active_task is False
+    assert intent.kind == "task"
+    assert intent.should_seed_active_task is True
 
 
 def test_task_intent_classifier_marks_chinese_extract_and_merge_request_as_task():

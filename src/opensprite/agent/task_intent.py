@@ -24,15 +24,6 @@ _NON_TASK_MESSAGES = {
     "nice",
 }
 _VAGUE_TASK_MESSAGES = {"continue"}
-_PURE_ANSWER_RE = re.compile(r"\b(?:translate|translation|calculate|compute)\b", re.IGNORECASE)
-_PURE_ANSWER_LITERAL_PHRASES = (
-    "\u7ffb\u8b6f",
-    "\u7ffb\u6210",
-    "\u7ffb\u8b6f\u6210",
-    "\u7ffb\u6210\u82f1\u6587",
-    "\u7ffb\u6210\u4e2d\u6587",
-    "\u8a08\u7b97",
-)
 
 
 @dataclass(frozen=True)
@@ -152,8 +143,6 @@ def _looks_like_question(text: str) -> bool:
 
 
 def _classify_kind(text: str, *, media_count: int) -> str:
-    if media_count == 0 and _is_pure_answer_request(text):
-        return "question"
     if media_count:
         return "analysis"
     if _looks_like_question(text):
@@ -164,12 +153,6 @@ def _classify_kind(text: str, *, media_count: int) -> str:
 def _needs_clarification(text: str, kind: str) -> bool:
     lowered = text.lower().strip(" .!?\uff1f")
     return kind in _TASK_KINDS and lowered in _VAGUE_TASK_MESSAGES
-
-
-def _is_pure_answer_request(text: str) -> bool:
-    text = text or ""
-    lowered = text.lower()
-    return bool(_PURE_ANSWER_RE.search(text) or any(phrase in lowered for phrase in _PURE_ANSWER_LITERAL_PHRASES))
 
 
 def _is_long_running(text: str, kind: str) -> bool:
