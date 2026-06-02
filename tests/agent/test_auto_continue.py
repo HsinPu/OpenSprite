@@ -507,14 +507,41 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="required source material was insufficient",
-        active_task_detail="- Fetch or inspect at least one source page before finalizing",
+        reason="judge rejected incomplete final answer",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="source_artifact", min_count=1),
+            AcceptanceCriterion(kind="source_detail", min_count=1),
+        ),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="I found search snippets.", executed_tool_calls=1),
+        execution_result=ExecutionResult(
+            content="I found search snippets.",
+            executed_tool_calls=1,
+            task_contract=contract,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_search",
+                    metadata={
+                        "sources": [
+                            {
+                                "title": "Reddit API docs",
+                                "url": "https://www.reddit.com/dev/api/",
+                                "snippet": "Search result snippet only.",
+                                "tool_name": "web_search",
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
         attempts_used=0,
         previous_response="I found search snippets.",
     )
@@ -532,17 +559,51 @@ def test_auto_continue_guides_retry_after_web_research_coverage_gap():
     intent = TaskIntentService().classify("Please research current AI browser pricing.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="required source material was insufficient",
-        active_task_detail=(
-            "- Web research coverage gap: fetched source coverage did not satisfy the research pass.\n"
-            "- Queries with search results but no successful fetch: ai browser pricing."
+        reason="judge rejected incomplete final answer",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="source_artifact", min_count=1),
+            AcceptanceCriterion(kind="source_detail", min_count=2),
         ),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="I found partial sources.", executed_tool_calls=1),
+        execution_result=ExecutionResult(
+            content="I found partial sources.",
+            executed_tool_calls=1,
+            task_contract=contract,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "title": "AI Browser pricing",
+                                "url": "https://example.com/ai-browser-pricing",
+                                "snippet": "Pricing details.",
+                                "tool_name": "web_fetch",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                            }
+                        ],
+                        "coverage": {
+                            "target_met": False,
+                            "target_fetch_count": 2,
+                            "fetched_count": 1,
+                            "queries_without_successful_fetch": ["ai browser pricing"],
+                            "too_short_count": 1,
+                            "fetched_domains": ["example.com"],
+                        },
+                    },
+                ),
+            ),
+        ),
         attempts_used=0,
         previous_response="I found partial sources.",
     )

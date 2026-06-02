@@ -8,7 +8,7 @@ from typing import Any
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
-from .quality_gate import source_material_satisfies_contract
+from .quality_gate import source_material_gap_detail, source_material_satisfies_contract
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
@@ -459,6 +459,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if _task_contract_has_acceptance_criterion(execution_result, "source_reference") and _existing_web_source_context(execution_result):
         return True
+    if _source_material_requires_more_detail(execution_result):
+        return True
     if completion_result.missing_evidence:
         return True
     return completion_result.reason in {
@@ -466,7 +468,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         "required task artifacts were not produced",
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
-        "required source material was insufficient",
     }
 
 
@@ -483,6 +484,15 @@ def _task_contract_has_acceptance_criterion(execution_result: ExecutionResult, *
         return False
     expected = {kind for kind in kinds if kind}
     return any(getattr(criterion, "kind", "") in expected for criterion in contract.acceptance_criteria)
+
+
+def _source_material_requires_more_detail(execution_result: ExecutionResult) -> bool:
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    if not _task_contract_has_acceptance_criterion(execution_result, "source_artifact", "source_detail"):
+        return False
+    return not source_material_satisfies_contract(contract, execution_result)
 
 
 def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:
@@ -521,7 +531,6 @@ def _quality_follow_up_instruction(
     execution_result: ExecutionResult | None = None,
 ) -> str:
     reason = str(completion_result.reason or "").strip()
-    detail = str(completion_result.active_task_detail or "").strip()
     if reason == "required task artifacts were not produced":
         return (
             "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
@@ -534,13 +543,16 @@ def _quality_follow_up_instruction(
             "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
             "Do not finalize from an untraceable source artifact."
         )
-    if reason == "required source material was insufficient":
-        if "Web research coverage gap" in detail:
+    if execution_result is not None:
+        coverage_gap = source_material_gap_detail(execution_result)
+        if coverage_gap:
             return (
                 "\n- Source follow-up: `web_research` reported coverage gaps. "
                 "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
-                "and do not finalize until the coverage target is met or a concrete fetch blocker is stated."
+                "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
+                f"{coverage_gap}"
             )
+    if execution_result is not None and _source_material_requires_more_detail(execution_result):
         return (
             "\n- Source follow-up: the previous pass did not inspect enough source material. "
             "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "

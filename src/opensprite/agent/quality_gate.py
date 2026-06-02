@@ -508,6 +508,11 @@ def source_material_satisfies_contract(contract: TaskContract, execution_result:
     return True
 
 
+def source_material_gap_detail(execution_result: ExecutionResult) -> str | None:
+    """Return structured web research coverage gap detail, when available."""
+    return _web_research_coverage_gap_detail(execution_result)
+
+
 def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str | None:
     for artifact in execution_result.task_artifacts:
         if not artifact.ok or artifact.source_tool != "web_research":
