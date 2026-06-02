@@ -488,14 +488,28 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="required task artifacts were not traceable",
-        active_task_detail="- Missing traceable source metadata: url plus title/snippet",
+        reason="judge rejected incomplete final answer",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        acceptance_criteria=(AcceptanceCriterion(kind="source_artifact", min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="I found sources.", executed_tool_calls=1),
+        execution_result=ExecutionResult(
+            content="I found sources.",
+            task_contract=contract,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_search",
+                    metadata={"sources": [{"title": "", "url": "", "snippet": ""}]},
+                ),
+            ),
+        ),
         attempts_used=0,
         previous_response="I found sources.",
     )

@@ -513,6 +513,26 @@ def source_material_gap_detail(execution_result: ExecutionResult) -> str | None:
     return _web_research_coverage_gap_detail(execution_result)
 
 
+def source_artifact_traceability_gap_detail(contract: TaskContract, execution_result: ExecutionResult) -> str | None:
+    """Return detail when source artifacts exist but lack traceable source metadata."""
+    for criterion in contract.acceptance_criteria:
+        if criterion.kind != "source_artifact":
+            continue
+        min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+        artifact_count = sum(
+            1
+            for artifact in execution_result.task_artifacts
+            if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
+        )
+        traceable_count = len(_execution_web_sources(execution_result))
+        if artifact_count > 0 and traceable_count < min_count:
+            return (
+                "- Missing traceable source metadata: url plus title/snippet "
+                f"(need {min_count}, found {traceable_count})"
+            )
+    return None
+
+
 def media_artifact_gap_detail(contract: TaskContract, execution_result: ExecutionResult) -> str | None:
     """Return the missing media artifact detail for a contract, when available."""
     result = _evaluate_media_artifacts(contract, execution_result)

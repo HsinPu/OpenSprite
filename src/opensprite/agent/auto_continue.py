@@ -8,7 +8,12 @@ from typing import Any
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
-from .quality_gate import media_artifact_gap_detail, source_material_gap_detail, source_material_satisfies_contract
+from .quality_gate import (
+    media_artifact_gap_detail,
+    source_artifact_traceability_gap_detail,
+    source_material_gap_detail,
+    source_material_satisfies_contract,
+)
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
@@ -467,7 +472,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
-        "required task artifacts were not traceable",
         "expected code changes were not recorded",
     }
 
@@ -552,12 +556,18 @@ def _quality_follow_up_instruction(
                 "Do not claim completion until each required resource has a concrete tool-derived result.\n"
                 f"{media_gap}"
             )
-    if reason == "required task artifacts were not traceable":
-        return (
-            "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
-            "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
-            "Do not finalize from an untraceable source artifact."
+        source_traceability_gap = (
+            source_artifact_traceability_gap_detail(execution_result.task_contract, execution_result)
+            if execution_result.task_contract is not None
+            else None
         )
+        if source_traceability_gap:
+            return (
+                "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
+                "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
+                "Do not finalize from an untraceable source artifact.\n"
+                f"{source_traceability_gap}"
+            )
     if execution_result is not None:
         coverage_gap = source_material_gap_detail(execution_result)
         if coverage_gap:
