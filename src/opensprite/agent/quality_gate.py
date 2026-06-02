@@ -16,11 +16,6 @@ _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transc
 _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
-_VERIFICATION_GAP_RE = re.compile(
-    r"\b(?:tests? not run|not tested|not verified|could not verify|unable to verify|verification gap|untested)\b"
-    r"|(?:未測試|沒有測試|尚未測試|未驗證|沒有驗證|尚未驗證|無法驗證)",
-    re.IGNORECASE,
-)
 _OPERATION_REPORT_RE = re.compile(
     r"\b(?:approval|approved|denied|blocked|blocker|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
     r"|(?:核准|拒絕|封鎖|阻礙|無法確認|無法判定|驗證|回滾|風險|稽核|權限|設定|部署|重啟)",
@@ -287,9 +282,8 @@ def _evaluate_verification_or_gap(
     response_text: str,
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
+    del response_text
     if execution_result.file_change_count <= 0 or execution_result.verification_attempted:
-        return None
-    if _VERIFICATION_GAP_RE.search(response_text or ""):
         return None
     return QualityGateResult(
         passed=False,

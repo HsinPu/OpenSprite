@@ -3080,7 +3080,7 @@ def test_quality_gate_uses_contract_acceptance_criteria():
     assert result.reason == "assistant did not provide the requested itemized result"
 
 
-def test_quality_gate_requires_verification_attempt_or_reported_gap_after_code_changes():
+def test_quality_gate_requires_recorded_verification_attempt_after_code_changes():
     intent = TaskIntentService().classify("Please fix src/app.py")
     contract = TaskContract(
         objective=intent.objective,
@@ -3099,17 +3099,37 @@ def test_quality_gate_requires_verification_attempt_or_reported_gap_after_code_c
         execution_result=ExecutionResult(content="Updated src/app.py.", file_change_count=1),
         task_contract=contract,
     )
-    reported_gap = QualityGateService().evaluate(
+    reported_gap_without_artifact = QualityGateService().evaluate(
         task_intent=intent,
         response_text="Updated src/app.py. Tests not run because pytest is unavailable.",
         execution_result=ExecutionResult(content="Updated src/app.py.", file_change_count=1),
+        task_contract=contract,
+    )
+    recorded_gap = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Updated src/app.py.",
+        execution_result=ExecutionResult(
+            content="Updated src/app.py.",
+            file_change_count=1,
+            verification_attempted=True,
+            verification_passed=False,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="verification_result",
+                    source_tool="verify",
+                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    ok=True,
+                ),
+            ),
+        ),
         task_contract=contract,
     )
 
     assert missing_gap.passed is False
     assert missing_gap.status == "needs_verification"
     assert missing_gap.reason == "verification outcome or gap was not reported"
-    assert reported_gap.passed is True
+    assert reported_gap_without_artifact.passed is False
+    assert recorded_gap.passed is True
 
 
 def test_quality_gate_requires_operation_validation_or_risk_report():
