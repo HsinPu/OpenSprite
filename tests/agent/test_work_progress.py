@@ -4,7 +4,7 @@ from opensprite.agent.harness_profile import HarnessProfile, HarnessProfileServi
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
-from opensprite.agent.work_progress import WorkProgressService
+from opensprite.agent.work_progress import WorkProgressService, WorkProgressUpdate
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
@@ -384,6 +384,50 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
     assert resumed.completed_steps == ("1. inspect",)
     assert resumed.file_change_count == 2
     assert resumed.resume_hint == "Resume at current step: 2. change"
+
+
+def test_work_progress_uses_structured_verification_step_position_without_label_marker():
+    service = WorkProgressService()
+    state = StoredWorkState(
+        session_id="web:browser-1",
+        objective="Finish the refactor",
+        kind="task",
+        status="active",
+        steps=("1. inspect", "2. change", "3. validate"),
+        long_running=True,
+        coding_task=True,
+        expects_code_change=True,
+        expects_verification=True,
+    )
+    progress = WorkProgressUpdate(
+        status="verifying",
+        pass_index=1,
+        auto_continue_attempts=0,
+        progress_signals=(),
+        has_progress=False,
+        file_change_count=0,
+        touched_paths=(),
+        verification_required=True,
+        verification_attempted=False,
+        verification_passed=False,
+        completion_status="needs_verification",
+        completion_reason="required verification was not recorded",
+        next_action="continue_verification",
+        continuation_budget=1,
+    )
+
+    updated = service.update_state(
+        session_id="web:browser-1",
+        state=state,
+        task_intent=TaskIntentService().classify("continue"),
+        work_plan=None,
+        progress=progress,
+        completion_result=CompletionGateResult(status="needs_verification", reason="required verification was not recorded"),
+    )
+
+    assert updated is not None
+    assert updated.current_step == "3. validate"
+    assert updated.next_step == "not set"
 
 
 def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
