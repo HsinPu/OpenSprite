@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from opensprite.storage import MemoryStorage
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.run_trace import ListRunFileChangesTool, PreviewRunFileChangeRevertTool
 
 
@@ -99,5 +100,15 @@ def test_run_trace_tools_require_current_session():
 
     list_result, preview_result = asyncio.run(scenario())
 
-    assert list_result.startswith("Error: current session_id is unavailable")
-    assert preview_result.startswith("Error: current session_id is unavailable")
+    list_status = classify_tool_result_status(list_result)
+    preview_status = classify_tool_result_status(preview_result)
+    assert list_status.ok is False
+    assert list_status.error_type == "ToolValidationError"
+    assert list_status.category == "session_unavailable"
+    assert list_status.invalid_arguments is True
+    assert "list_run_file_changes requires an active session context" in list_status.error
+    assert preview_status.ok is False
+    assert preview_status.error_type == "ToolValidationError"
+    assert preview_status.category == "session_unavailable"
+    assert preview_status.invalid_arguments is True
+    assert "preview_run_file_change_revert requires an active session context" in preview_status.error

@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable
 
 from ..storage import StorageProvider, StoredRunFileChange
 from .base import Tool
+from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -22,6 +23,18 @@ _DIFF_PREVIEW_CHARS = 1200
 
 def _json_result(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+def _missing_session_result(tool_name: str) -> str:
+    error = f"current session_id is unavailable. {tool_name} requires an active session context."
+    return tool_error_result(
+        error,
+        error_type="ToolValidationError",
+        category="session_unavailable",
+        repeated_error_key=error,
+        invalid_arguments=True,
+        metadata={"tool_name": tool_name},
+    )
 
 
 def _snapshot_available(change: StoredRunFileChange) -> dict[str, bool]:
@@ -101,7 +114,7 @@ class ListRunFileChangesTool(Tool):
     async def _execute(self, **kwargs: Any) -> str:
         session_id = self.get_session_id()
         if not session_id:
-            return "Error: current session_id is unavailable. list_run_file_changes requires an active session context."
+            return _missing_session_result(self.name)
 
         include_diffs = bool(kwargs.get("include_diffs", False))
         change_limit = min(max(int(kwargs.get("change_limit") or _DEFAULT_CHANGE_LIMIT), 1), _MAX_CHANGE_LIMIT)
@@ -180,6 +193,6 @@ class PreviewRunFileChangeRevertTool(Tool):
     async def _execute(self, **kwargs: Any) -> str:
         session_id = self.get_session_id()
         if not session_id:
-            return "Error: current session_id is unavailable. preview_run_file_change_revert requires an active session context."
+            return _missing_session_result(self.name)
         preview = await self.preview_revert(session_id, str(kwargs["run_id"]), int(kwargs["change_id"]))
         return _json_result(preview)
