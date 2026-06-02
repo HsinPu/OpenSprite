@@ -8,19 +8,13 @@ from typing import Any
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
+from .quality_gate import source_material_satisfies_contract
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
 
 _CONTINUABLE_STATUSES = {"incomplete", "needs_verification", "needs_review"}
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
-_EXISTING_WEB_SOURCE_FINAL_RETRY_REASONS = frozenset(
-    {
-        "assistant final answer did not reference gathered sources",
-        "assistant final answer was too terse for the task",
-        "assistant did not provide the requested itemized result",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -439,9 +433,16 @@ def _should_answer_from_existing_web_sources(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult,
 ) -> bool:
-    if completion_result.reason not in _EXISTING_WEB_SOURCE_FINAL_RETRY_REASONS:
+    if completion_result.status != "incomplete":
         return False
-    return bool(_existing_web_source_context(execution_result))
+    if completion_result.missing_evidence:
+        return False
+    if not _existing_web_source_context(execution_result):
+        return False
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    return source_material_satisfies_contract(contract, execution_result)
 
 
 def _can_continue_incomplete_without_prior_tool_progress(

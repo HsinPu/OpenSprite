@@ -492,6 +492,22 @@ def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, 
     return sources
 
 
+def source_material_satisfies_contract(contract: TaskContract, execution_result: ExecutionResult) -> bool:
+    """Return whether gathered web source material satisfies source acceptance criteria."""
+    for criterion in contract.acceptance_criteria:
+        if criterion.kind == "source_artifact":
+            min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+            if len(_execution_web_sources(execution_result)) < min_count:
+                return False
+        elif criterion.kind == "source_detail":
+            min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+            if _substantive_source_detail_count(execution_result) < min_count:
+                return False
+            if _web_research_coverage_gap_detail(execution_result) is not None:
+                return False
+    return True
+
+
 def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str | None:
     for artifact in execution_result.task_artifacts:
         if not artifact.ok or artifact.source_tool != "web_research":

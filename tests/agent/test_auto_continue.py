@@ -3,7 +3,7 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
+from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 
@@ -133,11 +133,20 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant final answer was too terse for the task",
+        reason="judge rejected incomplete final answer",
     )
     execution = ExecutionResult(
         content="Found it.",
         executed_tool_calls=1,
+        task_contract=TaskContract(
+            objective="Find today's TSMC stock price and cite sources.",
+            task_type="web_research",
+            acceptance_criteria=(
+                AcceptanceCriterion(kind="source_artifact", min_count=1),
+                AcceptanceCriterion(kind="source_detail", min_count=1),
+                AcceptanceCriterion(kind="source_reference", min_count=1),
+            ),
+        ),
         task_artifacts=(
             TaskArtifact(
                 kind="web_source",
@@ -148,6 +157,9 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
                             "title": "TSMC quote",
                             "url": "https://example.com/tsmc",
                             "snippet": "Latest market quote.",
+                            "tool_name": "web_fetch",
+                            "content_chars": 1200,
+                            "has_main_content": True,
                         }
                     ]
                 },
@@ -165,10 +177,58 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
 
     assert decision.should_continue is True
     assert decision.allow_tools is False
-    assert "previous final answer was too terse" in (decision.prompt or "")
     assert "https://example.com/tsmc" in (decision.prompt or "")
     assert "Write the final answer now" in (decision.prompt or "")
     assert "inspect history" in (decision.prompt or "")
+
+
+def test_auto_continue_keeps_tools_when_existing_web_sources_lack_detail():
+    intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="judge rejected incomplete final answer",
+    )
+    execution = ExecutionResult(
+        content="Found it.",
+        executed_tool_calls=1,
+        task_contract=TaskContract(
+            objective="Find today's TSMC stock price and cite sources.",
+            task_type="web_research",
+            acceptance_criteria=(
+                AcceptanceCriterion(kind="source_artifact", min_count=1),
+                AcceptanceCriterion(kind="source_detail", min_count=1),
+                AcceptanceCriterion(kind="source_reference", min_count=1),
+            ),
+        ),
+        task_artifacts=(
+            TaskArtifact(
+                kind="web_source",
+                source_tool="web_search",
+                metadata={
+                    "sources": [
+                        {
+                            "title": "TSMC quote",
+                            "url": "https://example.com/tsmc",
+                            "snippet": "Search result snippet only.",
+                            "tool_name": "web_search",
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=execution,
+        attempts_used=0,
+        previous_response="Found it.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.allow_tools is True
+    assert "allow_tools" not in decision.to_metadata()
 
 
 def test_auto_continue_allows_missing_review_once():
