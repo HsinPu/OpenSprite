@@ -316,6 +316,18 @@ def _evaluate_operation_report(
     )
 
 
+def _contract_requests_quality_check(contract: TaskContract, check_name: str) -> bool:
+    metadata = contract.planner_metadata or {}
+    raw_checks = metadata.get("quality_checks")
+    if isinstance(raw_checks, str):
+        checks = (raw_checks,)
+    elif isinstance(raw_checks, list | tuple | set):
+        checks = tuple(str(item) for item in raw_checks)
+    else:
+        checks = ()
+    return check_name in {item.strip() for item in checks if item.strip()}
+
+
 def _evaluate_command_version_answer(
     contract: TaskContract,
     response_text: str,
@@ -323,8 +335,7 @@ def _evaluate_command_version_answer(
 ) -> QualityGateResult | None:
     if contract.task_type != "operations":
         return None
-    objective = re.sub(r"\s+", " ", str(contract.objective or "")).strip().lower()
-    if not _asks_for_command_version(objective):
+    if not _contract_requests_quality_check(contract, "command_version"):
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
@@ -346,12 +357,6 @@ def _evaluate_command_version_answer(
         reason="command version answer did not report a version",
         active_task_detail=detail,
     )
-
-
-def _asks_for_command_version(normalized_objective: str) -> bool:
-    if not any(marker in normalized_objective for marker in ("version", "版本")):
-        return False
-    return bool(re.search(r"\b(?:git|python|python3|node|npm|pnpm|yarn|docker|uv|pip|poetry)\b", normalized_objective))
 
 
 def _response_contains_version_like_value(normalized_response: str) -> bool:
@@ -379,8 +384,7 @@ def _evaluate_repository_status_answer(
 ) -> QualityGateResult | None:
     if contract.task_type != "operations":
         return None
-    objective = re.sub(r"\s+", " ", str(contract.objective or "")).strip().lower()
-    if not _asks_for_repository_status(objective):
+    if not _contract_requests_quality_check(contract, "repository_status"):
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
@@ -427,28 +431,6 @@ def _evaluate_repository_status_answer(
             ),
         )
     return None
-
-
-def _asks_for_repository_status(objective: str) -> bool:
-    if re.search(r"\bgit\s+(?:status|diff|branch|log|rev-parse|show|stash)\b", objective):
-        return True
-    repo_markers = ("repo", "repository", "working tree", "worktree", "git", "專案", "分支")
-    status_markers = (
-        "uncommitted",
-        "unstaged",
-        "staged",
-        "dirty",
-        "branch",
-        "status",
-        "diff",
-        "未提交",
-        "尚未提交",
-        "沒 commit",
-        "改動",
-        "變更",
-        "目前分支",
-    )
-    return any(marker in objective for marker in repo_markers) and any(marker in objective for marker in status_markers)
 
 
 def _response_confuses_command_version_with_repo_state(

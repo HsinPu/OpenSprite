@@ -572,6 +572,7 @@ def test_completion_gate_rejects_repo_state_answer_for_command_version_question(
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        planner_metadata={"quality_checks": ["command_version"]},
     )
 
     result = CompletionGateService().evaluate(
@@ -604,6 +605,7 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        planner_metadata={"quality_checks": ["command_version"]},
     )
 
     result = CompletionGateService().evaluate(
@@ -625,6 +627,36 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
     )
 
     assert result.status == "complete"
+
+
+def test_quality_gate_does_not_infer_command_version_check_from_objective_text():
+    intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Unable to answer because this repo is not a git repository and has no .git directory.",
+        execution_result=ExecutionResult(
+            content="Unable to answer because this repo is not a git repository and has no .git directory.",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(
+                    name="exec",
+                    ok=True,
+                    result_preview="fatal: not a git repository (or any of the parent directories): .git",
+                    metadata={"tool_args": {"command": "git rev-parse HEAD"}},
+                ),
+            ),
+            task_contract=contract,
+        ),
+        task_contract=contract,
+    )
+
+    assert result.passed is True
 
 
 def test_completion_gate_treats_max_tool_iterations_as_incomplete():
@@ -3022,6 +3054,7 @@ def test_quality_gate_rejects_missing_git_metadata_as_clean_working_tree():
         acceptance_criteria=(
             AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
         ),
+        planner_metadata={"quality_checks": ["repository_status"]},
     )
 
     result = QualityGateService().evaluate(
@@ -3047,6 +3080,7 @@ def test_quality_gate_accepts_missing_git_metadata_as_blocker():
         acceptance_criteria=(
             AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
         ),
+        planner_metadata={"quality_checks": ["repository_status"]},
     )
 
     result = QualityGateService().evaluate(
