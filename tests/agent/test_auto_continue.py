@@ -560,14 +560,25 @@ def test_auto_continue_guides_retry_after_terse_final_answer():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant final answer was too terse for the task",
+        reason="judge rejected incomplete final answer",
         active_task_detail="Provide a substantive final answer that uses the inspected media results.",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="media_extraction",
+        acceptance_criteria=(
+            AcceptanceCriterion(
+                kind="substantive_final_answer",
+                min_response_chars=80,
+                description="Provide a substantive final answer that uses the inspected media results.",
+            ),
+        ),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="Done.", executed_tool_calls=1),
+        execution_result=ExecutionResult(content="Done.", executed_tool_calls=1, task_contract=contract),
         attempts_used=0,
         previous_response="Done.",
     )

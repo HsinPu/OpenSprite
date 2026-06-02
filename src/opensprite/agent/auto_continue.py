@@ -453,7 +453,7 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if _task_contract_requires_evidence(execution_result):
         return True
-    if _task_contract_has_acceptance_criterion(execution_result, "itemized_output"):
+    if _task_contract_has_acceptance_criterion(execution_result, "itemized_output", "substantive_final_answer"):
         return True
     if completion_result.missing_evidence:
         return True
@@ -464,7 +464,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         "expected code changes were not recorded",
         "required source material was insufficient",
         "assistant final answer did not reference gathered sources",
-        "assistant final answer was too terse for the task",
         "max tool iterations exhausted before completion",
     }
 
@@ -550,7 +549,7 @@ def _quality_follow_up_instruction(
             "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
             "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
         )
-    if reason == "assistant final answer was too terse for the task":
+    if execution_result is not None and _task_contract_has_acceptance_criterion(execution_result, "substantive_final_answer"):
         return (
             "\n- Quality follow-up: the previous final answer was too terse. "
             "Do not reply with only 'done', 'completed', '已完成', or another short acknowledgement. "
