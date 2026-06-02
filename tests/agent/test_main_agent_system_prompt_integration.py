@@ -169,7 +169,8 @@ def _is_task_contract_planner_call(messages) -> bool:
 
 def _task_contract_response(messages) -> LLMResponse:
     prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in messages)
-    if "please update README" in prompt_text or "tests/test_app.py" in prompt_text:
+    prompt_lower = prompt_text.lower()
+    if "please update readme" in prompt_lower or "tests/test_app.py" in prompt_text or "refactor the agent" in prompt_lower:
         content = (
             '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
             '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner workspace change"}'
@@ -421,13 +422,16 @@ def test_main_agent_call_llm_seeds_active_task_on_first_turn(tmp_path: Path) -> 
     )
 
     session_id = "telegram:room-1"
+    message = "Refactor the agent in small safe steps and keep it on task."
+    task_intent = TaskIntentService().classify(message)
 
     async def _run() -> str:
         return await agent.call_llm(
             session_id,
-            "Refactor the agent in small safe steps and keep it on task.",
+            message,
             channel="telegram",
             allow_tools=False,
+            task_intent=task_intent,
         )
 
     result = asyncio.run(_run())

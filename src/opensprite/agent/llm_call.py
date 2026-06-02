@@ -237,13 +237,6 @@ class LlmCallService:
                     external_chat_id=external_chat_id,
                 )
         effective_task_intent = _effective_task_intent(task_intent, task_objective_decision)
-        await self._maybe_seed_active_task(
-            session_id,
-            current_message,
-            task_intent=effective_task_intent,
-            task_context_decision=task_context_decision,
-            task_objective_decision=task_objective_decision,
-        )
         effective_current_message = _message_with_resolved_objective(current_message, task_objective_decision)
         if (
             work_state_summary
@@ -320,6 +313,18 @@ class LlmCallService:
             task_contract = replace(task_contract, harness_profile=harness_profile.to_metadata())
             harness_policy = self._select_harness_policy(harness_profile)
             harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
+            if _should_seed_active_task_for_contract(
+                active_task_snapshot=active_task_snapshot,
+                harness_profile=harness_profile,
+                task_context_decision=task_context_decision,
+            ):
+                await self._maybe_seed_active_task(
+                    session_id,
+                    current_message,
+                    task_intent=effective_task_intent,
+                    task_context_decision=task_context_decision,
+                    task_objective_decision=task_objective_decision,
+                )
             if run_id is not None:
                 await self._emit_run_event(
                     session_id,
@@ -585,6 +590,32 @@ def _structured_retrieval_decision(task_context_decision: TaskContextDecision | 
     inherited_tool_group = str(task_context_decision.inherited_tool_group or "").strip()
     inherited_task_type = str(task_context_decision.inherited_task_type or "").strip()
     return inherited_tool_group == "history_retrieval" or inherited_task_type == "history_retrieval"
+
+
+def _should_seed_active_task_for_contract(
+    *,
+    active_task_snapshot: str,
+    harness_profile: HarnessProfile,
+    task_context_decision: TaskContextDecision | None,
+) -> bool:
+    profile_name = str(getattr(harness_profile, "name", "") or "").strip()
+    if profile_name != "chat":
+        return True
+    if _active_task_snapshot_has_current_task(active_task_snapshot):
+        return True
+    if task_context_decision is None:
+        return False
+    return bool(task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
+
+
+def _active_task_snapshot_has_current_task(active_task_snapshot: str) -> bool:
+    for line in str(active_task_snapshot or "").splitlines():
+        stripped = line.strip()
+        if not stripped.lower().startswith("- status:"):
+            continue
+        status = stripped.split(":", 1)[1].strip().lower()
+        return status in {"active", "blocked", "waiting_user"}
+    return False
 
 
 def _effective_task_intent(
