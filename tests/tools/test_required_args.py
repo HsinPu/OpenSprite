@@ -89,7 +89,12 @@ def test_process_poll_requires_session_id():
 
     result = asyncio.run(tool.execute(action="poll"))
 
-    assert result == "Error: process action 'poll' requires session_id."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "process action 'poll' requires session_id" in status.error
 
 
 def test_process_log_requires_session_id():
@@ -97,7 +102,12 @@ def test_process_log_requires_session_id():
 
     result = asyncio.run(tool.execute(action="log"))
 
-    assert result == "Error: process action 'log' requires session_id."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "process action 'log' requires session_id" in status.error
 
 
 def test_process_inspect_requires_session_id():
@@ -105,7 +115,12 @@ def test_process_inspect_requires_session_id():
 
     result = asyncio.run(tool.execute(action="inspect"))
 
-    assert result == "Error: process action 'inspect' requires session_id."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "process action 'inspect' requires session_id" in status.error
 
 
 def test_exec_timeout_returns_partial_output(tmp_path):

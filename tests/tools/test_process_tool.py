@@ -8,6 +8,7 @@ from pathlib import Path
 from opensprite.storage import MemoryStorage
 from opensprite.tools.process import ProcessTool
 from opensprite.tools.process_runtime import BackgroundProcessManager
+from opensprite.tools.result_status import classify_tool_result_status
 import opensprite.tools.shell as shell_module
 from opensprite.tools.shell import ExecTool
 
@@ -24,6 +25,21 @@ def _extract_session_id(result: str) -> str:
         if line.startswith("Session ID: "):
             return line.removeprefix("Session ID: ").strip()
     raise AssertionError(f"Session ID missing from result: {result}")
+
+
+def test_process_poll_missing_session_returns_structured_error():
+    async def run() -> None:
+        process_tool = ProcessTool(BackgroundProcessManager())
+
+        result = await process_tool.execute(action="poll", session_id="missing-session")
+        status = classify_tool_result_status(result)
+
+        assert status.ok is False
+        assert status.error_type == "ProcessToolError"
+        assert status.category == "process_session_not_found"
+        assert "missing-session" in status.error
+
+    asyncio.run(run())
 
 
 def test_exec_background_starts_managed_session_and_process_tool_can_kill(tmp_path):

@@ -8,6 +8,7 @@ from typing import Any
 
 from .base import Tool
 from .process_runtime import BackgroundProcessManager, BackgroundSession
+from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -77,6 +78,22 @@ def _format_session_details(session: BackgroundSession) -> list[str]:
     return details
 
 
+def _process_error_result(
+    error: str,
+    *,
+    category: str,
+    error_type: str = "ProcessToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+    )
+
+
 class ProcessTool(Tool):
     """Inspect and control managed background exec sessions."""
 
@@ -128,8 +145,9 @@ class ProcessTool(Tool):
             if session_id:
                 session = await self.manager.clear_session(session_id)
                 if session is None:
-                    return (
-                        f"Error: background session '{session_id}' was not found or is still running."
+                    return _process_error_result(
+                        f"background session '{session_id}' was not found or is still running.",
+                        category="process_clear_failed",
                     )
                 return (
                     f"Cleared background session '{session.session_id}' "
@@ -142,12 +160,20 @@ class ProcessTool(Tool):
             return f"Cleared {cleared} exited background session(s)."
 
         if not session_id:
-            return f"Error: process action '{action}' requires session_id."
+            return _process_error_result(
+                f"process action '{action}' requires session_id.",
+                category="invalid_arguments",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
 
         if action == "poll":
             polled = await self.manager.poll_session(session_id)
             if polled is None:
-                return f"Error: background session '{session_id}' not found."
+                return _process_error_result(
+                    f"background session '{session_id}' not found.",
+                    category="process_session_not_found",
+                )
             session, new_output = polled
             lines = _format_session_details(session)
             lines.extend(["New output:", new_output])
@@ -156,13 +182,19 @@ class ProcessTool(Tool):
         if action == "inspect":
             session = await self.manager.get_session(session_id)
             if session is None:
-                return f"Error: background session '{session_id}' not found."
+                return _process_error_result(
+                    f"background session '{session_id}' not found.",
+                    category="process_session_not_found",
+                )
             return "\n".join(_format_session_details(session))
 
         if action == "log":
             session = await self.manager.get_session(session_id)
             if session is None:
-                return f"Error: background session '{session_id}' not found."
+                return _process_error_result(
+                    f"background session '{session_id}' not found.",
+                    category="process_session_not_found",
+                )
             lines = _format_session_details(session)
             lines.extend(
                 [
@@ -175,9 +207,17 @@ class ProcessTool(Tool):
         if action == "kill":
             session = await self.manager.kill_session(session_id)
             if session is None:
-                return f"Error: background session '{session_id}' not found."
+                return _process_error_result(
+                    f"background session '{session_id}' not found.",
+                    category="process_session_not_found",
+                )
             lines = _format_session_details(session)
             lines.extend(["Output tail:", self.manager.render_output(session, max_chars=1200)])
             return "\n".join(lines)
 
-        return f"Error: unsupported process action '{action}'."
+        return _process_error_result(
+            f"unsupported process action '{action}'.",
+            category="invalid_arguments",
+            error_type="ToolValidationError",
+            invalid_arguments=True,
+        )
