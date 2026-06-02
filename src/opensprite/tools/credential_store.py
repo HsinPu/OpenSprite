@@ -15,12 +15,33 @@ from ..auth.credentials import (
     set_provider_default,
 )
 from .base import Tool
+from .result_status import tool_error_result
+
+
+_TOOL_NAME = "credential_store"
+
+
+def _credential_store_error_result(
+    error: str,
+    *,
+    category: str,
+    error_type: str = "CredentialStoreToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
 
 
 class CredentialStoreTool(Tool):
     """Manage credentials only when the user explicitly asks to save them."""
 
-    name = "credential_store"
+    name = _TOOL_NAME
     description = (
         "Store, list, remove, or set defaults for local API-key credentials in the OpenSprite credential vault. "
         "Use action='add' only after the user explicitly asks to save/store a key, or after they clearly confirm "
@@ -90,7 +111,12 @@ class CredentialStoreTool(Tool):
             if action == "add":
                 secret = str(kwargs.get("secret") or kwargs.get("api_key") or "").strip()
                 if not provider or not secret:
-                    return "Error: provider and secret are required for credential_store add."
+                    return _credential_store_error_result(
+                        "provider and secret are required for credential_store add.",
+                        category="invalid_arguments",
+                        error_type="ToolValidationError",
+                        invalid_arguments=True,
+                    )
                 scopes = kwargs.get("scopes")
                 if not isinstance(scopes, list):
                     scopes = None
@@ -107,19 +133,39 @@ class CredentialStoreTool(Tool):
                 return json.dumps({"credentials": list_credentials(provider or None, app_home=self.app_home)}, ensure_ascii=False)
             if action == "remove":
                 if not provider or not credential_id:
-                    return "Error: provider and credential_id are required for credential_store remove."
+                    return _credential_store_error_result(
+                        "provider and credential_id are required for credential_store remove.",
+                        category="invalid_arguments",
+                        error_type="ToolValidationError",
+                        invalid_arguments=True,
+                    )
                 return json.dumps(remove_credential(provider, credential_id, app_home=self.app_home), ensure_ascii=False)
             if action == "set_default":
                 if not credential_id:
-                    return "Error: credential_id is required for credential_store set_default."
+                    return _credential_store_error_result(
+                        "credential_id is required for credential_store set_default.",
+                        category="invalid_arguments",
+                        error_type="ToolValidationError",
+                        invalid_arguments=True,
+                    )
                 capability = str(kwargs.get("capability") or "").strip()
                 if provider:
                     credential = set_provider_default(provider, credential_id, app_home=self.app_home)
                 elif capability:
                     credential = set_capability_default(capability, credential_id, app_home=self.app_home)
                 else:
-                    return "Error: provider or capability is required for credential_store set_default."
+                    return _credential_store_error_result(
+                        "provider or capability is required for credential_store set_default.",
+                        category="invalid_arguments",
+                        error_type="ToolValidationError",
+                        invalid_arguments=True,
+                    )
                 return json.dumps({"ok": True, "credential": credential}, ensure_ascii=False)
         except CredentialStoreError as exc:
-            return f"Error: {exc}"
-        return "Error: action must be one of add, list, remove, or set_default."
+            return _credential_store_error_result(str(exc), category="credential_store_error")
+        return _credential_store_error_result(
+            "action must be one of add, list, remove, or set_default.",
+            category="invalid_arguments",
+            error_type="ToolValidationError",
+            invalid_arguments=True,
+        )

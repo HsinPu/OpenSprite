@@ -4,6 +4,7 @@ import asyncio
 from opensprite.agent.tool_registration import register_config_tools
 from opensprite.tools import ToolRegistry
 from opensprite.tools.credential_store import CredentialStoreTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_credential_store_tool_adds_without_leaking_secret(tmp_path):
@@ -38,6 +39,31 @@ def test_credential_store_tool_lists_and_sets_default(tmp_path):
     listed = json.loads(list_result)["credentials"]["openai"][0]
     assert listed["is_default"] is True
     assert "openai-secret" not in list_result
+
+
+def test_credential_store_tool_reports_missing_add_arguments(tmp_path):
+    tool = CredentialStoreTool(app_home=tmp_path)
+
+    result = asyncio.run(tool.execute(action="add", provider="openrouter"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "provider and secret are required" in status.error
+
+
+def test_credential_store_tool_reports_backend_errors(tmp_path):
+    tool = CredentialStoreTool(app_home=tmp_path)
+
+    result = asyncio.run(tool.execute(action="remove", provider="openrouter", credential_id="missing"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "CredentialStoreToolError"
+    assert status.category == "credential_store_error"
+    assert "Credential not found: missing" in status.error
 
 
 def test_tool_registry_sanitizes_credential_params_for_hooks(tmp_path):
