@@ -170,20 +170,7 @@ class AutoContinueService:
             completion_result.status == "incomplete"
             and execution_result.executed_tool_calls == 0
             and not direct_action_available
-            and completion_result.reason
-            not in {
-                "assistant only reported progress without performing requested work",
-                "assistant did not provide the requested itemized result",
-                "assistant only emitted internal control text",
-                "required task evidence was not produced",
-                "required task artifacts were not produced",
-                "required task artifacts were not traceable",
-                "expected code changes were not recorded",
-                "required source material was insufficient",
-                "assistant final answer did not reference gathered sources",
-                "assistant final answer was too terse for the task",
-                "max tool iterations exhausted before completion",
-            }
+            and not _can_continue_incomplete_without_prior_tool_progress(completion_result, execution_result)
         ):
             return self._skip(
                 "no_tool_progress_after_incomplete_response",
@@ -325,7 +312,7 @@ class AutoContinueService:
                 "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
                 f"{no_tool_source_instruction}"
             )
-        quality_instruction = _quality_follow_up_instruction(completion_result)
+        quality_instruction = _quality_follow_up_instruction(completion_result, execution_result)
         profile_instruction = _profile_follow_up_instruction(harness_profile)
 
         return (
@@ -457,6 +444,36 @@ def _should_answer_from_existing_web_sources(
     return bool(_existing_web_source_context(execution_result))
 
 
+def _can_continue_incomplete_without_prior_tool_progress(
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult,
+) -> bool:
+    if _task_contract_requires_evidence(execution_result):
+        return True
+    if completion_result.missing_evidence:
+        return True
+    return completion_result.reason in {
+        "assistant only reported progress without performing requested work",
+        "assistant did not provide the requested itemized result",
+        "assistant only emitted internal control text",
+        "required task evidence was not produced",
+        "required task artifacts were not produced",
+        "required task artifacts were not traceable",
+        "expected code changes were not recorded",
+        "required source material was insufficient",
+        "assistant final answer did not reference gathered sources",
+        "assistant final answer was too terse for the task",
+        "max tool iterations exhausted before completion",
+    }
+
+
+def _task_contract_requires_evidence(execution_result: ExecutionResult) -> bool:
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    return bool(getattr(contract, "requirements", ()) or ())
+
+
 def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:
     if execution_result is None:
         return ""
@@ -488,7 +505,10 @@ def _existing_web_source_context(execution_result: ExecutionResult | None) -> st
     return "\n".join(lines)
 
 
-def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> str:
+def _quality_follow_up_instruction(
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult | None = None,
+) -> str:
     reason = str(completion_result.reason or "").strip()
     detail = str(completion_result.active_task_detail or "").strip()
     if reason == "required task artifacts were not produced":
@@ -538,6 +558,11 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
             "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
         )
     if reason == "required task evidence was not produced":
+        return (
+            "\n- Evidence follow-up: required tool evidence is missing. "
+            "Call the appropriate tools for the requested resources or external information before giving the final answer."
+        )
+    if execution_result is not None and _task_contract_requires_evidence(execution_result):
         return (
             "\n- Evidence follow-up: required tool evidence is missing. "
             "Call the appropriate tools for the requested resources or external information before giving the final answer."

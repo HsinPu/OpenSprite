@@ -287,6 +287,32 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     assert decision.emit_skipped_event is True
 
 
+def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_generic():
+    intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant response did not explicitly complete the task",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        allow_no_tool_final=False,
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Let me check that.", task_contract=contract),
+        attempts_used=0,
+        previous_response="Let me check that.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "required tool evidence is missing" in (decision.prompt or "")
+
+
 def test_auto_continue_does_not_use_pending_lookup_phrases():
     intent = TaskIntentService().classify("幫我找 2330市值")
     completion = CompletionGateResult(
