@@ -29,21 +29,6 @@ _NON_TASK_MESSAGES = {
     "cool",
     "nice",
 }
-_REQUEST_MARKERS = (
-    "help me",
-    "can you",
-    "could you",
-    "please",
-    "need you to",
-    "i want you to",
-    "let's",
-    "幫我",
-    "你把",
-    "你幫",
-    "給我",
-    "請",
-    "麻煩",
-)
 _QUESTION_MARKERS = (
     "what",
     "why",
@@ -60,16 +45,8 @@ _VAGUE_TASK_MESSAGES = {
     "fix it",
     "handle it",
     "make it better",
-    "處理一下",
-    "幫我處理",
-    "繼續",
-    "修一下",
-    "搞定",
 }
-_PURE_ANSWER_RE = re.compile(
-    r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
-    re.IGNORECASE,
-)
+_PURE_ANSWER_RE = re.compile(r"\b(?:translate|translation|calculate|compute)\b", re.IGNORECASE)
 _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u8b6f",
     "\u7ffb\u6210",
@@ -78,6 +55,7 @@ _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u6210\u4e2d\u6587",
     "\u8a08\u7b97",
 )
+
 
 @dataclass(frozen=True)
 class TaskIntent:
@@ -166,22 +144,18 @@ class TaskIntentService:
         kind = _classify_kind(compact, media_count=media_count)
         needs_clarification = _needs_clarification(compact, kind)
         long_running = _is_long_running(compact, kind)
-        constraints = ()
         done_criteria = _done_criteria(kind, long_running=long_running, has_media=media_count > 0)
-        verification_hint = None
-        expects_code_change = False
-        expects_verification = False
 
         return TaskIntent(
             kind=kind,
             objective=_truncate(compact),
-            constraints=constraints,
+            constraints=(),
             done_criteria=done_criteria,
             needs_clarification=needs_clarification,
-            verification_hint=verification_hint,
+            verification_hint=None,
             long_running=long_running,
-            expects_code_change=expects_code_change,
-            expects_verification=expects_verification,
+            expects_code_change=False,
+            expects_verification=False,
         )
 
 
@@ -195,39 +169,27 @@ def _truncate(text: str, max_chars: int = 220) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
-    lowered = text.lower()
-    return any(marker in lowered for marker in markers)
-
-
 def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
-    return text.endswith(("?", "？")) or any(
+    return text.endswith(("?", "\uff1f")) or any(
         lowered == marker or lowered.startswith(f"{marker} ")
         for marker in _QUESTION_MARKERS
     )
 
 
 def _classify_kind(text: str, *, media_count: int) -> str:
-    has_request_marker = _has_marker(text, _REQUEST_MARKERS)
     if media_count == 0 and _is_pure_answer_request(text):
         return "question"
-    if media_count and (_looks_like_question(text) or has_request_marker):
+    if media_count:
         return "analysis"
     if _looks_like_question(text):
         return "question"
-    if has_request_marker:
-        return "task"
     return "task"
 
 
 def _needs_clarification(text: str, kind: str) -> bool:
-    lowered = text.lower().strip(" .!?？")
-    if kind not in _TASK_KINDS:
-        return False
-    if lowered in _VAGUE_TASK_MESSAGES:
-        return True
-    return False
+    lowered = text.lower().strip(" .!?\uff1f")
+    return kind in _TASK_KINDS and lowered in _VAGUE_TASK_MESSAGES
 
 
 def _is_pure_answer_request(text: str) -> bool:
