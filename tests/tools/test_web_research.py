@@ -250,6 +250,27 @@ def test_web_research_corrects_stale_year_without_current_text_marker():
     assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current")
 
 
+def test_web_research_does_not_rank_recent_word_markers_without_dates():
+    search = _FakeSearchTool(
+        [
+            {"title": "Vendor guide", "url": "https://vendor.test/guide", "content": "Product guide."},
+            {"title": "Release notes", "url": "https://vendor.test/releases", "content": "Release notes."},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://vendor.test/guide": _fetch_payload("https://vendor.test/guide", title="Guide"),
+            "https://vendor.test/releases": _fetch_payload("https://vendor.test/releases", title="Releases"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("vendor docs", count=2, fetch_count=1, freshness="month")))
+
+    assert [call["url"] for call in fetch.calls] == ["https://vendor.test/guide"]
+    assert payload["fetched_sources"][0]["url"].startswith("https://vendor.test/guide")
+
+
 def test_web_research_respects_any_time_for_latest_query():
     search = _FakeSearchTool(
         [

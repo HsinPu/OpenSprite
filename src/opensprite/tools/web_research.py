@@ -19,18 +19,6 @@ from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 _WEB_RESEARCH_FETCH_CONCURRENCY = 4
 _WEB_RESEARCH_SEARCH_CONCURRENCY = 3
 _RECENT_FRESHNESS_VALUES = {"day", "week", "month"}
-_RECENT_TEXT_MARKERS = (
-    "latest",
-    "newest",
-    "recent",
-    "current",
-    "updated",
-    "update",
-    "release",
-    "released",
-    "announcement",
-    "announced",
-)
 _YEAR_RE = re.compile(r"(?<!\d)20\d{2}(?!\d)")
 _LOW_SIGNAL_DOMAIN_SUFFIXES = (
     "youtube.com",
@@ -1070,8 +1058,6 @@ def _candidate_recent_score(item: dict[str, Any]) -> int:
         score += 4
     if re.search(r"\b20\d{2}[-/.](0?[1-9]|1[0-2])([-/.](0?[1-9]|[12]\d|3[01]))?\b", text):
         score += 2
-    if any(marker in text for marker in _RECENT_TEXT_MARKERS):
-        score += 1
     return score
 
 
