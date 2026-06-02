@@ -28,6 +28,8 @@ class ToolResultStatus:
             "error": self.error,
             "error_type": self.error_type or "ToolError",
         }
+        if self.category:
+            metadata["category"] = self.category
         if self.status_code is not None:
             metadata["status_code"] = self.status_code
         return metadata
@@ -40,6 +42,7 @@ def tool_error_result(
     category: str = "",
     repeated_error_key: str | None = None,
     invalid_arguments: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> str:
     """Return a structured OpenSprite-owned tool error payload."""
     payload: dict[str, Any] = {
@@ -53,6 +56,8 @@ def tool_error_result(
         payload["repeated_error_key"] = repeated_error_key
     if invalid_arguments:
         payload["invalid_arguments"] = True
+    if metadata:
+        payload["metadata"] = metadata
     return json.dumps(payload, ensure_ascii=False)
 
 

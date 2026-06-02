@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from opensprite.tools.approval import PermissionRequestManager, classify_permission_request
 from opensprite.tools.base import Tool
@@ -49,6 +50,15 @@ def _assert_permission_block(result: str, reason: str) -> None:
     assert reason in status.error
 
 
+def _assert_unavailable_tool(result: str, tool_name: str, available_tools: list[str]) -> None:
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolUnavailableError"
+    assert status.category == "tool_unavailable"
+    assert tool_name in status.error
+    assert json.loads(result)["metadata"]["available_tools"] == available_tools
+
+
 def test_registry_hides_and_blocks_denied_tools():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(denied_tools=["exec"])
@@ -62,10 +72,7 @@ def test_registry_hides_and_blocks_denied_tools():
 
     result = asyncio.run(registry.execute("exec", {}))
 
-    assert result == (
-        "Error: Tool 'exec' is not available in this turn. Available tools: read_file. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
-    )
+    _assert_unavailable_tool(result, "exec", ["read_file"])
 
 
 def test_registry_blocks_denied_risk_levels():
@@ -77,10 +84,7 @@ def test_registry_blocks_denied_risk_levels():
     assert registry.tool_names == []
     result = asyncio.run(registry.execute("web_fetch", {}))
 
-    assert result == (
-        "Error: Tool 'web_fetch' is not available in this turn. Available tools: none. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
-    )
+    _assert_unavailable_tool(result, "web_fetch", [])
 
 
 def test_registry_emits_permission_decision_trace_events():
@@ -103,10 +107,7 @@ def test_registry_emits_permission_decision_trace_events():
     allowed_result, denied_result, events = asyncio.run(scenario())
 
     assert allowed_result == "ran:read_file"
-    assert denied_result == (
-        "Error: Tool 'exec' is not available in this turn. Available tools: read_file. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
-    )
+    _assert_unavailable_tool(denied_result, "exec", ["read_file"])
     assert [event[0] for event in events] == [
         "tool_permission.checked",
         "tool_permission.allowed",
@@ -138,9 +139,10 @@ def test_registry_uses_declared_tool_risk_levels():
 
     assert registry.tool_names == ["custom_read"]
     assert asyncio.run(registry.execute("custom_read", {})) == "ran:custom_read"
-    assert asyncio.run(registry.execute("custom_unknown", {})) == (
-        "Error: Tool 'custom_unknown' is not available in this turn. Available tools: custom_read. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
+    _assert_unavailable_tool(
+        asyncio.run(registry.execute("custom_unknown", {})),
+        "custom_unknown",
+        ["custom_read"],
     )
 
 
@@ -169,8 +171,10 @@ def test_registry_restricts_allowed_tools_by_glob():
     registry.register(EchoTool("write_file"))
 
     assert registry.tool_names == ["read_file", "grep_files"]
-    assert asyncio.run(registry.execute("write_file", {})).startswith(
-        "Error: Tool 'write_file' is not available in this turn. Available tools: read_file, grep_files."
+    _assert_unavailable_tool(
+        asyncio.run(registry.execute("write_file", {})),
+        "write_file",
+        ["read_file", "grep_files"],
     )
 
 
@@ -183,10 +187,7 @@ def test_approval_required_policy_blocks_when_mode_is_unset():
     result = asyncio.run(registry.execute("apply_patch", {}))
 
     assert registry.tool_names == []
-    assert result == (
-        "Error: Tool 'apply_patch' is not available in this turn. Available tools: none. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
-    )
+    _assert_unavailable_tool(result, "apply_patch", [])
 
 
 def test_approval_required_policy_allows_in_auto_mode():
@@ -209,10 +210,7 @@ def test_approval_required_policy_blocks_in_block_mode():
 
     result = asyncio.run(registry.execute("apply_patch", {}))
 
-    assert result == (
-        "Error: Tool 'apply_patch' is not available in this turn. Available tools: none. "
-        "Do not call unavailable tools again; answer directly or use an available tool."
-    )
+    _assert_unavailable_tool(result, "apply_patch", [])
 
 
 def test_approval_required_policy_exposes_but_blocks_execution_in_ask_mode():

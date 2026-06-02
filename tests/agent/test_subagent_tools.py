@@ -14,6 +14,7 @@ from opensprite.storage import MemoryStorage
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class FakeContextBuilder:
@@ -445,8 +446,11 @@ def test_code_reviewer_forbidden_write_call_is_not_executed(tmp_path):
     tool_results = [saved for saved in storage.saved if saved[1] == "tool"]
     assert len(tool_results) == 1
     assert tool_results[0][3] == "apply_patch"
-    assert "Tool 'apply_patch' is not available in this turn" in tool_results[0][2]
-    assert "Available tools: read_file" in tool_results[0][2]
+    status = classify_tool_result_status(tool_results[0][2])
+    assert status.error_type == "ToolUnavailableError"
+    assert status.category == "tool_unavailable"
+    assert "Tool 'apply_patch' is not available in this turn" in status.error
+    assert json.loads(tool_results[0][2])["metadata"]["available_tools"] == ["read_file"]
 
 
 def test_test_writer_write_tools_are_limited_to_test_paths(tmp_path):

@@ -142,6 +142,7 @@ def test_batch_child_calls_still_follow_permission_policy():
 
     assert "Batch completed: 1 call(s), 1 failed." in result
     assert "Tool 'read_file' is not available in this turn" in result
+    assert '"category": "tool_unavailable"' in result
 
 
 def test_batch_counts_structured_child_failures():

@@ -40,6 +40,7 @@ def test_tool_result_status_honors_structured_error_metadata():
     assert status.category == "permission_block"
     assert status.repeated_error_key == "permission:exec"
     assert status.invalid_arguments is True
+    assert status.error_metadata()["category"] == "permission_block"
 
 
 def test_tool_result_status_extracts_error_executing_metadata():

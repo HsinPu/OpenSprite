@@ -228,8 +228,9 @@ def _decision_label(event_type: str, decision: PermissionDecision) -> str:
     return "checked"
 
 def _tool_not_available_result(tool_name: str, available_tools: list[str]) -> str:
-    available = ", ".join(available_tools) if available_tools else "none"
-    return (
-        f"Error: Tool '{tool_name}' is not available in this turn. "
-        f"Available tools: {available}. Do not call unavailable tools again; answer directly or use an available tool."
+    return tool_error_result(
+        f"Tool '{tool_name}' is not available in this turn.",
+        error_type="ToolUnavailableError",
+        category="tool_unavailable",
+        metadata={"available_tools": list(available_tools)},
     )
