@@ -278,7 +278,7 @@ class AutoContinueService:
             incomplete_instruction = (
                 "\n- The missing work is already identified. Resume from the required follow-up detail below before doing broader new work."
             )
-        if completion_result.reason == "assistant only emitted internal control text":
+        if execution_result.assistant_internal_only_response:
             incomplete_instruction += (
                 "\n- The previous response only contained internal control text and no user-visible work. "
                 "Do not repeat internal tags such as <system-reminder> or <think>. "
@@ -448,6 +448,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult,
 ) -> bool:
+    if execution_result.assistant_internal_only_response:
+        return True
     if _task_contract_requires_evidence(execution_result):
         return True
     if completion_result.missing_evidence:
@@ -455,7 +457,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
         "assistant did not provide the requested itemized result",
-        "assistant only emitted internal control text",
         "required task evidence was not produced",
         "required task artifacts were not produced",
         "required task artifacts were not traceable",

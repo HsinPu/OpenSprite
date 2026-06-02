@@ -90,7 +90,7 @@ def test_auto_continue_retries_internal_only_web_answer_with_tools_available():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant only emitted internal control text",
+        reason="runtime detected a hidden-only response",
     )
     execution = ExecutionResult(
         content="",
