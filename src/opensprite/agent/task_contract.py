@@ -52,38 +52,6 @@ _PLANNER_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
     "valid JSON object for the same schema. Return JSON only, no markdown, no explanation."
 )
-_COMMAND_USAGE_DISCUSSION_RE = re.compile(
-    r"\b(?:cli|command|commands?|usage|how to use|examples?)\b"
-    r"|(?:指令|命令|怎麼用|如何用|用法|用途|範例)",
-    re.IGNORECASE,
-)
-_EXPLICIT_WORKSPACE_EVIDENCE_RE = re.compile(
-    r"\b(?:read|inspect|open|grep|search)\s+(?:the\s+)?(?:file|repo|repository|codebase|workspace)\b"
-    r"|(?:讀檔|讀取|查看檔案|檢查檔案|搜尋檔案|打開檔案)",
-    re.IGNORECASE,
-)
-_NO_WORKSPACE_EVIDENCE_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\b[^.?!\n]{0,48}"
-    r"\b(?:read|inspect|open|grep|search)\b[^.?!\n]{0,48}"
-    r"\b(?:file|files|repo|repository|codebase|workspace|project|source)\b"
-    r"|(?:不要|別|不用|無需)[^。！？\n]{0,20}"
-    r"(?:讀檔|讀取檔案|看檔案|查看檔案|檢查檔案|搜尋檔案|看專案|看工作區|讀工作區)",
-    re.IGNORECASE,
-)
-_RECENT_CONTEXT_NO_TOOL_RE = re.compile(
-    r"\b(?:previous answer|last answer|previous question|last question|above|just now)\b"
-    r"|(?:\u5ef6\u7e8c|\u4e0a\u4e00\u984c|\u4e0a\u984c|\u4e0a\u4e00\u500b|\u525b\u525b|\u525b\u624d|\u524d\u9762|\u4e0a\u9762)",
-    re.IGNORECASE,
-)
-_NO_NEW_EVIDENCE_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\b[^.?!\n]{0,48}"
-    r"\b(?:web|internet|online|search|research|browse|fetch|look up)\b"
-    r"|(?:\u4e0d\u8981|\u4e0d\u7528|\u5225|\u5148\u4e0d\u8981)[^\n\u3002\uff01\uff1f]{0,24}"
-    r"(?:\u91cd\u65b0\u67e5|\u518d\u67e5|\u4e0a\u7db2|\u641c\u5c0b|\u641c|\u67e5\u8a62|\u6293\u8cc7\u6599)",
-    re.IGNORECASE,
-)
-
-
 @dataclass(frozen=True)
 class EvidenceRequirement:
     """Evidence needed before the task can be treated as complete."""
