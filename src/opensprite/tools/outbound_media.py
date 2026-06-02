@@ -5,7 +5,23 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .base import Tool
+from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
+
+
+def _send_media_error_result(
+    error: str,
+    *,
+    category: str,
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type="SendMediaToolError",
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+    )
 
 
 class SendMediaTool(Tool):
@@ -78,9 +94,16 @@ class SendMediaTool(Tool):
         if not final_payload:
             media_items = self._current_media_for_kind(kind)
             if not media_items:
-                return f"Error: No current {kind} media is available to send."
+                return _send_media_error_result(
+                    f"No current {kind} media is available to send.",
+                    category="media_unavailable",
+                )
             if media_index >= len(media_items):
-                return f"Error: media_index {media_index} is out of range for {len(media_items)} current {kind} item(s)."
+                return _send_media_error_result(
+                    f"media_index {media_index} is out of range for {len(media_items)} current {kind} item(s).",
+                    category="invalid_arguments",
+                    invalid_arguments=True,
+                )
             final_payload = media_items[media_index]
 
         error = self._queue_media(kind, final_payload)
