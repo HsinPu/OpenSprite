@@ -109,9 +109,13 @@ def test_batch_runs_read_only_calls_and_preserves_order():
         )
     )
 
-    assert result.startswith("Batch completed: 2 call(s), 0 failed.")
-    assert "[1] grep_files\ngrep:needle" in result
-    assert "[2] read_file\nread:notes.txt" in result
+    payload = json.loads(result)
+    assert payload["ok"] is True
+    assert payload["summary"] == "Batch completed: 2 call(s), 0 failed."
+    assert payload["results"][0]["tool"] == "grep_files"
+    assert payload["results"][0]["result"] == "grep:needle"
+    assert payload["results"][1]["tool"] == "read_file"
+    assert payload["results"][1]["result"] == "read:notes.txt"
 
 
 def test_batch_rejects_non_read_only_child_tools():
@@ -144,9 +148,14 @@ def test_batch_child_calls_still_follow_permission_policy():
         )
     )
 
-    assert "Batch completed: 1 call(s), 1 failed." in result
-    assert "Tool 'read_file' is not available in this turn" in result
-    assert '"category": "tool_unavailable"' in result
+    status = classify_tool_result_status(result)
+    payload = json.loads(result)
+    assert status.error_type == "ToolFailure"
+    assert status.category == "batch_failure"
+    assert payload["summary"] == "Batch completed: 1 call(s), 1 failed."
+    assert payload["failed"] == 1
+    assert payload["results"][0]["category"] == "tool_unavailable"
+    assert "Tool 'read_file' is not available in this turn" in payload["results"][0]["result"]
 
 
 def test_batch_counts_structured_child_failures():
@@ -161,9 +170,12 @@ def test_batch_counts_structured_child_failures():
         )
     )
 
-    assert result.startswith("Batch completed: 1 call(s), 1 failed.")
-    assert '"ok": false' in result
-    assert "missing missing.txt" in result
+    status = classify_tool_result_status(result)
+    payload = json.loads(result)
+    assert status.error_type == "ToolFailure"
+    assert payload["summary"] == "Batch completed: 1 call(s), 1 failed."
+    assert payload["results"][0]["ok"] is False
+    assert "missing missing.txt" in payload["results"][0]["result"]
 
 
 def test_batch_enforces_call_limit():
@@ -175,7 +187,9 @@ def test_batch_enforces_call_limit():
 
     result = asyncio.run(registry.execute("batch", {"calls": calls}))
 
-    assert result == "Error: batch supports at most 8 calls."
+    status = classify_tool_result_status(result)
+    assert status.error_type == "ToolValidationError"
+    assert "batch supports at most 8 calls" in status.error
 
 
 def test_batch_executes_children_concurrently():
@@ -196,7 +210,8 @@ def test_batch_executes_children_concurrently():
         )
     )
 
-    assert "Batch completed: 2 call(s), 0 failed." in result
+    payload = json.loads(result)
+    assert payload["summary"] == "Batch completed: 2 call(s), 0 failed."
     assert slow_tool.max_active == 2
 
 
@@ -212,5 +227,6 @@ def test_batch_truncates_large_child_results():
         )
     )
 
-    assert "result truncated" in result
-    assert len(result) < 2600
+    payload = json.loads(result)
+    assert "result truncated" in payload["results"][0]["result"]
+    assert len(result) < 3000

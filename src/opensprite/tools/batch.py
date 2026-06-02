@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, Callable, TYPE_CHECKING
 
 from .base import Tool
-from .result_status import classify_tool_result_status
+from .result_status import classify_tool_result_status, tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 if TYPE_CHECKING:
@@ -72,54 +73,118 @@ class BatchTool(Tool):
         }
 
     @staticmethod
-    def _truncate_result(result: str) -> str:
-        if len(result) <= _MAX_BATCH_RESULT_CHARS:
+    def _truncate_result(result: str, max_chars: int = _MAX_BATCH_RESULT_CHARS) -> str:
+        if len(result) <= max_chars:
             return result
-        head = _MAX_BATCH_RESULT_CHARS // 2
-        tail = _MAX_BATCH_RESULT_CHARS - head
+        head = max_chars // 2
+        tail = max_chars - head
         return (
             result[:head].rstrip()
             + f"\n... (result truncated, total {len(result)} chars) ...\n"
             + result[-tail:].lstrip()
         )
 
-    @staticmethod
-    def _truncate_output(output: str) -> str:
-        if len(output) <= _MAX_BATCH_OUTPUT_CHARS:
-            return output
-        return output[:_MAX_BATCH_OUTPUT_CHARS].rstrip() + f"\n... (batch output truncated, total {len(output)} chars)"
+    @classmethod
+    def _json_output(cls, payload: dict[str, Any]) -> str:
+        text = json.dumps(payload, ensure_ascii=False)
+        if len(text) <= _MAX_BATCH_OUTPUT_CHARS:
+            return text
+        compact = dict(payload)
+        compact["results"] = [
+            {
+                **item,
+                "result": cls._truncate_result(str(item.get("result") or ""), max_chars=500),
+            }
+            for item in payload.get("results", [])
+            if isinstance(item, dict)
+        ]
+        text = json.dumps(compact, ensure_ascii=False)
+        if len(text) <= _MAX_BATCH_OUTPUT_CHARS:
+            return text
+        compact["results"] = [
+            {
+                **item,
+                "result": cls._truncate_result(str(item.get("result") or ""), max_chars=200),
+            }
+            for item in compact.get("results", [])
+            if isinstance(item, dict)
+        ]
+        return json.dumps(compact, ensure_ascii=False)
 
     async def _run_one(self, index: int, call: dict[str, Any]) -> tuple[int, str, str]:
         tool_name = str(call.get("tool") or "")
         arguments = call.get("arguments")
         if tool_name not in READ_ONLY_BATCH_TOOLS:
-            return index, tool_name or "<missing>", f"Error: batch cannot run non-read-only tool '{tool_name}'."
+            return index, tool_name or "<missing>", tool_error_result(
+                f"batch cannot run non-read-only tool '{tool_name}'.",
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                invalid_arguments=True,
+                metadata={"tool_name": "batch"},
+            )
         if not isinstance(arguments, dict):
-            return index, tool_name, "Error: batch child arguments must be an object."
+            return index, tool_name, tool_error_result(
+                "batch child arguments must be an object.",
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                invalid_arguments=True,
+                metadata={"tool_name": "batch"},
+            )
         result = await self._registry_resolver().execute(tool_name, arguments)
         return index, tool_name, result
 
     async def _execute(self, **kwargs: Any) -> str:
         calls = kwargs["calls"]
         if not calls:
-            return "Error: calls must contain at least one child tool call."
+            return tool_error_result(
+                "calls must contain at least one child tool call.",
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                invalid_arguments=True,
+                metadata={"tool_name": "batch"},
+            )
         if len(calls) > _MAX_BATCH_CALLS:
-            return f"Error: batch supports at most {_MAX_BATCH_CALLS} calls."
+            return tool_error_result(
+                f"batch supports at most {_MAX_BATCH_CALLS} calls.",
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                invalid_arguments=True,
+                metadata={"tool_name": "batch"},
+            )
 
         tasks = [self._run_one(index, call) for index, call in enumerate(calls, start=1)]
         results = await asyncio.gather(*tasks)
         results.sort(key=lambda item: item[0])
 
-        failed = sum(1 for _, _, result in results if not classify_tool_result_status(result).ok)
-        lines = [
-            f"Batch completed: {len(results)} call(s), {failed} failed.",
-        ]
+        child_results = []
         for index, tool_name, result in results:
-            lines.extend(
-                [
-                    "",
-                    f"[{index}] {tool_name}",
-                    self._truncate_result(str(result)),
-                ]
+            status = classify_tool_result_status(result)
+            child_results.append(
+                {
+                    "index": index,
+                    "tool": tool_name,
+                    "ok": status.ok,
+                    "error_type": status.error_type,
+                    "category": status.category,
+                    "result": self._truncate_result(str(result)),
+                }
             )
-        return self._truncate_output("\n".join(lines))
+        failed = sum(1 for item in child_results if not item["ok"])
+        summary = f"Batch completed: {len(results)} call(s), {failed} failed."
+        payload: dict[str, Any] = {
+            "type": "batch",
+            "ok": failed == 0,
+            "summary": summary,
+            "total": len(results),
+            "failed": failed,
+            "results": child_results,
+        }
+        if failed:
+            payload.update(
+                {
+                    "error": summary,
+                    "error_type": "ToolFailure",
+                    "category": "batch_failure",
+                }
+            )
+        return self._json_output(payload)

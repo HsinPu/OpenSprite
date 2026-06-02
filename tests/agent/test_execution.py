@@ -808,14 +808,35 @@ def test_tool_result_failure_detection_honors_structured_error_payload():
     assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is True
 
 
-def test_tool_result_failure_detection_allows_successful_batch_summary():
-    result = "Batch completed: 3 call(s), 0 failed.\n\n[1] list_dir\nACTIVE_TASK.md"
+def test_tool_result_failure_detection_allows_successful_batch_payload():
+    result = json.dumps(
+        {
+            "type": "batch",
+            "ok": True,
+            "summary": "Batch completed: 3 call(s), 0 failed.",
+            "total": 3,
+            "failed": 0,
+            "results": [],
+        }
+    )
 
     assert ExecutionEngine._tool_result_looks_like_failure(result) is False
 
 
-def test_tool_result_failure_detection_flags_failed_batch_summary():
-    result = "Batch completed: 3 call(s), 1 failed.\n\n[1] read_file\nError: missing file"
+def test_tool_result_failure_detection_flags_failed_batch_payload():
+    result = json.dumps(
+        {
+            "type": "batch",
+            "ok": False,
+            "summary": "Batch completed: 3 call(s), 1 failed.",
+            "total": 3,
+            "failed": 1,
+            "error": "Batch completed: 3 call(s), 1 failed.",
+            "error_type": "ToolFailure",
+            "category": "batch_failure",
+            "results": [],
+        }
+    )
 
     assert ExecutionEngine._tool_result_looks_like_failure(result) is True
 

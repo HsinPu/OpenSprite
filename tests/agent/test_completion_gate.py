@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 
 import pytest
 
@@ -539,7 +540,23 @@ def test_completion_gate_allows_read_only_batch_discovery_miss_after_workspace_e
             executed_tool_calls=3,
             had_tool_error=True,
             tool_evidence=(
-                ToolEvidence(name="batch", ok=False, result_preview="Batch completed: 4 call(s), 1 failed."),
+                ToolEvidence(
+                    name="batch",
+                    ok=False,
+                    result_preview=json.dumps(
+                        {
+                            "type": "batch",
+                            "ok": False,
+                            "summary": "Batch completed: 4 call(s), 1 failed.",
+                            "total": 4,
+                            "failed": 1,
+                            "error": "Batch completed: 4 call(s), 1 failed.",
+                            "error_type": "ToolFailure",
+                            "category": "batch_failure",
+                            "results": [],
+                        }
+                    ),
+                ),
                 ToolEvidence(name="grep_files", ok=True, result_preview="Found matching trace code."),
                 ToolEvidence(name="read_file", ok=True, result_preview="trace coverage notes"),
             ),

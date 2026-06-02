@@ -68,12 +68,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
     state_text = str(state or "").strip().lower()
     forced_error = state_text in _ERROR_STATES
 
-    batch_failure = _batch_result_failure(stripped)
-    if batch_failure is not None:
-        if batch_failure == 0 and not forced_error:
-            return ToolResultStatus(ok=True)
-        return _failed_status(_first_line(stripped), error_type="ToolFailure", fallback=stripped)
-
     payload = _json_object(stripped)
     if payload is not None:
         if payload.get("ok") is False:
@@ -130,16 +124,6 @@ def _json_object(value: str) -> dict[str, Any] | None:
 def _optional_text(value: Any) -> str | None:
     text = str(value or "").strip()
     return text or None
-
-
-def _batch_result_failure(text: str) -> int | None:
-    first_line = _first_line(text)
-    match = re.match(r"Batch completed: \d+ call\(s\), (\d+) failed\.", first_line)
-    return int(match.group(1)) if match else None
-
-
-def _first_line(text: str) -> str:
-    return (text or "").splitlines()[0] if text else ""
 
 
 def _failed_status(

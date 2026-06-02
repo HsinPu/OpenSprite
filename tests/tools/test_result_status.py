@@ -3,18 +3,44 @@ import json
 from opensprite.tools.result_status import classify_tool_result_status, tool_error_result
 
 
-def test_tool_result_status_allows_successful_batch_summary():
-    status = classify_tool_result_status("Batch completed: 2 call(s), 0 failed.\n\n[1] list_dir\nok")
+def test_tool_result_status_allows_successful_batch_payload():
+    status = classify_tool_result_status(
+        json.dumps(
+            {
+                "type": "batch",
+                "ok": True,
+                "summary": "Batch completed: 2 call(s), 0 failed.",
+                "total": 2,
+                "failed": 0,
+                "results": [],
+            }
+        )
+    )
 
     assert status.ok is True
     assert status.error_metadata() == {}
 
 
-def test_tool_result_status_flags_failed_batch_summary():
-    status = classify_tool_result_status("Batch completed: 2 call(s), 1 failed.\n\n[1] read_file\nError: missing")
+def test_tool_result_status_flags_failed_batch_payload():
+    status = classify_tool_result_status(
+        json.dumps(
+            {
+                "type": "batch",
+                "ok": False,
+                "summary": "Batch completed: 2 call(s), 1 failed.",
+                "total": 2,
+                "failed": 1,
+                "error": "Batch completed: 2 call(s), 1 failed.",
+                "error_type": "ToolFailure",
+                "category": "batch_failure",
+                "results": [],
+            }
+        )
+    )
 
     assert status.ok is False
     assert status.error_type == "ToolFailure"
+    assert status.category == "batch_failure"
 
 
 def test_tool_result_status_honors_structured_error_payload():
