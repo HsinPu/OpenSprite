@@ -340,7 +340,7 @@ def _evaluate_command_version_answer(
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
         return None
-    if _response_reports_command_unavailable(normalized_response):
+    if _execution_reports_command_unavailable(execution_result):
         return None
     if _response_contains_version_like_value(normalized_response):
         return None
@@ -363,18 +363,27 @@ def _response_contains_version_like_value(normalized_response: str) -> bool:
     return bool(re.search(r"\b\d+(?:\.\d+){1,}(?:[-+._a-z0-9]*)?\b", normalized_response))
 
 
-def _response_reports_command_unavailable(normalized_response: str) -> bool:
-    return any(
-        marker in normalized_response
-        for marker in (
-            "not installed",
-            "command not found",
-            "not recognized",
-            "找不到命令",
-            "未安裝",
-            "沒有安裝",
-        )
-    )
+def _execution_reports_command_unavailable(execution_result: ExecutionResult) -> bool:
+    for evidence in execution_result.tool_evidence:
+        if evidence.name not in {"exec", "process"} or evidence.ok:
+            continue
+        text_parts = [str(evidence.result_preview or "")]
+        if isinstance(evidence.metadata, dict):
+            text_parts.extend(str(value or "") for value in evidence.metadata.values())
+        normalized = re.sub(r"\s+", " ", " ".join(text_parts)).strip().lower()
+        if any(
+            marker in normalized
+            for marker in (
+                "not installed",
+                "command not found",
+                "not recognized",
+                "找不到命令",
+                "未安裝",
+                "沒有安裝",
+            )
+        ):
+            return True
+    return False
 
 
 def _evaluate_repository_status_answer(
