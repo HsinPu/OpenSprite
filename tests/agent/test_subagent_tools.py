@@ -438,7 +438,8 @@ def test_code_reviewer_forbidden_write_call_is_not_executed(tmp_path):
     tool_results = [saved for saved in storage.saved if saved[1] == "tool"]
     assert len(tool_results) == 1
     assert tool_results[0][3] == "apply_patch"
-    assert "Tool 'apply_patch' not found" in tool_results[0][2]
+    assert "Tool 'apply_patch' is not available in this turn" in tool_results[0][2]
+    assert "Available tools: read_file" in tool_results[0][2]
 
 
 def test_test_writer_write_tools_are_limited_to_test_paths(tmp_path):
