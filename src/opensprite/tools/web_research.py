@@ -216,7 +216,7 @@ class WebResearchTool(Tool):
                 "freshness": {
                     "type": "string",
                     "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter passed through to web_search; latest/current/recent queries infer a recent filter",
+                    "description": "Recency filter passed through to web_search; auto uses the configured default recent window",
                     "default": self.search_config.freshness,
                 },
                 "max_chars": {
