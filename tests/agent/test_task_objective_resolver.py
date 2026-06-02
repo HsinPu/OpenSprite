@@ -153,8 +153,12 @@ def test_task_objective_resolver_skips_ambiguous_boundary_until_user_confirms():
     assert decision.effective_objective == "please update README"
 
 
-def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
-    provider = _FailingProvider()
+def test_task_objective_resolver_uses_llm_for_pending_boundary_request():
+    provider = _JsonProvider(
+        '{"resolved_objective": "please update README", '
+        '"should_use_resolved_objective": true, "confidence": 0.9, '
+        '"reason": "active task boundary prompt contains the pending request"}'
+    )
     context = TaskContextDecision(
         should_seed_active_task=True,
         should_replace_active_task=True,
@@ -175,10 +179,37 @@ def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
     assert decision.should_use_resolved_objective is True
     assert decision.effective_objective == "please update README"
     assert decision.original_message == "switch"
+
+
+def test_task_objective_resolver_does_not_use_pending_boundary_request_without_llm():
+    context = TaskContextDecision(
+        should_seed_active_task=True,
+        should_replace_active_task=True,
+        continuation_type="task_switch",
+        confidence=0.9,
+        reason="user confirmed switching to the pending task-boundary request",
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="switch",
+            history=[],
+            task_intent=TaskIntentService().classify("switch"),
+            task_context_decision=context,
+            active_task=_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=UnconfiguredLLM(),
+            model="unconfigured",
+        )
+    )
+
+    assert decision.method == "llm_unresolved"
+    assert decision.should_use_resolved_objective is False
+    assert decision.effective_objective == "switch"
 
 
 def test_task_objective_resolver_uses_llm_context_for_short_new_task_even_when_intent_is_actionable():

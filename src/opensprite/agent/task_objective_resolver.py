@@ -10,7 +10,7 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
-from .task_context_resolver import TaskContextDecision, extract_pending_boundary_request
+from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
 
@@ -72,16 +72,6 @@ class TaskObjectiveResolver:
             resolved_objective=original,
             reason="objective enrichment not needed",
         )
-        pending_boundary_request = extract_pending_boundary_request(active_task)
-        if pending_boundary_request and task_context_decision and task_context_decision.continuation_type in _NEW_TASK_CONTINUATION_TYPES:
-            return TaskObjectiveDecision(
-                original_message=original,
-                resolved_objective=pending_boundary_request,
-                should_use_resolved_objective=True,
-                confidence=0.9,
-                method="deterministic",
-                reason="user confirmed the pending task-boundary request",
-            )
         if not _should_resolve_objective(
             current_message=original,
             history=history,
