@@ -120,6 +120,10 @@ async def test_completion_judge_service_calls_provider_with_decoding_config():
     assert kwargs["max_tokens"] == 700
     assert messages[0].role == "system"
     assert messages[1].role == "user"
+    user_prompt = messages[1].content
+    assert "Judge this semantically across languages" in user_prompt
+    assert "exact phrase matching" in user_prompt
+    assert "search, fetch" not in user_prompt
 
 
 @pytest.mark.anyio

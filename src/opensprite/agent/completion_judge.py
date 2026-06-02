@@ -227,8 +227,9 @@ def _build_judge_prompt(facts: dict[str, Any]) -> str:
         "Judge this agent turn using only the structured facts below. "
         "Return only JSON matching this schema:\n"
         f"{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n"
-        "Set progress_only_response to true when the assistant response only says it will search, fetch, "
-        "analyze, continue, or use tools, but does not provide user-visible task results.\n\n"
+        "Set progress_only_response to true when the assistant response is only a progress update or "
+        "next-action promise, without delivering the requested result, evidence, concrete blocker, or "
+        "user-facing conclusion. Judge this semantically across languages; do not rely on exact phrase matching.\n\n"
         "Facts:\n"
         f"{json.dumps(facts, ensure_ascii=False, indent=2, default=str)}"
     )
