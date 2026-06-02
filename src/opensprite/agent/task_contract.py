@@ -539,7 +539,12 @@ def _contract_from_planner_payload(
             reason="task contract planner returned an unsupported or missing task_type",
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
-    forced_no_tool = _is_no_tool_command_usage_question(task_intent, current_message)
+    raw_tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    forced_no_tool = _is_no_tool_command_usage_question(
+        current_message=current_message,
+        raw_task_type=raw_task_type,
+        tool_groups=raw_tool_groups,
+    )
     forced_recent_context_no_tool = _is_recent_context_no_tool_follow_up(
         current_message=current_message,
         history=history,
@@ -547,7 +552,7 @@ def _contract_from_planner_payload(
     if forced_no_tool or forced_recent_context_no_tool:
         raw_task_type = "pure_answer"
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
-    tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    tool_groups = raw_tool_groups
     if forced_no_tool or forced_recent_context_no_tool:
         tool_groups = []
     if task_type == "history_retrieval":
@@ -684,11 +689,15 @@ def _normalize_planner_tool_groups(value: Any) -> list[str]:
     return groups
 
 
-def _is_no_tool_command_usage_question(task_intent: TaskIntent, current_message: str) -> bool:
-    text = str(current_message or task_intent.objective or "").strip()
-    if task_intent.kind != "question":
-        return False
-    if task_intent.expects_code_change or task_intent.expects_verification:
+def _is_no_tool_command_usage_question(*, current_message: str, raw_task_type: str, tool_groups: list[str]) -> bool:
+    text = str(current_message or "").strip()
+    planner_requested_read_only_workspace = raw_task_type == "workspace_read" or "workspace_read" in tool_groups
+    planner_requested_workspace_change = (
+        raw_task_type in {"workspace_change", "code_change"}
+        or "workspace_write" in tool_groups
+        or "verification" in tool_groups
+    )
+    if not planner_requested_read_only_workspace or planner_requested_workspace_change:
         return False
     forbids_workspace_evidence = bool(_NO_WORKSPACE_EVIDENCE_RE.search(text))
     if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text) and not forbids_workspace_evidence:

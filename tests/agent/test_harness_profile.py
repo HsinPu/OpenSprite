@@ -353,6 +353,34 @@ async def test_task_contract_planner_keeps_command_usage_question_no_tool_when_r
 
 
 @pytest.mark.anyio
+async def test_task_contract_planner_does_not_override_workspace_change_for_command_usage_text():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    message = "Without reading the repo, explain how to change the opensprite trace CLI implementation."
+    intent = TaskIntentService().classify(message)
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "code_change",
+            "required_tool_groups": ["workspace_read", "workspace_write"],
+            "allow_no_tool_final": False,
+            "reason": "The user asked for an implementation change.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=message,
+        history=[],
+    )
+
+    assert contract.task_type == "code_change"
+    assert any(item.kind == "file_change" for item in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert "override_reason" not in contract.planner_metadata
+
+
+@pytest.mark.anyio
 async def test_task_contract_planner_does_not_infer_web_tools_from_invalid_json():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
