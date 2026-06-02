@@ -821,7 +821,7 @@ def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_pa
     assert "# Active Task" not in system_text
 
 
-def test_main_agent_call_llm_injects_proactive_retrieval_context_for_follow_up(tmp_path: Path) -> None:
+def test_main_agent_call_llm_does_not_inject_retrieval_context_without_task_context_decision(tmp_path: Path) -> None:
     app_home = tmp_path / "home"
     sync_templates(app_home, silent=True)
 
@@ -865,14 +865,11 @@ def test_main_agent_call_llm_injects_proactive_retrieval_context_for_follow_up(t
 
     assert result.content == "done"
     llm_messages = provider.calls[0]
-    proactive_context = next(
-        message.content
+    assert not any(
+        getattr(message, "role", None) == "system"
+        and "# Proactive Retrieval Context" in str(message.content or "")
         for message in llm_messages
-        if getattr(message, "role", None) == "system" and "# Proactive Retrieval Context" in str(message.content or "")
     )
-    assert "## Retrieved History" in proactive_context
-    assert "src/cleanup.py" in proactive_context
-    assert "## Retrieved Knowledge" not in proactive_context
 
 
 def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(tmp_path: Path) -> None:

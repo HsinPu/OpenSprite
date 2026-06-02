@@ -8,7 +8,6 @@ from typing import Any, Awaitable, Callable
 from ..config import AgentConfig
 from ..llms import ChatMessage
 from .planning_mode import resolve_planning_mode
-from .retrieval import ProactiveRetrievalService
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
@@ -410,15 +409,11 @@ class LlmCallService:
             tool_schema_tokens=tool_schema_tokens,
         )
         structured_retrieval_decision = _structured_retrieval_decision(task_context_decision)
+        should_retrieve = bool(structured_retrieval_decision)
         proactive_retrieval_context = await self._build_proactive_retrieval_context(
             session_id=session_id,
             current_message=effective_current_message,
-            should_retrieve=structured_retrieval_decision,
-        )
-        should_retrieve = (
-            ProactiveRetrievalService.should_retrieve(effective_current_message)
-            if structured_retrieval_decision is None
-            else structured_retrieval_decision
+            should_retrieve=should_retrieve,
         )
         if run_id is not None:
             await self._emit_run_event(
@@ -429,7 +424,7 @@ class LlmCallService:
                     "should_retrieve": should_retrieve,
                     "applied": bool(proactive_retrieval_context),
                     "context_len": len(proactive_retrieval_context or ""),
-                    "decision_source": "task_context" if structured_retrieval_decision is not None else "message_fallback",
+                    "decision_source": "task_context" if structured_retrieval_decision is not None else "none",
                 },
                 channel=channel,
                 external_chat_id=external_chat_id,
