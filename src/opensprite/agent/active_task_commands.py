@@ -221,9 +221,7 @@ class ActiveTaskCommandService:
                     or bool(task_objective_decision and task_objective_decision.should_use_resolved_objective)
                 )
             else:
-                should_seed = task_intent.should_seed_active_task or bool(
-                    task_objective_decision and task_objective_decision.should_use_resolved_objective
-                )
+                should_seed = bool(task_objective_decision and task_objective_decision.should_use_resolved_objective)
             inheriting_current_task = bool(has_current_task and task_context_decision and task_context_decision.should_inherit_active_task)
             if should_seed and not inheriting_current_task:
                 goal = task_intent.objective

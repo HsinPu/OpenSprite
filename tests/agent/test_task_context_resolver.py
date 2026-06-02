@@ -795,7 +795,7 @@ def test_active_task_seed_respects_llm_decision_not_to_seed_new_task(tmp_path):
     assert not any(event["event_type"] == "seed" for event in store.read_events())
 
 
-def test_active_task_seed_requires_structured_intent_not_text_markers(tmp_path):
+def test_active_task_seed_requires_structured_decision_not_task_intent(tmp_path):
     session_id = "telegram:room-1"
     app_home = tmp_path / "home"
     workspace = tmp_path / "workspace"
@@ -811,6 +811,7 @@ def test_active_task_seed_requires_structured_intent_not_text_markers(tmp_path):
             session_id,
             "Refactor the agent in small safe steps.",
             enabled=True,
+            task_intent=TaskIntentService().classify("Refactor the agent in small safe steps."),
         )
     )
 
