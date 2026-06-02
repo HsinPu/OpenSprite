@@ -815,6 +815,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.context_compaction_min_messages == 8
     assert config.agent.context_compaction_strategy == "deterministic"
     assert config.agent.context_compaction_llm.max_tokens == 4096
+    assert "maximum context length" in config.agent.context_overflow_error_markers
     assert config.agent.auto_continue_default_budget == 1
     assert config.agent.auto_continue_long_running_budget == 3
     assert config.agent.auto_continue_deterministic_action_budget == 4

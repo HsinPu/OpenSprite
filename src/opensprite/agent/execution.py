@@ -7,9 +7,9 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Sequence
 
-from ..config import DocumentLlmConfig, ToolsConfig
+from ..config import DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS, DocumentLlmConfig, ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
@@ -187,20 +187,6 @@ class ExecutionEngine:
     COMPACTED_TAIL_MESSAGE_MAX_CHARS = 1200
     LLM_COMPACTION_TRANSCRIPT_MAX_CHARS = 30_000
     LLM_COMPACTION_MESSAGE_MAX_CHARS = 1800
-    CONTEXT_OVERFLOW_MARKERS = (
-        "context length",
-        "context_length_exceeded",
-        "context window",
-        "maximum context",
-        "maximum context length",
-        "maximum token",
-        "too many tokens",
-        "token limit",
-        "tokens exceed",
-        "input is too long",
-        "prompt is too long",
-        "reduce the length",
-    )
     CONTINUATION_AFTER_COMPACTION_MESSAGE = (
         "Continue from the compacted conversation handoff above. "
         "Treat it as reference state from a previous context window, not as a fresh user request. "
@@ -253,6 +239,7 @@ Output exactly these sections when applicable:
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
         context_compaction_llm: DocumentLlmConfig | None = None,
+        context_overflow_error_markers: Sequence[str] | None = None,
         llm_request_timeout_seconds: float | None = None,
     ):
         self.provider = provider
@@ -270,6 +257,12 @@ Output exactly these sections when applicable:
         self.context_compaction_min_messages = max(1, context_compaction_min_messages)
         self.context_compaction_strategy = context_compaction_strategy
         self.context_compaction_llm = context_compaction_llm
+        marker_source = (
+            DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS
+            if context_overflow_error_markers is None
+            else context_overflow_error_markers
+        )
+        self.context_overflow_error_markers = tuple(str(marker).strip().lower() for marker in marker_source if str(marker).strip())
         self.tools_config = tools_config or ToolsConfig()
         self.tool_result_max_chars = max(200, self.tools_config.tool_result_max_chars)
         self.exec_result_max_chars = max(200, self.tools_config.exec_result_max_chars)
@@ -515,11 +508,10 @@ Output exactly these sections when applicable:
             preview += f", ... (+{len(names) - 5} more)"
         return preview
 
-    @classmethod
-    def _looks_like_context_overflow(cls, exc: Exception) -> bool:
+    def _looks_like_context_overflow(self, exc: Exception) -> bool:
         """Return whether an LLM exception appears to be caused by context size."""
         text = f"{type(exc).__name__}: {str(exc)}".lower()
-        return any(marker in text for marker in cls.CONTEXT_OVERFLOW_MARKERS)
+        return any(marker in text for marker in self.context_overflow_error_markers)
 
     @staticmethod
     def _raise_if_cancel_requested(should_cancel: Callable[[], bool] | None) -> None:

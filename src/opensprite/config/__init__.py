@@ -5,6 +5,7 @@ opensprite/config/__init__.py - 設定模組
 from .llm_presets import LLMPresets, ProviderPreset, load_llm_presets
 from .schema import (
     Config,
+    DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS,
     LLMsConfig,
     ProviderConfig,
     AgentConfig,
@@ -44,6 +45,7 @@ __all__ = [
     "ProviderPreset",
     "load_llm_presets",
     "Config",
+    "DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS",
     "LLMsConfig",
     "ProviderConfig",
     "AgentConfig",

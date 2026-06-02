@@ -1144,6 +1144,7 @@ class AgentLoop:
             context_compaction_min_messages=self.config.context_compaction_min_messages,
             context_compaction_strategy=self.config.context_compaction_strategy,
             context_compaction_llm=self.config.context_compaction_llm,
+            context_overflow_error_markers=self.config.context_overflow_error_markers,
         )
 
     async def _emit_search_index_failure(self, session_id: str, event_type: str, payload: dict[str, Any]) -> None:

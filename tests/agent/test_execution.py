@@ -308,8 +308,13 @@ class ReasoningStreamingProvider:
 
 
 class OverflowThenSuccessProvider:
-    def __init__(self, final_response: str = "done"):
+    def __init__(
+        self,
+        final_response: str = "done",
+        error_message: str = "This model's maximum context length was exceeded",
+    ):
         self.final_response = final_response
+        self.error_message = error_message
         self.calls = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
@@ -318,7 +323,7 @@ class OverflowThenSuccessProvider:
             "tools": tools,
         })
         if len(self.calls) == 1:
-            raise RuntimeError("This model's maximum context length was exceeded")
+            raise RuntimeError(self.error_message)
         return LLMResponse(content=self.final_response, model="fake-model")
 
 
@@ -2170,6 +2175,28 @@ def test_execution_compacts_and_retries_after_context_overflow():
     assert retried_messages[2].tool_call_id == "tc1"
     assert retried_messages[3].content == "latest instruction"
     assert statuses == ["上下文已接近上限，正在壓縮目前任務並繼續…"]
+
+
+def test_execution_context_overflow_uses_configured_markers():
+    provider = OverflowThenSuccessProvider("after custom marker", error_message="provider custom-window exhausted")
+    engine = _make_engine(
+        provider,
+        ToolRegistry(),
+        [],
+        context_overflow_error_markers=("custom-window",),
+    )
+    messages = [
+        ChatMessage(role="system", content="SYSTEM"),
+        ChatMessage(role="user", content="old detail " + "A" * 5000),
+        ChatMessage(role="assistant", content="intermediate answer"),
+        ChatMessage(role="user", content="latest instruction"),
+    ]
+
+    result = asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=False))
+
+    assert result.content == "after custom marker"
+    assert result.context_compactions == 1
+    assert len(provider.calls) == 2
 
 
 def test_execution_context_compaction_does_not_consume_tool_iteration():

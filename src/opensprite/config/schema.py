@@ -41,6 +41,22 @@ from .defaults import (
 from .llm_presets import provider_profile_defaults
 
 
+DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS: tuple[str, ...] = (
+    "context length",
+    "context_length_exceeded",
+    "context window",
+    "maximum context",
+    "maximum context length",
+    "maximum token",
+    "too many tokens",
+    "token limit",
+    "tokens exceed",
+    "input is too long",
+    "prompt is too long",
+    "reduce the length",
+)
+
+
 class ProviderConfig(BaseModel):
     """LLM provider configuration."""
 
@@ -139,6 +155,9 @@ class AgentConfig(BaseModel):
     context_compaction_min_messages: int = Field(ge=2)
     context_compaction_strategy: Literal["deterministic", "llm"]
     context_compaction_llm: DocumentLlmConfig
+    context_overflow_error_markers: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS)
+    )
     auto_continue_default_budget: int = Field(default=1, ge=0, le=100)
     auto_continue_long_running_budget: int = Field(default=3, ge=0, le=100)
     auto_continue_deterministic_action_budget: int = Field(default=4, ge=0, le=100)
@@ -1387,6 +1406,7 @@ class Config:
         return {
             "context_output_reserve_tokens": agent["context_output_reserve_tokens"],
             "llm_request_timeout_seconds": agent["llm_request_timeout_seconds"],
+            "context_overflow_error_markers": agent["context_overflow_error_markers"],
         }
 
     @classmethod
@@ -1511,6 +1531,7 @@ class Config:
                 "context_compaction_min_messages": self.agent.context_compaction_min_messages,
                 "context_compaction_strategy": self.agent.context_compaction_strategy,
                 "context_compaction_llm": self.agent.context_compaction_llm.model_dump(),
+                "context_overflow_error_markers": list(self.agent.context_overflow_error_markers),
                 "auto_continue_default_budget": self.agent.auto_continue_default_budget,
                 "auto_continue_long_running_budget": self.agent.auto_continue_long_running_budget,
                 "auto_continue_deterministic_action_budget": self.agent.auto_continue_deterministic_action_budget,

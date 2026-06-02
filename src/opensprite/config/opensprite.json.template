@@ -107,6 +107,20 @@
       "frequency_penalty": null,
       "presence_penalty": null
     },
+    "context_overflow_error_markers": [
+      "context length",
+      "context_length_exceeded",
+      "context window",
+      "maximum context",
+      "maximum context length",
+      "maximum token",
+      "too many tokens",
+      "token limit",
+      "tokens exceed",
+      "input is too long",
+      "prompt is too long",
+      "reduce the length"
+    ],
     "auto_continue_default_budget": 1,
     "auto_continue_long_running_budget": 3,
     "auto_continue_deterministic_action_budget": 4,
