@@ -58,6 +58,14 @@ def test_work_progress_uses_harness_profile_plan_steps():
     )
 
 
+def test_work_progress_default_plan_skips_question_intent():
+    intent = TaskIntentService().classify("What does this command do?")
+
+    plan = WorkProgressService().create_plan(intent)
+
+    assert plan is None
+
+
 def test_work_progress_coding_harness_plan_does_not_depend_on_intent_markers():
     intent = TaskIntentService().classify("請看一下這段目前流程")
     profile = HarnessProfileService().from_contract(

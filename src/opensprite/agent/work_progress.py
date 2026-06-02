@@ -202,7 +202,7 @@ class WorkProgressService:
         profile_name = harness_profile.name if harness_profile is not None else ""
         if profile_name == "chat":
             return None
-        if not task_intent.should_seed_active_task and profile_name in {"", "chat"}:
+        if not _intent_supports_default_work_plan(task_intent) and profile_name == "":
             return None
 
         steps: list[str]
@@ -809,6 +809,10 @@ def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
     required_tool_groups = set(harness_profile.required_tool_groups)
     required_evidence = set(harness_profile.required_evidence)
     return "verification" in required_tool_groups or "verification" in required_evidence
+
+
+def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
+    return task_intent.kind in {"analysis", "task"} and not task_intent.needs_clarification
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
