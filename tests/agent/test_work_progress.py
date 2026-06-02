@@ -261,7 +261,7 @@ def test_work_progress_resolves_vague_continue_from_existing_state():
     existing = StoredWorkState(
         session_id="web:browser-1",
         objective="Finish the refactor",
-        kind="refactor",
+        kind="task",
         status="active",
         steps=("1. inspect", "2. change", "3. verify"),
         constraints=("Keep the public API stable",),
@@ -276,7 +276,7 @@ def test_work_progress_resolves_vague_continue_from_existing_state():
     resolved = service.resolve_intent(vague_intent, existing)
 
     assert resolved.objective == "Finish the refactor"
-    assert resolved.kind == "refactor"
+    assert resolved.kind == "task"
     assert resolved.expects_code_change is True
     assert resolved.expects_verification is True
     assert resolved.needs_clarification is False
@@ -290,7 +290,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
         StoredWorkState(
             session_id="web:browser-1",
             objective="Finish the refactor",
-            kind="refactor",
+            kind="task",
             status="active",
             steps=("1. inspect", "2. change", "3. verify"),
             constraints=("Keep the public API stable",),
@@ -314,7 +314,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
     existing = StoredWorkState(
         session_id="web:browser-1",
         objective="Finish the refactor",
-        kind="refactor",
+        kind="task",
         status="active",
         steps=("1. inspect", "2. change", "3. verify"),
         constraints=("Keep the public API stable",),
@@ -353,7 +353,7 @@ def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
     state = StoredWorkState(
         session_id="web:browser-1",
         objective="Finish the refactor",
-        kind="refactor",
+        kind="task",
         status="active",
         steps=("1. inspect", "2. change", "3. verify"),
         completed_steps=("1. inspect",),

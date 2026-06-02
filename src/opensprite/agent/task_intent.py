@@ -9,13 +9,7 @@ from typing import Any
 
 _TASK_KINDS = {
     "analysis",
-    "debug",
-    "implementation",
-    "planning",
-    "refactor",
-    "review",
     "task",
-    "writing",
 }
 _NON_TASK_MESSAGES = {
     "hi",
@@ -219,14 +213,10 @@ def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[s
         return ("attached media is persisted or referenced for follow-up",)
 
     criteria = ["the user request is addressed directly", "the result or blocker is explicit"]
-    if kind in {"debug", "implementation", "refactor"} or long_running:
+    if long_running:
         criteria.append("relevant tests or checks pass, or the verification gap is stated")
-    if kind in {"analysis", "review"}:
+    if kind == "analysis":
         criteria.append("findings are tied to concrete evidence")
-    if kind == "writing":
-        criteria.append("the requested draft or revision is provided")
-    if kind == "planning":
-        criteria.append("next steps are concrete and ordered")
     if has_media:
         criteria.append("attached media is considered only when relevant to the request")
     return tuple(dict.fromkeys(criteria))
