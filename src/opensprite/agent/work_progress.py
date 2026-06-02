@@ -922,14 +922,14 @@ def _state_steps(
         current = steps[-1] if steps else "not set"
         return current, "not set"
     if progress.next_action == "continue_verification":
-        return (steps[-1] if steps else "not set"), "not set"
+        return _verification_step(steps), "not set"
     if progress.next_action in {"continue_review", "collect_review_evidence", "address_review_findings"}:
         return (steps[-1] if steps else "not set"), "not set"
     if expects_code_change and progress.file_change_count <= 0 and len(steps) >= 2:
         next_step = steps[2] if len(steps) > 2 else "not set"
         return steps[1], next_step
     if expects_verification and steps:
-        return steps[-1], "not set"
+        return _verification_step(steps), "not set"
     if progress.next_action == "continue_work" and steps:
         current = steps[-1] if progress.file_change_count > 0 else (steps[1] if len(steps) > 1 else steps[0])
         next_step = "not set"
@@ -937,3 +937,11 @@ def _state_steps(
             next_step = steps[2]
         return current, next_step
     return "not set", "not set"
+
+
+def _verification_step(steps: tuple[str, ...]) -> str:
+    for step in steps:
+        lowered = step.lower()
+        if "verification" in lowered or "verify" in lowered:
+            return step
+    return steps[-1] if steps else "not set"

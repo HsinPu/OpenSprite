@@ -630,6 +630,16 @@ class AgentTurnRunner:
                 exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
                 if exec_result.task_contract is not None:
                     harness_profile = self.harness_profiles.from_contract(exec_result.task_contract)
+                    contract_work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
+                    if contract_work_plan is not None:
+                        work_plan = contract_work_plan
+                        if _can_replace_initial_work_state(current_work_state):
+                            current_work_state = self.work_progress.build_initial_state(
+                                session_id=turn.session_id,
+                                task_intent=task_intent,
+                                work_plan=work_plan,
+                                existing_state=None,
+                            )
                 response = exec_result.content
             execution_results.append(exec_result)
 
@@ -1589,3 +1599,18 @@ def _task_contract_planner_status(task_contract: Any) -> str:
     if isinstance(metadata, dict):
         return str(metadata.get("planner_status") or "").strip()
     return ""
+
+
+def _can_replace_initial_work_state(state: StoredWorkState | None) -> bool:
+    if state is None:
+        return True
+    metadata = state.metadata if isinstance(state.metadata, dict) else {}
+    return (
+        metadata.get("source") == "work_progress"
+        and not str(metadata.get("harness_profile") or "").strip()
+        and not state.completed_steps
+        and not state.blockers
+        and int(state.file_change_count or 0) == 0
+        and not state.touched_paths
+        and not state.delegated_tasks
+    )

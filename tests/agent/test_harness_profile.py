@@ -58,6 +58,22 @@ def test_harness_profile_derives_workspace_change_from_contract():
     assert "workspace_write" in profile.required_tool_groups
 
 
+def test_harness_profile_preserves_workspace_change_verification_requirement():
+    contract = _contract(
+        "code_change",
+        EvidenceRequirement(kind="tool_group", tool_group="workspace_write"),
+        EvidenceRequirement(kind="file_change"),
+        EvidenceRequirement(kind="verification", tool_group="verification"),
+    )
+
+    profile = HarnessProfileService().from_contract(contract)
+
+    assert profile.name == "coding"
+    assert profile.task_type == "workspace_change"
+    assert "verification" in profile.required_tool_groups
+    assert "verification" in profile.required_evidence
+
+
 def test_harness_profile_derives_media_from_contract():
     contract = _contract(
         "media_extraction",

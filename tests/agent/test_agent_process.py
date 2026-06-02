@@ -2561,7 +2561,7 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
     task_block, events = asyncio.run(scenario())
 
     assert "- Status: active" in task_block
-    assert "- Current step: 3. verify the result" in task_block
+    assert "- Current step: 3. run focused verification or state the verification gap" in task_block
     progress_event = next(event for event in reversed(events) if event["event_type"] == "work_progress")
     assert progress_event["details"]["next_action"] == "stop_budget_exhausted"
 

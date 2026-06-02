@@ -89,11 +89,16 @@ class HarnessProfileService:
                 selection_signals=("contract:media",),
             )
         if "workspace_write" in tool_groups or "file_change" in requirement_kinds or task_type == "code_change":
+            required_tool_groups = ("workspace_read", "workspace_write")
+            required_evidence = ("file_change",)
+            if "verification" in tool_groups or "verification" in requirement_kinds:
+                required_tool_groups = (*required_tool_groups, "verification")
+                required_evidence = (*required_evidence, "verification")
             return HarnessProfile(
                 name="coding",
                 task_type="workspace_change",
-                required_tool_groups=("workspace_read", "workspace_write"),
-                required_evidence=("file_change",),
+                required_tool_groups=required_tool_groups,
+                required_evidence=required_evidence,
                 verification_policy="focused_if_possible",
                 continuation_policy="bounded_with_verification",
                 approval_required_risk_levels=("external_side_effect", "configuration"),
@@ -101,11 +106,16 @@ class HarnessProfileService:
                 selection_signals=("contract:workspace_write",),
             )
         if "workspace_read" in tool_groups or task_type == "workspace_read":
+            required_tool_groups = ("workspace_read",)
+            required_evidence = ("workspace_evidence",)
+            if "verification" in tool_groups or "verification" in requirement_kinds:
+                required_tool_groups = (*required_tool_groups, "verification")
+                required_evidence = (*required_evidence, "verification")
             return HarnessProfile(
                 name="coding",
                 task_type="workspace_analysis",
-                required_tool_groups=("workspace_read",),
-                required_evidence=("workspace_evidence",),
+                required_tool_groups=required_tool_groups,
+                required_evidence=required_evidence,
                 verification_policy="focused_if_possible",
                 continuation_policy="bounded_with_verification",
                 approval_required_risk_levels=("external_side_effect", "configuration"),
