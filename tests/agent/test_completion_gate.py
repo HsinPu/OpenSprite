@@ -643,7 +643,7 @@ def test_completion_gate_rejects_repo_state_answer_for_command_version_question(
                 ToolEvidence(
                     name="exec",
                     ok=True,
-                    result_preview="fatal: not a git repository (or any of the parent directories): .git",
+                    result_preview="abc123def456",
                     metadata={"tool_args": {"command": "git rev-parse HEAD"}},
                 ),
             ),

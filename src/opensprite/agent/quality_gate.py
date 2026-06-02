@@ -355,17 +355,25 @@ def _execution_has_failed_command_evidence(execution_result: ExecutionResult) ->
 
 
 def _execution_confuses_command_version_with_repo_state(execution_result: ExecutionResult) -> bool:
-    repo_state_markers = (".git", "not a git repository", "head", "rev-parse", "commit")
     for evidence in execution_result.tool_evidence:
         command = ""
         if isinstance(evidence.metadata, dict):
             args = evidence.metadata.get("tool_args")
             if isinstance(args, dict):
                 command = str(args.get("command") or "").lower()
-        preview = str(evidence.result_preview or "").lower()
-        if "git rev-parse" in command or any(marker in preview for marker in repo_state_markers):
+        if _command_inspects_git_repository_state(command):
             return True
     return False
+
+
+def _command_inspects_git_repository_state(command: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(command or "").strip().lower())
+    if not normalized.startswith("git "):
+        return False
+    return any(
+        f"git {subcommand}" in normalized
+        for subcommand in ("rev-parse", "status", "log", "show", "branch")
+    )
 
 
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
