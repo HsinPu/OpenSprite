@@ -1037,7 +1037,7 @@ async def test_completion_gate_uses_judge_for_waiting_user_status():
 
 
 def test_completion_gate_does_not_infer_waiting_from_response_question():
-    intent = TaskIntentService().classify("continue")
+    intent = TaskIntentService().classify("What should I do next?")
 
     result = CompletionGateService().evaluate(
         task_intent=intent,

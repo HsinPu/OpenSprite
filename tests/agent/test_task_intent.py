@@ -46,6 +46,14 @@ def test_task_intent_debug_diagnosis_does_not_require_code_change():
     assert intent.expects_verification is False
 
 
+def test_task_intent_does_not_treat_continue_as_vague_marker():
+    intent = TaskIntentService().classify("continue")
+
+    assert intent.kind == "task"
+    assert intent.needs_clarification is False
+    assert intent.should_seed_active_task is True
+
+
 def test_task_intent_respects_no_edit_planning_constraint():
     intent = TaskIntentService().classify(
         "Plan a refactor for src/opensprite/tools/web_research.py, but do not edit files."

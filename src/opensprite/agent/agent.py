@@ -731,6 +731,7 @@ class AgentLoop:
                 channel,
                 sender_id,
             ),
+            read_active_task_snapshot=self._read_active_task_snapshot,
             get_work_state=lambda session_id: self._get_work_state(session_id),
             save_work_state=lambda state: self._save_work_state(state),
             apply_completion_gate_result=lambda session_id, result: self._maybe_apply_completion_gate_result(

@@ -11,7 +11,6 @@ _TASK_KINDS = {
     "analysis",
     "task",
 }
-_VAGUE_TASK_MESSAGES = {"continue"}
 
 
 @dataclass(frozen=True)
@@ -91,7 +90,6 @@ class TaskIntentService:
             )
 
         kind = _classify_kind(compact, media_count=media_count)
-        needs_clarification = _needs_clarification(compact, kind)
         long_running = _is_long_running(compact, kind)
         done_criteria = _done_criteria(kind, long_running=long_running, has_media=media_count > 0)
 
@@ -100,7 +98,6 @@ class TaskIntentService:
             objective=_truncate(compact),
             constraints=(),
             done_criteria=done_criteria,
-            needs_clarification=needs_clarification,
             verification_hint=None,
             long_running=long_running,
             expects_code_change=False,
@@ -128,11 +125,6 @@ def _classify_kind(text: str, *, media_count: int) -> str:
     if _looks_like_question(text):
         return "question"
     return "task"
-
-
-def _needs_clarification(text: str, kind: str) -> bool:
-    lowered = text.lower().strip(" .!?\uff1f")
-    return kind in _TASK_KINDS and lowered in _VAGUE_TASK_MESSAGES
 
 
 def _is_long_running(text: str, kind: str) -> bool:

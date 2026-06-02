@@ -2,9 +2,21 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfile, HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
+from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
+
+
+def _continue_active_task_decision() -> TaskContextDecision:
+    return TaskContextDecision(
+        is_follow_up=True,
+        should_inherit_active_task=True,
+        continuation_type="continue_active_task",
+        confidence=0.75,
+        method="deterministic",
+        reason="structured active-task continuation",
+    )
 
 
 def test_work_progress_keeps_intent_only_plan_generic_before_contract():
@@ -256,7 +268,7 @@ def test_work_progress_stops_repeated_continuation_without_progress():
     assert update.next_action == "stop_no_progress"
 
 
-def test_work_progress_resolves_vague_continue_from_existing_state():
+def test_work_progress_resolves_structured_continue_from_existing_state():
     service = WorkProgressService()
     existing = StoredWorkState(
         session_id="web:browser-1",
@@ -271,14 +283,38 @@ def test_work_progress_resolves_vague_continue_from_existing_state():
         expects_code_change=True,
         expects_verification=True,
     )
-    vague_intent = TaskIntentService().classify("continue")
+    intent = TaskIntentService().classify("continue")
 
-    resolved = service.resolve_intent(vague_intent, existing)
+    resolved = service.resolve_intent(
+        intent,
+        existing,
+        task_context_decision=_continue_active_task_decision(),
+    )
 
     assert resolved.objective == "Finish the refactor"
     assert resolved.kind == "task"
     assert resolved.expects_code_change is True
     assert resolved.expects_verification is True
+    assert resolved.needs_clarification is False
+
+
+def test_work_progress_does_not_resolve_continue_without_structured_context():
+    service = WorkProgressService()
+    existing = StoredWorkState(
+        session_id="web:browser-1",
+        objective="Finish the refactor",
+        kind="task",
+        status="active",
+        steps=("1. inspect", "2. change", "3. verify"),
+        done_criteria=("tests pass",),
+        long_running=True,
+        coding_task=True,
+    )
+    intent = TaskIntentService().classify("continue")
+
+    resolved = service.resolve_intent(intent, existing)
+
+    assert resolved.objective == "continue"
     assert resolved.needs_clarification is False
 
 
@@ -309,6 +345,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
             resume_hint="Resume at current step: 2. change",
             last_progress_signals=("file_changes",),
         ),
+        task_context_decision=_continue_active_task_decision(),
     )
     plan = service.create_plan(resolved)
     existing = StoredWorkState(

@@ -25,6 +25,7 @@ from .run_trace import RunTraceRecorder
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
 from .task_intent import TaskIntent, TaskIntentService
+from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate
@@ -71,6 +72,7 @@ class AgentTurnRunner:
         llm_not_configured_message: Callable[[], str],
         format_log_preview: Callable[..., str],
         set_session_overlay_id: Callable[[str, dict[str, Any] | None, str | None, str | None], None],
+        read_active_task_snapshot: Callable[[str], str],
         get_work_state: Callable[[str], Awaitable[StoredWorkState | None]],
         save_work_state: Callable[[StoredWorkState | None], Awaitable[None]],
         apply_completion_gate_result: Callable[[str, CompletionGateResult], Awaitable[None]],
@@ -107,6 +109,7 @@ class AgentTurnRunner:
         self._llm_not_configured_message = llm_not_configured_message
         self._format_log_preview = format_log_preview
         self._set_session_overlay_id = set_session_overlay_id
+        self._read_active_task_snapshot = read_active_task_snapshot
         self._get_work_state = get_work_state
         self._save_work_state = save_work_state
         self._apply_completion_gate_result = apply_completion_gate_result
@@ -153,6 +156,22 @@ class AgentTurnRunner:
             },
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
+        )
+
+    def _resolve_pre_work_task_context(
+        self,
+        *,
+        user_message: UserMessage,
+        turn: PreparedTurnInput,
+        task_intent: TaskIntent,
+        existing_work_state: StoredWorkState | None,
+    ) -> TaskContextDecision:
+        """Resolve deterministic task context needed before work-state setup."""
+        return TaskContextResolver.resolve_deterministic(
+            current_message=_message_with_runtime_context(user_message.text, turn.user_metadata),
+            task_intent=task_intent,
+            active_task=self._read_active_task_snapshot(turn.session_id),
+            work_state_summary=self.work_progress.render_state_summary(existing_work_state),
         )
 
     async def _maybe_record_worktree_sandbox(
@@ -216,7 +235,17 @@ class AgentTurnRunner:
         )
         self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
         existing_work_state = await self._get_work_state(turn.session_id)
-        task_intent = self.work_progress.resolve_intent(task_intent, existing_work_state)
+        pre_work_task_context_decision = self._resolve_pre_work_task_context(
+            user_message=user_message,
+            turn=turn,
+            task_intent=task_intent,
+            existing_work_state=existing_work_state,
+        )
+        task_intent = self.work_progress.resolve_intent(
+            task_intent,
+            existing_work_state,
+            task_context_decision=pre_work_task_context_decision,
+        )
         worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
             turn.session_id,
             run_id,

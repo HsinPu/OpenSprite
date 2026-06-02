@@ -11,6 +11,7 @@ from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
+from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
 
@@ -80,6 +81,15 @@ def _merge_delegated_tasks(
         selected_task_id = next((task.task_id for task in reversed(normalized_updates) if task.selected), normalized_updates[-1].task_id)
         return tuple(replace(task, selected=task.task_id == selected_task_id) for task in tasks)
     return tasks
+
+
+def _continues_existing_task(task_context_decision: TaskContextDecision | None) -> bool:
+    if task_context_decision is None:
+        return False
+    return bool(
+        task_context_decision.should_inherit_active_task
+        or task_context_decision.continuation_type == "continue_active_task"
+    )
 
 
 @dataclass(frozen=True)
@@ -241,12 +251,18 @@ class WorkProgressService:
             continuation_policy=harness_profile.continuation_policy if harness_profile is not None else "",
         )
 
-    def resolve_intent(self, task_intent: TaskIntent, state: StoredWorkState | None) -> TaskIntent:
-        """Reuse persisted task semantics when the new user turn is only a vague continuation."""
+    def resolve_intent(
+        self,
+        task_intent: TaskIntent,
+        state: StoredWorkState | None,
+        *,
+        task_context_decision: TaskContextDecision | None = None,
+    ) -> TaskIntent:
+        """Reuse persisted task semantics when structured context says this turn continues it."""
         if (
             state is None
             or state.status not in {"active", "blocked", "waiting_user"}
-            or not task_intent.needs_clarification
+            or not _continues_existing_task(task_context_decision)
         ):
             return task_intent
         return TaskIntent(
