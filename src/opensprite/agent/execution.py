@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
@@ -546,6 +547,43 @@ Output exactly these sections when applicable:
         )
 
     @staticmethod
+    def _extract_structured_preview_from_detail(detail: str) -> str | None:
+        parsed = ExecutionEngine._parse_json_object_from_text(detail)
+        if isinstance(parsed, dict):
+            summary = parsed.get("summary") or parsed.get("error") or parsed.get("title")
+            if summary:
+                return str(summary)
+        for key in ("summary", "error", "title"):
+            summary = ExecutionEngine._extract_json_string_field_preview(detail, key)
+            if summary:
+                return summary
+        return None
+
+    @staticmethod
+    def _parse_json_object_from_text(text: str) -> dict | None:
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", str(text or "")):
+            try:
+                parsed, _ = decoder.raw_decode(str(text or "")[match.start() :])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return None
+
+    @staticmethod
+    def _extract_json_string_field_preview(text: str, key: str) -> str | None:
+        pattern = rf'"{re.escape(key)}"\s*:\s*"((?:\\.|[^"\\])*)'
+        match = re.search(pattern, str(text or ""))
+        if not match:
+            return None
+        raw = match.group(1)
+        try:
+            return str(json.loads(f'"{raw}"'))
+        except Exception:
+            return raw.replace(r"\"", '"')
+
+    @staticmethod
     def _summarize_tool_history_item_for_user(result: str) -> str:
         text = str(result or "").strip()
         if not text:
@@ -560,19 +598,9 @@ Output exactly these sections when applicable:
             or "--- BEGIN HEAD ---" in detail
         ):
             return f"{tool_name}: 工具輸出過長，已省略原始內容；請在 Trace 查看詳細結果。"
-        try:
-            parsed = json.loads(detail)
-        except Exception:
-            parsed = None
-        if isinstance(parsed, dict):
-            summary = parsed.get("summary") or parsed.get("error") or parsed.get("title")
-            if summary:
-                return f"{tool_name}: {str(summary)[:180]}"
-        summary_marker = '"summary": "'
-        if summary_marker in detail:
-            summary = detail.split(summary_marker, 1)[1].split('"', 1)[0]
-            if summary:
-                return f"{tool_name}: {summary[:180]}"
+        summary = ExecutionEngine._extract_structured_preview_from_detail(detail)
+        if summary:
+            return f"{tool_name}: {summary[:180]}"
         if detail.startswith("Error executing "):
             parts = detail.split(": ", 1)
             if len(parts) == 2:
