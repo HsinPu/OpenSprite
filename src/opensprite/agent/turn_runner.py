@@ -238,7 +238,6 @@ class AgentTurnRunner:
             work_plan=work_plan,
             existing_state=existing_work_state,
         )
-        await self._save_work_state(current_work_state)
         if work_plan is not None:
             await self._emit_run_event(
                 turn.session_id,
@@ -646,7 +645,11 @@ class AgentTurnRunner:
                 if exec_result.task_contract is not None:
                     harness_profile = self.harness_profiles.from_contract(exec_result.task_contract)
                     contract_work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
-                    if contract_work_plan is not None:
+                    if contract_work_plan is None:
+                        if _can_replace_initial_work_state(current_work_state):
+                            work_plan = None
+                            current_work_state = None
+                    else:
                         work_plan = contract_work_plan
                         if not worktree_sandbox_recorded and work_plan.expects_code_change:
                             worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(

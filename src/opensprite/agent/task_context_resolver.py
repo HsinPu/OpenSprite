@@ -521,9 +521,13 @@ def _continuation_type_from_payload(
 
 
 def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary: str | None) -> bool:
-    if _compact(work_state_summary):
+    if _has_active_task(work_state_summary):
         return True
-    return any(_compact(str(message.get("content") or "")) for message in (history or [])[-6:])
+    return any(
+        _compact(str(message.get("content") or ""))
+        for message in (history or [])[-6:]
+        if str(message.get("role") or "").strip().lower() != "user"
+    )
 
 
 def _is_context_dependent_short_turn(current: str) -> bool:

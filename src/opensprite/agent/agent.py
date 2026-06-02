@@ -2315,8 +2315,7 @@ class AgentLoop:
             return None
 
         task_intent = self._task_intent_for_explicit_goal(goal)
-        harness_profile = self.harness_profiles.default_chat_profile()
-        work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
+        work_plan = self.work_progress.create_plan(task_intent)
         state = self.work_progress.build_initial_state(
             session_id=session_id,
             task_intent=task_intent,

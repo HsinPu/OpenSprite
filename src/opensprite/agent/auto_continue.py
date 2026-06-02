@@ -145,17 +145,17 @@ class AutoContinueService:
                 max_attempts=max_attempts,
                 emit_event=True,
             )
-        if not direct_action_available and attempts_used >= max_attempts:
-            return self._skip(
-                "max_auto_continues_reached",
-                attempt=attempts_used,
-                max_attempts=max_attempts,
-                emit_event=True,
-            )
         if attempts_used > 0 and work_progress is not None and not work_progress.has_progress and not direct_action_available:
             return self._skip(
                 "no_progress_during_continuation",
                 attempt=next_attempt,
+                max_attempts=max_attempts,
+                emit_event=True,
+            )
+        if not direct_action_available and attempts_used >= max_attempts:
+            return self._skip(
+                "max_auto_continues_reached",
+                attempt=attempts_used,
                 max_attempts=max_attempts,
                 emit_event=True,
             )

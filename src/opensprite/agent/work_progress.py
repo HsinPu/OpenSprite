@@ -189,6 +189,8 @@ class WorkProgressService:
     def create_plan(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> WorkPlan | None:
         """Return a plan only for actionable tasks, not casual conversation."""
         profile_name = harness_profile.name if harness_profile is not None else ""
+        if profile_name == "chat":
+            return None
         if not task_intent.should_seed_active_task and profile_name in {"", "chat"}:
             return None
 

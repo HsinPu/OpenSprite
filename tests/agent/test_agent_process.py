@@ -1486,10 +1486,9 @@ def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
     task_block, events = asyncio.run(scenario())
 
     assert "- Goal: Please refactor the agent and run tests. Keep the public API stable." in task_block
-    assert "relevant tests or checks pass, or the verification gap is stated" in task_block
     assert "Keep the public API stable." in task_block
     seed_event = next(event for event in events if event["event_type"] == "seed")
-    assert seed_event["details"]["intent_kind"] == "refactor"
+    assert seed_event["details"]["intent_kind"] == "task"
 
 
 def test_agent_process_emits_task_context_resolved_event(tmp_path):
@@ -2627,7 +2626,7 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
             StoredWorkState(
                 session_id="web:browser-1",
                 objective="Finish the refactor",
-                kind="refactor",
+                kind="task",
                 status="active",
                 steps=("1. inspect", "2. change", "3. verify"),
                 constraints=("Keep the public API stable",),
