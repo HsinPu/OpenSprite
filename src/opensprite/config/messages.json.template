@@ -62,6 +62,8 @@
     "updated_next_step": "已更新下一步。",
     "advanced_to_next_step": "已將下一步提升為目前步驟。",
     "completed_current_step": "已完成目前步驟。",
+    "progress_continue_current_step": "2. execute the highest-value next step toward the goal",
+    "progress_verify_current_step": "3. verify the result",
     "error_set_usage": "Error: task description is required. Usage: /task set <task description>",
     "error_block_usage": "Error: reason is required. Usage: /task block <reason>",
     "error_wait_usage": "Error: question is required. Usage: /task wait <question>",

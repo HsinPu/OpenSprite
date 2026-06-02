@@ -7,7 +7,8 @@ from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver, _merge_with_deterministic
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
-from opensprite.config import Config
+from opensprite.agent.work_progress import WorkProgressUpdate
+from opensprite.config import Config, TaskMessagesConfig
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
@@ -792,6 +793,50 @@ def test_active_task_seed_respects_llm_decision_not_to_seed_new_task(tmp_path):
 
     assert store.read_status() == "inactive"
     assert not any(event["event_type"] == "seed" for event in store.read_events())
+
+
+def test_active_task_work_progress_uses_configured_fallback_steps(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+        messages=TaskMessagesConfig(
+            progress_continue_current_step="configured continue step",
+            progress_verify_current_step="configured verify step",
+        ),
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    store.write_managed_block(_ACTIVE_TASK_BLOCK)
+
+    asyncio.run(
+        service.apply_work_progress(
+            session_id,
+            WorkProgressUpdate(
+                status="working",
+                pass_index=1,
+                auto_continue_attempts=0,
+                progress_signals=(),
+                has_progress=False,
+                file_change_count=0,
+                touched_paths=(),
+                verification_required=True,
+                verification_attempted=False,
+                verification_passed=False,
+                completion_status="incomplete",
+                completion_reason="still working",
+                next_action="continue_work",
+                continuation_budget=1,
+            ),
+            state=None,
+        )
+    )
+
+    updated = store.read_managed_block()
+    assert "- Current step: configured continue step" in updated
+    assert "- Next step: configured verify step" in updated
 
 
 def test_active_task_seed_uses_enriched_objective_for_short_follow_up(tmp_path):

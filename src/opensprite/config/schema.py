@@ -294,6 +294,8 @@ class TaskMessagesConfig(BaseModel):
     updated_next_step: str = "已更新下一步。"
     advanced_to_next_step: str = "已將下一步提升為目前步驟。"
     completed_current_step: str = "已完成目前步驟。"
+    progress_continue_current_step: str = "2. execute the highest-value next step toward the goal"
+    progress_verify_current_step: str = "3. verify the result"
     error_set_usage: str = "Error: task description is required. Usage: /task set <task description>"
     error_block_usage: str = "Error: reason is required. Usage: /task block <reason>"
     error_wait_usage: str = "Error: question is required. Usage: /task wait <question>"

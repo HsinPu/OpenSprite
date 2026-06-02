@@ -878,6 +878,7 @@ class AgentLoop:
             storage=self.storage,
             app_home_getter=lambda: self.app_home,
             workspace_root_getter=lambda: self.tool_workspace,
+            messages=self.messages.task,
         )
         self.recent_summary_update = self._setup_recent_summary_update()
         self.curator = CuratorService(

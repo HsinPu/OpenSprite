@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from ..config import TaskMessagesConfig
 from ..documents.active_task import (
     _extract_task_field,
     build_initial_active_task_block,
@@ -46,10 +47,12 @@ class ActiveTaskCommandService:
         storage: StorageProvider,
         app_home_getter: Callable[[], Path | None],
         workspace_root_getter: Callable[[], Path | None],
+        messages: TaskMessagesConfig | None = None,
     ):
         self.storage = storage
         self._app_home_getter = app_home_getter
         self._workspace_root_getter = workspace_root_getter
+        self.messages = messages or TaskMessagesConfig()
 
     def get_store(self, session_id: str):
         app_home = self._app_home_getter()
@@ -120,11 +123,11 @@ class ActiveTaskCommandService:
         next_step = state.next_step if state is not None else None
         if not current_step and not next_step:
             if progress.next_action == "continue_verification" or progress.status == "verifying":
-                current_step = "3. verify the result"
+                current_step = self.messages.progress_verify_current_step
                 next_step = "not set"
             elif progress.next_action == "continue_work":
-                current_step = "2. execute the highest-value next step toward the goal"
-                next_step = "3. verify the result" if progress.verification_required else "not set"
+                current_step = self.messages.progress_continue_current_step
+                next_step = self.messages.progress_verify_current_step if progress.verification_required else "not set"
             else:
                 return
         if current_step is None or next_step is None:
