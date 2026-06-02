@@ -768,6 +768,55 @@ def test_web_research_adds_official_site_query_for_official_docs_query():
     ]
 
 
+def test_web_research_adds_official_site_query_from_brand_domain_match():
+    search = _FakeSearchToolByQuery(
+        {
+            "OpenRouter rate limits": [
+                {
+                    "title": "Third Party OpenRouter Guide",
+                    "url": "https://example.com/openrouter-rate-limits",
+                    "content": "OpenRouter rate limits explained by a third party",
+                },
+                {
+                    "title": "OpenRouter Docs",
+                    "url": "https://openrouter.ai/docs",
+                    "content": "OpenRouter documentation index",
+                },
+            ],
+            "site:openrouter.ai OpenRouter rate limits": [
+                {
+                    "title": "API Rate Limits",
+                    "url": "https://openrouter.ai/docs/api/reference/limits",
+                    "content": "Learn about OpenRouter API rate limits and quotas",
+                },
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://openrouter.ai/docs": _fetch_payload("https://openrouter.ai/docs", title="OpenRouter Docs"),
+            "https://openrouter.ai/docs/api/reference/limits": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/limits",
+                title="API Rate Limits",
+            ),
+            "https://example.com/openrouter-rate-limits": _fetch_payload("https://example.com/openrouter-rate-limits"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("OpenRouter rate limits", count=3, fetch_count=1, freshness="month")))
+
+    assert [call["query"] for call in search.calls] == [
+        "OpenRouter rate limits",
+        "site:openrouter.ai OpenRouter rate limits",
+    ]
+    assert [call["url"] for call in fetch.calls] == ["https://openrouter.ai/docs/api/reference/limits"]
+    assert payload["queries"] == [
+        "OpenRouter rate limits",
+        "site:openrouter.ai OpenRouter rate limits",
+    ]
+
+
 def test_web_research_fetches_official_domain_results_before_domain_diversity():
     search = _FakeSearchToolByQuery(
         {
@@ -1069,7 +1118,8 @@ def test_web_research_always_searches_and_fetches_without_cached_knowledge_reuse
 
     payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1, freshness="none")))
 
-    assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "none"}]
+    assert search.calls[0] == {"query": "sqlite fts", "count": 25, "freshness": "none"}
+    assert {"query": "site:sqlite.org sqlite fts", "count": 25, "freshness": "none"} in search.calls
     assert [call["url"] for call in fetch.calls] == ["https://sqlite.org/fts5.html"]
     assert payload["provider"] == "duckduckgo"
     assert payload["fetched_count"] == 1

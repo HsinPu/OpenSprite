@@ -33,14 +33,6 @@ _LOW_SIGNAL_DOMAIN_SUFFIXES = (
     "substack.com",
     "pinterest.com",
 )
-_OFFICIAL_DOC_MARKERS = (
-    "official",
-    "documentation",
-    "docs",
-    "官方",
-    "文件",
-    "文檔",
-)
 _OFFICIAL_DOMAIN_STOPWORDS = {
     "api",
     "docs",
@@ -943,9 +935,6 @@ def _market_quote_entity_terms(query: str) -> set[str]:
 
 
 def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
-    query_text = _clean_text(query).lower()
-    if not any(marker in query_text for marker in _OFFICIAL_DOC_MARKERS):
-        return set()
     brand_tokens = {
         token.lower()
         for token in re.findall(r"\b[A-Za-z][A-Za-z0-9]{2,}\b", str(query or ""))
