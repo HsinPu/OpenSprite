@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from ..bus.message import UserMessage
+from ..tools.result_status import classify_tool_result_status
 from .turn_input import PreparedTurnInput
 
 
@@ -62,7 +63,7 @@ class AudioInputPreprocessor:
 
         transcript = (await self._transcribe_audio(list(user_message.audios or []))).strip()
         metadata = user_message.metadata
-        if transcript.startswith("Error:"):
+        if not classify_tool_result_status(transcript).ok:
             metadata["audio_transcription_error"] = transcript
             user_message.text = transcript
             status = "failed"

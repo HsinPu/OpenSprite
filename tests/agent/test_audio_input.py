@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from opensprite.agent.audio_input import AudioInputPreprocessor
 from opensprite.agent.turn_input import PreparedTurnInput
@@ -56,4 +57,22 @@ def test_audio_input_preprocessor_replaces_audio_with_transcript_text():
     assert message.audios is None
     assert message.metadata["audio_transcript"] == "請幫我查明天行程"
     assert message.text == "請幫我查明天行程\n\n[Uploaded file path(s): audios/inbound-1.ogg]"
+    assert AudioInputPreprocessor.audio_files_for_llm(message, _turn(["audios/inbound-1.ogg"])) is None
+
+
+def test_audio_input_preprocessor_handles_structured_transcription_failure():
+    async def transcribe(audios):
+        assert audios == ["aud"]
+        return json.dumps({"ok": False, "error": "speech provider unavailable"})
+
+    message = UserMessage(text="", audios=["aud"], metadata={"audio_input_mode": "dictation"})
+    result = asyncio.run(AudioInputPreprocessor(transcribe).preprocess(message, _turn(["audios/inbound-1.ogg"])))
+
+    expected_error = json.dumps({"ok": False, "error": "speech provider unavailable"})
+    assert result.transcribed is True
+    assert result.status == "failed"
+    assert message.audios is None
+    assert message.metadata["audio_transcription_error"] == expected_error
+    assert message.text == expected_error
+    assert "audio_transcript" not in message.metadata
     assert AudioInputPreprocessor.audio_files_for_llm(message, _turn(["audios/inbound-1.ogg"])) is None
