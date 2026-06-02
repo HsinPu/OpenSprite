@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .result_status import classify_tool_result_status
+
 
 _WEB_SOURCE_TOOLS = frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"})
 _SOURCE_SNIPPET_MAX_CHARS = 500
@@ -68,10 +70,9 @@ def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) ->
         metadata.update(_web_search_failure_metadata(args, result))
     if tool_name == "web_research":
         metadata.update(_web_research_failure_metadata(args, result))
-    if _tool_result_is_error(tool_name, result):
-        payload = _parse_json_object(result)
-        error = payload.get("error") if isinstance(payload, dict) else None
-        metadata["error"] = str(error or result or "")[:500]
+    status = classify_tool_result_status(result)
+    if not status.ok and status.error:
+        metadata["error"] = status.error[:500]
     return metadata
 
 
@@ -93,10 +94,7 @@ def _tool_result_is_error(tool_name: str, result: str) -> bool:
     text = str(result or "").strip()
     if not text:
         return False
-    if text.startswith("Error:") or text.startswith("Error executing "):
-        return True
-    payload = _parse_json_object(text)
-    if isinstance(payload, dict) and payload.get("ok") is False and payload.get("error"):
+    if not classify_tool_result_status(text).ok:
         return True
     return tool_name == "web_fetch" and "http error:" in text.lower()
 

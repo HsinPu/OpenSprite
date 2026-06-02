@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable
 from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
-from .tool_result_status import classify_tool_result_status
+from ..tools.result_status import classify_tool_result_status
 
 
 _TRACE_TEXT_FIELDS = {

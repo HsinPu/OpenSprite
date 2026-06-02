@@ -1,6 +1,6 @@
 import json
 
-from opensprite.agent.tool_result_status import classify_tool_result_status
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_tool_result_status_allows_successful_batch_summary():

@@ -1,4 +1,4 @@
-"""Shared classification for plain-text tool results."""
+"""Shared classification for tool result strings."""
 
 from __future__ import annotations
 

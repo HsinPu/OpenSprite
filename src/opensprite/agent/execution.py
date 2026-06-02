@@ -14,6 +14,7 @@ from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
 from ..tools import ToolRegistry
 from ..tools.evidence import ToolEvidence
+from ..tools.result_status import classify_tool_result_status
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
@@ -21,7 +22,6 @@ from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
-from .tool_result_status import classify_tool_result_status
 
 
 @dataclass
