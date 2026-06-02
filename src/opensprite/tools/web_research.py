@@ -31,27 +31,6 @@ _RECENT_TEXT_MARKERS = (
     "announcement",
     "announced",
 )
-_CURRENT_QUERY_MARKERS = (
-    "latest",
-    "newest",
-    "recent",
-    "current",
-    "currently",
-    "today",
-    "now",
-    "as of",
-    "live",
-    "real-time",
-    "realtime",
-    "今日",
-    "今天",
-    "現在",
-    "即時",
-    "最新",
-    "目前",
-    "當前",
-    "今年",
-)
 _YEAR_RE = re.compile(r"(?<!\d)20\d{2}(?!\d)")
 _LOW_SIGNAL_DOMAIN_SUFFIXES = (
     "youtube.com",
@@ -651,9 +630,6 @@ def _prefer_current_year_queries(queries: list[str], *, freshness: str | None) -
     if freshness not in _RECENT_FRESHNESS_VALUES:
         return queries
     combined = " ".join(_clean_text(value).lower() for value in queries)
-    if not any(marker in combined for marker in _CURRENT_QUERY_MARKERS):
-        return queries
-
     current_year = datetime.now().year
     stale_years = sorted(
         {

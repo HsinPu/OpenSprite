@@ -211,6 +211,45 @@ def test_web_research_prefers_current_year_variant_for_current_stale_query():
     assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current")
 
 
+def test_web_research_corrects_stale_year_without_current_text_marker():
+    current_year = datetime.now().year
+    stale_year = current_year - 1
+    current_query = f"agent framework comparison {current_year}"
+    stale_query = f"agent framework comparison {stale_year}"
+    search = _FakeSearchToolByQuery(
+        {
+            current_query: [
+                {"title": f"Framework guide {current_year}", "url": "https://example.com/current", "content": "Current guide"},
+            ],
+            stale_query: [
+                {"title": f"Framework guide {stale_year}", "url": "https://example.com/stale", "content": "Old guide"},
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/current": _fetch_payload("https://example.com/current", title="Current"),
+            "https://example.com/stale": _fetch_payload("https://example.com/stale", title="Stale"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                stale_query,
+                count=2,
+                fetch_count=1,
+                freshness="month",
+            )
+        )
+    )
+
+    assert search.calls[0] == {"query": current_query, "count": 2, "freshness": "month"}
+    assert stale_query in payload["queries"]
+    assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current")
+
+
 def test_web_research_respects_any_time_for_latest_query():
     search = _FakeSearchTool(
         [
