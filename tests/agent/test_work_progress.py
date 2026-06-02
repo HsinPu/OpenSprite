@@ -1,6 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.harness_profile import HarnessProfile, HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
@@ -61,12 +61,31 @@ def test_work_progress_coding_harness_plan_does_not_depend_on_intent_markers():
 
     assert plan is not None
     assert plan.harness_profile == "coding"
+    assert plan.expects_code_change is True
+    assert plan.expects_verification is False
     assert plan.steps == (
         "inspect relevant workspace context",
         "make the smallest correct change or collect concrete workspace evidence",
         "run focused verification or state the verification gap",
         "summarize changes, evidence, and remaining risk",
     )
+
+
+def test_work_progress_harness_plan_uses_explicit_verification_requirement():
+    intent = TaskIntentService().classify("Can you look at this flow?")
+    profile = HarnessProfile(
+        name="coding",
+        task_type="workspace_change",
+        required_tool_groups=("workspace_read", "workspace_write", "verification"),
+        required_evidence=("file_change", "verification"),
+        verification_policy="focused_if_possible",
+    )
+
+    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
+
+    assert plan is not None
+    assert plan.expects_code_change is True
+    assert plan.expects_verification is True
 
 
 def test_work_progress_uses_harness_profile_continuation_budget():

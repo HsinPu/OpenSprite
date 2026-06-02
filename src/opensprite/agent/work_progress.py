@@ -235,6 +235,13 @@ class WorkProgressService:
         else:
             steps = ["complete the requested task"]
 
+        if harness_profile is not None:
+            expects_code_change = _profile_requires_code_change(harness_profile)
+            expects_verification = _profile_requires_verification(harness_profile)
+        else:
+            expects_code_change = task_intent.expects_code_change
+            expects_verification = task_intent.expects_verification
+
         return WorkPlan(
             objective=task_intent.objective,
             kind=task_intent.kind,
@@ -243,8 +250,8 @@ class WorkProgressService:
             done_criteria=tuple(task_intent.done_criteria),
             long_running=task_intent.long_running,
             coding_task=task_intent.kind in _CODING_KINDS,
-            expects_code_change=task_intent.expects_code_change,
-            expects_verification=task_intent.expects_verification,
+            expects_code_change=expects_code_change,
+            expects_verification=expects_verification,
             harness_profile=profile_name,
             verification_policy=harness_profile.verification_policy if harness_profile is not None else "",
             continuation_policy=harness_profile.continuation_policy if harness_profile is not None else "",
@@ -791,6 +798,22 @@ def _derive_verification_targets(
     if not targets:
         targets = ["Run the requested verification before treating the task as complete."]
     return tuple(dict.fromkeys(targets))
+
+
+def _profile_requires_code_change(harness_profile: HarnessProfile) -> bool:
+    required_tool_groups = set(harness_profile.required_tool_groups)
+    required_evidence = set(harness_profile.required_evidence)
+    return (
+        harness_profile.task_type in {"workspace_change", "code_change"}
+        or "workspace_write" in required_tool_groups
+        or "file_change" in required_evidence
+    )
+
+
+def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
+    required_tool_groups = set(harness_profile.required_tool_groups)
+    required_evidence = set(harness_profile.required_evidence)
+    return "verification" in required_tool_groups or "verification" in required_evidence
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
