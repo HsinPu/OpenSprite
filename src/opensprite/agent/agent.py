@@ -2339,12 +2339,11 @@ class AgentLoop:
     def _task_intent_for_explicit_goal(self, goal_text: str) -> TaskIntent:
         """Force an explicit `/goal` objective into actionable task state."""
         base_intent = self.task_intents.classify(goal_text)
-        kind = base_intent.kind if base_intent.should_seed_active_task else "task"
         done_criteria = base_intent.done_criteria or (
             "the goal is completed or a clear blocker is recorded",
         )
         return TaskIntent(
-            kind=kind,
+            kind="task",
             objective=goal_text,
             constraints=base_intent.constraints,
             done_criteria=done_criteria,

@@ -600,6 +600,28 @@ def test_agent_goal_command_persists_resumable_work_state(tmp_path):
     assert events[0].payload["work_state_created"] is True
 
 
+def test_agent_goal_intent_uses_explicit_task_kind(tmp_path):
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=FakeProvider(),
+        storage=FakeStorage(),
+        context_builder=FakeContextBuilder(tmp_path),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    intent = agent._task_intent_for_explicit_goal("Please refactor the agent and run tests.")
+
+    assert intent.kind == "task"
+    assert intent.long_running is True
+    assert intent.objective == "Please refactor the agent and run tests."
+
+
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
     async def scenario():
         registry = ToolRegistry()
