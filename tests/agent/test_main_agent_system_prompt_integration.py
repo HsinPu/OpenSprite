@@ -65,6 +65,15 @@ class TaskContextDecisionProvider(CapturingProvider):
                 ),
                 model="fake-model",
             )
+        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"resolved_objective": "Fix tests/test_app.py and verify the tests.", '
+                    '"should_use_resolved_objective": true, "confidence": 0.87, '
+                    '"reason": "task context classified the short turn as a new concrete task"}'
+                ),
+                model="fake-model",
+            )
         return LLMResponse(content="done", model="fake-model")
 
 
@@ -552,9 +561,10 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
     result = asyncio.run(_run())
 
     assert result.content == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 3
+    assert "You resolve a concise task objective for ACTIVE_TASK" in provider.calls[1][0].content
     system_text = provider.calls[-1][0].content
-    assert f"Goal: {message}" in system_text
+    assert "Goal: Fix tests/test_app.py and verify the tests." in system_text
 
 
 def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Path) -> None:

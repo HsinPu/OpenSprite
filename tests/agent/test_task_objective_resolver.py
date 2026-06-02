@@ -1,7 +1,7 @@
 import asyncio
 
 from opensprite.agent.task_context_resolver import TaskContextDecision
-from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveResolver
 from opensprite.config import Config
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
@@ -153,6 +153,44 @@ def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
     assert decision.should_use_resolved_objective is True
     assert decision.effective_objective == "please update README"
     assert decision.original_message == "switch"
+
+
+def test_task_objective_resolver_uses_llm_context_for_short_new_task_even_when_intent_is_actionable():
+    provider = _JsonProvider(
+        '{"resolved_objective": "Fix the failing README task and summarize the change.", '
+        '"should_use_resolved_objective": true, "confidence": 0.86, '
+        '"reason": "task context classified the short turn as a new task"}'
+    )
+    intent = TaskIntent(
+        kind="task",
+        objective="fix it",
+        done_criteria=("the task is completed",),
+    )
+    context = TaskContextDecision(
+        is_follow_up=False,
+        should_seed_active_task=True,
+        should_replace_active_task=True,
+        continuation_type="new_task",
+        confidence=0.88,
+        method="llm",
+        reason="short turn starts a new task",
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="fix it",
+            history=[],
+            task_intent=intent,
+            task_context_decision=context,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.should_use_resolved_objective is True
+    assert decision.effective_objective == "Fix the failing README task and summarize the change."
 
 
 def test_task_objective_resolver_falls_back_when_provider_is_unconfigured():

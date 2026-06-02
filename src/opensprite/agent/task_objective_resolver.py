@@ -180,7 +180,7 @@ def _should_resolve_objective(
     ):
         return False
     if task_context_decision and task_context_decision.continuation_type in _NEW_TASK_CONTINUATION_TYPES:
-        return _is_short_objective(current) and not bool(task_intent and task_intent.should_seed_active_task)
+        return _is_short_objective(current)
     if task_intent and task_intent.should_seed_active_task and not bool(
         task_context_decision
         and (task_context_decision.is_follow_up or task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES)
