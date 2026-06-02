@@ -1759,6 +1759,22 @@ def test_exec_tool_result_slimming_keeps_timeout_and_stderr_highlights():
     assert "final line" in summary
 
 
+def test_exec_tool_result_slimming_marks_structured_failure_summary():
+    result = json.dumps(
+        {
+            "ok": False,
+            "error": "structured exec failure",
+            "output": "line\n" * 500,
+        }
+    )
+
+    summary = ExecutionEngine._summarize_tool_result_for_context("exec", result)
+
+    assert "Output truncated for context" in summary
+    assert "Error summary:" in summary
+    assert "structured exec failure" in summary
+
+
 def test_exec_tool_result_slimming_prefers_tail_lines_for_long_output():
     result = "\n".join([f"line {i}" for i in range(300)])
 

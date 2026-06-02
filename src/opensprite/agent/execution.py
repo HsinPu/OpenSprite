@@ -431,7 +431,7 @@ Output exactly these sections when applicable:
         ]
         if timeout_lines:
             summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
-        elif text.startswith("Error:"):
+        elif not classify_tool_result_status(text).ok:
             summary_parts.extend(["Error summary:", lines[0]])
 
         if stderr_lines:
@@ -485,7 +485,7 @@ Output exactly these sections when applicable:
         ]
         if timeout_lines:
             summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
-        elif text.startswith("Error:"):
+        elif not classify_tool_result_status(text).ok:
             summary_parts.extend(["Error summary:", lines[0]])
 
         if stderr_lines:
