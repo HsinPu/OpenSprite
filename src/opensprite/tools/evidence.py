@@ -55,11 +55,15 @@ def build_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok
 def _build_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
     if tool_name == "exec":
         return _exec_metadata(args)
+    if tool_name == "verify":
+        return _verification_metadata(result)
     return _build_web_source_metadata(tool_name, args, result)
 
 
 def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
     metadata = _exec_metadata(args) if tool_name == "exec" else {}
+    if tool_name == "verify":
+        metadata.update(_verification_metadata(result))
     if tool_name == "web_search":
         metadata.update(_web_search_failure_metadata(args, result))
     if tool_name == "web_research":
@@ -68,6 +72,20 @@ def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) ->
         payload = _parse_json_object(result)
         error = payload.get("error") if isinstance(payload, dict) else None
         metadata["error"] = str(error or result or "")[:500]
+    return metadata
+
+
+def _verification_metadata(result: str) -> dict[str, Any]:
+    from .verify import classify_verification_result
+
+    outcome = classify_verification_result(result)
+    metadata: dict[str, Any] = {
+        "verification_status": outcome.get("status"),
+        "verification_ok": bool(outcome.get("ok")),
+        "verification_attempted": bool(outcome.get("attempted")),
+    }
+    if outcome.get("name"):
+        metadata["verification_name"] = outcome.get("name")
     return metadata
 
 

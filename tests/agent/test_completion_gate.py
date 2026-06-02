@@ -365,7 +365,7 @@ def test_completion_gate_accepts_reported_skipped_verification_for_note_change()
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
-        response_text="Completed. Added the note. Verification skipped: no supported Python or package.json build checks were detected.",
+        response_text="Completed. Added the note. Verification was recorded as skipped by the verify tool metadata.",
         execution_result=ExecutionResult(
             content="Added the note.",
             file_change_count=1,
@@ -376,8 +376,9 @@ def test_completion_gate_accepts_reported_skipped_verification_for_note_change()
                 TaskArtifact(
                     kind="verification_result",
                     source_tool="verify",
-                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
+                    metadata={"verification_status": "skipped"},
                 ),
             ),
             task_contract=contract,
@@ -407,8 +408,9 @@ def test_completion_gate_accepts_skipped_verification_for_non_code_note_change()
                 TaskArtifact(
                     kind="verification_result",
                     source_tool="verify",
-                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
+                    metadata={"verification_status": "skipped"},
                 ),
             ),
         ),
@@ -435,8 +437,9 @@ def test_completion_gate_uses_skipped_verification_artifact_without_response_mar
                 TaskArtifact(
                     kind="verification_result",
                     source_tool="verify",
-                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
+                    metadata={"verification_status": "skipped"},
                 ),
             ),
         ),
@@ -3253,8 +3256,9 @@ def test_quality_gate_requires_recorded_verification_attempt_after_code_changes(
                 TaskArtifact(
                     kind="verification_result",
                     source_tool="verify",
-                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
+                    metadata={"verification_status": "skipped"},
                 ),
             ),
         ),

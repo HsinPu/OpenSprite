@@ -648,16 +648,20 @@ def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> boo
     for artifact in execution_result.task_artifacts:
         if artifact.kind != "verification_result" or not artifact.ok:
             continue
-        preview = str(artifact.content_preview or "")
-        if preview.startswith("Verification skipped:"):
+        if _verification_status_is_skipped(artifact.metadata):
             return True
     for evidence in execution_result.tool_evidence:
         if evidence.name != "verify" or not evidence.ok:
             continue
-        preview = str(evidence.result_preview or "")
-        if preview.startswith("Verification skipped:"):
+        if _verification_status_is_skipped(evidence.metadata):
             return True
     return False
+
+
+def _verification_status_is_skipped(metadata: Any) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    return str(metadata.get("verification_status") or "").strip().lower() == "skipped"
 
 
 def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:

@@ -49,6 +49,21 @@ def test_web_fetch_http_error_marks_evidence_failed():
     assert "HTTP Error: 404" in evidence.metadata["error"]
 
 
+def test_verify_evidence_includes_structured_verification_status():
+    evidence = build_tool_evidence(
+        "verify",
+        {"action": "auto"},
+        "Verification skipped: no supported Python or package.json build checks were detected.",
+        ok=True,
+    )
+
+    assert evidence.ok is True
+    assert evidence.metadata["verification_status"] == "skipped"
+    assert evidence.metadata["verification_ok"] is False
+    assert evidence.metadata["verification_attempted"] is True
+    assert evidence.metadata["verification_name"] == "no supported Python or package.json build checks were detected."
+
+
 def test_structured_web_search_error_marks_evidence_failed():
     result = json.dumps(
         {
