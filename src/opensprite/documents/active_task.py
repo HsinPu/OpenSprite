@@ -564,18 +564,6 @@ def is_task_worthy_message(message_text: str) -> bool:
     return True
 
 
-def should_replace_active_task(current_task_block: str, message_text: str) -> bool:
-    """Return whether the latest user turn clearly indicates a task switch."""
-    current_goal_match = re.search(r"^- Goal:\s*(.+)$", current_task_block, re.MULTILINE)
-    current_goal = current_goal_match.group(1).strip().lower() if current_goal_match else ""
-    candidate = re.sub(r"\s+", " ", (message_text or "").strip()).lower()
-    if not candidate:
-        return False
-    if current_goal and (candidate == current_goal or current_goal in candidate):
-        return False
-    return candidate.startswith(_TASK_SWITCH_PREFIXES)
-
-
 def _extract_task_field(task_block: str, field_name: str) -> str:
     match = re.search(rf"^- {re.escape(field_name)}:\s*(.+)$", task_block, re.MULTILINE)
     if not match:

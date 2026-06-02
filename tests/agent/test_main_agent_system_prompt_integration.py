@@ -387,7 +387,7 @@ def test_main_agent_call_llm_seeds_active_task_on_first_turn(tmp_path: Path) -> 
     assert "Current step: 1. inspect the relevant context and refine the task if needed" in system_text
 
 
-def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(tmp_path: Path) -> None:
+def test_main_agent_call_llm_does_not_replace_active_task_without_context_decision(tmp_path: Path) -> None:
     app_home = tmp_path / "home"
     sync_templates(app_home, silent=True)
 
@@ -450,7 +450,8 @@ def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(
 
     assert result.content == "done"
     system_text = provider.calls[0][0].content
-    assert "Goal: 改成先幫我檢查 MCP lifecycle" in system_text
+    assert "Goal: Refactor the agent in small safe steps." in system_text
+    assert "Goal: 改成先幫我檢查 MCP lifecycle" not in system_text
 
 
 def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(tmp_path: Path) -> None:

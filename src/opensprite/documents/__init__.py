@@ -11,7 +11,6 @@ from .active_task import (
     build_active_task_execution_guidance,
     build_initial_active_task_block,
     is_task_worthy_message,
-    should_replace_active_task,
     consolidate_active_task,
 )
 from .managed import ManagedMarkdownDocument
@@ -38,7 +37,6 @@ __all__ = [
     "build_active_task_execution_guidance",
     "build_initial_active_task_block",
     "is_task_worthy_message",
-    "should_replace_active_task",
     "ConversationConsolidator",
     "ConversationDocumentStore",
     "DEFAULT_ACTIVE_TASK_CONTENT",

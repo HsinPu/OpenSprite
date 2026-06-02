@@ -8,7 +8,6 @@ from opensprite.documents.active_task import (
     build_initial_active_task_block,
     is_task_worthy_message,
     normalize_active_task_block,
-    should_replace_active_task,
     create_active_task_store,
 )
 from opensprite.llms.base import LLMResponse
@@ -112,15 +111,6 @@ def test_active_task_consolidator_updates_per_session_files(tmp_path):
     assert "Ship the refactor safely" in task_a.get_context("telegram:user-a")
     assert "Ship the refactor safely" in task_b.get_context("telegram:user-b")
     assert task_a.active_task_file != task_b.active_task_file
-
-
-def test_active_task_switch_detection_requires_explicit_task_change_signal():
-    current = build_initial_active_task_block("Refactor the agent in small safe steps.")
-    assert current is not None
-
-    assert should_replace_active_task(current, "改成先幫我檢查 MCP lifecycle") is True
-    assert should_replace_active_task(current, "接下來幫我整理 web channel") is True
-    assert should_replace_active_task(current, "continue with the refactor") is False
 
 
 def test_task_worthy_classifier_skips_plain_chat_and_keeps_work_requests():

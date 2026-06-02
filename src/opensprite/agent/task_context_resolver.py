@@ -8,7 +8,6 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
-from ..documents.active_task import should_replace_active_task
 from ..llms import ChatMessage
 from ..utils.log import logger
 from .follow_up_intent import FollowUpIntentResolver
@@ -244,15 +243,6 @@ class TaskContextResolver:
                 reason="user confirmed continuing the active task after task-boundary prompt",
             )
 
-        if has_active_task and should_replace_active_task(active_task or "", current):
-            return TaskContextDecision(
-                should_seed_active_task=True,
-                should_replace_active_task=True,
-                continuation_type="task_switch",
-                confidence=0.85,
-                reason="current message explicitly switches the active task",
-            )
-
         if has_active_task and _CONTINUATION_RE.match(current):
             return TaskContextDecision(
                 is_follow_up=True,
@@ -290,7 +280,7 @@ class TaskContextResolver:
 
         inherited_task_type = follow_up.inherited_task_type
         inherited_tool_group = follow_up.inherited_tool_group
-        should_inherit_active_task = has_active_task and not should_replace_active_task(active_task or "", current)
+        should_inherit_active_task = has_active_task
         return TaskContextDecision(
             is_follow_up=True,
             should_inherit_active_task=should_inherit_active_task,
@@ -454,17 +444,6 @@ def _merge_with_deterministic(
     """Keep deterministic safety signals when accepting an LLM classification."""
     if deterministic.continuation_type == "ack":
         return replace(llm_decision, continuation_type="ack", is_follow_up=False, should_inherit_active_task=False)
-
-    if deterministic.should_replace_active_task:
-        return replace(
-            llm_decision,
-            is_follow_up=False,
-            should_inherit_active_task=False,
-            should_seed_active_task=True,
-            should_replace_active_task=True,
-            continuation_type="task_switch",
-            confidence=max(deterministic.confidence, llm_decision.confidence),
-        )
 
     inherited_tool_group = llm_decision.inherited_tool_group or deterministic.inherited_tool_group
     inherited_task_type = llm_decision.inherited_task_type or deterministic.inherited_task_type

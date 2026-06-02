@@ -12,7 +12,6 @@ from ..documents.active_task import (
     build_task_block_from_intent_fields,
     build_task_block_from_text,
     create_active_task_store,
-    should_replace_active_task,
 )
 from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
@@ -204,11 +203,10 @@ class ActiveTaskCommandService:
                         details={"action": "continue", "message": _compact_for_prompt(current_message)},
                     )
                 return
-            explicit_replace = should_replace_active_task(current_task, current_message)
             llm_replace = _decision_replaces_current_task(task_context_decision)
-            if task_context_decision and task_context_decision.should_inherit_active_task and not (explicit_replace or llm_replace):
+            if task_context_decision and task_context_decision.should_inherit_active_task and not llm_replace:
                 return
-            if not (explicit_replace or llm_replace):
+            if not llm_replace:
                 return
             replacing = True
 
