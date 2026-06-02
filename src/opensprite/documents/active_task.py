@@ -212,6 +212,21 @@ class ActiveTaskStore(ConversationDocumentStore):
             return events[-limit:]
         return events
 
+    def read_pending_boundary_request(self) -> str | None:
+        """Return the unresolved structured task-boundary request, if one exists."""
+        if self.read_status() != "waiting_user":
+            return None
+        for event in reversed(self.read_events()):
+            event_type = str(event.get("event_type") or "")
+            if event_type == "task_boundary_confirmation_resolved":
+                return None
+            if event_type != "task_boundary_confirmation":
+                continue
+            details = event.get("details") if isinstance(event.get("details"), dict) else {}
+            pending_request = str(details.get("pending_request") or "").strip()
+            return pending_request or None
+        return None
+
     def render_history(self, limit: int = 10) -> str | None:
         events = self.read_events(limit=limit)
         if not events:

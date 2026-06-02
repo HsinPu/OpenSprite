@@ -18,7 +18,7 @@ from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
 from .completion_gate import CompletionGateResult
-from .task_context_resolver import TaskContextDecision, extract_pending_boundary_request
+from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -191,12 +191,13 @@ class ActiveTaskCommandService:
                     "immediate",
                     details={
                         "message": re.sub(r"\s+", " ", current_message).strip()[:120],
+                        "pending_request": _compact_for_prompt(current_message),
                         "confidence": task_context_decision.confidence if task_context_decision else 0.0,
                     },
                 )
                 return
             if _decision_continues_current_task(task_context_decision):
-                if current_status == "waiting_user" and extract_pending_boundary_request(current_task):
+                if current_status == "waiting_user" and store.read_pending_boundary_request():
                     store.update_fields(status="active", open_questions=["none"], force=True)
                     await self._mark_processed(session_id, store)
                     store.append_event(

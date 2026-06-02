@@ -13,18 +13,6 @@ from ..utils.log import logger
 from .task_intent import TaskIntent
 
 
-_BOUNDARY_REQUEST_PATTERNS = (
-    re.compile(
-        r"Reply `switch` to replace(?: the active task \(.+?\)| it) with the new request \((?P<request>.+?)\),? "
-        r"or `continue` to keep the active task\.",
-        re.IGNORECASE | re.DOTALL,
-    ),
-    re.compile(
-    r"Confirm whether to switch(?: from the active task \(.+?\))? to the new request \((?P<request>.+?)\),? "
-    r"or continue the active task\.",
-    re.IGNORECASE | re.DOTALL,
-    ),
-)
 _ACTIVE_STATUS_RE = re.compile(r"^- Status:\s*(?P<status>.+)$", re.MULTILINE)
 _ALLOWED_TASK_TYPES = frozenset(
     {
@@ -527,18 +515,6 @@ def _active_task_status(active_task: str | None) -> str:
     return match.group("status").strip().lower() or "inactive"
 
 
-def extract_pending_boundary_request(active_task: str | None) -> str | None:
-    """Return the pending new request from a boundary-confirmation ACTIVE_TASK prompt."""
-    if _active_task_status(active_task) != "waiting_user":
-        return None
-    compact = _compact(active_task)
-    for pattern in _BOUNDARY_REQUEST_PATTERNS:
-        match = pattern.search(compact)
-        if match:
-            return _compact(match.group("request")) or None
-    return None
-
-
 def _compact(value: str | None) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
@@ -550,4 +526,4 @@ def _truncate(value: str | None, max_chars: int) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-__all__ = ["TaskContextDecision", "TaskContextResolver", "extract_pending_boundary_request"]
+__all__ = ["TaskContextDecision", "TaskContextResolver"]

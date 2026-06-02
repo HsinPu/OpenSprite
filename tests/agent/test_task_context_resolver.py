@@ -1041,6 +1041,8 @@ def test_active_task_seed_marks_ambiguous_boundary_waiting_user(tmp_path):
     assert not any(event["event_type"] == "seed" for event in store.read_events())
     boundary_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation")
     assert boundary_event["details"]["confidence"] == 0.72
+    assert boundary_event["details"]["pending_request"] == message
+    assert store.read_pending_boundary_request() == message
 
 
 def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
@@ -1054,6 +1056,11 @@ def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
     )
     store = create_active_task_store(app_home, session_id, workspace_root=workspace)
     store.write_managed_block(_BOUNDARY_ACTIVE_TASK_BLOCK)
+    store.append_event(
+        "task_boundary_confirmation",
+        "immediate",
+        details={"pending_request": "please update README", "confidence": 0.72},
+    )
     decision = TaskContextDecision(
         is_follow_up=True,
         should_inherit_active_task=True,
@@ -1080,3 +1087,40 @@ def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
     assert "Reply `switch` to replace the active task" not in updated
     resolved_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation_resolved")
     assert resolved_event["details"]["action"] == "continue"
+
+
+def test_active_task_seed_does_not_reactivate_boundary_from_markdown_prompt_only(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    store.write_managed_block(_BOUNDARY_ACTIVE_TASK_BLOCK)
+    decision = TaskContextDecision(
+        is_follow_up=True,
+        should_inherit_active_task=True,
+        continuation_type="continue_active_task",
+        confidence=0.9,
+        method="llm",
+        reason="user chose to keep the active task",
+    )
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            "continue",
+            enabled=True,
+            task_intent=TaskIntentService().classify("continue"),
+            task_context_decision=decision,
+        )
+    )
+
+    updated = store.read_managed_block()
+    assert "- Status: waiting_user" in updated
+    assert "Reply `switch` to replace the active task" in updated
+    assert store.read_pending_boundary_request() is None
+    assert not any(event["event_type"] == "task_boundary_confirmation_resolved" for event in store.read_events())

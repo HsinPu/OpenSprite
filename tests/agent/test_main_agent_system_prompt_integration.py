@@ -99,6 +99,37 @@ class AmbiguousBoundaryDecisionProvider(CapturingProvider):
         return LLMResponse(content="done", model="fake-model")
 
 
+class BoundaryConfirmationProvider(CapturingProvider):
+    """Returns task-boundary confirmation and objective JSON before the main response."""
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
+        self.calls.append(list(messages))
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You classify whether the latest user turn inherits task context" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"continuation_type": "task_switch", "is_follow_up": false, '
+                    '"should_inherit_active_task": false, '
+                    '"should_seed_active_task": true, "should_replace_active_task": true, '
+                    '"inherited_task_type": null, "inherited_tool_group": null, '
+                    '"confidence": 0.92, "reason": "user confirmed the pending task-boundary request"}'
+                ),
+                model="fake-model",
+            )
+        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"resolved_objective": "please update README", '
+                    '"should_use_resolved_objective": true, "confidence": 0.9, '
+                    '"reason": "active task boundary prompt contains the pending request"}'
+                ),
+                model="fake-model",
+            )
+        return LLMResponse(content="done", model="fake-model")
+
+
 class TaskObjectiveDecisionProvider(CapturingProvider):
     """Returns task-context and objective JSON decisions before the main response."""
 
@@ -668,7 +699,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = CapturingProvider()
+    provider = BoundaryConfirmationProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -707,6 +738,11 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
             "  - Reply `switch` to replace the active task (Refactor the agent in small safe steps.) "
             "with the new request (please update README), or `continue` to keep the active task."
         )
+        task_store.append_event(
+            "task_boundary_confirmation",
+            "immediate",
+            details={"pending_request": "please update README", "confidence": 0.72},
+        )
         return await agent.call_llm(
             session_id,
             "switch",
@@ -721,7 +757,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     assert result.task_contract is not None
     assert result.task_contract.task_type == "code_change"
     assert any(requirement.kind == "file_change" for requirement in result.task_contract.requirements)
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == 3
     final_messages = provider.calls[-1]
     system_text = final_messages[0].content
     prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in final_messages)
