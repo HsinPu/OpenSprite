@@ -1095,9 +1095,7 @@ def _candidate_staleness_penalty(item: dict[str, Any], freshness: str) -> int:
     years = [int(match) for match in _YEAR_RE.findall(text)]
     if not years or current_year in years:
         return 0
-    query_text = _clean_text(item.get("source_query") or item.get("query")).lower()
-    wants_current = str(current_year) in query_text or any(marker in query_text for marker in _RECENT_TEXT_MARKERS)
-    if wants_current and max(years) < current_year:
+    if max(years) < current_year:
         return 1
     return 0
 

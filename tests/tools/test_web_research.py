@@ -616,6 +616,38 @@ def test_web_research_prioritizes_current_year_candidates_for_recent_searches():
     assert payload["fetched_sources"][0]["search_freshness"] == "month"
 
 
+def test_web_research_deprioritizes_stale_year_candidates_without_query_marker():
+    previous_year = datetime.now().year - 1
+    search = _FakeSearchTool(
+        [
+            {
+                "title": f"Framework comparison {previous_year}",
+                "url": "https://example.com/old-frameworks",
+                "content": "Older framework comparison.",
+            },
+            {
+                "title": "Framework comparison guide",
+                "url": "https://example.com/current-frameworks",
+                "content": "Current framework comparison without a year marker.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/current-frameworks": _fetch_payload(
+                "https://example.com/current-frameworks",
+                title="Current Frameworks",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("agent framework comparison", count=2, fetch_count=1, freshness="month")))
+
+    assert [call["url"] for call in fetch.calls] == ["https://example.com/current-frameworks"]
+    assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current-frameworks")
+
+
 def test_web_research_prioritizes_official_domain_for_official_docs_query():
     search = _FakeSearchTool(
         [
