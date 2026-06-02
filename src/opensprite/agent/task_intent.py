@@ -73,33 +73,6 @@ _VAGUE_TASK_MESSAGES = {
     "修一下",
     "搞定",
 }
-_LONG_RUNNING_MARKERS = (
-    "complete",
-    "end-to-end",
-    "full",
-    "long running",
-    "long-running",
-    "multi-step",
-    "continue",
-    "keep going",
-    "tests",
-    "verify",
-    "build",
-    "implement",
-    "refactor",
-    "debug",
-    "investigate",
-    "處理完整",
-    "完整",
-    "長時間",
-    "繼續",
-    "驗證",
-    "測試",
-    "實作",
-    "重構",
-    "除錯",
-    "調查",
-)
 _CONSTRAINT_MARKERS = (
     "do not",
     "don't",
@@ -309,9 +282,6 @@ def _is_pure_answer_request(text: str) -> bool:
 def _is_long_running(text: str, kind: str) -> bool:
     if kind not in _TASK_KINDS:
         return False
-    lowered = text.lower()
-    if any(marker in lowered for marker in _LONG_RUNNING_MARKERS):
-        return True
     if len(text) > 180:
         return True
     if len(re.findall(r"(?:^|\s)(?:\d+\.|[-*])\s+", text)) >= 2:
