@@ -304,7 +304,7 @@ class AutoContinueService:
             no_tool_source_instruction = ""
             if not allow_tools:
                 no_tool_source_instruction = (
-                    "\nDo not describe that you will search, fetch, inspect history, or use another tool. "
+                    "\nDo not reply with another progress-only promise or tool-use plan. "
                     "Write the final answer now from these gathered sources."
                 )
             source_section = (

@@ -180,7 +180,8 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
     assert decision.allow_tools is False
     assert "https://example.com/tsmc" in (decision.prompt or "")
     assert "Write the final answer now" in (decision.prompt or "")
-    assert "inspect history" in (decision.prompt or "")
+    assert "progress-only promise" in (decision.prompt or "")
+    assert "inspect history" not in (decision.prompt or "")
 
 
 def test_auto_continue_keeps_tools_when_existing_web_sources_lack_detail():
