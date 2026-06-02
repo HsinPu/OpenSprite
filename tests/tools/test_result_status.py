@@ -51,3 +51,11 @@ def test_tool_result_status_classifies_permission_blocks():
     assert status.ok is False
     assert status.error_type == "ToolPermissionError"
     assert status.category == "permission_block"
+
+
+def test_tool_result_status_keeps_incidental_failure_words_successful():
+    text = "What can cause Connection timed out? The startup failed retry phrase is just content."
+    status = classify_tool_result_status(text)
+
+    assert status.ok is True
+    assert status.error_metadata() == {}

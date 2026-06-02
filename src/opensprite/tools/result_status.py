@@ -34,14 +34,17 @@ class ToolResultStatus:
 
 
 def classify_tool_result_status(result_text: str, *, state: str | None = None) -> ToolResultStatus:
-    """Return normalized status for the plain-text result returned by a tool."""
+    """Return normalized status for a structured or OpenSprite-owned tool result."""
     text = str(result_text or "")
     stripped = text.lstrip()
     state_text = str(state or "").strip().lower()
     forced_error = state_text in _ERROR_STATES
 
-    if _batch_result_succeeded(stripped) and not forced_error:
-        return ToolResultStatus(ok=True)
+    batch_failure = _batch_result_failure(stripped)
+    if batch_failure is not None:
+        if batch_failure == 0 and not forced_error:
+            return ToolResultStatus(ok=True)
+        return _failed_status(_first_line(stripped), error_type="ToolFailure", fallback=stripped)
 
     payload = _json_object(stripped)
     if payload is not None:
@@ -80,10 +83,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
     lowered = stripped.lower()
     if lowered.startswith("(mcp tool call failed") or lowered.startswith("(mcp tool call timed out"):
         return _failed_status(stripped, error_type="McpToolError", fallback=stripped)
-    if "timed out" in lowered:
-        return _failed_status(stripped, error_type="ToolTimeout", fallback=stripped)
-    if " failed" in lowered:
-        return _failed_status(stripped, error_type="ToolFailure", fallback=stripped)
 
     return ToolResultStatus(ok=not forced_error)
 
@@ -96,10 +95,14 @@ def _json_object(value: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _batch_result_succeeded(text: str) -> bool:
-    first_line = (text or "").splitlines()[0] if text else ""
+def _batch_result_failure(text: str) -> int | None:
+    first_line = _first_line(text)
     match = re.match(r"Batch completed: \d+ call\(s\), (\d+) failed\.", first_line)
-    return bool(match and int(match.group(1)) == 0)
+    return int(match.group(1)) if match else None
+
+
+def _first_line(text: str) -> str:
+    return (text or "").splitlines()[0] if text else ""
 
 
 def _failed_status(
