@@ -687,7 +687,7 @@ def test_completion_gate_keeps_verification_status_when_verify_fails_with_tool_e
     assert result.verification_path == "."
 
 
-def test_completion_gate_marks_blocked_when_tool_error_reports_blocker():
+def test_completion_gate_does_not_infer_blocker_from_tool_error_text():
     intent = TaskIntentService().classify("繼續驗證")
 
     result = CompletionGateService().evaluate(
@@ -700,12 +700,13 @@ def test_completion_gate_marks_blocked_when_tool_error_reports_blocker():
         ),
     )
 
-    assert result.status == "blocked"
-    assert result.active_task_status == "blocked"
-    assert result.should_update_active_task is True
+    assert result.status == "incomplete"
+    assert result.reason == "tool execution reported an error without a clear blocker handoff"
+    assert result.active_task_status is None
+    assert result.should_update_active_task is False
 
 
-def test_completion_gate_marks_chinese_missing_files_as_blocked():
+def test_completion_gate_does_not_infer_chinese_missing_files_as_blocked():
     intent = TaskIntentService().classify(
         "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
     )
@@ -721,11 +722,12 @@ def test_completion_gate_marks_chinese_missing_files_as_blocked():
         ),
     )
 
-    assert result.status == "blocked"
-    assert result.active_task_status == "blocked"
+    assert result.status == "incomplete"
+    assert result.reason == "tool execution reported an error without a clear blocker handoff"
+    assert result.active_task_status is None
 
 
-def test_completion_gate_marks_workspace_scope_read_error_as_blocked():
+def test_completion_gate_does_not_infer_workspace_scope_read_error_as_blocked():
     intent = TaskIntentService().classify("請看目前工作區，找出 AGENTS.md 裡面跟 verification 有關的重點")
     response = (
         "根據工作區 runtime 環境的限制，我無法直接讀取 bootstrap 資料夾下的 `AGENTS.md`，"
@@ -742,12 +744,13 @@ def test_completion_gate_marks_workspace_scope_read_error_as_blocked():
         ),
     )
 
-    assert result.status == "blocked"
-    assert result.active_task_status == "blocked"
-    assert result.should_update_active_task is True
+    assert result.status == "incomplete"
+    assert result.reason == "tool execution reported an error without a clear blocker handoff"
+    assert result.active_task_status is None
+    assert result.should_update_active_task is False
 
 
-def test_completion_gate_marks_blocker_heading_as_blocked():
+def test_completion_gate_does_not_infer_blocker_heading_as_blocked():
     intent = TaskIntentService().classify(
         "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
     )
@@ -763,8 +766,9 @@ def test_completion_gate_marks_blocker_heading_as_blocked():
         ),
     )
 
-    assert result.status == "blocked"
-    assert result.active_task_status == "blocked"
+    assert result.status == "incomplete"
+    assert result.reason == "tool execution reported an error without a clear blocker handoff"
+    assert result.active_task_status is None
 
 
 def test_completion_gate_does_not_mark_preview_only_revert_as_blocked():
@@ -793,7 +797,7 @@ def test_completion_gate_does_not_mark_preview_only_revert_as_blocked():
     assert result.status == "complete"
 
 
-def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():
+def test_completion_gate_does_not_infer_strong_chinese_blocker_without_tool_error():
     intent = TaskIntentService().classify(
         "\u5ef6\u7e8c\u525b\u525b\u7684\u7a0b\u5f0f\u78bc\u89c0\u5bdf\uff0c\u8acb\u8a2d\u8a08\u6700\u5c0f regression test \u6848\u4f8b\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\u3001\u4e0d\u8981\u57f7\u884c\u6e2c\u8a66\u3002"
     )
@@ -805,8 +809,8 @@ def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():
         execution_result=ExecutionResult(content=response),
     )
 
-    assert result.status == "blocked"
-    assert result.active_task_status == "blocked"
+    assert result.status == "incomplete"
+    assert result.active_task_status is None
 
 
 def test_completion_gate_does_not_mark_status_definition_as_blocked():
@@ -847,7 +851,41 @@ async def test_completion_gate_marks_retry_only_conversation_response_incomplete
     assert result.reason == "judge rejected retry-only response"
 
 
-def test_completion_gate_marks_waiting_when_response_asks_for_input():
+@pytest.mark.anyio
+async def test_completion_gate_uses_judge_for_blocked_status():
+    intent = TaskIntentService().classify("繼續驗證")
+    response = "目前無法繼續，測試環境失敗。"
+
+    result = await _evaluate_with_static_judge(
+        status="blocked",
+        reason="judge identified an external blocker",
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response, had_tool_error=True),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason == "judge identified an external blocker"
+
+
+@pytest.mark.anyio
+async def test_completion_gate_uses_judge_for_waiting_user_status():
+    intent = TaskIntentService().classify("繼續做")
+    response = "請問你要用哪個 target branch？"
+
+    result = await _evaluate_with_static_judge(
+        status="waiting_user",
+        reason="judge identified required user input",
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "waiting_user"
+    assert result.reason == "judge identified required user input"
+
+
+def test_completion_gate_does_not_infer_waiting_from_response_question():
     intent = TaskIntentService().classify("繼續做")
 
     result = CompletionGateService().evaluate(
@@ -856,9 +894,9 @@ def test_completion_gate_marks_waiting_when_response_asks_for_input():
         execution_result=ExecutionResult(content="請問你要用哪個 target branch？"),
     )
 
-    assert result.status == "waiting_user"
-    assert result.active_task_status == "waiting_user"
-    assert result.should_update_active_task is True
+    assert result.status == "complete"
+    assert result.active_task_status is None
+    assert result.should_update_active_task is False
 
 
 def test_completion_gate_completes_generic_task_with_substantive_answer():
