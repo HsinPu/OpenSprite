@@ -294,7 +294,7 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
     assert aggregate.task_contract is valid_contract
 
 
-def test_aggregate_execution_results_keeps_valid_contract_over_retry_fallback_contract():
+def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error_contract():
     valid_contract = TaskContract(
         objective="Find sources",
         task_type="web_research",
@@ -302,18 +302,17 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_fallback_co
         contract_sources=("llm_planner",),
         planner_metadata={"planner_status": "validated"},
     )
-    fallback_contract = TaskContract(
+    planning_error_contract = TaskContract(
         objective="Find sources",
-        task_type="history_retrieval",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
-        contract_sources=("llm_planner", "fallback"),
-        planner_metadata={"planner_status": "fallback", "reason": "invalid JSON"},
+        task_type="planning_error",
+        contract_sources=("llm_planner",),
+        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
         [
             ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
-            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=fallback_contract),
+            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error_contract),
         ],
         content="retry answer",
     )

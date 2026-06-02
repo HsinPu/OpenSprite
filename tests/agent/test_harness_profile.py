@@ -397,7 +397,7 @@ async def test_task_contract_planner_does_not_override_workspace_change_for_comm
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_does_not_infer_web_tools_from_invalid_json():
+async def test_task_contract_planner_blocks_web_request_when_planner_json_is_invalid():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
@@ -410,15 +410,15 @@ async def test_task_contract_planner_does_not_infer_web_tools_from_invalid_json(
         history=[],
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert contract.task_type == "planning_error"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "invalid"
     assert "invalid JSON" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_falls_back_when_llm_call_fails():
+async def test_task_contract_planner_blocks_when_llm_call_fails():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find current OpenRouter API parameter docs and cite sources")
 
@@ -430,15 +430,15 @@ async def test_task_contract_planner_falls_back_when_llm_call_fails():
         history=[],
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert contract.task_type == "planning_error"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "blocked"
     assert "TimeoutError" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_does_not_infer_workspace_tools_from_invalid_json():
+async def test_task_contract_planner_blocks_workspace_request_when_planner_json_is_invalid():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("請看目前工作區，找出 CLI chat 相關測試檔案有哪些。")
     provider = _FakePlannerProvider("I should inspect files, but this is not JSON.")
@@ -451,9 +451,9 @@ async def test_task_contract_planner_does_not_infer_workspace_tools_from_invalid
         history=[],
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert contract.task_type == "planning_error"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["planner_status"] == "invalid"
     assert "invalid JSON" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
@@ -490,7 +490,7 @@ async def test_task_contract_planner_repairs_invalid_json_with_second_llm_call()
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_falls_back_to_pure_answer_for_invalid_json_plain_request():
+async def test_task_contract_planner_blocks_plain_request_when_planner_json_is_invalid():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
     provider = _FakePlannerProvider("This is a simple planning answer, no tools needed.")
@@ -503,7 +503,7 @@ async def test_task_contract_planner_falls_back_to_pure_answer_for_invalid_json_
         history=[],
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.allow_no_tool_final is True
+    assert contract.task_type == "planning_error"
+    assert contract.allow_no_tool_final is False
     assert contract.requirements == ()
-    assert contract.planner_metadata["planner_status"] == "fallback"
+    assert contract.planner_metadata["planner_status"] == "invalid"

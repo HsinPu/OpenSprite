@@ -1223,8 +1223,8 @@ class AgentTurnRunner:
 
     @staticmethod
     def _select_aggregate_task_contract(results: list[ExecutionResult]):
-        """Keep a validated contract if a later retry only failed or fell back during planning."""
-        fallback = next(
+        """Keep a validated contract if a later retry only failed during planning."""
+        latest_contract = next(
             (
                 result.task_contract
                 for result in reversed(results)
@@ -1251,7 +1251,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if result.task_contract is not None and result.task_contract.task_type != "planning_error"
             ),
-            fallback,
+            latest_contract,
         )
 
     @staticmethod

@@ -219,14 +219,8 @@ class TaskContractPlanner:
                 **self.llm_config.decoding_kwargs(),
             )
         except Exception as exc:
-            return _fallback_contract_from_intent(
-                task_intent=task_intent,
-                current_message=current_message,
-                history=history,
-                current_image_files=current_image_files,
-                current_audio_files=current_audio_files,
-                current_video_files=current_video_files,
-                task_context_decision=task_context_decision,
+            return _planner_blocked_contract(
+                objective=str(task_intent.objective or current_message or "").strip(),
                 reason=_planner_exception_reason(exc),
             )
         response_text = str(getattr(response, "content", "") or "")
@@ -251,14 +245,8 @@ class TaskContractPlanner:
                     **self.llm_config.decoding_kwargs(),
                 )
             except Exception as exc:
-                return _fallback_contract_from_intent(
-                    task_intent=task_intent,
-                    current_message=current_message,
-                    history=history,
-                    current_image_files=current_image_files,
-                    current_audio_files=current_audio_files,
-                    current_video_files=current_video_files,
-                    task_context_decision=task_context_decision,
+                return _planner_blocked_contract(
+                    objective=str(task_intent.objective or current_message or "").strip(),
                     reason=_planner_exception_reason(exc),
                     raw_response_preview=_truncate(response_text, max_chars=400),
                 )
@@ -267,14 +255,9 @@ class TaskContractPlanner:
             if not payload:
                 response_text = repair_text or response_text
         if not payload:
-            return _fallback_contract_from_intent(
-                task_intent=task_intent,
-                current_message=current_message,
-                history=history,
-                current_image_files=current_image_files,
-                current_audio_files=current_audio_files,
-                current_video_files=current_video_files,
-                task_context_decision=task_context_decision,
+            return _planner_blocked_contract(
+                objective=str(task_intent.objective or current_message or "").strip(),
+                status="invalid",
                 reason="task contract planner returned invalid JSON",
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
@@ -443,64 +426,6 @@ def _planner_blocked_contract(
                 description="Explain that task contract planning failed and a reliable tool profile could not be selected.",
             ),
         ),
-        planner_metadata=metadata,
-    )
-
-
-def _fallback_contract_from_intent(
-    *,
-    task_intent: TaskIntent,
-    current_message: str,
-    history: list[dict[str, Any]] | None,
-    current_image_files: list[str] | None,
-    current_audio_files: list[str] | None,
-    current_video_files: list[str] | None,
-    task_context_decision: TaskContextDecision | None,
-    reason: str,
-    raw_response_preview: str = "",
-) -> TaskContract:
-    task_type = "pure_answer"
-    tool_groups: list[str] = []
-
-    if current_image_files or current_audio_files or current_video_files:
-        task_type = "media_analysis"
-        tool_groups = ["media"]
-
-    contract = _contract_from_planner_payload(
-        {
-            "task_type": task_type,
-            "required_tool_groups": tool_groups,
-            "final_answer_required": True,
-            "allow_no_tool_final": not tool_groups,
-            "reason": reason,
-        },
-        task_intent=task_intent,
-        current_message=current_message,
-        history=history,
-        current_image_files=current_image_files,
-        current_audio_files=current_audio_files,
-        current_video_files=current_video_files,
-        task_context_decision=task_context_decision,
-    )
-    metadata = dict(contract.planner_metadata or {})
-    metadata.update(
-        {
-            "planner_status": "fallback",
-            "reason": reason,
-        }
-    )
-    if raw_response_preview:
-        metadata["raw_response_preview"] = raw_response_preview
-    return TaskContract(
-        objective=contract.objective,
-        task_type=contract.task_type,
-        requirements=contract.requirements,
-        acceptance_criteria=contract.acceptance_criteria,
-        selected_resources=contract.selected_resources,
-        final_answer_required=contract.final_answer_required,
-        allow_no_tool_final=contract.allow_no_tool_final,
-        contract_sources=("llm_planner", "fallback"),
-        harness_profile=contract.harness_profile,
         planner_metadata=metadata,
     )
 

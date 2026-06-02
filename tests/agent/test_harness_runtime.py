@@ -158,7 +158,7 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert "profile=chat" in scorecard_part.content
 
 
-def test_harness_runtime_records_fallback_contract_for_invalid_planner_json(tmp_path):
+def test_harness_runtime_records_planning_error_contract_for_invalid_planner_json(tmp_path):
     async def scenario():
         provider = RecordingProvider(
             "I could not select a reliable tool profile.",
