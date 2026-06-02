@@ -8,16 +8,35 @@ from typing import Any, Awaitable, Callable
 
 from ..config import Config, MCPServerConfig
 from .base import Tool
+from .result_status import tool_error_result
 
 
 ConfigPathResolver = Callable[[], Path | None]
 ReloadMCPCallback = Callable[[], Awaitable[str]]
+_TOOL_NAME = "configure_mcp"
+
+
+def _mcp_config_error_result(
+    error: str,
+    *,
+    category: str,
+    error_type: str = "ConfigureMCPToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
 
 
 class ConfigureMCPTool(Tool):
     """Read and update MCP server configuration without exposing full config writes."""
 
-    name = "configure_mcp"
+    name = _TOOL_NAME
     description = (
         "Inspect, add, update, or remove MCP server configuration in the dedicated MCP settings file. "
         "Use this when the user wants MCP servers configured instead of editing JSON files directly."
@@ -132,7 +151,7 @@ class ConfigureMCPTool(Tool):
         try:
             loaded, config_path, mcp_path = self._load_config()
         except Exception as exc:
-            return f"Error: {exc}"
+            return _mcp_config_error_result(str(exc), category="config_unavailable")
 
         reload_now = bool(kwargs.get("reload", True))
 
@@ -149,12 +168,20 @@ class ConfigureMCPTool(Tool):
 
         server_name = str(kwargs.get("server_name", "") or "").strip()
         if action in {"get", "upsert", "remove"} and not server_name:
-            return "Error: server_name is required for this action"
+            return _mcp_config_error_result(
+                "server_name is required for this action",
+                category="invalid_arguments",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
 
         if action == "get":
             server = loaded.tools.mcp_servers.get(server_name)
             if server is None:
-                return f"Error: MCP server '{server_name}' not found"
+                return _mcp_config_error_result(
+                    f"MCP server '{server_name}' not found",
+                    category="mcp_server_not_found",
+                )
             payload = {
                 "config_path": str(config_path),
                 "mcp_servers_file": str(mcp_path),
@@ -165,7 +192,10 @@ class ConfigureMCPTool(Tool):
 
         if action == "remove":
             if server_name not in loaded.tools.mcp_servers:
-                return f"Error: MCP server '{server_name}' not found"
+                return _mcp_config_error_result(
+                    f"MCP server '{server_name}' not found",
+                    category="mcp_server_not_found",
+                )
             del loaded.tools.mcp_servers[server_name]
             loaded.save(config_path)
             message = f"Removed MCP server '{server_name}' from {mcp_path}."
@@ -175,7 +205,12 @@ class ConfigureMCPTool(Tool):
             return message
 
         if action != "upsert":
-            return f"Error: unsupported action '{action}'"
+            return _mcp_config_error_result(
+                f"unsupported action '{action}'",
+                category="invalid_arguments",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
 
         existing = loaded.tools.mcp_servers.get(server_name)
         merged_payload = existing.model_dump() if existing is not None else MCPServerConfig().model_dump()
@@ -199,7 +234,12 @@ class ConfigureMCPTool(Tool):
         try:
             loaded.tools.mcp_servers[server_name] = self._validate_upsert_payload(server_name, merged_payload)
         except Exception as exc:
-            return f"Error: {exc}"
+            return _mcp_config_error_result(
+                str(exc),
+                category="invalid_arguments",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
 
         loaded.save(config_path)
         mode = "Updated" if existing is not None else "Added"

@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from opensprite.tools.mcp_config import ConfigureMCPTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _write_config(tmp_path, tools: dict | None = None) -> tuple:
@@ -127,3 +128,65 @@ def test_configure_mcp_removes_server_without_reload(tmp_path):
 
     assert "Removed MCP server 'demo'" in result
     assert saved == {}
+
+
+def test_configure_mcp_requires_server_name_for_get(tmp_path):
+    config_path, _mcp_path = _write_config(tmp_path)
+
+    async def fake_reload() -> str:
+        return "reloaded"
+
+    tool = ConfigureMCPTool(
+        config_path_resolver=lambda: config_path,
+        reload_callback=fake_reload,
+    )
+
+    result = asyncio.run(tool.execute(action="get"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "server_name is required" in status.error
+
+
+def test_configure_mcp_reports_missing_server(tmp_path):
+    config_path, _mcp_path = _write_config(tmp_path)
+
+    async def fake_reload() -> str:
+        return "reloaded"
+
+    tool = ConfigureMCPTool(
+        config_path_resolver=lambda: config_path,
+        reload_callback=fake_reload,
+    )
+
+    result = asyncio.run(tool.execute(action="get", server_name="missing"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ConfigureMCPToolError"
+    assert status.category == "mcp_server_not_found"
+    assert "MCP server 'missing' not found" in status.error
+
+
+def test_configure_mcp_reports_invalid_upsert_payload(tmp_path):
+    config_path, _mcp_path = _write_config(tmp_path)
+
+    async def fake_reload() -> str:
+        return "reloaded"
+
+    tool = ConfigureMCPTool(
+        config_path_resolver=lambda: config_path,
+        reload_callback=fake_reload,
+    )
+
+    result = asyncio.run(tool.execute(action="upsert", server_name="demo", reload=False))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "upsert requires either command or url" in status.error
