@@ -108,6 +108,37 @@ class TaskObjectiveDecisionProvider(CapturingProvider):
         return LLMResponse(content="done", model="fake-model")
 
 
+class HistoryRetrievalContextProvider(CapturingProvider):
+    """Returns a task-context decision that asks for prior chat retrieval."""
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_task_contract_planner_call(messages):
+            return _task_contract_response(messages)
+        self.calls.append(list(messages))
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You classify whether the latest user turn inherits task context" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"continuation_type": "continue_recent_context", "is_follow_up": true, '
+                    '"should_inherit_active_task": false, "should_seed_active_task": false, '
+                    '"should_replace_active_task": false, "inherited_task_type": "history_retrieval", '
+                    '"inherited_tool_group": "history_retrieval", "confidence": 0.91, '
+                    '"reason": "latest message asks about prior conversation context"}'
+                ),
+                model="fake-model",
+            )
+        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"resolved_objective": "Summarize the previous cleanup fix from chat history.", '
+                    '"should_use_resolved_objective": true, "confidence": 0.86, '
+                    '"reason": "context resolver identified a history follow-up"}'
+                ),
+                model="fake-model",
+            )
+        return LLMResponse(content="done", model="fake-model")
+
+
 def _is_task_contract_planner_call(messages) -> bool:
     system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
     return "OpenSprite task-contract planner" in system_text
@@ -829,3 +860,60 @@ def test_main_agent_call_llm_injects_proactive_retrieval_context_for_follow_up(t
     assert "## Retrieved History" in proactive_context
     assert "src/cleanup.py" in proactive_context
     assert "## Retrieved Knowledge" not in proactive_context
+
+
+def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = HistoryRetrievalContextProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_HistoryStorage(
+            [
+                {"role": "user", "content": "We fixed the cleanup flow."},
+                {"role": "assistant", "content": "The cleanup fix touched src/cleanup.py."},
+            ]
+        ),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_store=_FakeSearchStore(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    async def _run() -> str:
+        return await agent.call_llm(
+            "telegram:room-1",
+            "and this one?",
+            channel="telegram",
+            allow_tools=False,
+            task_intent=agent.task_intents.classify("and this one?"),
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    llm_messages = provider.calls[-1]
+    proactive_context = next(
+        message.content
+        for message in llm_messages
+        if getattr(message, "role", None) == "system" and "# Proactive Retrieval Context" in str(message.content or "")
+    )
+    assert "## Retrieved History" in proactive_context
+    assert "src/cleanup.py" in proactive_context

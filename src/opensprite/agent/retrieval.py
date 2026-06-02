@@ -50,8 +50,15 @@ class ProactiveRetrievalService:
         lowered = text.lower()
         return bool(cls._RETRIEVAL_WORD_PATTERN.search(text)) or any(marker in lowered for marker in cls._RETRIEVAL_TEXT_MARKERS)
 
-    async def build_context(self, *, session_id: str, current_message: str) -> str:
-        if self.search_store is None or not self.should_retrieve(current_message):
+    async def build_context(
+        self,
+        *,
+        session_id: str,
+        current_message: str,
+        should_retrieve: bool | None = None,
+    ) -> str:
+        resolved_should_retrieve = self.should_retrieve(current_message) if should_retrieve is None else bool(should_retrieve)
+        if self.search_store is None or not resolved_should_retrieve:
             return ""
 
         history_hits = await self.search_store.search_history(session_id=session_id, query=current_message, limit=3)

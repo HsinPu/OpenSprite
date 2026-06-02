@@ -405,9 +405,16 @@ class LlmCallService:
             session_id=session_id,
             tool_schema_tokens=tool_schema_tokens,
         )
+        structured_retrieval_decision = _structured_retrieval_decision(task_context_decision)
         proactive_retrieval_context = await self._build_proactive_retrieval_context(
             session_id=session_id,
             current_message=effective_current_message,
+            should_retrieve=structured_retrieval_decision,
+        )
+        should_retrieve = (
+            ProactiveRetrievalService.should_retrieve(effective_current_message)
+            if structured_retrieval_decision is None
+            else structured_retrieval_decision
         )
         if run_id is not None:
             await self._emit_run_event(
@@ -415,9 +422,10 @@ class LlmCallService:
                 run_id,
                 "retrieval.proactive_checked",
                 {
-                    "should_retrieve": ProactiveRetrievalService.should_retrieve(effective_current_message),
+                    "should_retrieve": should_retrieve,
                     "applied": bool(proactive_retrieval_context),
                     "context_len": len(proactive_retrieval_context or ""),
+                    "decision_source": "task_context" if structured_retrieval_decision is not None else "message_fallback",
                 },
                 channel=channel,
                 external_chat_id=external_chat_id,
@@ -570,6 +578,14 @@ class LlmCallService:
             result.task_contract = task_contract
             result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
             return result
+
+
+def _structured_retrieval_decision(task_context_decision: TaskContextDecision | None) -> bool | None:
+    if task_context_decision is None:
+        return None
+    inherited_tool_group = str(task_context_decision.inherited_tool_group or "").strip()
+    inherited_task_type = str(task_context_decision.inherited_task_type or "").strip()
+    return inherited_tool_group == "history_retrieval" or inherited_task_type == "history_retrieval"
 
 
 def _effective_task_intent(

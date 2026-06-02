@@ -952,9 +952,10 @@ class AgentLoop:
                 channel=channel,
                 external_chat_id=external_chat_id,
             ),
-            build_proactive_retrieval_context=lambda session_id, current_message: self.retrieval.build_context(
+            build_proactive_retrieval_context=lambda session_id, current_message, should_retrieve=None: self.retrieval.build_context(
                 session_id=session_id,
                 current_message=current_message,
+                should_retrieve=should_retrieve,
             ),
             get_tool_registry=lambda: self.tools,
             get_current_run_id=self.turn_context.current_run_id,
