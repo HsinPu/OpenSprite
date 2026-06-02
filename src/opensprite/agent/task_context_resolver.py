@@ -347,7 +347,7 @@ def _should_consult_llm(
     if decision.is_follow_up:
         return True
     if not _has_active_task(active_task):
-        return _has_recent_context(history, work_state_summary) and _is_context_dependent_short_turn(current, task_intent)
+        return _has_recent_context(history, work_state_summary) and _is_context_dependent_short_turn(current)
     if decision.should_inherit_active_task:
         return True
     return True
@@ -572,7 +572,7 @@ def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary
     return any(_compact(str(message.get("content") or "")) for message in (history or [])[-6:])
 
 
-def _is_context_dependent_short_turn(current: str, task_intent: TaskIntent | None) -> bool:
+def _is_context_dependent_short_turn(current: str) -> bool:
     if _CONTINUATION_RE.match(current):
         return True
     words = re.findall(r"[\w\u4e00-\u9fff]+", current)
