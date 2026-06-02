@@ -5,6 +5,7 @@ from opensprite.tools.base import Tool
 from opensprite.tools.filesystem import WriteFileTool
 from opensprite.tools.process import ProcessTool
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.shell import ExecTool
 
 
@@ -31,12 +32,23 @@ class BoundedCountStub(Tool):
         raise AssertionError("_execute should not be called when validation fails")
 
 
+def _assert_validation_error(result: str, tool_name: str, detail: str) -> None:
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert status.repeated_error_key == status.error
+    assert f"Invalid arguments for {tool_name}" in status.error
+    assert detail in status.error
+
+
 def test_write_file_reports_missing_required_arguments(tmp_path):
     tool = WriteFileTool(workspace=tmp_path)
 
     result = asyncio.run(tool.execute())
 
-    assert result == "Error: Invalid arguments for write_file: missing required argument(s): path, content."
+    _assert_validation_error(result, "write_file", "missing required argument(s): path, content")
 
 
 def test_exec_reports_missing_command_argument(tmp_path):
@@ -44,7 +56,7 @@ def test_exec_reports_missing_command_argument(tmp_path):
 
     result = asyncio.run(tool.execute())
 
-    assert result == "Error: Invalid arguments for exec: missing required argument(s): command."
+    _assert_validation_error(result, "exec", "missing required argument(s): command")
 
 
 def test_exec_rejects_blank_command(tmp_path):
@@ -52,7 +64,7 @@ def test_exec_rejects_blank_command(tmp_path):
 
     result = asyncio.run(tool.execute(command="   "))
 
-    assert result == "Error: Invalid arguments for exec: command must be a non-empty string."
+    _assert_validation_error(result, "exec", "command must be a non-empty string")
 
 
 def test_exec_blocks_powershell_recursive_delete(tmp_path):
@@ -69,7 +81,7 @@ def test_exec_rejects_overlong_command(tmp_path):
 
     result = asyncio.run(tool.execute(command="a" * 2001))
 
-    assert result == "Error: Invalid arguments for exec: command must be at most 2000 characters."
+    _assert_validation_error(result, "exec", "command must be at most 2000 characters")
 
 
 def test_process_poll_requires_session_id():
@@ -137,7 +149,7 @@ def test_registry_rejects_blank_read_file_path_before_execution():
 
     result = asyncio.run(registry.execute("read_file", {"path": "   "}))
 
-    assert result == "Error: Invalid arguments for read_file: path must be a non-empty string."
+    _assert_validation_error(result, "read_file", "path must be a non-empty string")
 
 
 def test_registry_rejects_non_string_write_file_content_before_execution():
@@ -169,7 +181,7 @@ def test_registry_rejects_non_string_write_file_content_before_execution():
 
     result = asyncio.run(registry.execute("write_file", {"path": "out.txt", "content": ["hello"]}))
 
-    assert result == "Error: Invalid arguments for write_file: content must be string, got array."
+    _assert_validation_error(result, "write_file", "content must be string, got array")
 
 
 def test_registry_rejects_integer_below_minimum_before_execution():
@@ -178,7 +190,7 @@ def test_registry_rejects_integer_below_minimum_before_execution():
 
     result = asyncio.run(registry.execute("count_tool", {"count": 0}))
 
-    assert result == "Error: Invalid arguments for count_tool: count must be at least 1."
+    _assert_validation_error(result, "count_tool", "count must be at least 1")
 
 
 def test_registry_rejects_integer_above_maximum_before_execution():
@@ -187,4 +199,4 @@ def test_registry_rejects_integer_above_maximum_before_execution():
 
     result = asyncio.run(registry.execute("count_tool", {"count": 11}))
 
-    assert result == "Error: Invalid arguments for count_tool: count must be at most 10."
+    _assert_validation_error(result, "count_tool", "count must be at most 10")

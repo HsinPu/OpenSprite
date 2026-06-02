@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .result_status import tool_error_result
+
 NON_EMPTY_STRING_PATTERN = r"\S"
 
 
@@ -208,7 +210,7 @@ def _validate_value(
 def validate_tool_params(name: str, schema: Any, params: Any) -> str | None:
     """Validate tool params against the supported JSON Schema subset."""
     if not isinstance(params, dict):
-        return f"Error: Invalid arguments for {name}: expected a JSON object of named arguments."
+        return _validation_error_result(name, "expected a JSON object of named arguments")
 
     normalized_schema = schema if isinstance(schema, dict) else {"type": "object", "properties": {}}
     issues = _validate_value(normalized_schema, params, path="", required=True)
@@ -221,4 +223,16 @@ def validate_tool_params(name: str, schema: Any, params: Any) -> str | None:
     if missing:
         parts.append(f"missing required argument(s): {', '.join(missing)}")
     parts.extend(invalid)
-    return f"Error: Invalid arguments for {name}: {'; '.join(parts)}."
+    return _validation_error_result(name, "; ".join(parts))
+
+
+def _validation_error_result(name: str, detail: str) -> str:
+    error = f"Invalid arguments for {name}: {detail}."
+    return tool_error_result(
+        error,
+        error_type="ToolValidationError",
+        category="invalid_arguments",
+        repeated_error_key=error,
+        invalid_arguments=True,
+        metadata={"tool_name": name},
+    )

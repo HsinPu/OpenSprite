@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from opensprite.context.paths import sync_templates
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.subagent_config import ConfigureSubagentTool
 
 _VALID_DESCRIPTION = (
@@ -90,8 +91,10 @@ def test_configure_subagent_rejects_invalid_tool_profile(tmp_path):
         )
     )
 
-    assert "Invalid arguments for configure_subagent" in out
-    assert "tool_profile must be one of" in out
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert "Invalid arguments for configure_subagent" in status.error
+    assert "tool_profile must be one of" in status.error
     assert not (session_ws / "subagent_prompts" / "bad-agent.md").exists()
 
 

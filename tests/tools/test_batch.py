@@ -5,6 +5,7 @@ from opensprite.tools.base import Tool
 from opensprite.tools.batch import BatchTool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class EchoTool(Tool):
@@ -123,8 +124,11 @@ def test_batch_rejects_non_read_only_child_tools():
         )
     )
 
-    assert result.startswith("Error: Invalid arguments for batch:")
-    assert "calls[0].tool must be one of" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert "Invalid arguments for batch" in status.error
+    assert "calls[0].tool must be one of" in status.error
     assert "write:x" not in result
 
 

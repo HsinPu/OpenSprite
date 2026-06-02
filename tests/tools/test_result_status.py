@@ -80,6 +80,23 @@ def test_tool_result_status_exposes_invalid_arguments_repeat_key():
     assert status.repeated_error_key == result
 
 
+def test_tool_result_status_exposes_structured_invalid_arguments_repeat_key():
+    result = tool_error_result(
+        "Invalid arguments for web_fetch: url is required.",
+        error_type="ToolValidationError",
+        category="invalid_arguments",
+        repeated_error_key="Invalid arguments for web_fetch: url is required.",
+        invalid_arguments=True,
+    )
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert status.repeated_error_key == "Invalid arguments for web_fetch: url is required."
+
+
 def test_tool_result_status_classifies_permission_blocks():
     result = tool_error_result(
         "Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools.",
