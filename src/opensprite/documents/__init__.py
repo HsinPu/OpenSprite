@@ -9,8 +9,6 @@ from .active_task import (
     ActiveTaskConsolidator,
     ActiveTaskStore,
     build_active_task_execution_guidance,
-    build_initial_active_task_block,
-    is_task_worthy_message,
     consolidate_active_task,
 )
 from .managed import ManagedMarkdownDocument
@@ -35,8 +33,6 @@ __all__ = [
     "ActiveTaskConsolidator",
     "ActiveTaskStore",
     "build_active_task_execution_guidance",
-    "build_initial_active_task_block",
-    "is_task_worthy_message",
     "ConversationConsolidator",
     "ConversationDocumentStore",
     "DEFAULT_ACTIVE_TASK_CONTENT",

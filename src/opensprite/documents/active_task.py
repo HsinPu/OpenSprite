@@ -81,93 +81,6 @@ _AUTO_ALLOWED_STATUS_TRANSITIONS = {
     "done": {"done"},
     "cancelled": {"cancelled"},
 }
-_NON_TASK_MESSAGES = {
-    "hi",
-    "hello",
-    "hey",
-    "thanks",
-    "thank you",
-    "ok",
-    "okay",
-    "got it",
-    "cool",
-    "nice",
-}
-_TASK_SWITCH_PREFIXES = (
-    "new task",
-    "new objective",
-    "switch task",
-    "switch to",
-    "change of plan",
-    "ignore previous",
-    "forget previous",
-    "instead",
-    "actually, switch",
-    "actually switch",
-    "新的任務",
-    "新任務",
-    "換個任務",
-    "換一個任務",
-    "改成",
-    "換成",
-    "改做",
-    "接下來幫我",
-    "接著幫我",
-    "另外一個任務",
-    "不要做原本的",
-    "先不要做原本的",
-)
-_TASK_REQUEST_MARKERS = (
-    "help me",
-    "can you",
-    "could you",
-    "please",
-    "need you to",
-    "i want you to",
-    "let's",
-    "幫我",
-    "請",
-    "麻煩",
-)
-_TASK_WORK_MARKERS = (
-    "fix",
-    "refactor",
-    "implement",
-    "add",
-    "build",
-    "create",
-    "update",
-    "review",
-    "analyze",
-    "analyse",
-    "investigate",
-    "audit",
-    "check",
-    "look into",
-    "debug",
-    "optimize",
-    "write",
-    "draft",
-    "plan",
-    "organize",
-    "整理",
-    "分析",
-    "修正",
-    "修復",
-    "重構",
-    "重寫",
-    "新增",
-    "建立",
-    "更新",
-    "調查",
-    "檢查",
-    "看一下",
-    "除錯",
-    "優化",
-    "規劃",
-    "實作",
-    "修改",
-)
 class ActiveTaskStore(ConversationDocumentStore):
     """Persist one session's ACTIVE_TASK.md and its update state."""
 
@@ -395,11 +308,6 @@ def _normalize_goal_text(text: str, max_chars: int = 180) -> str:
     return compact[: max_chars - 3].rstrip() + "..."
 
 
-def build_initial_active_task_block(message_text: str) -> str | None:
-    """Create a minimal first-turn task brief from the latest user message."""
-    return build_task_block_from_text(message_text)
-
-
 def build_task_block_from_intent_fields(
     *,
     goal: str,
@@ -409,7 +317,7 @@ def build_task_block_from_intent_fields(
 ) -> str | None:
     """Create an ACTIVE_TASK block from deterministic intent fields."""
     normalized_goal = _normalize_goal_text(goal)
-    if not normalized_goal or normalized_goal.lower() in _NON_TASK_MESSAGES:
+    if not normalized_goal:
         return None
 
     deliverable = _DEFAULT_ACTIVE_TASK_DELIVERABLE
@@ -459,12 +367,10 @@ def build_task_block_from_text(message_text: str, *, force: bool = False) -> str
         return None
     if stripped.startswith("/"):
         return None
+    if not force:
+        return None
 
     goal = _normalize_goal_text(stripped)
-    if goal.lower() in _NON_TASK_MESSAGES:
-        return None
-    if not force and not is_task_worthy_message(stripped):
-        return None
 
     deliverable = _DEFAULT_ACTIVE_TASK_DELIVERABLE
     assumptions = (
@@ -520,34 +426,6 @@ def _format_bulleted_task_list(items: list[str]) -> str:
 
 def _format_numbered_task_list(items: list[str]) -> str:
     return "\n".join(f"  {index}. {item}" for index, item in enumerate(items, start=1))
-
-
-def is_task_worthy_message(message_text: str) -> bool:
-    """Return whether a user message looks like work that should create an active task."""
-    stripped = (message_text or "").strip()
-    if not stripped:
-        return False
-    if stripped.startswith("/"):
-        return False
-
-    normalized = re.sub(r"\s+", " ", stripped).strip().lower()
-    if normalized in _NON_TASK_MESSAGES:
-        return False
-    if normalized.startswith(_TASK_SWITCH_PREFIXES):
-        return True
-
-    has_work_marker = any(marker in normalized for marker in _TASK_WORK_MARKERS)
-    if not has_work_marker:
-        return False
-
-    has_request_marker = any(marker in normalized for marker in _TASK_REQUEST_MARKERS)
-    if has_request_marker:
-        return True
-
-    if stripped.endswith(("?", "？")):
-        return False
-
-    return True
 
 
 def _extract_task_field(task_block: str, field_name: str) -> str:

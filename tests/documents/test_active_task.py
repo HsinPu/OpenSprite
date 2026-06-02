@@ -5,8 +5,7 @@ from opensprite.documents.active_task import (
     ActiveTaskConsolidator,
     DEFAULT_ACTIVE_TASK_CONTENT,
     build_active_task_execution_guidance,
-    build_initial_active_task_block,
-    is_task_worthy_message,
+    build_task_block_from_text,
     normalize_active_task_block,
     create_active_task_store,
 )
@@ -113,19 +112,14 @@ def test_active_task_consolidator_updates_per_session_files(tmp_path):
     assert task_a.active_task_file != task_b.active_task_file
 
 
-def test_task_worthy_classifier_skips_plain_chat_and_keeps_work_requests():
-    assert is_task_worthy_message("hello") is False
-    assert is_task_worthy_message("你覺得這樣可以嗎？") is False
-    assert is_task_worthy_message("幫我解釋一下這是什麼") is False
-    assert is_task_worthy_message("幫我分析 agent 核心流程") is True
-    assert is_task_worthy_message("Refactor the agent in small safe steps.") is True
-    assert is_task_worthy_message("Can you review this architecture and suggest fixes?") is True
+def test_active_task_text_block_requires_explicit_force():
+    assert build_task_block_from_text("Refactor the agent in small safe steps.") is None
 
+    block = build_task_block_from_text("Refactor the agent in small safe steps.", force=True)
 
-def test_initial_active_task_seed_skips_non_task_messages():
-    assert build_initial_active_task_block("hello") is None
-    assert build_initial_active_task_block("你覺得這樣可以嗎？") is None
-    assert build_initial_active_task_block("幫我解釋一下這是什麼") is None
+    assert block is not None
+    assert "- Status: active" in block
+    assert "- Goal: Refactor the agent in small safe steps." in block
 
 
 def test_active_task_consolidator_prompt_includes_tool_evidence(tmp_path):
