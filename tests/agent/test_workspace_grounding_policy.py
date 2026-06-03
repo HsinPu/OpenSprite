@@ -1,8 +1,18 @@
 from opensprite.agent.workspace_grounding_policy import (
+    WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
+    WORKSPACE_LOCATION_MISSING_REASON,
     contains_workspace_location_clue,
     response_references_workspace_path,
     workspace_paths,
 )
+
+
+def test_workspace_grounding_reasons_are_stable():
+    assert (
+        WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON
+        == "assistant final answer did not reference inspected workspace context"
+    )
+    assert WORKSPACE_LOCATION_MISSING_REASON == "assistant final answer did not identify the workspace location"
 
 
 def test_workspace_location_clue_accepts_path_supplied_by_caller():

@@ -72,6 +72,10 @@ from opensprite.agent.task_contract import (
     _contract_from_planner_payload,
 )
 from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
+from opensprite.agent.workspace_grounding_policy import (
+    WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
+    WORKSPACE_LOCATION_MISSING_REASON,
+)
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
@@ -1474,7 +1478,7 @@ def test_completion_gate_requires_workspace_answer_to_reference_requested_path()
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer did not reference inspected workspace context"
+    assert completion.reason == WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON
 
 
 def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_answer():
@@ -1529,7 +1533,7 @@ def test_completion_gate_requires_workspace_location_for_where_question():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer did not identify the workspace location"
+    assert completion.reason == WORKSPACE_LOCATION_MISSING_REASON
 
 def test_completion_gate_does_not_infer_workspace_location_from_objective_text():
     intent = TaskIntentService().classify("auth config 在哪")

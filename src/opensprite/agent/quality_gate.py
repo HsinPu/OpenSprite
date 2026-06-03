@@ -63,6 +63,8 @@ from .web_source_policy import (
     web_source_has_substantive_detail,
 )
 from .workspace_grounding_policy import (
+    WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
+    WORKSPACE_LOCATION_MISSING_REASON,
     contains_workspace_location_clue,
     response_references_workspace_path,
     workspace_paths,
@@ -423,7 +425,7 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="assistant final answer did not reference inspected workspace context",
+            reason=WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
             active_task_detail="- Reference the inspected workspace path or filename in the final answer.",
         )
 
@@ -437,7 +439,7 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="assistant final answer did not identify the workspace location",
+            reason=WORKSPACE_LOCATION_MISSING_REASON,
             active_task_detail="- Include a file path, symbol, or matching config/code clue from the workspace inspection.",
         )
     return None

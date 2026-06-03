@@ -11,6 +11,10 @@ WORKSPACE_PATH_RE = re.compile(
     r"(?:[\w.-]+[\\/])+[\w.-]+|[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)",
     flags=re.IGNORECASE,
 )
+WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON = (
+    "assistant final answer did not reference inspected workspace context"
+)
+WORKSPACE_LOCATION_MISSING_REASON = "assistant final answer did not identify the workspace location"
 
 
 def contains_workspace_location_clue(response_text: str | None, *, has_workspace_path: bool = False) -> bool:
