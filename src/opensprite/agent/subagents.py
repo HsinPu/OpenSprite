@@ -25,7 +25,7 @@ from .subagent_session import (
     validate_subagent_task_id,
 )
 from ..tools import ToolRegistry
-from ..tools.result_status import classify_tool_result_status
+from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
 from .run_hooks import RunHookService
 from .run_state import RunCancelledError
@@ -36,6 +36,35 @@ from .subagent_policy import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_re
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
 DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
+
+
+def _subagent_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "DelegateToolError",
+    invalid_arguments: bool = False,
+    tool_name: str = "delegate",
+) -> str:
+    error = str(message or "").removeprefix("Error:").strip()
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": tool_name},
+    )
+
+
+def _subagent_validation_error(message: str, *, tool_name: str = "delegate") -> str:
+    return _subagent_error_result(
+        message,
+        category="invalid_arguments",
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+        tool_name=tool_name,
+    )
 
 
 def _subagent_preparation_error_detail(message: str) -> str:
@@ -289,7 +318,7 @@ class SubagentRunService:
     ) -> PreparedSubagentTask | str:
         task_text = str(task or "").strip()
         if not task_text:
-            return "Error: subagent task must be a non-empty string."
+            return _subagent_validation_error("subagent task must be a non-empty string.")
 
         app_home = self._app_home_getter()
         workspace = self._workspace_getter()
@@ -302,7 +331,7 @@ class SubagentRunService:
         if resume_task_id:
             validation_error = validate_subagent_task_id(resume_task_id)
             if validation_error:
-                return validation_error
+                return _subagent_validation_error(validation_error)
             child_task_id = resume_task_id
         else:
             child_task_id = new_subagent_task_id()
@@ -311,19 +340,26 @@ class SubagentRunService:
         child_run_id = self._new_run_id()
         existing_child_messages = await self.storage.get_messages(child_session_id)
         if is_resume and not existing_child_messages:
-            return f"Error: unknown task_id '{child_task_id}' for current session. Start a new delegate task instead."
+            return _subagent_error_result(
+                f"unknown task_id '{child_task_id}' for current session. Start a new delegate task instead.",
+                category="task_not_found",
+            )
 
         stored_prompt_type = extract_subagent_prompt_type(existing_child_messages)
         requested_prompt_type = str(prompt_type).strip() if prompt_type is not None else ""
         effective_prompt_type = requested_prompt_type or stored_prompt_type or "writer"
         if stored_prompt_type and requested_prompt_type and requested_prompt_type != stored_prompt_type:
-            return (
-                f"Error: task_id '{child_task_id}' was created with prompt_type '{stored_prompt_type}', "
-                f"not '{requested_prompt_type}'. Omit prompt_type or use the original prompt_type to resume."
+            return _subagent_error_result(
+                f"task_id '{child_task_id}' was created with prompt_type '{stored_prompt_type}', "
+                f"not '{requested_prompt_type}'. Omit prompt_type or use the original prompt_type to resume.",
+                category="task_prompt_mismatch",
             )
         if effective_prompt_type not in subagents:
             available = ", ".join(subagents)
-            return f"Error: unknown subagent type '{effective_prompt_type}'. Available: {available}"
+            return _subagent_error_result(
+                f"unknown subagent type '{effective_prompt_type}'. Available: {available}",
+                category="unknown_subagent",
+            )
 
         try:
             subagent_tools = self.build_tools(effective_prompt_type, workspace=workspace)
@@ -333,13 +369,16 @@ class SubagentRunService:
                 session_workspace=workspace,
             )
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return _subagent_error_result(str(e), category="subagent_policy")
 
         if group_id is not None and subagent_profile.name not in PARALLEL_SAFE_PROFILE_NAMES:
             allowed = ", ".join(sorted(PARALLEL_SAFE_PROFILE_NAMES))
-            return (
-                "Error: parallel delegation only supports read-only or research subagents. "
-                f"'{effective_prompt_type}' uses profile '{subagent_profile.name}', not one of: {allowed}."
+            return _subagent_error_result(
+                "parallel delegation only supports read-only or research subagents. "
+                f"'{effective_prompt_type}' uses profile '{subagent_profile.name}', not one of: {allowed}.",
+                category="parallel_profile_not_supported",
+                error_type="DelegateManyToolError",
+                tool_name="delegate_many",
             )
 
         return PreparedSubagentTask(
@@ -931,7 +970,7 @@ class SubagentRunService:
                     str(prompt_type or "").strip() or "writer",
                 )
             except ValueError as exc:
-                return f"Error: {exc}"
+                return _subagent_error_result(str(exc), category="subagent_execution_error")
         return (
             f"Task ID: {outcome.task_id}\n"
             f"Subagent: {outcome.prompt_type}\n\n"
@@ -941,22 +980,37 @@ class SubagentRunService:
     async def run_many(self, tasks: list[dict[str, Any]], max_parallel: int | None = None) -> str:
         """Run multiple safe read-only or research child tasks concurrently."""
         if not isinstance(tasks, list):
-            return "Error: tasks must be an array of {task, prompt_type} objects."
+            return _subagent_validation_error(
+                "tasks must be an array of {task, prompt_type} objects.",
+                tool_name="delegate_many",
+            )
         if not tasks:
-            return "Error: tasks must contain at least one child task."
+            return _subagent_validation_error(
+                "tasks must contain at least one child task.",
+                tool_name="delegate_many",
+            )
         if len(tasks) > MAX_PARALLEL_SUBAGENTS:
-            return f"Error: delegate_many supports at most {MAX_PARALLEL_SUBAGENTS} tasks."
+            return _subagent_validation_error(
+                f"delegate_many supports at most {MAX_PARALLEL_SUBAGENTS} tasks.",
+                tool_name="delegate_many",
+            )
 
         group_id = self._new_group_id()
         prepared_tasks: list[PreparedSubagentTask] = []
         total = len(tasks)
         for index, item in enumerate(tasks, start=1):
             if not isinstance(item, dict):
-                return f"Error: task[{index}] must be an object with task and prompt_type."
+                return _subagent_validation_error(
+                    f"task[{index}] must be an object with task and prompt_type.",
+                    tool_name="delegate_many",
+                )
             task_text = str(item.get("task") or "").strip()
             prompt_type = str(item.get("prompt_type") or item.get("promptType") or "").strip()
             if not prompt_type:
-                return f"Error: task[{index}] prompt_type is required for parallel delegation."
+                return _subagent_validation_error(
+                    f"task[{index}] prompt_type is required for parallel delegation.",
+                    tool_name="delegate_many",
+                )
             prepared = await self._prepare_task(
                 task_text,
                 prompt_type=prompt_type,
@@ -965,14 +1019,21 @@ class SubagentRunService:
                 group_total=total,
             )
             if isinstance(prepared, str):
+                status = classify_tool_result_status(prepared)
                 prefix = _subagent_preparation_error_detail(prepared)
-                return f"Error: task[{index}] {prefix}"
+                return _subagent_error_result(
+                    f"task[{index}] {prefix}",
+                    category=status.category or "subagent_preparation_failed",
+                    error_type=status.error_type or "DelegateManyToolError",
+                    invalid_arguments=status.invalid_arguments,
+                    tool_name="delegate_many",
+                )
             prepared_tasks.append(prepared)
 
         try:
             requested_parallel = int(max_parallel or DEFAULT_MAX_PARALLEL_SUBAGENTS)
         except (TypeError, ValueError):
-            return "Error: max_parallel must be an integer."
+            return _subagent_validation_error("max_parallel must be an integer.", tool_name="delegate_many")
         concurrency = max(1, min(requested_parallel, len(prepared_tasks), MAX_PARALLEL_SUBAGENTS))
         semaphore = asyncio.Semaphore(concurrency)
         parent_session_id = prepared_tasks[0].parent_session_id

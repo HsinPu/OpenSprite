@@ -38,6 +38,19 @@ class FakeContextBuilder:
 def test_subagent_preparation_error_detail_uses_shared_result_status():
     assert _subagent_preparation_error_detail("Error: prompt_type is required") == "prompt_type is required"
     assert _subagent_preparation_error_detail(json.dumps({"ok": False, "error": "bad prompt"})) == "bad prompt"
+    assert (
+        _subagent_preparation_error_detail(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "task_id missing",
+                    "error_type": "ToolValidationError",
+                    "category": "invalid_arguments",
+                }
+            )
+        )
+        == "task_id missing"
+    )
 
 
 class FakeStorage:
@@ -906,7 +919,10 @@ def test_run_subagents_many_rejects_write_capable_profiles(tmp_path):
         )
     )
 
-    assert "parallel delegation only supports read-only or research subagents" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "DelegateManyToolError"
+    assert status.category == "parallel_profile_not_supported"
+    assert "parallel delegation only supports read-only or research subagents" in status.error
 
 
 def test_run_subagents_many_cancels_children_with_parent_cancel_request(tmp_path):
@@ -1312,4 +1328,7 @@ def test_subagent_resume_rejects_prompt_type_switch(tmp_path):
     task_id = next(line.split(": ", 1)[1] for line in first.splitlines() if line.startswith("Task ID:"))
     result = asyncio.run(agent.run_subagent("continue task", prompt_type="writer", task_id=task_id))
 
-    assert f"was created with prompt_type 'implementer'" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "DelegateToolError"
+    assert status.category == "task_prompt_mismatch"
+    assert f"was created with prompt_type 'implementer'" in status.error
