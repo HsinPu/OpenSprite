@@ -34,7 +34,7 @@ def path_touches_read_only_app_skills_dir(file_path: Path) -> str | None:
     except ValueError:
         return None
     return (
-        "Error: Cannot modify files under ~/.opensprite/skills/ via write_file or edit_file. "
+        "Cannot modify files under ~/.opensprite/skills/ via write_file or edit_file. "
         "Bundled skills there are read-only; use the session workspace skills/ folder or configure_skill."
     )
 
@@ -135,16 +135,16 @@ def _validate_skill_id(skill_name: str) -> str | None:
     """Validate skill id for configure_skill (strict, fixed rules)."""
     name = str(skill_name or "").strip()
     if not name:
-        return "Error: skill_name is required"
+        return "skill_name is required"
     if "/" in name or "\\" in name or "." in name or ".." in name:
-        return f"Error: Invalid skill name '{skill_name}'"
+        return f"Invalid skill name '{skill_name}'"
     if len(name) < 2:
-        return "Error: skill_name must be at least 2 characters"
+        return "skill_name must be at least 2 characters"
     if len(name) > MAX_SKILL_ID_LEN:
-        return f"Error: skill_name must be at most {MAX_SKILL_ID_LEN} characters"
+        return f"skill_name must be at most {MAX_SKILL_ID_LEN} characters"
     if not _SKILL_ID_PATTERN.match(name):
         return (
-            "Error: skill_name must be lowercase ASCII, start with a letter, use hyphens between segments only "
+            "skill_name must be lowercase ASCII, start with a letter, use hyphens between segments only "
             "(e.g. my-feature, skill-creator-design). Underscores, uppercase, and dots are not allowed."
         )
     return None
@@ -157,27 +157,27 @@ def _latin_letter_words(text: str) -> list[str]:
 
 def _validate_description_for_write(description: str | None, *, action: str) -> str | None:
     if description is None:
-        return f"Error: description is required for {action}"
+        return f"description is required for {action}"
     text = str(description).strip()
     if not text:
-        return f"Error: description is required for {action}"
+        return f"description is required for {action}"
     if len(text) < MIN_SKILL_DESCRIPTION_LEN:
         return (
-            f"Error: description must be at least {MIN_SKILL_DESCRIPTION_LEN} characters "
+            f"description must be at least {MIN_SKILL_DESCRIPTION_LEN} characters "
             f"(after trim); got {len(text)}. Write a detailed English description (what the skill does and when to use it)."
         )
 
     words = [w.lower() for w in _latin_letter_words(text)]
     if len(words) < MIN_SKILL_DESCRIPTION_WORDS:
         return (
-            f"Error: description must contain at least {MIN_SKILL_DESCRIPTION_WORDS} English words "
+            f"description must contain at least {MIN_SKILL_DESCRIPTION_WORDS} English words "
             f"(Latin letters); got {len(words)}. Add more detail: what the skill does, when to load it, and typical tasks."
         )
 
     content_tokens = [w for w in words if w not in _DESCRIPTION_STOPWORDS and len(w) > 2]
     if len(content_tokens) < MIN_SKILL_DESCRIPTION_CONTENT_WORDS:
         return (
-            f"Error: description is not detailed enough: need at least {MIN_SKILL_DESCRIPTION_CONTENT_WORDS} "
+            f"description is not detailed enough: need at least {MIN_SKILL_DESCRIPTION_CONTENT_WORDS} "
             "substantive English words (not only articles/prepositions). Explain capabilities and when the agent should use this skill."
         )
 
@@ -185,7 +185,7 @@ def _validate_description_for_write(description: str | None, *, action: str) -> 
         top_count = Counter(content_tokens).most_common(1)[0][1]
         if top_count / len(content_tokens) > MAX_SKILL_DESCRIPTION_TOKEN_DOMINANCE:
             return (
-                "Error: description looks too repetitive or padded (same terms dominate). "
+                "description looks too repetitive or padded (same terms dominate). "
                 "Rewrite with varied, specific detail about the skill scope and triggers."
             )
 
@@ -194,11 +194,11 @@ def _validate_description_for_write(description: str | None, *, action: str) -> 
 
 def _validate_body_for_write(body: str | None, *, action: str) -> str | None:
     if body is None:
-        return f"Error: body is required for {action}"
+        return f"body is required for {action}"
     text = str(body).strip()
     if len(text) < MIN_SKILL_BODY_LEN:
         return (
-            f"Error: body must be at least {MIN_SKILL_BODY_LEN} characters (after trim); got {len(text)}. "
+            f"body must be at least {MIN_SKILL_BODY_LEN} characters (after trim); got {len(text)}. "
             "Add imperative instructions for the skill body."
         )
     return None
