@@ -13,6 +13,7 @@ from .completion_gate import CompletionGateResult
 from .completion_status import (
     is_complete_completion_status,
     is_blocking_completion_status,
+    is_incomplete_completion_status,
     needs_review_completion_status,
     needs_verification_completion_status,
     is_terminal_completion_status,
@@ -452,7 +453,7 @@ class WorkProgressService:
         delegated_tasks = _merge_delegated_tasks(
             _delegated_tasks_for_state(current),
             delegated_task_updates,
-            clear_selection=completion_result.status == "complete",
+            clear_selection=is_complete_completion_status(completion_result.status),
         )
         selected_task = selected_delegated_task(delegated_tasks)
 
@@ -854,7 +855,7 @@ def _follow_up_pending_step(completion_result: CompletionGateResult, next_action
     detail = str(completion_result.active_task_detail or "").strip()
     if not detail:
         return ""
-    if completion_result.status == "incomplete":
+    if is_incomplete_completion_status(completion_result.status):
         return detail
     if next_action in {"collect_review_evidence", "address_review_findings"}:
         return detail
@@ -907,7 +908,7 @@ def _build_resume_hint(
 
 
 def _map_state_status(completion_result: CompletionGateResult, progress: WorkProgressUpdate) -> str:
-    if completion_result.status == "complete":
+    if is_complete_completion_status(completion_result.status):
         return "done"
     if is_blocking_completion_status(completion_result.status):
         return completion_result.status
@@ -928,7 +929,7 @@ def _completed_steps(
         completed.append(steps[0])
     if expects_code_change and progress.file_change_count > 0 and len(steps) > 1 and steps[1] not in completed:
         completed.append(steps[1])
-    if progress.completion_status == "complete":
+    if is_complete_completion_status(progress.completion_status):
         for step in steps:
             if step not in completed:
                 completed.append(step)
@@ -942,7 +943,7 @@ def _state_steps(
     expects_code_change: bool,
     expects_verification: bool,
 ) -> tuple[str, str]:
-    if progress.completion_status == "complete":
+    if is_complete_completion_status(progress.completion_status):
         return "not set", "not set"
     if is_blocking_completion_status(progress.completion_status):
         current = steps[-1] if steps else "not set"
