@@ -7,6 +7,7 @@ from typing import Any
 
 HISTORY_SEARCH_TOOL_NAME = "search_history"
 HISTORY_RESULT_COUNT_METADATA_KEYS = ("result_count", "hit_count", "hits", "count")
+HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON = "assistant did not provide enough recalled items"
 
 
 def is_history_retrieval_tool_name(tool_name: str | None) -> bool:

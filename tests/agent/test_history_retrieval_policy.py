@@ -1,7 +1,12 @@
 from opensprite.agent.history_retrieval_policy import (
+    HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,
 )
+
+
+def test_history_recalled_items_insufficient_reason_is_stable():
+    assert HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON == "assistant did not provide enough recalled items"
 
 
 def test_history_retrieval_metadata_reports_explicit_empty_counts():

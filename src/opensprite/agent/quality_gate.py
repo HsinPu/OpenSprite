@@ -14,6 +14,7 @@ from .completion_task_policy import (
 from .command_version_policy import COMMAND_VERSION_MISSING_REASON, command_version_missing_detail
 from .execution import ExecutionResult
 from .history_retrieval_policy import (
+    HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,
     is_history_retrieval_tool_name,
@@ -464,7 +465,7 @@ def _evaluate_history_grounding(
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="assistant did not provide enough recalled items",
+            reason=HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
             active_task_detail=f"- Provide at least {requested_count} recalled item(s) from the retrieved context.",
         )
     return None
