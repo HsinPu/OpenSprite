@@ -108,9 +108,13 @@ def test_exec_tool_blocks_dangerous_command(tmp_path):
 
     tool = ExecTool(workspace=Path(tmp_path))
     result = asyncio.run(tool.execute(command="git reset --hard"))
+    status = classify_tool_result_status(result)
 
-    assert result.startswith("Error: Command blocked by safety guard:")
-    assert "git reset --hard" in result
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "blocked_by_policy"
+    assert "Command blocked by safety guard:" in status.error
+    assert "git reset --hard" in status.error
 
 
 def test_destructive_classifier_blocks_common_bypass_variants():
@@ -167,10 +171,13 @@ def test_exec_tool_blocks_wrapped_destructive_command(tmp_path):
 
     tool = ExecTool(workspace=Path(tmp_path))
     result = asyncio.run(tool.execute(command='powershell -Command "Remove-Item -Recurse ."'))
+    status = classify_tool_result_status(result)
 
-    assert result.startswith("Error: Command blocked by safety guard:")
-    assert "powershell -Command" in result
-    assert "remove-item recursive/forced delete" in result
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "blocked_by_policy"
+    assert "powershell -Command" in status.error
+    assert "remove-item recursive/forced delete" in status.error
 
 
 def test_exec_tool_allows_help_for_dangerous_command_names(tmp_path):
@@ -179,7 +186,7 @@ def test_exec_tool_allows_help_for_dangerous_command_names(tmp_path):
     tool = ExecTool(workspace=Path(tmp_path))
     result = asyncio.run(tool.execute(command="Remove-Item --help"))
 
-    assert result != "Error: Command blocked by safety guard: dangerous pattern detected"
+    assert classify_tool_result_status(result).error_type != "ToolGuardrailError"
 
 
 def test_exec_tool_accepts_notify_on_complete_alias(tmp_path):

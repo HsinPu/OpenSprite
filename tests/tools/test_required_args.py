@@ -71,9 +71,12 @@ def test_exec_blocks_powershell_recursive_delete(tmp_path):
     tool = ExecTool(workspace=Path(tmp_path))
 
     result = asyncio.run(tool.execute(command="powershell -Command \"Remove-Item foo -Recurse -Force\""))
+    status = classify_tool_result_status(result)
 
-    assert result.startswith("Error: Command blocked by safety guard:")
-    assert "remove-item recursive/forced delete" in result
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "blocked_by_policy"
+    assert "remove-item recursive/forced delete" in status.error
 
 
 def test_exec_rejects_overlong_command(tmp_path):
