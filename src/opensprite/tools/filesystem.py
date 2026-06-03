@@ -846,11 +846,27 @@ class GlobFilesTool(Tool):
             workspace = self._get_workspace()
             search_path = _resolve_workspace_path(workspace, path)
             if search_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
             if not search_path.exists():
-                return f"Error: Directory not found: {path}"
+                return _filesystem_error_result(
+                    f"Directory not found: {path}",
+                    tool_name=self.name,
+                    category="not_found",
+                    metadata={"path": path},
+                )
             if not search_path.is_dir():
-                return f"Error: Not a directory: {path}"
+                return _filesystem_error_result(
+                    f"Not a directory: {path}",
+                    tool_name=self.name,
+                    category="not_directory",
+                    metadata={"path": path},
+                )
 
             matches = await _ripgrep_files(workspace, search_path, pattern)
             if matches is None:
@@ -877,7 +893,13 @@ class GlobFilesTool(Tool):
                 ])
             return _append_agents_hint("\n".join(output), workspace, search_path, self._agents_hint_seen)
         except Exception as e:
-            return f"Error finding files: {str(e)}"
+            return _filesystem_error_result(
+                f"Error finding files: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="glob_failed",
+                metadata={"path": str(kwargs.get("path", ".")), "pattern": str(kwargs.get("pattern", ""))},
+            )
 
 
 class GrepFilesTool(Tool):

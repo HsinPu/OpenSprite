@@ -227,6 +227,10 @@ def test_navigation_tools_reject_external_search_path(tmp_path):
 
     glob_result = asyncio.run(glob_tool.execute(pattern="*.txt", path=".."))
     grep_result = asyncio.run(grep_tool.execute(pattern="secret", path=".."))
+    glob_status = classify_tool_result_status(glob_result)
 
-    assert glob_result.startswith("Error: Access denied.")
+    assert glob_status.ok is False
+    assert glob_status.error_type == "ToolGuardrailError"
+    assert glob_status.category == "access_denied"
+    assert glob_status.error.startswith("Access denied.")
     assert grep_result.startswith("Error: Access denied.")
