@@ -41,6 +41,9 @@ _VERIFICATION_TOOL = "verify"
 _VERIFICATION_REQUIREMENT_KIND = "verification"
 _VERIFICATION_TOOL_GROUP = "verification"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
+_WEB_RESEARCH_TASK_TYPE = "web_research"
+_WEB_RESEARCH_TOOL_GROUP = "web_research"
+_WEB_SOURCE_ARTIFACT_KIND = "web_source"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -905,17 +908,17 @@ def _has_only_optional_history_retrieval_failures(execution_result: ExecutionRes
 
 
 def _requires_web_research_evidence(task_contract: Any) -> bool:
-    if getattr(task_contract, "task_type", None) == "web_research":
+    if _is_web_research_task_type(getattr(task_contract, "task_type", None)):
         return True
     return any(
-        getattr(requirement, "tool_group", None) == "web_research"
+        _is_web_research_tool_group(getattr(requirement, "tool_group", None))
         for requirement in getattr(task_contract, "requirements", ())
     )
 
 
 def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResult) -> bool:
     for artifact in execution_result.task_artifacts:
-        if artifact.kind != "web_source" or not artifact.ok:
+        if not _is_web_source_artifact_kind(artifact.kind) or not artifact.ok:
             continue
         sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
         if _is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
@@ -967,6 +970,18 @@ def _is_verification_requirement_kind(kind: str | None) -> bool:
 
 def _is_verification_tool_group(tool_group: str | None) -> bool:
     return str(tool_group or "").strip() == _VERIFICATION_TOOL_GROUP
+
+
+def _is_web_research_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == _WEB_RESEARCH_TASK_TYPE
+
+
+def _is_web_research_tool_group(tool_group: str | None) -> bool:
+    return str(tool_group or "").strip() == _WEB_RESEARCH_TOOL_GROUP
+
+
+def _is_web_source_artifact_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() == _WEB_SOURCE_ARTIFACT_KIND
 
 
 def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:

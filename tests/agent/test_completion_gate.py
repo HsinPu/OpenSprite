@@ -27,6 +27,9 @@ from opensprite.agent.completion_gate import (
     _is_verification_result_artifact_kind,
     _is_verification_tool,
     _is_verification_tool_group,
+    _is_web_research_task_type,
+    _is_web_research_tool_group,
+    _is_web_source_artifact_kind,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
     _is_workflow_completion_intent_kind,
@@ -249,6 +252,12 @@ def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert _is_web_research_source_artifact_tool("web_fetch") is False
     assert _is_web_fetch_source_record_tool("web_fetch") is True
     assert _is_web_fetch_source_record_tool("web_search") is False
+    assert _is_web_research_task_type("web_research") is True
+    assert _is_web_research_task_type("workspace_read") is False
+    assert _is_web_research_tool_group("web_research") is True
+    assert _is_web_research_tool_group("workspace_read") is False
+    assert _is_web_source_artifact_kind("web_source") is True
+    assert _is_web_source_artifact_kind("verification_result") is False
     assert _is_optional_workspace_batch_failure_tool("batch") is True
     assert _is_optional_workspace_batch_failure_tool("read_file") is False
     assert _is_history_retrieval_tool("search_history") is True
