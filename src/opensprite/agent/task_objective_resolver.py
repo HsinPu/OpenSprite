@@ -18,6 +18,7 @@ from .task_context_policy import (
 )
 from .task_context_resolver import TaskContextDecision
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
+from .task_text_policy import task_text_tokens
 
 
 _MIN_CONFIDENCE = 0.65
@@ -281,8 +282,7 @@ def _is_short_objective(current_message: str) -> bool:
     current = _compact(current_message)
     if len(current) <= 40:
         return True
-    words = re.findall(r"[\w\u4e00-\u9fff]+", current)
-    return len(words) <= 4
+    return len(task_text_tokens(current)) <= 4
 
 
 def _is_useful_objective(resolved_objective: str, original_message: str) -> bool:

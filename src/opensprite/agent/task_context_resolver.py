@@ -38,6 +38,7 @@ from .task_context_policy import (
     TASK_SWITCH_CONTINUATION_TYPE,
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
+from .task_text_policy import task_text_tokens
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
@@ -494,8 +495,7 @@ def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary
 
 
 def _is_context_dependent_short_turn(current: str) -> bool:
-    words = re.findall(r"[\w\u4e00-\u9fff]+", current)
-    return len(words) <= 8
+    return len(task_text_tokens(current)) <= 8
 
 
 def _coerce_bool(value: Any) -> bool:
