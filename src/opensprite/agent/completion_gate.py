@@ -41,6 +41,7 @@ from .web_source_policy import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
+from .verification_policy import is_verification_result_artifact_kind, is_verification_tool_name
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
@@ -55,8 +56,6 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND,
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({WORKSPACE_WRITE_TOOL_GROUP, "execution", VERIFICATION_TOOL_GROUP, "scheduling"})
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _HISTORY_RETRIEVAL_TOOL = "search_history"
-_VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
-_VERIFICATION_TOOL = "verify"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
@@ -992,11 +991,11 @@ def _is_history_retrieval_tool(tool_name: str | None) -> bool:
 
 
 def _is_verification_result_artifact_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == _VERIFICATION_RESULT_ARTIFACT_KIND
+    return is_verification_result_artifact_kind(kind)
 
 
 def _is_verification_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() == _VERIFICATION_TOOL
+    return is_verification_tool_name(tool_name)
 
 
 def _is_verification_requirement_kind(kind: str | None) -> bool:

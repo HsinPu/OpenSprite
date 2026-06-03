@@ -11,6 +11,7 @@ from .web_source_policy import (
     WEB_SOURCE_ARTIFACT_TOOLS,
     is_web_source_artifact_kind,
 )
+from .verification_policy import VERIFICATION_RESULT_ARTIFACT_KIND, VERIFICATION_TOOL_NAME
 
 
 _TOOL_ARTIFACT_KINDS: dict[str, str] = {
@@ -19,7 +20,7 @@ _TOOL_ARTIFACT_KINDS: dict[str, str] = {
     "transcribe_audio": "audio_transcript",
     "analyze_video": "video_analysis",
     **{tool_name: WEB_SOURCE_ARTIFACT_KIND for tool_name in WEB_SOURCE_ARTIFACT_TOOLS},
-    "verify": "verification_result",
+    VERIFICATION_TOOL_NAME: VERIFICATION_RESULT_ARTIFACT_KIND,
     "exec": "command_result",
 }
 
