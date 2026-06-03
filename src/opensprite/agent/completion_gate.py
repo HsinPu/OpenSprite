@@ -47,11 +47,16 @@ from .web_source_policy import (
     is_web_source_artifact_kind,
 )
 from .verification_policy import is_verification_result_artifact_kind, is_verification_tool_name
+from .workflow_status import (
+    WORKFLOW_CANCELLED_STATUS,
+    is_workflow_completed_status,
+    is_workflow_failed_status,
+    is_workflow_unsuccessful_status,
+)
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
-_UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _PLAIN_ANSWER_TASK_TYPE = "pure_answer"
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
 _READ_ONLY_TASK_TYPES = frozenset(
@@ -107,11 +112,8 @@ _GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
 _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
 _RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
-_FAILED_WORKFLOW_STATUS = "failed"
-_CANCELLED_WORKFLOW_STATUS = "cancelled"
 _WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
 _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = NEEDS_VERIFICATION_COMPLETION_STATUS
-_DELEGATED_REVIEW_COMPLETED_STATUS = "completed"
 _STRUCTURED_REVIEW_CLEAN_STATUS = "ok"
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
@@ -1206,7 +1208,7 @@ def _workflow_gate_outcome(
 
 
 def _is_unsuccessful_workflow_status(status: str | None) -> bool:
-    return str(status or "").strip().lower() in _UNSUCCESSFUL_WORKFLOW_STATUSES
+    return is_workflow_unsuccessful_status(status)
 
 
 def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
@@ -1220,11 +1222,11 @@ def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) ->
 
 
 def _is_failed_workflow_status(status: str | None) -> bool:
-    return str(status or "").strip().lower() == _FAILED_WORKFLOW_STATUS
+    return is_workflow_failed_status(status)
 
 
 def _is_cancelled_workflow_status(status: str | None) -> bool:
-    return str(status or "").strip().lower() == _CANCELLED_WORKFLOW_STATUS
+    return str(status or "").strip().lower() == WORKFLOW_CANCELLED_STATUS
 
 
 def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:
@@ -1240,7 +1242,7 @@ def _workflow_gate_needs_verification(workflow_gate: dict[str, Any]) -> bool:
 
 
 def _is_completed_delegated_review_status(status: str | None) -> bool:
-    return str(status or "").strip() == _DELEGATED_REVIEW_COMPLETED_STATUS
+    return is_workflow_completed_status(status)
 
 
 def _is_clean_structured_review_status(status: str | None) -> bool:
