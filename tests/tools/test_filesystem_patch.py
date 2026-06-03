@@ -41,6 +41,20 @@ def test_write_file_reports_post_edit_python_diagnostics(tmp_path):
     assert "app.py [python_syntax] OK" in result
 
 
+def test_write_file_returns_structured_error_for_post_edit_python_syntax_failure(tmp_path):
+    tool = WriteFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="broken.py", content="def broken(:\n"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolExecutionError"
+    assert status.category == "post_edit_diagnostics_failed"
+    assert "Changes were written successfully but post-edit diagnostics failed." in status.error
+    assert "broken.py [python_syntax]: invalid syntax" in status.error
+    assert (tmp_path / "broken.py").read_text(encoding="utf-8") == "def broken(:\n"
+
+
 def test_write_file_returns_structured_error_for_external_path(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -136,8 +150,13 @@ def test_edit_file_surfaces_post_edit_python_syntax_failures(tmp_path):
         )
     )
 
-    assert result.startswith("Error: Changes were written successfully but post-edit diagnostics failed.")
-    assert "broken.py [python_syntax]: invalid syntax" in result
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolExecutionError"
+    assert status.category == "post_edit_diagnostics_failed"
+    assert "Changes were written successfully but post-edit diagnostics failed." in status.error
+    assert "broken.py [python_syntax]: invalid syntax" in status.error
     assert target.read_text(encoding="utf-8") == "def broken(:\n"
 
 

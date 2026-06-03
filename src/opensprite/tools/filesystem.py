@@ -443,7 +443,7 @@ def _format_post_edit_diagnostics(
         return (
             "\n\n".join(
                 [
-                    f"Error: Post-edit diagnostics failed for {len(failures)} file(s).",
+                    f"Post-edit diagnostics failed for {len(failures)} file(s).",
                     "\n".join(f"- {item}" for item in failures[:12]),
                 ]
             ),
@@ -455,6 +455,15 @@ def _format_post_edit_diagnostics(
             False,
         )
     return "", False
+
+
+def _post_edit_diagnostics_error_result(*, tool_name: str, result: str) -> str:
+    return _filesystem_error_result(
+        f"Changes were written successfully but post-edit diagnostics failed.\n\n{result}",
+        tool_name=tool_name,
+        error_type="ToolExecutionError",
+        category="post_edit_diagnostics_failed",
+    )
 
 
 def _validate_expected_sha256(
@@ -1390,7 +1399,7 @@ class ApplyPatchTool(Tool):
             if diagnostics_text:
                 result += "\n\n" + diagnostics_text
             if diagnostics_failed:
-                return "Error: Changes were written successfully but post-edit diagnostics failed.\n\n" + result
+                return _post_edit_diagnostics_error_result(tool_name=self.name, result=result)
 
             return result
         except ValueError as e:
@@ -1506,7 +1515,7 @@ class WriteFileTool(Tool):
             if diagnostics_text:
                 result += f"\n\n{diagnostics_text}"
             if diagnostics_failed:
-                return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
+                return _post_edit_diagnostics_error_result(tool_name=self.name, result=result)
             return result
         except Exception as e:
             return _filesystem_error_result(
@@ -1721,7 +1730,7 @@ class EditFileTool(Tool):
             if diagnostics_text:
                 result += f"\n\n{diagnostics_text}"
             if diagnostics_failed:
-                return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
+                return _post_edit_diagnostics_error_result(tool_name=self.name, result=result)
             return result
         except Exception as e:
             return _filesystem_error_result(
