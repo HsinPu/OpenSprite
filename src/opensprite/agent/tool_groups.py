@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .harness_profile import GENERIC_TASK_TYPE, VERIFICATION_TOOL_GROUP
+from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
 
 
@@ -26,7 +28,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
         }
     ),
     "workspace_write": frozenset({"apply_patch", "write_file", "edit_file"}),
-    "verification": frozenset({"verify", "exec"}),
+    VERIFICATION_TOOL_GROUP: frozenset({VERIFICATION_TOOL_NAME, "exec"}),
 }
 
 TOOL_GROUP_BY_TOOL_NAME: dict[str, str] = {
@@ -43,7 +45,7 @@ TASK_TYPE_BY_TOOL_GROUP: dict[str, str] = {
     "image_understanding": "media_extraction",
     "media": "media_extraction",
     "scheduling": "operations",
-    "verification": "task",
+    VERIFICATION_TOOL_GROUP: GENERIC_TASK_TYPE,
     "video_understanding": "media_extraction",
     WEB_RESEARCH_TOOL_GROUP: WEB_RESEARCH_TASK_TYPE,
     "workspace_read": "workspace_read",

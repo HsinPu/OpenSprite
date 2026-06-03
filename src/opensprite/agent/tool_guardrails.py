@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
 
@@ -31,7 +32,7 @@ MUTATING_TOOL_NAMES = frozenset(
         "edit_file",
         "exec",
         "process",
-        "verify",
+        VERIFICATION_TOOL_NAME,
         "delegate",
         "delegate_many",
         "workflow",
