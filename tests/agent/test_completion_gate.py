@@ -20,6 +20,7 @@ from opensprite.agent.completion_gate import (
     _is_optional_web_discovery_failure_tool,
     _is_optional_web_fetch_failure_tool,
     _is_optional_workspace_batch_failure_tool,
+    _is_plain_answer_task_type,
     _is_web_fetch_source_record_tool,
     _is_web_research_source_artifact_tool,
     _path_requires_delegated_review,
@@ -204,6 +205,8 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     intent = TaskIntentService().classify("please answer")
     assert _is_read_only_task_type("web_research") is True
     assert _is_read_only_task_type("code_change") is False
+    assert _is_plain_answer_task_type("pure_answer") is True
+    assert _is_plain_answer_task_type("web_research") is False
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
     assert _is_one_turn_intent_kind("command") is True

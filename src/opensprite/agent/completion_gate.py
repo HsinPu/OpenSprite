@@ -23,6 +23,7 @@ _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
+_PLAIN_ANSWER_TASK_TYPE = "pure_answer"
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
 _READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval", "web_research"})
 _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
@@ -809,7 +810,7 @@ def _contract_requires_verification(task_contract: Any) -> bool:
 def _contract_allows_plain_answer(task_contract: Any) -> bool:
     return bool(
         task_contract is not None
-        and getattr(task_contract, "task_type", None) == "pure_answer"
+        and _is_plain_answer_task_type(getattr(task_contract, "task_type", None))
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
@@ -830,6 +831,10 @@ def _contract_is_read_only(task_contract: Any) -> bool:
 
 def _is_read_only_task_type(task_type: str | None) -> bool:
     return str(task_type or "").strip() in _READ_ONLY_TASK_TYPES
+
+
+def _is_plain_answer_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == _PLAIN_ANSWER_TASK_TYPE
 
 
 def _is_one_turn_intent_kind(kind: str | None) -> bool:
