@@ -42,7 +42,11 @@ def test_configure_subagent_list_and_add(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "user_confirmed" in denied.lower()
+    denied_status = classify_tool_result_status(denied)
+    assert denied_status.error_type == "ToolValidationError"
+    assert denied_status.category == "invalid_arguments"
+    assert denied_status.invalid_arguments is True
+    assert "user_confirmed" in denied_status.error.lower()
 
     out = asyncio.run(
         tool.execute(
@@ -65,7 +69,10 @@ def test_configure_subagent_list_and_add(tmp_path):
             user_confirmed=True,
         )
     )
-    assert "already exists" in dup.lower()
+    dup_status = classify_tool_result_status(dup)
+    assert dup_status.error_type == "ConfigureSubagentToolError"
+    assert dup_status.category == "prompt_conflict"
+    assert "already exists" in dup_status.error.lower()
 
     got = asyncio.run(tool.execute(action="get", subagent_id="my-reviewer"))
     data = json.loads(got)
@@ -131,7 +138,10 @@ def test_configure_subagent_upsert_then_remove(tmp_path):
     assert "Removed session" in rm
 
     again = asyncio.run(tool.execute(action="remove", subagent_id="doc-writer"))
-    assert "no session-managed" in again.lower()
+    again_status = classify_tool_result_status(again)
+    assert again_status.error_type == "ConfigureSubagentToolError"
+    assert again_status.category == "prompt_not_found"
+    assert "no session-managed" in again_status.error.lower()
 
 
 def test_configure_subagent_add_refuses_when_prompt_exists_under_app_home(tmp_path):
@@ -150,10 +160,29 @@ def test_configure_subagent_add_refuses_when_prompt_exists_under_app_home(tmp_pa
             body=_VALID_BODY,
         )
     )
-    assert "upsert" in out.lower()
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ConfigureSubagentToolError"
+    assert status.category == "prompt_conflict"
+    assert "upsert" in status.error.lower()
 
 
 def test_configure_subagent_requires_workspace_resolver(tmp_path):
     tool = ConfigureSubagentTool(app_home=tmp_path / "h", workspace_resolver=None)
     out = asyncio.run(tool.execute(action="list"))
-    assert "workspace_resolver" in out.lower()
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ConfigureSubagentToolError"
+    assert status.category == "missing_workspace"
+    assert "workspace_resolver" in status.error.lower()
+
+
+def test_configure_subagent_reports_missing_prompt(tmp_path):
+    app_home = tmp_path / "opensprite-home"
+    session_ws = _session_workspace(tmp_path)
+    tool = ConfigureSubagentTool(app_home=app_home, workspace_resolver=lambda: session_ws)
+
+    out = asyncio.run(tool.execute(action="get", subagent_id="missing-agent"))
+    status = classify_tool_result_status(out)
+
+    assert status.error_type == "ConfigureSubagentToolError"
+    assert status.category == "prompt_not_found"
+    assert "missing-agent" in status.error

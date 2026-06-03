@@ -20,8 +20,10 @@ from .skill_config import (
     _validate_description_for_write,
     _validate_skill_id,
 )
+from .result_status import tool_error_result
 
 AGENT_PROMPT_GUIDE_SKILL_NAME = "agent-creator-design"
+_TOOL_NAME = "configure_subagent"
 
 WorkspaceResolver = Callable[[], Path]
 
@@ -34,6 +36,37 @@ _CONFIGURE_SUBAGENT_RULES_SUMMARY = (
     "If an id already exists under ~/.opensprite/subagent_prompts/, use upsert to add or replace the session file. "
     "remove deletes only the session file, never app-home defaults."
 )
+
+
+def _strip_error_prefix(message: str) -> str:
+    return str(message or "").removeprefix("Error:").strip()
+
+
+def _configure_subagent_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "ConfigureSubagentToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    error = _strip_error_prefix(message)
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
+
+
+def _configure_subagent_validation_error(message: str) -> str:
+    return _configure_subagent_error_result(
+        message,
+        category="invalid_arguments",
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+    )
 
 
 def _build_subagent_prompt_md(
@@ -68,7 +101,7 @@ def _classify_subagent_session_write(
 class ConfigureSubagentTool(Tool):
     """Read and update subagent prompts under the session workspace ``subagent_prompts/``."""
 
-    name = "configure_subagent"
+    name = _TOOL_NAME
     description = (
         "Inspect, add, update, or remove subagent prompt definitions for this session (one markdown file per id "
         "under the session workspace subagent_prompts/). "
@@ -143,7 +176,10 @@ class ConfigureSubagentTool(Tool):
 
     async def _execute(self, action: str, **kwargs: Any) -> str:
         if self._workspace_resolver is None:
-            return "Error: configure_subagent requires a session workspace; workspace_resolver is not configured."
+            return _configure_subagent_error_result(
+                "configure_subagent requires a session workspace; workspace_resolver is not configured.",
+                category="missing_workspace",
+            )
 
         home = get_app_home(self._app_home)
         sync_subagent_prompts_from_package(home)
@@ -163,7 +199,7 @@ class ConfigureSubagentTool(Tool):
         subagent_id = str(kwargs.get("subagent_id", "") or "").strip()
         err = _validate_skill_id(subagent_id)
         if err:
-            return (
+            return _configure_subagent_validation_error(
                 err.replace("skill_name", "subagent_id")
                 .replace("Skill name", "Subagent id")
                 .replace("skill name", "subagent id")
@@ -172,7 +208,10 @@ class ConfigureSubagentTool(Tool):
         if action == "get":
             path, text = read_prompt_document(subagent_id, app_home=self._app_home, session_workspace=session_ws)
             if not text:
-                return f"Error: no prompt found for subagent_id '{subagent_id}'"
+                return _configure_subagent_error_result(
+                    f"no prompt found for subagent_id '{subagent_id}'",
+                    category="prompt_not_found",
+                )
             payload = {
                 "subagent_id": subagent_id,
                 "resolved_path": str(path) if path else "",
@@ -184,10 +223,11 @@ class ConfigureSubagentTool(Tool):
 
         if action == "remove":
             if not session_path.is_file():
-                return (
-                    f"Error: no session-managed prompt at {session_path}. "
+                return _configure_subagent_error_result(
+                    f"no session-managed prompt at {session_path}. "
                     "remove only deletes files under this session's subagent_prompts/; "
-                    "it does not remove defaults under ~/.opensprite/subagent_prompts/."
+                    "it does not remove defaults under ~/.opensprite/subagent_prompts/.",
+                    category="prompt_not_found",
                 )
             session_path.unlink()
             return f"Removed session subagent prompt '{subagent_id}' at {session_path}."
@@ -198,31 +238,33 @@ class ConfigureSubagentTool(Tool):
             tool_profile = kwargs.get("tool_profile")
             desc_err = _validate_description_for_write(description, action=action)
             if desc_err:
-                return desc_err
+                return _configure_subagent_validation_error(desc_err)
             body_err = _validate_body_for_write(body, action=action)
             if body_err:
-                return body_err
+                return _configure_subagent_validation_error(body_err)
             if tool_profile is not None:
                 profile_err = validate_tool_profile_name(tool_profile)
                 if profile_err:
-                    return profile_err
+                    return _configure_subagent_validation_error(profile_err)
                 tool_profile = str(tool_profile).strip()
 
             where = _classify_subagent_session_write(subagent_id, app_home=self._app_home, session_workspace=session_ws)
             if action == "add":
                 if where == "session":
-                    return (
-                        f"Error: subagent '{subagent_id}' already exists in this session at {session_path}. "
-                        "Use action=upsert to replace it, or remove it first."
+                    return _configure_subagent_error_result(
+                        f"subagent '{subagent_id}' already exists in this session at {session_path}. "
+                        "Use action=upsert to replace it, or remove it first.",
+                        category="prompt_conflict",
                     )
                 if where == "global":
-                    return (
-                        f"Error: subagent '{subagent_id}' already exists under ~/.opensprite/subagent_prompts/. "
-                        "Use action=upsert to write a session override in subagent_prompts/."
+                    return _configure_subagent_error_result(
+                        f"subagent '{subagent_id}' already exists under ~/.opensprite/subagent_prompts/. "
+                        "Use action=upsert to write a session override in subagent_prompts/.",
+                        category="prompt_conflict",
                     )
                 if where is None and kwargs.get("user_confirmed") is not True:
-                    return (
-                        "Error: action=add for a new subagent_id requires user_confirmed=true in the tool arguments "
+                    return _configure_subagent_validation_error(
+                        "action=add for a new subagent_id requires user_confirmed=true in the tool arguments "
                         "after the user explicitly agreed in the conversation. Ask first; do not set true without consent."
                     )
 
@@ -244,4 +286,4 @@ class ConfigureSubagentTool(Tool):
             label = "Updated" if existed_session else "Added"
             return f"{label} session subagent prompt '{subagent_id}' at {session_path}.{guide}"
 
-        return f"Error: unsupported action '{action}'"
+        return _configure_subagent_validation_error(f"unsupported action '{action}'")
