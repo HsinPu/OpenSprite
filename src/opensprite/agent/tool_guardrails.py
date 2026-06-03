@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
+
 
 IDEMPOTENT_TOOL_NAMES = frozenset(
     {
@@ -17,9 +19,7 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
         "batch",
         "read_skill",
         "search_history",
-        "web_search",
-        "web_fetch",
-        "web_research",
+        *WEB_SOURCE_EVIDENCE_TOOLS,
         "code_navigation",
     }
 )

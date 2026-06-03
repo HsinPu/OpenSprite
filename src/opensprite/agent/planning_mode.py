@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
+
 if TYPE_CHECKING:
     from .task_contract import TaskContract
     from ..tools import ToolRegistry
@@ -21,9 +23,7 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         "search_history",
         "list_run_file_changes",
         "preview_run_file_change_revert",
-        "web_search",
-        "web_fetch",
-        "web_research",
+        *WEB_SOURCE_EVIDENCE_TOOLS,
         "analyze_image",
         "ocr_image",
         "transcribe_audio",
