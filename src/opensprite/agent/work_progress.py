@@ -35,6 +35,19 @@ from .task_intent import TaskIntent
 
 
 _DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
+_WORK_STATE_DONE_STATUS = "done"
+_WORK_PROGRESS_VERIFYING_STATUS = "verifying"
+_NEXT_ACTION_CONTINUE_VERIFICATION = "continue_verification"
+_NEXT_ACTION_COLLECT_REVIEW_EVIDENCE = "collect_review_evidence"
+_NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = "address_review_findings"
+_NEXT_ACTION_CONTINUE_REVIEW = "continue_review"
+_NEXT_ACTION_CONTINUE_WORK = "continue_work"
+_REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
+    {
+        _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
+        _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
+    }
+)
 
 
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
@@ -747,7 +760,7 @@ class WorkProgressService:
         if is_terminal_completion_status(completion_result.status):
             return completion_result.status
         if needs_verification_completion_status(completion_result.status):
-            return "verifying"
+            return _WORK_PROGRESS_VERIFYING_STATUS
         if needs_review_completion_status(completion_result.status):
             return "reviewing"
         return "working"
@@ -769,10 +782,14 @@ class WorkProgressService:
         if attempts > 0 and not has_progress:
             return "stop_no_progress"
         if needs_verification_completion_status(completion_result.status):
-            return "continue_verification"
+            return _NEXT_ACTION_CONTINUE_VERIFICATION
         if needs_review_completion_status(completion_result.status):
-            return "address_review_findings" if completion_result.review_attempted else "collect_review_evidence"
-        return "continue_work"
+            return (
+                _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS
+                if completion_result.review_attempted
+                else _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE
+            )
+        return _NEXT_ACTION_CONTINUE_WORK
 
 
 def _numbered_steps(steps: tuple[str, ...]) -> tuple[str, ...]:
@@ -867,7 +884,7 @@ def _follow_up_pending_step(completion_result: CompletionGateResult, next_action
         return ""
     if is_incomplete_completion_status(completion_result.status):
         return detail
-    if next_action in {"collect_review_evidence", "address_review_findings"}:
+    if next_action in _REVIEW_FOLLOW_UP_NEXT_ACTIONS:
         return detail
     return ""
 
@@ -881,7 +898,7 @@ def _build_resume_hint(
     next_action: str,
     completion_result: CompletionGateResult | None = None,
 ) -> str:
-    if status == "done":
+    if status == _WORK_STATE_DONE_STATUS:
         return "Task is complete; only continue if the user asks for follow-up work."
     if blockers:
         return f"Resolve blocker first: {blockers[0]}"
@@ -890,23 +907,23 @@ def _build_resume_hint(
     prompt_type = str(getattr(completion_result, "follow_up_prompt_type", "") or "").strip()
     verification_action = str(getattr(completion_result, "verification_action", "") or "").strip()
     verification_path = str(getattr(completion_result, "verification_path", "") or "").strip()
-    if next_action == "continue_verification":
+    if next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
         if workflow and step_label:
             return f"Resume by finishing verification around the {step_label} step in {workflow}."
         if verification_action and verification_path:
             return f"Resume by running verify {verification_action} for `{verification_path}`."
         return "Resume by running or fixing the required verification."
-    if next_action == "collect_review_evidence":
+    if next_action == _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE:
         if workflow and step_label and prompt_type:
             return f"Resume by running or rerunning the delegated {prompt_type} step ({step_label}) for {workflow}."
         if prompt_type:
             return f"Resume by running or rerunning the delegated {prompt_type} step for the changed code."
         return "Resume by running or rerunning a delegated review step for the changed code."
-    if next_action == "address_review_findings":
+    if next_action == _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS:
         if workflow:
             return f"Resume by addressing the review findings for {workflow} before rerunning review if needed."
         return "Resume by addressing the delegated review findings before treating the task as complete."
-    if next_action == "continue_review":
+    if next_action == _NEXT_ACTION_CONTINUE_REVIEW:
         return "Resume by collecting review evidence or addressing delegated review findings."
     if workflow and step_label:
         return f"Resume with the {step_label} step in {workflow}."
@@ -919,10 +936,10 @@ def _build_resume_hint(
 
 def _map_state_status(completion_result: CompletionGateResult, progress: WorkProgressUpdate) -> str:
     if is_complete_completion_status(completion_result.status):
-        return "done"
+        return _WORK_STATE_DONE_STATUS
     if is_blocking_completion_status(completion_result.status):
         return completion_result.status
-    if progress.status == "verifying":
+    if progress.status == _WORK_PROGRESS_VERIFYING_STATUS:
         return "active"
     return "active"
 
@@ -958,16 +975,20 @@ def _state_steps(
     if is_blocking_completion_status(progress.completion_status):
         current = steps[-1] if steps else "not set"
         return current, "not set"
-    if progress.next_action == "continue_verification":
+    if progress.next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
         return _verification_step(steps, expects_code_change=expects_code_change), "not set"
-    if progress.next_action in {"continue_review", "collect_review_evidence", "address_review_findings"}:
+    if progress.next_action in (
+        _NEXT_ACTION_CONTINUE_REVIEW,
+        _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
+        _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
+    ):
         return (steps[-1] if steps else "not set"), "not set"
     if expects_code_change and progress.file_change_count <= 0 and len(steps) >= 2:
         next_step = steps[2] if len(steps) > 2 else "not set"
         return steps[1], next_step
     if expects_verification and steps:
         return _verification_step(steps, expects_code_change=expects_code_change), "not set"
-    if progress.next_action == "continue_work" and steps:
+    if progress.next_action == _NEXT_ACTION_CONTINUE_WORK and steps:
         current = steps[-1] if progress.file_change_count > 0 else (steps[1] if len(steps) > 1 else steps[0])
         next_step = "not set"
         if progress.file_change_count <= 0 and len(steps) > 2:
