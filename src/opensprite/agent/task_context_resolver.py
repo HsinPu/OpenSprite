@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
-from ..llms import ChatMessage
+from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
 from .active_task_status import active_task_status, has_current_active_task
 from .harness_profile import (
@@ -145,7 +145,7 @@ class TaskContextResolver:
             work_state_summary=work_state_summary,
         ):
             return deterministic
-        if provider is None or str(model or "").strip().lower() == "unconfigured":
+        if is_unconfigured_llm(provider, model):
             return _unresolved_llm_decision("llm unavailable; task context was not inferred")
 
         try:
