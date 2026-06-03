@@ -44,6 +44,7 @@ from ..tools.evidence import ToolEvidence
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 PLANNER_VALIDATED_STATUS = "validated"
+PLANNER_INVALID_STATUS = "invalid"
 PLANNING_ERROR_TASK_TYPE = "planning_error"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
@@ -273,7 +274,7 @@ class TaskContractPlanner:
         if not payload:
             return _planner_blocked_contract(
                 objective=str(task_intent.objective or current_message or "").strip(),
-                status="invalid",
+                status=PLANNER_INVALID_STATUS,
                 reason="task contract planner returned invalid JSON",
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
@@ -492,7 +493,7 @@ def _contract_from_planner_payload(
     if not raw_task_type:
         return _planner_blocked_contract(
             objective=objective,
-            status="invalid",
+            status=PLANNER_INVALID_STATUS,
             reason="task contract planner returned an unsupported or missing task_type",
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )

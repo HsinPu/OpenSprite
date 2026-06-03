@@ -40,7 +40,7 @@ from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .subagent_policy import REVIEW_PROMPT_TYPES
-from .task_contract import PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
+from .task_contract import PLANNER_INVALID_STATUS, PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
 from .task_intent import ONE_TURN_INTENT_KINDS, TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS, WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import (
@@ -61,7 +61,7 @@ from .workflow_status import (
 )
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
-_BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
+_BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
 _PLAIN_ANSWER_TASK_TYPE = PURE_ANSWER_TASK_TYPE
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({PURE_ANSWER_TASK_TYPE, PLANNING_ERROR_TASK_TYPE})
 _READ_ONLY_TASK_TYPES = frozenset(
