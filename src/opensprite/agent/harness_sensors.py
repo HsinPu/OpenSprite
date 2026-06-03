@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
+from .completion_status import is_complete_completion_status
 from .harness_inventory import expected_sensor_ids_for_task_type
 from .harness_scorecard import HarnessSensorResult
 from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
@@ -121,7 +122,7 @@ def _evaluate_sensor(
 
 
 def _completion_sensor(sensor_id: str, completion_result: CompletionGateResult) -> HarnessSensorResult:
-    complete = completion_result.status == "complete"
+    complete = is_complete_completion_status(completion_result.status)
     return HarnessSensorResult(
         sensor_id,
         "pass" if complete else "fail",
