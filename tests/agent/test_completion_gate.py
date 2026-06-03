@@ -48,6 +48,7 @@ from opensprite.agent.web_source_policy import (
     is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
+    is_web_source_evidence_tool,
 )
 from opensprite.agent.stop_reasons import is_max_tool_iterations_stop_reason
 from opensprite.agent.auto_continue import AutoContinueService
@@ -293,6 +294,8 @@ def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert is_web_research_source_artifact_tool("web_fetch") is False
     assert is_web_fetch_source_record_tool("web_fetch") is True
     assert is_web_fetch_source_record_tool("web_search") is False
+    assert is_web_source_evidence_tool("web_research") is True
+    assert is_web_source_evidence_tool("read_file") is False
     assert _is_web_research_task_type("web_research") is True
     assert _is_web_research_task_type("workspace_read") is False
     assert _is_web_research_tool_group("web_research") is True

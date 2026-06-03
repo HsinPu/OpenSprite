@@ -23,6 +23,11 @@ from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
+from .web_source_policy import (
+    is_web_research_source_artifact_tool,
+    is_web_source_artifact_kind,
+    is_web_source_evidence_tool,
+)
 
 
 @dataclass
@@ -332,13 +337,13 @@ Output exactly these sections when applicable:
         web_artifacts = [
             artifact
             for artifact in task_artifacts
-            if artifact.ok and artifact.kind == "web_source" and artifact.metadata.get("sources")
+            if artifact.ok and is_web_source_artifact_kind(artifact.kind) and artifact.metadata.get("sources")
         ]
         if not web_artifacts:
             return False
 
         for artifact in web_artifacts:
-            if artifact.source_tool != "web_research":
+            if not is_web_research_source_artifact_tool(artifact.source_tool):
                 continue
             coverage = artifact.metadata.get("coverage")
             if isinstance(coverage, dict) and coverage.get("target_met"):
@@ -346,7 +351,7 @@ Output exactly these sections when applicable:
 
         traceable_web_evidence_count = 0
         for evidence in tool_evidence:
-            if not evidence.ok or evidence.name not in {"web_search", "web_fetch", "web_research"}:
+            if not evidence.ok or not is_web_source_evidence_tool(evidence.name):
                 continue
             if evidence.metadata.get("sources"):
                 traceable_web_evidence_count += 1

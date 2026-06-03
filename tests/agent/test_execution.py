@@ -6,6 +6,7 @@ import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
+from opensprite.agent.task_artifact import TaskArtifact
 from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
@@ -392,6 +393,33 @@ def _make_engine(provider, registry, save_calls, tools_config=None, **engine_kwa
         sanitize_response_content=lambda text: text.strip(),
         **chat_kwargs,
     )
+
+
+def test_execution_engine_force_final_after_web_sources_uses_shared_policy():
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        ok=True,
+        metadata={
+            "sources": [{"url": "https://example.com/a"}],
+            "coverage": {"target_met": True},
+        },
+    )
+
+    assert ExecutionEngine._should_force_final_after_web_sources([artifact], []) is True
+
+    non_research_artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_search",
+        ok=True,
+        metadata={"sources": [{"url": "https://example.com/a"}]},
+    )
+    evidence = [
+        ToolEvidence(name="web_search", args={}, ok=True, metadata={"sources": [{"url": "https://example.com/a"}]}),
+        ToolEvidence(name="web_fetch", args={}, ok=True, metadata={"sources": [{"url": "https://example.com/b"}]}),
+    ]
+
+    assert ExecutionEngine._should_force_final_after_web_sources([non_research_artifact], evidence) is True
 
 
 def test_execution_engine_passes_provider_context_request_kwargs():
