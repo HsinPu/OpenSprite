@@ -7,6 +7,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
@@ -19,7 +20,7 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
         "grep_files",
         "batch",
         "read_skill",
-        "search_history",
+        HISTORY_SEARCH_TOOL_NAME,
         *WEB_SOURCE_EVIDENCE_TOOLS,
         "code_navigation",
     }

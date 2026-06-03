@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from .harness_profile import GENERIC_TASK_TYPE, VERIFICATION_TOOL_GROUP
+from .harness_profile import (
+    GENERIC_TASK_TYPE,
+    HISTORY_RETRIEVAL_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP,
+    VERIFICATION_TOOL_GROUP,
+)
+from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
 
@@ -16,7 +22,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "scheduling": frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
     WEB_RESEARCH_TOOL_GROUP: WEB_SOURCE_ARTIFACT_TOOLS,
-    "history_retrieval": frozenset({"search_history", "list_run_file_changes"}),
+    HISTORY_RETRIEVAL_TOOL_GROUP: frozenset({HISTORY_SEARCH_TOOL_NAME, "list_run_file_changes"}),
     "workspace_read": frozenset(
         {
             "read_file",
@@ -40,7 +46,7 @@ TOOL_GROUP_BY_TOOL_NAME: dict[str, str] = {
 TASK_TYPE_BY_TOOL_GROUP: dict[str, str] = {
     "audio_text": "media_extraction",
     "execution": "operations",
-    "history_retrieval": "history_retrieval",
+    HISTORY_RETRIEVAL_TOOL_GROUP: HISTORY_RETRIEVAL_TASK_TYPE,
     "image_text": "media_extraction",
     "image_understanding": "media_extraction",
     "media": "media_extraction",

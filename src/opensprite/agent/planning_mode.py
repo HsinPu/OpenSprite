@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         "grep_files",
         "batch",
         "read_skill",
-        "search_history",
+        HISTORY_SEARCH_TOOL_NAME,
         "list_run_file_changes",
         "preview_run_file_change_revert",
         *WEB_SOURCE_EVIDENCE_TOOLS,

@@ -17,6 +17,7 @@ from ..tools.permissions import (
     ToolPermissionPolicy,
 )
 from ..tools.registry import ToolRegistry
+from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .tool_access import ToolAccessResolver
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
@@ -29,7 +30,7 @@ READ_ONLY_TOOLS = frozenset(
         "grep_files",
         "batch",
         "read_skill",
-        "search_history",
+        HISTORY_SEARCH_TOOL_NAME,
     }
 )
 WEB_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS
