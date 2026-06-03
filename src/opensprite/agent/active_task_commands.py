@@ -30,6 +30,11 @@ from .active_task_status import (
 )
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
+from .task_context_policy import (
+    AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
+    CURRENT_TASK_CONTINUATION_TYPES,
+    CURRENT_TASK_REPLACEMENT_TYPES,
+)
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
@@ -39,19 +44,6 @@ from .work_progress import (
     is_continue_work_progress,
     is_verification_work_progress,
 )
-
-
-_CURRENT_TASK_CONTINUATION_TYPES = frozenset(
-    {
-        "follow_up",
-        "continue_active_task",
-        "continue_last_answer",
-        "continue_tool_work",
-        "advance_current_step",
-    }
-)
-_CURRENT_TASK_REPLACEMENT_TYPES = frozenset({"task_switch", "new_task"})
-_AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE = "ambiguous_boundary"
 
 
 class ActiveTaskCommandService:
@@ -454,7 +446,7 @@ def _decision_continues_current_task(decision: TaskContextDecision | None) -> bo
         return False
     return bool(
         decision.should_inherit_active_task
-        or decision.continuation_type in _CURRENT_TASK_CONTINUATION_TYPES
+        or decision.continuation_type in CURRENT_TASK_CONTINUATION_TYPES
         or decision.is_follow_up
     )
 
@@ -463,12 +455,12 @@ def _decision_replaces_current_task(decision: TaskContextDecision | None) -> boo
     return bool(
         decision
         and decision.should_replace_active_task
-        and decision.continuation_type in _CURRENT_TASK_REPLACEMENT_TYPES
+        and decision.continuation_type in CURRENT_TASK_REPLACEMENT_TYPES
     )
 
 
 def _decision_needs_boundary_confirmation(decision: TaskContextDecision | None) -> bool:
-    return bool(decision and decision.continuation_type == _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE)
+    return bool(decision and decision.continuation_type == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE)
 
 
 def _decision_controls_task_seed(decision: TaskContextDecision | None) -> bool:

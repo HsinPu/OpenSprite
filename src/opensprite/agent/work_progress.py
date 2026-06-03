@@ -36,6 +36,10 @@ from .harness_profile import (
     normalize_profile_name,
 )
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
+from .task_context_policy import (
+    CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
+    PRESERVE_STATE_RESET_CONTINUATION_TYPES,
+)
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
@@ -139,7 +143,7 @@ def _continues_existing_task(task_context_decision: TaskContextDecision | None) 
         return False
     return bool(
         task_context_decision.should_inherit_active_task
-        or task_context_decision.continuation_type == "continue_active_task"
+        or task_context_decision.continuation_type == CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE
     )
 
 
@@ -664,11 +668,10 @@ class WorkProgressService:
             return False
         if task_context_decision is None:
             return True
-        if task_context_decision.should_replace_active_task or task_context_decision.continuation_type in {
-            "new_task",
-            "replace_active_task",
-            "topic_shift",
-        }:
+        if (
+            task_context_decision.should_replace_active_task
+            or task_context_decision.continuation_type in PRESERVE_STATE_RESET_CONTINUATION_TYPES
+        ):
             return False
         return True
 
