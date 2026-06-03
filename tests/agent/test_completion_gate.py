@@ -24,7 +24,10 @@ from opensprite.agent.completion_gate import (
     _is_optional_web_fetch_failure_tool,
     _is_optional_workspace_batch_failure_tool,
     _is_plain_answer_task_type,
+    _is_python_file_path,
+    _is_python_test_path,
     _is_web_fetch_source_record_tool,
+    _is_web_app_path,
     _is_web_research_source_artifact_tool,
     _path_requires_delegated_review,
     _is_read_only_blocking_requirement_kind,
@@ -269,6 +272,12 @@ def test_completion_gate_review_path_policy_helper_is_centralized():
     assert _path_requires_delegated_review("package.json") is True
     assert _path_requires_delegated_review("snapshot_after/src/opensprite/app.vue") is True
     assert _path_requires_delegated_review("docs/usage.md") is False
+    assert _is_web_app_path("apps/web/src/App.vue") is True
+    assert _is_web_app_path("src/opensprite/channels/web.py") is False
+    assert _is_python_file_path("src/opensprite/runtime.py") is True
+    assert _is_python_file_path("apps/web/src/App.vue") is False
+    assert _is_python_test_path("tests/agent/test_completion_gate.py") is True
+    assert _is_python_test_path("src/opensprite/runtime.py") is False
 
 
 def test_completion_gate_web_source_policy_helpers_are_centralized():

@@ -46,6 +46,9 @@ _WEB_RESEARCH_TASK_TYPE = "web_research"
 _WEB_RESEARCH_TOOL_GROUP = "web_research"
 _WEB_SOURCE_ARTIFACT_KIND = "web_source"
 _MAX_TOOL_ITERATIONS_STOP_REASON = "max_tool_iterations"
+_WEB_APP_ROOT_PATH = "apps/web"
+_TEST_PATH_PREFIX = "tests/"
+_PYTHON_FILE_SUFFIX = ".py"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -1339,9 +1342,9 @@ def _string_or_none(value: Any) -> str | None:
 def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
     touched_paths = _normalized_touched_paths(execution_result.touched_paths)
     decision_paths = tuple(_strip_repo_snapshot_prefix(path) for path in touched_paths)
-    test_paths = tuple(path for path in decision_paths if path.startswith("tests/") and path.endswith(".py"))
-    has_web_touched = any(path.startswith("apps/web/") or path == "apps/web" for path in decision_paths)
-    has_python_touched = any(path.endswith(".py") for path in decision_paths)
+    test_paths = tuple(path for path in decision_paths if _is_python_test_path(path))
+    has_web_touched = any(_is_web_app_path(path) for path in decision_paths)
+    has_python_touched = any(_is_python_file_path(path) for path in decision_paths)
     if touched_paths and not has_web_touched and not has_python_touched:
         return {
             "action": "auto",
@@ -1349,7 +1352,7 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
             "pytest_args": (),
         }
     if has_web_touched:
-        return {"action": "web_build", "path": "apps/web", "pytest_args": ()}
+        return {"action": "web_build", "path": _WEB_APP_ROOT_PATH, "pytest_args": ()}
     if test_paths:
         return {"action": "pytest", "path": ".", "pytest_args": test_paths}
     if has_python_touched:
@@ -1368,6 +1371,20 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
 def _normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
     normalized = [str(path or "").replace("\\", "/").strip("/") for path in paths]
     return tuple(path for path in normalized if path)
+
+
+def _is_web_app_path(path: str | None) -> bool:
+    normalized = str(path or "").replace("\\", "/").strip("/")
+    return normalized == _WEB_APP_ROOT_PATH or normalized.startswith(f"{_WEB_APP_ROOT_PATH}/")
+
+
+def _is_python_file_path(path: str | None) -> bool:
+    return str(path or "").replace("\\", "/").strip("/").endswith(_PYTHON_FILE_SUFFIX)
+
+
+def _is_python_test_path(path: str | None) -> bool:
+    normalized = str(path or "").replace("\\", "/").strip("/")
+    return normalized.startswith(_TEST_PATH_PREFIX) and _is_python_file_path(normalized)
 
 
 def _strip_repo_snapshot_prefix(path: str) -> str:
