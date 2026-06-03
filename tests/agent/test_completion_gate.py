@@ -59,6 +59,7 @@ from opensprite.agent.stop_reasons import is_max_tool_iterations_stop_reason
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.operation_report_policy import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
@@ -3551,7 +3552,7 @@ def test_quality_gate_requires_operation_validation_or_risk_report():
     )
 
     assert missing_report.passed is False
-    assert missing_report.reason == "operation validation or risk was not reported"
+    assert missing_report.reason == OPERATION_VALIDATION_OR_RISK_MISSING_REASON
     assert reported_validation_without_evidence.passed is False
     assert reported_tool_result.passed is True
 

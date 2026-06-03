@@ -1,11 +1,16 @@
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.operation_report_policy import (
+    OPERATION_VALIDATION_OR_RISK_MISSING_REASON,
     execution_confuses_command_version_with_repo_state,
     execution_has_failed_command_evidence,
     is_command_execution_tool_name,
     is_operations_task_type,
 )
 from opensprite.tools.evidence import ToolEvidence
+
+
+def test_operation_validation_or_risk_missing_reason_is_stable():
+    assert OPERATION_VALIDATION_OR_RISK_MISSING_REASON == "operation validation or risk was not reported"
 
 
 def test_operation_report_policy_classifies_operation_task_and_execution_tools():

@@ -20,6 +20,7 @@ from .history_retrieval_policy import (
 )
 from .media_artifact_policy import count_media_artifacts, is_media_artifact_kind
 from .operation_report_policy import (
+    OPERATION_VALIDATION_OR_RISK_MISSING_REASON,
     execution_confuses_command_version_with_repo_state,
     execution_has_failed_command_evidence,
     is_operations_task_type,
@@ -341,7 +342,7 @@ def _evaluate_operation_report(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="operation validation or risk was not reported",
+        reason=OPERATION_VALIDATION_OR_RISK_MISSING_REASON,
         active_task_detail=getattr(criterion, "description", "") or None,
     )
 

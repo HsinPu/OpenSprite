@@ -8,6 +8,9 @@ from .execution import ExecutionResult
 from .harness_profile import OPERATIONS_TASK_TYPE
 
 
+OPERATION_VALIDATION_OR_RISK_MISSING_REASON = "operation validation or risk was not reported"
+
+
 def is_operations_task_type(task_type: str | None) -> bool:
     return str(task_type or "").strip() == OPERATIONS_TASK_TYPE
 
