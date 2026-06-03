@@ -37,7 +37,11 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
-from .turn_quick_actions import metadata_requests_direct_verification, metadata_requests_follow_up_resume
+from .turn_quick_actions import (
+    metadata_is_cli_via_web,
+    metadata_requests_direct_verification,
+    metadata_requests_follow_up_resume,
+)
 from .web_source_policy import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
@@ -1411,7 +1415,7 @@ def _final_response_after_exhausted_continuation(
 
 def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None) -> str:
     data = dict(metadata or {})
-    if data.get("source") != "cli_via_web":
+    if not metadata_is_cli_via_web(data):
         return message
     context_lines: list[str] = []
     gateway_url = str(data.get("gateway_url") or "").strip()
