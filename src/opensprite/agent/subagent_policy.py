@@ -87,6 +87,17 @@ TOOL_PROFILES_BY_NAME: dict[str, SubagentToolProfile] = {
 
 PARALLEL_SAFE_PROFILE_NAMES = frozenset({READ_ONLY_PROFILE.name, RESEARCH_PROFILE.name})
 
+CODE_REVIEWER_PROMPT_TYPE = "code-reviewer"
+SECURITY_REVIEWER_PROMPT_TYPE = "security-reviewer"
+ASYNC_CONCURRENCY_REVIEWER_PROMPT_TYPE = "async-concurrency-reviewer"
+REVIEW_PROMPT_TYPES = frozenset(
+    {
+        CODE_REVIEWER_PROMPT_TYPE,
+        SECURITY_REVIEWER_PROMPT_TYPE,
+        ASYNC_CONCURRENCY_REVIEWER_PROMPT_TYPE,
+    }
+)
+
 SUBAGENT_TOOL_PROFILES: dict[str, SubagentToolProfile] = {
     "implementer": IMPLEMENTATION_PROFILE,
     "debugger": IMPLEMENTATION_PROFILE,
@@ -98,9 +109,9 @@ SUBAGENT_TOOL_PROFILES: dict[str, SubagentToolProfile] = {
     "observability-engineer": IMPLEMENTATION_PROFILE,
     "test-writer": TESTING_PROFILE,
     "test-implementer": TESTING_PROFILE,
-    "code-reviewer": READ_ONLY_PROFILE,
-    "security-reviewer": READ_ONLY_PROFILE,
-    "async-concurrency-reviewer": READ_ONLY_PROFILE,
+    CODE_REVIEWER_PROMPT_TYPE: READ_ONLY_PROFILE,
+    SECURITY_REVIEWER_PROMPT_TYPE: READ_ONLY_PROFILE,
+    ASYNC_CONCURRENCY_REVIEWER_PROMPT_TYPE: READ_ONLY_PROFILE,
     "pattern-matcher": READ_ONLY_PROFILE,
     "porting-planner": READ_ONLY_PROFILE,
     "api-designer": READ_ONLY_PROFILE,

@@ -11,6 +11,7 @@ from ..utils.log import logger
 from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
 from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
+from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
@@ -197,7 +198,7 @@ def _implement_review_steps() -> tuple[WorkflowStepSpec, ...]:
         WorkflowStepSpec(
             step_id="review",
             label="Code review",
-            prompt_type="code-reviewer",
+            prompt_type=CODE_REVIEWER_PROMPT_TYPE,
             task_builder=lambda task, results: (
                 "Review the current workspace changes for correctness, regressions, and missing tests. "
                 "Inspect the actual files and report findings first.\n\n"
@@ -268,7 +269,7 @@ def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
         WorkflowStepSpec(
             step_id="review",
             label="Code review",
-            prompt_type="code-reviewer",
+            prompt_type=CODE_REVIEWER_PROMPT_TYPE,
             task_builder=lambda task, results: (
                 "Review the current workspace changes after the bug fix and test additions. "
                 "Inspect the actual files and report findings first.\n\n"
@@ -483,7 +484,7 @@ class SubagentWorkflowService:
         review_outcomes = [
             outcome
             for outcome in outcomes
-            if outcome.prompt_type in {"code-reviewer", "security-reviewer", "async-concurrency-reviewer"}
+            if outcome.prompt_type in REVIEW_PROMPT_TYPES
         ]
         finding_count = sum(
             int((outcome.structured_output or {}).get("finding_count") or 0)
