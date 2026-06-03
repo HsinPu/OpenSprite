@@ -17,6 +17,7 @@ from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
+from .active_task_status import is_current_active_task_status, is_current_or_done_active_task_status
 from .completion_gate import CompletionGateResult
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
@@ -84,7 +85,7 @@ class ActiveTaskCommandService:
         store = self.get_store(session_id)
         if store is None:
             return
-        if store.read_status() not in {"active", "blocked", "waiting_user"}:
+        if not is_current_active_task_status(store.read_status()):
             return
 
         status = result.active_task_status
@@ -115,7 +116,7 @@ class ActiveTaskCommandService:
         store = self.get_store(session_id)
         if store is None:
             return
-        if store.read_status() not in {"active", "blocked", "waiting_user"}:
+        if not is_current_active_task_status(store.read_status()):
             return
 
         current_step = state.current_step if state is not None else None
@@ -142,7 +143,7 @@ class ActiveTaskCommandService:
             open_questions = [progress.completion_reason]
 
         store.update_fields(
-            status=state.status if state is not None and state.status in {"active", "blocked", "waiting_user", "done"} else "active",
+            status=state.status if state is not None and is_current_or_done_active_task_status(state.status) else "active",
             current_step=current_step,
             next_step=next_step,
             open_questions=open_questions,
@@ -179,7 +180,7 @@ class ActiveTaskCommandService:
 
         current_status = store.read_status()
         replacing = False
-        has_current_task = current_status in {"active", "blocked", "waiting_user"}
+        has_current_task = is_current_active_task_status(current_status)
         if has_current_task:
             current_task = store.read_managed_block()
             if _decision_needs_boundary_confirmation(task_context_decision):

@@ -1,4 +1,9 @@
-from opensprite.agent.active_task_status import active_task_status, has_current_active_task
+from opensprite.agent.active_task_status import (
+    active_task_status,
+    has_current_active_task,
+    is_current_active_task_status,
+    is_current_or_done_active_task_status,
+)
 
 
 def test_active_task_status_parses_rendered_status_line():
@@ -12,3 +17,9 @@ def test_active_task_status_defaults_to_inactive():
     assert active_task_status("- Goal: Demo") == "inactive"
     assert has_current_active_task("- Status: done") is False
 
+
+def test_active_task_status_helpers_normalize_stored_status_values():
+    assert is_current_active_task_status(" WAITING_USER ") is True
+    assert is_current_active_task_status("done") is False
+    assert is_current_or_done_active_task_status("done") is True
+    assert is_current_or_done_active_task_status("inactive") is False

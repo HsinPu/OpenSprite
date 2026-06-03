@@ -63,6 +63,7 @@ from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
 from .active_task_commands import ActiveTaskCommandService
+from .active_task_status import is_current_active_task_status
 from .auto_continue import AutoContinueService
 from .background_notifications import BackgroundSessionNotificationService
 from .completion_gate import CompletionGateResult, CompletionGateService
@@ -1370,7 +1371,7 @@ class AgentLoop:
         if run_id is None:
             return
         changed = before_status != after_status
-        replacing = before_status in {"active", "blocked", "waiting_user"} and changed
+        replacing = is_current_active_task_status(before_status) and changed
         event_type = "active_task.replaced" if replacing else "active_task.seeded" if changed else "active_task.unchanged"
         await self._emit_run_event(
             session_id,
