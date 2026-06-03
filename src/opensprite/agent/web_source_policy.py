@@ -70,3 +70,46 @@ def is_source_acceptance_criterion_kind(kind: str | None) -> bool:
 
 def is_web_fetch_source_record_tool(tool_name: str | None) -> bool:
     return str(tool_name or "").strip() == WEB_FETCH_SOURCE_RECORD_TOOL
+
+
+def web_source_has_substantive_detail(source: dict[str, object]) -> bool:
+    tool_name = str(source.get("tool_name") or "").strip()
+    if not is_fetched_web_source_artifact_tool(tool_name):
+        return False
+    if is_web_fetch_source_record_tool(tool_name):
+        if _truthy(source.get("blocked_or_challenge")):
+            return False
+        if "has_main_content" in source and not _truthy(source.get("has_main_content")):
+            return False
+        if _truthy(source.get("is_too_short")):
+            return False
+        content_chars = _coerce_int(source.get("content_chars"), default=0)
+        min_content_chars = _coerce_int(source.get("min_content_chars"), default=0)
+        if min_content_chars > 0 and content_chars < min_content_chars:
+            return False
+    return True
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _coerce_int(value: object, *, default: int) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped:
+            try:
+                return int(float(stripped))
+            except ValueError:
+                return default
+    return default

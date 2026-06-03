@@ -32,10 +32,9 @@ from .task_contract import (
 )
 from .task_intent import TaskIntent
 from .web_source_policy import (
-    is_fetched_web_source_artifact_tool,
-    is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
+    web_source_has_substantive_detail,
 )
 from .workspace_grounding_policy import contains_workspace_location_clue
 
@@ -658,21 +657,7 @@ def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "")
 
 
 def _source_has_substantive_detail(source: dict[str, object]) -> bool:
-    tool_name = str(source.get("tool_name") or "").strip()
-    if not is_fetched_web_source_artifact_tool(tool_name):
-        return False
-    if is_web_fetch_source_record_tool(tool_name):
-        if _truthy(source.get("blocked_or_challenge")):
-            return False
-        if "has_main_content" in source and not _truthy(source.get("has_main_content")):
-            return False
-        if _truthy(source.get("is_too_short")):
-            return False
-        content_chars = _coerce_int(source.get("content_chars"), default=0)
-        min_content_chars = _coerce_int(source.get("min_content_chars"), default=0)
-        if min_content_chars > 0 and content_chars < min_content_chars:
-            return False
-    return True
+    return web_source_has_substantive_detail(source)
 
 
 def _workspace_paths(text: str) -> tuple[str, ...]:
