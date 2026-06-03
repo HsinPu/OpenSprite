@@ -7,6 +7,13 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from ..tool_names import (
+    BATCH_TOOL_NAME,
+    EXECUTION_TOOL_NAMES,
+    READ_SKILL_TOOL_NAME,
+    SEND_MEDIA_TOOL_NAME,
+    WORKSPACE_WRITE_TOOL_NAMES,
+)
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .verification_policy import VERIFICATION_TOOL_NAME
@@ -16,8 +23,8 @@ from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 IDEMPOTENT_TOOL_NAMES = frozenset(
     {
         *WORKSPACE_DISCOVERY_TOOLS,
-        "batch",
-        "read_skill",
+        BATCH_TOOL_NAME,
+        READ_SKILL_TOOL_NAME,
         HISTORY_SEARCH_TOOL_NAME,
         *WEB_SOURCE_EVIDENCE_TOOLS,
     }
@@ -25,11 +32,8 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
 
 MUTATING_TOOL_NAMES = frozenset(
     {
-        "apply_patch",
-        "write_file",
-        "edit_file",
-        "exec",
-        "process",
+        *WORKSPACE_WRITE_TOOL_NAMES,
+        *EXECUTION_TOOL_NAMES,
         VERIFICATION_TOOL_NAME,
         "delegate",
         "delegate_many",
@@ -39,7 +43,7 @@ MUTATING_TOOL_NAMES = frozenset(
         "configure_mcp",
         "credential_store",
         "cron",
-        "send_media",
+        SEND_MEDIA_TOOL_NAME,
     }
 )
 
