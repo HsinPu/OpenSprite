@@ -11,7 +11,16 @@ from .execution import ExecutionResult
 from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
 from .history_retrieval_policy import is_history_retrieval_tool_name
 from .resource_index import ResourceIndex
-from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
+from .task_contract import (
+    AcceptanceCriterion,
+    TaskContract,
+    is_itemized_output_criterion,
+    is_source_artifact_criterion,
+    is_source_detail_criterion,
+    is_source_reference_criterion,
+    is_substantive_final_answer_criterion,
+    neutral_task_contract,
+)
 from .task_intent import TaskIntent
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
@@ -56,23 +65,23 @@ class QualityGateService:
             if history_result is not None:
                 return history_result
         for criterion in contract.acceptance_criteria:
-            if criterion.kind == "itemized_output":
+            if is_itemized_output_criterion(criterion):
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "substantive_final_answer":
+            elif is_substantive_final_answer_criterion(criterion):
                 result = _evaluate_substantive_final_answer(criterion, response_text)
                 if result is not None:
                     return result
-            elif criterion.kind == "source_artifact":
+            elif is_source_artifact_criterion(criterion):
                 result = _evaluate_source_artifact(criterion, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "source_detail":
+            elif is_source_detail_criterion(criterion):
                 result = _evaluate_source_detail(criterion, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "source_reference":
+            elif is_source_reference_criterion(criterion):
                 result = _evaluate_source_reference(criterion, response_text, execution_result)
                 if result is not None:
                     return result

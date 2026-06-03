@@ -348,6 +348,30 @@ def contract_requests_substantive_final_answer(task_contract: Any) -> bool:
     return contract_has_acceptance_criterion(task_contract, SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND)
 
 
+def is_itemized_output_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == ITEMIZED_OUTPUT_CRITERION_KIND
+
+
+def is_substantive_final_answer_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND
+
+
+def is_source_artifact_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == SOURCE_ARTIFACT_CRITERION_KIND
+
+
+def is_source_detail_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == SOURCE_DETAIL_CRITERION_KIND
+
+
+def is_source_reference_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == SOURCE_REFERENCE_CRITERION_KIND
+
+
+def _criterion_kind(criterion: Any) -> str:
+    return str(getattr(criterion, "kind", "") or "")
+
+
 def _is_resource_coverage_requirement(requirement: EvidenceRequirement) -> bool:
     return requirement.kind == RESOURCE_COVERAGE_REQUIREMENT_KIND
 

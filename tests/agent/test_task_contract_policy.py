@@ -8,6 +8,11 @@ from opensprite.agent.task_contract import (
     contract_requests_source_material,
     contract_requests_source_reference,
     contract_requests_substantive_final_answer,
+    is_itemized_output_criterion,
+    is_source_artifact_criterion,
+    is_source_detail_criterion,
+    is_source_reference_criterion,
+    is_substantive_final_answer_criterion,
     missing_evidence,
 )
 from opensprite.tools.evidence import ToolEvidence
@@ -82,3 +87,8 @@ def test_acceptance_criterion_policy_helpers():
     assert contract_requests_itemized_output(contract) is True
     assert contract_requests_substantive_final_answer(contract) is True
     assert contract_requests_source_reference(None) is False
+    assert is_source_reference_criterion(contract.acceptance_criteria[0]) is True
+    assert is_source_detail_criterion(contract.acceptance_criteria[1]) is True
+    assert is_itemized_output_criterion(contract.acceptance_criteria[2]) is True
+    assert is_substantive_final_answer_criterion(contract.acceptance_criteria[3]) is True
+    assert is_source_artifact_criterion(AcceptanceCriterion(kind="source_artifact")) is True
