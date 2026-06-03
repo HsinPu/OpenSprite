@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from pathlib import Path
-import re
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
@@ -19,7 +18,6 @@ from .completion_status import (
     allows_nonfinal_response_replacement,
     is_blocking_completion_status,
     is_complete_completion_status,
-    is_incomplete_completion_status,
 )
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
@@ -29,10 +27,11 @@ from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
+from .source_fallback_policy import clean_source_fallback_snippet, source_fallback_allowed
 from .source_fallback_ranking import rank_web_sources_for_objective, web_source_relevance_score
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
-from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE, is_tool_group_requirement
+from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE
 from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
@@ -43,10 +42,7 @@ from .turn_quick_actions import (
     metadata_requests_follow_up_resume,
 )
 from .web_source_policy import (
-    is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
-    is_web_research_task_type,
-    is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
 from .workflow_status import is_workflow_failed_status
@@ -1447,7 +1443,7 @@ def _source_fallback_response(
 ) -> str:
     if execution_result is None:
         return ""
-    if not _should_use_source_fallback(completion_result, execution_result):
+    if not source_fallback_allowed(completion_result, execution_result):
         return ""
     sources = _substantive_web_sources(execution_result)
     if not sources:
@@ -1464,7 +1460,7 @@ def _source_fallback_response(
     for index, source in enumerate(sources[:4], start=1):
         title = str(source.get("title") or "").strip() or str(source.get("url") or "").strip()
         url = str(source.get("url") or "").strip()
-        snippet = _clean_source_fallback_snippet(str(source.get("snippet") or source.get("content") or ""))
+        snippet = clean_source_fallback_snippet(str(source.get("snippet") or source.get("content") or ""))
         if snippet:
             detail_lines.append(f"{index}. {title}: {snippet[:280]}")
         else:
@@ -1478,35 +1474,6 @@ def _source_fallback_response(
             f"{messages.sources_header}\n" + "\n".join(source_lines),
         ]
     )
-
-
-def _should_use_source_fallback(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
-    if not is_incomplete_completion_status(completion_result.status):
-        return False
-    return _task_contract_requires_web_sources(execution_result)
-
-
-def _task_contract_requires_web_sources(execution_result: ExecutionResult) -> bool:
-    contract = execution_result.task_contract
-    if contract is None:
-        return False
-    if is_web_research_task_type(getattr(contract, "task_type", None)):
-        return True
-    for requirement in getattr(contract, "requirements", ()) or ():
-        if is_tool_group_requirement(requirement) and is_web_research_tool_group(getattr(requirement, "tool_group", None)):
-            return True
-    for criterion in getattr(contract, "acceptance_criteria", ()) or ():
-        if is_source_acceptance_criterion_kind(getattr(criterion, "kind", None)):
-            return True
-    return False
-
-
-def _clean_source_fallback_snippet(snippet: str) -> str:
-    cleaned = str(snippet or "")
-    cleaned = re.sub(r"!\[[^\]]*]\([^)]+\)", "", cleaned)
-    cleaned = re.sub(r"\[([^\]]+)]\((https?://[^)]+)\)", r"\1", cleaned)
-    cleaned = re.sub(r"https?://\S+", "", cleaned)
-    return " ".join(cleaned.split())
 
 
 def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:
