@@ -11,6 +11,7 @@ from .completion_task_policy import (
     is_media_extraction_task_type,
     is_workspace_read_task_type,
 )
+from .command_version_policy import COMMAND_VERSION_MISSING_REASON, command_version_missing_detail
 from .execution import ExecutionResult
 from .history_retrieval_policy import (
     history_retrieval_metadata_has_results,
@@ -361,17 +362,13 @@ def _evaluate_command_version_answer(
         return None
     if _response_reports_tool_result(response_text, execution_result):
         return None
-    if _execution_confuses_command_version_with_repo_state(execution_result):
-        detail = (
-            "- The user asked for the installed command/program version. "
-            "Run the direct version command, such as `<command> --version`, instead of inspecting `.git`, `HEAD`, or repository commits."
-        )
-    else:
-        detail = "- Include the installed command/program version from the execution result, or clearly state that the command is unavailable."
+    detail = command_version_missing_detail(
+        inspected_repository_state=_execution_confuses_command_version_with_repo_state(execution_result)
+    )
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="command version answer did not report a version",
+        reason=COMMAND_VERSION_MISSING_REASON,
         active_task_detail=detail,
     )
 

@@ -1,6 +1,8 @@
 from opensprite.agent.command_version_policy import (
+    COMMAND_VERSION_MISSING_REASON,
     command_inspects_git_repository_state,
     command_version_follow_up_instruction,
+    command_version_missing_detail,
 )
 
 
@@ -20,3 +22,12 @@ def test_command_version_follow_up_instruction_prefers_direct_version_command():
 
     assert "<command> --version" in instruction
     assert "Do not inspect `.git`" in instruction
+
+
+def test_command_version_missing_detail_distinguishes_repo_state_confusion():
+    confused = command_version_missing_detail(inspected_repository_state=True)
+    generic = command_version_missing_detail(inspected_repository_state=False)
+
+    assert COMMAND_VERSION_MISSING_REASON == "command version answer did not report a version"
+    assert "instead of inspecting `.git`" in confused
+    assert "clearly state that the command is unavailable" in generic
