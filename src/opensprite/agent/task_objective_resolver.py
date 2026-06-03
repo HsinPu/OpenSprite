@@ -11,13 +11,15 @@ from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
+from .task_context_policy import (
+    NEW_TASK_CONTINUATION_TYPES,
+    OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES,
+    OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES,
+)
 from .task_context_resolver import TaskContextDecision
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 
 
-_SKIP_CONTINUATION_TYPES = frozenset({"ack", "ambiguous_boundary", "continue_active_task"})
-_NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
-_ENRICHABLE_CONTINUATION_TYPES = frozenset({"follow_up", "continue_last_answer", "continue_tool_work"})
 _MIN_CONFIDENCE = 0.65
 
 
@@ -161,18 +163,21 @@ def _should_resolve_objective(
     current = _compact(current_message)
     if not current:
         return False
-    if task_context_decision and task_context_decision.continuation_type in _SKIP_CONTINUATION_TYPES:
+    if task_context_decision and task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES:
         return False
     if task_intent and task_intent.kind == CONVERSATION_INTENT_KIND and not bool(
         task_context_decision
-        and (task_context_decision.is_follow_up or task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES)
+        and (
+            task_context_decision.is_follow_up
+            or task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES
+        )
     ):
         return False
-    if task_context_decision and task_context_decision.continuation_type in _NEW_TASK_CONTINUATION_TYPES:
+    if task_context_decision and task_context_decision.continuation_type in NEW_TASK_CONTINUATION_TYPES:
         return _is_short_objective(current)
     if not _has_recent_context(history, active_task, work_state_summary):
         return False
-    if task_context_decision and task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES:
+    if task_context_decision and task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES:
         return True
     if task_context_decision and task_context_decision.is_follow_up:
         return True
