@@ -53,3 +53,11 @@ def web_research_coverage_gap_follow_up_instruction(coverage_gap: str) -> str:
         "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
         f"{coverage_gap}"
     )
+
+
+def insufficient_source_detail_follow_up_instruction() -> str:
+    return (
+        "\n- Source follow-up: the previous pass did not inspect enough source material. "
+        "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
+        "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
+    )

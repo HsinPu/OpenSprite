@@ -1,5 +1,6 @@
 from opensprite.agent.auto_continue_prompt_policy import (
     existing_web_source_section,
+    insufficient_source_detail_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
@@ -56,3 +57,11 @@ def test_web_research_coverage_gap_follow_up_instruction_includes_gap_detail():
     assert "`web_research` reported coverage gaps" in instruction
     assert "focused `queries`" in instruction
     assert "- Target fetch count not met" in instruction
+
+
+def test_insufficient_source_detail_follow_up_instruction_requires_fetch_detail():
+    instruction = insufficient_source_detail_follow_up_instruction()
+
+    assert "did not inspect enough source material" in instruction
+    assert "web_fetch" in instruction
+    assert "Do not finalize from search snippets alone" in instruction

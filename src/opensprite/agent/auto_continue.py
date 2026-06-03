@@ -7,6 +7,7 @@ from typing import Any
 
 from .auto_continue_prompt_policy import (
     existing_web_source_section,
+    insufficient_source_detail_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
@@ -594,11 +595,7 @@ def _quality_follow_up_instruction(
         if coverage_gap:
             return web_research_coverage_gap_follow_up_instruction(coverage_gap)
     if execution_result is not None and _source_material_requires_more_detail(execution_result):
-        return (
-            "\n- Source follow-up: the previous pass did not inspect enough source material. "
-            "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
-            "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
-        )
+        return insufficient_source_detail_follow_up_instruction()
     if (
         execution_result is not None
         and contract_requests_source_reference(execution_result.task_contract)
