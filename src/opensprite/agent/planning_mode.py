@@ -12,8 +12,11 @@ from ..tool_names import (
     BATCH_TOOL_NAME,
     GLOB_FILES_TOOL_NAME,
     GREP_FILES_TOOL_NAME,
+    LIST_RUN_FILE_CHANGES_TOOL_NAME,
     LIST_DIR_TOOL_NAME,
+    PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
     READ_FILE_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
 )
 
 if TYPE_CHECKING:
@@ -28,10 +31,10 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         GLOB_FILES_TOOL_NAME,
         GREP_FILES_TOOL_NAME,
         BATCH_TOOL_NAME,
-        "read_skill",
+        READ_SKILL_TOOL_NAME,
         HISTORY_SEARCH_TOOL_NAME,
-        "list_run_file_changes",
-        "preview_run_file_change_revert",
+        LIST_RUN_FILE_CHANGES_TOOL_NAME,
+        PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
         *WEB_SOURCE_EVIDENCE_TOOLS,
         "analyze_image",
         "ocr_image",

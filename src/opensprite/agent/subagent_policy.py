@@ -26,6 +26,7 @@ from ..tool_names import (
     GREP_FILES_TOOL_NAME,
     LIST_DIR_TOOL_NAME,
     READ_FILE_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
     WORKSPACE_WRITE_TOOL_NAMES,
     WRITE_FILE_TOOL_NAME,
 )
@@ -41,7 +42,7 @@ READ_ONLY_TOOLS = frozenset(
         GLOB_FILES_TOOL_NAME,
         GREP_FILES_TOOL_NAME,
         BATCH_TOOL_NAME,
-        "read_skill",
+        READ_SKILL_TOOL_NAME,
         HISTORY_SEARCH_TOOL_NAME,
     }
 )

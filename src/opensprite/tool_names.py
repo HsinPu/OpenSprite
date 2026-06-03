@@ -14,6 +14,9 @@ WRITE_FILE_TOOL_NAME = "write_file"
 EDIT_FILE_TOOL_NAME = "edit_file"
 EXEC_TOOL_NAME = "exec"
 PROCESS_TOOL_NAME = "process"
+READ_SKILL_TOOL_NAME = "read_skill"
+LIST_RUN_FILE_CHANGES_TOOL_NAME = "list_run_file_changes"
+PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME = "preview_run_file_change_revert"
 WORKSPACE_DISCOVERY_TOOL_NAMES = frozenset(
     {
         READ_FILE_TOOL_NAME,
@@ -31,3 +34,9 @@ WORKSPACE_WRITE_TOOL_NAMES = frozenset(
     }
 )
 EXECUTION_TOOL_NAMES = frozenset({EXEC_TOOL_NAME, PROCESS_TOOL_NAME})
+RUN_TRACE_READ_TOOL_NAMES = frozenset(
+    {
+        LIST_RUN_FILE_CHANGES_TOOL_NAME,
+        PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    }
+)

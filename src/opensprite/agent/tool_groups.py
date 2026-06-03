@@ -20,6 +20,8 @@ from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, 
 from ..tool_names import (
     EXEC_TOOL_NAME,
     EXECUTION_TOOL_NAMES,
+    LIST_RUN_FILE_CHANGES_TOOL_NAME,
+    PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
     WORKSPACE_DISCOVERY_TOOL_NAMES,
     WORKSPACE_WRITE_TOOL_NAMES,
 )
@@ -39,12 +41,12 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     SCHEDULING_TOOL_GROUP: frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
     WEB_RESEARCH_TOOL_GROUP: WEB_SOURCE_ARTIFACT_TOOLS,
-    HISTORY_RETRIEVAL_TOOL_GROUP: frozenset({HISTORY_SEARCH_TOOL_NAME, "list_run_file_changes"}),
+    HISTORY_RETRIEVAL_TOOL_GROUP: frozenset({HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME}),
     WORKSPACE_READ_TOOL_GROUP: frozenset(
         {
             *WORKSPACE_DISCOVERY_TOOLS,
-            "list_run_file_changes",
-            "preview_run_file_change_revert",
+            LIST_RUN_FILE_CHANGES_TOOL_NAME,
+            PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
         }
     ),
     WORKSPACE_WRITE_TOOL_GROUP: WORKSPACE_WRITE_TOOL_NAMES,

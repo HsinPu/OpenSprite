@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPROVAL_MODE_ASK, APPROVAL_MODE_AUTO, denied_risks_except
+from ..tool_names import (
+    BATCH_TOOL_NAME,
+    LIST_RUN_FILE_CHANGES_TOOL_NAME,
+    PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
+)
 from ..tools import ToolRegistry
 from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import HarnessProfile
@@ -16,11 +22,11 @@ from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
 
 _READ_ONLY_TOOLS = (
     *WORKSPACE_DISCOVERY_TOOLS,
-    "read_skill",
+    READ_SKILL_TOOL_NAME,
     HISTORY_SEARCH_TOOL_NAME,
-    "list_run_file_changes",
-    "preview_run_file_change_revert",
-    "batch",
+    LIST_RUN_FILE_CHANGES_TOOL_NAME,
+    PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    BATCH_TOOL_NAME,
 )
 _WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, *WEB_HARNESS_RESEARCH_TOOLS)
 _MEDIA_TOOLS = (*_READ_ONLY_TOOLS, "analyze_image", "ocr_image", "transcribe_audio", "analyze_video", "send_media")
