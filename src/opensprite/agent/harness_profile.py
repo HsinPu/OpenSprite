@@ -10,6 +10,21 @@ MEDIA_PROFILE_NAME = "media"
 CODING_PROFILE_NAME = "coding"
 RESEARCH_PROFILE_NAME = "research"
 CHAT_PROFILE_NAME = "chat"
+OPERATIONS_TASK_TYPE = "operations"
+WEB_RESEARCH_TASK_TYPE = "web_research"
+MEDIA_EXTRACTION_TASK_TYPE = "media_extraction"
+CODE_CHANGE_TASK_TYPE = "code_change"
+WORKSPACE_READ_TASK_TYPE = "workspace_read"
+WORKSPACE_CHANGE_TASK_TYPE = "workspace_change"
+WORKSPACE_ANALYSIS_TASK_TYPE = "workspace_analysis"
+PURE_ANSWER_TASK_TYPE = "pure_answer"
+WEB_RESEARCH_TOOL_GROUP = "web_research"
+MEDIA_TOOL_GROUP = "media"
+WORKSPACE_WRITE_TOOL_GROUP = "workspace_write"
+WORKSPACE_READ_TOOL_GROUP = "workspace_read"
+VERIFICATION_TOOL_GROUP = "verification"
+FILE_CHANGE_REQUIREMENT_KIND = "file_change"
+VERIFICATION_REQUIREMENT_KIND = "verification"
 _PROFILE_PRIORITY_ORDER = (OPS_PROFILE_NAME, MEDIA_PROFILE_NAME, CODING_PROFILE_NAME, RESEARCH_PROFILE_NAME, CHAT_PROFILE_NAME)
 
 
@@ -57,11 +72,11 @@ class HarnessProfileService:
         task_type = str(getattr(task_contract, "task_type", "") or "")
         tool_groups = _contract_tool_groups(task_contract)
         requirement_kinds = _contract_requirement_kinds(task_contract)
-        if task_type == "operations":
+        if task_type == OPERATIONS_TASK_TYPE:
             required_tool_groups = tuple(sorted(tool_groups))
             return HarnessProfile(
                 name=OPS_PROFILE_NAME,
-                task_type="operations",
+                task_type=OPERATIONS_TASK_TYPE,
                 required_tool_groups=required_tool_groups,
                 required_evidence=("audit_trace",),
                 verification_policy="validate_or_report",
@@ -70,11 +85,11 @@ class HarnessProfileService:
                 reason="task contract selected operations profile",
                 selection_signals=("contract:operations",),
             )
-        if "web_research" in tool_groups or task_type == "web_research":
+        if WEB_RESEARCH_TOOL_GROUP in tool_groups or task_type == WEB_RESEARCH_TASK_TYPE:
             return HarnessProfile(
                 name=RESEARCH_PROFILE_NAME,
-                task_type="web_research",
-                required_tool_groups=("web_research",),
+                task_type=WEB_RESEARCH_TASK_TYPE,
+                required_tool_groups=(WEB_RESEARCH_TOOL_GROUP,),
                 required_evidence=("web_source", "source_reference"),
                 verification_policy="source_grounded",
                 continuation_policy="bounded_with_source_fetch",
@@ -82,26 +97,30 @@ class HarnessProfileService:
                 reason="task contract requires web research evidence",
                 selection_signals=("contract:web_research",),
             )
-        if task_type == "media_extraction" or "media" in tool_groups:
+        if task_type == MEDIA_EXTRACTION_TASK_TYPE or MEDIA_TOOL_GROUP in tool_groups:
             return HarnessProfile(
                 name=MEDIA_PROFILE_NAME,
-                task_type="media_extraction",
-                required_tool_groups=("media",),
+                task_type=MEDIA_EXTRACTION_TASK_TYPE,
+                required_tool_groups=(MEDIA_TOOL_GROUP,),
                 required_evidence=("media_artifact",),
                 verification_policy="artifact_required",
                 continuation_policy="bounded",
                 reason="task contract requires media evidence",
                 selection_signals=("contract:media",),
             )
-        if "workspace_write" in tool_groups or "file_change" in requirement_kinds or task_type == "code_change":
-            required_tool_groups = ("workspace_read", "workspace_write")
-            required_evidence = ("file_change",)
-            if "verification" in tool_groups or "verification" in requirement_kinds:
-                required_tool_groups = (*required_tool_groups, "verification")
-                required_evidence = (*required_evidence, "verification")
+        if (
+            WORKSPACE_WRITE_TOOL_GROUP in tool_groups
+            or FILE_CHANGE_REQUIREMENT_KIND in requirement_kinds
+            or task_type == CODE_CHANGE_TASK_TYPE
+        ):
+            required_tool_groups = (WORKSPACE_READ_TOOL_GROUP, WORKSPACE_WRITE_TOOL_GROUP)
+            required_evidence = (FILE_CHANGE_REQUIREMENT_KIND,)
+            if VERIFICATION_TOOL_GROUP in tool_groups or VERIFICATION_REQUIREMENT_KIND in requirement_kinds:
+                required_tool_groups = (*required_tool_groups, VERIFICATION_TOOL_GROUP)
+                required_evidence = (*required_evidence, VERIFICATION_REQUIREMENT_KIND)
             return HarnessProfile(
                 name=CODING_PROFILE_NAME,
-                task_type="workspace_change",
+                task_type=WORKSPACE_CHANGE_TASK_TYPE,
                 required_tool_groups=required_tool_groups,
                 required_evidence=required_evidence,
                 verification_policy="focused_if_possible",
@@ -110,15 +129,15 @@ class HarnessProfileService:
                 reason="task contract requires workspace changes",
                 selection_signals=("contract:workspace_write",),
             )
-        if "workspace_read" in tool_groups or task_type == "workspace_read":
-            required_tool_groups = ("workspace_read",)
+        if WORKSPACE_READ_TOOL_GROUP in tool_groups or task_type == WORKSPACE_READ_TASK_TYPE:
+            required_tool_groups = (WORKSPACE_READ_TOOL_GROUP,)
             required_evidence = ("workspace_evidence",)
-            if "verification" in tool_groups or "verification" in requirement_kinds:
-                required_tool_groups = (*required_tool_groups, "verification")
-                required_evidence = (*required_evidence, "verification")
+            if VERIFICATION_TOOL_GROUP in tool_groups or VERIFICATION_REQUIREMENT_KIND in requirement_kinds:
+                required_tool_groups = (*required_tool_groups, VERIFICATION_TOOL_GROUP)
+                required_evidence = (*required_evidence, VERIFICATION_REQUIREMENT_KIND)
             return HarnessProfile(
                 name=CODING_PROFILE_NAME,
-                task_type="workspace_analysis",
+                task_type=WORKSPACE_ANALYSIS_TASK_TYPE,
                 required_tool_groups=required_tool_groups,
                 required_evidence=required_evidence,
                 verification_policy="focused_if_possible",
@@ -129,7 +148,7 @@ class HarnessProfileService:
             )
         return HarnessProfile(
             name=CHAT_PROFILE_NAME,
-            task_type=task_type or "pure_answer",
+            task_type=task_type or PURE_ANSWER_TASK_TYPE,
             verification_policy="none",
             continuation_policy="minimal",
             reason="task contract does not require tool-backed evidence",
@@ -160,8 +179,8 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         ),
         HarnessProfile(
             name=RESEARCH_PROFILE_NAME,
-            task_type="web_research",
-            required_tool_groups=("web_research",),
+            task_type=WEB_RESEARCH_TASK_TYPE,
+            required_tool_groups=(WEB_RESEARCH_TOOL_GROUP,),
             required_evidence=("web_source", "source_reference"),
             verification_policy="source_grounded",
             continuation_policy="bounded_with_source_fetch",
@@ -170,8 +189,8 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         ),
         HarnessProfile(
             name=CODING_PROFILE_NAME,
-            task_type="workspace_analysis",
-            required_tool_groups=("workspace_read",),
+            task_type=WORKSPACE_ANALYSIS_TASK_TYPE,
+            required_tool_groups=(WORKSPACE_READ_TOOL_GROUP,),
             required_evidence=("workspace_evidence",),
             verification_policy="focused_if_possible",
             continuation_policy="bounded_with_verification",
@@ -180,9 +199,9 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         ),
         HarnessProfile(
             name=CODING_PROFILE_NAME,
-            task_type="workspace_change",
-            required_tool_groups=("workspace_read", "workspace_write"),
-            required_evidence=("file_change",),
+            task_type=WORKSPACE_CHANGE_TASK_TYPE,
+            required_tool_groups=(WORKSPACE_READ_TOOL_GROUP, WORKSPACE_WRITE_TOOL_GROUP),
+            required_evidence=(FILE_CHANGE_REQUIREMENT_KIND,),
             verification_policy="focused_if_possible",
             continuation_policy="bounded_with_verification",
             approval_required_risk_levels=("external_side_effect", "configuration"),
@@ -190,8 +209,8 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         ),
         HarnessProfile(
             name=MEDIA_PROFILE_NAME,
-            task_type="media_extraction",
-            required_tool_groups=("media",),
+            task_type=MEDIA_EXTRACTION_TASK_TYPE,
+            required_tool_groups=(MEDIA_TOOL_GROUP,),
             required_evidence=("media_artifact",),
             verification_policy="artifact_required",
             continuation_policy="bounded",
@@ -199,7 +218,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         ),
         HarnessProfile(
             name=OPS_PROFILE_NAME,
-            task_type="operations",
+            task_type=OPERATIONS_TASK_TYPE,
             required_tool_groups=("scheduling",),
             required_evidence=("audit_trace",),
             verification_policy="validate_or_report",
