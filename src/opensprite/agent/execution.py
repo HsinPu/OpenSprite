@@ -1140,7 +1140,7 @@ Output exactly these sections when applicable:
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
         on_tool_after_execute: Callable[..., Awaitable[None]] | None = None,
-        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
+        on_llm_status: Callable[[Any], Awaitable[None]] | None = None,
         on_response_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_tool_input_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_reasoning_delta: Callable[[str], Awaitable[None]] | None = None,
@@ -1181,7 +1181,7 @@ Output exactly these sections when applicable:
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
         on_tool_after_execute: Callable[..., Awaitable[None]] | None = None,
-        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
+        on_llm_status: Callable[[Any], Awaitable[None]] | None = None,
         on_response_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_tool_input_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_reasoning_delta: Callable[[str], Awaitable[None]] | None = None,
@@ -1271,7 +1271,13 @@ Output exactly these sections when applicable:
                     )
                     if on_llm_status is not None:
                         try:
-                            await on_llm_status(self.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE)
+                            await on_llm_status(
+                                {
+                                    "message": self.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE,
+                                    "status": "compacting",
+                                    "trigger": "proactive_context_compaction",
+                                }
+                            )
                         except Exception:
                             logger.exception(f"[{log_id}] llm.context-proactive.status-hook.error")
 
@@ -1424,7 +1430,13 @@ Output exactly these sections when applicable:
                             )
                             if on_llm_status is not None:
                                 try:
-                                    await on_llm_status(self.CONTEXT_OVERFLOW_STATUS_MESSAGE)
+                                    await on_llm_status(
+                                        {
+                                            "message": self.CONTEXT_OVERFLOW_STATUS_MESSAGE,
+                                            "status": "compacting",
+                                            "trigger": "context_overflow",
+                                        }
+                                    )
                                 except Exception:
                                     logger.exception(f"[{log_id}] llm.context-overflow.status-hook.error")
                             continue
@@ -1443,7 +1455,13 @@ Output exactly these sections when applicable:
                         )
                         if on_llm_status is not None:
                             try:
-                                await on_llm_status(self.PROVIDER_RETRY_STATUS_MESSAGE)
+                                await on_llm_status(
+                                    {
+                                        "message": self.PROVIDER_RETRY_STATUS_MESSAGE,
+                                        "status": "retry",
+                                        "trigger": "provider_retry",
+                                    }
+                                )
                             except Exception:
                                 logger.exception(f"[{log_id}] llm.retry.status-hook.error")
                         await asyncio.sleep((retry_delay.retry_after_ms or 0) / 1000)

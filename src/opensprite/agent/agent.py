@@ -269,7 +269,7 @@ class AgentLoop:
         session_id: str,
         run_id: str | None,
         enabled: bool,
-    ) -> Callable[[str], Awaitable[None]] | None:
+    ) -> Callable[[Any], Awaitable[None]] | None:
         """在 LLM 長時間等待或重試前，對使用者發送短暫狀態（與工具進度相同走 MessageBus）。"""
         return self.run_hooks.make_llm_status_hook(
             channel=channel,
@@ -1757,7 +1757,7 @@ class AgentLoop:
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
         on_tool_after_execute: Callable[[str, dict[str, Any], str], Awaitable[None]] | None = None,
-        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
+        on_llm_status: Callable[[Any], Awaitable[None]] | None = None,
         on_response_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_tool_input_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         on_reasoning_delta: Callable[[str], Awaitable[None]] | None = None,

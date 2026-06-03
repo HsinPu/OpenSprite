@@ -397,7 +397,7 @@ class RunHookService:
         session_id: str,
         run_id: str | None,
         enabled: bool,
-    ) -> Callable[[str], Awaitable[None]] | None:
+    ) -> Callable[[Any], Awaitable[None]] | None:
         """Publish run telemetry and interim outbound status during long LLM waits."""
         if not enabled or run_id is None:
             return None
@@ -407,10 +407,18 @@ class RunHookService:
         sid = session_id
         rid = run_id
 
-        async def _hook(text: str) -> None:
-            payload = {"message": text}
-            if "retry" in str(text or "").lower() or "重試" in str(text or ""):
-                payload["status"] = "retry"
+        async def _hook(update: Any) -> None:
+            if isinstance(update, dict):
+                text = str(update.get("message") or "").strip()
+                payload = {
+                    key: value
+                    for key, value in update.items()
+                    if key != "message" and value not in (None, "")
+                }
+                payload["message"] = text
+            else:
+                text = str(update or "")
+                payload = {"message": text}
             await self._emit_run_event(
                 sid,
                 rid,

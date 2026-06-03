@@ -1010,7 +1010,13 @@ def test_execution_engine_retries_transient_provider_errors_with_metadata():
     assert result.llm_step_events[0].next_retry_at is not None
     assert result.llm_step_events[0].provider == "RetryableThenSuccessProvider"
     assert result.llm_step_events[1].provider == "RetryableThenSuccessProvider"
-    assert statuses == [ExecutionEngine.PROVIDER_RETRY_STATUS_MESSAGE]
+    assert statuses == [
+        {
+            "message": ExecutionEngine.PROVIDER_RETRY_STATUS_MESSAGE,
+            "status": "retry",
+            "trigger": "provider_retry",
+        }
+    ]
 
 
 def test_execution_engine_retries_transient_transport_errors_without_status_code(monkeypatch):
@@ -1984,8 +1990,8 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
         ChatMessage(role="user", content="latest instruction"),
     ]
 
-    async def status_hook(text: str):
-        statuses.append(text)
+    async def status_hook(update):
+        statuses.append(update)
 
     result = asyncio.run(
         engine.execute_messages(
@@ -2032,7 +2038,13 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert "This handoff is not completion evidence" in result.compaction_handoff
     assert sent_messages[2].content == "intermediate answer"
     assert sent_messages[3].content == "latest instruction"
-    assert statuses == [ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE]
+    assert statuses == [
+        {
+            "message": ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE,
+            "status": "compacting",
+            "trigger": "proactive_context_compaction",
+        }
+    ]
 
 
 def test_execution_skips_proactive_compaction_below_budget():
@@ -2170,8 +2182,8 @@ def test_proactive_compaction_does_not_consume_overflow_retry():
         ChatMessage(role="user", content="latest instruction"),
     ]
 
-    async def status_hook(text: str):
-        statuses.append(text)
+    async def status_hook(update):
+        statuses.append(update)
 
     result = asyncio.run(
         engine.execute_messages(
@@ -2188,8 +2200,16 @@ def test_proactive_compaction_does_not_consume_overflow_retry():
     assert [event.strategy for event in result.context_compaction_events] == ["deterministic", "deterministic"]
     assert len(provider.calls) == 2
     assert statuses == [
-        ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE,
-        ExecutionEngine.CONTEXT_OVERFLOW_STATUS_MESSAGE,
+        {
+            "message": ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE,
+            "status": "compacting",
+            "trigger": "proactive_context_compaction",
+        },
+        {
+            "message": ExecutionEngine.CONTEXT_OVERFLOW_STATUS_MESSAGE,
+            "status": "compacting",
+            "trigger": "context_overflow",
+        },
     ]
 
 
@@ -2205,8 +2225,8 @@ def test_execution_compacts_and_retries_after_context_overflow():
         ChatMessage(role="user", content="latest instruction"),
     ]
 
-    async def status_hook(text: str):
-        statuses.append(text)
+    async def status_hook(update):
+        statuses.append(update)
 
     result = asyncio.run(
         engine.execute_messages(
@@ -2241,7 +2261,13 @@ def test_execution_compacts_and_retries_after_context_overflow():
     assert "A" * 5000 not in retried_messages[1].content
     assert retried_messages[2].tool_call_id == "tc1"
     assert retried_messages[3].content == "latest instruction"
-    assert statuses == ["上下文已接近上限，正在壓縮目前任務並繼續…"]
+    assert statuses == [
+        {
+            "message": ExecutionEngine.CONTEXT_OVERFLOW_STATUS_MESSAGE,
+            "status": "compacting",
+            "trigger": "context_overflow",
+        }
+    ]
 
 
 def test_execution_context_overflow_uses_configured_markers():

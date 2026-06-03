@@ -955,6 +955,50 @@ def test_llm_delta_hook_emits_empty_completion_marker():
     assert calls[0][4] == {"channel": "web", "external_chat_id": "browser-1"}
 
 
+def test_llm_status_hook_uses_structured_status_only():
+    calls = []
+
+    async def emit_run_event(session_id, run_id, event_type, payload, **kwargs):
+        calls.append((session_id, run_id, event_type, payload, kwargs))
+
+    service = RunHookService(
+        message_bus_getter=lambda: None,
+        add_run_part=lambda *args, **kwargs: None,
+        emit_run_event=emit_run_event,
+        format_log_preview=lambda text, max_chars=200: str(text)[:max_chars],
+    )
+    hook = service.make_llm_status_hook(
+        channel="web",
+        external_chat_id="browser-1",
+        session_id="web:browser-1",
+        run_id="run-1",
+        enabled=True,
+    )
+
+    async def scenario():
+        await hook("The article says retry policies are useful.")
+        await hook({"message": "Retrying provider request.", "status": "retry", "trigger": "provider_retry"})
+
+    asyncio.run(scenario())
+
+    assert calls == [
+        (
+            "web:browser-1",
+            "run-1",
+            "llm_status",
+            {"message": "The article says retry policies are useful."},
+            {"channel": "web", "external_chat_id": "browser-1"},
+        ),
+        (
+            "web:browser-1",
+            "run-1",
+            "llm_status",
+            {"status": "retry", "trigger": "provider_retry", "message": "Retrying provider request."},
+            {"channel": "web", "external_chat_id": "browser-1"},
+        ),
+    ]
+
+
 def test_tool_input_delta_hook_emits_tool_input_events():
     calls = []
 

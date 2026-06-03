@@ -55,7 +55,7 @@ class LlmCallService:
         should_cancel_run: Callable[[str, str | None], bool],
         make_tool_progress_hook: Callable[..., Callable[[str, dict[str, Any]], Awaitable[None]] | None],
         make_tool_result_hook: Callable[..., Callable[[str, dict[str, Any], str], Awaitable[None]] | None],
-        make_llm_status_hook: Callable[..., Callable[[str], Awaitable[None]] | None],
+        make_llm_status_hook: Callable[..., Callable[[Any], Awaitable[None]] | None],
         make_llm_delta_hook: Callable[..., Callable[[str, str, str, int], Awaitable[None]] | None],
         make_tool_input_delta_hook: Callable[..., Callable[[str, str, str, int], Awaitable[None]] | None],
         make_reasoning_delta_hook: Callable[..., Callable[[str, int], Awaitable[None]] | None],
