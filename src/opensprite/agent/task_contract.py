@@ -46,6 +46,18 @@ _PLANNER_TASK_TYPE_ALIASES = {
     "media_analysis": "media_extraction",
     "ops": "operations",
 }
+_PLANNER_TOOL_GROUP_ALIASES = {
+    "workspace_change": "workspace_write",
+    "media_analysis": "media",
+    "ops": "verification",
+}
+_TASK_TYPE_REQUIRED_TOOL_GROUPS = {
+    "web_research": ("web_research",),
+    "workspace_read": ("workspace_read",),
+    "code_change": ("workspace_read", "workspace_write"),
+    "media_extraction": ("media",),
+    "history_retrieval": ("history_retrieval",),
+}
 _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
@@ -581,12 +593,7 @@ def _normalize_planner_tool_groups(value: Any) -> list[str]:
     groups: list[str] = []
     for item in raw_values:
         text = str(item or "").strip()
-        if text == "workspace_change":
-            text = "workspace_write"
-        elif text == "media_analysis":
-            text = "media"
-        elif text == "ops":
-            text = "verification"
+        text = _PLANNER_TOOL_GROUP_ALIASES.get(text, text)
         if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
             groups.append(text)
     return groups
@@ -603,20 +610,7 @@ def _normalize_planner_quality_checks(value: Any) -> list[str]:
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
-    required: tuple[str, ...]
-    if task_type == "web_research":
-        required = ("web_research",)
-    elif task_type == "workspace_read":
-        required = ("workspace_read",)
-    elif task_type == "code_change":
-        required = ("workspace_read", "workspace_write")
-    elif task_type == "media_extraction":
-        required = ("media",)
-    elif task_type == "history_retrieval":
-        required = ("history_retrieval",)
-    else:
-        required = ()
-    for tool_group in required:
+    for tool_group in _TASK_TYPE_REQUIRED_TOOL_GROUPS.get(task_type, ()):
         if tool_group not in tool_groups:
             tool_groups.append(tool_group)
 
