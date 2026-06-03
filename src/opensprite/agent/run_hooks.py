@@ -16,6 +16,7 @@ from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
 from ..tools.result_status import classify_tool_result_status
+from .mcp_tool_policy import is_mcp_tool_name, mcp_tool_display_name
 from .verification_policy import is_verification_tool_name
 
 
@@ -174,7 +175,7 @@ class RunHookService:
             RUN_WORKFLOW_TOOL_NAME,
         }:
             return True
-        return tool_name.startswith("mcp_")
+        return is_mcp_tool_name(tool_name)
 
     @staticmethod
     def format_tool_progress_message(tool_name: str, tool_args: dict[str, Any]) -> str:
@@ -198,8 +199,8 @@ class RunHookService:
             if start_step:
                 return f"正在續跑固定工作流（{workflow}:{start_step}）…"
             return f"正在執行固定工作流（{workflow}）…"
-        if tool_name.startswith("mcp_"):
-            tail = tool_name[4:] if tool_name.startswith("mcp_") else tool_name
+        if is_mcp_tool_name(tool_name):
+            tail = mcp_tool_display_name(tool_name)
             return f"正在呼叫 MCP：{tail}…"
         return "處理中…"
 

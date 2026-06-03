@@ -18,6 +18,7 @@ from .harness_profile import (
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessProfile,
 )
+from .mcp_tool_policy import mcp_tool_names as list_mcp_tool_names
 from .task_contract import (
     PLANNER_VALIDATED_STATUS,
     TaskContract,
@@ -481,7 +482,7 @@ class LlmCallService:
         self._sync_runtime_mcp_tools_context()
         if run_id is not None:
             tool_names = list(selected_tool_registry.tool_names) if selected_tool_registry is not None else []
-            mcp_tool_names = sorted(name for name in tool_names if str(name).startswith("mcp_"))
+            mcp_tool_names = list_mcp_tool_names(tool_names)
             await self._emit_run_event(
                 session_id,
                 run_id,
