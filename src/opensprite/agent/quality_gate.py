@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .command_version_policy import command_inspects_git_repository_state
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
 from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
@@ -15,6 +14,11 @@ from .history_retrieval_policy import (
     is_history_retrieval_tool_name,
 )
 from .media_artifact_policy import count_media_artifacts, is_media_artifact_kind
+from .operation_report_policy import (
+    execution_confuses_command_version_with_repo_state,
+    execution_has_failed_command_evidence,
+    is_operations_task_type,
+)
 from .resource_index import ResourceIndex
 from .task_contract import (
     AcceptanceCriterion,
@@ -342,7 +346,7 @@ def _evaluate_command_version_answer(
     response_text: str,
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
-    if contract.task_type != "operations":
+    if not is_operations_task_type(contract.task_type):
         return None
     if not contract_requests_quality_check(contract, "command_version"):
         return None
@@ -369,22 +373,11 @@ def _evaluate_command_version_answer(
 
 
 def _execution_has_failed_command_evidence(execution_result: ExecutionResult) -> bool:
-    return any(
-        evidence.name in {"exec", "process"} and not evidence.ok
-        for evidence in execution_result.tool_evidence
-    )
+    return execution_has_failed_command_evidence(execution_result)
 
 
 def _execution_confuses_command_version_with_repo_state(execution_result: ExecutionResult) -> bool:
-    for evidence in execution_result.tool_evidence:
-        command = ""
-        if isinstance(evidence.metadata, dict):
-            args = evidence.metadata.get("tool_args")
-            if isinstance(args, dict):
-                command = str(args.get("command") or "").lower()
-        if command_inspects_git_repository_state(command):
-            return True
-    return False
+    return execution_confuses_command_version_with_repo_state(execution_result)
 
 
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
