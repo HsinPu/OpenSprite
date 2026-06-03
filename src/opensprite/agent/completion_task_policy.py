@@ -44,6 +44,13 @@ def intent_supports_fallback_active_task_update(task_intent: Any, task_contract:
     return task_type not in NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES
 
 
+def intent_supports_default_work_plan(task_intent: Any) -> bool:
+    return str(getattr(task_intent, "kind", "") or "").strip() in {
+        ANALYSIS_TASK_TYPE,
+        GENERIC_TASK_TYPE,
+    } and not bool(getattr(task_intent, "needs_clarification", False))
+
+
 def is_read_only_task_type(task_type: str | None) -> bool:
     normalized = str(task_type or "").strip()
     return is_web_research_task_type(normalized) or normalized in READ_ONLY_TASK_TYPES

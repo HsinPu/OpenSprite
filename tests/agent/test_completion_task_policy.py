@@ -1,5 +1,6 @@
 from opensprite.agent.completion_task_policy import (
     accepts_final_response_task_type,
+    intent_supports_default_work_plan,
     intent_supports_fallback_active_task_update,
     is_analysis_response_intent_kind,
     is_generic_task_response_intent_kind,
@@ -64,3 +65,14 @@ def test_completion_task_policy_controls_fallback_active_task_updates():
     assert intent_supports_fallback_active_task_update(
         clarification, TaskContract(objective="x", task_type="web_research")
     ) is False
+
+
+def test_completion_task_policy_controls_default_work_plan_support():
+    task = TaskIntentService().classify("please inspect and summarize")
+    conversation = TaskIntentService().classify("")
+    clarification = TaskIntentService().classify("please inspect")
+    object.__setattr__(clarification, "needs_clarification", True)
+
+    assert intent_supports_default_work_plan(task) is True
+    assert intent_supports_default_work_plan(conversation) is False
+    assert intent_supports_default_work_plan(clarification) is False

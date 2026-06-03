@@ -10,6 +10,7 @@ from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
 from .active_task_status import is_current_active_task_status
 from .completion_gate import CompletionGateResult
+from .completion_task_policy import intent_supports_default_work_plan
 from .completion_status import (
     is_complete_completion_status,
     is_blocking_completion_status,
@@ -921,7 +922,7 @@ def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
 
 
 def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
-    return task_intent.kind in {ANALYSIS_TASK_TYPE, GENERIC_TASK_TYPE} and not task_intent.needs_clarification
+    return intent_supports_default_work_plan(task_intent)
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
