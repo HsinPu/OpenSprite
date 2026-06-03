@@ -7,7 +7,6 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
-from ..tool_names import BATCH_TOOL_NAME
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (
@@ -48,7 +47,6 @@ from .harness_profile import (
     WORKSPACE_READ_TASK_TYPE,
     WORKSPACE_WRITE_TOOL_GROUP,
 )
-from .history_retrieval_policy import is_history_retrieval_tool_name
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import is_clean_structured_subagent_status
@@ -61,15 +59,21 @@ from .task_intent import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
 )
-from .tool_groups import OPERATION_TOOL_GROUPS, WORKSPACE_DISCOVERY_TOOLS
+from .tool_failure_policy import (
+    has_only_optional_history_retrieval_failures,
+    has_only_optional_web_discovery_failures,
+    has_only_optional_workspace_discovery_failures,
+    has_successful_fetched_web_source_artifact,
+    is_history_retrieval_failure_tool,
+    is_optional_web_discovery_failure_tool,
+    is_optional_web_fetch_failure_tool,
+    is_optional_workspace_batch_failure_tool,
+    web_research_artifact_has_successful_fetch,
+)
+from .tool_groups import OPERATION_TOOL_GROUPS
 from .web_source_policy import (
-    is_fetched_web_source_artifact_tool,
-    is_web_discovery_tool,
-    is_web_fetch_source_record_tool,
-    is_web_research_source_artifact_tool,
     is_web_research_task_type,
     is_web_research_tool_group,
-    is_web_source_artifact_kind,
 )
 from .verification_policy import (
     SKIPPED_VERIFICATION_STATUS,
@@ -102,7 +106,6 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND,
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
     {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
 )
-_OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = BATCH_TOOL_NAME
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _ANALYSIS_RESPONSE_INTENT_KIND = ANALYSIS_INTENT_KIND
@@ -894,51 +897,15 @@ def _task_contract_planner_reason(task_contract: Any) -> str:
 
 
 def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult) -> bool:
-    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
-    if not failed_evidence:
-        return False
-    has_successful_fetch_sources = _has_successful_fetched_web_source_artifact(execution_result)
-    for item in failed_evidence:
-        if _is_optional_web_discovery_failure_tool(item.name):
-            continue
-        if _is_optional_web_fetch_failure_tool(item.name) and has_successful_fetch_sources:
-            continue
-        if _is_non_exposed_permission_block(item):
-            continue
-        return False
-    return True
+    return has_only_optional_web_discovery_failures(execution_result)
 
 
 def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionResult) -> bool:
-    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
-    if not failed_evidence:
-        return False
-    if not any(item.ok and item.name in WORKSPACE_DISCOVERY_TOOLS for item in execution_result.tool_evidence):
-        return False
-    for item in failed_evidence:
-        if item.name in WORKSPACE_DISCOVERY_TOOLS:
-            continue
-        if _is_optional_workspace_batch_failure_tool(item.name) and execution_result.file_change_count <= 0:
-            continue
-        if _is_non_exposed_permission_block(item):
-            continue
-        return False
-    return True
+    return has_only_optional_workspace_discovery_failures(execution_result)
 
 
 def _has_only_optional_history_retrieval_failures(execution_result: ExecutionResult) -> bool:
-    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
-    if not failed_evidence:
-        return False
-    if not any(item.ok and _is_history_retrieval_tool(item.name) for item in execution_result.tool_evidence):
-        return False
-    for item in failed_evidence:
-        if _is_history_retrieval_tool(item.name):
-            continue
-        if _is_non_exposed_permission_block(item):
-            continue
-        return False
-    return True
+    return has_only_optional_history_retrieval_failures(execution_result)
 
 
 def _requires_web_research_evidence(task_contract: Any) -> bool:
@@ -951,43 +918,23 @@ def _requires_web_research_evidence(task_contract: Any) -> bool:
 
 
 def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResult) -> bool:
-    for artifact in execution_result.task_artifacts:
-        if not is_web_source_artifact_kind(artifact.kind) or not artifact.ok:
-            continue
-        sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
-            return True
-        if (
-            is_web_research_source_artifact_tool(artifact.source_tool)
-            and _web_research_artifact_has_successful_fetch(artifact)
-        ):
-            return True
-    return False
-
-
-def _is_non_exposed_permission_block(evidence: ToolEvidence) -> bool:
-    permission = evidence.metadata.get("permission") if isinstance(evidence.metadata, dict) else None
-    return bool(
-        isinstance(permission, dict)
-        and permission.get("blocked") is True
-        and permission.get("exposed") is False
-    )
+    return has_successful_fetched_web_source_artifact(execution_result)
 
 
 def _is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
-    return is_web_discovery_tool(tool_name)
+    return is_optional_web_discovery_failure_tool(tool_name)
 
 
 def _is_optional_web_fetch_failure_tool(tool_name: str | None) -> bool:
-    return is_web_fetch_source_record_tool(tool_name)
+    return is_optional_web_fetch_failure_tool(tool_name)
 
 
 def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() == _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL
+    return is_optional_workspace_batch_failure_tool(tool_name)
 
 
 def _is_history_retrieval_tool(tool_name: str | None) -> bool:
-    return is_history_retrieval_tool_name(tool_name)
+    return is_history_retrieval_failure_tool(tool_name)
 
 
 def _is_verification_result_artifact_kind(kind: str | None) -> bool:
@@ -1007,23 +954,7 @@ def _is_verification_tool_group(tool_group: str | None) -> bool:
 
 
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
-    metadata = artifact.metadata if isinstance(artifact.metadata, dict) else {}
-    coverage = metadata.get("coverage") if isinstance(metadata.get("coverage"), dict) else {}
-    if int(coverage.get("fetched_count") or 0) > 0:
-        return True
-    sources = metadata.get("sources")
-    if not isinstance(sources, list):
-        return False
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        if not is_web_fetch_source_record_tool(source.get("tool_name")):
-            continue
-        if source.get("blocked_or_challenge") or source.get("is_too_short"):
-            continue
-        if int(source.get("content_chars") or 0) > 0 or source.get("has_main_content"):
-            return True
-    return False
+    return web_research_artifact_has_successful_fetch(artifact)
 
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:
