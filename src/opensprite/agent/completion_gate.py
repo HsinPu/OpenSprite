@@ -86,11 +86,11 @@ from .workflow_status import (
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
 )
-from .workflows import (
-    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
-    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
-    RESEARCH_THEN_OUTLINE_WORKFLOW_ID,
-    REVIEW_WORKFLOW_IDS,
+from .workflow_completion_policy import (
+    is_research_then_outline_workflow,
+    is_review_workflow,
+    workflow_fix_follow_up_fields,
+    workflow_review_follow_up_fields,
 )
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
@@ -111,20 +111,6 @@ _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _ANALYSIS_RESPONSE_INTENT_KIND = ANALYSIS_INTENT_KIND
 _GENERIC_TASK_RESPONSE_INTENT_KIND = GENERIC_TASK_INTENT_KIND
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
-_REVIEW_WORKFLOW_IDS = REVIEW_WORKFLOW_IDS
-_RESEARCH_THEN_OUTLINE_WORKFLOW_ID = RESEARCH_THEN_OUTLINE_WORKFLOW_ID
-_WORKFLOW_FIX_STEPS = {
-    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
-        "next_step_id": "implement",
-        "next_step_label": "Implement",
-        "next_step_prompt_type": "implementer",
-    },
-    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID: {
-        "next_step_id": "bugfix",
-        "next_step_label": "Bug fix",
-        "next_step_prompt_type": "bug-fixer",
-    },
-}
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -1153,7 +1139,7 @@ def _is_cancelled_workflow_status(status: str | None) -> bool:
 
 
 def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:
-    return str(workflow_id or "").strip() == _RESEARCH_THEN_OUTLINE_WORKFLOW_ID
+    return is_research_then_outline_workflow(workflow_id)
 
 
 def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
@@ -1232,21 +1218,15 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
 
 
 def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    if _is_review_workflow(workflow_id):
-        return {
-            "next_step_id": "review",
-            "next_step_label": "Code review",
-            "next_step_prompt_type": "code-reviewer",
-        }
-    return {}
+    return workflow_review_follow_up_fields(workflow_id)
 
 
 def _workflow_fix_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    return dict(_WORKFLOW_FIX_STEPS.get(str(workflow_id or "").strip(), {}))
+    return workflow_fix_follow_up_fields(workflow_id)
 
 
 def _is_review_workflow(workflow_id: str | None) -> bool:
-    return str(workflow_id or "").strip() in _REVIEW_WORKFLOW_IDS
+    return is_review_workflow(workflow_id)
 
 
 def _string_or_none(value: Any) -> str | None:
