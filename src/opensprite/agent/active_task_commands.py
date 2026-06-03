@@ -39,6 +39,7 @@ from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import (
+    WORK_PROGRESS_ACTIVE_TASK_EVENT_TYPE,
     WORK_STEP_NOT_SET,
     WorkProgressService,
     WorkProgressUpdate,
@@ -163,7 +164,7 @@ class ActiveTaskCommandService:
             force=True,
         )
         store.append_event(
-            "work_progress",
+            WORK_PROGRESS_ACTIVE_TASK_EVENT_TYPE,
             "immediate",
             details={
                 "status": progress.status,
