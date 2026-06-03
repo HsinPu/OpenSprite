@@ -79,6 +79,49 @@ def test_edit_file_returns_unified_diff(tmp_path):
     assert "+new" in result
 
 
+def test_edit_file_returns_structured_error_for_external_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tool = EditFileTool(workspace=workspace)
+
+    result = asyncio.run(
+        tool.execute(
+            path="../outside.txt",
+            old_text="secret",
+            new_text="public",
+            expected_sha256=_sha256("secret\n"),
+        )
+    )
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "access_denied"
+    assert status.error.startswith("Access denied.")
+
+
+def test_edit_file_returns_structured_error_when_old_text_missing(tmp_path):
+    target = tmp_path / "notes.txt"
+    target.write_text("old\n", encoding="utf-8")
+    tool = EditFileTool(workspace=tmp_path)
+
+    result = asyncio.run(
+        tool.execute(
+            path="notes.txt",
+            old_text="missing",
+            new_text="new",
+            expected_sha256=_sha256("old\n"),
+        )
+    )
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "old_text_not_found"
+    assert status.invalid_arguments is True
+    assert "old_text not found" in status.error
+
+
 def test_edit_file_surfaces_post_edit_python_syntax_failures(tmp_path):
     target = tmp_path / "broken.py"
     target.write_text("VALUE = 1\n", encoding="utf-8")

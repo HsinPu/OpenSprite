@@ -1520,14 +1520,25 @@ class EditFileTool(Tool):
             workspace = self._get_workspace()
             file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
 
             guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
             if guard:
                 return guard
 
             if not file_path.exists():
-                return f"Error: File not found: {path}"
+                return _filesystem_error_result(
+                    f"File not found: {path}",
+                    tool_name=self.name,
+                    category="not_found",
+                    metadata={"path": path},
+                )
 
             content = file_path.read_text(encoding="utf-8")
             stale_error = _validate_expected_sha256(path, content, kwargs.get("expected_sha256"))
@@ -1535,7 +1546,14 @@ class EditFileTool(Tool):
                 return stale_error
 
             if old_text not in content:
-                return f"Error: old_text not found in file. Please provide exact text to replace."
+                return _filesystem_error_result(
+                    "old_text not found in file. Please provide exact text to replace.",
+                    tool_name=self.name,
+                    error_type="ToolValidationError",
+                    category="old_text_not_found",
+                    invalid_arguments=True,
+                    metadata={"path": path},
+                )
 
             # Count occurrences
             count = content.count(old_text)
@@ -1566,4 +1584,10 @@ class EditFileTool(Tool):
                 return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
             return result
         except Exception as e:
-            return f"Error editing file: {str(e)}"
+            return _filesystem_error_result(
+                f"Error editing file: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="edit_failed",
+                metadata={"path": str(kwargs.get("path", ""))},
+            )
