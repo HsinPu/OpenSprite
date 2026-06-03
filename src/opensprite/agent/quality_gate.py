@@ -10,11 +10,15 @@ from .execution import ExecutionResult
 from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
 from .task_intent import TaskIntent
-from .web_source_policy import is_web_source_artifact_kind
+from .web_source_policy import (
+    is_fetched_web_source_artifact_tool,
+    is_web_fetch_source_record_tool,
+    is_web_research_source_artifact_tool,
+    is_web_source_artifact_kind,
+)
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
-_SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
 @dataclass(frozen=True)
 class QualityGateResult:
@@ -545,7 +549,7 @@ def media_artifact_gap_detail(contract: TaskContract, execution_result: Executio
 
 def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str | None:
     for artifact in execution_result.task_artifacts:
-        if not artifact.ok or artifact.source_tool != "web_research":
+        if not artifact.ok or not is_web_research_source_artifact_tool(artifact.source_tool):
             continue
         coverage = artifact.metadata.get("coverage") if isinstance(artifact.metadata, dict) else None
         if not isinstance(coverage, dict):
@@ -638,9 +642,9 @@ def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "")
 
 def _source_has_substantive_detail(source: dict[str, object]) -> bool:
     tool_name = str(source.get("tool_name") or "").strip()
-    if tool_name not in _SOURCE_DETAIL_TOOLS:
+    if not is_fetched_web_source_artifact_tool(tool_name):
         return False
-    if tool_name == "web_fetch":
+    if is_web_fetch_source_record_tool(tool_name):
         if _truthy(source.get("blocked_or_challenge")):
             return False
         if "has_main_content" in source and not _truthy(source.get("has_main_content")):
