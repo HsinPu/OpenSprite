@@ -9,20 +9,29 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..llms import ChatMessage
+from .completion_status import (
+    BLOCKED_COMPLETION_STATUS,
+    COMPLETE_COMPLETION_STATUS,
+    INCOMPLETE_COMPLETION_STATUS,
+    NEEDS_REVIEW_COMPLETION_STATUS,
+    NEEDS_VERIFICATION_COMPLETION_STATUS,
+    WAITING_USER_COMPLETION_STATUS,
+)
 from .execution import ExecutionResult
 from .task_intent import TaskIntent
 
 
 COMPLETION_JUDGE_STATUSES = frozenset(
     {
-        "complete",
-        "incomplete",
-        "blocked",
-        "waiting_user",
-        "needs_verification",
-        "needs_review",
+        COMPLETE_COMPLETION_STATUS,
+        INCOMPLETE_COMPLETION_STATUS,
+        BLOCKED_COMPLETION_STATUS,
+        WAITING_USER_COMPLETION_STATUS,
+        NEEDS_VERIFICATION_COMPLETION_STATUS,
+        NEEDS_REVIEW_COMPLETION_STATUS,
     }
 )
+_COMPLETION_JUDGE_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_STATUSES))
 
 COMPLETION_JUDGE_SYSTEM_PROMPT = """You are OpenSprite's completion judge.
 You receive structured facts about one agent turn. Decide whether the assistant
@@ -207,7 +216,7 @@ def normalize_completion_judge_payload(
 
 def _build_judge_prompt(facts: dict[str, Any]) -> str:
     schema = {
-        "status": "complete|incomplete|blocked|waiting_user|needs_verification|needs_review",
+        "status": _COMPLETION_JUDGE_STATUS_SCHEMA,
         "reason": "short reason",
         "active_task_status": "done|in_progress|blocked|null",
         "active_task_detail": "optional detail",
