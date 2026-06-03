@@ -368,6 +368,32 @@ def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
     assert decision.should_replace_active_task is True
 
 
+def test_task_context_treats_llm_empty_value_sentinels_as_absent():
+    provider = _JsonProvider(
+        '{"continuation_type": "follow_up", "is_follow_up": true, '
+        '"should_inherit_active_task": true, "should_seed_active_task": false, '
+        '"should_replace_active_task": false, '
+        '"inherited_task_type": "N/A", "inherited_tool_group": "null", '
+        '"confidence": 0.91, "reason": "same task but no concrete inherited type"}'
+    )
+    message = "continue from the previous answer"
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.continuation_type == "follow_up"
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
+
+
 def test_task_context_uses_llm_for_long_active_task_boundary():
     provider = _JsonProvider(
         '{"continuation_type": "ambiguous_boundary", "is_follow_up": false, '

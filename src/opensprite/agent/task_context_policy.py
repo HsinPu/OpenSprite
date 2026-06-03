@@ -17,6 +17,7 @@ AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE = "ambiguous_boundary"
 NONE_CONTINUATION_TYPE = "none"
 BOUNDARY_SWITCH_REPLY_COMMAND = "switch"
 BOUNDARY_CONTINUE_REPLY_COMMAND = "continue"
+LLM_EMPTY_VALUE_SENTINELS = frozenset({NONE_CONTINUATION_TYPE, "null", "n/a"})
 
 FOLLOW_UP_CONTINUATION_TYPES = frozenset(
     {
@@ -64,6 +65,13 @@ ALLOWED_CONTINUATION_TYPES = frozenset(
 
 def is_allowed_continuation_type(value: str | None) -> bool:
     return str(value or "").strip() in ALLOWED_CONTINUATION_TYPES
+
+
+def llm_string_or_none(value: object) -> str | None:
+    normalized = str(value or "").strip()
+    if not normalized or normalized.lower() in LLM_EMPTY_VALUE_SENTINELS:
+        return None
+    return normalized
 
 
 def is_follow_up_continuation_type(value: str | None) -> bool:

@@ -38,6 +38,7 @@ from .task_context_policy import (
     is_ambiguous_boundary_continuation_type,
     is_follow_up_continuation_type,
     is_new_task_continuation_type,
+    llm_string_or_none,
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .task_text_policy import task_text_tokens
@@ -458,8 +459,8 @@ def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
-    normalized = str(value or "").strip()
-    if not normalized or normalized.lower() in {"none", "null", "n/a"}:
+    normalized = llm_string_or_none(value)
+    if normalized is None:
         return None
     return normalized if normalized in allowed else None
 
