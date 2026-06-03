@@ -1530,7 +1530,7 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
     assert captured["user_video_files"][0].startswith("videos/inbound-")
 
 
-def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
+def test_agent_process_does_not_seed_active_task_from_detected_intent_only(tmp_path):
     async def scenario():
         registry = ToolRegistry()
         registry.register(DummyTool())
@@ -1572,10 +1572,9 @@ def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
 
     task_block, events = asyncio.run(scenario())
 
-    assert "- Goal: Please refactor the agent and run tests. Keep the public API stable." in task_block
-    assert "Keep the public API stable." in task_block
-    seed_event = next(event for event in events if event["event_type"] == "seed")
-    assert seed_event["details"]["intent_kind"] == "task"
+    assert "- Status: inactive" in task_block
+    assert "- Goal: not set" in task_block
+    assert not any(event["event_type"] == "seed" for event in events)
 
 
 def test_agent_process_emits_task_context_resolved_event(tmp_path):

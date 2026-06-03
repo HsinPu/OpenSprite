@@ -286,6 +286,7 @@ class AgentTurnRunner:
             task_intent=task_intent,
             work_plan=work_plan,
             existing_state=existing_work_state,
+            task_context_decision=pre_work_task_context_decision,
         )
 
         try:
@@ -650,6 +651,7 @@ class AgentTurnRunner:
                 response, exec_result, collected_delegated_tasks, collected_workflow_outcomes = await self._run_direct_workflow_resume(
                     run_id=run_id,
                     task_intent=task_intent,
+                    current_work_state=current_work_state,
                     direct_resume=pending_direct_resume,
                     collected_delegated_tasks=collected_delegated_tasks,
                     collected_workflow_outcomes=collected_workflow_outcomes,
@@ -1055,13 +1057,19 @@ class AgentTurnRunner:
         *,
         run_id: str,
         task_intent: TaskIntent,
+        current_work_state: StoredWorkState | None,
         direct_resume: dict[str, str],
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...],
         collected_workflow_outcomes: tuple[dict[str, Any], ...],
     ) -> tuple[str, ExecutionResult, tuple[StoredDelegatedTask, ...], tuple[dict[str, Any], ...]]:
+        task_objective = (
+            current_work_state.objective
+            if current_work_state is not None and current_work_state.objective.strip()
+            else task_intent.objective
+        )
         workflow_result = await self._run_workflow(
             direct_resume["workflow"],
-            task_intent.objective,
+            task_objective,
             direct_resume["start_step"],
         )
         direct_result = ExecutionResult(content=workflow_result, executed_tool_calls=1)

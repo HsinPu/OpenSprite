@@ -288,6 +288,7 @@ class WorkProgressService:
         task_intent: TaskIntent,
         work_plan: WorkPlan | None,
         existing_state: StoredWorkState | None = None,
+        task_context_decision: TaskContextDecision | None = None,
     ) -> StoredWorkState | None:
         """Create a new persisted state when a concrete task begins."""
         if work_plan is None:
@@ -295,6 +296,8 @@ class WorkProgressService:
                 return existing_state
             return None
         if self._should_resume_existing_state(task_intent, work_plan, existing_state):
+            return self._resume_existing_state(existing_state, work_plan)
+        if self._should_preserve_existing_state(existing_state, task_context_decision):
             return self._resume_existing_state(existing_state, work_plan)
         if existing_state is not None and task_intent.needs_clarification and task_intent.long_running:
             return existing_state
@@ -601,6 +604,25 @@ class WorkProgressService:
             existing_state.objective.strip().lower() == work_plan.objective.strip().lower()
             and existing_state.kind == work_plan.kind
         )
+
+    @staticmethod
+    def _should_preserve_existing_state(
+        existing_state: StoredWorkState | None,
+        task_context_decision: TaskContextDecision | None,
+    ) -> bool:
+        if existing_state is None:
+            return False
+        if existing_state.status not in {"active", "blocked", "waiting_user"}:
+            return False
+        if task_context_decision is None:
+            return True
+        if task_context_decision.should_replace_active_task or task_context_decision.continuation_type in {
+            "new_task",
+            "replace_active_task",
+            "topic_shift",
+        }:
+            return False
+        return True
 
     def _resume_existing_state(
         self,
