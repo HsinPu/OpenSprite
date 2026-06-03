@@ -32,7 +32,7 @@ from .run_trace import RunTraceRecorder
 from .source_fallback_ranking import rank_web_sources_for_objective, web_source_relevance_score
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
-from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE
+from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE, is_tool_group_requirement
 from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
@@ -1493,10 +1493,7 @@ def _task_contract_requires_web_sources(execution_result: ExecutionResult) -> bo
     if is_web_research_task_type(getattr(contract, "task_type", None)):
         return True
     for requirement in getattr(contract, "requirements", ()) or ():
-        if (
-            str(getattr(requirement, "kind", "") or "") == "tool_group"
-            and is_web_research_tool_group(getattr(requirement, "tool_group", None))
-        ):
+        if is_tool_group_requirement(requirement) and is_web_research_tool_group(getattr(requirement, "tool_group", None)):
             return True
     for criterion in getattr(contract, "acceptance_criteria", ()) or ():
         if is_source_acceptance_criterion_kind(getattr(criterion, "kind", None)):

@@ -311,8 +311,8 @@ def _has_requirement(
     )
 
 
-def _is_tool_group_requirement(requirement: EvidenceRequirement) -> bool:
-    return requirement.kind == TOOL_GROUP_REQUIREMENT_KIND
+def is_tool_group_requirement(requirement: Any) -> bool:
+    return str(getattr(requirement, "kind", "") or "") == TOOL_GROUP_REQUIREMENT_KIND
 
 
 def _is_resource_coverage_requirement(requirement: EvidenceRequirement) -> bool:
@@ -339,7 +339,7 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     ok_evidence = [item for item in evidence if item.ok]
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     for requirement in contract.requirements:
-        if _is_tool_group_requirement(requirement):
+        if is_tool_group_requirement(requirement):
             tools = TOOL_GROUPS.get(requirement.tool_group, frozenset())
             count = sum(1 for item in ok_evidence if item.name in tools)
             if count < max(1, requirement.min_count):
