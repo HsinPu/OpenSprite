@@ -180,27 +180,11 @@ from html import unescape
 
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
+from .web_blocking import looks_blocked_or_challenge
 from ..utils.log import logger
 
 WEB_FETCH_MIN_CONTENT_CHARS = 800
 
-
-def _looks_blocked_or_challenge(*, title: str, content: str, status: int | None) -> bool:
-    if status in {401, 403, 407, 408, 409, 429, 451, 503}:
-        return True
-    normalized = f"{title}\n{content}".lower()
-    markers = (
-        "captcha",
-        "cloudflare",
-        "access denied",
-        "forbidden",
-        "enable javascript",
-        "verify you are human",
-        "prove you are human",
-        "unusual traffic",
-        "too many requests",
-    )
-    return any(marker in normalized for marker in markers)
 
 # 嘗試引入 trafilatura
 try:
@@ -1036,7 +1020,7 @@ class WebFetchTool(Tool):
         except (TypeError, ValueError):
             status = None
         title = str(result.get("title") or "")
-        blocked_or_challenge = _looks_blocked_or_challenge(title=title, content=content, status=status)
+        blocked_or_challenge = looks_blocked_or_challenge(title=title, content=content, status=status)
         is_too_short = content_chars < WEB_FETCH_MIN_CONTENT_CHARS
         has_main_content = bool(content.strip()) and not is_too_short and not blocked_or_challenge
         return json.dumps(

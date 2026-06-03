@@ -13,6 +13,7 @@ from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
+from .web_blocking import looks_blocked_or_challenge
 from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
 from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 
@@ -1124,7 +1125,7 @@ def _merge_fetch_source(
     status = fetch_payload.get("status")
     extractor = _clean_text(fetch_payload.get("extractor"))
     truncated = bool(fetch_payload.get("truncated"))
-    blocked_or_challenge = _blocked_or_challenge(title=title, content=content, status=status)
+    blocked_or_challenge = looks_blocked_or_challenge(title=title, content=content, status=status)
     is_too_short = bool(fetch_payload.get("is_too_short")) or content_chars < min_content_chars
     has_main_content = bool(content.strip()) and not is_too_short and not blocked_or_challenge
     quality_score = _quality_score(
@@ -1171,24 +1172,6 @@ def _merge_fetch_source(
         "search_freshness": _clean_text(item.get("search_freshness")),
         "search_rank": item.get("rank"),
     }
-
-
-def _blocked_or_challenge(*, title: str, content: str, status: Any) -> bool:
-    if _coerce_int(status, default=0) in {401, 403, 407, 408, 409, 429, 451, 503}:
-        return True
-    normalized = f"{title}\n{content}".lower()
-    markers = (
-        "captcha",
-        "cloudflare",
-        "access denied",
-        "forbidden",
-        "enable javascript",
-        "verify you are human",
-        "prove you are human",
-        "unusual traffic",
-        "too many requests",
-    )
-    return any(marker in normalized for marker in markers)
 
 
 def _quality_score(
