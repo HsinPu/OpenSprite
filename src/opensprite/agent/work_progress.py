@@ -61,6 +61,12 @@ _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE = "collect_review_evidence"
 _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = "address_review_findings"
 _NEXT_ACTION_CONTINUE_REVIEW = "continue_review"
 _NEXT_ACTION_CONTINUE_WORK = "continue_work"
+_PROGRESS_SIGNAL_TOOL_CALLS = "tool_calls"
+_PROGRESS_SIGNAL_FILE_CHANGES = "file_changes"
+_PROGRESS_SIGNAL_VERIFICATION_ATTEMPTED = "verification_attempted"
+_PROGRESS_SIGNAL_VERIFICATION_PASSED = "verification_passed"
+_PROGRESS_SIGNAL_CONTEXT_COMPACTION = "context_compaction"
+_PROGRESS_SIGNAL_TOOL_ERROR = "tool_error"
 _REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
     {
         _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
@@ -771,19 +777,19 @@ class WorkProgressService:
     def _progress_signals(execution_result: ExecutionResult) -> tuple[str, ...]:
         signals: list[str] = []
         if execution_result.executed_tool_calls > 0:
-            signals.append("tool_calls")
+            signals.append(_PROGRESS_SIGNAL_TOOL_CALLS)
         if execution_result.file_change_count > 0:
-            signals.append("file_changes")
+            signals.append(_PROGRESS_SIGNAL_FILE_CHANGES)
         if execution_result.verification_attempted:
-            signals.append("verification_attempted")
+            signals.append(_PROGRESS_SIGNAL_VERIFICATION_ATTEMPTED)
         if execution_result.verification_passed:
-            signals.append("verification_passed")
+            signals.append(_PROGRESS_SIGNAL_VERIFICATION_PASSED)
         if execution_result.context_compactions > 0:
-            signals.append("context_compaction")
+            signals.append(_PROGRESS_SIGNAL_CONTEXT_COMPACTION)
         if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
             signals.append(MAX_TOOL_ITERATIONS_STOP_REASON)
         if execution_result.had_tool_error:
-            signals.append("tool_error")
+            signals.append(_PROGRESS_SIGNAL_TOOL_ERROR)
         return tuple(signals)
 
     @staticmethod
