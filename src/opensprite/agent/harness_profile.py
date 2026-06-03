@@ -262,6 +262,10 @@ def is_research_profile_name(profile_name: str | None) -> bool:
     return normalize_profile_name(profile_name) == RESEARCH_PROFILE_NAME
 
 
+def is_planning_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == PLANNING_TASK_TYPE
+
+
 def is_coding_profile_name(profile_name: str | None) -> bool:
     return normalize_profile_name(profile_name) == CODING_PROFILE_NAME
 
