@@ -10,6 +10,7 @@ from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
 from ..tools.result_status import classify_tool_result_status
+from .verification_policy import is_verification_tool_name
 
 
 _TRACE_TEXT_FIELDS = {
@@ -247,7 +248,7 @@ class RunHookService:
                 channel=ch,
                 external_chat_id=tid,
             )
-            if tool_name == "verify":
+            if is_verification_tool_name(tool_name):
                 await self._emit_run_event(
                     sid,
                     rid,
@@ -369,7 +370,7 @@ class RunHookService:
                 channel=channel,
                 external_chat_id=tid,
             )
-            if tool_name == "verify":
+            if is_verification_tool_name(tool_name):
                 verification = classify_verification_result(result_text)
                 await self._emit_run_event(
                     session_id,

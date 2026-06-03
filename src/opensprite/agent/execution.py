@@ -23,6 +23,7 @@ from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
+from .verification_policy import is_verification_tool_name
 from .web_source_policy import (
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
@@ -1709,7 +1710,7 @@ Output exactly these sections when applicable:
                     artifact = build_task_artifact(evidence)
                     if artifact is not None:
                         task_artifacts.append(artifact)
-                    if tool_name == "verify":
+                    if is_verification_tool_name(tool_name):
                         verification_outcome = classify_verification_result(result)
                         verification_attempted = verification_attempted or bool(verification_outcome["attempted"])
                         verification_passed = verification_passed or bool(verification_outcome["ok"])

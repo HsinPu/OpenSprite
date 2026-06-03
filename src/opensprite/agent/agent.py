@@ -103,6 +103,7 @@ from .tool_registration import (
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner, CompletionBlockerMessages, SourceFallbackMessages
+from .verification_policy import VERIFICATION_TOOL_NAME
 from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -722,7 +723,7 @@ class AgentLoop:
             transcribe_audio=lambda audios: self._transcribe_audio_input(audios),
             run_workflow=lambda workflow, task, start_step=None: self.run_workflow(workflow, task, start_step),
             run_verify=lambda action, path, pytest_args=(): self.run_verify(action=action, path=path, pytest_args=pytest_args),
-            verification_available=lambda: self.tools.get("verify") is not None,
+            verification_available=lambda: self.tools.get(VERIFICATION_TOOL_NAME) is not None,
             get_queued_outbound_media=self._get_queued_outbound_media,
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
@@ -2069,7 +2070,7 @@ class AgentLoop:
                     "No active run is available for deterministic verification.",
                     error_type="VerifyToolError",
                     category="missing_run_context",
-                    metadata={"tool_name": "verify"},
+                    metadata={"tool_name": VERIFICATION_TOOL_NAME},
                 ),
                 had_tool_error=True,
             )
@@ -2097,10 +2098,10 @@ class AgentLoop:
         )
 
         if before is not None:
-            await before("verify", tool_args)
-        result = await self.tools.execute("verify", tool_args)
+            await before(VERIFICATION_TOOL_NAME, tool_args)
+        result = await self.tools.execute(VERIFICATION_TOOL_NAME, tool_args)
         if after is not None:
-            await after("verify", tool_args, result)
+            await after(VERIFICATION_TOOL_NAME, tool_args, result)
 
         verification = classify_verification_result(result)
         return ExecutionResult(
