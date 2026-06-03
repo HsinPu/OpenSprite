@@ -51,6 +51,8 @@ PLANNING_ERROR_TASK_TYPE = "planning_error"
 TOOL_GROUP_REQUIREMENT_KIND = "tool_group"
 RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
 ALL_RESOURCE_COVERAGE = "all"
+ITEMIZED_OUTPUT_CRITERION_KIND = "itemized_output"
+SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND = "substantive_final_answer"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
@@ -313,6 +315,37 @@ def _has_requirement(
 
 def is_tool_group_requirement(requirement: Any) -> bool:
     return str(getattr(requirement, "kind", "") or "") == TOOL_GROUP_REQUIREMENT_KIND
+
+
+def contract_has_acceptance_criterion(task_contract: Any, *kinds: str) -> bool:
+    """Return whether a task contract carries any of the requested acceptance criteria."""
+    expected = {str(kind or "").strip() for kind in kinds if str(kind or "").strip()}
+    if not expected:
+        return False
+    return any(
+        str(getattr(criterion, "kind", "") or "") in expected
+        for criterion in getattr(task_contract, "acceptance_criteria", ()) or ()
+    )
+
+
+def contract_requests_itemized_output(task_contract: Any) -> bool:
+    return contract_has_acceptance_criterion(task_contract, ITEMIZED_OUTPUT_CRITERION_KIND)
+
+
+def contract_requests_source_reference(task_contract: Any) -> bool:
+    return contract_has_acceptance_criterion(task_contract, SOURCE_REFERENCE_CRITERION_KIND)
+
+
+def contract_requests_source_material(task_contract: Any) -> bool:
+    return contract_has_acceptance_criterion(
+        task_contract,
+        SOURCE_ARTIFACT_CRITERION_KIND,
+        SOURCE_DETAIL_CRITERION_KIND,
+    )
+
+
+def contract_requests_substantive_final_answer(task_contract: Any) -> bool:
+    return contract_has_acceptance_criterion(task_contract, SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND)
 
 
 def _is_resource_coverage_requirement(requirement: EvidenceRequirement) -> bool:

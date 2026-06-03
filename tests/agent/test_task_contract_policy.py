@@ -1,4 +1,15 @@
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, _ensure_task_type_tool_groups, _normalize_planner_tool_groups, missing_evidence
+from opensprite.agent.task_contract import (
+    AcceptanceCriterion,
+    EvidenceRequirement,
+    TaskContract,
+    _ensure_task_type_tool_groups,
+    _normalize_planner_tool_groups,
+    contract_requests_itemized_output,
+    contract_requests_source_material,
+    contract_requests_source_reference,
+    contract_requests_substantive_final_answer,
+    missing_evidence,
+)
 from opensprite.tools.evidence import ToolEvidence
 
 
@@ -52,3 +63,22 @@ def test_missing_evidence_uses_requirement_kind_policy_helpers():
     assert "Missing workspace_read coverage for: file:b" in missing
     assert "Change a file." in missing
     assert "Verify the result." in missing
+
+
+def test_acceptance_criterion_policy_helpers():
+    contract = TaskContract(
+        objective="Summarize source material.",
+        task_type="web_research",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="source_reference"),
+            AcceptanceCriterion(kind="source_detail"),
+            AcceptanceCriterion(kind="itemized_output"),
+            AcceptanceCriterion(kind="substantive_final_answer"),
+        ),
+    )
+
+    assert contract_requests_source_reference(contract) is True
+    assert contract_requests_source_material(contract) is True
+    assert contract_requests_itemized_output(contract) is True
+    assert contract_requests_substantive_final_answer(contract) is True
+    assert contract_requests_source_reference(None) is False

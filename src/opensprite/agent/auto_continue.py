@@ -30,7 +30,13 @@ from .quality_gate import (
     source_material_satisfies_contract,
 )
 from .stop_reasons import is_max_tool_iterations_stop_reason
-from .task_contract import contract_expects_file_change
+from .task_contract import (
+    contract_expects_file_change,
+    contract_requests_itemized_output,
+    contract_requests_source_material,
+    contract_requests_source_reference,
+    contract_requests_substantive_final_answer,
+)
 from .task_intent import TaskIntent
 from .web_source_policy import is_web_source_artifact_kind
 from .work_progress import WorkProgressUpdate
@@ -479,9 +485,15 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if _task_contract_requires_evidence(execution_result):
         return True
-    if _task_contract_has_acceptance_criterion(execution_result, "itemized_output", "substantive_final_answer"):
+    if (
+        contract_requests_itemized_output(execution_result.task_contract)
+        or contract_requests_substantive_final_answer(execution_result.task_contract)
+    ):
         return True
-    if _task_contract_has_acceptance_criterion(execution_result, "source_reference") and _existing_web_source_context(execution_result):
+    if (
+        contract_requests_source_reference(execution_result.task_contract)
+        and _existing_web_source_context(execution_result)
+    ):
         return True
     if _source_material_requires_more_detail(execution_result):
         return True
@@ -497,19 +509,11 @@ def _task_contract_requires_evidence(execution_result: ExecutionResult) -> bool:
     return bool(getattr(contract, "requirements", ()) or ())
 
 
-def _task_contract_has_acceptance_criterion(execution_result: ExecutionResult, *kinds: str) -> bool:
-    contract = execution_result.task_contract
-    if contract is None:
-        return False
-    expected = {kind for kind in kinds if kind}
-    return any(getattr(criterion, "kind", "") in expected for criterion in contract.acceptance_criteria)
-
-
 def _source_material_requires_more_detail(execution_result: ExecutionResult) -> bool:
     contract = execution_result.task_contract
     if contract is None:
         return False
-    if not _task_contract_has_acceptance_criterion(execution_result, "source_artifact", "source_detail"):
+    if not contract_requests_source_material(contract):
         return False
     return not source_material_satisfies_contract(contract, execution_result)
 
@@ -611,14 +615,17 @@ def _quality_follow_up_instruction(
         )
     if (
         execution_result is not None
-        and _task_contract_has_acceptance_criterion(execution_result, "source_reference")
+        and contract_requests_source_reference(execution_result.task_contract)
         and _existing_web_source_context(execution_result)
     ):
         return (
             "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
             "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
         )
-    if execution_result is not None and _task_contract_has_acceptance_criterion(execution_result, "substantive_final_answer"):
+    if (
+        execution_result is not None
+        and contract_requests_substantive_final_answer(execution_result.task_contract)
+    ):
         return (
             "\n- Quality follow-up: the previous final answer was too terse. "
             "Do not reply with only 'done', 'completed', '已完成', or another short acknowledgement. "
@@ -634,7 +641,9 @@ def _quality_follow_up_instruction(
             "Run the direct version command, such as `<command> --version`, and answer with the version value. "
             "Do not inspect `.git`, `HEAD`, repository commits, or package metadata unless the user asks for repository state."
         )
-    if execution_result is not None and _task_contract_has_acceptance_criterion(execution_result, "itemized_output"):
+    if execution_result is not None and contract_requests_itemized_output(
+        execution_result.task_contract
+    ):
         return (
             "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
             "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
