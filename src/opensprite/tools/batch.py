@@ -24,6 +24,7 @@ READ_ONLY_BATCH_TOOLS = frozenset(
         "search_history",
     }
 )
+BATCH_TOOL_NAME = "batch"
 _MAX_BATCH_CALLS = 8
 _MAX_BATCH_RESULT_CHARS = 2_000
 _MAX_BATCH_OUTPUT_CHARS = 16_000
@@ -32,7 +33,7 @@ _MAX_BATCH_OUTPUT_CHARS = 16_000
 class BatchTool(Tool):
     """Run multiple safe read-only tools concurrently."""
 
-    name = "batch"
+    name = BATCH_TOOL_NAME
     description = (
         "Run up to 8 read-only tool calls concurrently and return their results together. "
         "Allowed child tools: read_file, list_dir, glob_files, grep_files, read_skill, "

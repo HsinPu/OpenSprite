@@ -7,6 +7,7 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
+from ..tools.batch import BATCH_TOOL_NAME
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (
@@ -89,7 +90,7 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND,
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
     {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
 )
-_OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
+_OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = BATCH_TOOL_NAME
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
