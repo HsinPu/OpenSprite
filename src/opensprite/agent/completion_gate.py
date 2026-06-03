@@ -11,6 +11,7 @@ from .completion_gate_policy import (
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
+    PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
 )
 from .evidence_gate import EvidenceGateService
@@ -389,7 +390,7 @@ class CompletionGateService:
         ):
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="plain-answer contract received a response",
+                reason=PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
                 active_task_status=(
                     "done"
                     if _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract)

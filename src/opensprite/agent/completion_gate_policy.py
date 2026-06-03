@@ -9,3 +9,4 @@ MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL = (
 )
 INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON = "assistant only emitted internal control text"
 TOOL_ERROR_WITHOUT_BLOCKER_REASON = "tool execution reported an error without a clear blocker handoff"
+PLAIN_ANSWER_CONTRACT_COMPLETE_REASON = "plain-answer contract received a response"
