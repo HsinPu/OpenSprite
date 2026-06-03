@@ -9,8 +9,11 @@ from typing import Any, Mapping
 
 from ..tool_names import (
     BATCH_TOOL_NAME,
+    CONFIGURE_MCP_TOOL_NAME,
     CONFIGURE_SKILL_TOOL_NAME,
     CONFIGURE_SUBAGENT_TOOL_NAME,
+    CREDENTIAL_STORE_TOOL_NAME,
+    CRON_TOOL_NAME,
     DELEGATED_EXECUTION_TOOL_NAMES,
     EXECUTION_TOOL_NAMES,
     READ_SKILL_TOOL_NAME,
@@ -42,9 +45,9 @@ MUTATING_TOOL_NAMES = frozenset(
         "workflow",
         CONFIGURE_SKILL_TOOL_NAME,
         CONFIGURE_SUBAGENT_TOOL_NAME,
-        "configure_mcp",
-        "credential_store",
-        "cron",
+        CONFIGURE_MCP_TOOL_NAME,
+        CREDENTIAL_STORE_TOOL_NAME,
+        CRON_TOOL_NAME,
         SEND_MEDIA_TOOL_NAME,
     }
 )

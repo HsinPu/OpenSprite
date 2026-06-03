@@ -9,9 +9,11 @@ from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, denie
 from ..tool_names import (
     APPLY_PATCH_TOOL_NAME,
     BATCH_TOOL_NAME,
+    CONFIGURE_MCP_TOOL_NAME,
     DELEGATE_TOOL_NAME,
     EXEC_TOOL_NAME,
     READ_FILE_TOOL_NAME,
+    TASK_UPDATE_TOOL_NAME,
     WEB_SEARCH_TOOL_NAME,
 )
 from ..tools import BatchTool, ToolRegistry
@@ -20,12 +22,12 @@ from .harness_policy import HarnessPolicy, HarnessPolicyService
 
 
 _RISK_PROBE_TOOLS = {
-    "configuration": "configure_mcp",
+    "configuration": CONFIGURE_MCP_TOOL_NAME,
     "delegation": DELEGATE_TOOL_NAME,
     "execute": EXEC_TOOL_NAME,
     "external_side_effect": "browser_click",
     "mcp": "mcp_probe_tool",
-    "memory": "task_update",
+    "memory": TASK_UPDATE_TOOL_NAME,
     "network": WEB_SEARCH_TOOL_NAME,
     "read": READ_FILE_TOOL_NAME,
     "write": APPLY_PATCH_TOOL_NAME,
