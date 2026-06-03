@@ -2,6 +2,10 @@ from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
     TaskContract,
+    PLANNER_INVALID_JSON_REASON,
+    PLANNER_UNAVAILABLE_REASON,
+    PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
+    _contract_from_planner_payload,
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
     contract_requests_itemized_output,
@@ -20,6 +24,24 @@ from opensprite.agent.task_contract import (
     missing_evidence,
 )
 from opensprite.tools.evidence import ToolEvidence
+
+
+def test_planner_fallback_reasons_are_centralized():
+    assert PLANNER_UNAVAILABLE_REASON == "task contract planner unavailable: llm not configured"
+    assert PLANNER_INVALID_JSON_REASON == "task contract planner returned invalid JSON"
+
+    contract = _contract_from_planner_payload(
+        {"task_type": "not_allowed"},
+        task_intent=type("Intent", (), {"objective": "Plan this"})(),
+        current_message="Plan this",
+        history=None,
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert contract.planner_metadata["reason"] == PLANNER_UNSUPPORTED_TASK_TYPE_REASON
 
 
 def test_planner_tool_group_aliases_are_normalized_without_duplicates():

@@ -45,6 +45,9 @@ from ..tools.evidence import ToolEvidence
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 PLANNER_VALIDATED_STATUS = "validated"
 PLANNER_INVALID_STATUS = "invalid"
+PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
+PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
+PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
 PLANNING_ERROR_TASK_TYPE = "planning_error"
@@ -227,7 +230,7 @@ class TaskContractPlanner:
         if is_unconfigured_llm(provider, model):
             return _planner_blocked_contract(
                 objective=str(task_intent.objective or current_message or "").strip(),
-                reason="task contract planner unavailable: llm not configured",
+                reason=PLANNER_UNAVAILABLE_REASON,
             )
         planner_prompt = _build_planner_contract_prompt(
             current_message=current_message,
@@ -287,7 +290,7 @@ class TaskContractPlanner:
             return _planner_blocked_contract(
                 objective=str(task_intent.objective or current_message or "").strip(),
                 status=PLANNER_INVALID_STATUS,
-                reason="task contract planner returned invalid JSON",
+                reason=PLANNER_INVALID_JSON_REASON,
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
         return _contract_from_planner_payload(
@@ -606,7 +609,7 @@ def _contract_from_planner_payload(
         return _planner_blocked_contract(
             objective=objective,
             status=PLANNER_INVALID_STATUS,
-            reason="task contract planner returned an unsupported or missing task_type",
+            reason=PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
     raw_tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
