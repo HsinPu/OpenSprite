@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from ..utils.processes import terminate_process_tree
 from .base import Tool
+from .result_status import classify_tool_result_status, tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -53,9 +54,41 @@ class VerifyCommandResult:
     timed_out: bool = False
 
 
+def _verify_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "VerifyToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    error = str(message or "").removeprefix("Error:").strip()
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": "verify"},
+    )
+
+
+def _verify_validation_error(message: str, *, category: str = "invalid_arguments") -> str:
+    return _verify_error_result(
+        message,
+        category=category,
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+    )
+
+
 def classify_verification_result(result: str) -> dict[str, Any]:
     """Classify one verify tool result string into structured outcome fields."""
     text = str(result or "").strip()
+    if text.lstrip().startswith("{"):
+        status = classify_tool_result_status(text)
+        if not status.ok and status.error:
+            return {"status": "error", "ok": False, "attempted": True, "name": None}
+
     first_line = text.splitlines()[0].strip() if text else ""
     for prefix, status, ok in (
         ("Verification passed: ", "passed", True),
@@ -199,7 +232,7 @@ class VerifyTool(Tool):
         workspace = self._workspace_resolver()
         target = _resolve_workspace_path(workspace, path or ".")
         if target is None:
-            return f"Error: Verification path is outside the workspace: {path}"
+            return _verify_validation_error(f"Verification path is outside the workspace: {path}")
 
         current_timeout = min(max(int(timeout or self.DEFAULT_TIMEOUT), 1), self.MAX_TIMEOUT)
         mode = (action or "auto").strip().lower()
@@ -213,7 +246,7 @@ class VerifyTool(Tool):
             return await self._verify_web_smoke(workspace, target, current_timeout)
         if mode == "auto":
             return await self._verify_auto(workspace, target, current_timeout)
-        return f"Error: Unknown verification action: {action}"
+        return _verify_validation_error(f"Unknown verification action: {action}")
 
     async def _verify_auto(self, workspace: Path, target: Path, timeout: int) -> str:
         results: list[str] = []
@@ -316,21 +349,33 @@ class VerifyTool(Tool):
     ) -> str:
         package_dir = self._find_package_dir(workspace, target)
         if package_dir is None:
-            return f"Error: No package.json found for {label} near {_display_path(workspace, target)}."
+            return _verify_error_result(
+                f"No package.json found for {label} near {_display_path(workspace, target)}.",
+                category="package_json_not_found",
+            )
 
         package_json = package_dir / "package.json"
         try:
             payload = json.loads(package_json.read_text(encoding="utf-8"))
         except Exception as exc:
-            return f"Error: Could not read { _display_path(workspace, package_json) }: {exc}"
+            return _verify_error_result(
+                f"Could not read {_display_path(workspace, package_json)}: {exc}",
+                category="package_json_unreadable",
+            )
 
         scripts = payload.get("scripts") if isinstance(payload, dict) else None
         if not isinstance(scripts, dict) or script_name not in scripts:
-            return f"Error: { _display_path(workspace, package_json) } does not define scripts.{script_name}."
+            return _verify_error_result(
+                f"{_display_path(workspace, package_json)} does not define scripts.{script_name}.",
+                category="package_script_missing",
+            )
 
         npm = self._resolve_npm_executable()
         if npm is None:
-            return f"Error: npm was not found on PATH; cannot run {label} verification."
+            return _verify_error_result(
+                f"npm was not found on PATH; cannot run {label} verification.",
+                category="npm_unavailable",
+            )
 
         result = await self._run_command([npm, "run", script_name], package_dir, timeout)
         return self._format_command_verification(label, result)

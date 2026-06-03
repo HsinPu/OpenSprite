@@ -1,7 +1,8 @@
 import asyncio
 import sys
 
-from opensprite.tools.verify import VerifyCommandResult, VerifyTool
+from opensprite.tools.verify import VerifyCommandResult, VerifyTool, classify_verification_result
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_verify_python_compile_passes_valid_files(tmp_path):
@@ -29,7 +30,24 @@ def test_verify_rejects_paths_outside_workspace(tmp_path):
 
     result = asyncio.run(tool.execute(action="python_compile", path=".."))
 
-    assert result.startswith("Error: Verification path is outside the workspace")
+    status = classify_tool_result_status(result)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "Verification path is outside the workspace" in status.error
+
+
+def test_verify_rejects_unknown_action(tmp_path):
+    tool = VerifyTool(workspace=tmp_path)
+
+    result = asyncio.run(tool._execute(action="wat", path="."))
+    status = classify_tool_result_status(result)
+
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "Unknown verification action" in status.error
+    assert classify_verification_result(result)["status"] == "error"
 
 
 def test_verify_pytest_uses_focused_args(tmp_path):
@@ -141,6 +159,46 @@ def test_verify_web_build_uses_package_json_build_script(tmp_path):
     assert captured["cwd"] == package_dir.resolve(strict=False)
     assert captured["timeout"] == 9
     assert result.startswith("Verification passed: web_build")
+
+
+def test_verify_web_build_reports_missing_package_json(tmp_path):
+    tool = VerifyTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(action="web_build"))
+    status = classify_tool_result_status(result)
+
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "package_json_not_found"
+    assert "No package.json found" in status.error
+
+
+def test_verify_web_build_reports_missing_script(tmp_path):
+    package_dir = tmp_path / "apps" / "web"
+    package_dir.mkdir(parents=True)
+    (package_dir / "package.json").write_text('{"scripts":{"test":"vitest"}}', encoding="utf-8")
+    tool = VerifyTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(action="web_build"))
+    status = classify_tool_result_status(result)
+
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "package_script_missing"
+    assert "scripts.build" in status.error
+
+
+def test_verify_web_build_reports_missing_npm(tmp_path):
+    package_dir = tmp_path / "apps" / "web"
+    package_dir.mkdir(parents=True)
+    (package_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
+    tool = VerifyTool(workspace=tmp_path)
+    tool._resolve_npm_executable = lambda: None
+
+    result = asyncio.run(tool.execute(action="web_build"))
+    status = classify_tool_result_status(result)
+
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "npm_unavailable"
+    assert "npm was not found" in status.error
 
 
 def test_verify_web_smoke_uses_package_json_smoke_script(tmp_path):
