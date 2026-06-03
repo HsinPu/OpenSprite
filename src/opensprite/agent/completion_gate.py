@@ -17,6 +17,7 @@ from .completion_gate_policy import (
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
+    one_turn_completion_reason,
 )
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
@@ -536,9 +537,10 @@ class CompletionGateService:
             )
 
         if _is_one_turn_intent_kind(task_intent.kind):
+            has_response = bool(response_text.strip())
             return CompletionGateResult(
-                status=COMPLETE_COMPLETION_STATUS if response_text.strip() else INCOMPLETE_COMPLETION_STATUS,
-                reason="one-turn intent received a response" if response_text.strip() else "assistant response was empty",
+                status=COMPLETE_COMPLETION_STATUS if has_response else INCOMPLETE_COMPLETION_STATUS,
+                reason=one_turn_completion_reason(has_response=has_response),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,

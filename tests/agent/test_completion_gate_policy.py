@@ -1,13 +1,16 @@
 from opensprite.agent.completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
+    EMPTY_ASSISTANT_RESPONSE_REASON,
     EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
+    ONE_TURN_RESPONSE_COMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
+    one_turn_completion_reason,
 )
 
 
@@ -42,3 +45,10 @@ def test_analysis_task_complete_reason_is_stable():
 
 def test_expected_code_changes_missing_reason_is_stable():
     assert EXPECTED_CODE_CHANGES_MISSING_REASON == "expected code changes were not recorded"
+
+
+def test_one_turn_completion_reason_reflects_response_presence():
+    assert ONE_TURN_RESPONSE_COMPLETE_REASON == "one-turn intent received a response"
+    assert EMPTY_ASSISTANT_RESPONSE_REASON == "assistant response was empty"
+    assert one_turn_completion_reason(has_response=True) == ONE_TURN_RESPONSE_COMPLETE_REASON
+    assert one_turn_completion_reason(has_response=False) == EMPTY_ASSISTANT_RESPONSE_REASON

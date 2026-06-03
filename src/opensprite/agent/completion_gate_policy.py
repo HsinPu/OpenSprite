@@ -14,3 +14,9 @@ TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON = "task contract accepted final res
 GENERIC_TASK_COMPLETE_REASON = "generic task returned a response"
 ANALYSIS_TASK_COMPLETE_REASON = "analysis-style task returned a substantive response"
 EXPECTED_CODE_CHANGES_MISSING_REASON = "expected code changes were not recorded"
+ONE_TURN_RESPONSE_COMPLETE_REASON = "one-turn intent received a response"
+EMPTY_ASSISTANT_RESPONSE_REASON = "assistant response was empty"
+
+
+def one_turn_completion_reason(*, has_response: bool) -> str:
+    return ONE_TURN_RESPONSE_COMPLETE_REASON if has_response else EMPTY_ASSISTANT_RESPONSE_REASON
