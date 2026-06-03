@@ -43,6 +43,7 @@ from opensprite.agent.completion_gate import (
 )
 from opensprite.agent.web_source_policy import (
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
+    SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
     UNGATHERED_SOURCE_REFERENCED_REASON,
     is_fetched_web_source_artifact_tool,
@@ -60,6 +61,7 @@ from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
+from opensprite.agent.task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
@@ -2121,7 +2123,7 @@ def test_completion_gate_requires_web_source_artifacts_after_evidence():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required task artifacts were not produced"
+    assert completion.reason == TASK_ARTIFACTS_NOT_PRODUCED_REASON
     assert "web_source" in (completion.active_task_detail or "")
 
 
@@ -2148,7 +2150,7 @@ def test_completion_gate_requires_traceable_web_source_metadata():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required task artifacts were not traceable"
+    assert completion.reason == SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON
     assert "source metadata" in (completion.active_task_detail or "")
 
 
@@ -3906,7 +3908,7 @@ def test_completion_gate_requires_media_artifacts_after_evidence():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required task artifacts were not produced"
+    assert completion.reason == TASK_ARTIFACTS_NOT_PRODUCED_REASON
     assert "image:images/a.jpg" in (completion.active_task_detail or "")
 
 

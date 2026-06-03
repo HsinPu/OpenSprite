@@ -25,6 +25,7 @@ from .operation_report_policy import (
     is_operations_task_type,
 )
 from .resource_index import ResourceIndex
+from .task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .task_contract import (
     AcceptanceCriterion,
     TaskContract,
@@ -50,6 +51,7 @@ from .response_shape_policy import (
 from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
+    SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     UNGATHERED_SOURCE_REFERENCED_REASON,
     is_web_research_source_artifact_tool,
@@ -175,7 +177,7 @@ def _evaluate_media_artifacts(contract: TaskContract, execution_result: Executio
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="required task artifacts were not produced",
+        reason=TASK_ARTIFACTS_NOT_PRODUCED_REASON,
         active_task_detail="\n".join(f"- Missing artifact for {resource_id}" for resource_id in missing),
     )
 
@@ -212,7 +214,7 @@ def _evaluate_source_artifact(
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="required task artifacts were not traceable",
+            reason=SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
             active_task_detail=(
                 "- Missing traceable source metadata: url plus title/snippet "
                 f"(need {min_count}, found {traceable_count})"
@@ -221,7 +223,7 @@ def _evaluate_source_artifact(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="required task artifacts were not produced",
+        reason=TASK_ARTIFACTS_NOT_PRODUCED_REASON,
         active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {artifact_count})",
     )
 
@@ -305,7 +307,7 @@ def _evaluate_media_artifact_criterion(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="required task artifacts were not produced",
+        reason=TASK_ARTIFACTS_NOT_PRODUCED_REASON,
         active_task_detail=getattr(criterion, "description", "") or None,
     )
 
