@@ -5,7 +5,8 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.subagents import _subagent_preparation_error_detail
-from opensprite.agent.subagent_policy import build_subagent_tool_registry
+from opensprite.agent.subagent_policy import RESEARCH_PROFILE, build_subagent_tool_registry
+from opensprite.agent.web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
@@ -61,6 +62,11 @@ def test_subagent_preparation_error_detail_uses_shared_result_status():
         )
         == "task_id missing"
     )
+
+
+def test_research_subagent_profile_uses_shared_web_tool_policy():
+    assert WEB_SOURCE_EVIDENCE_TOOLS.issubset(RESEARCH_PROFILE.allowed_tools)
+    assert "browser_snapshot" not in RESEARCH_PROFILE.allowed_tools
 
 
 class FakeStorage:

@@ -18,6 +18,7 @@ from ..tools.permissions import (
 )
 from ..tools.registry import ToolRegistry
 from .tool_access import ToolAccessResolver
+from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
 
 READ_ONLY_TOOLS = frozenset(
@@ -31,7 +32,7 @@ READ_ONLY_TOOLS = frozenset(
         "search_history",
     }
 )
-WEB_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
+WEB_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS
 WRITE_TOOLS = frozenset({"apply_patch", "write_file", "edit_file"})
 EXEC_TOOLS = frozenset({"exec", "process"})
 
