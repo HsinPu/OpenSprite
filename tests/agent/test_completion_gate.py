@@ -4,7 +4,11 @@ import json
 import pytest
 
 from opensprite.agent.completion_judge import CompletionJudgeVerdict
-from opensprite.agent.completion_gate import CompletionGateService
+from opensprite.agent.completion_gate import (
+    CompletionGateService,
+    _is_blocking_planner_status,
+    _is_unsuccessful_workflow_status,
+)
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
@@ -154,6 +158,13 @@ def test_completion_gate_blocks_unvalidated_task_contract():
     assert result.status == "blocked"
     assert result.reason == "task contract planner did not produce a validated contract"
     assert result.active_task_detail == "task contract planner returned invalid JSON"
+
+
+def test_completion_gate_status_helpers_normalize_policy_values():
+    assert _is_blocking_planner_status(" INVALID ") is True
+    assert _is_blocking_planner_status("ready") is False
+    assert _is_unsuccessful_workflow_status("CANCELLED") is True
+    assert _is_unsuccessful_workflow_status("complete") is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:

@@ -21,6 +21,8 @@ from .task_intent import TaskIntent
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
+_BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
+_UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -185,7 +187,7 @@ class CompletionGateService:
             )
 
         planner_status = _task_contract_planner_status(execution_result.task_contract)
-        if planner_status in {"blocked", "invalid"}:
+        if _is_blocking_planner_status(planner_status):
             reason = "task contract planner did not produce a validated contract"
             detail = _task_contract_planner_reason(execution_result.task_contract) or reason
             return CompletionGateResult(
@@ -781,6 +783,10 @@ def _task_contract_planner_status(task_contract: Any) -> str:
     return ""
 
 
+def _is_blocking_planner_status(status: str | None) -> bool:
+    return str(status or "").strip().lower() in _BLOCKING_PLANNER_STATUSES
+
+
 def _task_contract_planner_reason(task_contract: Any) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
@@ -987,7 +993,7 @@ def _workflow_gate_outcome(
         ),
     }
 
-    if workflow_status in {"failed", "cancelled"}:
+    if _is_unsuccessful_workflow_status(workflow_status):
         detail = _workflow_follow_up_detail(workflow_id, workflow_status, workflow)
         return {
             **metadata,
@@ -1053,6 +1059,10 @@ def _workflow_gate_outcome(
         }
 
     return None
+
+
+def _is_unsuccessful_workflow_status(status: str | None) -> bool:
+    return str(status or "").strip().lower() in _UNSUCCESSFUL_WORKFLOW_STATUSES
 
 
 def _first_review_finding(structured_output: Any) -> str:
