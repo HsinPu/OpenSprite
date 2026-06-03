@@ -49,7 +49,7 @@ from .web_source_policy import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
-from .workflow_status import WORKFLOW_FAILED_STATUS
+from .workflow_status import is_workflow_failed_status
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from .worktree import WorktreeSandboxInspector
 
@@ -1174,7 +1174,7 @@ class AgentTurnRunner:
                     update.error
                     if update.error
                     else ""
-                    if update.status and update.status != WORKFLOW_FAILED_STATUS
+                    if update.status and not is_workflow_failed_status(update.status)
                     else previous.error if previous is not None else ""
                 ),
                 child_session_id=update.child_session_id or (previous.child_session_id if previous is not None else None),

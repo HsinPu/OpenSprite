@@ -796,3 +796,55 @@ def test_work_progress_merges_multiple_delegated_tasks_and_clears_selection_on_c
     assert completed.active_delegate_prompt_type is None
     assert [task.task_id for task in completed.delegated_tasks] == ["task_old", "task_new_a", "task_new_b"]
     assert all(task.selected is False for task in completed.delegated_tasks)
+
+
+def test_work_progress_preserves_delegated_error_for_failure_statuses_only():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Please review the implementation.")
+    plan = service.create_plan(intent)
+    state = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+    assert state is not None
+    state = StoredWorkState(
+        **{
+            **state.__dict__,
+            "delegated_tasks": (
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="failed",
+                    error="previous failure",
+                ),
+            ),
+        }
+    )
+    progress = service.evaluate(
+        task_intent=intent,
+        completion_result=CompletionGateResult(status="incomplete", reason="still working"),
+        execution_result=ExecutionResult(content="Still working."),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+
+    still_failed = service.update_state(
+        session_id="web:browser-1",
+        state=state,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(status="incomplete", reason="still working"),
+        delegated_task_updates=(StoredDelegatedTask(task_id="task_review", status="error"),),
+    )
+    assert still_failed is not None
+    assert still_failed.delegated_tasks[0].error == "previous failure"
+
+    completed = service.update_state(
+        session_id="web:browser-1",
+        state=still_failed,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(status="incomplete", reason="still working"),
+        delegated_task_updates=(StoredDelegatedTask(task_id="task_review", status="completed"),),
+    )
+    assert completed is not None
+    assert completed.delegated_tasks[0].error == ""
