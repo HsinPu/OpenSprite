@@ -19,6 +19,7 @@ from ..utils.processes import terminate_process_tree
 from .base import Tool
 from .result_status import classify_tool_result_status, tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
+from .verification_output_policy import pytest_collected_no_tests
 
 
 WorkspaceResolver = Callable[[], Path]
@@ -311,7 +312,7 @@ class VerifyTool(Tool):
         if not args and target != project_dir and not default_workspace_target:
             args = [_display_path(project_dir, target)]
         result = await self._run_command([sys.executable, "-m", "pytest", *args], project_dir, timeout)
-        if result.exit_code == 5 and _pytest_collected_no_tests(result.output):
+        if result.exit_code == 5 and pytest_collected_no_tests(result.output):
             return self._format_command_verification("pytest", result, status="skipped")
         return self._format_command_verification("pytest", result)
 
@@ -514,8 +515,3 @@ class VerifyTool(Tool):
             ),
             category=category,
         )
-
-
-def _pytest_collected_no_tests(output: str) -> bool:
-    normalized = str(output or "").lower()
-    return "collected 0 items" in normalized or "no tests ran" in normalized
