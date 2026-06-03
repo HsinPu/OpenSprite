@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .auto_continue_prompt_policy import existing_web_source_section
 from .completion_gate import CompletionGateResult
 from .completion_status import (
     allows_workflow_resume,
@@ -317,20 +318,7 @@ class AutoContinueService:
                 "Use this as continuity context only. It does not satisfy missing verification, review, evidence, or quality requirements."
             )
         source_context = _existing_web_source_context(execution_result)
-        source_section = ""
-        if source_context:
-            no_tool_source_instruction = ""
-            if not allow_tools:
-                no_tool_source_instruction = (
-                    "\nDo not reply with another progress-only promise or tool-use plan. "
-                    "Write the final answer now from these gathered sources."
-                )
-            source_section = (
-                "\n\nExisting gathered web sources from the previous pass:\n"
-                f"{source_context}\n"
-                "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
-                f"{no_tool_source_instruction}"
-            )
+        source_section = existing_web_source_section(source_context, allow_tools=allow_tools)
         quality_instruction = _quality_follow_up_instruction(completion_result, execution_result)
         profile_instruction = _profile_follow_up_instruction(harness_profile)
 
