@@ -46,7 +46,7 @@ def _subagent_error_result(
     invalid_arguments: bool = False,
     tool_name: str = "delegate",
 ) -> str:
-    error = str(message or "").removeprefix("Error:").strip()
+    error = str(message or "").strip()
     return tool_error_result(
         error,
         error_type=error_type,
