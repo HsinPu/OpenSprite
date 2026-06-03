@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
-from ..llms import ChatMessage
+from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
 from .task_context_policy import (
@@ -83,7 +83,7 @@ class TaskObjectiveResolver:
             work_state_summary=work_state_summary,
         ):
             return deterministic
-        if provider is None or str(model or "").strip().lower() == "unconfigured":
+        if is_unconfigured_llm(provider, model):
             return _unresolved_llm_objective(original, "llm unavailable; objective was not enriched")
 
         try:
