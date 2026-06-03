@@ -48,8 +48,14 @@ from .workflow_status import WORKFLOW_FAILED_STATUS
 
 
 _DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
+_WORK_STATE_ACTIVE_STATUS = "active"
 _WORK_STATE_DONE_STATUS = "done"
 _WORK_PROGRESS_VERIFYING_STATUS = "verifying"
+_WORK_PROGRESS_REVIEWING_STATUS = "reviewing"
+_WORK_PROGRESS_WORKING_STATUS = "working"
+_NEXT_ACTION_FINALIZE = "finalize"
+_NEXT_ACTION_STOP_BUDGET_EXHAUSTED = "stop_budget_exhausted"
+_NEXT_ACTION_STOP_NO_PROGRESS = "stop_no_progress"
 _NEXT_ACTION_CONTINUE_VERIFICATION = "continue_verification"
 _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE = "collect_review_evidence"
 _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = "address_review_findings"
@@ -787,8 +793,8 @@ class WorkProgressService:
         if needs_verification_completion_status(completion_result.status):
             return _WORK_PROGRESS_VERIFYING_STATUS
         if needs_review_completion_status(completion_result.status):
-            return "reviewing"
-        return "working"
+            return _WORK_PROGRESS_REVIEWING_STATUS
+        return _WORK_PROGRESS_WORKING_STATUS
 
     @staticmethod
     def _next_action(
@@ -799,13 +805,13 @@ class WorkProgressService:
         budget: int,
     ) -> str:
         if is_complete_completion_status(completion_result.status):
-            return "finalize"
+            return _NEXT_ACTION_FINALIZE
         if is_blocking_completion_status(completion_result.status):
             return completion_result.status
         if attempts >= budget:
-            return "stop_budget_exhausted"
+            return _NEXT_ACTION_STOP_BUDGET_EXHAUSTED
         if attempts > 0 and not has_progress:
-            return "stop_no_progress"
+            return _NEXT_ACTION_STOP_NO_PROGRESS
         if needs_verification_completion_status(completion_result.status):
             return _NEXT_ACTION_CONTINUE_VERIFICATION
         if needs_review_completion_status(completion_result.status):
@@ -965,8 +971,8 @@ def _map_state_status(completion_result: CompletionGateResult, progress: WorkPro
     if is_blocking_completion_status(completion_result.status):
         return completion_result.status
     if progress.status == _WORK_PROGRESS_VERIFYING_STATUS:
-        return "active"
-    return "active"
+        return _WORK_STATE_ACTIVE_STATUS
+    return _WORK_STATE_ACTIVE_STATUS
 
 
 def _completed_steps(
