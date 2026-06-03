@@ -30,6 +30,11 @@ MAX_STRUCTURED_SUBAGENT_SOURCES = 12
 _JSON_FENCE_RE = re.compile(r"```json\s*(?P<body>.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
 
+def is_clean_structured_subagent_status(status: str | None) -> bool:
+    """Return whether a structured subagent status represents a clean result."""
+    return str(status or "").strip() == STRUCTURED_SUBAGENT_OK_STATUS
+
+
 def parse_structured_subagent_output(
     text: str,
     *,
