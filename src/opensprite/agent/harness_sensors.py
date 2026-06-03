@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from .harness_inventory import expected_sensor_ids_for_task_type
 from .harness_scorecard import HarnessSensorResult
+from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
 
 if TYPE_CHECKING:
     from .completion_gate import CompletionGateResult
@@ -43,7 +44,7 @@ def _evaluate_sensor(
     if sensor_id == "completion.final_answer":
         return _completion_sensor(sensor_id, completion_result)
     if sensor_id == "research.source_coverage":
-        count = _artifact_count(execution_result, "web_source")
+        count = _artifact_count_matching(execution_result, is_web_source_artifact_kind)
         return HarnessSensorResult(
             sensor_id,
             "pass" if count > 0 else "fail",
@@ -139,8 +140,8 @@ def _missing_evidence_sensor(sensor_id: str, completion_result: CompletionGateRe
     )
 
 
-def _artifact_count(execution_result: ExecutionResult, kind: str) -> int:
-    return sum(1 for artifact in execution_result.task_artifacts if artifact.kind == kind)
+def _artifact_count_matching(execution_result: ExecutionResult, matches_kind: Callable[[str | None], bool]) -> int:
+    return sum(1 for artifact in execution_result.task_artifacts if matches_kind(artifact.kind))
 
 
 def _artifact_count_any(execution_result: ExecutionResult, kinds: tuple[str, ...]) -> int:
@@ -148,4 +149,4 @@ def _artifact_count_any(execution_result: ExecutionResult, kinds: tuple[str, ...
 
 
 def _web_tool_evidence_count(execution_result: ExecutionResult) -> int:
-    return sum(1 for evidence in execution_result.tool_evidence if str(evidence.name).startswith("web_"))
+    return sum(1 for evidence in execution_result.tool_evidence if is_web_source_evidence_tool(evidence.name))
