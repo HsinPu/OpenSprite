@@ -78,7 +78,7 @@ class HarnessProfileService:
         tool_groups = _contract_tool_groups(task_contract)
         requirement_kinds = _contract_requirement_kinds(task_contract)
         if task_type == OPERATIONS_TASK_TYPE:
-            required_tool_groups = tuple(sorted(tool_groups))
+            required_tool_groups = tuple(sorted({WORKSPACE_READ_TOOL_GROUP, *tool_groups}))
             return HarnessProfile(
                 name=OPS_PROFILE_NAME,
                 task_type=OPERATIONS_TASK_TYPE,

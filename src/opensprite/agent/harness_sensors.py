@@ -5,7 +5,24 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
 from .completion_status import is_complete_completion_status
-from .harness_inventory import expected_sensor_ids_for_task_type
+from .harness_inventory import (
+    SENSOR_CHAT_NO_UNEXPECTED_TOOLS,
+    SENSOR_CODING_FILE_CHANGE,
+    SENSOR_CODING_VERIFICATION,
+    SENSOR_CODING_WORKSPACE_EVIDENCE,
+    SENSOR_COMPLETION_CHANGE_SUMMARY,
+    SENSOR_COMPLETION_FINAL_ANSWER,
+    SENSOR_COMPLETION_MEDIA_SUMMARY,
+    SENSOR_COMPLETION_OPERATION_REPORT,
+    SENSOR_COMPLETION_SOURCE_GROUNDING,
+    SENSOR_COMPLETION_VERIFICATION_OR_GAP,
+    SENSOR_MEDIA_ARTIFACT,
+    SENSOR_OPS_APPROVAL_BOUNDARY,
+    SENSOR_OPS_AUDIT_TRACE,
+    SENSOR_RESEARCH_FRESHNESS,
+    SENSOR_RESEARCH_SOURCE_COVERAGE,
+    expected_sensor_ids_for_task_type,
+)
 from .harness_scorecard import HarnessSensorResult
 from .media_artifact_policy import count_media_artifacts
 from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
@@ -35,7 +52,7 @@ def _evaluate_sensor(
     execution_result: ExecutionResult,
     completion_result: CompletionGateResult,
 ) -> HarnessSensorResult:
-    if sensor_id == "chat.no_unexpected_tools":
+    if sensor_id == SENSOR_CHAT_NO_UNEXPECTED_TOOLS:
         count = execution_result.executed_tool_calls
         return HarnessSensorResult(
             sensor_id,
@@ -43,9 +60,9 @@ def _evaluate_sensor(
             "No tools were needed." if count == 0 else "Conversation turn used tools.",
             {"executed_tool_calls": count},
         )
-    if sensor_id == "completion.final_answer":
+    if sensor_id == SENSOR_COMPLETION_FINAL_ANSWER:
         return _completion_sensor(sensor_id, completion_result)
-    if sensor_id == "research.source_coverage":
+    if sensor_id == SENSOR_RESEARCH_SOURCE_COVERAGE:
         count = _artifact_count_matching(execution_result, is_web_source_artifact_kind)
         return HarnessSensorResult(
             sensor_id,
@@ -53,7 +70,7 @@ def _evaluate_sensor(
             "Traceable web sources were recorded." if count > 0 else "No traceable web source artifact was recorded.",
             {"web_source_artifacts": count},
         )
-    if sensor_id == "research.freshness":
+    if sensor_id == SENSOR_RESEARCH_FRESHNESS:
         evidence_count = _web_tool_evidence_count(execution_result)
         return HarnessSensorResult(
             sensor_id,
@@ -61,9 +78,9 @@ def _evaluate_sensor(
             "Live web evidence is present." if evidence_count > 0 else "No live web evidence was found.",
             {"web_tool_evidence": evidence_count},
         )
-    if sensor_id == "completion.source_grounding":
+    if sensor_id == SENSOR_COMPLETION_SOURCE_GROUNDING:
         return _missing_evidence_sensor(sensor_id, completion_result)
-    if sensor_id == "coding.workspace_evidence":
+    if sensor_id == SENSOR_CODING_WORKSPACE_EVIDENCE:
         evidence_count = len(execution_result.tool_evidence)
         return HarnessSensorResult(
             sensor_id,
@@ -71,7 +88,7 @@ def _evaluate_sensor(
             "Workspace evidence was gathered." if evidence_count > 0 else "No workspace evidence was recorded.",
             {"tool_evidence": evidence_count},
         )
-    if sensor_id == "coding.file_change":
+    if sensor_id == SENSOR_CODING_FILE_CHANGE:
         count = execution_result.file_change_count
         return HarnessSensorResult(
             sensor_id,
@@ -79,7 +96,7 @@ def _evaluate_sensor(
             "File changes were recorded." if count > 0 else "No file changes were recorded.",
             {"file_change_count": count},
         )
-    if sensor_id == "coding.verification":
+    if sensor_id == SENSOR_CODING_VERIFICATION:
         return HarnessSensorResult(
             sensor_id,
             "pass" if execution_result.verification_passed else "warn",
@@ -89,11 +106,11 @@ def _evaluate_sensor(
                 "verification_passed": execution_result.verification_passed,
             },
         )
-    if sensor_id == "completion.change_summary":
+    if sensor_id == SENSOR_COMPLETION_CHANGE_SUMMARY:
         return _completion_sensor(sensor_id, completion_result)
-    if sensor_id == "completion.verification_or_gap":
+    if sensor_id == SENSOR_COMPLETION_VERIFICATION_OR_GAP:
         return _missing_evidence_sensor(sensor_id, completion_result)
-    if sensor_id == "media.artifact":
+    if sensor_id == SENSOR_MEDIA_ARTIFACT:
         count = count_media_artifacts(execution_result.task_artifacts)
         return HarnessSensorResult(
             sensor_id,
@@ -101,23 +118,23 @@ def _evaluate_sensor(
             "Media artifacts were recorded." if count > 0 else "No media artifact was recorded.",
             {"media_artifacts": count},
         )
-    if sensor_id == "completion.media_summary":
+    if sensor_id == SENSOR_COMPLETION_MEDIA_SUMMARY:
         return _completion_sensor(sensor_id, completion_result)
-    if sensor_id == "ops.audit_trace":
+    if sensor_id == SENSOR_OPS_AUDIT_TRACE:
         return HarnessSensorResult(
             sensor_id,
             "pass" if execution_result.executed_tool_calls > 0 else "warn",
             "Operational tool activity was recorded." if execution_result.executed_tool_calls > 0 else "No operational tool activity was recorded.",
             {"executed_tool_calls": execution_result.executed_tool_calls},
         )
-    if sensor_id == "ops.approval_boundary":
+    if sensor_id == SENSOR_OPS_APPROVAL_BOUNDARY:
         return HarnessSensorResult(
             sensor_id,
             "pass",
             "Approval policy metadata was recorded.",
             {"has_harness_policy": bool(execution_result.harness_policy)},
         )
-    if sensor_id == "completion.operation_report":
+    if sensor_id == SENSOR_COMPLETION_OPERATION_REPORT:
         return _completion_sensor(sensor_id, completion_result)
     return HarnessSensorResult(sensor_id, "not_applicable", "No deterministic check is defined.")
 

@@ -9,15 +9,31 @@ from .harness_policy import HarnessPolicyService
 from .harness_profile import HarnessProfile, preview_harness_profiles
 
 
+SENSOR_CHAT_NO_UNEXPECTED_TOOLS = "chat.no_unexpected_tools"
+SENSOR_COMPLETION_FINAL_ANSWER = "completion.final_answer"
+SENSOR_RESEARCH_SOURCE_COVERAGE = "research.source_coverage"
+SENSOR_RESEARCH_FRESHNESS = "research.freshness"
+SENSOR_COMPLETION_SOURCE_GROUNDING = "completion.source_grounding"
+SENSOR_CODING_WORKSPACE_EVIDENCE = "coding.workspace_evidence"
+SENSOR_CODING_FILE_CHANGE = "coding.file_change"
+SENSOR_CODING_VERIFICATION = "coding.verification"
+SENSOR_COMPLETION_CHANGE_SUMMARY = "completion.change_summary"
+SENSOR_COMPLETION_VERIFICATION_OR_GAP = "completion.verification_or_gap"
+SENSOR_MEDIA_ARTIFACT = "media.artifact"
+SENSOR_COMPLETION_MEDIA_SUMMARY = "completion.media_summary"
+SENSOR_OPS_AUDIT_TRACE = "ops.audit_trace"
+SENSOR_OPS_APPROVAL_BOUNDARY = "ops.approval_boundary"
+SENSOR_COMPLETION_OPERATION_REPORT = "completion.operation_report"
+
 SENSOR_IDS_BY_TASK_TYPE: dict[str, tuple[str, ...]] = {
-    "conversation": ("chat.no_unexpected_tools", "completion.final_answer"),
-    "question": ("chat.no_unexpected_tools", "completion.final_answer"),
-    "pure_answer": ("chat.no_unexpected_tools", "completion.final_answer"),
-    "web_research": ("research.source_coverage", "research.freshness", "completion.source_grounding"),
-    "workspace_analysis": ("coding.workspace_evidence", "completion.verification_or_gap"),
-    "workspace_change": ("coding.file_change", "coding.verification", "completion.change_summary"),
-    "media_extraction": ("media.artifact", "completion.media_summary"),
-    "operations": ("ops.audit_trace", "ops.approval_boundary", "completion.operation_report"),
+    "conversation": (SENSOR_CHAT_NO_UNEXPECTED_TOOLS, SENSOR_COMPLETION_FINAL_ANSWER),
+    "question": (SENSOR_CHAT_NO_UNEXPECTED_TOOLS, SENSOR_COMPLETION_FINAL_ANSWER),
+    "pure_answer": (SENSOR_CHAT_NO_UNEXPECTED_TOOLS, SENSOR_COMPLETION_FINAL_ANSWER),
+    "web_research": (SENSOR_RESEARCH_SOURCE_COVERAGE, SENSOR_RESEARCH_FRESHNESS, SENSOR_COMPLETION_SOURCE_GROUNDING),
+    "workspace_analysis": (SENSOR_CODING_WORKSPACE_EVIDENCE, SENSOR_COMPLETION_VERIFICATION_OR_GAP),
+    "workspace_change": (SENSOR_CODING_FILE_CHANGE, SENSOR_CODING_VERIFICATION, SENSOR_COMPLETION_CHANGE_SUMMARY),
+    "media_extraction": (SENSOR_MEDIA_ARTIFACT, SENSOR_COMPLETION_MEDIA_SUMMARY),
+    "operations": (SENSOR_OPS_AUDIT_TRACE, SENSOR_OPS_APPROVAL_BOUNDARY, SENSOR_COMPLETION_OPERATION_REPORT),
 }
 
 
