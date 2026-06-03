@@ -21,6 +21,16 @@ from .workflow_status import (
     is_workflow_unsuccessful_status,
 )
 
+IMPLEMENT_THEN_REVIEW_WORKFLOW_ID = "implement_then_review"
+RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
+BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID = "bugfix_then_test_then_review"
+REVIEW_WORKFLOW_IDS = frozenset(
+    {
+        IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
+        BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
+    }
+)
+
 
 @dataclass(frozen=True)
 class WorkflowStepSpec:
@@ -287,18 +297,18 @@ def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
 
 
 WORKFLOW_SPECS: dict[str, WorkflowSpec] = {
-    "implement_then_review": WorkflowSpec(
-        workflow_id="implement_then_review",
+    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: WorkflowSpec(
+        workflow_id=IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
         description="Run implementer first, then inspect the workspace with code-reviewer.",
         steps=_implement_review_steps(),
     ),
-    "research_then_outline": WorkflowSpec(
-        workflow_id="research_then_outline",
+    RESEARCH_THEN_OUTLINE_WORKFLOW_ID: WorkflowSpec(
+        workflow_id=RESEARCH_THEN_OUTLINE_WORKFLOW_ID,
         description="Gather research context first, then turn it into an outline.",
         steps=_research_outline_steps(),
     ),
-    "bugfix_then_test_then_review": WorkflowSpec(
-        workflow_id="bugfix_then_test_then_review",
+    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID: WorkflowSpec(
+        workflow_id=BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
         description="Fix the bug, add focused tests, then run a code review pass.",
         steps=_bugfix_test_review_steps(),
     ),

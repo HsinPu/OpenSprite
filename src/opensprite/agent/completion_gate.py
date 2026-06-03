@@ -63,6 +63,12 @@ from .workflow_status import (
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
 )
+from .workflows import (
+    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
+    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
+    RESEARCH_THEN_OUTLINE_WORKFLOW_ID,
+    REVIEW_WORKFLOW_IDS,
+)
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
@@ -121,18 +127,18 @@ _DELEGATED_REVIEW_EXACT_PATHS = frozenset(
 _ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
 _GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
 _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
-_REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
-_RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
+_REVIEW_WORKFLOW_IDS = REVIEW_WORKFLOW_IDS
+_RESEARCH_THEN_OUTLINE_WORKFLOW_ID = RESEARCH_THEN_OUTLINE_WORKFLOW_ID
 _WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
 _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = NEEDS_VERIFICATION_COMPLETION_STATUS
 _STRUCTURED_REVIEW_CLEAN_STATUS = STRUCTURED_SUBAGENT_OK_STATUS
 _WORKFLOW_FIX_STEPS = {
-    "implement_then_review": {
+    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
         "next_step_id": "implement",
         "next_step_label": "Implement",
         "next_step_prompt_type": "implementer",
     },
-    "bugfix_then_test_then_review": {
+    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID: {
         "next_step_id": "bugfix",
         "next_step_label": "Bug fix",
         "next_step_prompt_type": "bug-fixer",
