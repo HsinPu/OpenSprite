@@ -144,6 +144,53 @@ def test_verify_pytest_skips_when_no_tests_are_collected(tmp_path):
     assert not result.startswith("Error: Verification failed")
 
 
+def test_verify_pytest_returns_structured_error_when_tests_fail(tmp_path):
+    tool = VerifyTool(workspace=tmp_path)
+
+    async def fake_run_command(command, cwd, timeout):
+        return VerifyCommandResult(command=command, cwd=cwd, exit_code=1, output="1 failed")
+
+    tool._run_command = fake_run_command
+
+    result = asyncio.run(tool.execute(action="pytest"))
+    status = classify_tool_result_status(result)
+    verification = classify_verification_result(result)
+
+    assert status.ok is False
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "verification_failed"
+    assert "Verification failed: pytest" in status.error
+    assert "1 failed" in status.error
+    assert verification["status"] == "failed"
+    assert verification["name"] == "pytest"
+
+
+def test_verify_pytest_returns_structured_error_when_timed_out(tmp_path):
+    tool = VerifyTool(workspace=tmp_path)
+
+    async def fake_run_command(command, cwd, timeout):
+        return VerifyCommandResult(
+            command=command,
+            cwd=cwd,
+            exit_code=None,
+            output="Command timed out",
+            timed_out=True,
+        )
+
+    tool._run_command = fake_run_command
+
+    result = asyncio.run(tool.execute(action="pytest"))
+    status = classify_tool_result_status(result)
+    verification = classify_verification_result(result)
+
+    assert status.ok is False
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "verification_timed_out"
+    assert "Verification timed out: pytest" in status.error
+    assert verification["status"] == "timed_out"
+    assert verification["name"] == "pytest"
+
+
 def test_verify_web_build_uses_package_json_build_script(tmp_path):
     package_dir = tmp_path / "apps" / "web"
     package_dir.mkdir(parents=True)

@@ -89,6 +89,14 @@ def classify_verification_result(result: str) -> dict[str, Any]:
         if not status.ok and status.error:
             if status.category == "python_compile_failed":
                 return {"status": "failed", "ok": False, "attempted": True, "name": "python_compile"}
+            if status.category == "verification_timed_out":
+                first_error_line = status.error.splitlines()[0].strip()
+                name = first_error_line.removeprefix("Verification timed out:").strip() or None
+                return {"status": "timed_out", "ok": False, "attempted": True, "name": name}
+            if status.category == "verification_failed":
+                first_error_line = status.error.splitlines()[0].strip()
+                name = first_error_line.removeprefix("Verification failed:").strip() or None
+                return {"status": "failed", "ok": False, "attempted": True, "name": name}
             return {"status": "error", "ok": False, "attempted": True, "name": None}
 
     first_line = text.splitlines()[0].strip() if text else ""
@@ -473,22 +481,42 @@ class VerifyTool(Tool):
         command = _command_display(result.command)
         if status == "skipped":
             heading = f"Verification skipped: {name}"
-        elif result.timed_out:
-            heading = f"Error: Verification timed out: {name}"
-        elif result.exit_code:
-            heading = f"Error: Verification failed: {name}"
-        else:
-            heading = f"Verification passed: {name}"
+            return "\n".join(
+                [
+                    heading,
+                    f"Command: {command}",
+                    f"CWD: {cwd_display or '.'}",
+                    f"Exit code: {result.exit_code if result.exit_code is not None else '-'}",
+                    "Output:",
+                    result.output,
+                ]
+            )
+        if not result.timed_out and not result.exit_code:
+            return "\n".join(
+                [
+                    f"Verification passed: {name}",
+                    f"Command: {command}",
+                    f"CWD: {cwd_display or '.'}",
+                    f"Exit code: {result.exit_code if result.exit_code is not None else '-'}",
+                    "Output:",
+                    result.output,
+                ]
+            )
 
-        return "\n".join(
-            [
-                heading,
-                f"Command: {command}",
-                f"CWD: {cwd_display or '.'}",
-                f"Exit code: {result.exit_code if result.exit_code is not None else '-'}",
-                "Output:",
-                result.output,
-            ]
+        heading = f"Verification timed out: {name}" if result.timed_out else f"Verification failed: {name}"
+        category = "verification_timed_out" if result.timed_out else "verification_failed"
+        return _verify_error_result(
+            "\n".join(
+                [
+                    heading,
+                    f"Command: {command}",
+                    f"CWD: {cwd_display or '.'}",
+                    f"Exit code: {result.exit_code if result.exit_code is not None else '-'}",
+                    "Output:",
+                    result.output,
+                ]
+            ),
+            category=category,
         )
 
 
