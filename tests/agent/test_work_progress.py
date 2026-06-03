@@ -4,7 +4,7 @@ from opensprite.agent.harness_profile import HarnessProfile, HarnessProfileServi
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
-from opensprite.agent.work_progress import WorkProgressService, WorkProgressUpdate
+from opensprite.agent.work_progress import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
@@ -128,6 +128,7 @@ def test_work_progress_verification_targets_do_not_depend_on_done_criteria_marke
     state = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
 
     assert state is not None
+    assert metadata_is_work_progress_source(state.metadata)
     workboard = service.extract_workboard(state)
     assert workboard.verification_targets == (
         "relevant tests or checks pass, or the verification gap is stated",

@@ -50,7 +50,7 @@ from .web_source_policy import (
     is_web_source_artifact_kind,
 )
 from .workflow_status import WORKFLOW_FAILED_STATUS
-from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate
+from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from .worktree import WorktreeSandboxInspector
 
 
@@ -1679,7 +1679,7 @@ def _can_replace_initial_work_state(state: StoredWorkState | None) -> bool:
         return True
     metadata = state.metadata if isinstance(state.metadata, dict) else {}
     return (
-        metadata.get("source") == "work_progress"
+        metadata_is_work_progress_source(metadata)
         and not str(metadata.get("harness_profile") or "").strip()
         and not state.completed_steps
         and not state.blockers

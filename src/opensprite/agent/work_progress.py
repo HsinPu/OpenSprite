@@ -67,6 +67,8 @@ _PROGRESS_SIGNAL_VERIFICATION_ATTEMPTED = "verification_attempted"
 _PROGRESS_SIGNAL_VERIFICATION_PASSED = "verification_passed"
 _PROGRESS_SIGNAL_CONTEXT_COMPACTION = "context_compaction"
 _PROGRESS_SIGNAL_TOOL_ERROR = "tool_error"
+WORK_PROGRESS_METADATA_SOURCE_KEY = "source"
+WORK_PROGRESS_METADATA_SOURCE = "work_progress"
 WORK_STEP_NOT_SET = "not set"
 _REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
     {
@@ -87,6 +89,11 @@ def is_verification_work_progress(progress: Any) -> bool:
 def is_continue_work_progress(progress: Any) -> bool:
     """Return whether a structured progress update should resume regular work."""
     return str(getattr(progress, "next_action", "") or "").strip() == _NEXT_ACTION_CONTINUE_WORK
+
+
+def metadata_is_work_progress_source(metadata: dict[str, Any]) -> bool:
+    """Return whether metadata was created by the structured work-progress service."""
+    return str(metadata.get(WORK_PROGRESS_METADATA_SOURCE_KEY) or "").strip() == WORK_PROGRESS_METADATA_SOURCE
 
 
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
@@ -412,7 +419,7 @@ class WorkProgressService:
             verification_passed=False,
             last_next_action=_NEXT_ACTION_CONTINUE_WORK,
             metadata={
-                "source": "work_progress",
+                WORK_PROGRESS_METADATA_SOURCE_KEY: WORK_PROGRESS_METADATA_SOURCE,
                 "schema_version": 1,
                 "harness_profile": work_plan.harness_profile,
                 "verification_policy": work_plan.verification_policy,
