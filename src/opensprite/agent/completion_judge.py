@@ -32,6 +32,8 @@ COMPLETION_JUDGE_STATUSES = frozenset(
     }
 )
 _COMPLETION_JUDGE_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_STATUSES))
+COMPLETION_JUDGE_UNAVAILABLE_REASON = "completion judge unavailable"
+COMPLETION_JUDGE_LLM_NOT_CONFIGURED_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: llm not configured"
 
 COMPLETION_JUDGE_SYSTEM_PROMPT = """You are OpenSprite's completion judge.
 You receive structured facts about one agent turn. Decide whether the assistant
@@ -87,7 +89,7 @@ class CompletionJudgeService:
         facts: dict[str, Any],
     ) -> CompletionJudgeVerdict:
         if is_unconfigured_llm(provider, model):
-            raise CompletionJudgeError("completion judge unavailable: llm not configured")
+            raise CompletionJudgeError(COMPLETION_JUDGE_LLM_NOT_CONFIGURED_REASON)
         prompt = _build_judge_prompt(facts)
         response = await provider.chat(
             [

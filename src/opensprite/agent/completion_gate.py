@@ -12,6 +12,7 @@ from .execution import ExecutionResult
 from .completion_judge import (
     CompletionJudgeError,
     CompletionJudgeService,
+    COMPLETION_JUDGE_UNAVAILABLE_REASON,
     CompletionJudgeVerdict,
     build_completion_judge_facts,
 )
@@ -91,7 +92,6 @@ from .workflow_completion_policy import (
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
-COMPLETION_JUDGE_UNAVAILABLE_REASON = "completion judge unavailable"
 COMPLETION_JUDGE_MISSING_CONFIG_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: missing llm config"
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
