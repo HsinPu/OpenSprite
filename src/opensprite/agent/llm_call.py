@@ -13,7 +13,11 @@ from ..utils.log import logger
 from .active_task_status import has_current_active_task
 from .execution import ExecutionResult
 from .harness_policy import HarnessPolicy
-from .harness_profile import HarnessProfile
+from .harness_profile import (
+    HISTORY_RETRIEVAL_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP,
+    HarnessProfile,
+)
 from .task_contract import TaskContract
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
@@ -570,7 +574,10 @@ def _structured_retrieval_decision(task_context_decision: TaskContextDecision | 
         return None
     inherited_tool_group = str(task_context_decision.inherited_tool_group or "").strip()
     inherited_task_type = str(task_context_decision.inherited_task_type or "").strip()
-    return inherited_tool_group == "history_retrieval" or inherited_task_type == "history_retrieval"
+    return (
+        inherited_tool_group == HISTORY_RETRIEVAL_TOOL_GROUP
+        or inherited_task_type == HISTORY_RETRIEVAL_TASK_TYPE
+    )
 
 
 def _should_seed_active_task_for_contract(
