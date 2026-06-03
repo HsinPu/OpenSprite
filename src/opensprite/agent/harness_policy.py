@@ -9,6 +9,7 @@ from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPRO
 from ..tool_names import (
     BATCH_TOOL_NAME,
     LIST_RUN_FILE_CHANGES_TOOL_NAME,
+    MEDIA_TOOL_NAMES,
     PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
     READ_SKILL_TOOL_NAME,
 )
@@ -29,7 +30,7 @@ _READ_ONLY_TOOLS = (
     BATCH_TOOL_NAME,
 )
 _WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, *WEB_HARNESS_RESEARCH_TOOLS)
-_MEDIA_TOOLS = (*_READ_ONLY_TOOLS, "analyze_image", "ocr_image", "transcribe_audio", "analyze_video", "send_media")
+_MEDIA_TOOLS = (*_READ_ONLY_TOOLS, *MEDIA_TOOL_NAMES)
 _CHAT_RISKS = ("read",)
 _RESEARCH_RISKS = ("read", "network")
 _MEDIA_RISKS = ("read", "network", "external_side_effect")

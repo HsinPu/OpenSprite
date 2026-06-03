@@ -18,10 +18,15 @@ from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
 from ..tool_names import (
+    ANALYZE_IMAGE_TOOL_NAME,
+    ANALYZE_VIDEO_TOOL_NAME,
+    MEDIA_ANALYSIS_TOOL_NAMES,
+    OCR_IMAGE_TOOL_NAME,
     EXEC_TOOL_NAME,
     EXECUTION_TOOL_NAMES,
     LIST_RUN_FILE_CHANGES_TOOL_NAME,
     PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    TRANSCRIBE_AUDIO_TOOL_NAME,
     WORKSPACE_DISCOVERY_TOOL_NAMES,
     WORKSPACE_WRITE_TOOL_NAMES,
 )
@@ -33,13 +38,13 @@ OPERATION_TOOL_GROUPS = frozenset({EXECUTION_TOOL_GROUP, SCHEDULING_TOOL_GROUP})
 WORKSPACE_DISCOVERY_TOOLS = WORKSPACE_DISCOVERY_TOOL_NAMES
 
 TOOL_GROUPS: dict[str, frozenset[str]] = {
-    "image_text": frozenset({"ocr_image", "analyze_image"}),
-    "image_understanding": frozenset({"analyze_image"}),
-    "audio_text": frozenset({"transcribe_audio"}),
+    "image_text": frozenset({OCR_IMAGE_TOOL_NAME, ANALYZE_IMAGE_TOOL_NAME}),
+    "image_understanding": frozenset({ANALYZE_IMAGE_TOOL_NAME}),
+    "audio_text": frozenset({TRANSCRIBE_AUDIO_TOOL_NAME}),
     EXECUTION_TOOL_GROUP: EXECUTION_TOOL_NAMES,
-    "media": frozenset({"analyze_image", "ocr_image", "transcribe_audio", "analyze_video"}),
+    "media": MEDIA_ANALYSIS_TOOL_NAMES,
     SCHEDULING_TOOL_GROUP: frozenset({"cron"}),
-    "video_understanding": frozenset({"analyze_video"}),
+    "video_understanding": frozenset({ANALYZE_VIDEO_TOOL_NAME}),
     WEB_RESEARCH_TOOL_GROUP: WEB_SOURCE_ARTIFACT_TOOLS,
     HISTORY_RETRIEVAL_TOOL_GROUP: frozenset({HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME}),
     WORKSPACE_READ_TOOL_GROUP: frozenset(

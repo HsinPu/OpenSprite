@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..tool_names import (
+    ANALYZE_IMAGE_TOOL_NAME,
+    ANALYZE_VIDEO_TOOL_NAME,
+    EXEC_TOOL_NAME,
+    OCR_IMAGE_TOOL_NAME,
+    TRANSCRIBE_AUDIO_TOOL_NAME,
+)
 from ..tools.evidence import ToolEvidence
 from .web_source_policy import (
     WEB_SOURCE_ARTIFACT_KIND,
@@ -15,13 +22,13 @@ from .verification_policy import VERIFICATION_RESULT_ARTIFACT_KIND, VERIFICATION
 
 
 _TOOL_ARTIFACT_KINDS: dict[str, str] = {
-    "ocr_image": "image_text",
-    "analyze_image": "image_analysis",
-    "transcribe_audio": "audio_transcript",
-    "analyze_video": "video_analysis",
+    OCR_IMAGE_TOOL_NAME: "image_text",
+    ANALYZE_IMAGE_TOOL_NAME: "image_analysis",
+    TRANSCRIBE_AUDIO_TOOL_NAME: "audio_transcript",
+    ANALYZE_VIDEO_TOOL_NAME: "video_analysis",
     **{tool_name: WEB_SOURCE_ARTIFACT_KIND for tool_name in WEB_SOURCE_ARTIFACT_TOOLS},
     VERIFICATION_TOOL_NAME: VERIFICATION_RESULT_ARTIFACT_KIND,
-    "exec": "command_result",
+    EXEC_TOOL_NAME: "command_result",
 }
 
 

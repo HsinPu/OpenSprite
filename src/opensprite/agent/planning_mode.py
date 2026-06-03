@@ -9,14 +9,18 @@ from .harness_profile import PLANNING_TASK_TYPE
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 from ..tool_names import (
+    ANALYZE_IMAGE_TOOL_NAME,
+    ANALYZE_VIDEO_TOOL_NAME,
     BATCH_TOOL_NAME,
     GLOB_FILES_TOOL_NAME,
     GREP_FILES_TOOL_NAME,
     LIST_RUN_FILE_CHANGES_TOOL_NAME,
     LIST_DIR_TOOL_NAME,
+    OCR_IMAGE_TOOL_NAME,
     PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
     READ_FILE_TOOL_NAME,
     READ_SKILL_TOOL_NAME,
+    TRANSCRIBE_AUDIO_TOOL_NAME,
 )
 
 if TYPE_CHECKING:
@@ -36,10 +40,10 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         LIST_RUN_FILE_CHANGES_TOOL_NAME,
         PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
         *WEB_SOURCE_EVIDENCE_TOOLS,
-        "analyze_image",
-        "ocr_image",
-        "transcribe_audio",
-        "analyze_video",
+        ANALYZE_IMAGE_TOOL_NAME,
+        OCR_IMAGE_TOOL_NAME,
+        TRANSCRIBE_AUDIO_TOOL_NAME,
+        ANALYZE_VIDEO_TOOL_NAME,
     }
 )
 
