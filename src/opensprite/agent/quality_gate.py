@@ -32,6 +32,7 @@ from .web_source_policy import (
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
 )
+from .workspace_grounding_policy import contains_workspace_location_clue
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
@@ -467,7 +468,10 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     requires_location = any(
         is_workspace_location_criterion(criterion) for criterion in contract.acceptance_criteria
     )
-    if requires_location and not _contains_workspace_location_clue(normalized_response):
+    if requires_location and not contains_workspace_location_clue(
+        normalized_response,
+        has_workspace_path=bool(_workspace_paths(normalized_response)),
+    ):
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
@@ -698,16 +702,6 @@ def _path_referenced(path: str, normalized_response: str) -> bool:
         return True
     filename = normalized_path.rsplit("/", 1)[-1]
     return bool(filename and filename in normalized_response)
-
-
-def _contains_workspace_location_clue(normalized_response: str) -> bool:
-    if _workspace_paths(normalized_response):
-        return True
-    if re.search(r"\b(?:function|class|method|symbol)\s+[`'\"]?[\w.:-]+", normalized_response):
-        return True
-    if re.search(r"[`'\"][\w.:-]+[`'\"]", normalized_response):
-        return True
-    return False
 
 
 def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
