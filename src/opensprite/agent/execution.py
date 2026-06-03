@@ -28,6 +28,12 @@ from .run_state import RunCancelledError
 from .context_compaction_policy import (
     COMPACTED_CONVERSATION_STATE_HEADING,
     COMPACTED_TASK_STATE_HEADING,
+    LLM_COMPACTION_CONFIG_MISSING_REASON,
+    LLM_COMPACTION_EMPTY_REASON,
+    LLM_COMPACTION_ERROR_REASON,
+    LLM_COMPACTION_NO_BODY_REASON,
+    LLM_COMPACTION_NO_PROMPT_REASON,
+    LLM_COMPACTION_TOO_LARGE_REASON,
     contains_compaction_handoff,
 )
 from .task_artifact import TaskArtifact, build_task_artifact
@@ -739,7 +745,7 @@ Output exactly these sections when applicable:
                         tool_schema_tokens=tool_schema_tokens,
                         strategy="llm",
                     )
-                llm_fallback_reason = "llm_too_large"
+                llm_fallback_reason = LLM_COMPACTION_TOO_LARGE_REASON
                 logger.warning(
                     f"[{log_id}] llm.context-compact.llm-too-large | "
                     f"estimated_tokens={estimated_tokens} compacted_tokens={compacted_tokens} fallback=deterministic"
@@ -930,12 +936,12 @@ Output exactly these sections when applicable:
     ) -> _LlmCompactionAttempt:
         compaction_llm = self.context_compaction_llm
         if compaction_llm is None:
-            return _LlmCompactionAttempt(fallback_reason="llm_config_missing")
+            return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_CONFIG_MISSING_REASON)
 
         active_provider = provider or self.provider
         leading_system, body = self._split_leading_system_messages(chat_messages)
         if not body:
-            return _LlmCompactionAttempt(fallback_reason="no_body")
+            return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_NO_BODY_REASON)
 
         compaction_messages = self._build_llm_compaction_prompt(
             chat_messages,
@@ -943,7 +949,7 @@ Output exactly these sections when applicable:
             work_state_summary=work_state_summary,
         )
         if compaction_messages is None:
-            return _LlmCompactionAttempt(fallback_reason="no_prompt")
+            return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_NO_PROMPT_REASON)
 
         _, tail = self._split_compaction_head_and_tail(body)
 
@@ -960,12 +966,12 @@ Output exactly these sections when applicable:
                 f"[{log_id}] llm.context-compact.llm-error | fallback=deterministic "
                 f"error={error_preview}"
             )
-            return _LlmCompactionAttempt(fallback_reason="llm_error", error=error_preview)
+            return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_ERROR_REASON, error=error_preview)
 
         summary = self.sanitize_response_content(response.content or "").strip()
         if not summary:
             logger.warning(f"[{log_id}] llm.context-compact.llm-empty | fallback=deterministic")
-            return _LlmCompactionAttempt(fallback_reason="llm_empty")
+            return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_EMPTY_REASON)
 
         summary_sections = [
             COMPACTED_CONVERSATION_STATE_HEADING,

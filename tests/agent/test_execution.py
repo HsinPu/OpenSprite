@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
+from opensprite.agent.context_compaction_policy import LLM_COMPACTION_EMPTY_REASON
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
 from opensprite.agent.task_artifact import TaskArtifact
@@ -2193,7 +2194,7 @@ def test_execution_falls_back_when_llm_compactor_returns_empty():
     assert event.trigger == "proactive"
     assert event.strategy == "deterministic"
     assert event.outcome == "fallback"
-    assert event.fallback_reason == "llm_empty"
+    assert event.fallback_reason == LLM_COMPACTION_EMPTY_REASON
     assert len(provider.calls) == 2
     sent_messages = provider.calls[1]["messages"]
     assert "approaching the configured context budget" in sent_messages[1].content
