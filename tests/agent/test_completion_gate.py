@@ -60,6 +60,7 @@ from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
+    PLANNER_INVALID_JSON_REASON,
     TaskContract,
     _contract_from_planner_payload,
 )
@@ -188,7 +189,7 @@ def test_completion_gate_blocks_unvalidated_task_contract():
         contract_sources=("llm_planner",),
         planner_metadata={
             "planner_status": "invalid",
-            "reason": "task contract planner returned invalid JSON",
+            "reason": PLANNER_INVALID_JSON_REASON,
         },
     )
 
@@ -200,7 +201,7 @@ def test_completion_gate_blocks_unvalidated_task_contract():
 
     assert result.status == "blocked"
     assert result.reason == "task contract planner did not produce a validated contract"
-    assert result.active_task_detail == "task contract planner returned invalid JSON"
+    assert result.active_task_detail == PLANNER_INVALID_JSON_REASON
 
 
 def test_completion_gate_status_helpers_normalize_policy_values():
