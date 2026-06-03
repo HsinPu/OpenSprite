@@ -104,6 +104,7 @@ from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner, CompletionBlockerMessages, SourceFallbackMessages
 from .verification_policy import VERIFICATION_TOOL_NAME
+from .workflow_status import WORKFLOW_FAILED_STATUS
 from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -435,7 +436,7 @@ class AgentLoop:
                 str(task.error or "").strip()
                 if str(task.error or "").strip()
                 else ""
-                if str(task.status or "").strip() and str(task.status or "").strip() != "failed"
+                if str(task.status or "").strip() and str(task.status or "").strip() != WORKFLOW_FAILED_STATUS
                 else previous.error if previous is not None else ""
             ),
             child_session_id=task.child_session_id or (previous.child_session_id if previous is not None else None),

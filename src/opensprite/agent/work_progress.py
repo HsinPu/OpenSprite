@@ -44,6 +44,7 @@ from .task_context_policy import (
 )
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
+from .workflow_status import WORKFLOW_FAILED_STATUS
 
 
 _DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
@@ -110,7 +111,7 @@ def _merge_delegated_tasks(
                 update.error
                 if update.error
                 else ""
-                if update.status and update.status != "failed"
+                if update.status and update.status != WORKFLOW_FAILED_STATUS
                 else previous.error if previous is not None else ""
             ),
             child_session_id=(
