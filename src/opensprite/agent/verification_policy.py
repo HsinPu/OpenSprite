@@ -8,6 +8,7 @@ VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
 SKIPPED_VERIFICATION_STATUS = "skipped"
 REQUIRED_VERIFICATION_FAILED_REASON = "required verification did not pass"
 REQUIRED_VERIFICATION_NOT_RECORDED_REASON = "required verification was not recorded"
+VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON = "verification outcome or gap was not reported"
 
 
 def is_verification_tool_name(tool_name: str | None) -> bool:

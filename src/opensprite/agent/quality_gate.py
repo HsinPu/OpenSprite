@@ -49,6 +49,7 @@ from .response_shape_policy import (
     response_item_count,
 )
 from .tool_result_grounding_policy import response_reports_tool_result_preview
+from .verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
 from .web_source_policy import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
@@ -323,7 +324,7 @@ def _evaluate_verification_or_gap(
     return QualityGateResult(
         passed=False,
         status=NEEDS_VERIFICATION_COMPLETION_STATUS,
-        reason="verification outcome or gap was not reported",
+        reason=VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON,
         active_task_detail=getattr(criterion, "description", "") or None,
     )
 

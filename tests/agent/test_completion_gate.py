@@ -70,6 +70,7 @@ from opensprite.agent.task_contract import (
     TaskContract,
     _contract_from_planner_payload,
 )
+from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
@@ -3511,7 +3512,7 @@ def test_quality_gate_requires_recorded_verification_attempt_after_code_changes(
 
     assert missing_gap.passed is False
     assert missing_gap.status == "needs_verification"
-    assert missing_gap.reason == "verification outcome or gap was not reported"
+    assert missing_gap.reason == VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
     assert reported_gap_without_artifact.passed is False
     assert recorded_gap.passed is True
 
