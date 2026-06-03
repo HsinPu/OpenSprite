@@ -45,6 +45,20 @@ from .task_context_policy import (
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .workflow_status import is_workflow_failed_status
+from .work_progress_action_policy import (
+    NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
+    NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
+    NEXT_ACTION_CONTINUE_REVIEW,
+    NEXT_ACTION_CONTINUE_VERIFICATION,
+    NEXT_ACTION_CONTINUE_WORK,
+    NEXT_ACTION_FINALIZE,
+    NEXT_ACTION_STOP_BUDGET_EXHAUSTED,
+    NEXT_ACTION_STOP_NO_PROGRESS,
+    is_continue_work_next_action,
+    is_review_follow_up_next_action,
+    is_review_phase_next_action,
+    is_verification_next_action,
+)
 
 
 _DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
@@ -53,14 +67,14 @@ _WORK_STATE_DONE_STATUS = "done"
 _WORK_PROGRESS_VERIFYING_STATUS = "verifying"
 _WORK_PROGRESS_REVIEWING_STATUS = "reviewing"
 _WORK_PROGRESS_WORKING_STATUS = "working"
-_NEXT_ACTION_FINALIZE = "finalize"
-_NEXT_ACTION_STOP_BUDGET_EXHAUSTED = "stop_budget_exhausted"
-_NEXT_ACTION_STOP_NO_PROGRESS = "stop_no_progress"
-_NEXT_ACTION_CONTINUE_VERIFICATION = "continue_verification"
-_NEXT_ACTION_COLLECT_REVIEW_EVIDENCE = "collect_review_evidence"
-_NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = "address_review_findings"
-_NEXT_ACTION_CONTINUE_REVIEW = "continue_review"
-_NEXT_ACTION_CONTINUE_WORK = "continue_work"
+_NEXT_ACTION_FINALIZE = NEXT_ACTION_FINALIZE
+_NEXT_ACTION_STOP_BUDGET_EXHAUSTED = NEXT_ACTION_STOP_BUDGET_EXHAUSTED
+_NEXT_ACTION_STOP_NO_PROGRESS = NEXT_ACTION_STOP_NO_PROGRESS
+_NEXT_ACTION_CONTINUE_VERIFICATION = NEXT_ACTION_CONTINUE_VERIFICATION
+_NEXT_ACTION_COLLECT_REVIEW_EVIDENCE = NEXT_ACTION_COLLECT_REVIEW_EVIDENCE
+_NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = NEXT_ACTION_ADDRESS_REVIEW_FINDINGS
+_NEXT_ACTION_CONTINUE_REVIEW = NEXT_ACTION_CONTINUE_REVIEW
+_NEXT_ACTION_CONTINUE_WORK = NEXT_ACTION_CONTINUE_WORK
 _PROGRESS_SIGNAL_TOOL_CALLS = "tool_calls"
 _PROGRESS_SIGNAL_FILE_CHANGES = "file_changes"
 _PROGRESS_SIGNAL_VERIFICATION_ATTEMPTED = "verification_attempted"
@@ -71,25 +85,17 @@ WORK_PROGRESS_METADATA_SOURCE_KEY = "source"
 WORK_PROGRESS_METADATA_SOURCE = "work_progress"
 WORK_PROGRESS_ACTIVE_TASK_EVENT_TYPE = "work_progress"
 WORK_STEP_NOT_SET = "not set"
-_REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
-    {
-        _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
-        _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
-    }
-)
-
-
 def is_verification_work_progress(progress: Any) -> bool:
     """Return whether a structured progress update is in the verification phase."""
     return (
-        str(getattr(progress, "next_action", "") or "").strip() == _NEXT_ACTION_CONTINUE_VERIFICATION
+        is_verification_next_action(getattr(progress, "next_action", None))
         or str(getattr(progress, "status", "") or "").strip() == _WORK_PROGRESS_VERIFYING_STATUS
     )
 
 
 def is_continue_work_progress(progress: Any) -> bool:
     """Return whether a structured progress update should resume regular work."""
-    return str(getattr(progress, "next_action", "") or "").strip() == _NEXT_ACTION_CONTINUE_WORK
+    return is_continue_work_next_action(getattr(progress, "next_action", None))
 
 
 def metadata_is_work_progress_source(metadata: dict[str, Any]) -> bool:
@@ -932,7 +938,7 @@ def _follow_up_pending_step(completion_result: CompletionGateResult, next_action
         return ""
     if is_incomplete_completion_status(completion_result.status):
         return detail
-    if next_action in _REVIEW_FOLLOW_UP_NEXT_ACTIONS:
+    if is_review_follow_up_next_action(next_action):
         return detail
     return ""
 
@@ -1023,11 +1029,7 @@ def _state_steps(
         return current, WORK_STEP_NOT_SET
     if progress.next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
         return _verification_step(steps, expects_code_change=expects_code_change), WORK_STEP_NOT_SET
-    if progress.next_action in (
-        _NEXT_ACTION_CONTINUE_REVIEW,
-        _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
-        _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
-    ):
+    if is_review_phase_next_action(progress.next_action):
         return (steps[-1] if steps else WORK_STEP_NOT_SET), WORK_STEP_NOT_SET
     if expects_code_change and progress.file_change_count <= 0 and len(steps) >= 2:
         next_step = steps[2] if len(steps) > 2 else WORK_STEP_NOT_SET
