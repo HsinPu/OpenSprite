@@ -134,11 +134,15 @@ def test_exec_timeout_returns_partial_output(tmp_path):
     )
 
     result = asyncio.run(tool.execute(command=command))
+    status = classify_tool_result_status(result)
 
-    assert "Error: Command timed out after 1s." in result
-    assert "interactive input" in result
-    assert "Partial output before timeout:" in result
-    assert "waiting for input..." in result
+    assert status.ok is False
+    assert status.error_type == "ToolExecutionError"
+    assert status.category == "timeout"
+    assert "Command timed out after 1s." in status.error
+    assert "interactive input" in status.error
+    assert "Partial output before timeout:" in status.error
+    assert "waiting for input..." in status.error
 
 
 def test_registry_rejects_blank_read_file_path_before_execution():

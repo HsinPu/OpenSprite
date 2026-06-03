@@ -550,10 +550,16 @@ def _build_timeout_result(timeout: int, output: str, *, drained: bool) -> str:
             "a descendant process may still have inherited stdout/stderr."
         )
 
-    return (
-        f"Error: Command timed out after {timeout}s. "
-        "The command may be waiting for interactive input or may be stuck. "
-        f"Partial output before timeout:\n{output}"
+    return tool_error_result(
+        (
+            f"Command timed out after {timeout}s. "
+            "The command may be waiting for interactive input or may be stuck. "
+            f"Partial output before timeout:\n{output}"
+        ),
+        error_type="ToolExecutionError",
+        category="timeout",
+        repeated_error_key=f"exec:timeout:{timeout}",
+        metadata={"tool_name": "exec", "timeout_seconds": timeout},
     )
 
 

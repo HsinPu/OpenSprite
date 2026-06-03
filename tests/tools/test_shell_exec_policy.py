@@ -375,9 +375,13 @@ def test_exec_timeout_terminates_descendant_processes(tmp_path):
 
     tool = ExecTool(workspace=Path(tmp_path), timeout=1)
     result = asyncio.run(tool.execute(command=_python_shell_command(parent_code)))
+    status = classify_tool_result_status(result)
 
-    assert "Error: Command timed out after 1s." in result
-    assert "parent started" in result
+    assert status.ok is False
+    assert status.error_type == "ToolExecutionError"
+    assert status.category == "timeout"
+    assert "Command timed out after 1s." in status.error
+    assert "parent started" in status.error
 
     deadline = time.time() + 3
     while time.time() < deadline:
@@ -423,10 +427,14 @@ def test_exec_warns_when_output_readers_linger_after_process_exit(tmp_path, monk
 
 def test_build_timeout_result_appends_pipe_warning_when_not_drained():
     result = _build_timeout_result(3, "partial output", drained=False)
+    status = classify_tool_result_status(result)
 
-    assert "Error: Command timed out after 3s." in result
-    assert "Partial output before timeout:\npartial output" in result
-    assert "output pipes did not close promptly after timeout" in result
+    assert status.ok is False
+    assert status.error_type == "ToolExecutionError"
+    assert status.category == "timeout"
+    assert "Command timed out after 3s." in status.error
+    assert "Partial output before timeout:\npartial output" in status.error
+    assert "output pipes did not close promptly after timeout" in status.error
 
 
 def test_build_pipe_drain_warning_result_mentions_timeout_window():
