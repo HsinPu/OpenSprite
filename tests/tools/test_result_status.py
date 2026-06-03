@@ -122,3 +122,10 @@ def test_tool_result_status_keeps_incidental_failure_words_successful():
 
     assert status.ok is True
     assert status.error_metadata() == {}
+
+
+def test_tool_result_status_does_not_treat_error_prefix_as_status_marker():
+    status = classify_tool_result_status("Error: this may be quoted user-facing text")
+
+    assert status.ok is True
+    assert status.error_metadata() == {}

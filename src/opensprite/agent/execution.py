@@ -414,10 +414,12 @@ Output exactly these sections when applicable:
         if len(text) <= cls.EXEC_RESULT_MAX_CHARS:
             return text
 
-        lines = [line for line in text.splitlines() if line.strip()]
+        status = classify_tool_result_status(text)
+        summary_text = status.error if not status.ok and status.error else text
+        lines = [line for line in summary_text.splitlines() if line.strip()]
         first_lines = lines[:6]
         stderr_lines = [line for line in lines if "[stderr]" in line][:4]
-        error_lines = cls._tool_error_highlight_lines(lines)
+        error_lines = lines[:2] if not status.ok and status.error else cls._tool_error_highlight_lines(lines)
         tail_lines = lines[-8:]
 
         summary_parts: list[str] = [
@@ -425,7 +427,7 @@ Output exactly these sections when applicable:
         ]
         if error_lines:
             summary_parts.extend(["Timeout/Error summary:", *error_lines])
-        elif not classify_tool_result_status(text).ok:
+        elif not status.ok and lines:
             summary_parts.extend(["Error summary:", lines[0]])
 
         if stderr_lines:
@@ -468,10 +470,12 @@ Output exactly these sections when applicable:
         if len(text) <= self.exec_result_max_chars:
             return text
 
-        lines = [line for line in text.splitlines() if line.strip()]
+        status = classify_tool_result_status(text)
+        summary_text = status.error if not status.ok and status.error else text
+        lines = [line for line in summary_text.splitlines() if line.strip()]
         first_lines = lines[:6]
         stderr_lines = [line for line in lines if "[stderr]" in line][:4]
-        error_lines = self._tool_error_highlight_lines(lines)
+        error_lines = lines[:2] if not status.ok and status.error else self._tool_error_highlight_lines(lines)
         tail_lines = lines[-8:]
 
         summary_parts: list[str] = [
@@ -479,7 +483,7 @@ Output exactly these sections when applicable:
         ]
         if error_lines:
             summary_parts.extend(["Timeout/Error summary:", *error_lines])
-        elif not classify_tool_result_status(text).ok:
+        elif not status.ok and lines:
             summary_parts.extend(["Error summary:", lines[0]])
 
         if stderr_lines:

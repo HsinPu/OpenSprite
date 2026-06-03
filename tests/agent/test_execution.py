@@ -16,6 +16,7 @@ from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.image import AnalyzeImageTool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import tool_error_result
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool, _format_results
 
@@ -81,7 +82,12 @@ class FailingTool(Tool):
 
     async def _execute(self, value: str, **kwargs) -> str:
         self.calls += 1
-        return "Error: still broken"
+        return tool_error_result(
+            "still broken",
+            error_type="ToolExecutionError",
+            category="test_failure",
+            metadata={"tool_name": self.name},
+        )
 
 
 class TaskUpdateLikeTool(Tool):
@@ -1772,12 +1778,17 @@ def test_execution_engine_uses_configured_tool_result_context_limit():
 
 
 def test_exec_tool_result_slimming_keeps_timeout_and_stderr_highlights():
-    result = (
-        "Error: Command timed out after 60s. The command may be waiting for interactive input or may be stuck.\n"
-        "Partial output before timeout:\n"
-        + ("line\n" * 400)
-        + "[stderr] npm ERR! missing script: build\n"
-        + "final line\n"
+    result = tool_error_result(
+        (
+            "Command timed out after 60s. The command may be waiting for interactive input or may be stuck.\n"
+            "Partial output before timeout:\n"
+            + ("line\n" * 400)
+            + "[stderr] npm ERR! missing script: build\n"
+            + "final line\n"
+        ),
+        error_type="ToolExecutionError",
+        category="timeout",
+        metadata={"tool_name": "exec"},
     )
 
     summary = ExecutionEngine._summarize_tool_result_for_context("exec", result)

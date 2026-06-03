@@ -89,9 +89,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
             )
         return ToolResultStatus(ok=not forced_error)
 
-    if stripped.startswith("Error:"):
-        return _failed_status(stripped.removeprefix("Error:").strip(), error_type="ToolError", fallback=stripped)
-
     lowered = stripped.lower()
     if lowered.startswith("(mcp tool call failed") or lowered.startswith("(mcp tool call timed out"):
         return _failed_status(stripped, error_type="McpToolError", fallback=stripped)

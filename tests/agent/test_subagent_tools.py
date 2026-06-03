@@ -14,7 +14,7 @@ from opensprite.storage import MemoryStorage
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.result_status import classify_tool_result_status
+from opensprite.tools.result_status import classify_tool_result_status, tool_error_result
 
 
 class FakeContextBuilder:
@@ -36,7 +36,17 @@ class FakeContextBuilder:
 
 
 def test_subagent_preparation_error_detail_uses_shared_result_status():
-    assert _subagent_preparation_error_detail("Error: prompt_type is required") == "prompt_type is required"
+    assert (
+        _subagent_preparation_error_detail(
+            tool_error_result(
+                "prompt_type is required",
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                metadata={"tool_name": "delegate"},
+            )
+        )
+        == "prompt_type is required"
+    )
     assert _subagent_preparation_error_detail(json.dumps({"ok": False, "error": "bad prompt"})) == "bad prompt"
     assert (
         _subagent_preparation_error_detail(
