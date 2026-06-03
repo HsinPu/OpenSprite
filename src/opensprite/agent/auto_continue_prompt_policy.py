@@ -28,3 +28,10 @@ def terse_final_answer_follow_up_instruction() -> str:
         "Do not reply with only 'done', 'completed', or another short acknowledgement. "
         "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
     )
+
+
+def missing_tool_evidence_follow_up_instruction() -> str:
+    return (
+        "\n- Evidence follow-up: required tool evidence is missing. "
+        "Call the appropriate tools for the requested resources or external information before giving the final answer."
+    )

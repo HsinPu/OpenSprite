@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .auto_continue_prompt_policy import existing_web_source_section, terse_final_answer_follow_up_instruction
+from .auto_continue_prompt_policy import (
+    existing_web_source_section,
+    missing_tool_evidence_follow_up_instruction,
+    terse_final_answer_follow_up_instruction,
+)
 from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
@@ -630,15 +634,9 @@ def _quality_follow_up_instruction(
             "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
         )
     if completion_result.missing_evidence:
-        return (
-            "\n- Evidence follow-up: required tool evidence is missing. "
-            "Call the appropriate tools for the requested resources or external information before giving the final answer."
-        )
+        return missing_tool_evidence_follow_up_instruction()
     if execution_result is not None and _task_contract_requires_evidence(execution_result):
-        return (
-            "\n- Evidence follow-up: required tool evidence is missing. "
-            "Call the appropriate tools for the requested resources or external information before giving the final answer."
-        )
+        return missing_tool_evidence_follow_up_instruction()
     return ""
 
 

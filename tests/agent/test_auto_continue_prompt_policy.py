@@ -1,5 +1,6 @@
 from opensprite.agent.auto_continue_prompt_policy import (
     existing_web_source_section,
+    missing_tool_evidence_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
 )
 
@@ -30,3 +31,10 @@ def test_terse_final_answer_follow_up_instruction_requires_substantive_answer():
     assert "previous final answer was too terse" in instruction
     assert "Do not reply with only 'done'" in instruction
     assert "substantive final answer" in instruction
+
+
+def test_missing_tool_evidence_follow_up_instruction_requests_tools():
+    instruction = missing_tool_evidence_follow_up_instruction()
+
+    assert "required tool evidence is missing" in instruction
+    assert "Call the appropriate tools" in instruction
