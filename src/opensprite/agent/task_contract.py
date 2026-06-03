@@ -486,83 +486,13 @@ def _contract_from_planner_payload(
     selected: list[ResourceRef] = []
 
     for tool_group in tool_groups:
-        if tool_group == "web_research":
-            _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
-        elif tool_group == "workspace_read":
-            _append_workspace_contract(requirements, acceptance_criteria)
-        elif tool_group == "workspace_write":
-            _append_workspace_contract(requirements, acceptance_criteria)
-            if not _has_requirement(requirements, kind="file_change"):
-                requirements.append(
-                    EvidenceRequirement(
-                        kind="file_change",
-                        min_count=1,
-                        description="Record at least one workspace file change.",
-                    )
-                )
-            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
-        elif tool_group == "media":
-            image_resources = resource_index.by_kind("image")
-            audio_resources = resource_index.by_kind("audio")
-            video_resources = resource_index.by_kind("video")
-            selected.extend(image_resources + audio_resources + video_resources)
-            if image_resources:
-                requirements.append(
-                    EvidenceRequirement(
-                        kind="resource_coverage",
-                        tool_group="image_text",
-                        resource_ids=tuple(item.id for item in image_resources),
-                        coverage="all",
-                        min_count=len(image_resources),
-                        description="Inspect each referenced image before finalizing the answer.",
-                    )
-                )
-            if audio_resources:
-                requirements.append(
-                    EvidenceRequirement(
-                        kind="resource_coverage",
-                        tool_group="audio_text",
-                        resource_ids=tuple(item.id for item in audio_resources),
-                        coverage="all",
-                        min_count=len(audio_resources),
-                        description="Transcribe each referenced audio clip before finalizing the answer.",
-                    )
-                )
-            if video_resources:
-                requirements.append(
-                    EvidenceRequirement(
-                        kind="resource_coverage",
-                        tool_group="video_understanding",
-                        resource_ids=tuple(item.id for item in video_resources),
-                        coverage="all",
-                        min_count=len(video_resources),
-                        description="Analyze each referenced video before finalizing the answer.",
-                    )
-                )
-            if not (image_resources or audio_resources or video_resources):
-                requirements.append(_tool_group_requirement("media"))
-            acceptance_criteria = _append_acceptance_criteria(
-                acceptance_criteria,
-                (_media_artifact_criterion(), _media_final_answer_criterion()),
-            )
-        elif tool_group == "history_retrieval":
-            requirements.append(_tool_group_requirement("history_retrieval"))
-            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
-        elif tool_group == "scheduling":
-            requirements.append(_tool_group_requirement("scheduling"))
-            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
-        elif tool_group == "execution":
-            requirements.append(_tool_group_requirement("execution"))
-            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
-        elif tool_group == "verification":
-            requirements.append(
-                EvidenceRequirement(
-                    kind="verification",
-                    tool_group="verification",
-                    min_count=1,
-                    description="Record verification evidence before finalizing.",
-                )
-            )
+        acceptance_criteria = _append_tool_group_contract(
+            tool_group,
+            requirements=requirements,
+            acceptance_criteria=acceptance_criteria,
+            resource_index=resource_index,
+            selected=selected,
+        )
 
     if "workspace_location" in quality_checks:
         acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_workspace_location_criterion(),))
@@ -613,6 +543,108 @@ def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> Non
     for tool_group in _TASK_TYPE_REQUIRED_TOOL_GROUPS.get(task_type, ()):
         if tool_group not in tool_groups:
             tool_groups.append(tool_group)
+
+
+def _append_tool_group_contract(
+    tool_group: str,
+    *,
+    requirements: list[EvidenceRequirement],
+    acceptance_criteria: list[AcceptanceCriterion],
+    resource_index: ResourceIndex,
+    selected: list[ResourceRef],
+) -> list[AcceptanceCriterion]:
+    if tool_group == "web_research":
+        _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
+        return acceptance_criteria
+    if tool_group == "workspace_read":
+        _append_workspace_contract(requirements, acceptance_criteria)
+        return acceptance_criteria
+    if tool_group == "workspace_write":
+        _append_workspace_contract(requirements, acceptance_criteria)
+        if not _has_requirement(requirements, kind="file_change"):
+            requirements.append(
+                EvidenceRequirement(
+                    kind="file_change",
+                    min_count=1,
+                    description="Record at least one workspace file change.",
+                )
+            )
+        return _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
+    if tool_group == "media":
+        return _append_media_contract(
+            requirements,
+            acceptance_criteria,
+            resource_index=resource_index,
+            selected=selected,
+        )
+    if tool_group == "history_retrieval":
+        requirements.append(_tool_group_requirement("history_retrieval"))
+        return _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
+    if tool_group in {"scheduling", "execution"}:
+        requirements.append(_tool_group_requirement(tool_group))
+        return _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
+    if tool_group == "verification":
+        requirements.append(
+            EvidenceRequirement(
+                kind="verification",
+                tool_group="verification",
+                min_count=1,
+                description="Record verification evidence before finalizing.",
+            )
+        )
+    return acceptance_criteria
+
+
+def _append_media_contract(
+    requirements: list[EvidenceRequirement],
+    acceptance_criteria: list[AcceptanceCriterion],
+    *,
+    resource_index: ResourceIndex,
+    selected: list[ResourceRef],
+) -> list[AcceptanceCriterion]:
+    image_resources = resource_index.by_kind("image")
+    audio_resources = resource_index.by_kind("audio")
+    video_resources = resource_index.by_kind("video")
+    selected.extend(image_resources + audio_resources + video_resources)
+    if image_resources:
+        requirements.append(
+            EvidenceRequirement(
+                kind="resource_coverage",
+                tool_group="image_text",
+                resource_ids=tuple(item.id for item in image_resources),
+                coverage="all",
+                min_count=len(image_resources),
+                description="Inspect each referenced image before finalizing the answer.",
+            )
+        )
+    if audio_resources:
+        requirements.append(
+            EvidenceRequirement(
+                kind="resource_coverage",
+                tool_group="audio_text",
+                resource_ids=tuple(item.id for item in audio_resources),
+                coverage="all",
+                min_count=len(audio_resources),
+                description="Transcribe each referenced audio clip before finalizing the answer.",
+            )
+        )
+    if video_resources:
+        requirements.append(
+            EvidenceRequirement(
+                kind="resource_coverage",
+                tool_group="video_understanding",
+                resource_ids=tuple(item.id for item in video_resources),
+                coverage="all",
+                min_count=len(video_resources),
+                description="Analyze each referenced video before finalizing the answer.",
+            )
+        )
+    if not (image_resources or audio_resources or video_resources):
+        requirements.append(_tool_group_requirement("media"))
+    return _append_acceptance_criteria(
+        acceptance_criteria,
+        (_media_artifact_criterion(), _media_final_answer_criterion()),
+    )
 
 
 def _append_web_contract(
