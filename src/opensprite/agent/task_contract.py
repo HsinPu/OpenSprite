@@ -43,6 +43,8 @@ from .web_source_policy import (
 from ..tools.evidence import ToolEvidence
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
+PLANNER_VALIDATED_STATUS = "validated"
+PLANNING_ERROR_TASK_TYPE = "planning_error"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
@@ -445,7 +447,7 @@ def _planner_blocked_contract(
         metadata["raw_response_preview"] = raw_response_preview
     return TaskContract(
         objective=objective,
-        task_type="planning_error",
+        task_type=PLANNING_ERROR_TASK_TYPE,
         final_answer_required=True,
         allow_no_tool_final=False,
         contract_sources=("llm_planner",),
@@ -526,7 +528,7 @@ def _contract_from_planner_payload(
 
     planner_reason = _truncate(str(payload.get("reason") or "llm planner returned a task contract"), max_chars=240)
     metadata = {
-        "planner_status": "validated",
+        "planner_status": PLANNER_VALIDATED_STATUS,
         "raw_task_type": raw_task_type,
         "required_tool_groups": list(tool_groups),
         "quality_checks": list(quality_checks),

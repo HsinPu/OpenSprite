@@ -32,6 +32,7 @@ from .run_trace import RunTraceRecorder
 from .source_fallback_ranking import rank_web_sources_for_objective, web_source_relevance_score
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
+from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE
 from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
@@ -1321,7 +1322,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if (
                     result.task_contract is not None
-                    and _task_contract_planner_status(result.task_contract) == "validated"
+                    and _task_contract_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
                 )
             ),
             None,
@@ -1332,7 +1333,7 @@ class AgentTurnRunner:
             (
                 result.task_contract
                 for result in reversed(results)
-                if result.task_contract is not None and result.task_contract.task_type != "planning_error"
+                if result.task_contract is not None and result.task_contract.task_type != PLANNING_ERROR_TASK_TYPE
             ),
             latest_contract,
         )

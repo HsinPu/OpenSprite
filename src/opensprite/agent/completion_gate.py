@@ -38,7 +38,7 @@ from .harness_profile import (
 from .history_retrieval_policy import is_history_retrieval_tool_name
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
-from .task_contract import contract_expects_file_change
+from .task_contract import PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
 from .task_intent import TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS
 from .web_source_policy import (
@@ -62,7 +62,7 @@ _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
 _PLAIN_ANSWER_TASK_TYPE = PURE_ANSWER_TASK_TYPE
-_NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({PURE_ANSWER_TASK_TYPE, "planning_error"})
+_NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({PURE_ANSWER_TASK_TYPE, PLANNING_ERROR_TASK_TYPE})
 _READ_ONLY_TASK_TYPES = frozenset(
     {ANALYSIS_TASK_TYPE, OPERATIONS_TASK_TYPE, WORKSPACE_READ_TASK_TYPE, HISTORY_RETRIEVAL_TASK_TYPE}
 )

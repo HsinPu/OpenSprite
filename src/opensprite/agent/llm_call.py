@@ -18,7 +18,7 @@ from .harness_profile import (
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessProfile,
 )
-from .task_contract import TaskContract
+from .task_contract import PLANNER_VALIDATED_STATUS, TaskContract
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
@@ -303,7 +303,7 @@ class LlmCallService:
                 )
                 validation_event_type = (
                     "task_contract.validated"
-                    if _task_contract_planner_status(task_contract) == "validated"
+                    if _task_contract_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
                     else "task_contract.validation_failed"
                 )
                 await self._emit_run_event(
