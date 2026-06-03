@@ -54,7 +54,7 @@ from ..tools import ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
-from ..tools.result_status import classify_tool_result_status
+from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..tools.web_research import WebResearchTool
 from ..tools.web_search import WebSearchTool
@@ -2063,7 +2063,15 @@ class AgentLoop:
         session_id = self._get_current_session_id()
         run_id = self.turn_context.current_run_id()
         if session_id is None or run_id is None:
-            return ExecutionResult(content="Error: No active run is available for deterministic verification.", had_tool_error=True)
+            return ExecutionResult(
+                content=tool_error_result(
+                    "No active run is available for deterministic verification.",
+                    error_type="VerifyToolError",
+                    category="missing_run_context",
+                    metadata={"tool_name": "verify"},
+                ),
+                had_tool_error=True,
+            )
 
         tool_args: dict[str, Any] = {
             "action": str(action or "auto").strip() or "auto",
