@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
 from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
@@ -26,7 +27,7 @@ class QualityGateResult:
 
     passed: bool
     reason: str = ""
-    status: str = "complete"
+    status: str = COMPLETE_COMPLETION_STATUS
     active_task_detail: str | None = None
 
 
@@ -109,7 +110,7 @@ def _evaluate_itemized_output(
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="assistant did not provide the requested itemized result",
     )
 
@@ -130,7 +131,7 @@ def _evaluate_media_artifacts(contract: TaskContract, execution_result: Executio
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="required task artifacts were not produced",
         active_task_detail="\n".join(f"- Missing artifact for {resource_id}" for resource_id in missing),
     )
@@ -146,7 +147,7 @@ def _evaluate_substantive_final_answer(
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="assistant final answer was too terse for the task",
         active_task_detail=getattr(criterion, "description", "") or None,
     )
@@ -168,7 +169,7 @@ def _evaluate_source_artifact(
     if artifact_count > 0:
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="required task artifacts were not traceable",
             active_task_detail=(
                 "- Missing traceable source metadata: url plus title/snippet "
@@ -177,7 +178,7 @@ def _evaluate_source_artifact(
         )
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="required task artifacts were not produced",
         active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {artifact_count})",
     )
@@ -198,13 +199,13 @@ def _evaluate_source_detail(
             return None
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="required source material was insufficient",
             active_task_detail=coverage_detail,
         )
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="required source material was insufficient",
         active_task_detail=(
             "- Fetch or inspect at least one source page before finalizing; "
@@ -226,7 +227,7 @@ def _evaluate_source_reference(
     if ungrounded_urls:
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="assistant final answer referenced ungathered sources",
             active_task_detail=(
                 "- Remove or verify source URLs that were not gathered in this run: "
@@ -239,7 +240,7 @@ def _evaluate_source_reference(
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="assistant final answer did not reference gathered sources",
         active_task_detail=(
             "- Reference at least one gathered source by URL, domain, or title "
@@ -265,7 +266,7 @@ def _evaluate_media_artifact_criterion(
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="required task artifacts were not produced",
         active_task_detail=getattr(criterion, "description", "") or None,
     )
@@ -281,7 +282,7 @@ def _evaluate_verification_or_gap(
         return None
     return QualityGateResult(
         passed=False,
-        status="needs_verification",
+        status=NEEDS_VERIFICATION_COMPLETION_STATUS,
         reason="verification outcome or gap was not reported",
         active_task_detail=getattr(criterion, "description", "") or None,
     )
@@ -298,7 +299,7 @@ def _evaluate_operation_report(
         return None
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="operation validation or risk was not reported",
         active_task_detail=getattr(criterion, "description", "") or None,
     )
@@ -341,7 +342,7 @@ def _evaluate_command_version_answer(
         detail = "- Include the installed command/program version from the execution result, or clearly state that the command is unavailable."
     return QualityGateResult(
         passed=False,
-        status="incomplete",
+        status=INCOMPLETE_COMPLETION_STATUS,
         reason="command version answer did not report a version",
         active_task_detail=detail,
     )
@@ -443,7 +444,7 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     if requested_paths and not any(_path_referenced(path, normalized_response) for path in requested_paths):
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="assistant final answer did not reference inspected workspace context",
             active_task_detail="- Reference the inspected workspace path or filename in the final answer.",
         )
@@ -452,7 +453,7 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     if requires_location and not _contains_workspace_location_clue(normalized_response):
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="assistant final answer did not identify the workspace location",
             active_task_detail="- Include a file path, symbol, or matching config/code clue from the workspace inspection.",
         )
@@ -477,7 +478,7 @@ def _evaluate_history_grounding(
     if requested_count > 1 and _response_item_count(response_text) < requested_count:
         return QualityGateResult(
             passed=False,
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="assistant did not provide enough recalled items",
             active_task_detail=f"- Provide at least {requested_count} recalled item(s) from the retrieved context.",
         )
