@@ -12,6 +12,7 @@ from ..tool_names import (
     DELEGATE_TOOL_NAME,
     EXEC_TOOL_NAME,
     READ_FILE_TOOL_NAME,
+    WEB_SEARCH_TOOL_NAME,
 )
 from ..tools import BatchTool, ToolRegistry
 from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
@@ -25,7 +26,7 @@ _RISK_PROBE_TOOLS = {
     "external_side_effect": "browser_click",
     "mcp": "mcp_probe_tool",
     "memory": "task_update",
-    "network": "web_search",
+    "network": WEB_SEARCH_TOOL_NAME,
     "read": READ_FILE_TOOL_NAME,
     "write": APPLY_PATCH_TOOL_NAME,
 }

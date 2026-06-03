@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
-WEB_DISCOVERY_TOOLS = frozenset({"web_search", "web_research"})
+from ..tool_names import WEB_FETCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME
+
+FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({WEB_FETCH_TOOL_NAME, "browser_navigate", "browser_snapshot"})
+WEB_DISCOVERY_TOOLS = frozenset({WEB_SEARCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME})
 WEB_SOURCE_ARTIFACT_TOOLS = frozenset(
     {
-        "web_search",
-        "web_fetch",
-        "web_research",
+        WEB_SEARCH_TOOL_NAME,
+        WEB_FETCH_TOOL_NAME,
+        WEB_RESEARCH_TOOL_NAME,
         "browser_navigate",
         "browser_snapshot",
     }
 )
-WEB_SOURCE_EVIDENCE_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
+WEB_SOURCE_EVIDENCE_TOOLS = frozenset({WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME})
 WEB_BROWSER_RESEARCH_TOOLS = frozenset({"browser_snapshot", "browser_scroll"})
 WEB_HARNESS_RESEARCH_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS | WEB_BROWSER_RESEARCH_TOOLS
-WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
-WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
+WEB_FETCH_SOURCE_RECORD_TOOL = WEB_FETCH_TOOL_NAME
+WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = WEB_RESEARCH_TOOL_NAME
 WEB_RESEARCH_TASK_TYPE = "web_research"
 WEB_RESEARCH_TOOL_GROUP = "web_research"
 WEB_SOURCE_ARTIFACT_KIND = "web_source"
