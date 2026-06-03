@@ -987,8 +987,6 @@ def _map_state_status(completion_result: CompletionGateResult, progress: WorkPro
         return _WORK_STATE_DONE_STATUS
     if is_blocking_completion_status(completion_result.status):
         return completion_result.status
-    if progress.status == _WORK_PROGRESS_VERIFYING_STATUS:
-        return _WORK_STATE_ACTIVE_STATUS
     return _WORK_STATE_ACTIVE_STATUS
 
 
