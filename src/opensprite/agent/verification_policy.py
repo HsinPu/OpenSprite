@@ -6,6 +6,7 @@ from __future__ import annotations
 VERIFICATION_TOOL_NAME = "verify"
 VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
 SKIPPED_VERIFICATION_STATUS = "skipped"
+REQUIRED_VERIFICATION_FAILED_REASON = "required verification did not pass"
 
 
 def is_verification_tool_name(tool_name: str | None) -> bool:
