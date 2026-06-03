@@ -34,7 +34,7 @@ _BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _PLAIN_ANSWER_TASK_TYPE = "pure_answer"
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
-_READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval", "web_research"})
+_READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval"})
 _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
@@ -838,7 +838,8 @@ def _contract_is_read_only(task_contract: Any) -> bool:
 
 
 def _is_read_only_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() in _READ_ONLY_TASK_TYPES
+    normalized = str(task_type or "").strip()
+    return is_web_research_task_type(normalized) or normalized in _READ_ONLY_TASK_TYPES
 
 
 def _is_plain_answer_task_type(task_type: str | None) -> bool:
