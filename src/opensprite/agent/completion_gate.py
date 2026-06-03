@@ -31,6 +31,8 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
 _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
 _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+_WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
+_WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -910,7 +912,10 @@ def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResul
         sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
         if _is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
             return True
-        if artifact.source_tool == "web_research" and _web_research_artifact_has_successful_fetch(artifact):
+        if (
+            _is_web_research_source_artifact_tool(artifact.source_tool)
+            and _web_research_artifact_has_successful_fetch(artifact)
+        ):
             return True
     return False
 
@@ -932,6 +937,14 @@ def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
     return str(source_tool or "").strip() in _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS
 
 
+def _is_web_research_source_artifact_tool(source_tool: str | None) -> bool:
+    return str(source_tool or "").strip() == _WEB_RESEARCH_SOURCE_ARTIFACT_TOOL
+
+
+def _is_web_fetch_source_record_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() == _WEB_FETCH_SOURCE_RECORD_TOOL
+
+
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     metadata = artifact.metadata if isinstance(artifact.metadata, dict) else {}
     coverage = metadata.get("coverage") if isinstance(metadata.get("coverage"), dict) else {}
@@ -943,7 +956,7 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     for source in sources:
         if not isinstance(source, dict):
             continue
-        if source.get("tool_name") != "web_fetch":
+        if not _is_web_fetch_source_record_tool(source.get("tool_name")):
             continue
         if source.get("blocked_or_challenge") or source.get("is_too_short"):
             continue

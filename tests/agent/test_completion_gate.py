@@ -14,6 +14,8 @@ from opensprite.agent.completion_gate import (
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
     _is_optional_web_discovery_failure_tool,
+    _is_web_fetch_source_record_tool,
+    _is_web_research_source_artifact_tool,
     _path_requires_delegated_review,
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
@@ -226,6 +228,10 @@ def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert _is_optional_web_discovery_failure_tool("web_fetch") is False
     assert _is_fetched_web_source_artifact_tool("browser_snapshot") is True
     assert _is_fetched_web_source_artifact_tool("web_research") is False
+    assert _is_web_research_source_artifact_tool("web_research") is True
+    assert _is_web_research_source_artifact_tool("web_fetch") is False
+    assert _is_web_fetch_source_record_tool("web_fetch") is True
+    assert _is_web_fetch_source_record_tool("web_search") is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:
