@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 
 from opensprite.tools.filesystem import ApplyPatchTool, EditFileTool, ReadFileTool, WriteFileTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _sha256(content: str) -> str:
@@ -38,6 +39,21 @@ def test_write_file_reports_post_edit_python_diagnostics(tmp_path):
     assert "Successfully wrote to app.py" in result
     assert "Diagnostics:" in result
     assert "app.py [python_syntax] OK" in result
+
+
+def test_write_file_returns_structured_error_for_external_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tool = WriteFileTool(workspace=workspace)
+
+    result = asyncio.run(tool.execute(path="../outside.txt", content="secret\n"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "access_denied"
+    assert status.error.startswith("Access denied.")
+    assert not (tmp_path / "outside.txt").exists()
 
 
 def test_edit_file_returns_unified_diff(tmp_path):

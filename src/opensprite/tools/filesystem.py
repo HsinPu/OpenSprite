@@ -1333,7 +1333,13 @@ class WriteFileTool(Tool):
             workspace = self._get_workspace()
             file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
 
             guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
             if guard:
@@ -1368,7 +1374,13 @@ class WriteFileTool(Tool):
                 return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
             return result
         except Exception as e:
-            return f"Error writing file: {str(e)}"
+            return _filesystem_error_result(
+                f"Error writing file: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="write_failed",
+                metadata={"path": str(kwargs.get("path", ""))},
+            )
 
 
 class ListDirTool(Tool):
