@@ -9,6 +9,7 @@ from .harness_profile import (
     FILE_CHANGE_REQUIREMENT_KIND,
     GENERIC_TASK_TYPE,
     HISTORY_RETRIEVAL_TASK_TYPE,
+    MEDIA_EXTRACTION_TASK_TYPE,
     OPERATIONS_TASK_TYPE,
     PLANNING_TASK_TYPE,
     PURE_ANSWER_TASK_TYPE,
@@ -46,6 +47,18 @@ def intent_supports_fallback_active_task_update(task_intent: Any, task_contract:
 def is_read_only_task_type(task_type: str | None) -> bool:
     normalized = str(task_type or "").strip()
     return is_web_research_task_type(normalized) or normalized in READ_ONLY_TASK_TYPES
+
+
+def is_media_extraction_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == MEDIA_EXTRACTION_TASK_TYPE
+
+
+def is_history_retrieval_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == HISTORY_RETRIEVAL_TASK_TYPE
+
+
+def is_workspace_read_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() == WORKSPACE_READ_TASK_TYPE
 
 
 def is_plain_answer_task_type(task_type: str | None) -> bool:

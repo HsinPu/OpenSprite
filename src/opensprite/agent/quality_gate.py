@@ -6,8 +6,12 @@ import re
 from dataclasses import dataclass
 
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
+from .completion_task_policy import (
+    is_history_retrieval_task_type,
+    is_media_extraction_task_type,
+    is_workspace_read_task_type,
+)
 from .execution import ExecutionResult
-from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
 from .history_retrieval_policy import (
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,
@@ -78,7 +82,7 @@ class QualityGateService:
         command_version_result = _evaluate_command_version_answer(contract, response_text, execution_result)
         if command_version_result is not None:
             return command_version_result
-        if contract.task_type == HISTORY_RETRIEVAL_TASK_TYPE and _history_retrieval_was_empty(execution_result):
+        if is_history_retrieval_task_type(contract.task_type) and _history_retrieval_was_empty(execution_result):
             history_result = _evaluate_history_grounding(contract, response_text, execution_result)
             if history_result is not None:
                 return history_result
@@ -145,7 +149,7 @@ def _evaluate_itemized_output(
 
 
 def _evaluate_media_artifacts(contract: TaskContract, execution_result: ExecutionResult) -> QualityGateResult | None:
-    if contract.task_type != MEDIA_EXTRACTION_TASK_TYPE or not contract.selected_resources:
+    if not is_media_extraction_task_type(contract.task_type) or not contract.selected_resources:
         return None
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     covered = {
@@ -397,7 +401,7 @@ def _response_reports_tool_result(response_text: str, execution_result: Executio
 
 
 def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) -> QualityGateResult | None:
-    if contract.task_type != WORKSPACE_READ_TASK_TYPE:
+    if not is_workspace_read_task_type(contract.task_type):
         return None
     objective = str(contract.objective or "")
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
@@ -434,7 +438,7 @@ def _evaluate_history_grounding(
     response_text: str,
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
-    if contract.task_type != HISTORY_RETRIEVAL_TASK_TYPE:
+    if not is_history_retrieval_task_type(contract.task_type):
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
