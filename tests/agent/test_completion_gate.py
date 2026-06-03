@@ -13,7 +13,10 @@ from opensprite.agent.completion_gate import (
     _is_generic_task_response_intent_kind,
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
+    _is_history_retrieval_tool,
     _is_optional_web_discovery_failure_tool,
+    _is_optional_web_fetch_failure_tool,
+    _is_optional_workspace_batch_failure_tool,
     _is_web_fetch_source_record_tool,
     _is_web_research_source_artifact_tool,
     _path_requires_delegated_review,
@@ -226,12 +229,18 @@ def test_completion_gate_review_path_policy_helper_is_centralized():
 def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert _is_optional_web_discovery_failure_tool("web_search") is True
     assert _is_optional_web_discovery_failure_tool("web_fetch") is False
+    assert _is_optional_web_fetch_failure_tool("web_fetch") is True
+    assert _is_optional_web_fetch_failure_tool("web_search") is False
     assert _is_fetched_web_source_artifact_tool("browser_snapshot") is True
     assert _is_fetched_web_source_artifact_tool("web_research") is False
     assert _is_web_research_source_artifact_tool("web_research") is True
     assert _is_web_research_source_artifact_tool("web_fetch") is False
     assert _is_web_fetch_source_record_tool("web_fetch") is True
     assert _is_web_fetch_source_record_tool("web_search") is False
+    assert _is_optional_workspace_batch_failure_tool("batch") is True
+    assert _is_optional_workspace_batch_failure_tool("read_file") is False
+    assert _is_history_retrieval_tool("search_history") is True
+    assert _is_history_retrieval_tool("web_search") is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:

@@ -33,6 +33,9 @@ _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"}
 _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
 _WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
+_OPTIONAL_WEB_FETCH_FAILURE_TOOL = "web_fetch"
+_OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
+_HISTORY_RETRIEVAL_TOOL = "search_history"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -856,7 +859,7 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
     for item in failed_evidence:
         if _is_optional_web_discovery_failure_tool(item.name):
             continue
-        if item.name == "web_fetch" and has_successful_fetch_sources:
+        if _is_optional_web_fetch_failure_tool(item.name) and has_successful_fetch_sources:
             continue
         if _is_non_exposed_permission_block(item):
             continue
@@ -873,7 +876,7 @@ def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionR
     for item in failed_evidence:
         if item.name in _WORKSPACE_DISCOVERY_TOOLS:
             continue
-        if item.name == "batch" and execution_result.file_change_count <= 0:
+        if _is_optional_workspace_batch_failure_tool(item.name) and execution_result.file_change_count <= 0:
             continue
         if _is_non_exposed_permission_block(item):
             continue
@@ -885,10 +888,10 @@ def _has_only_optional_history_retrieval_failures(execution_result: ExecutionRes
     failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
     if not failed_evidence:
         return False
-    if not any(item.ok and item.name == "search_history" for item in execution_result.tool_evidence):
+    if not any(item.ok and _is_history_retrieval_tool(item.name) for item in execution_result.tool_evidence):
         return False
     for item in failed_evidence:
-        if item.name == "search_history":
+        if _is_history_retrieval_tool(item.name):
             continue
         if _is_non_exposed_permission_block(item):
             continue
@@ -931,6 +934,18 @@ def _is_non_exposed_permission_block(evidence: ToolEvidence) -> bool:
 
 def _is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
     return str(tool_name or "").strip() in _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS
+
+
+def _is_optional_web_fetch_failure_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() == _OPTIONAL_WEB_FETCH_FAILURE_TOOL
+
+
+def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() == _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL
+
+
+def _is_history_retrieval_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() == _HISTORY_RETRIEVAL_TOOL
 
 
 def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
