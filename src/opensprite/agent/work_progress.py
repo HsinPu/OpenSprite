@@ -21,8 +21,10 @@ from .completion_status import (
 )
 from .execution import ExecutionResult
 from .harness_profile import (
+    ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
+    GENERIC_TASK_TYPE,
     HarnessProfile,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,
@@ -273,7 +275,7 @@ class WorkProgressService:
             steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
         elif is_ops_profile_name(profile_name):
             steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
-        elif task_intent.kind == "analysis":
+        elif task_intent.kind == ANALYSIS_TASK_TYPE:
             steps = ["inspect the relevant context", "collect concrete evidence", "deliver the findings clearly"]
         elif task_intent.long_running:
             steps = ["make measurable progress", "verify or summarize remaining work"]
@@ -889,7 +891,7 @@ def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
 
 
 def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
-    return task_intent.kind in {"analysis", "task"} and not task_intent.needs_clarification
+    return task_intent.kind in {ANALYSIS_TASK_TYPE, GENERIC_TASK_TYPE} and not task_intent.needs_clarification
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
