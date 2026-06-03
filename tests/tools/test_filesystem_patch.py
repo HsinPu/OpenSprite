@@ -232,6 +232,31 @@ def test_apply_patch_returns_structured_error_for_external_path(tmp_path):
     assert not (tmp_path / "outside.txt").exists()
 
 
+def test_apply_patch_returns_structured_error_when_target_is_directory(tmp_path):
+    (tmp_path / "notes.txt").mkdir()
+    tool = ApplyPatchTool(workspace=tmp_path)
+
+    result = asyncio.run(
+        tool.execute(
+            changes=[
+                {
+                    "action": "update",
+                    "path": "notes.txt",
+                    "old_text": "old",
+                    "new_text": "new",
+                },
+            ]
+        )
+    )
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_target"
+    assert status.invalid_arguments is True
+    assert status.error == "Not a file: notes.txt"
+
+
 def test_apply_patch_validates_all_changes_before_writing(tmp_path):
     tool = ApplyPatchTool(workspace=tmp_path)
 

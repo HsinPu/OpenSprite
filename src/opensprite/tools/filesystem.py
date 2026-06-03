@@ -1403,9 +1403,20 @@ class ApplyPatchTool(Tool):
 
             return result
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return _filesystem_error_result(
+                str(e),
+                tool_name=self.name,
+                error_type="ToolValidationError",
+                category="invalid_target",
+                invalid_arguments=True,
+            )
         except Exception as e:
-            return f"Error applying patch: {str(e)}"
+            return _filesystem_error_result(
+                f"Error applying patch: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="apply_failed",
+            )
 
 
 class WriteFileTool(Tool):
