@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
+from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_state import RunCancelledError
@@ -66,7 +67,7 @@ def _workflow_error_result(
         category=category,
         repeated_error_key=error if invalid_arguments else None,
         invalid_arguments=invalid_arguments,
-        metadata={"tool_name": "run_workflow"},
+        metadata={"tool_name": RUN_WORKFLOW_TOOL_NAME},
     )
 
 

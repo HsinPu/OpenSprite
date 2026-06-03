@@ -13,6 +13,11 @@ from ..config import DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS, DocumentLlmConfig, 
 from ..llms import ChatMessage, LLMProvider
 from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
+from ..tool_names import (
+    CONFIGURE_SKILL_TOOL_NAME,
+    CONFIGURE_SUBAGENT_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+)
 from ..tools import ToolRegistry
 from ..tools.evidence import ToolEvidence
 from ..tools.result_status import classify_tool_result_status, tool_error_result
@@ -168,7 +173,7 @@ class ToolResultPersistence:
 class ExecutionEngine:
     """Run the LLM and tool-calling loop for prepared chat messages."""
 
-    _MAIN_SYSTEM_REFRESH_TOOLS = frozenset({"configure_skill", "configure_subagent"})
+    _MAIN_SYSTEM_REFRESH_TOOLS = frozenset({CONFIGURE_SKILL_TOOL_NAME, CONFIGURE_SUBAGENT_TOOL_NAME})
     _MAIN_SYSTEM_REFRESH_ACTIONS = frozenset({"add", "upsert", "remove"})
 
     REPEATED_TOOL_ERROR_LIMIT = 2
@@ -1714,7 +1719,7 @@ Output exactly these sections when applicable:
                         verification_outcome = classify_verification_result(result)
                         verification_attempted = verification_attempted or bool(verification_outcome["attempted"])
                         verification_passed = verification_passed or bool(verification_outcome["ok"])
-                    if tool_name == "delegate":
+                    if tool_name == DELEGATE_TOOL_NAME:
                         delegate_task_id, delegate_prompt_type = self._extract_delegate_task_info(result)
                         if delegate_task_id:
                             active_delegate_task_id = delegate_task_id
@@ -1730,7 +1735,7 @@ Output exactly these sections when applicable:
                                     updated_at=time.time(),
                                 )
                             )
-                    if tool_name == "configure_skill" and tool_args.get("action") in ("add", "upsert"):
+                    if tool_name == CONFIGURE_SKILL_TOOL_NAME and tool_args.get("action") in ("add", "upsert"):
                         used_configure_skill = True
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
@@ -1744,8 +1749,8 @@ Output exactly these sections when applicable:
                                     result,
                                     tc.id,
                                     iteration + 1,
-                                    active_delegate_task_id if tool_name == "delegate" else None,
-                                    active_delegate_prompt_type if tool_name == "delegate" else None,
+                                    active_delegate_task_id if tool_name == DELEGATE_TOOL_NAME else None,
+                                    active_delegate_prompt_type if tool_name == DELEGATE_TOOL_NAME else None,
                                     "error" if tool_failed else "completed",
                                 )
                             except TypeError:

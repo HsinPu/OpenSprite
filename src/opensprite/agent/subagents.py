@@ -16,6 +16,7 @@ from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_ru
 from ..config.llm_presets import provider_profile_defaults
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
+from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
 from .subagent_output import parse_structured_subagent_output
 from ..subagent_prompts import get_all_subagents, load_metadata
 from .subagent_session import (
@@ -52,7 +53,7 @@ def _subagent_error_result(
     category: str,
     error_type: str = "DelegateToolError",
     invalid_arguments: bool = False,
-    tool_name: str = "delegate",
+    tool_name: str = DELEGATE_TOOL_NAME,
 ) -> str:
     error = str(message or "").strip()
     return tool_error_result(
@@ -65,7 +66,7 @@ def _subagent_error_result(
     )
 
 
-def _subagent_validation_error(message: str, *, tool_name: str = "delegate") -> str:
+def _subagent_validation_error(message: str, *, tool_name: str = DELEGATE_TOOL_NAME) -> str:
     return _subagent_error_result(
         message,
         category="invalid_arguments",
@@ -386,7 +387,7 @@ class SubagentRunService:
                 f"'{effective_prompt_type}' uses profile '{subagent_profile.name}', not one of: {allowed}.",
                 category="parallel_profile_not_supported",
                 error_type="DelegateManyToolError",
-                tool_name="delegate_many",
+                tool_name=DELEGATE_MANY_TOOL_NAME,
             )
 
         return PreparedSubagentTask(
@@ -990,17 +991,17 @@ class SubagentRunService:
         if not isinstance(tasks, list):
             return _subagent_validation_error(
                 "tasks must be an array of {task, prompt_type} objects.",
-                tool_name="delegate_many",
+                tool_name=DELEGATE_MANY_TOOL_NAME,
             )
         if not tasks:
             return _subagent_validation_error(
                 "tasks must contain at least one child task.",
-                tool_name="delegate_many",
+                tool_name=DELEGATE_MANY_TOOL_NAME,
             )
         if len(tasks) > MAX_PARALLEL_SUBAGENTS:
             return _subagent_validation_error(
                 f"delegate_many supports at most {MAX_PARALLEL_SUBAGENTS} tasks.",
-                tool_name="delegate_many",
+                tool_name=DELEGATE_MANY_TOOL_NAME,
             )
 
         group_id = self._new_group_id()
@@ -1010,14 +1011,14 @@ class SubagentRunService:
             if not isinstance(item, dict):
                 return _subagent_validation_error(
                     f"task[{index}] must be an object with task and prompt_type.",
-                    tool_name="delegate_many",
+                    tool_name=DELEGATE_MANY_TOOL_NAME,
                 )
             task_text = str(item.get("task") or "").strip()
             prompt_type = str(item.get("prompt_type") or item.get("promptType") or "").strip()
             if not prompt_type:
                 return _subagent_validation_error(
                     f"task[{index}] prompt_type is required for parallel delegation.",
-                    tool_name="delegate_many",
+                    tool_name=DELEGATE_MANY_TOOL_NAME,
                 )
             prepared = await self._prepare_task(
                 task_text,
@@ -1034,14 +1035,14 @@ class SubagentRunService:
                     category=status.category or "subagent_preparation_failed",
                     error_type=status.error_type or "DelegateManyToolError",
                     invalid_arguments=status.invalid_arguments,
-                    tool_name="delegate_many",
+                    tool_name=DELEGATE_MANY_TOOL_NAME,
                 )
             prepared_tasks.append(prepared)
 
         try:
             requested_parallel = int(max_parallel or DEFAULT_MAX_PARALLEL_SUBAGENTS)
         except (TypeError, ValueError):
-            return _subagent_validation_error("max_parallel must be an integer.", tool_name="delegate_many")
+            return _subagent_validation_error("max_parallel must be an integer.", tool_name=DELEGATE_MANY_TOOL_NAME)
         concurrency = max(1, min(requested_parallel, len(prepared_tasks), MAX_PARALLEL_SUBAGENTS))
         semaphore = asyncio.Semaphore(concurrency)
         parent_session_id = prepared_tasks[0].parent_session_id

@@ -6,6 +6,12 @@ import json
 import time
 from typing import Any, Awaitable, Callable
 
+from ..tool_names import (
+    DELEGATE_MANY_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
+    RUN_WORKFLOW_TOOL_NAME,
+)
 from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
@@ -161,7 +167,12 @@ class RunHookService:
     @staticmethod
     def tool_warrants_progress_notice(tool_name: str) -> bool:
         """Whether to send a short interim message before this tool runs."""
-        if tool_name in {"read_skill", "delegate", "delegate_many", "run_workflow"}:
+        if tool_name in {
+            READ_SKILL_TOOL_NAME,
+            DELEGATE_TOOL_NAME,
+            DELEGATE_MANY_TOOL_NAME,
+            RUN_WORKFLOW_TOOL_NAME,
+        }:
             return True
         return tool_name.startswith("mcp_")
 
@@ -169,19 +180,19 @@ class RunHookService:
     def format_tool_progress_message(tool_name: str, tool_args: dict[str, Any]) -> str:
         """User-facing one-line status for skill, subagent, and MCP tool execution."""
         args = tool_args or {}
-        if tool_name == "read_skill":
+        if tool_name == READ_SKILL_TOOL_NAME:
             name = args.get("skill_name") or "?"
             return f"正在讀取技能〈{name}〉…"
-        if tool_name == "delegate":
+        if tool_name == DELEGATE_TOOL_NAME:
             task_id = args.get("task_id")
             ptype = args.get("prompt_type") or "writer"
             if task_id:
                 return f"正在續跑子代理任務（{task_id}）…"
             return f"正在委派子代理（{ptype}）…"
-        if tool_name == "delegate_many":
+        if tool_name == DELEGATE_MANY_TOOL_NAME:
             tasks = args.get("tasks") if isinstance(args.get("tasks"), list) else []
             return f"正在平行委派 {max(1, len(tasks))} 個子代理任務…"
-        if tool_name == "run_workflow":
+        if tool_name == RUN_WORKFLOW_TOOL_NAME:
             workflow = args.get("workflow") or args.get("workflow_id") or "workflow"
             start_step = args.get("start_step") or args.get("startStep")
             if start_step:

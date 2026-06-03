@@ -16,6 +16,10 @@ EXEC_TOOL_NAME = "exec"
 PROCESS_TOOL_NAME = "process"
 READ_SKILL_TOOL_NAME = "read_skill"
 CONFIGURE_SKILL_TOOL_NAME = "configure_skill"
+CONFIGURE_SUBAGENT_TOOL_NAME = "configure_subagent"
+DELEGATE_TOOL_NAME = "delegate"
+DELEGATE_MANY_TOOL_NAME = "delegate_many"
+RUN_WORKFLOW_TOOL_NAME = "run_workflow"
 LIST_RUN_FILE_CHANGES_TOOL_NAME = "list_run_file_changes"
 PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME = "preview_run_file_change_revert"
 ANALYZE_IMAGE_TOOL_NAME = "analyze_image"
@@ -47,6 +51,13 @@ RUN_TRACE_READ_TOOL_NAMES = frozenset(
     }
 )
 SKILL_REVIEW_TOOL_NAMES = frozenset({READ_SKILL_TOOL_NAME, CONFIGURE_SKILL_TOOL_NAME})
+DELEGATED_EXECUTION_TOOL_NAMES = frozenset(
+    {
+        DELEGATE_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+    }
+)
 MEDIA_ANALYSIS_TOOL_NAMES = frozenset(
     {
         ANALYZE_IMAGE_TOOL_NAME,

@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, denied_risks_except
-from ..tool_names import APPLY_PATCH_TOOL_NAME, BATCH_TOOL_NAME, EXEC_TOOL_NAME, READ_FILE_TOOL_NAME
+from ..tool_names import (
+    APPLY_PATCH_TOOL_NAME,
+    BATCH_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+    EXEC_TOOL_NAME,
+    READ_FILE_TOOL_NAME,
+)
 from ..tools import BatchTool, ToolRegistry
 from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_policy import HarnessPolicy, HarnessPolicyService
@@ -14,7 +20,7 @@ from .harness_policy import HarnessPolicy, HarnessPolicyService
 
 _RISK_PROBE_TOOLS = {
     "configuration": "configure_mcp",
-    "delegation": "delegate",
+    "delegation": DELEGATE_TOOL_NAME,
     "execute": EXEC_TOOL_NAME,
     "external_side_effect": "browser_click",
     "mcp": "mcp_probe_tool",
