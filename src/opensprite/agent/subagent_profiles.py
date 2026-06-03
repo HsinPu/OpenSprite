@@ -27,4 +27,4 @@ def validate_tool_profile_name(tool_profile: Any) -> str | None:
     if normalized in TOOL_PROFILE_NAMES:
         return None
     allowed = ", ".join(allowed_tool_profile_names())
-    return f"Error: tool_profile must be one of: {allowed}."
+    return f"tool_profile must be one of: {allowed}."

@@ -22,7 +22,7 @@ def validate_subagent_task_id(task_id: str) -> str | None:
     value = str(task_id or "").strip()
     if _TASK_ID_RE.fullmatch(value):
         return None
-    return "Error: task_id must match pattern task_[A-Za-z0-9_-]{8,64}."
+    return "task_id must match pattern task_[A-Za-z0-9_-]{8,64}."
 
 
 def build_child_subagent_session_id(parent_session_id: str, task_id: str) -> str:
