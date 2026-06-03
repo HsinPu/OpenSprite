@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import DocumentLlmConfig
-from ..llms import ChatMessage
+from ..llms import ChatMessage, is_unconfigured_llm
 from .completion_status import (
     BLOCKED_COMPLETION_STATUS,
     COMPLETE_COMPLETION_STATUS,
@@ -86,7 +86,7 @@ class CompletionJudgeService:
         model: str | None,
         facts: dict[str, Any],
     ) -> CompletionJudgeVerdict:
-        if provider is None or str(model or "").strip().lower() == "unconfigured":
+        if is_unconfigured_llm(provider, model):
             raise CompletionJudgeError("completion judge unavailable: llm not configured")
         prompt = _build_judge_prompt(facts)
         response = await provider.chat(

@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
+UNCONFIGURED_LLM_MODEL = "unconfigured"
+
 
 @dataclass
 class ToolCall:
@@ -149,6 +151,11 @@ class LLMProvider(ABC):
         return {}
 
 
+def is_unconfigured_llm(provider: Any, model: str | None) -> bool:
+    """Return whether an LLM provider/model pair represents the unconfigured fallback."""
+    return provider is None or isinstance(provider, UnconfiguredLLM) or str(model or "").strip().lower() == UNCONFIGURED_LLM_MODEL
+
+
 class UnconfiguredLLM(LLMProvider):
     """Fallback provider used before the user configures an LLM."""
 
@@ -170,4 +177,4 @@ class UnconfiguredLLM(LLMProvider):
         return LLMResponse(content="", model=self.get_default_model())
 
     def get_default_model(self) -> str:
-        return "unconfigured"
+        return UNCONFIGURED_LLM_MODEL
