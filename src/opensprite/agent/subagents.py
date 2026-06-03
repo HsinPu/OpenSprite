@@ -32,6 +32,13 @@ from .run_state import RunCancelledError
 from .run_trace import RunTraceRecorder
 from .subagent_builder import SubagentMessageBuilder
 from .subagent_policy import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_registry, profile_for_subagent
+from .workflow_status import (
+    WORKFLOW_CANCELLED_STATUS,
+    WORKFLOW_COMPLETED_STATUS,
+    WORKFLOW_ERROR_STATUS,
+    WORKFLOW_FAILED_STATUS,
+    is_workflow_failed_status,
+)
 
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
@@ -491,17 +498,17 @@ class SubagentRunService:
 
     @classmethod
     def _group_summary(cls, status: str, *, total: int, counts: dict[str, int]) -> str:
-        completed = counts.get("completed", 0)
-        failed = counts.get("failed", 0) + counts.get("error", 0)
-        cancelled = counts.get("cancelled", 0)
+        completed = counts.get(WORKFLOW_COMPLETED_STATUS, 0)
+        failed = counts.get(WORKFLOW_FAILED_STATUS, 0) + counts.get(WORKFLOW_ERROR_STATUS, 0)
+        cancelled = counts.get(WORKFLOW_CANCELLED_STATUS, 0)
         if status == "running":
             return f"Queued {total} parallel subagent task(s)."
-        if status == "completed":
+        if status == WORKFLOW_COMPLETED_STATUS:
             return f"Completed {completed}/{total} parallel subagent task(s)."
-        if status == "failed":
+        if status == WORKFLOW_FAILED_STATUS:
             tail = f"; {cancelled} cancelled." if cancelled else "."
             return f"Completed {completed}/{total} parallel subagent task(s); {failed} failed{tail}"
-        if status == "cancelled":
+        if status == WORKFLOW_CANCELLED_STATUS:
             settled = completed + failed + cancelled
             return f"Cancelled parallel subagent group after {settled}/{total} task(s) settled."
         return f"Parallel subagent group status: {status}."
@@ -855,7 +862,7 @@ class SubagentRunService:
         except Exception as exc:
             error_preview = self._format_log_preview(str(exc), max_chars=240)
             failure_payload = {
-                "status": "failed",
+                "status": WORKFLOW_FAILED_STATUS,
                 "task_id": prepared.task_id,
                 "prompt_type": prepared.prompt_type,
                 "child_session_id": prepared.child_session_id,
@@ -870,12 +877,12 @@ class SubagentRunService:
             await self.run_trace.fail_run(
                 prepared.child_session_id,
                 prepared.child_run_id,
-                status="failed",
+                status=WORKFLOW_FAILED_STATUS,
                 event_payload=failure_payload,
             )
             self._record_task_update(
                 prepared,
-                status="failed",
+                status=WORKFLOW_FAILED_STATUS,
                 error=error_preview,
                 created_at=started_at,
                 updated_at=time.time(),
@@ -893,7 +900,7 @@ class SubagentRunService:
                 prompt_type=prepared.prompt_type,
                 child_session_id=prepared.child_session_id,
                 child_run_id=prepared.child_run_id,
-                status="failed",
+                status=WORKFLOW_FAILED_STATUS,
                 error=error_preview,
                 summary=error_preview,
                 is_resume=prepared.is_resume,
@@ -1117,7 +1124,7 @@ class SubagentRunService:
                         prompt_type=prepared.prompt_type,
                         child_session_id=prepared.child_session_id,
                         child_run_id=prepared.child_run_id,
-                        status="failed",
+                        status=WORKFLOW_FAILED_STATUS,
                         error=error_preview,
                         summary=error_preview,
                         is_resume=prepared.is_resume,
@@ -1133,7 +1140,7 @@ class SubagentRunService:
             for prepared in prepared_tasks
             if prepared.task_id in outcomes_by_task_id
         ]
-        any_failed = any(outcome.status in {"failed", "error"} for outcome in ordered_outcomes)
+        any_failed = any(is_workflow_failed_status(outcome.status) for outcome in ordered_outcomes)
         await self._emit_parent_event(
             parent_session_id=parent_session_id,
             parent_run_id=parent_run_id,
@@ -1142,7 +1149,7 @@ class SubagentRunService:
                 prepared_tasks,
                 group_id=group_id,
                 max_parallel=concurrency,
-                status="failed" if any_failed else "completed",
+                status=WORKFLOW_FAILED_STATUS if any_failed else WORKFLOW_COMPLETED_STATUS,
                 outcomes_by_task_id=outcomes_by_task_id,
             ),
         )
