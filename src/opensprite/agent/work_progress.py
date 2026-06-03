@@ -962,7 +962,7 @@ def _build_resume_hint(
     prompt_type = str(getattr(completion_result, "follow_up_prompt_type", "") or "").strip()
     verification_action = str(getattr(completion_result, "verification_action", "") or "").strip()
     verification_path = str(getattr(completion_result, "verification_path", "") or "").strip()
-    if next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
+    if is_verification_next_action(next_action):
         if workflow and step_label:
             return f"Resume by finishing verification around the {step_label} step in {workflow}."
         if verification_action and verification_path:
@@ -1028,7 +1028,7 @@ def _state_steps(
     if is_blocking_completion_status(progress.completion_status):
         current = steps[-1] if steps else WORK_STEP_NOT_SET
         return current, WORK_STEP_NOT_SET
-    if progress.next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
+    if is_verification_next_action(progress.next_action):
         return _verification_step(steps, expects_code_change=expects_code_change), WORK_STEP_NOT_SET
     if is_review_phase_next_action(progress.next_action):
         return (steps[-1] if steps else WORK_STEP_NOT_SET), WORK_STEP_NOT_SET
@@ -1037,7 +1037,7 @@ def _state_steps(
         return steps[1], next_step
     if expects_verification and steps:
         return _verification_step(steps, expects_code_change=expects_code_change), WORK_STEP_NOT_SET
-    if progress.next_action == _NEXT_ACTION_CONTINUE_WORK and steps:
+    if is_continue_work_next_action(progress.next_action) and steps:
         current = steps[-1] if progress.file_change_count > 0 else (steps[1] if len(steps) > 1 else steps[0])
         next_step = WORK_STEP_NOT_SET
         if progress.file_change_count <= 0 and len(steps) > 2:
