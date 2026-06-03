@@ -30,6 +30,7 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
+from .web_source_policy import is_web_fetch_source_record_tool, is_web_source_artifact_kind
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate
 from .worktree import WorktreeSandboxInspector
 
@@ -1493,7 +1494,7 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
     sources: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for artifact in execution_result.task_artifacts:
-        if not artifact.ok or artifact.kind != "web_source":
+        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
             continue
         raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
         if not isinstance(raw_sources, list):
@@ -1507,7 +1508,11 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
             content_chars = _coerce_positive_int(raw_source.get("content_chars"))
             is_too_short = bool(raw_source.get("is_too_short"))
             has_main_content = bool(raw_source.get("has_main_content"))
-            if raw_source.get("tool_name") == "web_fetch" and (content_chars >= 800 or has_main_content) and not is_too_short:
+            if (
+                is_web_fetch_source_record_tool(raw_source.get("tool_name"))
+                and (content_chars >= 800 or has_main_content)
+                and not is_too_short
+            ):
                 seen_urls.add(url)
                 sources.append(raw_source)
     return sources
