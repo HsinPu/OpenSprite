@@ -10,6 +10,7 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
+from .active_task_status import has_current_active_task
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
@@ -18,7 +19,6 @@ _SKIP_CONTINUATION_TYPES = frozenset({"ack", "ambiguous_boundary", "continue_act
 _NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
 _ENRICHABLE_CONTINUATION_TYPES = frozenset({"follow_up", "continue_last_answer", "continue_tool_work"})
 _MIN_CONFIDENCE = 0.65
-_ACTIVE_STATUS_RE = re.compile(r"^- Status:\s*(?P<status>.+)$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -269,10 +269,7 @@ def _has_recent_context(
 
 
 def _has_active_task(active_task: str | None) -> bool:
-    match = _ACTIVE_STATUS_RE.search(str(active_task or ""))
-    if not match:
-        return False
-    return match.group("status").strip().lower() in {"active", "blocked", "waiting_user"}
+    return has_current_active_task(active_task)
 
 
 def _is_short_objective(current_message: str) -> bool:

@@ -10,10 +10,10 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
+from .active_task_status import active_task_status, has_current_active_task
 from .task_intent import TaskIntent
 
 
-_ACTIVE_STATUS_RE = re.compile(r"^- Status:\s*(?P<status>.+)$", re.MULTILINE)
 _ALLOWED_TASK_TYPES = frozenset(
     {
         "analysis",
@@ -508,15 +508,11 @@ def _coerce_confidence(value: Any) -> float:
 
 
 def _has_active_task(active_task: str | None) -> bool:
-    status = _active_task_status(active_task)
-    return status in {"active", "blocked", "waiting_user"}
+    return has_current_active_task(active_task)
 
 
 def _active_task_status(active_task: str | None) -> str:
-    match = _ACTIVE_STATUS_RE.search(str(active_task or ""))
-    if not match:
-        return "inactive"
-    return match.group("status").strip().lower() or "inactive"
+    return active_task_status(active_task)
 
 
 def _compact(value: str | None) -> str:

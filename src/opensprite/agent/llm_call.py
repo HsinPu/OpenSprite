@@ -10,6 +10,7 @@ from ..llms import ChatMessage
 from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
+from .active_task_status import has_current_active_task
 from .execution import ExecutionResult
 from .harness_policy import HarnessPolicy
 from .harness_profile import HarnessProfile
@@ -581,21 +582,11 @@ def _should_seed_active_task_for_contract(
     profile_name = str(getattr(harness_profile, "name", "") or "").strip()
     if profile_name != "chat":
         return True
-    if _active_task_snapshot_has_current_task(active_task_snapshot):
+    if has_current_active_task(active_task_snapshot):
         return True
     if task_context_decision is None:
         return False
     return bool(task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
-
-
-def _active_task_snapshot_has_current_task(active_task_snapshot: str) -> bool:
-    for line in str(active_task_snapshot or "").splitlines():
-        stripped = line.strip()
-        if not stripped.lower().startswith("- status:"):
-            continue
-        status = stripped.split(":", 1)[1].strip().lower()
-        return status in {"active", "blocked", "waiting_user"}
-    return False
 
 
 def _effective_task_intent(
