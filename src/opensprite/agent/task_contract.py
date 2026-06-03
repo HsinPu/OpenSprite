@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
-from ..llms import ChatMessage
+from ..llms import ChatMessage, is_unconfigured_llm
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
@@ -215,7 +215,7 @@ class TaskContractPlanner:
         current_video_files: list[str] | None = None,
         task_context_decision: TaskContextDecision | None = None,
     ) -> TaskContract:
-        if provider is None or str(model or "").strip().lower() == "unconfigured":
+        if is_unconfigured_llm(provider, model):
             return _planner_blocked_contract(
                 objective=str(task_intent.objective or current_message or "").strip(),
                 reason="task contract planner unavailable: llm not configured",
