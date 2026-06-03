@@ -12,6 +12,7 @@ from ..bus.message import AssistantMessage, UserMessage
 from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
+from .completion_blocker_policy import CompletionBlockerMessages, completion_blocker_response
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .completion_status import (
     INCOMPLETE_COMPLETION_STATUS,
@@ -66,15 +67,6 @@ class SourceFallbackMessages:
     intro: str
     details_header: str
     sources_header: str
-
-
-@dataclass(frozen=True)
-class CompletionBlockerMessages:
-    intro: str
-    reason_prefix: str
-    detail_header: str
-    missing_evidence_header: str
-    stop_notice: str
 
 
 class AgentTurnRunner:
@@ -1406,7 +1398,7 @@ def _final_response_after_exhausted_continuation(
         auto_continue_attempts=auto_continue_attempts,
     ):
         return response
-    return _completion_blocker_response(completion_result, completion_blocker_messages)
+    return completion_blocker_response(completion_result, completion_blocker_messages)
 
 
 def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None) -> str:
@@ -1529,27 +1521,6 @@ def _should_replace_nonfinal_response(
     if is_blocking_completion_status(completion_result.status):
         return False
     return allows_nonfinal_response_replacement(completion_result.status)
-
-
-def _completion_blocker_response(
-    completion_result: CompletionGateResult,
-    messages: CompletionBlockerMessages,
-) -> str:
-    reason = (completion_result.reason or completion_result.status or "completion gate did not pass").strip()
-    detail = (completion_result.active_task_detail or "").strip()
-    missing = [item.strip() for item in completion_result.missing_evidence if str(item).strip()]
-    sections = [
-        messages.intro,
-        f"{messages.reason_prefix}{reason}",
-    ]
-    if detail:
-        detail_lines = [line.strip("- ").strip() for line in detail.splitlines() if line.strip()]
-        if detail_lines:
-            sections.append(f"{messages.detail_header}\n" + "\n".join(f"- {line}" for line in detail_lines))
-    if missing:
-        sections.append(f"{messages.missing_evidence_header}\n" + "\n".join(f"- {item}" for item in missing))
-    sections.append(messages.stop_notice)
-    return "\n\n".join(sections)
 
 
 def _harness_scorecard_metadata(

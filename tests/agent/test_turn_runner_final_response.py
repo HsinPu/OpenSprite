@@ -1,9 +1,9 @@
+from opensprite.agent.completion_blocker_policy import CompletionBlockerMessages
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import (
-    CompletionBlockerMessages,
     SourceFallbackMessages,
     _final_response_after_exhausted_continuation as _raw_final_response_after_exhausted_continuation,
     _message_with_runtime_context,

@@ -97,6 +97,7 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
+from .completion_blocker_policy import CompletionBlockerMessages
 from .task_contract import TaskContractPlanner
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
@@ -108,7 +109,7 @@ from .tool_registration import (
 )
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
-from .turn_runner import AgentTurnRunner, CompletionBlockerMessages, SourceFallbackMessages
+from .turn_runner import AgentTurnRunner, SourceFallbackMessages
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .workflow_status import is_workflow_failed_status
 from .worktree import WorktreeSandboxInspector
