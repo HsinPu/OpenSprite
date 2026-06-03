@@ -507,11 +507,11 @@ def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, 
 def source_material_satisfies_contract(contract: TaskContract, execution_result: ExecutionResult) -> bool:
     """Return whether gathered web source material satisfies source acceptance criteria."""
     for criterion in contract.acceptance_criteria:
-        if criterion.kind == "source_artifact":
+        if is_source_artifact_criterion(criterion):
             min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
             if len(_execution_web_sources(execution_result)) < min_count:
                 return False
-        elif criterion.kind == "source_detail":
+        elif is_source_detail_criterion(criterion):
             min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
             if _substantive_source_detail_count(execution_result) < min_count:
                 return False
@@ -528,7 +528,7 @@ def source_material_gap_detail(execution_result: ExecutionResult) -> str | None:
 def source_artifact_traceability_gap_detail(contract: TaskContract, execution_result: ExecutionResult) -> str | None:
     """Return detail when source artifacts exist but lack traceable source metadata."""
     for criterion in contract.acceptance_criteria:
-        if criterion.kind != "source_artifact":
+        if not is_source_artifact_criterion(criterion):
             continue
         min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
         artifact_count = sum(
@@ -730,7 +730,7 @@ def _history_itemized_min_count(contract: TaskContract) -> int:
     counts = [
         _coerce_int(getattr(criterion, "min_count", 0), default=0)
         for criterion in contract.acceptance_criteria
-        if criterion.kind == "itemized_output"
+        if is_itemized_output_criterion(criterion)
     ]
     return max(counts, default=0)
 
