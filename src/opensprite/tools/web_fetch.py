@@ -173,6 +173,7 @@ import socket
 import asyncio
 import gzip
 import zlib
+from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.error import URLError, HTTPError
@@ -184,6 +185,35 @@ from .web_blocking import looks_blocked_or_challenge
 from ..utils.log import logger
 
 WEB_FETCH_MIN_CONTENT_CHARS = 800
+
+
+@dataclass(frozen=True)
+class DocsFallbackRule:
+    domain: str
+    legacy_path_prefix: str
+    canonical_path_prefix: str
+    index_path: str
+    index_fallback_path: str
+    not_found_markers: tuple[str, ...]
+    not_found_required_terms: tuple[str, ...]
+    index_shell_markers: tuple[str, ...]
+    fallback_title: str
+
+
+_OPENROUTER_DOCS_FALLBACK_RULE = DocsFallbackRule(
+    domain="openrouter.ai",
+    legacy_path_prefix="/docs/api-reference/",
+    canonical_path_prefix="/docs/api/reference/",
+    index_path="/docs",
+    index_fallback_path="/docs/llms.txt",
+    not_found_markers=(
+        "# page not found this page does not exist.",
+        "page not found this page does not exist.",
+    ),
+    not_found_required_terms=("page not found", "this page does not exist"),
+    index_shell_markers=("no models found", "full documentation content"),
+    fallback_title="OpenRouter full documentation",
+)
 
 
 # 嘗試引入 trafilatura
@@ -901,7 +931,7 @@ class WebFetcher:
                         'finalUrl': final_url,
                         'status': status,
                         'contentType': content_type,
-                        'title': 'OpenRouter full documentation',
+                        'title': _OPENROUTER_DOCS_FALLBACK_RULE.fallback_title,
                         'extractor': 'raw',
                     }
                 )
@@ -913,49 +943,49 @@ class WebFetcher:
 def _openrouter_docs_alternate_url(url: str, final_url: str, content: str) -> str | None:
     if not _looks_like_openrouter_docs_not_found(content):
         return None
+    rule = _OPENROUTER_DOCS_FALLBACK_RULE
     for candidate in (url, final_url):
         try:
             parsed = urlparse(str(candidate or ""))
         except Exception:
             continue
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "openrouter.ai":
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != rule.domain:
             continue
         path = parsed.path
         if path.endswith(".md"):
             path = path[:-3]
-        if "/docs/api-reference/" not in path:
+        if rule.legacy_path_prefix not in path:
             continue
-        return parsed._replace(path=path.replace("/docs/api-reference/", "/docs/api/reference/", 1)).geturl()
+        return parsed._replace(path=path.replace(rule.legacy_path_prefix, rule.canonical_path_prefix, 1)).geturl()
     return None
 
 
 def _looks_like_openrouter_docs_not_found(content: str) -> bool:
     normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
-    return (
-        normalized in {"# page not found this page does not exist.", "page not found this page does not exist."}
-        or ("page not found" in normalized and "this page does not exist" in normalized)
-    )
+    rule = _OPENROUTER_DOCS_FALLBACK_RULE
+    return normalized in rule.not_found_markers or all(term in normalized for term in rule.not_found_required_terms)
 
 
 def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:
     normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
     if len(normalized) >= WEB_FETCH_MIN_CONTENT_CHARS:
         return None
-    if "no models found" not in normalized and "full documentation content" not in normalized:
+    rule = _OPENROUTER_DOCS_FALLBACK_RULE
+    if not any(marker in normalized for marker in rule.index_shell_markers):
         return None
     for candidate in (final_url, url):
         try:
             parsed = urlparse(str(candidate or ""))
         except Exception:
             continue
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "openrouter.ai":
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != rule.domain:
             continue
         path = parsed.path
         if path.endswith(".md"):
             path = path[:-3]
-        if path.rstrip("/") != "/docs":
+        if path.rstrip("/") != rule.index_path:
             continue
-        return parsed._replace(path="/docs/llms.txt", query="", fragment="").geturl()
+        return parsed._replace(path=rule.index_fallback_path, query="", fragment="").geturl()
     return None
 
 
