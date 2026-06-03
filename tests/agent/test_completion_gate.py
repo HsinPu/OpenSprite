@@ -715,6 +715,38 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
     assert result.status == "complete"
 
 
+def test_completion_gate_rejects_ungrounded_command_version_number():
+    intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        planner_metadata={"quality_checks": ["command_version"]},
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="9.9.9",
+        execution_result=ExecutionResult(
+            content="9.9.9",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(
+                    name="exec",
+                    ok=True,
+                    result_preview="git version 2.47.1.windows.2",
+                    metadata={"tool_args": {"command": "git --version"}},
+                ),
+            ),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "command version answer did not report a version"
+
+
 def test_completion_gate_rejects_command_unavailable_claim_without_execution_evidence():
     intent = TaskIntentService().classify("Confirm the current missingtool version. Answer only the version number.")
     contract = TaskContract(

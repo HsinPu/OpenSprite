@@ -326,7 +326,7 @@ def _evaluate_command_version_answer(
         return None
     if _execution_has_failed_command_evidence(execution_result):
         return None
-    if _response_contains_version_like_value(normalized_response):
+    if _response_reports_tool_result(response_text, execution_result):
         return None
     if _execution_confuses_command_version_with_repo_state(execution_result):
         detail = (
@@ -341,10 +341,6 @@ def _evaluate_command_version_answer(
         reason="command version answer did not report a version",
         active_task_detail=detail,
     )
-
-
-def _response_contains_version_like_value(normalized_response: str) -> bool:
-    return bool(re.search(r"\b\d+(?:\.\d+){1,}(?:[-+._a-z0-9]*)?\b", normalized_response))
 
 
 def _execution_has_failed_command_evidence(execution_result: ExecutionResult) -> bool:
