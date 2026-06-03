@@ -4,6 +4,7 @@ import pytest
 
 from opensprite.agent.harness_profile import (
     HarnessProfileService,
+    harness_profile_follow_up_instruction,
     is_chat_profile_name,
     is_coding_profile_name,
     is_media_profile_name,
@@ -99,7 +100,7 @@ def test_harness_profile_derives_ops_from_contract():
 
     assert profile.name == "ops"
     assert profile.task_type == "operations"
-    assert profile.required_tool_groups == ()
+    assert profile.required_tool_groups == ("workspace_read",)
     assert "configuration" in profile.approval_required_risk_levels
 
 
@@ -110,7 +111,7 @@ def test_harness_profile_derives_ops_scheduling_from_contract():
 
     assert profile.name == "ops"
     assert profile.task_type == "operations"
-    assert profile.required_tool_groups == ("scheduling",)
+    assert profile.required_tool_groups == ("scheduling", "workspace_read")
 
 
 def test_harness_profile_derives_ops_execution_from_contract():
@@ -120,7 +121,7 @@ def test_harness_profile_derives_ops_execution_from_contract():
 
     assert profile.name == "ops"
     assert profile.task_type == "operations"
-    assert profile.required_tool_groups == ("execution",)
+    assert profile.required_tool_groups == ("execution", "workspace_read")
 
 
 def test_default_chat_profile_no_longer_routes_by_user_text_markers():
@@ -142,6 +143,14 @@ def test_harness_profile_name_helpers_are_centralized():
     assert is_media_profile_name("ops") is False
     assert is_ops_profile_name("ops") is True
     assert is_ops_profile_name("chat") is False
+
+
+def test_harness_profile_follow_up_instruction_matches_profiles():
+    assert "Harness profile: research" in harness_profile_follow_up_instruction("research")
+    assert "Harness profile: coding" in harness_profile_follow_up_instruction("coding")
+    assert "Harness profile: media" in harness_profile_follow_up_instruction("media")
+    assert "Harness profile: ops" in harness_profile_follow_up_instruction("ops")
+    assert harness_profile_follow_up_instruction("chat") == ""
 
 
 class _FakeResponse:

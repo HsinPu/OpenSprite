@@ -27,6 +27,7 @@ from .completion_status import (
 from .execution import ExecutionResult
 from .harness_profile import (
     HarnessProfile,
+    harness_profile_follow_up_instruction,
     is_coding_profile_name,
     is_media_profile_name,
     is_ops_profile_name,
@@ -624,25 +625,7 @@ def _quality_follow_up_instruction(
 def _profile_follow_up_instruction(harness_profile: HarnessProfile | None) -> str:
     if harness_profile is None:
         return ""
-    if is_research_profile_name(harness_profile.name):
-        return (
-            "\n- Harness profile: research. Gather source evidence first, fetch or inspect at least one substantive source, "
-            "and reference gathered sources in the final answer."
-        )
-    if is_coding_profile_name(harness_profile.name):
-        return (
-            "\n- Harness profile: coding. Inspect workspace context before changing files, make the smallest safe change, "
-            "and run focused verification when possible."
-        )
-    if is_media_profile_name(harness_profile.name):
-        return (
-            "\n- Harness profile: media. Use the relevant media tool to produce the required artifact before finalizing."
-        )
-    if is_ops_profile_name(harness_profile.name):
-        return (
-            "\n- Harness profile: ops. Do not perform external side effects without required approval; report validation or blockers explicitly."
-        )
-    return ""
+    return harness_profile_follow_up_instruction(harness_profile.name)
 
 
 def _workflow_follow_up_target(completion_result: CompletionGateResult) -> str:
