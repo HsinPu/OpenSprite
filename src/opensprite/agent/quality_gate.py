@@ -31,6 +31,7 @@ from .task_contract import (
     neutral_task_contract,
 )
 from .task_intent import TaskIntent
+from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
@@ -388,58 +389,19 @@ def _execution_confuses_command_version_with_repo_state(execution_result: Execut
 
 
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
-    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
-    if not normalized_response:
+    if not str(response_text or "").strip():
         return False
     for evidence in execution_result.tool_evidence:
         if not evidence.ok:
             continue
-        preview = re.sub(r"\s+", " ", str(evidence.result_preview or "")).strip().lower()
-        if preview and preview in normalized_response:
-            return True
-        if _version_token_overlap(preview, normalized_response):
-            return True
-        if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
+        if response_reports_tool_result_preview(response_text, evidence.result_preview):
             return True
     for artifact in execution_result.task_artifacts:
         if not artifact.ok:
             continue
-        preview = re.sub(r"\s+", " ", str(artifact.content_preview or "")).strip().lower()
-        if preview and preview in normalized_response:
-            return True
-        if _version_token_overlap(preview, normalized_response):
-            return True
-        if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
+        if response_reports_tool_result_preview(response_text, artifact.content_preview):
             return True
     return False
-
-
-def _version_token_overlap(expected: str, actual: str) -> bool:
-    if not expected or not actual:
-        return False
-    version_tokens = [
-        token
-        for token in re.split(r"[^0-9a-zA-Z._-]+", expected)
-        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
-    ]
-    actual_tokens = [
-        token
-        for token in re.split(r"[^0-9a-zA-Z._-]+", actual)
-        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
-    ]
-    return any(
-        token in actual
-        or any(token.startswith(actual_token) or actual_token.startswith(token) for actual_token in actual_tokens)
-        for token in version_tokens
-    )
-
-
-def _meaningful_overlap(expected: str, actual: str) -> bool:
-    tokens = [token for token in re.split(r"[^0-9a-zA-Z._-]+", expected) if len(token) >= 3]
-    if not tokens:
-        return False
-    matched = sum(1 for token in tokens if token in actual)
-    return matched >= min(3, len(tokens))
 
 
 def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) -> QualityGateResult | None:
