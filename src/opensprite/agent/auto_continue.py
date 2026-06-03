@@ -16,6 +16,7 @@ from .quality_gate import (
     source_material_gap_detail,
     source_material_satisfies_contract,
 )
+from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
@@ -456,7 +457,7 @@ def _can_continue_incomplete_without_prior_tool_progress(
 ) -> bool:
     if execution_result.assistant_internal_only_response:
         return True
-    if execution_result.stop_reason == "max_tool_iterations":
+    if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
         return True
     if _media_artifacts_require_more_work(execution_result):
         return True

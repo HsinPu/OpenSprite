@@ -175,6 +175,21 @@ def test_work_progress_tracks_verification_and_next_action():
     assert update.continuation_budget == 3
 
 
+def test_work_progress_tracks_max_tool_iteration_stop_reason():
+    intent = TaskIntentService().classify("Please keep working until done.")
+    completion = CompletionGateResult(status="incomplete", reason="max tool iterations exhausted before completion")
+
+    update = WorkProgressService().evaluate(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="", stop_reason="max_tool_iterations"),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+
+    assert update.progress_signals == ("max_tool_iterations",)
+
+
 def test_work_progress_uses_configured_continuation_budgets():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     task_intent = TaskIntentService().classify("Please refactor the agent and run tests.")

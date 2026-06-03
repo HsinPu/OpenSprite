@@ -17,6 +17,7 @@ from .completion_status import (
 )
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
+from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
@@ -721,8 +722,8 @@ class WorkProgressService:
             signals.append("verification_passed")
         if execution_result.context_compactions > 0:
             signals.append("context_compaction")
-        if execution_result.stop_reason == "max_tool_iterations":
-            signals.append("max_tool_iterations")
+        if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
+            signals.append(MAX_TOOL_ITERATIONS_STOP_REASON)
         if execution_result.had_tool_error:
             signals.append("tool_error")
         return tuple(signals)
