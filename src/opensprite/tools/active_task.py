@@ -9,6 +9,7 @@ from ..documents.active_task import (
     _extract_task_field,
     build_task_block_from_text,
 )
+from ..agent.active_task_open_questions import normalize_open_questions
 from .base import Tool
 from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
@@ -249,9 +250,7 @@ class TaskUpdateTool(Tool):
 
             cleaned_questions = None
             if open_questions is not None:
-                cleaned_questions = [str(item).strip() for item in open_questions if str(item).strip()]
-                if any(item.lower() == "none" for item in cleaned_questions):
-                    cleaned_questions = ["none"]
+                cleaned_questions = normalize_open_questions(open_questions)
 
             rendered = store.update_fields(
                 status=str(status).strip() if status is not None else None,

@@ -17,6 +17,7 @@ from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
+from .active_task_open_questions import clear_open_questions
 from .active_task_status import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_STATUS,
@@ -105,7 +106,7 @@ class ActiveTaskCommandService:
         elif status == BLOCKED_ACTIVE_TASK_STATUS:
             store.update_fields(status=BLOCKED_ACTIVE_TASK_STATUS, open_questions=[detail or "blocked"], force=True)
         elif status == DONE_ACTIVE_TASK_STATUS:
-            store.update_fields(status=DONE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
+            store.update_fields(status=DONE_ACTIVE_TASK_STATUS, open_questions=clear_open_questions(), force=True)
         else:
             return
 
@@ -150,7 +151,7 @@ class ActiveTaskCommandService:
         if workboard.blockers:
             open_questions = list(workboard.blockers)
         elif state is not None and clears_active_task_open_questions(state.status):
-            open_questions = ["none"]
+            open_questions = clear_open_questions()
         elif is_blocking_completion_status(progress.status):
             open_questions = [progress.completion_reason]
 
@@ -213,7 +214,7 @@ class ActiveTaskCommandService:
                 return
             if _decision_continues_current_task(task_context_decision):
                 if current_status == WAITING_USER_ACTIVE_TASK_STATUS and store.read_pending_boundary_request():
-                    store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
+                    store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=clear_open_questions(), force=True)
                     await self._mark_processed(session_id, store)
                     store.append_event(
                         "task_boundary_confirmation_resolved",
@@ -321,7 +322,7 @@ class ActiveTaskCommandService:
         store = self.get_store(session_id)
         if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
+        rendered = store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=clear_open_questions(), force=True)
         await self._mark_processed(session_id, store)
         store.append_event("activate", "user")
         return f"# Active Task\n\n{rendered}"
@@ -429,7 +430,7 @@ class ActiveTaskCommandService:
         store = self.get_store(session_id)
         if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        open_questions = ["none"] if clears_active_task_open_questions(status) else None
+        open_questions = clear_open_questions() if clears_active_task_open_questions(status) else None
         store.update_fields(status=status, open_questions=open_questions, force=True)
         if is_terminal_active_task_status(status):
             await self._mark_processed(session_id, store)
