@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .evidence_gate_policy import MISSING_TASK_EVIDENCE_REASON, missing_evidence_active_task_detail
 from .execution import ExecutionResult
 from .task_contract import TaskContract, missing_evidence, neutral_task_contract
 from .task_intent import TaskIntent
@@ -20,9 +21,7 @@ class EvidenceGateResult:
 
     @property
     def active_task_detail(self) -> str | None:
-        if not self.missing_evidence:
-            return None
-        return "\n".join(f"- {item}" for item in self.missing_evidence)
+        return missing_evidence_active_task_detail(self.missing_evidence)
 
 
 class EvidenceGateService:
@@ -47,6 +46,6 @@ class EvidenceGateService:
                 passed=False,
                 task_contract=task_contract,
                 missing_evidence=missing,
-                reason="required task evidence was not produced",
+                reason=MISSING_TASK_EVIDENCE_REASON,
             )
         return EvidenceGateResult(passed=True, task_contract=task_contract)
