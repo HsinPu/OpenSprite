@@ -19,6 +19,12 @@ from .task_context_policy import (
 from .task_context_resolver import TaskContextDecision
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .task_text_policy import task_text_tokens
+from .llm_resolution_policy import (
+    TASK_OBJECTIVE_RESOLUTION_PURPOSE,
+    llm_failed_reason,
+    llm_low_confidence_reason,
+    llm_unavailable_reason,
+)
 
 
 _MIN_CONFIDENCE = 0.65
@@ -85,7 +91,7 @@ class TaskObjectiveResolver:
         ):
             return deterministic
         if is_unconfigured_llm(provider, model):
-            return _unresolved_llm_objective(original, "llm unavailable; objective was not enriched")
+            return _unresolved_llm_objective(original, llm_unavailable_reason(TASK_OBJECTIVE_RESOLUTION_PURPOSE))
 
         try:
             llm_decision = await self._resolve_with_llm(
@@ -100,12 +106,12 @@ class TaskObjectiveResolver:
             )
         except Exception as exc:
             logger.warning("Task objective LLM resolution failed: {}", exc)
-            return _unresolved_llm_objective(original, "llm failed; objective was not enriched")
+            return _unresolved_llm_objective(original, llm_failed_reason(TASK_OBJECTIVE_RESOLUTION_PURPOSE))
 
         if llm_decision.confidence < _MIN_CONFIDENCE:
             return _unresolved_llm_objective(
                 original,
-                f"llm confidence too low ({llm_decision.confidence:.2f}); objective was not enriched",
+                llm_low_confidence_reason(llm_decision.confidence, TASK_OBJECTIVE_RESOLUTION_PURPOSE),
             )
         if llm_decision.should_use_resolved_objective and not _is_useful_objective(
             llm_decision.resolved_objective,

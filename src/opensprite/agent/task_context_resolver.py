@@ -42,6 +42,12 @@ from .task_context_policy import (
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .task_text_policy import task_text_tokens
+from .llm_resolution_policy import (
+    TASK_CONTEXT_RESOLUTION_PURPOSE,
+    llm_failed_reason,
+    llm_low_confidence_reason,
+    llm_unavailable_reason,
+)
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
@@ -150,7 +156,7 @@ class TaskContextResolver:
         ):
             return deterministic
         if is_unconfigured_llm(provider, model):
-            return _unresolved_llm_decision("llm unavailable; task context was not inferred")
+            return _unresolved_llm_decision(llm_unavailable_reason(TASK_CONTEXT_RESOLUTION_PURPOSE))
 
         try:
             llm_decision = await self._resolve_with_llm(
@@ -165,7 +171,7 @@ class TaskContextResolver:
             )
         except Exception as exc:
             logger.warning("Task context LLM resolution failed: {}", exc)
-            return _unresolved_llm_decision("llm failed; task context was not inferred")
+            return _unresolved_llm_decision(llm_failed_reason(TASK_CONTEXT_RESOLUTION_PURPOSE))
 
         llm_decision = _merge_with_deterministic(
             deterministic,
@@ -173,9 +179,7 @@ class TaskContextResolver:
             has_active_task=_has_active_task(active_task),
         )
         if llm_decision.confidence < 0.55:
-            return _unresolved_llm_decision(
-                f"llm confidence too low ({llm_decision.confidence:.2f}); task context was not inferred"
-            )
+            return _unresolved_llm_decision(llm_low_confidence_reason(llm_decision.confidence, TASK_CONTEXT_RESOLUTION_PURPOSE))
         return llm_decision
 
     @classmethod
