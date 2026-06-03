@@ -25,6 +25,11 @@ from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_state import RunCancelledError
+from .context_compaction_policy import (
+    COMPACTED_CONVERSATION_STATE_HEADING,
+    COMPACTED_TASK_STATE_HEADING,
+    contains_compaction_handoff,
+)
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .subagent_result_policy import (
@@ -215,7 +220,7 @@ class ExecutionEngine:
     PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE = "上下文接近上限，正在壓縮目前任務並繼續…"
     PROVIDER_RETRY_LIMIT = 1
     PROVIDER_RETRY_STATUS_MESSAGE = "模型服務暫時忙碌，我會稍等後重試。"
-    LLM_COMPACTION_SYSTEM_PROMPT = """You are a context compaction engine for an autonomous assistant.
+    LLM_COMPACTION_SYSTEM_PROMPT = f"""You are a context compaction engine for an autonomous assistant.
 Compress the provided conversation state into a concise, factual Markdown handoff snapshot.
 Do not solve the user's task. Do not ask questions. Do not invent facts.
 Treat this as a handoff to a future context window of the same assistant.
@@ -224,7 +229,7 @@ Do not turn old requests into new instructions. Distinguish clearly between comp
 Preserve verification requirements, missing evidence, review findings, quality gaps, and blockers exactly. Never convert incomplete work into completed work.
 
 Output exactly these sections when applicable:
-# Compacted Task State
+{COMPACTED_TASK_STATE_HEADING}
 ## Current Goal
 ## Latest User Instruction
 ## Important Context And Constraints
@@ -851,7 +856,7 @@ Output exactly these sections when applicable:
             if getattr(message, "role", None) != "system":
                 continue
             content = cls._message_content_to_text(getattr(message, "content", ""))
-            if "# Compacted Conversation State" in content or "# Compacted Task State" in content:
+            if contains_compaction_handoff(content):
                 return cls._truncate_text(content, cls.COMPACTION_HANDOFF_MAX_CHARS)
         return None
 
@@ -963,7 +968,7 @@ Output exactly these sections when applicable:
             return _LlmCompactionAttempt(fallback_reason="llm_empty")
 
         summary_sections = [
-            "# Compacted Conversation State",
+            COMPACTED_CONVERSATION_STATE_HEADING,
             "The in-turn context was compacted by an LLM before the next request because it was approaching the configured context budget.",
             "This summary is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
             "Treat summarized older context as reference only. Prefer the preserved recent tail and current active task state if they conflict with the summary.",
