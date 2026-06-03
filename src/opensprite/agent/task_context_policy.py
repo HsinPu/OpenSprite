@@ -58,3 +58,35 @@ ALLOWED_CONTINUATION_TYPES = frozenset(
         NONE_CONTINUATION_TYPE,
     }
 )
+
+
+def is_allowed_continuation_type(value: str | None) -> bool:
+    return str(value or "").strip() in ALLOWED_CONTINUATION_TYPES
+
+
+def is_follow_up_continuation_type(value: str | None) -> bool:
+    return str(value or "").strip() in FOLLOW_UP_CONTINUATION_TYPES
+
+
+def is_new_task_continuation_type(value: str | None) -> bool:
+    return str(value or "").strip() in NEW_TASK_CONTINUATION_TYPES
+
+
+def is_current_task_continuation_type(value: str | None) -> bool:
+    return str(value or "").strip() in CURRENT_TASK_CONTINUATION_TYPES
+
+
+def is_current_task_replacement_type(value: str | None) -> bool:
+    return str(value or "").strip() in CURRENT_TASK_REPLACEMENT_TYPES
+
+
+def is_objective_resolution_skip_type(value: str | None) -> bool:
+    return str(value or "").strip() in OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES
+
+
+def is_objective_resolution_enrichable_type(value: str | None) -> bool:
+    return str(value or "").strip() in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES
+
+
+def is_ambiguous_boundary_continuation_type(value: str | None) -> bool:
+    return str(value or "").strip() == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE

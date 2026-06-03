@@ -31,11 +31,13 @@ from .task_context_policy import (
     AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     FOLLOW_UP_CONTINUATION_TYPE,
-    FOLLOW_UP_CONTINUATION_TYPES,
     NEW_TASK_CONTINUATION_TYPE,
-    NEW_TASK_CONTINUATION_TYPES,
     NONE_CONTINUATION_TYPE,
     TASK_SWITCH_CONTINUATION_TYPE,
+    is_allowed_continuation_type,
+    is_ambiguous_boundary_continuation_type,
+    is_follow_up_continuation_type,
+    is_new_task_continuation_type,
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .task_text_policy import task_text_tokens
@@ -318,18 +320,18 @@ def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = F
         should_seed_active_task=should_seed_active_task,
         should_replace_active_task=should_replace_active_task,
     )
-    if continuation_type in FOLLOW_UP_CONTINUATION_TYPES:
+    if is_follow_up_continuation_type(continuation_type):
         should_replace_active_task = False
         is_follow_up = True
     if continuation_type == CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE or (
-        has_active_task and continuation_type in FOLLOW_UP_CONTINUATION_TYPES
+        has_active_task and is_follow_up_continuation_type(continuation_type)
     ):
         should_inherit_active_task = True
         is_follow_up = True
-    if continuation_type in NEW_TASK_CONTINUATION_TYPES:
+    if is_new_task_continuation_type(continuation_type):
         should_inherit_active_task = False
         should_seed_active_task = True
-    if continuation_type == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE:
+    if is_ambiguous_boundary_continuation_type(continuation_type):
         should_inherit_active_task = False
         should_seed_active_task = False
         should_replace_active_task = False
@@ -373,7 +375,7 @@ def _merge_with_deterministic(
     continuation_type = llm_decision.continuation_type
     if (
         has_active_task
-        and continuation_type in NEW_TASK_CONTINUATION_TYPES
+        and is_new_task_continuation_type(continuation_type)
         and llm_decision.confidence < _LLM_TASK_SWITCH_CONFIDENCE
     ):
         return replace(
@@ -389,21 +391,21 @@ def _merge_with_deterministic(
         )
     if (
         deterministic.should_inherit_active_task
-        and continuation_type not in NEW_TASK_CONTINUATION_TYPES
-        and continuation_type != AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE
+        and not is_new_task_continuation_type(continuation_type)
+        and not is_ambiguous_boundary_continuation_type(continuation_type)
     ):
         continuation_type = CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE
     elif inherited_tool_group and continuation_type == NONE_CONTINUATION_TYPE:
         continuation_type = FOLLOW_UP_CONTINUATION_TYPE
 
-    should_replace_active_task = llm_decision.should_replace_active_task and continuation_type in NEW_TASK_CONTINUATION_TYPES
+    should_replace_active_task = llm_decision.should_replace_active_task and is_new_task_continuation_type(continuation_type)
     should_seed_active_task = llm_decision.should_seed_active_task or should_replace_active_task
     should_inherit_active_task = llm_decision.should_inherit_active_task
     if deterministic.should_inherit_active_task and not should_replace_active_task:
         should_inherit_active_task = True
 
     is_follow_up = llm_decision.is_follow_up
-    if inherited_tool_group or continuation_type in FOLLOW_UP_CONTINUATION_TYPES:
+    if inherited_tool_group or is_follow_up_continuation_type(continuation_type):
         is_follow_up = True
     if should_replace_active_task:
         is_follow_up = False
@@ -471,7 +473,7 @@ def _continuation_type_from_payload(
     should_replace_active_task: bool,
 ) -> str:
     normalized = str(payload.get("continuation_type") or "").strip()
-    if normalized in ALLOWED_CONTINUATION_TYPES:
+    if is_allowed_continuation_type(normalized):
         return normalized
     if should_replace_active_task:
         return TASK_SWITCH_CONTINUATION_TYPE

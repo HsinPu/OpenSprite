@@ -12,9 +12,9 @@ from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
 from .task_context_policy import (
-    NEW_TASK_CONTINUATION_TYPES,
-    OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES,
-    OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES,
+    is_new_task_continuation_type,
+    is_objective_resolution_enrichable_type,
+    is_objective_resolution_skip_type,
 )
 from .task_context_resolver import TaskContextDecision
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
@@ -164,21 +164,21 @@ def _should_resolve_objective(
     current = _compact(current_message)
     if not current:
         return False
-    if task_context_decision and task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES:
+    if task_context_decision and is_objective_resolution_skip_type(task_context_decision.continuation_type):
         return False
     if task_intent and task_intent.kind == CONVERSATION_INTENT_KIND and not bool(
         task_context_decision
         and (
             task_context_decision.is_follow_up
-            or task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES
+            or is_objective_resolution_enrichable_type(task_context_decision.continuation_type)
         )
     ):
         return False
-    if task_context_decision and task_context_decision.continuation_type in NEW_TASK_CONTINUATION_TYPES:
+    if task_context_decision and is_new_task_continuation_type(task_context_decision.continuation_type):
         return _is_short_objective(current)
     if not _has_recent_context(history, active_task, work_state_summary):
         return False
-    if task_context_decision and task_context_decision.continuation_type in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES:
+    if task_context_decision and is_objective_resolution_enrichable_type(task_context_decision.continuation_type):
         return True
     if task_context_decision and task_context_decision.is_follow_up:
         return True

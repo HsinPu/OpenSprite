@@ -31,9 +31,9 @@ from .active_task_status import (
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
 from .task_context_policy import (
-    AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
-    CURRENT_TASK_CONTINUATION_TYPES,
-    CURRENT_TASK_REPLACEMENT_TYPES,
+    is_ambiguous_boundary_continuation_type,
+    is_current_task_continuation_type,
+    is_current_task_replacement_type,
 )
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
@@ -450,7 +450,7 @@ def _decision_continues_current_task(decision: TaskContextDecision | None) -> bo
         return False
     return bool(
         decision.should_inherit_active_task
-        or decision.continuation_type in CURRENT_TASK_CONTINUATION_TYPES
+        or is_current_task_continuation_type(decision.continuation_type)
         or decision.is_follow_up
     )
 
@@ -459,12 +459,12 @@ def _decision_replaces_current_task(decision: TaskContextDecision | None) -> boo
     return bool(
         decision
         and decision.should_replace_active_task
-        and decision.continuation_type in CURRENT_TASK_REPLACEMENT_TYPES
+        and is_current_task_replacement_type(decision.continuation_type)
     )
 
 
 def _decision_needs_boundary_confirmation(decision: TaskContextDecision | None) -> bool:
-    return bool(decision and decision.continuation_type == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE)
+    return bool(decision and is_ambiguous_boundary_continuation_type(decision.continuation_type))
 
 
 def _decision_controls_task_seed(decision: TaskContextDecision | None) -> bool:
