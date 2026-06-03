@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from .completion_gate import CompletionGateResult
-from .completion_status import allows_workflow_resume, is_continuable_completion_status, is_terminal_completion_status
+from .completion_status import (
+    allows_workflow_resume,
+    is_continuable_completion_status,
+    is_incomplete_completion_status,
+    is_terminal_completion_status,
+    needs_review_completion_status,
+    needs_verification_completion_status,
+)
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
 from .quality_gate import (
@@ -166,7 +173,7 @@ class AutoContinueService:
                 emit_event=True,
             )
         if (
-            completion_result.status == "incomplete"
+            is_incomplete_completion_status(completion_result.status)
             and execution_result.executed_tool_calls == 0
             and not direct_action_available
             and not _can_continue_incomplete_without_prior_tool_progress(task_intent, completion_result, execution_result)
@@ -177,7 +184,7 @@ class AutoContinueService:
                 max_attempts=max_attempts,
                 emit_event=True,
             )
-        if completion_result.status == "needs_review" and attempts_used > 0 and not (direct_workflow and direct_start_step):
+        if needs_review_completion_status(completion_result.status) and attempts_used > 0 and not (direct_workflow and direct_start_step):
             reason = "review_findings_require_follow_up" if completion_result.review_attempted else "review_evidence_still_missing"
             return self._skip(
                 reason,
@@ -248,7 +255,7 @@ class AutoContinueService:
                     "\n- Prefer resuming this concrete workflow step instead of rerunning already completed workflow steps."
                 )
         verification_instruction = ""
-        if completion_result.status == "needs_verification":
+        if needs_verification_completion_status(completion_result.status):
             verification_instruction = (
                 "\n- Verification is required. Use available verification tools or clearly state the blocker "
                 "if verification cannot be run."
@@ -261,7 +268,7 @@ class AutoContinueService:
                     f"{_format_verify_pytest_args_hint(completion_result.verification_pytest_args)})`."
                 )
         review_instruction = ""
-        if completion_result.status == "needs_review":
+        if needs_review_completion_status(completion_result.status):
             if completion_result.review_attempted:
                 review_instruction = (
                     "\n- Review findings already exist. Address the recorded findings first, "
@@ -273,7 +280,7 @@ class AutoContinueService:
                     "then summarize whether the review found issues that still need follow-up."
                 )
         incomplete_instruction = ""
-        if completion_result.status == "incomplete" and follow_up_detail:
+        if is_incomplete_completion_status(completion_result.status) and follow_up_detail:
             incomplete_instruction = (
                 "\n- The missing work is already identified. Resume from the required follow-up detail below before doing broader new work."
             )
@@ -406,7 +413,7 @@ class AutoContinueService:
         same_target_verify_attempts: int,
         max_same_target_verifications: int,
     ) -> tuple[str | None, str | None, tuple[str, ...]]:
-        if completion_result.status != "needs_verification":
+        if not needs_verification_completion_status(completion_result.status):
             return None, None, ()
         if not verification_available:
             return None, None, ()
@@ -438,7 +445,7 @@ def _should_answer_from_existing_web_sources(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult,
 ) -> bool:
-    if completion_result.status != "incomplete":
+    if not is_incomplete_completion_status(completion_result.status):
         return False
     if completion_result.missing_evidence:
         return False
