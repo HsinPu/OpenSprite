@@ -817,6 +817,19 @@ def test_tool_result_failure_detection_honors_structured_error_payload():
     assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is True
 
 
+def test_tool_result_repeated_error_key_requires_structured_payload():
+    assert ExecutionEngine._classify_tool_result("Search failed for: Qwen") is None
+
+    result = tool_error_result(
+        "Search failed for: Qwen",
+        error_type="ToolExecutionError",
+        category="web_search_error",
+        repeated_error_key="web_search:Qwen",
+    )
+
+    assert ExecutionEngine._classify_tool_result(result) == "web_search:Qwen"
+
+
 def test_tool_result_failure_detection_allows_successful_batch_payload():
     result = json.dumps(
         {
