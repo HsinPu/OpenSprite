@@ -17,7 +17,17 @@ from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
-from .active_task_status import is_current_active_task_status, is_current_or_done_active_task_status
+from .active_task_status import (
+    ACTIVE_ACTIVE_TASK_STATUS,
+    BLOCKED_ACTIVE_TASK_STATUS,
+    DONE_ACTIVE_TASK_STATUS,
+    WAITING_USER_ACTIVE_TASK_STATUS,
+    clears_active_task_open_questions,
+    is_current_active_task_status,
+    is_current_or_done_active_task_status,
+    is_inactive_active_task_status,
+    is_terminal_active_task_status,
+)
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
 from .task_context_resolver import TaskContextDecision
@@ -96,12 +106,12 @@ class ActiveTaskCommandService:
 
         status = result.active_task_status
         detail = result.active_task_detail or result.reason
-        if status == "waiting_user":
-            store.update_fields(status="waiting_user", open_questions=[detail or "need user input"], force=True)
-        elif status == "blocked":
-            store.update_fields(status="blocked", open_questions=[detail or "blocked"], force=True)
-        elif status == "done":
-            store.update_fields(status="done", open_questions=["none"], force=True)
+        if status == WAITING_USER_ACTIVE_TASK_STATUS:
+            store.update_fields(status=WAITING_USER_ACTIVE_TASK_STATUS, open_questions=[detail or "need user input"], force=True)
+        elif status == BLOCKED_ACTIVE_TASK_STATUS:
+            store.update_fields(status=BLOCKED_ACTIVE_TASK_STATUS, open_questions=[detail or "blocked"], force=True)
+        elif status == DONE_ACTIVE_TASK_STATUS:
+            store.update_fields(status=DONE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
         else:
             return
 
@@ -143,13 +153,15 @@ class ActiveTaskCommandService:
         open_questions: list[str] | None = None
         if workboard.blockers:
             open_questions = list(workboard.blockers)
-        elif state is not None and state.status in {"active", "done"}:
+        elif state is not None and clears_active_task_open_questions(state.status):
             open_questions = ["none"]
         elif is_blocking_completion_status(progress.status):
             open_questions = [progress.completion_reason]
 
         store.update_fields(
-            status=state.status if state is not None and is_current_or_done_active_task_status(state.status) else "active",
+            status=state.status
+            if state is not None and is_current_or_done_active_task_status(state.status)
+            else ACTIVE_ACTIVE_TASK_STATUS,
             current_step=current_step,
             next_step=next_step,
             open_questions=open_questions,
@@ -191,7 +203,7 @@ class ActiveTaskCommandService:
             current_task = store.read_managed_block()
             if _decision_needs_boundary_confirmation(task_context_decision):
                 question = _boundary_confirmation_question(current_task, current_message)
-                store.update_fields(status="waiting_user", open_questions=[question], force=True)
+                store.update_fields(status=WAITING_USER_ACTIVE_TASK_STATUS, open_questions=[question], force=True)
                 await self._mark_processed(session_id, store)
                 store.append_event(
                     "task_boundary_confirmation",
@@ -204,8 +216,8 @@ class ActiveTaskCommandService:
                 )
                 return
             if _decision_continues_current_task(task_context_decision):
-                if current_status == "waiting_user" and store.read_pending_boundary_request():
-                    store.update_fields(status="active", open_questions=["none"], force=True)
+                if current_status == WAITING_USER_ACTIVE_TASK_STATUS and store.read_pending_boundary_request():
+                    store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
                     await self._mark_processed(session_id, store)
                     store.append_event(
                         "task_boundary_confirmation_resolved",
@@ -311,9 +323,9 @@ class ActiveTaskCommandService:
     async def activate(self, session_id: str) -> str | None:
         """Mark the current ACTIVE_TASK as active again."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status="active", open_questions=["none"], force=True)
+        rendered = store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=["none"], force=True)
         await self._mark_processed(session_id, store)
         store.append_event("activate", "user")
         return f"# Active Task\n\n{rendered}"
@@ -323,9 +335,9 @@ class ActiveTaskCommandService:
         store = self.get_store(session_id)
         if store is None:
             return None
-        if store.read_status() not in {"done", "cancelled"}:
+        if not is_terminal_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status="active", force=True)
+        rendered = store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, force=True)
         await self._mark_processed(session_id, store)
         store.append_event("reopen", "user")
         return f"# Active Task\n\n{rendered}"
@@ -333,9 +345,9 @@ class ActiveTaskCommandService:
     async def block(self, session_id: str, reason: str) -> str | None:
         """Mark the current ACTIVE_TASK as blocked with one explicit reason."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status="blocked", open_questions=[reason], force=True)
+        rendered = store.update_fields(status=BLOCKED_ACTIVE_TASK_STATUS, open_questions=[reason], force=True)
         await self._mark_processed(session_id, store)
         store.append_event("block", "user", details={"reason": reason})
         return f"# Active Task\n\n{rendered}"
@@ -343,9 +355,9 @@ class ActiveTaskCommandService:
     async def wait_on(self, session_id: str, question: str) -> str | None:
         """Mark the current ACTIVE_TASK as waiting for user input."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status="waiting_user", open_questions=[question], force=True)
+        rendered = store.update_fields(status=WAITING_USER_ACTIVE_TASK_STATUS, open_questions=[question], force=True)
         await self._mark_processed(session_id, store)
         store.append_event("wait", "user", details={"question": question})
         return f"# Active Task\n\n{rendered}"
@@ -353,9 +365,9 @@ class ActiveTaskCommandService:
     async def set_current_step(self, session_id: str, step_text: str) -> str | None:
         """Replace the current step for the active task."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        rendered = store.update_fields(status="active", current_step=step_text, force=True)
+        rendered = store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, current_step=step_text, force=True)
         await self._mark_processed(session_id, store)
         store.append_event("set_current_step", "user", details={"current_step": step_text})
         return f"# Active Task\n\n{rendered}"
@@ -363,7 +375,7 @@ class ActiveTaskCommandService:
     async def set_next_step(self, session_id: str, step_text: str) -> str | None:
         """Replace the planned next step for the active task."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
         rendered = store.update_fields(next_step=step_text, force=True)
         await self._mark_processed(session_id, store)
@@ -373,7 +385,7 @@ class ActiveTaskCommandService:
     async def advance(self, session_id: str) -> str | None:
         """Promote the next step into the current step and mark the previous step complete."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
         current_block = store.read_managed_block()
         current_step = _extract_task_field(current_block, "Current step")
@@ -381,7 +393,7 @@ class ActiveTaskCommandService:
         if next_step == "not set":
             return None
         rendered = store.update_fields(
-            status="active",
+            status=ACTIVE_ACTIVE_TASK_STATUS,
             current_step=next_step,
             next_step="not set",
             append_completed_step=current_step,
@@ -398,7 +410,7 @@ class ActiveTaskCommandService:
     async def complete_step(self, session_id: str, next_step_override: str | None = None) -> str | None:
         """Complete the current step and either advance or finish the task."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
         current_block = store.read_managed_block()
         current_step = _extract_task_field(current_block, "Current step")
@@ -419,11 +431,11 @@ class ActiveTaskCommandService:
     async def mark_status(self, session_id: str, status: str) -> str | None:
         """Set the current ACTIVE_TASK status when one exists."""
         store = self.get_store(session_id)
-        if store is None or store.read_status() == "inactive":
+        if store is None or is_inactive_active_task_status(store.read_status()):
             return None
-        open_questions = ["none"] if status in {"active", "done", "cancelled"} else None
+        open_questions = ["none"] if clears_active_task_open_questions(status) else None
         store.update_fields(status=status, open_questions=open_questions, force=True)
-        if status in {"done", "cancelled"}:
+        if is_terminal_active_task_status(status):
             await self._mark_processed(session_id, store)
         store.append_event(status, "user")
         return store.render_full_for_user()
