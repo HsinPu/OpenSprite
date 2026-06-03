@@ -2,6 +2,7 @@ from opensprite.agent.completion_blocker_policy import CompletionBlockerMessages
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
 from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.response_shape_policy import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import (
@@ -94,7 +95,7 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
         response="找到了正確網址，讓我抓取主要文件頁面的內容。",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="assistant final answer was too terse for the task",
+            reason=TERSE_FINAL_ANSWER_REASON,
             active_task_detail="Provide a substantive final answer that uses the gathered web source results.",
         ),
         auto_continue_attempts=3,
@@ -137,7 +138,7 @@ def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snipp
         response="Let me keep checking that.",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="assistant final answer was too terse for the task",
+            reason=TERSE_FINAL_ANSWER_REASON,
             active_task_detail="Provide a substantive final answer that uses the gathered web source results.",
         ),
         auto_continue_attempts=3,
@@ -182,7 +183,7 @@ def test_exhausted_continuation_uses_gathered_source_fallback_for_market_quote()
         response="Let me keep checking that.",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="assistant final answer was too terse for the task",
+            reason=TERSE_FINAL_ANSWER_REASON,
             active_task_detail="State the current or latest available quote directly before listing sources.",
         ),
         auto_continue_attempts=3,
@@ -268,7 +269,7 @@ def test_exhausted_continuation_does_not_use_source_fallback_from_reason_only():
         response="Let me keep checking that.",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="assistant final answer was too terse for the task",
+            reason=TERSE_FINAL_ANSWER_REASON,
         ),
         auto_continue_attempts=3,
         execution_result=ExecutionResult(
@@ -300,7 +301,7 @@ def test_exhausted_continuation_does_not_use_source_fallback_from_reason_only():
     )
 
     assert "https://example.com/source" not in response
-    assert "assistant final answer was too terse for the task" in response
+    assert TERSE_FINAL_ANSWER_REASON in response
 
 
 def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_error():

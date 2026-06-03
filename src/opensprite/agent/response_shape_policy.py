@@ -7,6 +7,7 @@ import re
 
 ITEMIZED_RESPONSE_LINE_RE = re.compile(r"^(?:[-*]|\d+[.)]|\|)")
 ITEMIZED_OUTPUT_MISSING_REASON = "assistant did not provide the requested itemized result"
+TERSE_FINAL_ANSWER_REASON = "assistant final answer was too terse for the task"
 
 
 def normalized_response_text(response_text: str | None) -> str:

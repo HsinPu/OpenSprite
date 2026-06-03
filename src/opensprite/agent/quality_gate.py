@@ -42,6 +42,7 @@ from .task_contract import (
 from .task_intent import TaskIntent
 from .response_shape_policy import (
     ITEMIZED_OUTPUT_MISSING_REASON,
+    TERSE_FINAL_ANSWER_REASON,
     normalized_response_text,
     response_has_minimum_text_length,
     response_item_count,
@@ -186,7 +187,7 @@ def _evaluate_substantive_final_answer(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="assistant final answer was too terse for the task",
+        reason=TERSE_FINAL_ANSWER_REASON,
         active_task_detail=getattr(criterion, "description", "") or None,
     )
 

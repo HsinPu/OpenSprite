@@ -56,7 +56,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
-from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON
+from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
@@ -1441,7 +1441,7 @@ def test_completion_gate_rejects_terse_workspace_answer_after_reading():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer was too terse for the task"
+    assert completion.reason == TERSE_FINAL_ANSWER_REASON
 
 
 def test_completion_gate_requires_workspace_answer_to_reference_requested_path():
@@ -1682,7 +1682,7 @@ def test_completion_gate_rejects_terse_history_answer_after_retrieval():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer was too terse for the task"
+    assert completion.reason == TERSE_FINAL_ANSWER_REASON
 
 
 def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
@@ -2825,7 +2825,7 @@ def test_completion_gate_rejects_terse_web_research_final_answer():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer was too terse for the task"
+    assert completion.reason == TERSE_FINAL_ANSWER_REASON
 
 
 def test_completion_gate_requires_web_source_reference_in_final_answer():
@@ -3874,7 +3874,7 @@ def test_completion_gate_rejects_terse_media_final_answer():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer was too terse for the task"
+    assert completion.reason == TERSE_FINAL_ANSWER_REASON
 
 
 def test_completion_gate_requires_media_artifacts_after_evidence():
