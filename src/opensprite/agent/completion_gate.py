@@ -52,7 +52,11 @@ from .web_source_policy import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
-from .verification_policy import is_verification_result_artifact_kind, is_verification_tool_name
+from .verification_policy import (
+    SKIPPED_VERIFICATION_STATUS,
+    is_verification_result_artifact_kind,
+    is_verification_tool_name,
+)
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     is_workflow_completed_status,
@@ -74,7 +78,7 @@ _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
     {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
 )
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
-_SKIPPED_VERIFICATION_STATUS = "skipped"
+_SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
 _PYTHON_FILE_SUFFIX = ".py"
