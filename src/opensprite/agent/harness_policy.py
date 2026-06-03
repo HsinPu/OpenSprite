@@ -10,15 +10,12 @@ from ..tools import ToolRegistry
 from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import HarnessProfile
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
+from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
 
 
 _READ_ONLY_TOOLS = (
-    "read_file",
-    "list_dir",
-    "glob_files",
-    "grep_files",
-    "code_navigation",
+    *WORKSPACE_DISCOVERY_TOOLS,
     "read_skill",
     HISTORY_SEARCH_TOOL_NAME,
     "list_run_file_changes",

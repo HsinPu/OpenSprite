@@ -8,21 +8,18 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
+from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
 
 IDEMPOTENT_TOOL_NAMES = frozenset(
     {
-        "read_file",
-        "list_dir",
-        "glob_files",
-        "grep_files",
+        *WORKSPACE_DISCOVERY_TOOLS,
         "batch",
         "read_skill",
         HISTORY_SEARCH_TOOL_NAME,
         *WEB_SOURCE_EVIDENCE_TOOLS,
-        "code_navigation",
     }
 )
 

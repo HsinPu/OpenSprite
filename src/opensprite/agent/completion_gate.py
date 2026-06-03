@@ -41,7 +41,7 @@ from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .task_contract import PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
 from .task_intent import TaskIntent
-from .tool_groups import OPERATION_TOOL_GROUPS
+from .tool_groups import OPERATION_TOOL_GROUPS, WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,
@@ -59,7 +59,6 @@ from .workflow_status import (
     is_workflow_unsuccessful_status,
 )
 
-_WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
 _PLAIN_ANSWER_TASK_TYPE = PURE_ANSWER_TASK_TYPE
@@ -928,10 +927,10 @@ def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionR
     failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
     if not failed_evidence:
         return False
-    if not any(item.ok and item.name in _WORKSPACE_DISCOVERY_TOOLS for item in execution_result.tool_evidence):
+    if not any(item.ok and item.name in WORKSPACE_DISCOVERY_TOOLS for item in execution_result.tool_evidence):
         return False
     for item in failed_evidence:
-        if item.name in _WORKSPACE_DISCOVERY_TOOLS:
+        if item.name in WORKSPACE_DISCOVERY_TOOLS:
             continue
         if _is_optional_workspace_batch_failure_tool(item.name) and execution_result.file_change_count <= 0:
             continue
