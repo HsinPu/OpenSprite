@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
 from .command_version_policy import command_inspects_git_repository_state
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
@@ -35,13 +34,14 @@ from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
+    ungrounded_response_source_urls,
+    web_source_is_referenced,
     web_source_has_substantive_detail,
 )
 from .workspace_grounding_policy import contains_workspace_location_clue
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
-_URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
 @dataclass(frozen=True)
 class QualityGateResult:
     """Verdict for deterministic response-quality checks."""
@@ -244,7 +244,7 @@ def _evaluate_source_reference(
     sources = _execution_web_sources(execution_result)
     if not sources:
         return None
-    ungrounded_urls = _ungrounded_response_urls(response_text, sources)
+    ungrounded_urls = ungrounded_response_source_urls(response_text, sources)
     if ungrounded_urls:
         return QualityGateResult(
             passed=False,
@@ -256,7 +256,7 @@ def _evaluate_source_reference(
             ),
         )
     min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
-    referenced_count = sum(1 for source in sources if _source_is_referenced(source, response_text))
+    referenced_count = sum(1 for source in sources if web_source_is_referenced(source, response_text))
     if referenced_count >= min_count:
         return None
     return QualityGateResult(
@@ -700,91 +700,6 @@ def _string_list(value: object) -> list[str]:
         seen.add(key)
         out.append(text)
     return out
-
-
-def _source_is_referenced(source: dict[str, object], response_text: str) -> bool:
-    normalized_response = re.sub(r"\s+", " ", (response_text or "").strip().lower())
-    if not normalized_response:
-        return False
-
-    url = str(source.get("url") or "").strip().lower()
-    if url and url in normalized_response:
-        return True
-
-    domain = _source_domain(url)
-    if domain and domain in normalized_response:
-        return True
-
-    title = re.sub(r"\s+", " ", str(source.get("title") or "").strip().lower())
-    return len(title) >= 6 and title in normalized_response
-
-
-def _ungrounded_response_urls(response_text: str, sources: list[dict[str, object]]) -> list[str]:
-    source_urls = {
-        normalized
-        for source in sources
-        if (normalized := _normalize_source_url(str(source.get("url") or "")))
-    }
-    if not source_urls:
-        return []
-
-    ungrounded: list[str] = []
-    seen: set[str] = set()
-    text = response_text or ""
-    for match in _URL_RE.finditer(text):
-        raw_url = match.group(0)
-        url = raw_url.rstrip(".,;:!?，。；：！？`'\"*)]】")
-        normalized = _normalize_source_url(url)
-        if not normalized or normalized in source_urls:
-            continue
-        if not _response_url_looks_like_source_reference(normalized):
-            continue
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        ungrounded.append(url)
-    return ungrounded
-
-
-def _response_url_looks_like_source_reference(normalized_url: str) -> bool:
-    try:
-        parsed = urlparse(normalized_url)
-    except Exception:
-        return True
-    if parsed.netloc == "openrouter.ai" and parsed.path.startswith("/api/"):
-        return False
-    return True
-
-
-def _normalize_source_url(url: str) -> str:
-    text = str(url or "").strip()
-    if not text:
-        return ""
-    try:
-        parsed = urlparse(text)
-    except Exception:
-        return text.rstrip("/").lower()
-    scheme = parsed.scheme.lower()
-    netloc = parsed.netloc.lower()
-    if netloc.startswith("www."):
-        netloc = netloc[4:]
-    path = parsed.path.rstrip("/")
-    if netloc == "openrouter.ai":
-        path = path.replace("/docs/api-reference/", "/docs/api/reference/", 1)
-        if path.endswith(".md"):
-            path = path[:-3]
-    normalized = f"{scheme}://{netloc}{path}"
-    if parsed.params:
-        normalized += f";{parsed.params}"
-    return normalized.lower()
-
-
-def _source_domain(url: str) -> str:
-    try:
-        domain = urlparse(url).netloc.lower()
-    except Exception:
-        return ""
-    return domain[4:] if domain.startswith("www.") else domain
 
 
 def _response_item_count(response_text: str) -> int:

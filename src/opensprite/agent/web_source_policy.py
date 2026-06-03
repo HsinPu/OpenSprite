@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from urllib.parse import urlparse
+
 from ..tool_names import WEB_FETCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME
 
 FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({WEB_FETCH_TOOL_NAME, "browser_navigate", "browser_snapshot"})
@@ -34,6 +37,7 @@ SOURCE_ACCEPTANCE_CRITERION_KINDS = frozenset(
     }
 )
 WEB_SOURCE_REQUIRED_EVIDENCE = (WEB_SOURCE_ARTIFACT_KIND, SOURCE_REFERENCE_CRITERION_KIND)
+SOURCE_URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
 
 
 def is_web_source_artifact_kind(kind: str | None) -> bool:
@@ -88,6 +92,91 @@ def web_source_has_substantive_detail(source: dict[str, object]) -> bool:
         if min_content_chars > 0 and content_chars < min_content_chars:
             return False
     return True
+
+
+def web_source_is_referenced(source: dict[str, object], response_text: str) -> bool:
+    normalized_response = re.sub(r"\s+", " ", (response_text or "").strip().lower())
+    if not normalized_response:
+        return False
+
+    url = str(source.get("url") or "").strip().lower()
+    if url and url in normalized_response:
+        return True
+
+    domain = source_domain(url)
+    if domain and domain in normalized_response:
+        return True
+
+    title = re.sub(r"\s+", " ", str(source.get("title") or "").strip().lower())
+    return len(title) >= 6 and title in normalized_response
+
+
+def ungrounded_response_source_urls(response_text: str, sources: list[dict[str, object]]) -> list[str]:
+    source_urls = {
+        normalized
+        for source in sources
+        if (normalized := normalize_source_url(str(source.get("url") or "")))
+    }
+    if not source_urls:
+        return []
+
+    ungrounded: list[str] = []
+    seen: set[str] = set()
+    text = response_text or ""
+    for match in SOURCE_URL_RE.finditer(text):
+        raw_url = match.group(0)
+        url = raw_url.rstrip(".,;:!?，。；：！？`'\"*)]】")
+        normalized = normalize_source_url(url)
+        if not normalized or normalized in source_urls:
+            continue
+        if not response_url_looks_like_source_reference(normalized):
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ungrounded.append(url)
+    return ungrounded
+
+
+def response_url_looks_like_source_reference(normalized_url: str) -> bool:
+    try:
+        parsed = urlparse(normalized_url)
+    except Exception:
+        return True
+    if parsed.netloc == "openrouter.ai" and parsed.path.startswith("/api/"):
+        return False
+    return True
+
+
+def normalize_source_url(url: str) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlparse(text)
+    except Exception:
+        return text.rstrip("/").lower()
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    if netloc.startswith("www."):
+        netloc = netloc[4:]
+    path = parsed.path.rstrip("/")
+    if netloc == "openrouter.ai":
+        path = path.replace("/docs/api-reference/", "/docs/api/reference/", 1)
+        if path.endswith(".md"):
+            path = path[:-3]
+    normalized = f"{scheme}://{netloc}{path}"
+    if parsed.params:
+        normalized += f";{parsed.params}"
+    return normalized.lower()
+
+
+def source_domain(url: str) -> str:
+    try:
+        domain = urlparse(url).netloc.lower()
+    except Exception:
+        return ""
+    return domain[4:] if domain.startswith("www.") else domain
 
 
 def _truthy(value: object) -> bool:
