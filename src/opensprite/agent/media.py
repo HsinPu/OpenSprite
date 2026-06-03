@@ -12,6 +12,7 @@ from typing import Any, Callable
 from ..context.paths import get_session_workspace
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
+from .media_history_policy import MEDIA_ONLY_HISTORY_MARKER
 
 
 OUTBOUND_MEDIA_KEYS = {
@@ -242,7 +243,7 @@ class AgentMediaService:
         video_files: list[str],
     ) -> str:
         """Format saved media paths as readable user-message history content."""
-        lines = ["[Media-only message saved to workspace]"]
+        lines = [MEDIA_ONLY_HISTORY_MARKER]
         if image_files:
             lines.append("Images: " + ", ".join(image_files))
         if audio_files:
