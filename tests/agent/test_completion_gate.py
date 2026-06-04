@@ -73,6 +73,7 @@ from opensprite.agent.task_contract import (
     ITEMIZED_OUTPUT_CRITERION_KIND,
     PLANNER_INVALID_JSON_REASON,
     REPOSITORY_STATUS_QUALITY_CHECK,
+    SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
     TaskContract,
     WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_planner_payload,
@@ -676,7 +677,7 @@ def test_completion_gate_does_not_require_verification_for_read_only_workspace_a
         objective=intent.objective,
         task_type="workspace_read",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
     result = CompletionGateService().evaluate(
@@ -703,7 +704,7 @@ def test_completion_gate_allows_read_only_batch_discovery_miss_after_workspace_e
         objective=intent.objective,
         task_type="analysis",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
     result = CompletionGateService().evaluate(
@@ -751,7 +752,7 @@ def test_completion_gate_accepts_run_file_change_listing_as_read_only_evidence()
         objective=intent.objective,
         task_type="workspace_read",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=20),),
     )
 
     result = CompletionGateService().evaluate(
@@ -780,7 +781,7 @@ def test_completion_gate_accepts_run_file_change_listing_as_history_evidence():
         objective=intent.objective,
         task_type="history_retrieval",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
     result = CompletionGateService().evaluate(
