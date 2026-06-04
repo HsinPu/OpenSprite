@@ -29,6 +29,13 @@ from .workflow_fields import (
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+    WORKFLOW_REVIEW_ATTEMPTED_FIELD,
+    WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
+    WORKFLOW_REVIEW_FIRST_FINDING_FIELD,
+    WORKFLOW_REVIEW_PASSED_FIELD,
+    WORKFLOW_REVIEW_SUMMARY_FIELD,
+    WORKFLOW_VERIFICATION_ATTEMPTED_FIELD,
+    WORKFLOW_VERIFICATION_PASSED_FIELD,
 )
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
@@ -577,13 +584,13 @@ class SubagentWorkflowService:
                 if is_workflow_completed_status(status)
                 else f"Workflow stopped after {completed_steps}/{len(spec.steps)} completed step(s)."
             ),
-            "review_attempted": review["attempted"],
-            "review_passed": review["passed"],
-            "review_finding_count": review["finding_count"],
-            "review_summary": review["summary"],
-            "review_first_finding": review["first_finding"],
-            "verification_attempted": verification["attempted"],
-            "verification_passed": verification["passed"],
+            WORKFLOW_REVIEW_ATTEMPTED_FIELD: review["attempted"],
+            WORKFLOW_REVIEW_PASSED_FIELD: review["passed"],
+            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: review["finding_count"],
+            WORKFLOW_REVIEW_SUMMARY_FIELD: review["summary"],
+            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: review["first_finding"],
+            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: verification["attempted"],
+            WORKFLOW_VERIFICATION_PASSED_FIELD: verification["passed"],
             **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
             **(
                 {

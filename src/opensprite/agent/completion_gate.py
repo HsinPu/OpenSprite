@@ -113,6 +113,13 @@ from .workflow_fields import (
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+    WORKFLOW_REVIEW_ATTEMPTED_FIELD,
+    WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
+    WORKFLOW_REVIEW_FIRST_FINDING_FIELD,
+    WORKFLOW_REVIEW_PASSED_FIELD,
+    WORKFLOW_REVIEW_SUMMARY_FIELD,
+    WORKFLOW_VERIFICATION_ATTEMPTED_FIELD,
+    WORKFLOW_VERIFICATION_PASSED_FIELD,
 )
 from .workflow_completion_policy import (
     WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
@@ -413,12 +420,12 @@ class CompletionGateService:
                 )
 
         if workflow_gate is not None:
-            workflow_verification_attempted = bool(workflow_gate.get("verification_attempted", verification_attempted))
-            workflow_verification_passed = bool(workflow_gate.get("verification_passed", verification_passed))
-            workflow_review_attempted = bool(workflow_gate.get("review_attempted", review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
-            workflow_review_passed = bool(workflow_gate.get("review_passed", review[REVIEW_EVIDENCE_PASSED_FIELD]))
-            workflow_review_summary = str(workflow_gate.get("review_summary") or review[REVIEW_EVIDENCE_SUMMARY_FIELD] or "").strip()
-            workflow_review_finding_count = int(workflow_gate.get("review_finding_count", review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD]))
+            workflow_verification_attempted = bool(workflow_gate.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD, verification_attempted))
+            workflow_verification_passed = bool(workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed))
+            workflow_review_attempted = bool(workflow_gate.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD, review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
+            workflow_review_passed = bool(workflow_gate.get(WORKFLOW_REVIEW_PASSED_FIELD, review[REVIEW_EVIDENCE_PASSED_FIELD]))
+            workflow_review_summary = str(workflow_gate.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or review[REVIEW_EVIDENCE_SUMMARY_FIELD] or "").strip()
+            workflow_review_finding_count = int(workflow_gate.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD, review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD]))
             return CompletionGateResult(
                 status=workflow_gate["status"],
                 reason=workflow_gate["reason"],
@@ -1067,13 +1074,13 @@ def _workflow_gate_outcome(
     workflow = relevant_outcomes[-1]
     workflow_id = str(workflow.get("workflow") or "").strip()
     workflow_status = str(workflow.get("status") or "").strip()
-    review_attempted = bool(workflow.get("review_attempted"))
-    review_passed = bool(workflow.get("review_passed"))
-    review_finding_count = int(workflow.get("review_finding_count") or 0)
-    workflow_verification_attempted = bool(workflow.get("verification_attempted"))
-    workflow_verification_passed = bool(workflow.get("verification_passed"))
-    workflow_review_summary = str(workflow.get("review_summary") or "").strip()
-    workflow_review_first_finding = str(workflow.get("review_first_finding") or "").strip()
+    review_attempted = bool(workflow.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD))
+    review_passed = bool(workflow.get(WORKFLOW_REVIEW_PASSED_FIELD))
+    review_finding_count = int(workflow.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD) or 0)
+    workflow_verification_attempted = bool(workflow.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD))
+    workflow_verification_passed = bool(workflow.get(WORKFLOW_VERIFICATION_PASSED_FIELD))
+    workflow_review_summary = str(workflow.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or "").strip()
+    workflow_review_first_finding = str(workflow.get(WORKFLOW_REVIEW_FIRST_FINDING_FIELD) or "").strip()
     next_step_id = str(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
     next_step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or "").strip()
     next_step_prompt_type = str(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD) or "").strip()
