@@ -23,6 +23,9 @@ from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_fields import (
+    WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD,
+    WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD,
+    WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
@@ -153,9 +156,9 @@ def _workflow_progress_fields(
         last_completed = steps[completed_prefix - 1]
         payload.update(
             {
-                "last_completed_step_id": last_completed.step_id,
-                "last_completed_step_label": last_completed.label,
-                "last_completed_prompt_type": last_completed.prompt_type,
+                WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD: last_completed.step_id,
+                WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD: last_completed.label,
+                WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD: last_completed.prompt_type,
             }
         )
     if not is_workflow_completed_status(status) and completed_prefix < len(steps):
