@@ -5,6 +5,7 @@ from opensprite.agent.work_progress_action_policy import (
     NEXT_ACTION_CONTINUE_VERIFICATION,
     NEXT_ACTION_CONTINUE_WORK,
     TASK_DONE_RESUME_HINT,
+    VERIFICATION_REQUIRED_RESUME_HINT,
     build_resume_hint,
     is_continue_work_next_action,
     is_review_follow_up_next_action,
@@ -47,7 +48,7 @@ def test_work_progress_action_policy_builds_verification_resume_hints():
         next_step="",
         blockers=(),
         next_action=NEXT_ACTION_CONTINUE_VERIFICATION,
-    ) == "Resume by running or fixing the required verification."
+    ) == VERIFICATION_REQUIRED_RESUME_HINT
 
 
 def test_work_progress_action_policy_builds_review_resume_hints():

@@ -13,6 +13,7 @@ NEXT_ACTION_CONTINUE_REVIEW = "continue_review"
 NEXT_ACTION_CONTINUE_WORK = "continue_work"
 DEFAULT_WORK_STEP_NOT_SET = "not set"
 TASK_DONE_RESUME_HINT = "Task is complete; only continue if the user asks for follow-up work."
+VERIFICATION_REQUIRED_RESUME_HINT = "Resume by running or fixing the required verification."
 
 REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
     {
@@ -72,7 +73,7 @@ def build_resume_hint(
             return f"Resume by finishing verification around the {step_label} step in {workflow}."
         if verification_action and verification_path:
             return f"Resume by running verify {verification_action} for `{verification_path}`."
-        return "Resume by running or fixing the required verification."
+        return VERIFICATION_REQUIRED_RESUME_HINT
     if normalize_next_action(next_action) == NEXT_ACTION_COLLECT_REVIEW_EVIDENCE:
         if workflow and step_label and prompt_type:
             return f"Resume by running or rerunning the delegated {prompt_type} step ({step_label}) for {workflow}."

@@ -5,6 +5,7 @@ from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
+from opensprite.agent.work_progress_action_policy import VERIFICATION_REQUIRED_RESUME_HINT
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
@@ -570,14 +571,14 @@ def test_work_progress_updates_state_and_renders_summary():
     assert workboard.verification_targets == (
         "relevant tests or checks pass, or the verification gap is stated",
     )
-    assert workboard.resume_hint == "Resume by running or fixing the required verification."
+    assert workboard.resume_hint == VERIFICATION_REQUIRED_RESUME_HINT
     assert updated.pending_steps == ("3. run focused verification or state the verification gap", "4. summarize changes, evidence, and remaining risk")
-    assert updated.resume_hint == "Resume by running or fixing the required verification."
+    assert updated.resume_hint == VERIFICATION_REQUIRED_RESUME_HINT
     summary = service.render_state_summary(updated)
     assert "Structured Work State" in summary
     assert "Active delegate: implementer (task_abc12345)" in summary
     assert "Pending steps:" in summary
-    assert "Resume hint: Resume by running or fixing the required verification." in summary
+    assert f"Resume hint: {VERIFICATION_REQUIRED_RESUME_HINT}" in summary
     assert "src/agent.py" in summary
 
 
