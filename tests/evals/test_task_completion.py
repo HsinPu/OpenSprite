@@ -6,6 +6,8 @@ from opensprite.evals.task_completion import (
     run_live_task_completion_eval,
     run_task_completion_smoke,
 )
+from opensprite.runs.events import COMPLETION_GATE_EVALUATED_EVENT
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT
 from opensprite.storage import MemoryStorage, StoredMessage
 
 
@@ -163,14 +165,14 @@ async def _run_live_task_completion_eval_scores_agent_result():
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "completion_gate.evaluated",
+                COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete", "reason": "test"},
                 created_at=2.0,
             )
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "run_finished",
+                RUN_FINISHED_EVENT,
                 payload={"status": "completed", "had_tool_error": False},
                 created_at=3.0,
             )
@@ -285,14 +287,14 @@ async def _run_live_task_completion_eval_uses_stored_response_when_agent_return_
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "completion_gate.evaluated",
+                COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete", "reason": "test"},
                 created_at=3.0,
             )
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "run_finished",
+                RUN_FINISHED_EVENT,
                 payload={"status": "completed", "had_tool_error": False},
                 created_at=4.0,
             )
