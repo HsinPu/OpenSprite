@@ -7,6 +7,7 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
+from .active_task_status import BLOCKED_ACTIVE_TASK_STATUS, DONE_ACTIVE_TASK_STATUS
 from .completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
     ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
@@ -293,7 +294,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=BLOCKED_COMPLETION_STATUS,
                 reason=reason,
-                active_task_status="blocked",
+                active_task_status=BLOCKED_ACTIVE_TASK_STATUS,
                 active_task_detail=detail,
                 should_update_active_task=_intent_supports_fallback_active_task_update(
                     task_intent,
@@ -374,7 +375,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=workflow_gate["status"],
                 reason=workflow_gate["reason"],
-                active_task_status="done" if _workflow_gate_is_complete(workflow_gate) else None,
+                active_task_status=DONE_ACTIVE_TASK_STATUS if _workflow_gate_is_complete(workflow_gate) else None,
                 active_task_detail=workflow_gate.get("detail") or None,
                 follow_up_workflow=_string_or_none(workflow_gate.get("workflow")),
                 follow_up_step_id=_string_or_none(workflow_gate.get("next_step_id")),
@@ -411,7 +412,7 @@ class CompletionGateService:
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
                 active_task_status=(
-                    "done"
+                    DONE_ACTIVE_TASK_STATUS
                     if _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract)
                     else None
                 ),
@@ -529,7 +530,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
-                active_task_status="done",
+                active_task_status=DONE_ACTIVE_TASK_STATUS,
                 should_update_active_task=True,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -562,7 +563,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=ANALYSIS_TASK_COMPLETE_REASON,
-                active_task_status="done",
+                active_task_status=DONE_ACTIVE_TASK_STATUS,
                 should_update_active_task=_intent_supports_fallback_active_task_update(
                     task_intent,
                     evidence_result.task_contract,
@@ -583,7 +584,7 @@ class CompletionGateService:
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=GENERIC_TASK_COMPLETE_REASON,
                 active_task_status=(
-                    "done"
+                    DONE_ACTIVE_TASK_STATUS
                     if _intent_supports_fallback_active_task_update(task_intent, evidence_result.task_contract)
                     else None
                 ),
@@ -610,7 +611,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=TASK_CONTRACT_SATISFIED_REASON,
-                active_task_status="done" if should_update_active_task else None,
+                active_task_status=DONE_ACTIVE_TASK_STATUS if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -634,7 +635,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
-                active_task_status="done" if should_update_active_task else None,
+                active_task_status=DONE_ACTIVE_TASK_STATUS if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -742,7 +743,7 @@ def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
     return CompletionGateResult(
         status=BLOCKED_COMPLETION_STATUS,
         reason=detail,
-        active_task_status="blocked",
+        active_task_status=BLOCKED_ACTIVE_TASK_STATUS,
         active_task_detail=detail,
         should_update_active_task=True,
         judge_metadata={
