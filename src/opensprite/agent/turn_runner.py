@@ -33,7 +33,18 @@ from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_blocker_policy import CompletionBlockerMessages, completion_blocker_response
-from .completion_gate import CompletionGateResult, CompletionGateService
+from .completion_gate import (
+    COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
+    COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD,
+    COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD,
+    COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD,
+    COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD,
+    COMPLETION_RESULT_VERIFICATION_ACTION_FIELD,
+    COMPLETION_RESULT_VERIFICATION_PATH_FIELD,
+    COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD,
+    CompletionGateResult,
+    CompletionGateService,
+)
 from .completion_status import (
     INCOMPLETE_COMPLETION_STATUS,
     allows_nonfinal_response_replacement,
@@ -1063,16 +1074,16 @@ class AgentTurnRunner:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
         if not metadata_requests_follow_up_resume(payload):
             return None
-        workflow = str(payload.get("follow_up_workflow") or "").strip()
-        start_step = str(payload.get("follow_up_step_id") or "").strip()
+        workflow = str(payload.get(COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD) or "").strip()
+        start_step = str(payload.get(COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD) or "").strip()
         if not workflow or not start_step:
             return None
         return {
             "workflow": workflow,
             "start_step": start_step,
-            "step_label": str(payload.get("follow_up_step_label") or start_step).strip() or start_step,
-            "prompt_type": str(payload.get("follow_up_prompt_type") or "").strip(),
-            "detail": str(payload.get("active_task_detail") or "").strip(),
+            "step_label": str(payload.get(COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD) or start_step).strip() or start_step,
+            "prompt_type": str(payload.get(COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD) or "").strip(),
+            "detail": str(payload.get(COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD) or "").strip(),
             "previous_response": "continue",
         }
 
@@ -1081,13 +1092,13 @@ class AgentTurnRunner:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
         if not metadata_requests_direct_verification(payload):
             return None
-        action = str(payload.get("verification_action") or "").strip()
+        action = str(payload.get(COMPLETION_RESULT_VERIFICATION_ACTION_FIELD) or "").strip()
         if not action:
             return None
-        path = str(payload.get("verification_path") or ".").strip() or "."
+        path = str(payload.get(COMPLETION_RESULT_VERIFICATION_PATH_FIELD) or ".").strip() or "."
         pytest_args = tuple(
             str(item or "").strip()
-            for item in (payload.get("verification_pytest_args") or payload.get("verificationPytestArgs") or ())
+            for item in (payload.get(COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD) or payload.get("verificationPytestArgs") or ())
             if str(item or "").strip()
         )
         return {
