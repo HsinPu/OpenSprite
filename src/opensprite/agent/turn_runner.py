@@ -12,8 +12,11 @@ from ..bus.message import AssistantMessage, UserMessage
 from ..runs.events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_SCHEDULED_EVENT,
+    AUTO_CONTINUE_SKIPPED_EVENT,
     AUDIO_INPUT_TRANSCRIBED_EVENT,
     COMPLETION_GATE_EVALUATED_EVENT,
+    DIRECT_VERIFICATION_STARTED_EVENT,
+    DIRECT_WORKFLOW_RESUME_STARTED_EVENT,
     EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
@@ -677,7 +680,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "direct_workflow_resume.started",
+                    DIRECT_WORKFLOW_RESUME_STARTED_EVENT,
                     {"schema_version": 1, **direct_resume_context},
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -695,7 +698,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "direct_verification.started",
+                    DIRECT_VERIFICATION_STARTED_EVENT,
                     {"schema_version": 1, **dict(pending_direct_verify)},
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -878,7 +881,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "auto_continue.skipped",
+                    AUTO_CONTINUE_SKIPPED_EVENT,
                     {
                         **decision.to_metadata(),
                         "completion_status": completion_result.status,

@@ -22,6 +22,9 @@ from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
     ACTIVE_TASK_COMMAND_APPLIED_EVENT,
+    AUTO_CONTINUE_COMPLETED_EVENT,
+    AUTO_CONTINUE_SCHEDULED_EVENT,
+    AUTO_CONTINUE_SKIPPED_EVENT,
     FILE_CHANGED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
@@ -1868,13 +1871,13 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "work_progress.updated",
         "harness_checkpoint.recorded",
         "harness_scorecard.recorded",
-        "auto_continue.scheduled",
+        AUTO_CONTINUE_SCHEDULED_EVENT,
         "completion_gate.evaluated",
         "work_progress.updated",
         "harness_checkpoint.recorded",
         "harness_scorecard.recorded",
-        "auto_continue.completed",
-        "auto_continue.skipped",
+        AUTO_CONTINUE_COMPLETED_EVENT,
+        AUTO_CONTINUE_SKIPPED_EVENT,
         "task_checklist.updated",
         "run_finished",
     ]
@@ -2166,8 +2169,8 @@ def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp
     calls, events = asyncio.run(scenario())
 
     assert len(calls) == 2
-    assert [event.event_type for event in events].count("auto_continue.scheduled") == 1
-    skipped = next(event for event in events if event.event_type == "auto_continue.skipped")
+    assert [event.event_type for event in events].count(AUTO_CONTINUE_SCHEDULED_EVENT) == 1
+    skipped = next(event for event in events if event.event_type == AUTO_CONTINUE_SKIPPED_EVENT)
     assert skipped.payload["reason"] == "no_progress_during_continuation"
     assert skipped.payload["completion_status"] == "incomplete"
 
