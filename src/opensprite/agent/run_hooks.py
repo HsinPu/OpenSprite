@@ -14,7 +14,13 @@ from ..tool_names import (
 )
 from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
-from ..runs.events import RUN_PART_DELTA_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
+from ..runs.events import (
+    RUN_PART_DELTA_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+    VERIFICATION_RESULT_EVENT,
+    VERIFICATION_STARTED_EVENT,
+)
 from ..utils import json_safe_payload
 from ..tools.result_status import classify_tool_result_status
 from .mcp_tool_policy import (
@@ -262,7 +268,7 @@ class RunHookService:
                 await self._emit_run_event(
                     sid,
                     rid,
-                    "verification_started",
+                    VERIFICATION_STARTED_EVENT,
                     {
                         "action": (tool_args or {}).get("action", "auto"),
                         "path": (tool_args or {}).get("path", "."),
@@ -385,7 +391,7 @@ class RunHookService:
                 await self._emit_run_event(
                     session_id,
                     rid,
-                    "verification_result",
+                    VERIFICATION_RESULT_EVENT,
                     {
                         "action": (tool_args or {}).get("action", "auto"),
                         "path": (tool_args or {}).get("path", "."),

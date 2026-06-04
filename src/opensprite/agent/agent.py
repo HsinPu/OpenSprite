@@ -49,6 +49,7 @@ from ..media import (
 )
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
+from ..runs.events import PERMISSION_DENIED_EVENT, PERMISSION_GRANTED_EVENT, PERMISSION_REQUESTED_EVENT
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequest, PermissionRequestManager
@@ -118,11 +119,11 @@ from .work_progress import WorkProgressService, WorkProgressUpdate
 
 
 def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:
-    if event_type == "permission_requested":
+    if event_type == PERMISSION_REQUESTED_EVENT:
         return "tool_approval.requested"
-    if event_type == "permission_granted":
+    if event_type == PERMISSION_GRANTED_EVENT:
         return "tool_approval.approved"
-    if event_type == "permission_denied":
+    if event_type == PERMISSION_DENIED_EVENT:
         return "tool_approval.expired" if request.timed_out else "tool_approval.denied"
     return None
 

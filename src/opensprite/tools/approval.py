@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Iterable
 from uuid import uuid4
 
+from ..runs.events import PERMISSION_DENIED_EVENT, PERMISSION_GRANTED_EVENT, PERMISSION_REQUESTED_EVENT
 from ..utils.log import logger
 from .permissions import PermissionApprovalResult, ToolPermissionPolicy
 from .shell import classify_destructive_shell_command
@@ -179,7 +180,7 @@ class PermissionRequestManager:
         async with self._lock:
             self._requests[request.request_id] = request
 
-        await self._emit("permission_requested", request)
+        await self._emit(PERMISSION_REQUESTED_EVENT, request)
         try:
             try:
                 await asyncio.wait_for(request._event.wait(), timeout=self.timeout_seconds)
@@ -189,7 +190,7 @@ class PermissionRequestManager:
                     status=PERMISSION_REQUEST_DENIED_STATUS,
                     reason=PERMISSION_REQUEST_TIMED_OUT_REASON,
                     timed_out=True,
-                    event_type="permission_denied",
+                    event_type=PERMISSION_DENIED_EVENT,
                 )
 
             return PermissionApprovalResult(
@@ -209,7 +210,7 @@ class PermissionRequestManager:
             status=PERMISSION_REQUEST_APPROVED_STATUS,
             reason=PERMISSION_APPROVED_ONCE_REASON,
             timed_out=False,
-            event_type="permission_granted",
+            event_type=PERMISSION_GRANTED_EVENT,
         )
 
     async def deny(self, request_id: str, reason: str = DEFAULT_PERMISSION_DENIAL_REASON) -> PermissionRequest | None:
@@ -219,7 +220,7 @@ class PermissionRequestManager:
             status=PERMISSION_REQUEST_DENIED_STATUS,
             reason=reason,
             timed_out=False,
-            event_type="permission_denied",
+            event_type=PERMISSION_DENIED_EVENT,
         )
 
     async def _resolve(

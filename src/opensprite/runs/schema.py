@@ -6,11 +6,18 @@ from typing import Any
 
 from .events import (
     MESSAGE_PART_DELTA_EVENT,
+    PERMISSION_DENIED_EVENT,
+    PERMISSION_EVENTS,
+    PERMISSION_GRANTED_EVENT,
+    PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
     TEXT_DELTA_EVENTS,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    VERIFICATION_EVENTS,
+    VERIFICATION_RESULT_EVENT,
+    VERIFICATION_STARTED_EVENT,
 )
 from .lifecycle import (
     RUN_CANCEL_REQUESTED_EVENT,
@@ -80,12 +87,12 @@ _EVENT_KINDS = {
     "background_process.lost": "process",
     TOOL_STARTED_EVENT: "tool",
     TOOL_RESULT_EVENT: "tool",
-    "verification_started": "verification",
-    "verification_result": "verification",
+    VERIFICATION_STARTED_EVENT: "verification",
+    VERIFICATION_RESULT_EVENT: "verification",
     "file_changed": "file",
-    "permission_requested": "permission",
-    "permission_granted": "permission",
-    "permission_denied": "permission",
+    PERMISSION_REQUESTED_EVENT: "permission",
+    PERMISSION_GRANTED_EVENT: "permission",
+    PERMISSION_DENIED_EVENT: "permission",
     RUN_PART_DELTA_EVENT: "text",
     MESSAGE_PART_DELTA_EVENT: "text",
     "tool_input_delta": "tool",
@@ -261,7 +268,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             artifact["metadata"] = metadata
         return artifact
 
-    if normalized in {"verification_started", "verification_result"}:
+    if normalized in VERIFICATION_EVENTS:
         return {
             "schema_version": RUN_SCHEMA_VERSION,
             "artifact_type": "verification",
@@ -271,7 +278,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "detail": _text(data.get("result_preview") or data.get("path")),
         }
 
-    if normalized in {"permission_requested", "permission_granted", "permission_denied"}:
+    if normalized in PERMISSION_EVENTS:
         request_id = _text(data.get("request_id"))
         tool_name = _text(data.get("tool_name"))
         if not request_id and not tool_name:
@@ -942,7 +949,7 @@ def serialize_diff_summary(trace: Any) -> dict[str, Any]:
 
 
 def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> dict[str, Any]:
-    latest = _latest_event_payload(events, "verification_result")
+    latest = _latest_event_payload(events, VERIFICATION_RESULT_EVENT)
     attempted = _metadata_bool(run_metadata, "verification_attempted") or latest is not None
     passed = _metadata_bool(run_metadata, "verification_passed")
     if latest is not None:
