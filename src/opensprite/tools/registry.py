@@ -227,11 +227,11 @@ class ToolRegistry:
 
 
 def _decision_label(event_type: str, decision: PermissionDecision) -> str:
-    if event_type.endswith(".approval_required") or decision.requires_approval:
+    if event_type == TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT or decision.requires_approval:
         return "approval_required"
-    if event_type.endswith(".denied") or not decision.allowed:
+    if event_type in {TOOL_PERMISSION_DENIED_EVENT, TOOL_PERMISSION_NOT_EXPOSED_EVENT} or not decision.allowed:
         return "denied"
-    if event_type.endswith(".allowed"):
+    if event_type == TOOL_PERMISSION_ALLOWED_EVENT:
         return "allowed"
     return "checked"
 
