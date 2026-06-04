@@ -16,6 +16,7 @@ from ..runs.events import (
     EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    LLM_STATUS_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
@@ -640,7 +641,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "llm_status",
+            LLM_STATUS_EVENT,
             {"message": "processing"},
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,

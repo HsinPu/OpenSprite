@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from ..runs.events import FILE_CHANGED_EVENT
 from ..storage import StorageProvider, StoredRunFileChange
 from ..utils.json_safe import json_safe_payload
 from ..utils.log import logger
@@ -104,7 +105,7 @@ class RunFileChangeService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "file_changed",
+                FILE_CHANGED_EVENT,
                 {
                     "tool_name": tool_name,
                     "path": path,

@@ -54,6 +54,10 @@ BACKGROUND_PROCESS_COMPLETED_EVENT = "background_process.completed"
 BACKGROUND_PROCESS_LOST_EVENT = "background_process.lost"
 BACKGROUND_PROCESS_NOTIFICATION_SENT_EVENT = "background_process.notification_sent"
 BACKGROUND_PROCESS_NOTIFICATION_FAILED_EVENT = "background_process.notification_failed"
+LLM_STATUS_EVENT = "llm_status"
+REASONING_DELTA_EVENT = "reasoning_delta"
+TOOL_INPUT_DELTA_EVENT = "tool_input_delta"
+FILE_CHANGED_EVENT = "file_changed"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})

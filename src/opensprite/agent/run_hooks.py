@@ -15,7 +15,10 @@ from ..tool_names import (
 from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..runs.events import (
+    LLM_STATUS_EVENT,
+    REASONING_DELTA_EVENT,
     RUN_PART_DELTA_EVENT,
+    TOOL_INPUT_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     VERIFICATION_RESULT_EVENT,
@@ -439,7 +442,7 @@ class RunHookService:
             await self._emit_run_event(
                 sid,
                 rid,
-                "llm_status",
+                LLM_STATUS_EVENT,
                 payload,
                 channel=ch,
                 external_chat_id=tid,
@@ -521,7 +524,7 @@ class RunHookService:
             await self._emit_run_event(
                 sid,
                 rid,
-                "tool_input_delta",
+                TOOL_INPUT_DELTA_EVENT,
                 {
                     "tool_call_id": str(tool_call_id or ""),
                     "tool_name": str(tool_name or ""),
@@ -558,7 +561,7 @@ class RunHookService:
             await self._emit_run_event(
                 sid,
                 rid,
-                "reasoning_delta",
+                REASONING_DELTA_EVENT,
                 {
                     "content_delta": text,
                     "sequence": int(sequence),

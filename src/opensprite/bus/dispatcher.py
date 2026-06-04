@@ -37,6 +37,7 @@ from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
 from ..cron.types import CronSchedule
 from ..runs.events import (
+    LLM_STATUS_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
@@ -1022,7 +1023,7 @@ class MessageQueue:
                 "waiting_permission",
                 {**metadata, "request_id": payload.get("request_id"), "tool_name": payload.get("tool_name")},
             )
-        elif event_type == "llm_status" and str(payload.get("status") or payload.get("state") or "") == "retry":
+        elif event_type == LLM_STATUS_EVENT and str(payload.get("status") or payload.get("state") or "") == "retry":
             await self._set_session_status(event.session_id, "retry", {**metadata, "message": payload.get("message")})
         elif event_type in {PERMISSION_GRANTED_EVENT, PERMISSION_DENIED_EVENT, TOOL_RESULT_EVENT}:
             await self._set_session_status(event.session_id, "thinking", metadata)

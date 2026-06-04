@@ -21,15 +21,18 @@ from .events import (
     CURATOR_RUNNING_EVENTS,
     CURATOR_STARTED_EVENT,
     EXECUTION_STOPPED_EVENT,
+    FILE_CHANGED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    LLM_STATUS_EVENT,
     MESSAGE_PART_DELTA_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_EVENTS,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
+    REASONING_DELTA_EVENT,
     RUN_PART_DELTA_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
@@ -41,6 +44,7 @@ from .events import (
     TASK_INTENT_DETECTED_EVENT,
     TEXT_DELTA_EVENTS,
     TOOL_LIFECYCLE_EVENTS,
+    TOOL_INPUT_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     TERMINAL_WORKFLOW_EVENTS,
@@ -96,8 +100,8 @@ _EVENT_KINDS = {
     RUN_FAILED_EVENT: "run",
     RUN_CANCELLED_EVENT: "run",
     RUN_CANCEL_REQUESTED_EVENT: "run",
-    "llm_status": "llm",
-    "reasoning_delta": "llm",
+    LLM_STATUS_EVENT: "llm",
+    REASONING_DELTA_EVENT: "llm",
     TASK_INTENT_DETECTED_EVENT: "work",
     WORK_PLAN_CREATED_EVENT: "work",
     WORK_PROGRESS_UPDATED_EVENT: "work",
@@ -143,13 +147,13 @@ _EVENT_KINDS = {
     TOOL_RESULT_EVENT: "tool",
     VERIFICATION_STARTED_EVENT: "verification",
     VERIFICATION_RESULT_EVENT: "verification",
-    "file_changed": "file",
+    FILE_CHANGED_EVENT: "file",
     PERMISSION_REQUESTED_EVENT: "permission",
     PERMISSION_GRANTED_EVENT: "permission",
     PERMISSION_DENIED_EVENT: "permission",
     RUN_PART_DELTA_EVENT: "text",
     MESSAGE_PART_DELTA_EVENT: "text",
-    "tool_input_delta": "tool",
+    TOOL_INPUT_DELTA_EVENT: "tool",
 }
 
 
@@ -261,7 +265,7 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "running"
     if normalized == EXECUTION_STOPPED_EVENT:
         return explicit or "stopped"
-    if normalized.endswith("_started") or normalized == "llm_status" or normalized == AUTO_CONTINUE_SCHEDULED_EVENT:
+    if normalized.endswith("_started") or normalized == LLM_STATUS_EVENT or normalized == AUTO_CONTINUE_SCHEDULED_EVENT:
         return explicit or "running"
     if explicit:
         return explicit
@@ -276,7 +280,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
     normalized = _text(event_type)
     status = run_event_status(normalized, data)
 
-    if normalized == "file_changed":
+    if normalized == FILE_CHANGED_EVENT:
         path = _text(data.get("path"))
         if not path:
             return None
@@ -1356,3 +1360,4 @@ def _has_external_http_exec_artifact(artifacts: list[dict[str, Any]]) -> bool:
         if isinstance(metadata, dict) and metadata.get("external_http_via_exec"):
             return True
     return False
+    REASONING_DELTA_EVENT,
