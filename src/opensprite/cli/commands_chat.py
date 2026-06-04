@@ -18,6 +18,7 @@ from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
 from ..context.paths import get_session_workspace, get_tool_workspace
 from ..agent.turn_quick_actions import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
+from ..runs.events import TOOL_STARTED_EVENT
 from ..runs.lifecycle import RUN_CANCELLED_EVENT, RUN_FAILED_EVENT, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
 from ..runtime import (
     apply_network_environment,
@@ -158,7 +159,7 @@ def _web_chat_payload(
     error_type: str = "",
     workspace_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    tool_call_count = sum(1 for event in run_events if event.get("event_type") == "tool_started")
+    tool_call_count = sum(1 for event in run_events if event.get("event_type") == TOOL_STARTED_EVENT)
     payload: dict[str, Any] = {
         "ok": ok,
         "mode": "web",

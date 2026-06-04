@@ -36,6 +36,7 @@ from ..agent.curator import CURATOR_SCOPE_CHOICES
 from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
 from ..cron.types import CronSchedule
+from ..runs.events import TEXT_DELTA_EVENTS, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
 from ..runs.lifecycle import ACTIVE_RUN_EVENTS, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
 from ..utils.log import logger
 
@@ -1000,9 +1001,9 @@ class MessageQueue:
         }
         if event_type == RUN_STARTED_EVENT:
             await self._set_session_status(event.session_id, "thinking", metadata)
-        elif event_type in {"run_part_delta", "message_part_delta"}:
+        elif event_type in TEXT_DELTA_EVENTS:
             await self._set_session_status(event.session_id, "streaming", metadata)
-        elif event_type == "tool_started":
+        elif event_type == TOOL_STARTED_EVENT:
             await self._set_session_status(
                 event.session_id,
                 "tool_running",
@@ -1016,7 +1017,7 @@ class MessageQueue:
             )
         elif event_type == "llm_status" and str(payload.get("status") or payload.get("state") or "") == "retry":
             await self._set_session_status(event.session_id, "retry", {**metadata, "message": payload.get("message")})
-        elif event_type in {"permission_granted", "permission_denied", "tool_result"}:
+        elif event_type in {"permission_granted", "permission_denied", TOOL_RESULT_EVENT}:
             await self._set_session_status(event.session_id, "thinking", metadata)
         elif str(payload.get("status") or payload.get("state") or "") == "waiting_user":
             await self._set_session_status(event.session_id, "waiting_user", metadata)

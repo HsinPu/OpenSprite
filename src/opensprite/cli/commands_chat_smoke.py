@@ -13,6 +13,7 @@ from typing import Any
 
 import typer
 
+from ..runs.events import TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
 from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredRunTrace
 from .commands_chat import _json_for_stdout, run_web_chat
 
@@ -260,11 +261,11 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
 
     for event in trace.events:
         payload = event.payload if isinstance(event.payload, dict) else {}
-        if event.event_type == "tool_started":
+        if event.event_type == TOOL_STARTED_EVENT:
             tool_name = _tool_name_from_event(payload)
             if tool_name:
                 tools.append(tool_name)
-        elif event.event_type == "tool_result":
+        elif event.event_type == TOOL_RESULT_EVENT:
             ok = payload.get("ok")
             if ok is False:
                 failed_tool = _tool_name_from_event(payload)

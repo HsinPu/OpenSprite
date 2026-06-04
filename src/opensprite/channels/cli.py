@@ -8,6 +8,7 @@ from typing import Any
 
 from ..bus import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
+from ..runs.events import TOOL_STARTED_EVENT
 from ..runs.lifecycle import TERMINAL_RUN_EVENTS
 from .identity import build_session_id, normalize_identifier
 
@@ -25,7 +26,7 @@ class CliChatResult:
 
     @property
     def tool_call_count(self) -> int:
-        return sum(1 for event in self.run_events if event.event_type == "tool_started")
+        return sum(1 for event in self.run_events if event.event_type == TOOL_STARTED_EVENT)
 
 
 class CliAdapter(MessageAdapter):

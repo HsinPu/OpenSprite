@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from .events import (
+    MESSAGE_PART_DELTA_EVENT,
+    RUN_PART_DELTA_EVENT,
+    TEXT_DELTA_EVENTS,
+    TOOL_LIFECYCLE_EVENTS,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+)
 from .lifecycle import (
     RUN_CANCEL_REQUESTED_EVENT,
     RUN_CANCELLED_EVENT,
@@ -70,21 +78,18 @@ _EVENT_KINDS = {
     "background_process.started": "process",
     "background_process.completed": "process",
     "background_process.lost": "process",
-    "tool_started": "tool",
-    "tool_result": "tool",
+    TOOL_STARTED_EVENT: "tool",
+    TOOL_RESULT_EVENT: "tool",
     "verification_started": "verification",
     "verification_result": "verification",
     "file_changed": "file",
     "permission_requested": "permission",
     "permission_granted": "permission",
     "permission_denied": "permission",
-    "run_part_delta": "text",
-    "message_part_delta": "text",
+    RUN_PART_DELTA_EVENT: "text",
+    MESSAGE_PART_DELTA_EVENT: "text",
     "tool_input_delta": "tool",
 }
-
-
-_TEXT_DELTA_EVENTS = {"run_part_delta", "message_part_delta"}
 
 
 def _text(value: Any) -> str:
@@ -199,7 +204,7 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or RUN_CANCELLED_STATUS
     if normalized == RUN_CANCEL_REQUESTED_EVENT:
         return explicit or "cancelling"
-    if normalized in {"run_part_delta", "message_part_delta"}:
+    if normalized in TEXT_DELTA_EVENTS:
         return explicit or "running"
     if normalized == "execution.stopped":
         return explicit or "stopped"
@@ -234,7 +239,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "diff_preview": _text(data.get("diff_preview")),
         }
 
-    if normalized in {"tool_started", "tool_result"}:
+    if normalized in TOOL_LIFECYCLE_EVENTS:
         tool_name = _text(data.get("tool_name"))
         if not tool_name:
             return None
@@ -244,14 +249,14 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "artifact_type": "tool",
             "kind": "tool",
             "status": status,
-            "phase": "started" if normalized == "tool_started" else "result",
+            "phase": "started" if normalized == TOOL_STARTED_EVENT else "result",
             "tool_name": tool_name,
             "tool_call_id": data.get("tool_call_id"),
             "iteration": data.get("iteration"),
             "title": tool_name,
             "detail": _text(data.get("result_preview") or data.get("args_preview")),
         }
-        metadata = _tool_trace_metadata(data) if normalized == "tool_result" else {}
+        metadata = _tool_trace_metadata(data) if normalized == TOOL_RESULT_EVENT else {}
         if metadata:
             artifact["metadata"] = metadata
         return artifact
@@ -502,7 +507,7 @@ def serialize_run_event(
 
 
 def _is_text_delta_event(event: Any) -> bool:
-    return _text(getattr(event, "event_type", "")) in _TEXT_DELTA_EVENTS
+    return _text(getattr(event, "event_type", "")) in TEXT_DELTA_EVENTS
 
 
 def compact_run_events(
@@ -541,7 +546,7 @@ def serialize_run_event_counts(events: list[Any], serialized_events: list[dict[s
     text_returned = sum(
         1
         for event in serialized_events
-        if _text(event.get("event_type")) in _TEXT_DELTA_EVENTS or event.get("kind") == "text"
+        if _text(event.get("event_type")) in TEXT_DELTA_EVENTS or event.get("kind") == "text"
     )
     return {
         "total": len(original),
@@ -867,7 +872,7 @@ def _summarize_tools(parts: list[Any], events: list[Any]) -> list[dict[str, Any]
 
     if not counts:
         for event in events:
-            if getattr(event, "event_type", None) != "tool_started":
+            if getattr(event, "event_type", None) != TOOL_STARTED_EVENT:
                 continue
             tool_name = str((getattr(event, "payload", {}) or {}).get("tool_name") or "").strip()
             if not tool_name:
