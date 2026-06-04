@@ -49,6 +49,7 @@ PLANNER_INVALID_STATUS = "invalid"
 PLANNER_MISSING_STATUS = "missing"
 PLANNER_METADATA_STATUS_FIELD = "planner_status"
 PLANNER_METADATA_REASON_FIELD = "reason"
+PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD = "raw_response_preview"
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
@@ -569,7 +570,7 @@ def _planner_blocked_contract(
         PLANNER_METADATA_REASON_FIELD: reason,
     }
     if raw_response_preview:
-        metadata["raw_response_preview"] = raw_response_preview
+        metadata[PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD] = raw_response_preview
     return TaskContract(
         objective=objective,
         task_type=PLANNING_ERROR_TASK_TYPE,
