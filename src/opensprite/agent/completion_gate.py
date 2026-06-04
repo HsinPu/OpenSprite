@@ -137,6 +137,34 @@ _VERIFICATION_STATUS_METADATA_FIELD = VERIFICATION_STATUS_METADATA_FIELD
 COMPLETION_JUDGE_MISSING_CONFIG_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: missing llm config"
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
+COMPLETION_RESULT_SCHEMA_VERSION_FIELD = "schema_version"
+COMPLETION_RESULT_STATUS_FIELD = "status"
+COMPLETION_RESULT_REASON_FIELD = "reason"
+COMPLETION_RESULT_SHOULD_UPDATE_ACTIVE_TASK_FIELD = "should_update_active_task"
+COMPLETION_RESULT_VERIFICATION_REQUIRED_FIELD = "verification_required"
+COMPLETION_RESULT_VERIFICATION_ATTEMPTED_FIELD = "verification_attempted"
+COMPLETION_RESULT_VERIFICATION_PASSED_FIELD = "verification_passed"
+COMPLETION_RESULT_REVIEW_REQUIRED_FIELD = "review_required"
+COMPLETION_RESULT_REVIEW_ATTEMPTED_FIELD = "review_attempted"
+COMPLETION_RESULT_REVIEW_PASSED_FIELD = "review_passed"
+COMPLETION_RESULT_REVIEW_SUMMARY_FIELD = "review_summary"
+COMPLETION_RESULT_REVIEW_PROMPT_TYPES_FIELD = "review_prompt_types"
+COMPLETION_RESULT_REVIEW_FINDING_COUNT_FIELD = "review_finding_count"
+COMPLETION_RESULT_FILE_CHANGE_REQUIRED_FIELD = "file_change_required"
+COMPLETION_RESULT_MISSING_EVIDENCE_FIELD = "missing_evidence"
+COMPLETION_RESULT_PROGRESS_ONLY_RESPONSE_FIELD = "progress_only_response"
+COMPLETION_RESULT_ACTIVE_TASK_STATUS_FIELD = "active_task_status"
+COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD = "active_task_detail"
+COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD = "follow_up_workflow"
+COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD = "follow_up_step_id"
+COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD = "follow_up_step_label"
+COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD = "follow_up_prompt_type"
+COMPLETION_RESULT_VERIFICATION_ACTION_FIELD = "verification_action"
+COMPLETION_RESULT_VERIFICATION_PATH_FIELD = "verification_path"
+COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD = "verification_pytest_args"
+COMPLETION_RESULT_JUDGE_FIELD = "judge"
+
+
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -170,43 +198,43 @@ class CompletionGateResult:
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe run event payload."""
         payload: dict[str, Any] = {
-            "schema_version": 1,
-            "status": self.status,
-            "reason": self.reason,
-            "should_update_active_task": self.should_update_active_task,
-            "verification_required": self.verification_required,
-            "verification_attempted": self.verification_attempted,
-            "verification_passed": self.verification_passed,
-            "review_required": self.review_required,
-            "review_attempted": self.review_attempted,
-            "review_passed": self.review_passed,
-            "review_summary": self.review_summary,
-            "review_prompt_types": list(self.review_prompt_types),
-            "review_finding_count": self.review_finding_count,
-            "file_change_required": self.file_change_required,
-            "missing_evidence": list(self.missing_evidence),
-            "progress_only_response": self.progress_only_response,
+            COMPLETION_RESULT_SCHEMA_VERSION_FIELD: 1,
+            COMPLETION_RESULT_STATUS_FIELD: self.status,
+            COMPLETION_RESULT_REASON_FIELD: self.reason,
+            COMPLETION_RESULT_SHOULD_UPDATE_ACTIVE_TASK_FIELD: self.should_update_active_task,
+            COMPLETION_RESULT_VERIFICATION_REQUIRED_FIELD: self.verification_required,
+            COMPLETION_RESULT_VERIFICATION_ATTEMPTED_FIELD: self.verification_attempted,
+            COMPLETION_RESULT_VERIFICATION_PASSED_FIELD: self.verification_passed,
+            COMPLETION_RESULT_REVIEW_REQUIRED_FIELD: self.review_required,
+            COMPLETION_RESULT_REVIEW_ATTEMPTED_FIELD: self.review_attempted,
+            COMPLETION_RESULT_REVIEW_PASSED_FIELD: self.review_passed,
+            COMPLETION_RESULT_REVIEW_SUMMARY_FIELD: self.review_summary,
+            COMPLETION_RESULT_REVIEW_PROMPT_TYPES_FIELD: list(self.review_prompt_types),
+            COMPLETION_RESULT_REVIEW_FINDING_COUNT_FIELD: self.review_finding_count,
+            COMPLETION_RESULT_FILE_CHANGE_REQUIRED_FIELD: self.file_change_required,
+            COMPLETION_RESULT_MISSING_EVIDENCE_FIELD: list(self.missing_evidence),
+            COMPLETION_RESULT_PROGRESS_ONLY_RESPONSE_FIELD: self.progress_only_response,
         }
         if self.active_task_status:
-            payload["active_task_status"] = self.active_task_status
+            payload[COMPLETION_RESULT_ACTIVE_TASK_STATUS_FIELD] = self.active_task_status
         if self.active_task_detail:
-            payload["active_task_detail"] = self.active_task_detail
+            payload[COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD] = self.active_task_detail
         if self.follow_up_workflow:
-            payload["follow_up_workflow"] = self.follow_up_workflow
+            payload[COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD] = self.follow_up_workflow
         if self.follow_up_step_id:
-            payload["follow_up_step_id"] = self.follow_up_step_id
+            payload[COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD] = self.follow_up_step_id
         if self.follow_up_step_label:
-            payload["follow_up_step_label"] = self.follow_up_step_label
+            payload[COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD] = self.follow_up_step_label
         if self.follow_up_prompt_type:
-            payload["follow_up_prompt_type"] = self.follow_up_prompt_type
+            payload[COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD] = self.follow_up_prompt_type
         if self.verification_action:
-            payload["verification_action"] = self.verification_action
+            payload[COMPLETION_RESULT_VERIFICATION_ACTION_FIELD] = self.verification_action
         if self.verification_path:
-            payload["verification_path"] = self.verification_path
+            payload[COMPLETION_RESULT_VERIFICATION_PATH_FIELD] = self.verification_path
         if self.verification_pytest_args:
-            payload["verification_pytest_args"] = list(self.verification_pytest_args)
+            payload[COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD] = list(self.verification_pytest_args)
         if self.judge_metadata:
-            payload["judge"] = dict(self.judge_metadata)
+            payload[COMPLETION_RESULT_JUDGE_FIELD] = dict(self.judge_metadata)
         return payload
 
 
