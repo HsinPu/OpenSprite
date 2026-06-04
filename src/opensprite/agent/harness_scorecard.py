@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
+HARNESS_SENSOR_PASS_STATUS = "pass"
+HARNESS_SENSOR_WARN_STATUS = "warn"
+HARNESS_SENSOR_FAIL_STATUS = "fail"
+HARNESS_SENSOR_NOT_APPLICABLE_STATUS = "not_applicable"
 HarnessCheckStatus = Literal["pass", "warn", "fail", "not_applicable"]
 
 
