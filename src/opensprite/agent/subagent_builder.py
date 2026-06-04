@@ -3,7 +3,7 @@ from pathlib import Path
 from ..context.runtime import build_runtime_context
 from ..llms import ChatMessage
 from ..skills import SkillsLoader
-from .subagent_output import build_structured_subagent_contract_instructions
+from .subagent_output import READONLY_SUBAGENT_RESULT_CONTRACT, build_structured_subagent_contract_instructions
 from ..subagent_prompts import load_metadata, load_prompt
 
 
@@ -57,7 +57,7 @@ class SubagentMessageBuilder:
                 "- 若資訊不足：列出需要補充的問題。"
             )
 
-        if str(prompt_metadata.get("structured_output_contract") or "").strip() == "readonly_subagent_result":
+        if str(prompt_metadata.get("structured_output_contract") or "").strip() == READONLY_SUBAGENT_RESULT_CONTRACT:
             sections.extend(["", build_structured_subagent_contract_instructions(prompt_type)])
 
         if skills_summary:
