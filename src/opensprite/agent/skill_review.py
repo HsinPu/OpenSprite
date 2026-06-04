@@ -10,6 +10,7 @@ from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, READ_SKILL_TOOL_NAME, SKILL_
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils.log import logger
+from .skill_review_policy import SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON
 
 SKILL_REVIEW_SYSTEM = f"""You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
 
@@ -96,7 +97,7 @@ class SkillReviewService:
         stored = await self.storage.get_messages(session_id, limit=self._transcript_message_limit_getter())
         transcript = format_stored_messages_for_transcript(stored)
         if len(transcript) < 80:
-            logger.info("[%s] skill.review.skip | reason=transcript-too-short", session_id)
+            logger.info("[%s] skill.review.skip | reason=%s", session_id, SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON)
             return []
 
         user_content = build_skill_review_user_content(transcript)
