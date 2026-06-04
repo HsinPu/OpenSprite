@@ -91,6 +91,19 @@ from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, me
 from .worktree import WorktreeSandboxInspector
 
 
+TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD = "auto_continue_attempts"
+TURN_METADATA_COMPLETION_GATE_FIELD = "completion_gate"
+TURN_METADATA_COMPLETION_STATUS_FIELD = "completion_status"
+TURN_METADATA_COMPLETION_REASON_FIELD = "completion_reason"
+TURN_METADATA_WORK_PROGRESS_FIELD = "work_progress"
+TURN_METADATA_TASK_CONTRACT_FIELD = "task_contract"
+TURN_METADATA_TOOL_EVIDENCE_FIELD = "tool_evidence"
+TURN_METADATA_TASK_ARTIFACTS_FIELD = "task_artifacts"
+TURN_METADATA_DELEGATED_TASKS_FIELD = "delegated_tasks"
+TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD = "active_delegate_task_id"
+TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD = "active_delegate_prompt_type"
+
+
 @dataclass(frozen=True)
 class TurnPassEvaluation:
     """Evaluation output for one normal-turn execution pass."""
@@ -596,8 +609,8 @@ class AgentTurnRunner:
                 AUTO_CONTINUE_COMPLETED_EVENT,
                 {
                     "attempt": auto_continue_attempts,
-                    "completion_status": completion_result.status,
-                    "completion_reason": completion_result.reason,
+                    TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                    TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                 },
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
@@ -633,7 +646,7 @@ class AgentTurnRunner:
         auto_continue_attempts: int,
     ) -> dict[str, Any]:
         metadata = completion_result.to_metadata()
-        metadata["auto_continue_attempts"] = auto_continue_attempts
+        metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] = auto_continue_attempts
         judge = metadata.setdefault("judge", {})
         if isinstance(judge, dict):
             provider, model = self._completion_judge_context()
@@ -815,8 +828,8 @@ class AgentTurnRunner:
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
-                        "completion_status": completion_result.status,
-                        "completion_reason": completion_result.reason,
+                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -841,8 +854,8 @@ class AgentTurnRunner:
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
-                        "completion_status": completion_result.status,
-                        "completion_reason": completion_result.reason,
+                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -873,8 +886,8 @@ class AgentTurnRunner:
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
-                        "completion_status": completion_result.status,
-                        "completion_reason": completion_result.reason,
+                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -899,8 +912,8 @@ class AgentTurnRunner:
                     AUTO_CONTINUE_SKIPPED_EVENT,
                     {
                         **decision.to_metadata(),
-                        "completion_status": completion_result.status,
-                        "completion_reason": completion_result.reason,
+                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
                     channel=turn.channel,
                     external_chat_id=turn.external_chat_id,
@@ -960,8 +973,8 @@ class AgentTurnRunner:
             "verification_attempted": aggregate_result.verification_attempted,
             "verification_passed": aggregate_result.verification_passed,
             "context_compactions": aggregate_result.context_compactions,
-            "auto_continue_attempts": auto_continue_attempts,
-            "work_progress": work_progress.to_metadata(),
+            TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: auto_continue_attempts,
+            TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
         }
         status_metadata = {
             "executed_tool_calls": aggregate_result.executed_tool_calls,
@@ -969,21 +982,21 @@ class AgentTurnRunner:
             "verification_attempted": aggregate_result.verification_attempted,
             "verification_passed": aggregate_result.verification_passed,
             "context_compactions": aggregate_result.context_compactions,
-            "auto_continue_attempts": auto_continue_attempts,
+            TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: auto_continue_attempts,
         }
         completion_metadata = completion_result.to_metadata()
-        completion_metadata["auto_continue_attempts"] = auto_continue_attempts
-        response_metadata["completion_gate"] = completion_metadata
+        completion_metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] = auto_continue_attempts
+        response_metadata[TURN_METADATA_COMPLETION_GATE_FIELD] = completion_metadata
         if aggregate_result.task_contract is not None:
-            response_metadata["task_contract"] = aggregate_result.task_contract.to_metadata()
+            response_metadata[TURN_METADATA_TASK_CONTRACT_FIELD] = aggregate_result.task_contract.to_metadata()
         if aggregate_result.tool_evidence:
-            response_metadata["tool_evidence"] = [item.to_metadata() for item in aggregate_result.tool_evidence]
+            response_metadata[TURN_METADATA_TOOL_EVIDENCE_FIELD] = [item.to_metadata() for item in aggregate_result.tool_evidence]
         if aggregate_result.task_artifacts:
-            response_metadata["task_artifacts"] = [item.to_metadata() for item in aggregate_result.task_artifacts]
-        status_metadata["completion_status"] = completion_result.status
-        response_metadata["delegated_tasks"] = [task.to_payload() for task in aggregate_result.delegated_tasks]
-        response_metadata["active_delegate_task_id"] = aggregate_result.active_delegate_task_id
-        response_metadata["active_delegate_prompt_type"] = aggregate_result.active_delegate_prompt_type
+            response_metadata[TURN_METADATA_TASK_ARTIFACTS_FIELD] = [item.to_metadata() for item in aggregate_result.task_artifacts]
+        status_metadata[TURN_METADATA_COMPLETION_STATUS_FIELD] = completion_result.status
+        response_metadata[TURN_METADATA_DELEGATED_TASKS_FIELD] = [task.to_payload() for task in aggregate_result.delegated_tasks]
+        response_metadata[TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD] = aggregate_result.active_delegate_task_id
+        response_metadata[TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD] = aggregate_result.active_delegate_prompt_type
         if aggregate_result.stop_reason:
             response_metadata["stop_reason"] = aggregate_result.stop_reason
             status_metadata["stop_reason"] = aggregate_result.stop_reason
@@ -1410,12 +1423,12 @@ def _harness_checkpoint_metadata(
     return {
         "schema_version": 1,
         "pass_index": max(1, pass_index),
-        "auto_continue_attempts": max(0, auto_continue_attempts),
+        TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: max(0, auto_continue_attempts),
         "harness_profile": profile_metadata,
         "harness_policy": dict(aggregate_result.harness_policy or {}),
-        "task_contract": task_contract.to_metadata() if task_contract is not None else None,
+        TURN_METADATA_TASK_CONTRACT_FIELD: task_contract.to_metadata() if task_contract is not None else None,
         "completion": completion_result.to_metadata(),
-        "work_progress": work_progress.to_metadata(),
+        TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
         "next_action": work_progress.next_action,
         "tool_evidence_count": len(aggregate_result.tool_evidence),
         "task_artifact_count": len(aggregate_result.task_artifacts),
