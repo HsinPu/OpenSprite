@@ -1,7 +1,9 @@
 from opensprite.agent.harness_policy import (
     CHAT_HARNESS_POLICY_REASON,
+    HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON,
     MEDIA_HARNESS_POLICY_REASON,
     OPERATIONS_HARNESS_POLICY_REASON,
+    POLICY_RESOLUTION_METADATA_REASON,
     RESEARCH_HARNESS_POLICY_REASON,
     WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON,
     WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
@@ -81,6 +83,12 @@ def test_harness_policy_reasons_are_stable():
         "operations turns must ask approval before configuration, MCP, or external side effects"
     )
     assert CHAT_HARNESS_POLICY_REASON == "chat turns default to read-only local context and avoid external side effects"
+    assert POLICY_RESOLUTION_METADATA_REASON == (
+        "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy"
+    )
+    assert HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON == (
+        "harness approval requirements cannot be relaxed by user settings"
+    )
 
 
 def test_chat_harness_policy_is_read_only():
@@ -317,8 +325,11 @@ def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
     assert metadata["profile_override"]["approval_mode"] == "auto"
     assert metadata["harness_policy"]["name"] == "operations_approval_policy"
     assert metadata["effective_policy"]["kind"] == "composite"
+    assert metadata["reason"] == POLICY_RESOLUTION_METADATA_REASON
     assert "profile permission override" in metadata["constraints_applied"]
-    assert any(item["field"] == "approval_mode" for item in metadata["blocked_relaxations"])
+    approval_blocks = [item for item in metadata["blocked_relaxations"] if item["field"] == "approval_mode"]
+    assert approval_blocks
+    assert all(item["reason"] == HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON for item in approval_blocks)
 
 
 def _registry_for_permission_baseline() -> ToolRegistry:

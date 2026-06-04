@@ -51,6 +51,12 @@ OPERATIONS_HARNESS_POLICY_REASON = (
     "operations turns must ask approval before configuration, MCP, or external side effects"
 )
 CHAT_HARNESS_POLICY_REASON = "chat turns default to read-only local context and avoid external side effects"
+POLICY_RESOLUTION_METADATA_REASON = (
+    "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy"
+)
+HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON = (
+    "harness approval requirements cannot be relaxed by user settings"
+)
 
 
 @dataclass(frozen=True)
@@ -203,7 +209,7 @@ class HarnessPolicyService:
             "effective_policy": effective_policy.to_metadata(),
             "constraints_applied": _constraints_applied(profile_permission_policy, harness_policy),
             "blocked_relaxations": _blocked_relaxations(global_policy, profile_permission_policy, harness_policy),
-            "reason": "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy",
+            "reason": POLICY_RESOLUTION_METADATA_REASON,
         }
 
 
@@ -269,7 +275,7 @@ def _blocked_relaxations(
                     "field": "approval_mode",
                     "value": APPROVAL_MODE_AUTO,
                     "blocked_by": "harness_policy",
-                    "reason": "harness approval requirements cannot be relaxed by user settings",
+                    "reason": HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON,
                 }
             )
     return blocked
