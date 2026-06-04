@@ -7,6 +7,14 @@ from opensprite.agent.subagents import SubagentTaskOutcome
 from opensprite.agent.workflows import SubagentWorkflowService
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
+from opensprite.runs.events import (
+    WORKFLOW_COMPLETED_EVENT,
+    WORKFLOW_FAILED_EVENT,
+    WORKFLOW_STARTED_EVENT,
+    WORKFLOW_STEP_COMPLETED_EVENT,
+    WORKFLOW_STEP_FAILED_EVENT,
+    WORKFLOW_STEP_STARTED_EVENT,
+)
 from opensprite.storage import MemoryStorage
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
@@ -139,10 +147,10 @@ def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):
     assert len(child_sessions) == 2
     assert trace is not None
     event_types = [event.event_type for event in trace.events]
-    assert event_types.count("workflow.started") == 1
-    assert event_types.count("workflow.step.started") == 2
-    assert event_types.count("workflow.step.completed") == 2
-    assert event_types.count("workflow.completed") == 1
+    assert event_types.count(WORKFLOW_STARTED_EVENT) == 1
+    assert event_types.count(WORKFLOW_STEP_STARTED_EVENT) == 2
+    assert event_types.count(WORKFLOW_STEP_COMPLETED_EVENT) == 2
+    assert event_types.count(WORKFLOW_COMPLETED_EVENT) == 1
 
 
 def test_run_workflow_returns_error_for_unknown_workflow(tmp_path):
@@ -180,7 +188,7 @@ def test_run_workflow_can_resume_from_specific_step(tmp_path):
     assert "Resumed from step: 2" in result
     assert "[2] code-reviewer | completed" in result
     assert trace is not None
-    started_event = next(event for event in trace.events if event.event_type == "workflow.started")
+    started_event = next(event for event in trace.events if event.event_type == WORKFLOW_STARTED_EVENT)
     assert started_event.payload["resumed"] is True
     assert started_event.payload["start_step_id"] == "review"
     assert started_event.payload["start_step_label"] == "Code review"
@@ -239,8 +247,8 @@ def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
     assert "workflow step 'review' failed" in status.error
     assert trace is not None
     event_types = [event.event_type for event in trace.events]
-    assert "workflow.step.failed" in event_types
-    assert "workflow.failed" in event_types
-    failed_event = next(event for event in trace.events if event.event_type == "workflow.failed")
+    assert WORKFLOW_STEP_FAILED_EVENT in event_types
+    assert WORKFLOW_FAILED_EVENT in event_types
+    failed_event = next(event for event in trace.events if event.event_type == WORKFLOW_FAILED_EVENT)
     assert failed_event.payload["next_step_id"] == "review"
     assert failed_event.payload["next_step_label"] == "Code review"
