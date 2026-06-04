@@ -6,6 +6,13 @@ from typer.testing import CliRunner
 from opensprite.cli import commands
 from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, load_trace_readonly, select_cases, summarize_trace
 from opensprite.cli.commands_trace import trace_payload
+from opensprite.runs.events import (
+    COMPLETION_GATE_EVALUATED_EVENT,
+    HARNESS_PROFILE_SELECTED_EVENT,
+    TASK_CONTRACT_CREATED_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+)
 from opensprite.storage.base import StoredRun, StoredRunEvent, StoredRunPart, StoredRunTrace
 
 
@@ -22,31 +29,31 @@ def test_summarize_trace_extracts_profile_tools_and_completion():
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="harness_profile.selected",
+                event_type=HARNESS_PROFILE_SELECTED_EVENT,
                 payload={"name": "research"},
             ),
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="task_contract.created",
+                event_type=TASK_CONTRACT_CREATED_EVENT,
                 payload={"task_type": "web_research"},
             ),
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="tool_started",
+                event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "web_research"},
             ),
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="tool_result",
+                event_type=TOOL_RESULT_EVENT,
                 payload={"tool_name": "web_fetch", "ok": False},
             ),
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete", "reason": "done"},
             ),
         ],
@@ -120,7 +127,7 @@ def test_load_trace_readonly_reads_sqlite_without_storage_initialization(tmp_pat
         )
         conn.execute(
             "INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
-            ("run-1", "web:smoke", "tool_started", '{"tool_name":"web_search"}', 1.5),
+            ("run-1", "web:smoke", TOOL_STARTED_EVENT, '{"tool_name":"web_search"}', 1.5),
         )
         conn.execute(
             "INSERT INTO run_parts (run_id, session_id, part_type, content, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -227,7 +234,7 @@ def test_trace_payload_can_include_full_serialized_trace():
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete", "reason": "done"},
             ),
         ],
@@ -246,7 +253,7 @@ def test_trace_payload_can_include_full_serialized_trace():
     assert payload["ok"] is True
     assert payload["run"]["run_id"] == "run-1"
     assert payload["trace"]["completion_status"] == "complete"
-    assert payload["events"][0]["event_type"] == "completion_gate.evaluated"
+    assert payload["events"][0]["event_type"] == COMPLETION_GATE_EVALUATED_EVENT
     assert payload["parts"][0]["content"] == "pong"
 
 
@@ -306,7 +313,7 @@ def test_trace_command_outputs_json_from_readonly_db(tmp_path):
         )
         conn.execute(
             "INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
-            ("run-1", "web:smoke", "completion_gate.evaluated", '{"status":"complete","reason":"done"}', 1.5),
+            ("run-1", "web:smoke", COMPLETION_GATE_EVALUATED_EVENT, '{"status":"complete","reason":"done"}', 1.5),
         )
         conn.commit()
     finally:
