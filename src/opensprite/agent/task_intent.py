@@ -26,6 +26,34 @@ TASK_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, GENERIC_TASK_INTENT_KIND})
 WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, REVIEW_INTENT_KIND})
 COMMAND_PREFIXES = ("/",)
 LIST_ITEM_RE = re.compile(r"(?:^|\s)(?:\d+\.|[-*])\s+")
+TASK_INTENT_SCHEMA_VERSION = 1
+OBJECTIVE_MAX_CHARS = 220
+LONG_RUNNING_TEXT_MIN_CHARS = 180
+LONG_RUNNING_LIST_ITEM_MIN_COUNT = 2
+
+TASK_INTENT_SCHEMA_VERSION_FIELD = "schema_version"
+TASK_INTENT_KIND_FIELD = "kind"
+TASK_INTENT_OBJECTIVE_FIELD = "objective"
+TASK_INTENT_CONSTRAINTS_FIELD = "constraints"
+TASK_INTENT_DONE_CRITERIA_FIELD = "done_criteria"
+TASK_INTENT_NEEDS_CLARIFICATION_FIELD = "needs_clarification"
+TASK_INTENT_LONG_RUNNING_FIELD = "long_running"
+TASK_INTENT_EXPECTS_CODE_CHANGE_FIELD = "expects_code_change"
+TASK_INTENT_EXPECTS_VERIFICATION_FIELD = "expects_verification"
+TASK_INTENT_VERIFICATION_HINT_FIELD = "verification_hint"
+
+MEDIA_UPLOAD_OBJECTIVE = "Save attached media for later use"
+EMPTY_TEXT_OBJECTIVE = "No user text was provided"
+
+DONE_CRITERION_MEDIA_PERSISTED = "attached media is persisted or referenced for follow-up"
+DONE_CRITERION_NO_ACTION_REQUIRED = "no action is required unless context indicates otherwise"
+DONE_CRITERION_COMMAND_HANDLED = "the command is handled or rejected with a clear reason"
+DONE_CRITERION_DIRECT_RESPONSE = "the user request is addressed directly"
+DONE_CRITERION_EXPLICIT_RESULT_OR_BLOCKER = "the result or blocker is explicit"
+DONE_CRITERION_VERIFICATION_REPORTED = "relevant tests or checks pass, or the verification gap is stated"
+DONE_CRITERION_EVIDENCE_TIED_FINDINGS = "findings are tied to concrete evidence"
+DONE_CRITERION_RELEVANT_MEDIA_CONSIDERED = "attached media is considered only when relevant to the request"
+DONE_CRITERION_NATURAL_RESPONSE = "respond naturally and match the user's tone"
 
 
 @dataclass(frozen=True)
@@ -45,18 +73,18 @@ class TaskIntent:
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe event payload for durable run telemetry."""
         payload: dict[str, Any] = {
-            "schema_version": 1,
-            "kind": self.kind,
-            "objective": self.objective,
-            "constraints": list(self.constraints),
-            "done_criteria": list(self.done_criteria),
-            "needs_clarification": self.needs_clarification,
-            "long_running": self.long_running,
-            "expects_code_change": self.expects_code_change,
-            "expects_verification": self.expects_verification,
+            TASK_INTENT_SCHEMA_VERSION_FIELD: TASK_INTENT_SCHEMA_VERSION,
+            TASK_INTENT_KIND_FIELD: self.kind,
+            TASK_INTENT_OBJECTIVE_FIELD: self.objective,
+            TASK_INTENT_CONSTRAINTS_FIELD: list(self.constraints),
+            TASK_INTENT_DONE_CRITERIA_FIELD: list(self.done_criteria),
+            TASK_INTENT_NEEDS_CLARIFICATION_FIELD: self.needs_clarification,
+            TASK_INTENT_LONG_RUNNING_FIELD: self.long_running,
+            TASK_INTENT_EXPECTS_CODE_CHANGE_FIELD: self.expects_code_change,
+            TASK_INTENT_EXPECTS_VERIFICATION_FIELD: self.expects_verification,
         }
         if self.verification_hint:
-            payload["verification_hint"] = self.verification_hint
+            payload[TASK_INTENT_VERIFICATION_HINT_FIELD] = self.verification_hint
         return payload
 
 
@@ -80,14 +108,14 @@ class TaskIntentService:
             if media_count:
                 return TaskIntent(
                     kind=MEDIA_UPLOAD_INTENT_KIND,
-                    objective="Save attached media for later use",
-                    done_criteria=("attached media is persisted or referenced for follow-up",),
+                    objective=MEDIA_UPLOAD_OBJECTIVE,
+                    done_criteria=_done_criteria(MEDIA_UPLOAD_INTENT_KIND, long_running=False, has_media=True),
                     long_running=False,
                 )
             return TaskIntent(
                 kind=CONVERSATION_INTENT_KIND,
-                objective="No user text was provided",
-                done_criteria=("no action is required unless context indicates otherwise",),
+                objective=EMPTY_TEXT_OBJECTIVE,
+                done_criteria=(DONE_CRITERION_NO_ACTION_REQUIRED,),
                 long_running=False,
             )
 
@@ -95,7 +123,7 @@ class TaskIntentService:
             return TaskIntent(
                 kind=COMMAND_INTENT_KIND,
                 objective=_truncate(compact),
-                done_criteria=("the command is handled or rejected with a clear reason",),
+                done_criteria=_done_criteria(COMMAND_INTENT_KIND, long_running=False, has_media=False),
                 long_running=False,
             )
 
@@ -119,7 +147,7 @@ def _compact_text(text: str | None) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
-def _truncate(text: str, max_chars: int = 220) -> str:
+def _truncate(text: str, max_chars: int = OBJECTIVE_MAX_CHARS) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 3].rstrip() + "..."
@@ -137,13 +165,13 @@ def _is_command_text(text: str) -> bool:
 
 
 def _has_multiple_list_items(text: str) -> bool:
-    return len(LIST_ITEM_RE.findall(text)) >= 2
+    return len(LIST_ITEM_RE.findall(text)) >= LONG_RUNNING_LIST_ITEM_MIN_COUNT
 
 
 def _is_long_running(text: str, kind: str) -> bool:
     if kind not in TASK_INTENT_KINDS:
         return False
-    if len(text) > 180:
+    if len(text) > LONG_RUNNING_TEXT_MIN_CHARS:
         return True
     if _has_multiple_list_items(text):
         return True
@@ -152,17 +180,17 @@ def _is_long_running(text: str, kind: str) -> bool:
 
 def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[str, ...]:
     if kind == CONVERSATION_INTENT_KIND:
-        return ("respond naturally and match the user's tone",)
+        return (DONE_CRITERION_NATURAL_RESPONSE,)
     if kind == COMMAND_INTENT_KIND:
-        return ("the command is handled or rejected with a clear reason",)
+        return (DONE_CRITERION_COMMAND_HANDLED,)
     if kind == MEDIA_UPLOAD_INTENT_KIND:
-        return ("attached media is persisted or referenced for follow-up",)
+        return (DONE_CRITERION_MEDIA_PERSISTED,)
 
-    criteria = ["the user request is addressed directly", "the result or blocker is explicit"]
+    criteria = [DONE_CRITERION_DIRECT_RESPONSE, DONE_CRITERION_EXPLICIT_RESULT_OR_BLOCKER]
     if long_running:
-        criteria.append("relevant tests or checks pass, or the verification gap is stated")
+        criteria.append(DONE_CRITERION_VERIFICATION_REPORTED)
     if kind == ANALYSIS_INTENT_KIND:
-        criteria.append("findings are tied to concrete evidence")
+        criteria.append(DONE_CRITERION_EVIDENCE_TIED_FINDINGS)
     if has_media:
-        criteria.append("attached media is considered only when relevant to the request")
+        criteria.append(DONE_CRITERION_RELEVANT_MEDIA_CONSIDERED)
     return tuple(dict.fromkeys(criteria))
