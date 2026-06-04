@@ -11,11 +11,15 @@ from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig,
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
+    RUN_PART_DELTA_EVENT,
     SUBAGENT_COMPLETED_EVENT,
     SUBAGENT_STARTED_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
     TOOL_PERMISSION_ALLOWED_EVENT,
     TOOL_PERMISSION_CHECKED_EVENT,
 )
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.runs.schema import serialize_run_artifacts
 from opensprite.storage import MemoryStorage
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -831,9 +835,9 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
     child_trace = asyncio.run(storage.get_run_trace(child_session_id, child_run.run_id))
     assert child_trace is not None
     child_event_types = [event.event_type for event in child_trace.events]
-    assert child_event_types[:3] == ["run_started", "tool_started", "tool_result"]
-    assert "run_part_delta" in child_event_types
-    assert child_event_types[-1] == "run_finished"
+    assert child_event_types[:3] == [RUN_STARTED_EVENT, TOOL_STARTED_EVENT, TOOL_RESULT_EVENT]
+    assert RUN_PART_DELTA_EVENT in child_event_types
+    assert child_event_types[-1] == RUN_FINISHED_EVENT
     assert child_trace.events[0].payload["parent_run_id"] == "run_parent"
     assert child_trace.events[-1].payload["summary"] == "done"
     assert [part.part_type for part in child_trace.parts] == ["tool_call", "tool_result", "llm_step", "llm_step", "assistant_message"]
