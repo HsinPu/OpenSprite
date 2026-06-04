@@ -50,6 +50,8 @@ PLANNER_MISSING_STATUS = "missing"
 PLANNER_METADATA_STATUS_FIELD = "planner_status"
 PLANNER_METADATA_REASON_FIELD = "reason"
 PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD = "raw_response_preview"
+DETERMINISTIC_CONTRACT_SOURCE = "deterministic"
+DETERMINISTIC_CONTRACT_SOURCES = (DETERMINISTIC_CONTRACT_SOURCE,)
 LLM_PLANNER_CONTRACT_SOURCE = "llm_planner"
 LLM_PLANNER_CONTRACT_SOURCES = (LLM_PLANNER_CONTRACT_SOURCE,)
 MISSING_RUNTIME_CONTRACT_SOURCE = "missing_runtime_contract"
@@ -183,7 +185,7 @@ class TaskContract:
     selected_resources: tuple[ResourceRef, ...] = ()
     final_answer_required: bool = True
     allow_no_tool_final: bool = True
-    contract_sources: tuple[str, ...] = ("deterministic",)
+    contract_sources: tuple[str, ...] = DETERMINISTIC_CONTRACT_SOURCES
     harness_profile: dict[str, Any] | None = None
     planner_metadata: dict[str, Any] | None = None
 
