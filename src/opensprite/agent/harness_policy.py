@@ -35,6 +35,22 @@ _CHAT_RISKS = ("read",)
 _RESEARCH_RISKS = ("read", "network")
 _MEDIA_RISKS = ("read", "network", "external_side_effect")
 _WORKSPACE_ANALYSIS_RISKS = ("read", "network", "delegation")
+RESEARCH_HARNESS_POLICY_REASON = (
+    "research turns may inspect local context and web sources but cannot mutate workspace or external state"
+)
+WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON = (
+    "workspace analysis turns can inspect and delegate review but should not mutate or execute"
+)
+WORKSPACE_CHANGE_HARNESS_POLICY_REASON = (
+    "workspace change turns may edit and verify but require approval for configuration or external side effects"
+)
+MEDIA_HARNESS_POLICY_REASON = (
+    "media turns use media extraction tools and may send produced artifacts without broad workspace mutation"
+)
+OPERATIONS_HARNESS_POLICY_REASON = (
+    "operations turns must ask approval before configuration, MCP, or external side effects"
+)
+CHAT_HARNESS_POLICY_REASON = "chat turns default to read-only local context and avoid external side effects"
 
 
 @dataclass(frozen=True)
@@ -94,7 +110,7 @@ class HarnessPolicyService:
                 allowed_tools=_WEB_RESEARCH_TOOLS,
                 allowed_risk_levels=_RESEARCH_RISKS,
                 denied_risk_levels=denied_risks_except(_RESEARCH_RISKS),
-                reason="research turns may inspect local context and web sources but cannot mutate workspace or external state",
+                reason=RESEARCH_HARNESS_POLICY_REASON,
             ), harness_profile)
         if profile_name == "coding":
             if harness_profile.task_type == "workspace_analysis":
@@ -104,7 +120,7 @@ class HarnessPolicyService:
                     allowed_tools=("*",),
                     allowed_risk_levels=_WORKSPACE_ANALYSIS_RISKS,
                     denied_risk_levels=denied_risks_except(_WORKSPACE_ANALYSIS_RISKS),
-                    reason="workspace analysis turns can inspect and delegate review but should not mutate or execute",
+                    reason=WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON,
                 ), harness_profile)
             return _with_profile_denied_tools(HarnessPolicy(
                 name="workspace_change_policy",
@@ -113,7 +129,7 @@ class HarnessPolicyService:
                 allowed_risk_levels=tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk != "mcp"),
                 denied_risk_levels=("mcp",),
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
-                reason="workspace change turns may edit and verify but require approval for configuration or external side effects",
+                reason=WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
             ), harness_profile)
         if profile_name == "media":
             return _with_profile_denied_tools(HarnessPolicy(
@@ -121,7 +137,7 @@ class HarnessPolicyService:
                 harness_profile_name=profile_name,
                 allowed_tools=_MEDIA_TOOLS,
                 allowed_risk_levels=_MEDIA_RISKS,
-                reason="media turns use media extraction tools and may send produced artifacts without broad workspace mutation",
+                reason=MEDIA_HARNESS_POLICY_REASON,
             ), harness_profile)
         if profile_name == "ops":
             return _with_profile_denied_tools(HarnessPolicy(
@@ -130,7 +146,7 @@ class HarnessPolicyService:
                 allowed_tools=("*",),
                 allowed_risk_levels=ALL_RISK_LEVELS_ORDER,
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
-                reason="operations turns must ask approval before configuration, MCP, or external side effects",
+                reason=OPERATIONS_HARNESS_POLICY_REASON,
             ), harness_profile)
         return _with_profile_denied_tools(HarnessPolicy(
             name="chat_read_policy",
@@ -138,7 +154,7 @@ class HarnessPolicyService:
             allowed_tools=("*",),
             allowed_risk_levels=_CHAT_RISKS,
             denied_risk_levels=denied_risks_except(_CHAT_RISKS),
-            reason="chat turns default to read-only local context and avoid external side effects",
+            reason=CHAT_HARNESS_POLICY_REASON,
         ), harness_profile)
 
     def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy, profile_permission_policy: ToolPermissionPolicy | None = None) -> ToolRegistry:

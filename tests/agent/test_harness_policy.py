@@ -1,4 +1,12 @@
-from opensprite.agent.harness_policy import HarnessPolicyService
+from opensprite.agent.harness_policy import (
+    CHAT_HARNESS_POLICY_REASON,
+    MEDIA_HARNESS_POLICY_REASON,
+    OPERATIONS_HARNESS_POLICY_REASON,
+    RESEARCH_HARNESS_POLICY_REASON,
+    WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON,
+    WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
+    HarnessPolicyService,
+)
 from opensprite.agent.harness_profile import HarnessProfile
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
@@ -50,6 +58,29 @@ def _policy_for_contract(task_type: str, *requirements: EvidenceRequirement):
     )
     profile = HarnessProfileService().from_contract(contract)
     return HarnessPolicyService().select(profile)
+
+
+def test_harness_policy_reasons_are_stable():
+    assert (
+        RESEARCH_HARNESS_POLICY_REASON
+        == "research turns may inspect local context and web sources but cannot mutate workspace or external state"
+    )
+    assert (
+        WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON
+        == "workspace analysis turns can inspect and delegate review but should not mutate or execute"
+    )
+    assert (
+        WORKSPACE_CHANGE_HARNESS_POLICY_REASON
+        == "workspace change turns may edit and verify but require approval for configuration or external side effects"
+    )
+    assert (
+        MEDIA_HARNESS_POLICY_REASON
+        == "media turns use media extraction tools and may send produced artifacts without broad workspace mutation"
+    )
+    assert OPERATIONS_HARNESS_POLICY_REASON == (
+        "operations turns must ask approval before configuration, MCP, or external side effects"
+    )
+    assert CHAT_HARNESS_POLICY_REASON == "chat turns default to read-only local context and avoid external side effects"
 
 
 def test_chat_harness_policy_is_read_only():
