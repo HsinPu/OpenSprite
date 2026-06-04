@@ -20,6 +20,7 @@ from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.runs.events import TASK_CONTEXT_RESOLVED_EVENT, TASK_OBJECTIVE_RESOLVED_EVENT
 from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
@@ -1615,12 +1616,12 @@ def test_agent_process_emits_task_context_resolved_event(tmp_path):
 
     events = asyncio.run(scenario())
 
-    event = next(event for event in events if event.event_type == "task_context.resolved")
+    event = next(event for event in events if event.event_type == TASK_CONTEXT_RESOLVED_EVENT)
     assert event.payload["method"] == "deterministic"
     assert event.payload["is_follow_up"] is False
     assert event.payload["continuation_type"] == "none"
     assert event.payload["confidence"] >= 0.0
-    objective_event = next(event for event in events if event.event_type == "task_objective.resolved")
+    objective_event = next(event for event in events if event.event_type == TASK_OBJECTIVE_RESOLVED_EVENT)
     assert objective_event.payload["method"] == "deterministic"
     assert objective_event.payload["should_use_resolved_objective"] is False
 

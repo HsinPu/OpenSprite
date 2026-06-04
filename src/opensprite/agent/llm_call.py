@@ -10,11 +10,15 @@ from ..llms import ChatMessage
 from ..runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
+    HISTORY_LOADED_EVENT,
+    PROMPT_BUILT_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
+    TASK_CONTEXT_RESOLVED_EVENT,
+    TASK_OBJECTIVE_RESOLVED_EVENT,
 )
 from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
@@ -186,7 +190,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "history.loaded",
+                HISTORY_LOADED_EVENT,
                 {
                     "loaded_messages": loaded_history_count,
                     "history_messages": len(history_dicts),
@@ -201,7 +205,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "prompt.built",
+                PROMPT_BUILT_EVENT,
                 {
                     "history_messages": len(history_dicts),
                     "current_message_len": len(str(current_message or "")),
@@ -236,7 +240,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_context.resolved",
+                    TASK_CONTEXT_RESOLVED_EVENT,
                     task_context_decision.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
@@ -258,7 +262,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_objective.resolved",
+                    TASK_OBJECTIVE_RESOLVED_EVENT,
                     task_objective_decision.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,

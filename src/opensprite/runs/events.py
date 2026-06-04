@@ -58,6 +58,10 @@ LLM_STATUS_EVENT = "llm_status"
 REASONING_DELTA_EVENT = "reasoning_delta"
 TOOL_INPUT_DELTA_EVENT = "tool_input_delta"
 FILE_CHANGED_EVENT = "file_changed"
+HISTORY_LOADED_EVENT = "history.loaded"
+PROMPT_BUILT_EVENT = "prompt.built"
+TASK_CONTEXT_RESOLVED_EVENT = "task_context.resolved"
+TASK_OBJECTIVE_RESOLVED_EVENT = "task_objective.resolved"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})
