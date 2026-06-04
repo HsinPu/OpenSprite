@@ -39,6 +39,7 @@ from .harness_profile import (
 )
 from .mcp_tool_policy import mcp_tool_names as list_mcp_tool_names
 from .task_contract import (
+    PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContract,
     is_itemized_output_criterion,
@@ -740,5 +741,5 @@ def _format_acceptance_criterion(criterion: Any) -> str:
 def _task_contract_planner_status(contract: TaskContract | None) -> str:
     metadata = getattr(contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return str(metadata.get("planner_status") or "").strip()
+        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
     return ""

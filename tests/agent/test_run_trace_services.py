@@ -2,6 +2,7 @@ import asyncio
 import subprocess
 from types import SimpleNamespace
 
+from opensprite.agent.task_contract import PLANNER_METADATA_STATUS_FIELD, PLANNER_VALIDATED_STATUS
 from opensprite.agent.run_hooks import RunHookService
 from opensprite.agent.execution import LlmStepEvent
 from opensprite.agent.run_trace import (
@@ -535,7 +536,10 @@ def test_serialize_run_events_preserves_planned_contract_routes():
                 payload={
                     "task_type": tool_group,
                     "requirements": [{"kind": "tool_group", "tool_group": tool_group}],
-                    "planner_metadata": {"planner_status": "validated", "reason": f"Route to {tool_group}."},
+                    "planner_metadata": {
+                        PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS,
+                        "reason": f"Route to {tool_group}.",
+                    },
                 },
                 created_at=12.0 + event_id,
             )
@@ -549,7 +553,10 @@ def test_serialize_run_events_preserves_planned_contract_routes():
         "workspace_read",
         "history_retrieval",
     ]
-    assert all(event["payload"]["planner_metadata"]["planner_status"] == "validated" for event in payload)
+    assert all(
+        event["payload"]["planner_metadata"][PLANNER_METADATA_STATUS_FIELD] == PLANNER_VALIDATED_STATUS
+        for event in payload
+    )
 
 
 def test_serialize_run_event_projects_curator_artifact():

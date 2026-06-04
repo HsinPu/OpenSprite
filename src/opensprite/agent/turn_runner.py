@@ -52,7 +52,11 @@ from .source_fallback_policy import clean_source_fallback_snippet, source_fallba
 from .source_fallback_ranking import rank_web_sources_for_objective, web_source_relevance_score
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
-from .task_contract import PLANNER_VALIDATED_STATUS, PLANNING_ERROR_TASK_TYPE
+from .task_contract import (
+    PLANNER_METADATA_STATUS_FIELD,
+    PLANNER_VALIDATED_STATUS,
+    PLANNING_ERROR_TASK_TYPE,
+)
 from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
@@ -1632,7 +1636,7 @@ def _harness_trace_health(
 def _task_contract_planner_status(task_contract: Any) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return str(metadata.get("planner_status") or "").strip()
+        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
     return ""
 
 

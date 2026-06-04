@@ -29,6 +29,8 @@ from opensprite.agent.task_contract import (
     EvidenceRequirement,
     OPERATION_REPORT_CRITERION_KIND,
     PLANNER_BLOCKED_STATUS,
+    PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContract,
     TaskContractPlanner,
@@ -487,7 +489,7 @@ async def test_task_contract_planner_blocks_web_request_when_planner_json_is_inv
 
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["planner_status"] == "invalid"
+    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
     assert "invalid JSON" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
@@ -507,7 +509,7 @@ async def test_task_contract_planner_blocks_when_llm_call_fails():
 
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["planner_status"] == PLANNER_BLOCKED_STATUS
+    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_BLOCKED_STATUS
     assert "TimeoutError" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
@@ -528,7 +530,7 @@ async def test_task_contract_planner_blocks_workspace_request_when_planner_json_
 
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["planner_status"] == "invalid"
+    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
     assert "invalid JSON" in contract.planner_metadata["reason"]
     assert contract.requirements == ()
 
@@ -560,7 +562,7 @@ async def test_task_contract_planner_repairs_invalid_json_with_second_llm_call()
 
     assert contract.task_type == "pure_answer"
     assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["planner_status"] == PLANNER_VALIDATED_STATUS
+    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_VALIDATED_STATUS
     assert len(provider.calls) == 2
 
 
@@ -581,4 +583,4 @@ async def test_task_contract_planner_blocks_plain_request_when_planner_json_is_i
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
     assert contract.requirements == ()
-    assert contract.planner_metadata["planner_status"] == "invalid"
+    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS

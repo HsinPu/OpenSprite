@@ -11,7 +11,13 @@ import sys
 from opensprite.agent.agent import AgentLoop, _verification_result_is_tool_error
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
+from opensprite.agent.task_contract import (
+    EvidenceRequirement,
+    PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_STATUS_FIELD,
+    PLANNER_VALIDATED_STATUS,
+    TaskContract,
+)
 from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
@@ -330,13 +336,13 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         task_type="web_research",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
         contract_sources=("llm_planner",),
-        planner_metadata={"planner_status": "validated"},
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
     planning_error = TaskContract(
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
@@ -358,13 +364,13 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         task_type="web_research",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
         contract_sources=("llm_planner",),
-        planner_metadata={"planner_status": "validated"},
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
     planning_error_contract = TaskContract(
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
@@ -398,7 +404,7 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={"planner_status": "invalid", "reason": "invalid JSON"},
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(

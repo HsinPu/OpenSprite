@@ -69,7 +69,12 @@ from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import REVIEW_PROMPT_TYPES
-from .task_contract import PLANNER_INVALID_STATUS, contract_expects_file_change
+from .task_contract import (
+    PLANNER_BLOCKED_STATUS,
+    PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_STATUS_FIELD,
+    contract_expects_file_change,
+)
 from .task_intent import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
@@ -124,7 +129,7 @@ from .workflow_completion_policy import (
 )
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
-_BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
+_BLOCKING_PLANNER_STATUSES = frozenset({PLANNER_BLOCKED_STATUS, PLANNER_INVALID_STATUS})
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
 COMPLETION_JUDGE_MISSING_CONFIG_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: missing llm config"
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
@@ -873,7 +878,7 @@ def _is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
 def _task_contract_planner_status(task_contract: Any) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return str(metadata.get("planner_status") or "").strip()
+        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
     return ""
 
 
