@@ -16,11 +16,14 @@ class CompletionBlockerMessages:
     stop_notice: str
 
 
+COMPLETION_GATE_DID_NOT_PASS_REASON = "completion gate did not pass"
+
+
 def completion_blocker_response(
     completion_result: CompletionGateResult,
     messages: CompletionBlockerMessages,
 ) -> str:
-    reason = (completion_result.reason or completion_result.status or "completion gate did not pass").strip()
+    reason = (completion_result.reason or completion_result.status or COMPLETION_GATE_DID_NOT_PASS_REASON).strip()
     detail = (completion_result.active_task_detail or "").strip()
     missing = [item.strip() for item in completion_result.missing_evidence if str(item).strip()]
     sections = [
