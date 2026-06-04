@@ -11,7 +11,7 @@ from opensprite.agent.harness_policy import (
 )
 from opensprite.agent.harness_profile import HarnessProfile
 from opensprite.agent.harness_profile import HarnessProfileService
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
+from opensprite.agent.task_contract import EvidenceRequirement, LLM_PLANNER_CONTRACT_SOURCES, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -56,7 +56,7 @@ def _policy_for_contract(task_type: str, *requirements: EvidenceRequirement):
         task_type=task_type,
         requirements=tuple(requirements),
         allow_no_tool_final=not requirements,
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
     )
     profile = HarnessProfileService().from_contract(contract)
     return HarnessPolicyService().select(profile)

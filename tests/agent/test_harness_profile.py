@@ -27,6 +27,7 @@ from opensprite.agent.harness_profile import (
 )
 from opensprite.agent.task_contract import (
     EvidenceRequirement,
+    LLM_PLANNER_CONTRACT_SOURCES,
     OPERATION_REPORT_CRITERION_KIND,
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,
@@ -48,7 +49,7 @@ def _contract(task_type: str, *requirements: EvidenceRequirement) -> TaskContrac
         task_type=task_type,
         requirements=tuple(requirements),
         allow_no_tool_final=not requirements,
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
     )
 
 
@@ -246,7 +247,7 @@ async def test_task_contract_planner_builds_web_contract_from_llm_json():
     )
 
     assert contract.task_type == "web_research"
-    assert contract.contract_sources == ("llm_planner",)
+    assert contract.contract_sources == LLM_PLANNER_CONTRACT_SOURCES
     assert contract.allow_no_tool_final is False
     assert any(item.kind == "tool_group" and item.tool_group == "web_research" for item in contract.requirements)
     assert any(item.kind == "source_reference" for item in contract.acceptance_criteria)

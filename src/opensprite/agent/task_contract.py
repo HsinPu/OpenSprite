@@ -50,6 +50,8 @@ PLANNER_MISSING_STATUS = "missing"
 PLANNER_METADATA_STATUS_FIELD = "planner_status"
 PLANNER_METADATA_REASON_FIELD = "reason"
 PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD = "raw_response_preview"
+LLM_PLANNER_CONTRACT_SOURCE = "llm_planner"
+LLM_PLANNER_CONTRACT_SOURCES = (LLM_PLANNER_CONTRACT_SOURCE,)
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
@@ -576,7 +578,7 @@ def _planner_blocked_contract(
         task_type=PLANNING_ERROR_TASK_TYPE,
         final_answer_required=True,
         allow_no_tool_final=False,
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         acceptance_criteria=(
             AcceptanceCriterion(
                 kind="planner_error_report",
@@ -668,7 +670,7 @@ def _contract_from_planner_payload(
         selected_resources=tuple(dict.fromkeys(selected)),
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
         allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata=metadata,
     )
 

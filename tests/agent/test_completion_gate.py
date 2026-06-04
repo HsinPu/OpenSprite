@@ -41,6 +41,7 @@ from opensprite.agent.completion_gate import (
     _workflow_gate_is_complete,
     _workflow_gate_needs_verification,
 )
+from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.web_source_policy import (
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
@@ -209,7 +210,7 @@ def test_completion_gate_blocks_unvalidated_task_contract():
         objective=intent.objective,
         task_type="planning_error",
         allow_no_tool_final=False,
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
             PLANNER_METADATA_REASON_FIELD: PLANNER_INVALID_JSON_REASON,

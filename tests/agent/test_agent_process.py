@@ -13,6 +13,7 @@ from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
 from opensprite.agent.task_contract import (
     EvidenceRequirement,
+    LLM_PLANNER_CONTRACT_SOURCES,
     PLANNER_INVALID_STATUS,
     PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
@@ -336,13 +337,13 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         objective="Find sources",
         task_type="web_research",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
     planning_error = TaskContract(
         objective="Find sources",
         task_type="planning_error",
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
             PLANNER_METADATA_REASON_FIELD: "invalid JSON",
@@ -367,13 +368,13 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         objective="Find sources",
         task_type="web_research",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
     planning_error_contract = TaskContract(
         objective="Find sources",
         task_type="planning_error",
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
             PLANNER_METADATA_REASON_FIELD: "invalid JSON",
@@ -410,7 +411,7 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
     planning_error = TaskContract(
         objective="Find sources",
         task_type="planning_error",
-        contract_sources=("llm_planner",),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
             PLANNER_METADATA_REASON_FIELD: "invalid JSON",
