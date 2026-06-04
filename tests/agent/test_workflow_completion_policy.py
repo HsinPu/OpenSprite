@@ -1,4 +1,7 @@
 from opensprite.agent.workflow_completion_policy import (
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
     WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,
@@ -59,22 +62,22 @@ def test_workflow_review_follow_up_details_are_stable():
 
 def test_workflow_completion_policy_returns_review_follow_up_step():
     assert workflow_review_follow_up_fields("implement_then_review") == {
-        "next_step_id": "review",
-        "next_step_label": "Code review",
-        "next_step_prompt_type": "code-reviewer",
+        WORKFLOW_NEXT_STEP_ID_FIELD: "review",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
     }
     assert workflow_review_follow_up_fields("research_then_outline") == {}
 
 
 def test_workflow_completion_policy_returns_fix_follow_up_steps():
     assert workflow_fix_follow_up_fields("implement_then_review") == {
-        "next_step_id": "implement",
-        "next_step_label": "Implement",
-        "next_step_prompt_type": "implementer",
+        WORKFLOW_NEXT_STEP_ID_FIELD: "implement",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Implement",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "implementer",
     }
     assert workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
-        "next_step_id": "bugfix",
-        "next_step_label": "Bug fix",
-        "next_step_prompt_type": "bug-fixer",
+        WORKFLOW_NEXT_STEP_ID_FIELD: "bugfix",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Bug fix",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "bug-fixer",
     }
     assert workflow_fix_follow_up_fields("research_then_outline") == {}

@@ -10,16 +10,19 @@ from .workflows import (
 )
 
 
+WORKFLOW_NEXT_STEP_ID_FIELD = "next_step_id"
+WORKFLOW_NEXT_STEP_LABEL_FIELD = "next_step_label"
+WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD = "next_step_prompt_type"
 WORKFLOW_FIX_STEPS = {
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
-        "next_step_id": "implement",
-        "next_step_label": "Implement",
-        "next_step_prompt_type": "implementer",
+        WORKFLOW_NEXT_STEP_ID_FIELD: "implement",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Implement",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "implementer",
     },
     BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID: {
-        "next_step_id": "bugfix",
-        "next_step_label": "Bug fix",
-        "next_step_prompt_type": "bug-fixer",
+        WORKFLOW_NEXT_STEP_ID_FIELD: "bugfix",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Bug fix",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "bug-fixer",
     },
 }
 WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON = "workflow completed but required verification evidence is still missing"
@@ -77,9 +80,9 @@ def is_review_workflow(workflow_id: str | None) -> bool:
 def workflow_review_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
     if is_review_workflow(workflow_id):
         return {
-            "next_step_id": "review",
-            "next_step_label": "Code review",
-            "next_step_prompt_type": "code-reviewer",
+            WORKFLOW_NEXT_STEP_ID_FIELD: "review",
+            WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
+            WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
         }
     return {}
 

@@ -103,6 +103,9 @@ from .workflow_status import (
     is_workflow_unsuccessful_status,
 )
 from .workflow_completion_policy import (
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
     WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,
@@ -378,9 +381,9 @@ class CompletionGateService:
                 active_task_status=DONE_ACTIVE_TASK_STATUS if _workflow_gate_is_complete(workflow_gate) else None,
                 active_task_detail=workflow_gate.get("detail") or None,
                 follow_up_workflow=_string_or_none(workflow_gate.get("workflow")),
-                follow_up_step_id=_string_or_none(workflow_gate.get("next_step_id")),
-                follow_up_step_label=_string_or_none(workflow_gate.get("next_step_label")),
-                follow_up_prompt_type=_string_or_none(workflow_gate.get("next_step_prompt_type")),
+                follow_up_step_id=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_ID_FIELD)),
+                follow_up_step_label=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
+                follow_up_prompt_type=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
                 should_update_active_task=_workflow_gate_is_complete(workflow_gate)
                 and _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
@@ -1027,9 +1030,9 @@ def _workflow_gate_outcome(
     workflow_verification_passed = bool(workflow.get("verification_passed"))
     workflow_review_summary = str(workflow.get("review_summary") or "").strip()
     workflow_review_first_finding = str(workflow.get("review_first_finding") or "").strip()
-    next_step_id = str(workflow.get("next_step_id") or "").strip()
-    next_step_label = str(workflow.get("next_step_label") or "").strip()
-    next_step_prompt_type = str(workflow.get("next_step_prompt_type") or "").strip()
+    next_step_id = str(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
+    next_step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or "").strip()
+    next_step_prompt_type = str(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD) or "").strip()
     metadata = {
         "workflow": workflow_id,
         "review_attempted": review_attempted,
@@ -1040,9 +1043,9 @@ def _workflow_gate_outcome(
         "verification_passed": workflow_verification_passed,
         **(
             {
-                "next_step_id": next_step_id,
-                "next_step_label": next_step_label,
-                "next_step_prompt_type": next_step_prompt_type,
+                WORKFLOW_NEXT_STEP_ID_FIELD: next_step_id,
+                WORKFLOW_NEXT_STEP_LABEL_FIELD: next_step_label,
+                WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: next_step_prompt_type,
             }
             if next_step_id or next_step_label or next_step_prompt_type
             else {}
@@ -1200,7 +1203,7 @@ def _review_follow_up_detail(review: dict[str, Any]) -> str | None:
 
 
 def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow: dict[str, Any]) -> str:
-    step_label = str(workflow.get("next_step_label") or workflow.get("next_step_id") or "").strip()
+    step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
     error = str(workflow.get("error") or "").strip()
     summary = str(workflow.get("summary") or "").strip()
     if _is_cancelled_workflow_status(workflow_status):
