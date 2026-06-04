@@ -3,6 +3,7 @@ import asyncio
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.agent.task_objective_resolver import (
+    DETERMINISTIC_OBJECTIVE_METHOD,
     LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON,
     LLM_RESOLVED_TASK_OBJECTIVE_REASON,
     OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
@@ -54,7 +55,7 @@ _FOLLOW_UP_WEB_DECISION = TaskContextDecision(
     inherited_tool_group="web_research",
     continuation_type="follow_up",
     confidence=0.75,
-    method="deterministic",
+    method=DETERMINISTIC_OBJECTIVE_METHOD,
     reason="inherited web_research from recent conversation context",
 )
 _ACTIVE_TASK_BLOCK = (
@@ -133,7 +134,7 @@ def test_task_objective_resolver_skips_continue_active_task():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == DETERMINISTIC_OBJECTIVE_METHOD
     assert decision.should_use_resolved_objective is False
     assert decision.effective_objective == "繼續"
 
@@ -159,7 +160,7 @@ def test_task_objective_resolver_skips_ambiguous_boundary_until_user_confirms():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert decision.method == DETERMINISTIC_OBJECTIVE_METHOD
     assert decision.should_use_resolved_objective is False
     assert decision.effective_objective == "please update README"
 

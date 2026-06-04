@@ -28,6 +28,7 @@ from .llm_resolution_policy import (
 
 
 _MIN_CONFIDENCE = 0.65
+DETERMINISTIC_OBJECTIVE_METHOD = "deterministic"
 OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON = "objective enrichment not needed"
 LLM_RESOLVED_TASK_OBJECTIVE_REASON = "llm resolved task objective"
 LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON = "llm objective was not more specific"
@@ -41,7 +42,7 @@ class TaskObjectiveDecision:
     resolved_objective: str
     should_use_resolved_objective: bool = False
     confidence: float = 0.0
-    method: str = "deterministic"
+    method: str = DETERMINISTIC_OBJECTIVE_METHOD
     reason: str = ""
 
     @property
