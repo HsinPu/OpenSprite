@@ -13,6 +13,10 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 UNCONFIGURED_LLM_MODEL = "unconfigured"
+CHAT_ROLE_SYSTEM = "system"
+CHAT_ROLE_USER = "user"
+CHAT_ROLE_ASSISTANT = "assistant"
+CHAT_ROLE_TOOL = "tool"
 
 
 @dataclass
@@ -44,7 +48,7 @@ class ChatMessage:
     支援文字和圖片內容。
     圖片格式：base64 編碼的 data URL
     """
-    role: str    # "system", "user", "assistant", "tool"
+    role: str    # CHAT_ROLE_SYSTEM / CHAT_ROLE_USER / CHAT_ROLE_ASSISTANT / CHAT_ROLE_TOOL
     content: str | list[dict] = ""  # 字串或混合內容（文字+圖片）
     tool_call_id: str | None = None  # For tool results
     tool_calls: list[dict] | None = None  # For assistant messages with tool calls
@@ -67,9 +71,9 @@ class ChatMessage:
             content = [{"type": "text", "text": text}]
             for img in images:
                 content.append({"type": "image_url", "image_url": {"url": img}})
-            return ChatMessage(role="user", content=content)
+            return ChatMessage(role=CHAT_ROLE_USER, content=content)
         else:
-            return ChatMessage(role="user", content=text)
+            return ChatMessage(role=CHAT_ROLE_USER, content=text)
 
 
 @dataclass

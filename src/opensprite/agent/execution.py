@@ -10,7 +10,14 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Sequence
 
 from ..config import DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS, DocumentLlmConfig, ToolsConfig
-from ..llms import ChatMessage, LLMProvider
+from ..llms import (
+    CHAT_ROLE_ASSISTANT,
+    CHAT_ROLE_SYSTEM,
+    CHAT_ROLE_TOOL,
+    CHAT_ROLE_USER,
+    ChatMessage,
+    LLMProvider,
+)
 from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import (
@@ -791,9 +798,9 @@ Output exactly these sections when applicable:
         leading_system: list[ChatMessage] = []
         body_start = 0
         for message in chat_messages:
-            if getattr(message, "role", None) != "system":
+            if getattr(message, "role", None) != CHAT_ROLE_SYSTEM:
                 break
-            leading_system.append(ChatMessage(role="system", content=getattr(message, "content", "")))
+            leading_system.append(ChatMessage(role=CHAT_ROLE_SYSTEM, content=getattr(message, "content", "")))
             body_start += 1
         return leading_system, chat_messages[body_start:]
 
@@ -828,7 +835,7 @@ Output exactly these sections when applicable:
 
         tail_start = max(0, len(messages) - cls.COMPACTED_TAIL_MESSAGE_LIMIT)
         latest_user_index = next(
-            (index for index in range(len(messages) - 1, -1, -1) if getattr(messages[index], "role", None) == "user"),
+            (index for index in range(len(messages) - 1, -1, -1) if getattr(messages[index], "role", None) == CHAT_ROLE_USER),
             None,
         )
         if latest_user_index is not None and latest_user_index >= max(0, tail_start - 1):
@@ -848,19 +855,19 @@ Output exactly these sections when applicable:
     ) -> list[ChatMessage]:
         compacted = [
             *leading_system,
-            ChatMessage(role="system", content="\n".join(summary_sections)),
+            ChatMessage(role=CHAT_ROLE_SYSTEM, content="\n".join(summary_sections)),
         ]
         if tail_messages:
             compacted.extend(tail_messages)
             return compacted
-        compacted.append(ChatMessage(role="user", content=cls.CONTINUATION_AFTER_COMPACTION_MESSAGE))
+        compacted.append(ChatMessage(role=CHAT_ROLE_USER, content=cls.CONTINUATION_AFTER_COMPACTION_MESSAGE))
         return compacted
 
     @classmethod
     def _extract_compaction_handoff(cls, messages: list[ChatMessage]) -> str | None:
         """Return the latest compacted-state system handoff for continuation prompts."""
         for message in reversed(messages):
-            if getattr(message, "role", None) != "system":
+            if getattr(message, "role", None) != CHAT_ROLE_SYSTEM:
                 continue
             content = cls._message_content_to_text(getattr(message, "content", ""))
             if contains_compaction_handoff(content):
@@ -869,7 +876,7 @@ Output exactly these sections when applicable:
 
     @classmethod
     def _latest_user_text(cls, messages: list[ChatMessage], *, max_chars: int) -> str:
-        latest_user = next((message for message in reversed(messages) if getattr(message, "role", None) == "user"), None)
+        latest_user = next((message for message in reversed(messages) if getattr(message, "role", None) == CHAT_ROLE_USER), None)
         if latest_user is None:
             return ""
         return cls._truncate_text(
@@ -922,8 +929,8 @@ Output exactly these sections when applicable:
                 "\n".join(f"- {item}" for item in tool_results_history[-12:]),
             ])
         return [
-            ChatMessage(role="system", content=self.LLM_COMPACTION_SYSTEM_PROMPT),
-            ChatMessage(role="user", content="\n".join(sections)),
+            ChatMessage(role=CHAT_ROLE_SYSTEM, content=self.LLM_COMPACTION_SYSTEM_PROMPT),
+            ChatMessage(role=CHAT_ROLE_USER, content="\n".join(sections)),
         ]
 
     async def _compact_messages_with_llm(
@@ -1098,9 +1105,9 @@ Output exactly these sections when applicable:
         leading_system: list[ChatMessage] = []
         body_start = 0
         for message in chat_messages:
-            if getattr(message, "role", None) != "system":
+            if getattr(message, "role", None) != CHAT_ROLE_SYSTEM:
                 break
-            leading_system.append(ChatMessage(role="system", content=getattr(message, "content", "")))
+            leading_system.append(ChatMessage(role=CHAT_ROLE_SYSTEM, content=getattr(message, "content", "")))
             body_start += 1
 
         body = chat_messages[body_start:]
@@ -1109,7 +1116,7 @@ Output exactly these sections when applicable:
 
         head, tail = cls._split_compaction_head_and_tail(body)
 
-        latest_user = next((message for message in reversed(body) if getattr(message, "role", None) == "user"), None)
+        latest_user = next((message for message in reversed(body) if getattr(message, "role", None) == CHAT_ROLE_USER), None)
         latest_user_text = ""
         if latest_user is not None:
             latest_user_text = cls._truncate_text(
@@ -1618,7 +1625,7 @@ Output exactly these sections when applicable:
                     })
 
                 chat_messages.append(ChatMessage(
-                    role="assistant",
+                    role=CHAT_ROLE_ASSISTANT,
                     content=response.content or "",
                     tool_calls=tool_calls_api,
                     reasoning_details=response.reasoning_details,
@@ -1818,7 +1825,7 @@ Output exactly these sections when applicable:
 
                     tool_results_history.append(f"{tool_name}: {result_for_context[:200]}")
                     chat_messages.append(ChatMessage(
-                        role="tool",
+                        role=CHAT_ROLE_TOOL,
                         content=result_for_context,
                         tool_call_id=tc.id,
                     ))
@@ -1830,7 +1837,7 @@ Output exactly these sections when applicable:
                     ):
                         try:
                             new_system = refresh_system_prompt()
-                            if chat_messages and chat_messages[0].role == "system":
+                            if chat_messages and chat_messages[0].role == CHAT_ROLE_SYSTEM:
                                 chat_messages[0].content = new_system
                                 if allow_tools and active_tools.tool_names:
                                     tools = active_tools.get_definitions()
@@ -1851,7 +1858,7 @@ Output exactly these sections when applicable:
                 if self._should_force_final_after_web_sources(task_artifacts, tool_evidence):
                     tools = None
                     chat_messages.append(ChatMessage(
-                        role="system",
+                        role=CHAT_ROLE_SYSTEM,
                         content=(
                             "You already have enough traceable web source evidence for this turn. "
                             "Stop calling tools now and write the final answer from the gathered sources. "
@@ -1875,7 +1882,7 @@ Output exactly these sections when applicable:
                     )
                     chat_messages.append(
                         ChatMessage(
-                            role="system",
+                            role=CHAT_ROLE_SYSTEM,
                             content=(
                                 self.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
                                 if sanitized_became_empty

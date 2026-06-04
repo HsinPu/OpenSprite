@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
 from ..config import AgentConfig
-from ..llms import ChatMessage
+from ..llms import CHAT_ROLE_SYSTEM, CHAT_ROLE_TOOL, CHAT_ROLE_USER, ChatMessage
 from ..runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_POLICY_MERGE_RESOLVED_EVENT,
@@ -159,7 +159,7 @@ class LlmCallService:
         filtered = []
         for m in history_messages:
             role = m.get("role", "?") if isinstance(m, dict) else getattr(m, "role", "?")
-            if role != "tool":
+            if role != CHAT_ROLE_TOOL:
                 filtered.append(m)
         history_messages = filtered
         filtered_tool_messages = loaded_history_count - len(history_messages)
@@ -170,7 +170,7 @@ class LlmCallService:
             latest = history_messages[-1]
             latest_role = latest.get("role", "?") if isinstance(latest, dict) else getattr(latest, "role", "?")
             latest_content = latest.get("content", "") if isinstance(latest, dict) else getattr(latest, "content", "")
-            if latest_role == "user" and latest_content == current_message:
+            if latest_role == CHAT_ROLE_USER and latest_content == current_message:
                 history_messages = history_messages[:-1]
 
         history_dicts = []
@@ -472,7 +472,7 @@ class LlmCallService:
                 external_chat_id=external_chat_id,
             )
         if proactive_retrieval_context:
-            history_dicts = [{"role": "system", "content": proactive_retrieval_context}, *history_dicts]
+            history_dicts = [{"role": CHAT_ROLE_SYSTEM, "content": proactive_retrieval_context}, *history_dicts]
         effective_context_budget = self._effective_context_token_budget()
         logger.info(
             f"[{session_id}] prompt.tokens | budget={effective_context_budget} "
