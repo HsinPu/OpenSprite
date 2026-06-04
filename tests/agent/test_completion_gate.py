@@ -61,6 +61,7 @@ from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.history_retrieval_policy import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
 from opensprite.agent.operation_report_policy import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
+from opensprite.agent.completion_gate_policy import TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
@@ -213,7 +214,7 @@ def test_completion_gate_blocks_unvalidated_task_contract():
     )
 
     assert result.status == "blocked"
-    assert result.reason == "task contract planner did not produce a validated contract"
+    assert result.reason == TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
     assert result.active_task_detail == PLANNER_INVALID_JSON_REASON
 
 

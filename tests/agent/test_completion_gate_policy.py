@@ -11,6 +11,7 @@ from opensprite.agent.completion_gate_policy import (
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
+    TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
     one_turn_completion_reason,
@@ -67,3 +68,7 @@ def test_one_turn_completion_reason_reflects_response_presence():
 
 def test_task_contract_satisfied_reason_is_stable():
     assert TASK_CONTRACT_SATISFIED_REASON == "task contract was satisfied"
+
+
+def test_task_contract_planner_unvalidated_reason_is_stable():
+    assert TASK_CONTRACT_PLANNER_UNVALIDATED_REASON == "task contract planner did not produce a validated contract"

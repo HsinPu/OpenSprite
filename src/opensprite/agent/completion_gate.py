@@ -18,6 +18,7 @@ from .completion_gate_policy import (
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
+    TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
     one_turn_completion_reason,
@@ -277,7 +278,7 @@ class CompletionGateService:
 
         planner_status = _task_contract_planner_status(execution_result.task_contract)
         if _is_blocking_planner_status(planner_status):
-            reason = "task contract planner did not produce a validated contract"
+            reason = TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
             detail = _task_contract_planner_reason(execution_result.task_contract) or reason
             return CompletionGateResult(
                 status=BLOCKED_COMPLETION_STATUS,

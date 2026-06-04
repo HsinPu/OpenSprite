@@ -19,6 +19,7 @@ EXPECTED_CODE_CHANGES_MISSING_REASON = "expected code changes were not recorded"
 ONE_TURN_RESPONSE_COMPLETE_REASON = "one-turn intent received a response"
 EMPTY_ASSISTANT_RESPONSE_REASON = "assistant response was empty"
 TASK_CONTRACT_SATISFIED_REASON = "task contract was satisfied"
+TASK_CONTRACT_PLANNER_UNVALIDATED_REASON = "task contract planner did not produce a validated contract"
 
 
 def one_turn_completion_reason(*, has_response: bool) -> str:
