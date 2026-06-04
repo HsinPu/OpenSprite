@@ -6,6 +6,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from ..llms import ChatMessage
+from ..runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
 from ..search.base import SearchStore
 from ..storage import StorageProvider, StoredMessage
 from ..utils.log import logger
@@ -94,7 +95,7 @@ class MessageHistoryService:
             if self._emit_index_failure is not None:
                 await self._emit_index_failure(
                     session_id,
-                    "search_index.message_failed",
+                    SEARCH_INDEX_MESSAGE_FAILED_EVENT,
                     {
                         "role": role,
                         "tool_name": tool_name,
