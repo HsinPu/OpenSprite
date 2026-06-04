@@ -3,6 +3,11 @@ import hashlib
 from pathlib import Path
 
 from opensprite.agent.file_changes import RunFileChangeService
+from opensprite.runs.events import (
+    FILE_REVERT_APPLIED_EVENT,
+    FILE_REVERT_PREVIEWED_EVENT,
+    FILE_REVERT_SKIPPED_EVENT,
+)
 from opensprite.storage import MemoryStorage
 
 
@@ -66,9 +71,9 @@ def test_file_change_service_can_preview_and_apply_safe_revert(tmp_path):
     assert applied["post_sha256"] == _sha256("before\n")
     assert final_content == "before\n"
     assert [args[2] for args, _kwargs in events] == [
-        "file_revert.previewed",
-        "file_revert.skipped",
-        "file_revert.applied",
+        FILE_REVERT_PREVIEWED_EVENT,
+        FILE_REVERT_SKIPPED_EVENT,
+        FILE_REVERT_APPLIED_EVENT,
     ]
     assert events[-1][0][3]["path"] == "notes.txt"
     assert events[-1][0][3]["status"] == "applied"
@@ -107,8 +112,8 @@ def test_file_change_service_refuses_current_hash_conflict(tmp_path):
     assert applied["applied"] is False
     assert final_content == "user change\n"
     assert [args[2] for args, _kwargs in events] == [
-        "file_revert.previewed",
-        "file_revert.skipped",
+        FILE_REVERT_PREVIEWED_EVENT,
+        FILE_REVERT_SKIPPED_EVENT,
     ]
     assert events[-1][0][3]["status"] == "conflict"
     assert events[-1][0][3]["applied"] is False
