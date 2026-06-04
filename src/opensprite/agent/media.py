@@ -13,6 +13,7 @@ from ..context.paths import get_session_workspace
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .media_history_policy import MEDIA_ONLY_HISTORY_MARKER
+from .media_inbound_policy import INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON
 
 
 OUTBOUND_MEDIA_KEYS = {
@@ -146,12 +147,20 @@ class AgentMediaService:
         for index, item in enumerate(media_items, start=1):
             decoded = self.decode_data_url(item, media_prefix)
             if decoded is None:
-                events.append({"media_type": media_prefix, "status": "skipped", "index": index, "reason": "unsupported-payload"})
+                events.append(
+                    {
+                        "media_type": media_prefix,
+                        "status": "skipped",
+                        "index": index,
+                        "reason": INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON,
+                    }
+                )
                 logger.warning(
-                    "[{}] inbound.{}.persist.skip | index={} reason=unsupported-payload",
+                    "[{}] inbound.{}.persist.skip | index={} reason={}",
                     session_id,
                     media_prefix,
                     index,
+                    INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON,
                 )
                 continue
 
