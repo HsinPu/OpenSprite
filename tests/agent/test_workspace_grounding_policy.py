@@ -33,8 +33,9 @@ def test_response_references_workspace_path_by_full_path_or_filename():
     assert not response_references_workspace_path("src/opensprite/runtime.py", "the relevant file is app.py")
 
 
-def test_workspace_location_clue_accepts_symbol_or_quoted_code_token():
-    assert contains_workspace_location_clue("function load_config handles it") is True
+def test_workspace_location_clue_accepts_code_like_or_quoted_code_token():
+    assert contains_workspace_location_clue("load_config handles it") is True
+    assert contains_workspace_location_clue("Config.load handles it") is True
     assert contains_workspace_location_clue("check `AuthSettings`") is True
 
 

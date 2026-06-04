@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 
 
-WORKSPACE_LOCATION_SYMBOL_RE = re.compile(r"\b(?:function|class|method|symbol)\s+[`'\"]?[\w.:-]+")
+WORKSPACE_LOCATION_CODE_TOKEN_RE = re.compile(
+    r"\b[A-Za-z_][\w:-]*(?:\.[A-Za-z_][\w:-]*|_[A-Za-z0-9_]+|\(\))\b"
+)
 WORKSPACE_LOCATION_QUOTED_TOKEN_RE = re.compile(r"[`'\"][\w.:-]+[`'\"]")
 WORKSPACE_PATH_RE = re.compile(
     r"(?:[\w.-]+[\\/])+[\w.-]+|[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)",
@@ -24,7 +26,7 @@ def contains_workspace_location_clue(response_text: str | None, *, has_workspace
     normalized = str(response_text or "").strip().lower()
     if not normalized:
         return False
-    if WORKSPACE_LOCATION_SYMBOL_RE.search(normalized):
+    if WORKSPACE_LOCATION_CODE_TOKEN_RE.search(normalized):
         return True
     return bool(WORKSPACE_LOCATION_QUOTED_TOKEN_RE.search(normalized))
 
