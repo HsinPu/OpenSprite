@@ -26,11 +26,13 @@ from .events import (
     PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
+    TASK_CHECKLIST_UPDATED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
+    TASK_INTENT_DETECTED_EVENT,
     TEXT_DELTA_EVENTS,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_RESULT_EVENT,
@@ -48,6 +50,7 @@ from .events import (
     WORKFLOW_STEP_COMPLETED_EVENT,
     WORKFLOW_STEP_FAILED_EVENT,
     WORKFLOW_STEP_STARTED_EVENT,
+    WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
     SUBAGENT_CANCELLED_EVENT,
     SUBAGENT_CANCELLED_EVENTS,
@@ -89,10 +92,10 @@ _EVENT_KINDS = {
     RUN_CANCEL_REQUESTED_EVENT: "run",
     "llm_status": "llm",
     "reasoning_delta": "llm",
-    "task_intent.detected": "work",
-    "work_plan.created": "work",
+    TASK_INTENT_DETECTED_EVENT: "work",
+    WORK_PLAN_CREATED_EVENT: "work",
     WORK_PROGRESS_UPDATED_EVENT: "work",
-    "task_checklist.updated": "work",
+    TASK_CHECKLIST_UPDATED_EVENT: "work",
     TASK_ARTIFACTS_RECORDED_EVENT: "work",
     TASK_CONTRACT_PLANNING_STARTED_EVENT: "work",
     TASK_CONTRACT_PLANNED_EVENT: "work",
@@ -332,7 +335,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "request_id": request_id or None,
         }
 
-    if normalized == "task_checklist.updated":
+    if normalized == TASK_CHECKLIST_UPDATED_EVENT:
         todos = data.get("todos") if isinstance(data.get("todos"), list) else []
         completed = sum(1 for item in todos if isinstance(item, dict) and item.get("status") == "completed")
         total = len(todos)
@@ -1221,7 +1224,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     parts = list(getattr(trace, "parts", None) or [])
     file_changes = list(getattr(trace, "file_changes", None) or [])
     run_metadata = dict(getattr(run, "metadata", {}) or {})
-    task_intent = _latest_event_payload(events, "task_intent.detected") or {}
+    task_intent = _latest_event_payload(events, TASK_INTENT_DETECTED_EVENT) or {}
     completion = _latest_event_payload(events, COMPLETION_GATE_EVALUATED_EVENT) or {}
     work_progress = _latest_work_progress(events) or {}
     verification = _summarize_verification(run_metadata, events)

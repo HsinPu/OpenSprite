@@ -14,6 +14,9 @@ from ..runs.events import (
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
+    TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_INTENT_DETECTED_EVENT,
+    WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
 from ..utils.log import logger
@@ -297,7 +300,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "task_intent.detected",
+            TASK_INTENT_DETECTED_EVENT,
             task_intent.to_metadata(),
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
@@ -720,7 +723,7 @@ class AgentTurnRunner:
                             await self._emit_run_event(
                                 turn.session_id,
                                 run_id,
-                                "work_plan.created",
+                                WORK_PLAN_CREATED_EVENT,
                                 work_plan.to_metadata(),
                                 channel=turn.channel,
                                 external_chat_id=turn.external_chat_id,
@@ -987,7 +990,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "task_checklist.updated",
+                    TASK_CHECKLIST_UPDATED_EVENT,
                     {
                         "status": updated_work_state.status,
                         "objective": updated_work_state.objective,

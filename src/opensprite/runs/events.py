@@ -43,6 +43,9 @@ HARNESS_PROFILE_SELECTED_EVENT = "harness_profile.selected"
 HARNESS_POLICY_SELECTED_EVENT = "harness_policy.selected"
 HARNESS_CHECKPOINT_RECORDED_EVENT = "harness_checkpoint.recorded"
 HARNESS_SCORECARD_RECORDED_EVENT = "harness_scorecard.recorded"
+TASK_INTENT_DETECTED_EVENT = "task_intent.detected"
+WORK_PLAN_CREATED_EVENT = "work_plan.created"
+TASK_CHECKLIST_UPDATED_EVENT = "task_checklist.updated"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})
