@@ -2,6 +2,7 @@ import asyncio
 import json
 import sqlite3
 
+from opensprite.runs.lifecycle import RUN_STARTED_EVENT
 from opensprite.storage.base import (
     StoredBackgroundProcess,
     StoredDelegatedTask,
@@ -160,7 +161,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
         event = await storage.add_run_event(
             "chat-1",
             "run-1",
-            "run_started",
+            RUN_STARTED_EVENT,
             payload={"status": "running"},
             created_at=11.0,
         )
@@ -253,7 +254,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert created.status == "running"
     assert created.metadata == {"channel": "web"}
     assert event is not None
-    assert event.event_type == "run_started"
+    assert event.event_type == RUN_STARTED_EVENT
     assert event.payload == {"status": "running"}
     assert part is not None
     assert part.part_type == "tool_call"
@@ -276,7 +277,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert latest.status == "completed"
     assert single_run is not None
     assert single_run.run_id == "run-1"
-    assert [entry.event_type for entry in events] == ["run_started"]
+    assert [entry.event_type for entry in events] == [RUN_STARTED_EVENT]
     assert [entry.part_type for entry in parts] == ["tool_call"]
     assert parts[0].content == '{"action": "auto"}'
     assert [entry.path for entry in file_changes] == ["notes.txt"]
@@ -287,7 +288,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert single_change.path == "notes.txt"
     assert trace is not None
     assert trace.run.run_id == "run-1"
-    assert [entry.event_type for entry in trace.events] == ["run_started"]
+    assert [entry.event_type for entry in trace.events] == [RUN_STARTED_EVENT]
     assert [entry.part_type for entry in trace.parts] == ["tool_call"]
     assert [entry.path for entry in trace.file_changes] == ["notes.txt"]
     assert work_state is not None
