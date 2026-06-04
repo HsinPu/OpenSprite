@@ -11,6 +11,7 @@ from ..runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
     HISTORY_LOADED_EVENT,
+    MCP_TOOLS_SYNCED_EVENT,
     PROMPT_BUILT_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
@@ -499,7 +500,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "mcp.tools_synced",
+                MCP_TOOLS_SYNCED_EVENT,
                 {"tool_names": mcp_tool_names, "tool_count": len(mcp_tool_names)},
                 channel=channel,
                 external_chat_id=external_chat_id,

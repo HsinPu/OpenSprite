@@ -65,6 +65,9 @@ TASK_OBJECTIVE_RESOLVED_EVENT = "task_objective.resolved"
 ACTIVE_TASK_REPLACED_EVENT = "active_task.replaced"
 ACTIVE_TASK_SEEDED_EVENT = "active_task.seeded"
 ACTIVE_TASK_UNCHANGED_EVENT = "active_task.unchanged"
+MCP_CONNECTED_EVENT = "mcp.connected"
+MCP_CONNECTION_FAILED_EVENT = "mcp.connection_failed"
+MCP_TOOLS_SYNCED_EVENT = "mcp.tools_synced"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})

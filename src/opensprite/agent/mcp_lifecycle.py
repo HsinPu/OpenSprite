@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from ..config import Config, ToolsConfig
+from ..runs.events import MCP_CONNECTED_EVENT, MCP_CONNECTION_FAILED_EVENT
 from ..tools import ToolRegistry
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
@@ -120,14 +121,14 @@ class McpLifecycleService:
                 }
                 self.sync_runtime_tools_context()
                 await self._emit_event(
-                    "mcp.connected",
+                    MCP_CONNECTED_EVENT,
                     {
                         "server_count": len(self.servers),
                         "tool_names": sorted(self.tool_names),
                         "registered_tool_count": len(self.tool_names),
                     },
                 )
-                logger.info("agent.mcp.connected | tools={}", ", ".join(self.tools.tool_names))
+                logger.info("agent.{} | tools={}", MCP_CONNECTED_EVENT, ", ".join(self.tools.tool_names))
             except BaseException as exc:
                 for name in list(self.tools.tool_names):
                     if name.startswith("mcp_") and name not in preexisting_tool_names:
@@ -147,7 +148,7 @@ class McpLifecycleService:
                     self.connect_failures,
                 )
                 await self._emit_event(
-                    "mcp.connection_failed",
+                    MCP_CONNECTION_FAILED_EVENT,
                     {
                         "server_count": len(self.servers),
                         "error": str(exc),
