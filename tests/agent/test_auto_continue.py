@@ -9,6 +9,11 @@ from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
+    ITEMIZED_OUTPUT_CRITERION_KIND,
+    MEDIA_ARTIFACT_CRITERION_KIND,
+    SOURCE_ARTIFACT_CRITERION_KIND,
+    SOURCE_DETAIL_CRITERION_KIND,
+    SOURCE_REFERENCE_CRITERION_KIND,
     TaskContract,
 )
 from opensprite.agent.task_intent import TaskIntentService
@@ -150,9 +155,9 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
             objective="Find today's TSMC stock price and cite sources.",
             task_type="web_research",
             acceptance_criteria=(
-                AcceptanceCriterion(kind="source_artifact", min_count=1),
-                AcceptanceCriterion(kind="source_detail", min_count=1),
-                AcceptanceCriterion(kind="source_reference", min_count=1),
+                AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=1),
+                AcceptanceCriterion(kind=SOURCE_DETAIL_CRITERION_KIND, min_count=1),
+                AcceptanceCriterion(kind=SOURCE_REFERENCE_CRITERION_KIND, min_count=1),
             ),
         ),
         task_artifacts=(
@@ -204,9 +209,9 @@ def test_auto_continue_keeps_tools_when_existing_web_sources_lack_detail():
             objective="Find today's TSMC stock price and cite sources.",
             task_type="web_research",
             acceptance_criteria=(
-                AcceptanceCriterion(kind="source_artifact", min_count=1),
-                AcceptanceCriterion(kind="source_detail", min_count=1),
-                AcceptanceCriterion(kind="source_reference", min_count=1),
+                AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=1),
+                AcceptanceCriterion(kind=SOURCE_DETAIL_CRITERION_KIND, min_count=1),
+                AcceptanceCriterion(kind=SOURCE_REFERENCE_CRITERION_KIND, min_count=1),
             ),
         ),
         task_artifacts=(
@@ -413,7 +418,7 @@ def test_auto_continue_uses_itemized_contract_when_incomplete_reason_is_generic(
     contract = TaskContract(
         objective=intent.objective,
         task_type="task",
-        acceptance_criteria=(AcceptanceCriterion(kind="itemized_output", min_count=3),),
+        acceptance_criteria=(AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND, min_count=3),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
@@ -522,7 +527,7 @@ def test_auto_continue_guides_retry_after_missing_task_artifacts():
         objective=intent.objective,
         task_type="media_extraction",
         selected_resources=(ResourceRef(id="image:images/a.jpg", kind="image", path="images/a.jpg"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="media_artifact", min_count=1),),
+        acceptance_criteria=(AcceptanceCriterion(kind=MEDIA_ARTIFACT_CRITERION_KIND, min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
@@ -549,7 +554,7 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     contract = TaskContract(
         objective=intent.objective,
         task_type="web_research",
-        acceptance_criteria=(AcceptanceCriterion(kind="source_artifact", min_count=1),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
@@ -589,8 +594,8 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
         objective=intent.objective,
         task_type="web_research",
         acceptance_criteria=(
-            AcceptanceCriterion(kind="source_artifact", min_count=1),
-            AcceptanceCriterion(kind="source_detail", min_count=1),
+            AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=1),
+            AcceptanceCriterion(kind=SOURCE_DETAIL_CRITERION_KIND, min_count=1),
         ),
     )
 
@@ -641,8 +646,8 @@ def test_auto_continue_guides_retry_after_web_research_coverage_gap():
         objective=intent.objective,
         task_type="web_research",
         acceptance_criteria=(
-            AcceptanceCriterion(kind="source_artifact", min_count=1),
-            AcceptanceCriterion(kind="source_detail", min_count=2),
+            AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=1),
+            AcceptanceCriterion(kind=SOURCE_DETAIL_CRITERION_KIND, min_count=2),
         ),
     )
 
@@ -702,7 +707,7 @@ def test_auto_continue_guides_retry_after_missing_web_source_reference():
     contract = TaskContract(
         objective=intent.objective,
         task_type="web_research",
-        acceptance_criteria=(AcceptanceCriterion(kind="source_reference", min_count=1),),
+        acceptance_criteria=(AcceptanceCriterion(kind=SOURCE_REFERENCE_CRITERION_KIND, min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
