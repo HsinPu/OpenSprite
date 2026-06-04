@@ -9,6 +9,12 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
+from .active_task_status import (
+    ACTIVE_ACTIVE_TASK_STATUS,
+    BLOCKED_ACTIVE_TASK_STATUS,
+    DONE_ACTIVE_TASK_STATUS,
+    WAITING_USER_ACTIVE_TASK_STATUS,
+)
 from .completion_status import (
     BLOCKED_COMPLETION_STATUS,
     COMPLETE_COMPLETION_STATUS,
@@ -35,6 +41,15 @@ _COMPLETION_JUDGE_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_STATUSES))
 COMPLETION_JUDGE_UNAVAILABLE_REASON = "completion judge unavailable"
 COMPLETION_JUDGE_LLM_NOT_CONFIGURED_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: llm not configured"
 COMPLETION_JUDGE_UNSUPPORTED_STATUS_PREFIX = "completion judge returned unsupported status"
+COMPLETION_JUDGE_ACTIVE_TASK_STATUSES = frozenset(
+    {
+        ACTIVE_ACTIVE_TASK_STATUS,
+        BLOCKED_ACTIVE_TASK_STATUS,
+        WAITING_USER_ACTIVE_TASK_STATUS,
+        DONE_ACTIVE_TASK_STATUS,
+    }
+)
+_COMPLETION_JUDGE_ACTIVE_TASK_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_ACTIVE_TASK_STATUSES))
 
 COMPLETION_JUDGE_SYSTEM_PROMPT = """You are OpenSprite's completion judge.
 You receive structured facts about one agent turn. Decide whether the assistant
@@ -192,7 +207,7 @@ def normalize_completion_judge_payload(
     return CompletionJudgeVerdict(
         status=status,
         reason=reason,
-        active_task_status=_optional_text(payload.get("active_task_status"), max_chars=120),
+        active_task_status=_optional_active_task_status(payload.get("active_task_status")),
         active_task_detail=_optional_text(payload.get("active_task_detail"), max_chars=1000),
         follow_up_workflow=_optional_text(payload.get("follow_up_workflow"), max_chars=80),
         follow_up_step_id=_optional_text(payload.get("follow_up_step_id"), max_chars=120),
@@ -225,7 +240,7 @@ def _build_judge_prompt(facts: dict[str, Any]) -> str:
     schema = {
         "status": _COMPLETION_JUDGE_STATUS_SCHEMA,
         "reason": "short reason",
-        "active_task_status": "done|in_progress|blocked|null",
+        "active_task_status": f"{_COMPLETION_JUDGE_ACTIVE_TASK_STATUS_SCHEMA}|null",
         "active_task_detail": "optional detail",
         "missing_evidence": ["optional missing items"],
         "progress_only_response": False,
@@ -321,6 +336,13 @@ def _safe_value(value: Any) -> Any:
 def _optional_text(value: Any, *, max_chars: int) -> str | None:
     text = _coerce_text(value, max_chars=max_chars)
     return text or None
+
+
+def _optional_active_task_status(value: Any) -> str | None:
+    status = _coerce_text(value, max_chars=120).lower()
+    if status in COMPLETION_JUDGE_ACTIVE_TASK_STATUSES:
+        return status
+    return None
 
 
 def _coerce_text(value: Any, *, max_chars: int) -> str:

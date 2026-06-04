@@ -1,6 +1,7 @@
 import pytest
 
 from opensprite.agent.completion_judge import (
+    COMPLETION_JUDGE_ACTIVE_TASK_STATUSES,
     CompletionJudgeError,
     CompletionJudgeService,
     CompletionJudgeVerdict,
@@ -83,6 +84,7 @@ def test_normalize_completion_judge_payload_coerces_optional_fields():
         {
             "status": "needs_review",
             "reason": "review required",
+            "active_task_status": "blocked",
             "missing_evidence": ["review result"],
             "verification_required": 1,
             "review_prompt_types": ["code-reviewer"],
@@ -93,6 +95,7 @@ def test_normalize_completion_judge_payload_coerces_optional_fields():
     )
 
     assert verdict.status == "needs_review"
+    assert verdict.active_task_status == "blocked"
     assert verdict.verification_required is True
     assert verdict.review_prompt_types == ("code-reviewer",)
     assert verdict.review_finding_count == 2
@@ -100,6 +103,18 @@ def test_normalize_completion_judge_payload_coerces_optional_fields():
     assert verdict.missing_evidence == ("review result",)
     assert verdict.raw_response_preview == "raw"
     assert verdict.metadata["method"] == "llm"
+
+
+def test_normalize_completion_judge_payload_drops_unsupported_active_task_status():
+    verdict = normalize_completion_judge_payload(
+        {
+            "status": "incomplete",
+            "reason": "needs more work",
+            "active_task_status": "in_progress",
+        }
+    )
+
+    assert verdict.active_task_status is None
 
 
 @pytest.mark.anyio
@@ -126,6 +141,13 @@ async def test_completion_judge_service_calls_provider_with_decoding_config():
     assert "Judge this semantically across languages" in user_prompt
     assert "exact phrase matching" in user_prompt
     assert "search, fetch" not in user_prompt
+    assert "in_progress" not in user_prompt
+    assert "active|blocked|done|waiting_user|null" in user_prompt
+
+
+def test_completion_judge_active_task_statuses_match_supported_statuses():
+    assert COMPLETION_JUDGE_ACTIVE_TASK_STATUSES == frozenset({"active", "blocked", "done", "waiting_user"})
+
 
 
 @pytest.mark.anyio
