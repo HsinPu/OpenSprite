@@ -1,7 +1,13 @@
 import asyncio
 import json
 
-from opensprite.tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequestManager, classify_permission_request
+from opensprite.tools.approval import (
+    DEFAULT_PERMISSION_DENIAL_REASON,
+    PERMISSION_APPROVED_ONCE_REASON,
+    PERMISSION_REQUEST_TIMED_OUT_REASON,
+    PermissionRequestManager,
+    classify_permission_request,
+)
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
@@ -256,6 +262,7 @@ def test_approval_required_policy_waits_for_approval_in_ask_mode():
     result, events, pending = asyncio.run(scenario())
 
     assert result == "ran:apply_patch"
+    assert PERMISSION_APPROVED_ONCE_REASON == "approved once"
     assert [event[0] for event in events] == ["permission_requested", "permission_granted"]
     assert events[0][2] == "pending"
     assert events[1][2] == "approved"
@@ -392,7 +399,8 @@ def test_approval_required_policy_times_out_pending_request_in_ask_mode():
 
     result, events, pending = asyncio.run(scenario())
 
-    _assert_permission_block(result, "permission request timed out")
+    assert PERMISSION_REQUEST_TIMED_OUT_REASON == "permission request timed out"
+    _assert_permission_block(result, PERMISSION_REQUEST_TIMED_OUT_REASON)
     assert events == [
         ("permission_requested", "pending", False),
         ("permission_denied", "denied", True),

@@ -14,6 +14,8 @@ from .shell import classify_destructive_shell_command
 
 
 DEFAULT_PERMISSION_DENIAL_REASON = "user denied approval"
+PERMISSION_REQUEST_TIMED_OUT_REASON = "permission request timed out"
+PERMISSION_APPROVED_ONCE_REASON = "approved once"
 
 
 def _text(value: Any) -> str:
@@ -180,7 +182,7 @@ class PermissionRequestManager:
                 await self._resolve(
                     request.request_id,
                     status="denied",
-                    reason="permission request timed out",
+                    reason=PERMISSION_REQUEST_TIMED_OUT_REASON,
                     timed_out=True,
                     event_type="permission_denied",
                 )
@@ -200,7 +202,7 @@ class PermissionRequestManager:
         return await self._resolve(
             request_id,
             status="approved",
-            reason="approved once",
+            reason=PERMISSION_APPROVED_ONCE_REASON,
             timed_out=False,
             event_type="permission_granted",
         )
