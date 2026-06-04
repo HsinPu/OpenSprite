@@ -387,7 +387,7 @@ def test_auto_continue_uses_stop_reason_for_max_tool_iterations():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
 
 
 def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_generic():
@@ -412,7 +412,7 @@ def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_gene
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "required tool evidence is missing" in (decision.prompt or "")
 
 
@@ -437,7 +437,7 @@ def test_auto_continue_uses_itemized_contract_when_incomplete_reason_is_generic(
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "provide the requested itemized result" in (decision.prompt or "")
 
 
@@ -477,7 +477,7 @@ def test_auto_continue_uses_progress_only_flag_without_reason_marker():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
 
 
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
@@ -494,7 +494,7 @@ def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
 
 
 def test_auto_continue_uses_command_version_contract_for_retry_guidance():
@@ -519,7 +519,7 @@ def test_auto_continue_uses_command_version_contract_for_retry_guidance():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "<command> --version" in (decision.prompt or "")
     assert "Do not inspect `.git`" in (decision.prompt or "")
 
@@ -546,7 +546,7 @@ def test_auto_continue_guides_retry_after_missing_task_artifacts():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "typed artifacts for every required resource" in (decision.prompt or "")
     assert "Use the relevant media/source tools" in (decision.prompt or "")
     assert "Missing artifact for image:images/a.jpg" in (decision.prompt or "")
@@ -583,7 +583,7 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "source artifact without traceable source metadata" in (decision.prompt or "")
     assert "web_research" in (decision.prompt or "")
     assert "web_search" in (decision.prompt or "")
@@ -635,7 +635,7 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "inspect enough source material" in (decision.prompt or "")
     assert "web_research" in (decision.prompt or "")
     assert "web_fetch" in (decision.prompt or "")
@@ -697,7 +697,7 @@ def test_auto_continue_guides_retry_after_web_research_coverage_gap():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "`web_research` reported coverage gaps" in (decision.prompt or "")
     assert "focused `queries`" in (decision.prompt or "")
     assert "alternate URLs/domains" in (decision.prompt or "")
@@ -745,7 +745,7 @@ def test_auto_continue_guides_retry_after_missing_web_source_reference():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "gathered sources are available" in (decision.prompt or "")
     assert "Do not rerun tools unless the sources are insufficient" in (decision.prompt or "")
     assert "reference at least one source by URL, domain, or title" in (decision.prompt or "")
@@ -779,7 +779,7 @@ def test_auto_continue_guides_retry_after_terse_final_answer():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_incomplete"
+    assert decision.reason == completion_gate_continue_reason("incomplete")
     assert "previous final answer was too terse" in (decision.prompt or "")
     assert "Do not reply with only a short acknowledgement" in (decision.prompt or "")
     assert "substantive final answer" in (decision.prompt or "")
