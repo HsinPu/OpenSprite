@@ -15,6 +15,8 @@ from opensprite.cli.commands_chat import (
     run_web_chat,
     snapshot_workspace_for_session,
 )
+from opensprite.runs.events import TOOL_STARTED_EVENT
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 
 
 def test_build_ws_url_defaults_to_gateway_ws_path():
@@ -35,7 +37,7 @@ class FakeAgent:
                 external_chat_id=user_message.external_chat_id,
                 session_id=user_message.session_id,
                 run_id="run-cli",
-                event_type="run_started",
+                event_type=RUN_STARTED_EVENT,
                 payload={"status": "running"},
                 created_at=1.0,
             )
@@ -46,7 +48,7 @@ class FakeAgent:
                 external_chat_id=user_message.external_chat_id,
                 session_id=user_message.session_id,
                 run_id="run-cli",
-                event_type="tool_started",
+                event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "web_search"},
                 created_at=2.0,
             )
@@ -57,7 +59,7 @@ class FakeAgent:
                 external_chat_id=user_message.external_chat_id,
                 session_id=user_message.session_id,
                 run_id="run-cli",
-                event_type="run_finished",
+                event_type=RUN_FINISHED_EVENT,
                 payload={"status": "completed"},
                 created_at=3.0,
             )
