@@ -10,6 +10,14 @@ from typing import Any
 
 
 SANDBOX_MARKER = ".opensprite-worktree.json"
+WORKTREE_SANDBOX_DISABLED_REASON = "worktree sandbox is disabled"
+WORKSPACE_NOT_GIT_REPOSITORY_REASON = "workspace is not inside a git repository"
+WORKTREE_SANDBOX_EXISTS_REASON = "worktree sandbox already exists"
+GIT_WORKTREE_ADD_FAILED_REASON = "git worktree add failed"
+MISSING_WORKTREE_MARKER_REASON = "missing OpenSprite worktree marker"
+WORKTREE_MARKER_NOT_MANAGED_REASON = "worktree marker is not managed by OpenSprite"
+REPOSITORY_ROOT_MISSING_REASON = "repository root no longer exists"
+GIT_WORKTREE_REMOVE_FAILED_REASON = "git worktree remove failed"
 
 
 @dataclass
@@ -53,7 +61,7 @@ class WorktreeSandboxInspector:
                 enabled=False,
                 status="disabled",
                 workspace_root=str(self.workspace_root),
-                reason="worktree sandbox is disabled",
+                reason=WORKTREE_SANDBOX_DISABLED_REASON,
             )
 
         repository_root = self._git("rev-parse", "--show-toplevel")
@@ -62,7 +70,7 @@ class WorktreeSandboxInspector:
                 enabled=True,
                 status="unavailable",
                 workspace_root=str(self.workspace_root),
-                reason="workspace is not inside a git repository",
+                reason=WORKSPACE_NOT_GIT_REPOSITORY_REASON,
             )
 
         return WorktreeSandboxMetadata(
@@ -91,7 +99,7 @@ class WorktreeSandboxInspector:
                 base_commit=metadata.base_commit,
                 sandbox_path=str(sandbox_path),
                 cleanup_supported=self._marker_path(sandbox_path).exists(),
-                reason="worktree sandbox already exists",
+                reason=WORKTREE_SANDBOX_EXISTS_REASON,
             )
 
         sandbox_path.parent.mkdir(parents=True, exist_ok=True)
@@ -113,7 +121,7 @@ class WorktreeSandboxInspector:
                 base_branch=metadata.base_branch,
                 base_commit=metadata.base_commit,
                 sandbox_path=str(sandbox_path),
-                reason=(result.stderr or result.stdout).strip() or "git worktree add failed",
+                reason=(result.stderr or result.stdout).strip() or GIT_WORKTREE_ADD_FAILED_REASON,
             )
 
         marker = {
@@ -142,23 +150,23 @@ class WorktreeSandboxInspector:
         path = Path(sandbox_path).expanduser().resolve(strict=False)
         marker_path = cls._marker_path(path)
         if not marker_path.exists():
-            return {"ok": False, "status": "refused", "reason": "missing OpenSprite worktree marker", "sandbox_path": str(path)}
+            return {"ok": False, "status": "refused", "reason": MISSING_WORKTREE_MARKER_REASON, "sandbox_path": str(path)}
         try:
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             return {"ok": False, "status": "refused", "reason": f"invalid worktree marker: {exc}", "sandbox_path": str(path)}
         if marker.get("managed_by") != "opensprite":
-            return {"ok": False, "status": "refused", "reason": "worktree marker is not managed by OpenSprite", "sandbox_path": str(path)}
+            return {"ok": False, "status": "refused", "reason": WORKTREE_MARKER_NOT_MANAGED_REASON, "sandbox_path": str(path)}
         repository_root = Path(str(marker.get("repository_root") or "")).expanduser().resolve(strict=False)
         if not repository_root.exists():
-            return {"ok": False, "status": "refused", "reason": "repository root no longer exists", "sandbox_path": str(path)}
+            return {"ok": False, "status": "refused", "reason": REPOSITORY_ROOT_MISSING_REASON, "sandbox_path": str(path)}
 
         result = cls._run_git("worktree", "remove", str(path), cwd=repository_root, timeout=20)
         if result.returncode != 0:
             return {
                 "ok": False,
                 "status": "remove_failed",
-                "reason": (result.stderr or result.stdout).strip() or "git worktree remove failed",
+                "reason": (result.stderr or result.stdout).strip() or GIT_WORKTREE_REMOVE_FAILED_REASON,
                 "sandbox_path": str(path),
                 "repository_root": str(repository_root),
             }
