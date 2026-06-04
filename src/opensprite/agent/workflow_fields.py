@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 
+WORKFLOW_ID_FIELD = "workflow"
+WORKFLOW_STATUS_FIELD = "status"
+WORKFLOW_SUMMARY_FIELD = "summary"
+WORKFLOW_ERROR_FIELD = "error"
 WORKFLOW_NEXT_STEP_ID_FIELD = "next_step_id"
 WORKFLOW_NEXT_STEP_LABEL_FIELD = "next_step_label"
 WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD = "next_step_prompt_type"

@@ -23,6 +23,8 @@ from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_fields import (
+    WORKFLOW_ERROR_FIELD,
+    WORKFLOW_ID_FIELD,
     WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD,
     WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD,
     WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD,
@@ -34,6 +36,8 @@ from .workflow_fields import (
     WORKFLOW_REVIEW_FIRST_FINDING_FIELD,
     WORKFLOW_REVIEW_PASSED_FIELD,
     WORKFLOW_REVIEW_SUMMARY_FIELD,
+    WORKFLOW_STATUS_FIELD,
+    WORKFLOW_SUMMARY_FIELD,
     WORKFLOW_VERIFICATION_ATTEMPTED_FIELD,
     WORKFLOW_VERIFICATION_PASSED_FIELD,
 )
@@ -41,6 +45,7 @@ from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_FAILED_STATUS,
+    WORKFLOW_RUNNING_STATUS,
     is_workflow_completed_status,
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
@@ -401,7 +406,7 @@ class SubagentWorkflowService:
     ) -> dict[str, Any]:
         payload = {
             "workflow_run_id": workflow_run_id,
-            "workflow": workflow_id,
+            WORKFLOW_ID_FIELD: workflow_id,
             "step_id": spec.step_id,
             "label": spec.label,
             "prompt_type": spec.prompt_type,
@@ -412,12 +417,12 @@ class SubagentWorkflowService:
         if outcome is not None:
             payload.update(
                 {
-                    "status": outcome.status,
+                    WORKFLOW_STATUS_FIELD: outcome.status,
                     "task_id": outcome.task_id,
                     "child_session_id": outcome.child_session_id,
                     "child_run_id": outcome.child_run_id,
-                    "summary": outcome.summary,
-                    "error": outcome.error,
+                    WORKFLOW_SUMMARY_FIELD: outcome.summary,
+                    WORKFLOW_ERROR_FIELD: outcome.error,
                 }
             )
             if outcome.structured_output is not None:
@@ -429,7 +434,7 @@ class SubagentWorkflowService:
                     "residual_risk_count": outcome.structured_output.get("residual_risk_count", 0),
                 }
         if error:
-            payload["error"] = error
+            payload[WORKFLOW_ERROR_FIELD] = error
         return payload
 
     @staticmethod
@@ -453,24 +458,24 @@ class SubagentWorkflowService:
         )
         payload = {
             "workflow_run_id": workflow_run_id,
-            "workflow": workflow_id,
-            "status": status,
+            WORKFLOW_ID_FIELD: workflow_id,
+            WORKFLOW_STATUS_FIELD: status,
             "task_preview": task_preview,
             "total_steps": len(steps),
             "completed_steps": completed_steps,
             "failed_steps": failed_steps,
-            "summary": summary,
+            WORKFLOW_SUMMARY_FIELD: summary,
             "steps": [
                 {
                     "step_id": spec.step_id,
                     "label": spec.label,
                     "prompt_type": spec.prompt_type,
-                    "status": outcome.status,
+                    WORKFLOW_STATUS_FIELD: outcome.status,
                     "task_id": outcome.task_id,
                     "child_session_id": outcome.child_session_id,
                     "child_run_id": outcome.child_run_id,
-                    "summary": outcome.summary,
-                    "error": outcome.error,
+                    WORKFLOW_SUMMARY_FIELD: outcome.summary,
+                    WORKFLOW_ERROR_FIELD: outcome.error,
                 }
                 for spec, outcome in zip(steps[start_index:], outcomes)
             ],
@@ -486,7 +491,7 @@ class SubagentWorkflowService:
                 }
             )
         if error:
-            payload["error"] = error
+            payload[WORKFLOW_ERROR_FIELD] = error
         return payload
 
     @staticmethod
@@ -573,13 +578,13 @@ class SubagentWorkflowService:
         completed_steps = start_index + _completed_outcome_count(outcomes)
         return {
             "workflow_run_id": workflow_run_id,
-            "workflow": spec.workflow_id,
-            "status": status,
+            WORKFLOW_ID_FIELD: spec.workflow_id,
+            WORKFLOW_STATUS_FIELD: status,
             "task_preview": task_preview,
             "total_steps": len(spec.steps),
             "completed_steps": completed_steps,
             "failed_steps": _unsuccessful_outcome_count(outcomes),
-            "summary": (
+            WORKFLOW_SUMMARY_FIELD: (
                 f"Completed {completed_steps}/{len(spec.steps)} workflow step(s)."
                 if is_workflow_completed_status(status)
                 else f"Workflow stopped after {completed_steps}/{len(spec.steps)} completed step(s)."
@@ -601,7 +606,7 @@ class SubagentWorkflowService:
                 if start_index > 0
                 else {}
             ),
-            **({"error": error} if error else {}),
+            **({WORKFLOW_ERROR_FIELD: error} if error else {}),
         }
 
     async def run(self, workflow_id: str, task: str) -> str:
@@ -649,11 +654,11 @@ class SubagentWorkflowService:
             WORKFLOW_STARTED_EVENT,
             {
                 "workflow_run_id": workflow_run_id,
-                "workflow": spec.workflow_id,
-                "status": "running",
+                WORKFLOW_ID_FIELD: spec.workflow_id,
+                WORKFLOW_STATUS_FIELD: WORKFLOW_RUNNING_STATUS,
                 "task_preview": task_preview,
                 "total_steps": len(spec.steps),
-                "summary": start_step_summary,
+                WORKFLOW_SUMMARY_FIELD: start_step_summary,
                 **(
                     {
                         "resumed": True,
