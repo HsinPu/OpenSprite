@@ -6,6 +6,12 @@ from typing import Any
 
 from aiohttp import web
 
+from ..runs.events import (
+    WORKTREE_CLEANUP_COMPLETED_EVENT,
+    WORKTREE_CLEANUP_FAILED_EVENT,
+    WORKTREE_CLEANUP_STARTED_EVENT,
+)
+
 
 async def handle_permissions(adapter: Any, request: web.Request) -> web.Response:
     agent = adapter._get_agent()
@@ -67,7 +73,7 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
         await emit_run_event(
             session_id,
             run_id,
-            "worktree_cleanup.started",
+            WORKTREE_CLEANUP_STARTED_EVENT,
             {"sandbox_path": sandbox_path, "status": "running"},
             channel=adapter.channel_instance_id,
             external_chat_id=adapter._external_chat_id_from_session(session_id),
@@ -79,7 +85,7 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
             await emit_run_event(
                 session_id,
                 run_id,
-                "worktree_cleanup.failed",
+                WORKTREE_CLEANUP_FAILED_EVENT,
                 {
                     "sandbox_path": sandbox_path,
                     "status": "failed",
@@ -95,7 +101,7 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
         await emit_run_event(
             session_id,
             run_id,
-            "worktree_cleanup.completed" if ok else "worktree_cleanup.failed",
+            WORKTREE_CLEANUP_COMPLETED_EVENT if ok else WORKTREE_CLEANUP_FAILED_EVENT,
             {
                 "sandbox_path": result.get("sandbox_path") or sandbox_path,
                 "status": result.get("status"),

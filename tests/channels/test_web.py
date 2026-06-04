@@ -22,6 +22,8 @@ from opensprite.runs.events import (
     TASK_INTENT_DETECTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    WORKTREE_CLEANUP_COMPLETED_EVENT,
+    WORKTREE_CLEANUP_STARTED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
@@ -3142,8 +3144,8 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
         }
         assert cleanup_calls == [str(marker_dir)]
         assert [(event[0], event[1], event[2]) for event in trace_events] == [
-            ("web:browser-1", "run-1", "worktree_cleanup.started"),
-            ("web:browser-1", "run-1", "worktree_cleanup.completed"),
+            ("web:browser-1", "run-1", WORKTREE_CLEANUP_STARTED_EVENT),
+            ("web:browser-1", "run-1", WORKTREE_CLEANUP_COMPLETED_EVENT),
         ]
         assert trace_events[-1][3]["sandbox_path"] == str(marker_dir)
         assert trace_events[-1][3]["ok"] is True
