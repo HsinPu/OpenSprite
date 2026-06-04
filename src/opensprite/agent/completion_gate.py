@@ -21,6 +21,7 @@ from .completion_gate_policy import (
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
+    delegated_review_completion_reason,
     one_turn_completion_reason,
 )
 from .evidence_gate import EvidenceGateService
@@ -459,11 +460,7 @@ class CompletionGateService:
             )
 
         if review_required and not review["passed"]:
-            reason = (
-                "delegated review reported findings that require follow-up"
-                if review["attempted"]
-                else "delegated review was not recorded for code changes"
-            )
+            reason = delegated_review_completion_reason(review_attempted=bool(review["attempted"]))
             return CompletionGateResult(
                 status=NEEDS_REVIEW_COMPLETION_STATUS,
                 reason=reason,

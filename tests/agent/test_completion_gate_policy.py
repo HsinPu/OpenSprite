@@ -1,6 +1,8 @@
 from opensprite.agent.completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
     ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
+    DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON,
+    DELEGATED_REVIEW_NOT_RECORDED_REASON,
     EMPTY_ASSISTANT_RESPONSE_REASON,
     EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
@@ -14,6 +16,7 @@ from opensprite.agent.completion_gate_policy import (
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
+    delegated_review_completion_reason,
     one_turn_completion_reason,
 )
 
@@ -72,3 +75,13 @@ def test_task_contract_satisfied_reason_is_stable():
 
 def test_task_contract_planner_unvalidated_reason_is_stable():
     assert TASK_CONTRACT_PLANNER_UNVALIDATED_REASON == "task contract planner did not produce a validated contract"
+
+
+def test_delegated_review_completion_reason_reflects_review_attempt():
+    assert (
+        DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON
+        == "delegated review reported findings that require follow-up"
+    )
+    assert DELEGATED_REVIEW_NOT_RECORDED_REASON == "delegated review was not recorded for code changes"
+    assert delegated_review_completion_reason(review_attempted=True) == DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON
+    assert delegated_review_completion_reason(review_attempted=False) == DELEGATED_REVIEW_NOT_RECORDED_REASON

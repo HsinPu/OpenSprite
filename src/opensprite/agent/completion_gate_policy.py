@@ -20,7 +20,13 @@ ONE_TURN_RESPONSE_COMPLETE_REASON = "one-turn intent received a response"
 EMPTY_ASSISTANT_RESPONSE_REASON = "assistant response was empty"
 TASK_CONTRACT_SATISFIED_REASON = "task contract was satisfied"
 TASK_CONTRACT_PLANNER_UNVALIDATED_REASON = "task contract planner did not produce a validated contract"
+DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON = "delegated review reported findings that require follow-up"
+DELEGATED_REVIEW_NOT_RECORDED_REASON = "delegated review was not recorded for code changes"
 
 
 def one_turn_completion_reason(*, has_response: bool) -> str:
     return ONE_TURN_RESPONSE_COMPLETE_REASON if has_response else EMPTY_ASSISTANT_RESPONSE_REASON
+
+
+def delegated_review_completion_reason(*, review_attempted: bool) -> str:
+    return DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON if review_attempted else DELEGATED_REVIEW_NOT_RECORDED_REASON
