@@ -35,6 +35,7 @@ from .harness_profile import (
     HISTORY_RETRIEVAL_TASK_TYPE,
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessProfile,
+    is_chat_profile_name,
 )
 from .mcp_tool_policy import mcp_tool_names as list_mcp_tool_names
 from .task_contract import (
@@ -618,7 +619,7 @@ def _should_seed_active_task_for_contract(
     task_context_decision: TaskContextDecision | None,
 ) -> bool:
     profile_name = str(getattr(harness_profile, "name", "") or "").strip()
-    if profile_name != "chat":
+    if not is_chat_profile_name(profile_name):
         return True
     if has_current_active_task(active_task_snapshot):
         return True
