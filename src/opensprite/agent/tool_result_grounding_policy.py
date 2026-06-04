@@ -5,6 +5,12 @@ from __future__ import annotations
 import re
 
 
+MEANINGFUL_OVERLAP_MIN_PREVIEW_CHARS = 17
+GROUNDING_TOKEN_MIN_CHARS = 3
+VERSION_TOKEN_MIN_CHARS = 5
+MEANINGFUL_OVERLAP_MAX_REQUIRED_MATCHES = 3
+
+
 def response_reports_tool_result_preview(response_text: str | None, preview: str | None) -> bool:
     normalized_response = _normalize_text(response_text)
     normalized_preview = _normalize_text(preview)
@@ -14,7 +20,10 @@ def response_reports_tool_result_preview(response_text: str | None, preview: str
         return True
     if _version_token_overlap(normalized_preview, normalized_response):
         return True
-    return len(normalized_preview) > 16 and _meaningful_overlap(normalized_preview, normalized_response)
+    return (
+        len(normalized_preview) >= MEANINGFUL_OVERLAP_MIN_PREVIEW_CHARS
+        and _meaningful_overlap(normalized_preview, normalized_response)
+    )
 
 
 def _normalize_text(value: str | None) -> str:
@@ -27,12 +36,12 @@ def _version_token_overlap(expected: str, actual: str) -> bool:
     version_tokens = [
         token
         for token in re.split(r"[^0-9a-zA-Z._-]+", expected)
-        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
+        if len(token) >= VERSION_TOKEN_MIN_CHARS and any(char.isdigit() for char in token) and "." in token
     ]
     actual_tokens = [
         token
         for token in re.split(r"[^0-9a-zA-Z._-]+", actual)
-        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
+        if len(token) >= VERSION_TOKEN_MIN_CHARS and any(char.isdigit() for char in token) and "." in token
     ]
     return any(
         token in actual
@@ -42,8 +51,8 @@ def _version_token_overlap(expected: str, actual: str) -> bool:
 
 
 def _meaningful_overlap(expected: str, actual: str) -> bool:
-    tokens = [token for token in re.split(r"[^0-9a-zA-Z._-]+", expected) if len(token) >= 3]
+    tokens = [token for token in re.split(r"[^0-9a-zA-Z._-]+", expected) if len(token) >= GROUNDING_TOKEN_MIN_CHARS]
     if not tokens:
         return False
     matched = sum(1 for token in tokens if token in actual)
-    return matched >= min(3, len(tokens))
+    return matched >= min(MEANINGFUL_OVERLAP_MAX_REQUIRED_MATCHES, len(tokens))
