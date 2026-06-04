@@ -14,6 +14,7 @@ from opensprite.agent.run_state import RunBusyError
 from opensprite.agent.task_contract import (
     EvidenceRequirement,
     PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContract,
@@ -342,7 +343,10 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
+        planner_metadata={
+            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
+            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
+        },
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
@@ -370,7 +374,10 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
+        planner_metadata={
+            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
+            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
+        },
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
@@ -404,7 +411,10 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
         objective="Find sources",
         task_type="planning_error",
         contract_sources=("llm_planner",),
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS, "reason": "invalid JSON"},
+        planner_metadata={
+            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
+            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
+        },
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(

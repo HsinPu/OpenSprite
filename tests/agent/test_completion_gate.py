@@ -74,6 +74,7 @@ from opensprite.agent.task_contract import (
     OPERATION_REPORT_CRITERION_KIND,
     PLANNER_INVALID_JSON_REASON,
     PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     REPOSITORY_STATUS_QUALITY_CHECK,
     SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
@@ -211,7 +212,7 @@ def test_completion_gate_blocks_unvalidated_task_contract():
         contract_sources=("llm_planner",),
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
-            "reason": PLANNER_INVALID_JSON_REASON,
+            PLANNER_METADATA_REASON_FIELD: PLANNER_INVALID_JSON_REASON,
         },
     )
 

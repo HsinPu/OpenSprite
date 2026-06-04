@@ -30,6 +30,7 @@ from opensprite.agent.task_contract import (
     OPERATION_REPORT_CRITERION_KIND,
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContract,
@@ -490,7 +491,7 @@ async def test_task_contract_planner_blocks_web_request_when_planner_json_is_inv
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
     assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
-    assert "invalid JSON" in contract.planner_metadata["reason"]
+    assert "invalid JSON" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
     assert contract.requirements == ()
 
 
@@ -510,7 +511,7 @@ async def test_task_contract_planner_blocks_when_llm_call_fails():
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
     assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_BLOCKED_STATUS
-    assert "TimeoutError" in contract.planner_metadata["reason"]
+    assert "TimeoutError" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
     assert contract.requirements == ()
 
 
@@ -531,7 +532,7 @@ async def test_task_contract_planner_blocks_workspace_request_when_planner_json_
     assert contract.task_type == "planning_error"
     assert contract.allow_no_tool_final is False
     assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
-    assert "invalid JSON" in contract.planner_metadata["reason"]
+    assert "invalid JSON" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
     assert contract.requirements == ()
 
 

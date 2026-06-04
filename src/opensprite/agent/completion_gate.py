@@ -72,6 +72,7 @@ from .subagent_policy import REVIEW_PROMPT_TYPES
 from .task_contract import (
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,
+    PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     contract_expects_file_change,
 )
@@ -889,7 +890,7 @@ def _is_blocking_planner_status(status: str | None) -> bool:
 def _task_contract_planner_reason(task_contract: Any) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return str(metadata.get("reason") or "").strip()
+        return str(metadata.get(PLANNER_METADATA_REASON_FIELD) or "").strip()
     return ""
 
 

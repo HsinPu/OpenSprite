@@ -2,7 +2,11 @@ import asyncio
 import subprocess
 from types import SimpleNamespace
 
-from opensprite.agent.task_contract import PLANNER_METADATA_STATUS_FIELD, PLANNER_VALIDATED_STATUS
+from opensprite.agent.task_contract import (
+    PLANNER_METADATA_REASON_FIELD,
+    PLANNER_METADATA_STATUS_FIELD,
+    PLANNER_VALIDATED_STATUS,
+)
 from opensprite.agent.run_hooks import RunHookService
 from opensprite.agent.execution import LlmStepEvent
 from opensprite.agent.run_trace import (
@@ -512,7 +516,7 @@ def test_serialize_run_event_classifies_planned_contract_event():
         payload={
             "task_type": "web_research",
             "requirements": [{"kind": "tool_group", "tool_group": "web_research"}],
-            "planner_metadata": {"reason": "Current stock price needs web evidence."},
+            "planner_metadata": {PLANNER_METADATA_REASON_FIELD: "Current stock price needs web evidence."},
         },
         created_at=12.9,
     )
@@ -538,7 +542,7 @@ def test_serialize_run_events_preserves_planned_contract_routes():
                     "requirements": [{"kind": "tool_group", "tool_group": tool_group}],
                     "planner_metadata": {
                         PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS,
-                        "reason": f"Route to {tool_group}.",
+                        PLANNER_METADATA_REASON_FIELD: f"Route to {tool_group}.",
                     },
                 },
                 created_at=12.0 + event_id,

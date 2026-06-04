@@ -48,6 +48,7 @@ PLANNER_BLOCKED_STATUS = "blocked"
 PLANNER_INVALID_STATUS = "invalid"
 PLANNER_MISSING_STATUS = "missing"
 PLANNER_METADATA_STATUS_FIELD = "planner_status"
+PLANNER_METADATA_REASON_FIELD = "reason"
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
@@ -210,7 +211,7 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
         contract_sources=("missing_runtime_contract",),
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_MISSING_STATUS,
-            "reason": "execution result did not include a task contract",
+            PLANNER_METADATA_REASON_FIELD: "execution result did not include a task contract",
         },
     )
 
@@ -565,7 +566,7 @@ def _planner_blocked_contract(
 ) -> TaskContract:
     metadata: dict[str, Any] = {
         PLANNER_METADATA_STATUS_FIELD: status,
-        "reason": reason,
+        PLANNER_METADATA_REASON_FIELD: reason,
     }
     if raw_response_preview:
         metadata["raw_response_preview"] = raw_response_preview
@@ -656,7 +657,7 @@ def _contract_from_planner_payload(
         "raw_task_type": raw_task_type,
         "required_tool_groups": list(tool_groups),
         "quality_checks": list(quality_checks),
-        "reason": planner_reason,
+        PLANNER_METADATA_REASON_FIELD: planner_reason,
     }
     return TaskContract(
         objective=objective,
