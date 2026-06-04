@@ -26,6 +26,7 @@ from ..tool_names import (
     CONFIGURE_SKILL_TOOL_NAME,
     CONFIGURE_SUBAGENT_TOOL_NAME,
     DELEGATE_TOOL_NAME,
+    EXEC_TOOL_NAME,
 )
 from ..tools import ToolRegistry
 from ..tools.evidence import ToolEvidence
@@ -411,7 +412,7 @@ Output exactly these sections when applicable:
     def _summarize_tool_result_for_context(cls, tool_name: str, result: str) -> str:
         """Shrink verbose tool output before feeding it back into the LLM loop."""
         text = result.strip()
-        if tool_name == "exec":
+        if tool_name == EXEC_TOOL_NAME:
             return cls._summarize_exec_result_for_context(text)
         if len(text) <= cls.TOOL_RESULT_MAX_CHARS:
             return text
@@ -483,7 +484,7 @@ Output exactly these sections when applicable:
     def _summarize_tool_result_for_context_with_config(self, tool_name: str, result: str) -> str:
         """Shrink verbose tool output using runtime-configured limits."""
         text = result.strip()
-        if tool_name == "exec":
+        if tool_name == EXEC_TOOL_NAME:
             return self._summarize_exec_result_for_context_with_config(text)
         if len(text) <= self.tool_result_max_chars:
             return text
