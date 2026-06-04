@@ -25,6 +25,26 @@ WORKFLOW_FIX_STEPS = {
 WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON = "workflow completed but required verification evidence is still missing"
 
 
+def workflow_unsuccessful_reason(workflow_id: str | None) -> str:
+    return f"workflow {str(workflow_id or '').strip()} did not complete successfully"
+
+
+def workflow_review_evidence_missing_reason(workflow_id: str | None) -> str:
+    return f"workflow {str(workflow_id or '').strip()} completed but review evidence is missing"
+
+
+def workflow_review_findings_follow_up_reason(workflow_id: str | None) -> str:
+    return f"workflow {str(workflow_id or '').strip()} completed but review findings still require follow-up"
+
+
+def workflow_clean_review_reason(workflow_id: str | None) -> str:
+    return f"workflow {str(workflow_id or '').strip()} completed with clean review evidence"
+
+
+def workflow_completed_all_steps_reason(workflow_id: str | None) -> str:
+    return f"workflow {str(workflow_id or '').strip()} completed all required steps"
+
+
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:
     return str(workflow_id or "").strip() == RESEARCH_THEN_OUTLINE_WORKFLOW_ID
 

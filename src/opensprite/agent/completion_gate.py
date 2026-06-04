@@ -105,8 +105,13 @@ from .workflow_completion_policy import (
     WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,
+    workflow_clean_review_reason,
+    workflow_completed_all_steps_reason,
     workflow_fix_follow_up_fields,
+    workflow_review_evidence_missing_reason,
+    workflow_review_findings_follow_up_reason,
     workflow_review_follow_up_fields,
+    workflow_unsuccessful_reason,
 )
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
@@ -1045,7 +1050,7 @@ def _workflow_gate_outcome(
         return {
             **metadata,
             "status": _completion_status_for_unsuccessful_workflow(workflow_status),
-            "reason": f"workflow {workflow_id} did not complete successfully",
+            "reason": workflow_unsuccessful_reason(workflow_id),
             "detail": detail,
         }
 
@@ -1053,7 +1058,7 @@ def _workflow_gate_outcome(
         return {
             **metadata,
             "status": COMPLETE_COMPLETION_STATUS,
-            "reason": "workflow research_then_outline completed all required steps",
+            "reason": workflow_completed_all_steps_reason(workflow_id),
         }
 
     if _is_review_workflow(workflow_id):
@@ -1062,7 +1067,7 @@ def _workflow_gate_outcome(
             return {
                 **metadata,
                 "status": NEEDS_REVIEW_COMPLETION_STATUS,
-                "reason": f"workflow {workflow_id} completed but review evidence is missing",
+                "reason": workflow_review_evidence_missing_reason(workflow_id),
                 "detail": "Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
                 **review_step,
             }
@@ -1071,7 +1076,7 @@ def _workflow_gate_outcome(
             return {
                 **metadata,
                 "status": NEEDS_REVIEW_COMPLETION_STATUS,
-                "reason": f"workflow {workflow_id} completed but review findings still require follow-up",
+                "reason": workflow_review_findings_follow_up_reason(workflow_id),
                 "detail": workflow_review_first_finding
                 or workflow_review_summary
                 or str(workflow.get("summary") or "").strip(),
@@ -1087,7 +1092,7 @@ def _workflow_gate_outcome(
         return {
             **metadata,
             "status": COMPLETE_COMPLETION_STATUS,
-            "reason": f"workflow {workflow_id} completed with clean review evidence",
+            "reason": workflow_clean_review_reason(workflow_id),
         }
 
     if verification_required and not (verification_passed or workflow_verification_passed):
@@ -1102,7 +1107,7 @@ def _workflow_gate_outcome(
         return {
             **metadata,
             "status": COMPLETE_COMPLETION_STATUS,
-            "reason": f"workflow {workflow_id} completed all required steps",
+            "reason": workflow_completed_all_steps_reason(workflow_id),
         }
 
     return None
