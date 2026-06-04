@@ -102,10 +102,12 @@ from .workflow_status import (
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
 )
-from .workflow_completion_policy import (
+from .workflow_fields import (
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+)
+from .workflow_completion_policy import (
     WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,

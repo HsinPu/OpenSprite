@@ -4,6 +4,7 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.subagents import SubagentTaskOutcome
+from opensprite.agent.workflow_fields import WORKFLOW_NEXT_STEP_ID_FIELD, WORKFLOW_NEXT_STEP_LABEL_FIELD
 from opensprite.agent.workflows import SubagentWorkflowService
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
@@ -250,5 +251,5 @@ def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
     assert WORKFLOW_STEP_FAILED_EVENT in event_types
     assert WORKFLOW_FAILED_EVENT in event_types
     failed_event = next(event for event in trace.events if event.event_type == WORKFLOW_FAILED_EVENT)
-    assert failed_event.payload["next_step_id"] == "review"
-    assert failed_event.payload["next_step_label"] == "Code review"
+    assert failed_event.payload[WORKFLOW_NEXT_STEP_ID_FIELD] == "review"
+    assert failed_event.payload[WORKFLOW_NEXT_STEP_LABEL_FIELD] == "Code review"

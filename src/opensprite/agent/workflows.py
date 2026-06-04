@@ -22,6 +22,11 @@ from .subagents import SubagentTaskOutcome
 from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
+from .workflow_fields import (
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+)
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
@@ -157,9 +162,9 @@ def _workflow_progress_fields(
         next_step = steps[completed_prefix]
         payload.update(
             {
-                "next_step_id": next_step.step_id,
-                "next_step_label": next_step.label,
-                "next_step_prompt_type": next_step.prompt_type,
+                WORKFLOW_NEXT_STEP_ID_FIELD: next_step.step_id,
+                WORKFLOW_NEXT_STEP_LABEL_FIELD: next_step.label,
+                WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: next_step.prompt_type,
             }
         )
     return payload

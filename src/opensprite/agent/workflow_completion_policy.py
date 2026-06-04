@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from .workflow_fields import (
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+)
 from .workflows import (
     BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
@@ -10,9 +15,6 @@ from .workflows import (
 )
 
 
-WORKFLOW_NEXT_STEP_ID_FIELD = "next_step_id"
-WORKFLOW_NEXT_STEP_LABEL_FIELD = "next_step_label"
-WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD = "next_step_prompt_type"
 WORKFLOW_FIX_STEPS = {
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
         WORKFLOW_NEXT_STEP_ID_FIELD: "implement",
