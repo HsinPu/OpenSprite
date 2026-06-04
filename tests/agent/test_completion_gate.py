@@ -83,7 +83,7 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_planner_payload,
 )
-from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
+from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.workspace_grounding_policy import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
@@ -560,7 +560,7 @@ def test_completion_gate_accepts_reported_skipped_verification_for_note_change()
                     source_tool="verify",
                     content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
-                    metadata={"verification_status": "skipped"},
+                    metadata={VERIFICATION_STATUS_METADATA_FIELD: "skipped"},
                 ),
             ),
             task_contract=contract,
@@ -592,7 +592,7 @@ def test_completion_gate_accepts_skipped_verification_for_non_code_note_change()
                     source_tool="verify",
                     content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
-                    metadata={"verification_status": "skipped"},
+                    metadata={VERIFICATION_STATUS_METADATA_FIELD: "skipped"},
                 ),
             ),
         ),
@@ -621,7 +621,7 @@ def test_completion_gate_uses_skipped_verification_artifact_without_response_mar
                     source_tool="verify",
                     content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
-                    metadata={"verification_status": "skipped"},
+                    metadata={VERIFICATION_STATUS_METADATA_FIELD: "skipped"},
                 ),
             ),
         ),
@@ -3520,7 +3520,7 @@ def test_quality_gate_requires_recorded_verification_attempt_after_code_changes(
                     source_tool="verify",
                     content_preview="No supported Python or package.json build checks were detected.",
                     ok=True,
-                    metadata={"verification_status": "skipped"},
+                    metadata={VERIFICATION_STATUS_METADATA_FIELD: "skipped"},
                 ),
             ),
         ),

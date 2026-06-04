@@ -20,6 +20,7 @@ from opensprite.agent.task_contract import (
     PLANNER_VALIDATED_STATUS,
     TaskContract,
 )
+from opensprite.agent.verification_policy import VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
@@ -1003,7 +1004,7 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
     assert stored_events[1].payload == {"action": "python_compile", "path": "src"}
     assert stored_events[-1].payload["ok"] is True
-    assert stored_events[-1].payload["verification_status"] == "passed"
+    assert stored_events[-1].payload[VERIFICATION_STATUS_METADATA_FIELD] == "passed"
     assert stored_events[-1].payload["verification_name"] == "python_compile"
     assert stored_events[0].payload["state"] == "running"
     assert stored_events[0].payload["started_at"] > 0

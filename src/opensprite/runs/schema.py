@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..agent.verification_policy import VERIFICATION_STATUS_METADATA_FIELD
 from .events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_EVENTS,
@@ -1013,7 +1014,7 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
     attempted = _metadata_bool(run_metadata, "verification_attempted") or latest is not None
     passed = _metadata_bool(run_metadata, "verification_passed")
     if latest is not None:
-        passed = latest.get("ok") is not False and str(latest.get("verification_status") or "").lower() not in {"failed", "error"}
+        passed = latest.get("ok") is not False and str(latest.get(VERIFICATION_STATUS_METADATA_FIELD) or "").lower() not in {"failed", "error"}
 
     status = "not_attempted"
     name = None
@@ -1021,7 +1022,7 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
     if attempted:
         status = "passed" if passed else "failed"
     if latest is not None:
-        status = str(latest.get("verification_status") or status)
+        status = str(latest.get(VERIFICATION_STATUS_METADATA_FIELD) or status)
         name = latest.get("verification_name")
         summary = str(latest.get("result_preview") or "")
 

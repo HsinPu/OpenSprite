@@ -98,6 +98,7 @@ from .web_source_policy import (
 from .verification_policy import (
     REQUIRED_VERIFICATION_FAILED_REASON,
     SKIPPED_VERIFICATION_STATUS,
+    VERIFICATION_STATUS_METADATA_FIELD,
     is_verification_result_artifact_kind,
     is_verification_tool_name,
     required_verification_completion_reason,
@@ -132,6 +133,7 @@ from .workflow_completion_policy import (
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
 _BLOCKING_PLANNER_STATUSES = frozenset({PLANNER_BLOCKED_STATUS, PLANNER_INVALID_STATUS})
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
+_VERIFICATION_STATUS_METADATA_FIELD = VERIFICATION_STATUS_METADATA_FIELD
 COMPLETION_JUDGE_MISSING_CONFIG_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: missing llm config"
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
@@ -804,7 +806,7 @@ def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> boo
 def _verification_status_is_skipped(metadata: Any) -> bool:
     if not isinstance(metadata, dict):
         return False
-    return str(metadata.get("verification_status") or "").strip().lower() == _SKIPPED_VERIFICATION_STATUS
+    return str(metadata.get(_VERIFICATION_STATUS_METADATA_FIELD) or "").strip().lower() == _SKIPPED_VERIFICATION_STATUS
 
 
 def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:

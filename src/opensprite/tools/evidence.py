@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..agent.verification_policy import VERIFICATION_STATUS_METADATA_FIELD
 from .result_status import classify_tool_result_status
 
 
@@ -81,7 +82,7 @@ def _verification_metadata(result: str) -> dict[str, Any]:
 
     outcome = classify_verification_result(result)
     metadata: dict[str, Any] = {
-        "verification_status": outcome.get("status"),
+        VERIFICATION_STATUS_METADATA_FIELD: outcome.get("status"),
         "verification_ok": bool(outcome.get("ok")),
         "verification_attempted": bool(outcome.get("attempted")),
     }
