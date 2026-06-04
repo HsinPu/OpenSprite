@@ -17,6 +17,13 @@ from opensprite.auth.codex import CodexToken, delete_codex_token, save_codex_tok
 import opensprite.auth.codex as codex_module
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
+from opensprite.runs.events import (
+    COMPLETION_GATE_EVALUATED_EVENT,
+    TASK_INTENT_DETECTED_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+)
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
 from opensprite.tools.registry import ToolRegistry
 from opensprite.storage.base import StoredBackgroundProcess
@@ -73,7 +80,7 @@ def test_web_adapter_broadcasts_same_session_replies_and_events_to_all_sockets()
                 external_chat_id="same-session",
                 run_id="run_123",
                 session_id=session_id,
-                event_type="run_finished",
+                event_type=RUN_FINISHED_EVENT,
                 payload={"status": "completed"},
             )
         )
@@ -211,7 +218,7 @@ async def _run_web_roundtrip():
                         external_chat_id=session_frame["external_chat_id"],
                         session_id=session_frame["session_id"],
                         run_id="run-test",
-                        event_type="run_started",
+                        event_type=RUN_STARTED_EVENT,
                         payload={"status": "running"},
                         created_at=123.0,
                     )
@@ -225,7 +232,7 @@ async def _run_web_roundtrip():
                     "external_chat_id": session_frame["external_chat_id"],
                     "session_id": session_frame["session_id"],
                     "run_id": "run-test",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "kind": "run",
                     "status": "running",
                     "payload": {"status": "running"},
@@ -245,7 +252,7 @@ async def _run_web_roundtrip():
                         external_chat_id="chat-42",
                         session_id="telegram:chat-42",
                         run_id="run-telegram",
-                        event_type="run_started",
+                        event_type=RUN_STARTED_EVENT,
                         payload={"status": "running"},
                         created_at=125.0,
                     )
@@ -1731,28 +1738,28 @@ async def _run_web_run_events_api():
     await storage.add_run_event(
         "web:browser-1",
         "run-1",
-        "task_intent.detected",
+        TASK_INTENT_DETECTED_EVENT,
         payload={"objective": "inspect run timeline", "path": Path("notes.txt")},
         created_at=101.0,
     )
     await storage.add_run_event(
         "web:browser-1",
         "run-1",
-        "completion_gate.evaluated",
+        COMPLETION_GATE_EVALUATED_EVENT,
         payload={"status": "complete"},
         created_at=102.0,
     )
     await storage.add_run_event(
         "web:browser-1",
         "run-1",
-        "tool_started",
+        TOOL_STARTED_EVENT,
         payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "args_preview": "apply patch"},
         created_at=102.5,
     )
     await storage.add_run_event(
         "web:browser-1",
         "run-1",
-        "tool_result",
+        TOOL_RESULT_EVENT,
         payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "ok": True, "result_preview": "done"},
         created_at=102.75,
     )
@@ -1877,10 +1884,10 @@ async def _run_web_run_events_api():
                 "max_text_events": 24,
             }
             assert [event["event_type"] for event in payload["events"]] == [
-                "task_intent.detected",
-                "completion_gate.evaluated",
-                "tool_started",
-                "tool_result",
+                TASK_INTENT_DETECTED_EVENT,
+                COMPLETION_GATE_EVALUATED_EVENT,
+                TOOL_STARTED_EVENT,
+                TOOL_RESULT_EVENT,
             ]
             assert payload["events"][0]["event_id"] == 1
             assert payload["events"][0]["payload"] == {
@@ -2004,10 +2011,10 @@ async def _run_web_run_events_api():
             assert trace_payload["event_counts"]["returned"] == 4
             assert trace_payload["event_counts"]["compacted"] == 0
             assert [event["event_type"] for event in trace_payload["events"]] == [
-                "task_intent.detected",
-                "completion_gate.evaluated",
-                "tool_started",
-                "tool_result",
+                TASK_INTENT_DETECTED_EVENT,
+                COMPLETION_GATE_EVALUATED_EVENT,
+                TOOL_STARTED_EVENT,
+                TOOL_RESULT_EVENT,
             ]
             assert trace_payload["parts"] == [
                 {
@@ -2300,14 +2307,14 @@ async def _run_web_task_completion_live_eval_api():
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "completion_gate.evaluated",
+                COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete", "reason": "test"},
                 created_at=2.0,
             )
             await storage.add_run_event(
                 user_message.session_id,
                 run_id,
-                "run_finished",
+                RUN_FINISHED_EVENT,
                 payload={"status": "completed", "had_tool_error": False},
                 created_at=3.0,
             )
