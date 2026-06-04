@@ -9,6 +9,10 @@ import subprocess
 import sys
 
 from opensprite.agent.agent import AgentLoop, _verification_result_is_tool_error
+from opensprite.agent.auto_continue_reason_policy import (
+    NO_PROGRESS_DURING_CONTINUATION_REASON,
+    REVIEW_EVIDENCE_STILL_MISSING_REASON,
+)
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
 from opensprite.agent.task_contract import (
@@ -1922,7 +1926,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[11].payload["next_action"] == "collect_review_evidence"
     assert events[12].payload["completion"]["status"] == "needs_review"
     assert events[13].payload["completion_status"] == "needs_review"
-    assert events[14].payload["reason"] == "review_evidence_still_missing"
+    assert events[14].payload["reason"] == REVIEW_EVIDENCE_STILL_MISSING_REASON
     assert events[-1].payload["status"] == "needs_review"
     assert events[-1].payload["completion_gate"]["status"] == "needs_review"
     assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
@@ -2203,7 +2207,7 @@ def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp
     assert len(calls) == 2
     assert [event.event_type for event in events].count(AUTO_CONTINUE_SCHEDULED_EVENT) == 1
     skipped = next(event for event in events if event.event_type == AUTO_CONTINUE_SKIPPED_EVENT)
-    assert skipped.payload["reason"] == "no_progress_during_continuation"
+    assert skipped.payload["reason"] == NO_PROGRESS_DURING_CONTINUATION_REASON
     assert skipped.payload["completion_status"] == "incomplete"
 
 

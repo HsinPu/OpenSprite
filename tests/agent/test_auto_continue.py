@@ -1,4 +1,11 @@
 from opensprite.agent.auto_continue import AutoContinueService
+from opensprite.agent.auto_continue_reason_policy import (
+    MAX_AUTO_CONTINUES_REACHED_REASON,
+    NO_PROGRESS_DURING_CONTINUATION_REASON,
+    NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
+    REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON,
+    completion_gate_continue_reason,
+)
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
 from opensprite.agent.execution import ExecutionResult
@@ -40,7 +47,7 @@ def test_auto_continue_allows_missing_verification_once():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_needs_verification"
+    assert decision.reason == completion_gate_continue_reason("needs_verification")
     assert decision.direct_verify_action == "pytest"
     assert decision.direct_verify_path == "."
     assert "Verification is required" in decision.prompt
@@ -262,7 +269,7 @@ def test_auto_continue_allows_missing_review_once():
     )
 
     assert decision.should_continue is True
-    assert decision.reason == "completion_gate_needs_review"
+    assert decision.reason == completion_gate_continue_reason("needs_review")
     assert "Review evidence is required" in decision.prompt
 
 
@@ -337,7 +344,7 @@ def test_auto_continue_stops_at_max_attempts():
     )
 
     assert decision.should_continue is False
-    assert decision.reason == "max_auto_continues_reached"
+    assert decision.reason == MAX_AUTO_CONTINUES_REACHED_REASON
     assert decision.emit_skipped_event is True
 
 
@@ -357,7 +364,7 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     )
 
     assert decision.should_continue is False
-    assert decision.reason == "no_tool_progress_after_incomplete_response"
+    assert decision.reason == NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON
     assert decision.emit_skipped_event is True
 
 
@@ -450,7 +457,7 @@ def test_auto_continue_does_not_use_pending_lookup_phrases():
     )
 
     assert decision.should_continue is False
-    assert decision.reason == "no_tool_progress_after_incomplete_response"
+    assert decision.reason == NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON
 
 
 def test_auto_continue_uses_progress_only_flag_without_reason_marker():
@@ -880,7 +887,7 @@ def test_auto_continue_skips_second_direct_resume_when_target_is_unchanged():
     )
 
     assert decision.should_continue is False
-    assert decision.reason == "review_findings_require_follow_up"
+    assert decision.reason == REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON
 
 
 def test_auto_continue_limits_same_target_verify_retries():
@@ -974,7 +981,7 @@ def test_auto_continue_uses_work_progress_budget_and_stops_without_progress():
     )
 
     assert decision.should_continue is False
-    assert decision.reason == "no_progress_during_continuation"
+    assert decision.reason == NO_PROGRESS_DURING_CONTINUATION_REASON
     assert decision.max_attempts == 3
     assert decision.emit_skipped_event is True
 
