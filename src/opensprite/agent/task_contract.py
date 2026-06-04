@@ -48,6 +48,7 @@ PLANNER_INVALID_STATUS = "invalid"
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
+PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
 PLANNING_ERROR_TASK_TYPE = "planning_error"
@@ -642,7 +643,7 @@ def _contract_from_planner_payload(
     if "workspace_location" in quality_checks:
         acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_workspace_location_criterion(),))
 
-    planner_reason = _truncate(str(payload.get("reason") or "llm planner returned a task contract"), max_chars=240)
+    planner_reason = _truncate(str(payload.get("reason") or PLANNER_VALIDATED_REASON), max_chars=240)
     metadata = {
         "planner_status": PLANNER_VALIDATED_STATUS,
         "raw_task_type": raw_task_type,
