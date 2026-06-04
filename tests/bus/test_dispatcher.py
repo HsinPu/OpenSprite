@@ -8,6 +8,13 @@ from opensprite.config.schema import MessagesConfig, ToolsConfig
 from opensprite.cron.manager import CronManager
 from opensprite.cron.types import CronJob, CronSchedule
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.runs.events import (
+    PERMISSION_REQUESTED_EVENT,
+    RUN_PART_DELTA_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+)
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT
 from opensprite.storage import MemoryStorage
 
 from tests.agent.agent_test_helpers import make_agent_loop
@@ -758,7 +765,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type="run_part_delta",
+                event_type=RUN_PART_DELTA_EVENT,
                 payload={"content_delta": "hi"},
             )
         )
@@ -770,7 +777,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type="tool_started",
+                event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "demo"},
             )
         )
@@ -782,7 +789,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type="permission_requested",
+                event_type=PERMISSION_REQUESTED_EVENT,
                 payload={"request_id": "perm-1", "tool_name": "demo"},
             )
         )
@@ -987,10 +994,10 @@ def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
     assert run.status == "completed"
     assert run.metadata["executed_tool_calls"] == 1
     event_types = [event.event_type for event in events]
-    assert "tool_started" in event_types
-    assert "tool_result" in event_types
-    assert "run_finished" in event_types
-    tool_events = [event for event in events if event.event_type in {"tool_started", "tool_result"}]
+    assert TOOL_STARTED_EVENT in event_types
+    assert TOOL_RESULT_EVENT in event_types
+    assert RUN_FINISHED_EVENT in event_types
+    tool_events = [event for event in events if event.event_type in {TOOL_STARTED_EVENT, TOOL_RESULT_EVENT}]
     assert [event.payload["tool_name"] for event in tool_events] == ["dummy", "dummy"]
     assert [part.part_type for part in parts] == [
         "tool_call",
