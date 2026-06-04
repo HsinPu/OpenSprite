@@ -10,6 +10,13 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Awaitable, Callable
 
+from ..runs.events import (
+    BACKGROUND_PROCESS_COMPLETED_EVENT,
+    BACKGROUND_PROCESS_LOST_EVENT,
+    BACKGROUND_PROCESS_NOTIFICATION_FAILED_EVENT,
+    BACKGROUND_PROCESS_NOTIFICATION_SENT_EVENT,
+    BACKGROUND_PROCESS_STARTED_EVENT,
+)
 from ..storage.base import StorageProvider, StoredBackgroundProcess
 from ..utils.log import logger
 from ..utils.processes import terminate_process_tree
@@ -136,7 +143,7 @@ class BackgroundProcessManager:
         )
         session.watch_task = asyncio.create_task(self._watch_session(session))
         self._sessions[session.session_id] = session
-        self._schedule_persist_session(session, event_type="background_process.started")
+        self._schedule_persist_session(session, event_type=BACKGROUND_PROCESS_STARTED_EVENT)
         return session
 
     def _output_file_path_for_session(self, session: BackgroundSession) -> Path | None:
@@ -330,7 +337,7 @@ class BackgroundProcessManager:
                 finished_at=now,
                 metadata=metadata,
             )
-            stored = await self._persist_stored_process(updated, event_type="background_process.lost")
+            stored = await self._persist_stored_process(updated, event_type=BACKGROUND_PROCESS_LOST_EVENT)
             if stored is not None:
                 marked += 1
         if marked:
@@ -401,13 +408,13 @@ class BackgroundProcessManager:
             session.finished_at = time.monotonic()
             session.finished_at_wall = time.time()
             self._prune_exited_sessions()
-            await self._persist_session(session, event_type="background_process.completed")
+            await self._persist_session(session, event_type=BACKGROUND_PROCESS_COMPLETED_EVENT)
             if self._should_notify_on_exit(session):
                 try:
                     await session.exit_notifier(session)
                     await self._add_session_run_event(
                         session,
-                        "background_process.notification_sent",
+                        BACKGROUND_PROCESS_NOTIFICATION_SENT_EVENT,
                         {"status": "sent"},
                     )
                 except Exception:
@@ -418,7 +425,7 @@ class BackgroundProcessManager:
                     )
                     await self._add_session_run_event(
                         session,
-                        "background_process.notification_failed",
+                        BACKGROUND_PROCESS_NOTIFICATION_FAILED_EVENT,
                         {"status": "failed"},
                     )
 

@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from .events import (
+    AUTO_CONTINUE_COMPLETED_EVENT,
+    AUTO_CONTINUE_SCHEDULED_EVENT,
+    BACKGROUND_PROCESS_COMPLETED_EVENT,
+    BACKGROUND_PROCESS_LOST_EVENT,
+    BACKGROUND_PROCESS_STARTED_EVENT,
     COMPLETION_GATE_EVALUATED_EVENT,
     CURATOR_COMPLETED_EVENT,
     CURATOR_EVENTS,
@@ -15,6 +20,7 @@ from .events import (
     CURATOR_JOB_STARTED_EVENT,
     CURATOR_RUNNING_EVENTS,
     CURATOR_STARTED_EVENT,
+    EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
@@ -127,12 +133,12 @@ _EVENT_KINDS = {
     HARNESS_CHECKPOINT_RECORDED_EVENT: "harness",
     HARNESS_SCORECARD_RECORDED_EVENT: "harness",
     TASK_CONTRACT_CREATED_EVENT: "harness",
-    "execution.stopped": "llm",
-    "auto_continue.scheduled": "run",
-    "auto_continue.completed": "run",
-    "background_process.started": "process",
-    "background_process.completed": "process",
-    "background_process.lost": "process",
+    EXECUTION_STOPPED_EVENT: "llm",
+    AUTO_CONTINUE_SCHEDULED_EVENT: "run",
+    AUTO_CONTINUE_COMPLETED_EVENT: "run",
+    BACKGROUND_PROCESS_STARTED_EVENT: "process",
+    BACKGROUND_PROCESS_COMPLETED_EVENT: "process",
+    BACKGROUND_PROCESS_LOST_EVENT: "process",
     TOOL_STARTED_EVENT: "tool",
     TOOL_RESULT_EVENT: "tool",
     VERIFICATION_STARTED_EVENT: "verification",
@@ -253,9 +259,9 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "cancelling"
     if normalized in TEXT_DELTA_EVENTS:
         return explicit or "running"
-    if normalized == "execution.stopped":
+    if normalized == EXECUTION_STOPPED_EVENT:
         return explicit or "stopped"
-    if normalized.endswith("_started") or normalized == "llm_status" or normalized == "auto_continue.scheduled":
+    if normalized.endswith("_started") or normalized == "llm_status" or normalized == AUTO_CONTINUE_SCHEDULED_EVENT:
         return explicit or "running"
     if explicit:
         return explicit

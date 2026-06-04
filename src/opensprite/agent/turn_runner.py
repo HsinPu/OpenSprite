@@ -10,7 +10,10 @@ from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
 from ..runs.events import (
+    AUTO_CONTINUE_COMPLETED_EVENT,
+    AUTO_CONTINUE_SCHEDULED_EVENT,
     COMPLETION_GATE_EVALUATED_EVENT,
+    EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
@@ -470,7 +473,7 @@ class AgentTurnRunner:
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                "execution.stopped",
+                EXECUTION_STOPPED_EVENT,
                 {
                     "schema_version": 1,
                     "status": "stopped",
@@ -566,7 +569,7 @@ class AgentTurnRunner:
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                "auto_continue.completed",
+                AUTO_CONTINUE_COMPLETED_EVENT,
                 {
                     "attempt": auto_continue_attempts,
                     "completion_status": completion_result.status,
@@ -785,7 +788,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "auto_continue.scheduled",
+                    AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
                         "completion_status": completion_result.status,
@@ -811,7 +814,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "auto_continue.scheduled",
+                    AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
                         "completion_status": completion_result.status,
@@ -843,7 +846,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "auto_continue.scheduled",
+                    AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
                         **decision.to_metadata(),
                         "completion_status": completion_result.status,

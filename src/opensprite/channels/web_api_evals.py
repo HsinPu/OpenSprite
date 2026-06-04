@@ -11,6 +11,7 @@ from aiohttp import web
 
 from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
+from ..runs.events import BACKGROUND_PROCESS_COMPLETED_EVENT, BACKGROUND_PROCESS_LOST_EVENT, BACKGROUND_PROCESS_STARTED_EVENT
 from ..tools.shell_runtime import CapturedOutputChunk, start_shell_process
 
 
@@ -90,7 +91,7 @@ async def handle_long_task_eval_smoke(adapter: Any, request: web.Request, *, lon
             "id": "run_event_schema",
             "label": "Background process run events are registered",
             "ok": True,
-            "detail": "Expected events: background_process.started, background_process.completed, background_process.lost.",
+            "detail": f"Expected events: {BACKGROUND_PROCESS_STARTED_EVENT}, {BACKGROUND_PROCESS_COMPLETED_EVENT}, {BACKGROUND_PROCESS_LOST_EVENT}.",
         }
     )
 
@@ -162,8 +163,8 @@ async def handle_long_task_eval_controlled(
             "ok": (stored_process is not None and stored_process.state == "exited" and stored_process.exit_code == 0),
             "detail": f"state={getattr(stored_process, 'state', None)} exit_code={getattr(stored_process, 'exit_code', None)}",
         },
-        {"id": "started_event_recorded", "label": "Started event was recorded", "ok": "background_process.started" in event_types, "detail": ", ".join(event_types) or "none"},
-        {"id": "completed_event_recorded", "label": "Completed event was recorded", "ok": "background_process.completed" in event_types, "detail": ", ".join(event_types) or "none"},
+        {"id": "started_event_recorded", "label": "Started event was recorded", "ok": BACKGROUND_PROCESS_STARTED_EVENT in event_types, "detail": ", ".join(event_types) or "none"},
+        {"id": "completed_event_recorded", "label": "Completed event was recorded", "ok": BACKGROUND_PROCESS_COMPLETED_EVENT in event_types, "detail": ", ".join(event_types) or "none"},
         {
             "id": "output_tail_captured",
             "label": "Output tail was captured",
