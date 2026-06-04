@@ -13,6 +13,7 @@ from ..runs.events import (
     HISTORY_LOADED_EVENT,
     MCP_TOOLS_SYNCED_EVENT,
     PROMPT_BUILT_EVENT,
+    PROMPT_TOKENS_ESTIMATED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
@@ -479,7 +480,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "prompt.tokens_estimated",
+                PROMPT_TOKENS_ESTIMATED_EVENT,
                 {
                     "budget": effective_context_budget,
                     "history_budget": self.config.history_token_budget,
