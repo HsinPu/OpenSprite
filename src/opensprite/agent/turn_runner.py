@@ -52,7 +52,7 @@ from .completion_status import (
     is_complete_completion_status,
 )
 from .execution import ExecutionResult
-from .harness_profile import HarnessProfile, HarnessProfileService
+from .harness_profile import HarnessProfile, HarnessProfileService, PURE_ANSWER_TASK_TYPE
 from .harness_scorecard import HarnessScorecard, HarnessSensorResult
 from .harness_sensors import evaluate_harness_sensors
 from .media import AgentMediaService
@@ -1355,7 +1355,7 @@ class AgentTurnRunner:
 
     @staticmethod
     def _select_aggregate_task_contract(results: list[ExecutionResult]):
-        """Keep a validated contract if a later retry only failed during planning."""
+        """Keep the original tool-backed contract when a later retry only finalizes the answer."""
         latest_contract = next(
             (
                 result.task_contract
@@ -1375,6 +1375,22 @@ class AgentTurnRunner:
             ),
             None,
         )
+        if validated is not None and _is_tool_backed_task_contract(validated):
+            return validated
+        tool_backed_validated = next(
+            (
+                result.task_contract
+                for result in reversed(results)
+                if (
+                    result.task_contract is not None
+                    and _task_contract_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
+                    and _is_tool_backed_task_contract(result.task_contract)
+                )
+            ),
+            None,
+        )
+        if tool_backed_validated is not None:
+            return tool_backed_validated
         if validated is not None:
             return validated
         return next(
@@ -1662,6 +1678,13 @@ def _task_contract_planner_status(task_contract: Any) -> str:
     if isinstance(metadata, dict):
         return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
     return ""
+
+
+def _is_tool_backed_task_contract(task_contract: Any) -> bool:
+    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    if task_type in {"", PURE_ANSWER_TASK_TYPE, PLANNING_ERROR_TASK_TYPE}:
+        return False
+    return True
 
 
 def _can_replace_initial_work_state(state: StoredWorkState | None) -> bool:

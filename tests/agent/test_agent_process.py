@@ -399,6 +399,36 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
     assert aggregate.task_contract is valid_contract
 
 
+def test_aggregate_execution_results_keeps_tool_contract_over_auto_continue_pure_answer():
+    web_contract = TaskContract(
+        objective="Find sources",
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
+        harness_profile={"name": "research", "task_type": "web_research"},
+    )
+    final_answer_contract = TaskContract(
+        objective="Continue the current task",
+        task_type="pure_answer",
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
+        harness_profile={"name": "chat", "task_type": "pure_answer"},
+    )
+
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [
+            ExecutionResult(content="", executed_tool_calls=1, task_contract=web_contract),
+            ExecutionResult(content="final answer", executed_tool_calls=0, task_contract=final_answer_contract),
+        ],
+        content="final answer",
+    )
+
+    assert aggregate.content == "final answer"
+    assert aggregate.executed_tool_calls == 1
+    assert aggregate.task_contract is web_contract
+
+
 def test_aggregate_execution_results_does_not_mark_visible_final_as_internal_only():
     aggregate = AgentTurnRunner._aggregate_execution_results(
         [
