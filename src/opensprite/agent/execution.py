@@ -44,6 +44,7 @@ from .subagent_result_policy import (
     SUBAGENT_TASK_ID_LABEL,
     parse_subagent_result_line,
 )
+from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 from .verification_policy import is_verification_tool_name
 from .web_source_policy import (
@@ -1966,7 +1967,7 @@ Output exactly these sections when applicable:
             active_delegate_prompt_type=active_delegate_prompt_type,
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,
-            stop_reason="max_tool_iterations",
+            stop_reason=MAX_TOOL_ITERATIONS_STOP_REASON,
             stop_metadata=stop_metadata,
             compaction_handoff=latest_compaction_handoff,
             context_compactions=context_compactions,

@@ -7,6 +7,7 @@ from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.context_compaction_policy import LLM_COMPACTION_EMPTY_REASON
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
+from opensprite.agent.stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.web_source_policy import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService
@@ -1584,7 +1585,7 @@ def test_execution_engine_returns_max_iteration_message_when_tool_loop_never_fin
 
     assert "超過了最大迭代次數（1次）" in result.content
     assert "demo_tool: tool:abc" in result.content
-    assert result.stop_reason == "max_tool_iterations"
+    assert result.stop_reason == MAX_TOOL_ITERATIONS_STOP_REASON
     assert result.stop_metadata == {
         "schema_version": 1,
         "iteration_limit": 1,
