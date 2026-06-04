@@ -1,0 +1,16 @@
+"""Shared process-runtime status policy."""
+
+from __future__ import annotations
+
+
+PROCESS_TERMINATION_RUNTIME_RESTART = "runtime_restart"
+PROCESS_TERMINATION_EXIT = "exit"
+PROCESS_TERMINATION_TIMEOUT = "timeout"
+PROCESS_TERMINATION_CANCELLED = "cancelled"
+PROCESS_TERMINATION_ERROR = "error"
+PROCESS_TERMINATION_KILLED = "killed"
+PROCESS_TERMINATION_SHUTDOWN = "shutdown"
+PROCESS_TERMINATION_UNKNOWN = "unknown"
+PROCESS_RECOVERY_RUNTIME_RESTART_REASON = PROCESS_TERMINATION_RUNTIME_RESTART
+PROCESS_REATTACH_RUNTIME_LOCAL_REASON = "stdout_stderr_and_watch_state_are_runtime_local"
+PROCESS_LOST_ON_STARTUP_POLICY = "mark_running_processes_lost_on_startup"

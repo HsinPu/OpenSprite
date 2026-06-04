@@ -13,6 +13,19 @@ from typing import Awaitable, Callable
 from ..storage.base import StorageProvider, StoredBackgroundProcess
 from ..utils.log import logger
 from ..utils.processes import terminate_process_tree
+from .process_runtime_policy import (
+    PROCESS_TERMINATION_CANCELLED,
+    PROCESS_TERMINATION_ERROR,
+    PROCESS_TERMINATION_EXIT,
+    PROCESS_TERMINATION_KILLED,
+    PROCESS_TERMINATION_RUNTIME_RESTART,
+    PROCESS_TERMINATION_SHUTDOWN,
+    PROCESS_TERMINATION_TIMEOUT,
+    PROCESS_TERMINATION_UNKNOWN,
+    PROCESS_LOST_ON_STARTUP_POLICY,
+    PROCESS_REATTACH_RUNTIME_LOCAL_REASON,
+    PROCESS_RECOVERY_RUNTIME_RESTART_REASON,
+)
 from .shell_runtime import CapturedOutputChunk, drain_process_output, format_captured_output
 
 
@@ -303,16 +316,16 @@ class BackgroundProcessManager:
             metadata = dict(process.metadata or {})
             metadata.update(
                 {
-                    "recovery_reason": "runtime_restart",
+                    "recovery_reason": PROCESS_RECOVERY_RUNTIME_RESTART_REASON,
                     "reattach_supported": False,
-                    "reattach_reason": "stdout_stderr_and_watch_state_are_runtime_local",
-                    "lost_policy": "mark_running_processes_lost_on_startup",
+                    "reattach_reason": PROCESS_REATTACH_RUNTIME_LOCAL_REASON,
+                    "lost_policy": PROCESS_LOST_ON_STARTUP_POLICY,
                 }
             )
             updated = replace(
                 process,
                 state="lost",
-                termination_reason="runtime_restart",
+                termination_reason=PROCESS_TERMINATION_RUNTIME_RESTART,
                 updated_at=now,
                 finished_at=now,
                 metadata=metadata,
@@ -351,7 +364,7 @@ class BackgroundProcessManager:
             return False
         if not session.notify_on_exit:
             return False
-        if session.termination_reason == "exit" and session.exit_code == 0:
+        if session.termination_reason == PROCESS_TERMINATION_EXIT and session.exit_code == 0:
             if not cls._session_output_text(session):
                 return session.notify_on_exit_empty_success
         return True
@@ -363,20 +376,20 @@ class BackgroundProcessManager:
             else:
                 await asyncio.wait_for(session.process.wait(), timeout=session.timeout_seconds)
             if session.termination_reason is None:
-                session.termination_reason = "exit"
+                session.termination_reason = PROCESS_TERMINATION_EXIT
         except asyncio.TimeoutError:
             if session.termination_reason is None:
-                session.termination_reason = "timeout"
+                session.termination_reason = PROCESS_TERMINATION_TIMEOUT
             await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
         except asyncio.CancelledError:
             if session.termination_reason is None:
-                session.termination_reason = "cancelled"
+                session.termination_reason = PROCESS_TERMINATION_CANCELLED
             await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
             raise
         except Exception as exc:
             session.error = str(exc)
             if session.termination_reason is None:
-                session.termination_reason = "error"
+                session.termination_reason = PROCESS_TERMINATION_ERROR
             await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
         finally:
             session.output_drained = await drain_process_output(
@@ -401,7 +414,7 @@ class BackgroundProcessManager:
                     logger.exception(
                         "background.process.notify-failed | session_id={} reason={}",
                         session.session_id,
-                        session.termination_reason or "unknown",
+                        session.termination_reason or PROCESS_TERMINATION_UNKNOWN,
                     )
                     await self._add_session_run_event(
                         session,
@@ -472,7 +485,7 @@ class BackgroundProcessManager:
 
         if session.state == "running":
             if session.termination_reason is None:
-                session.termination_reason = "killed"
+                session.termination_reason = PROCESS_TERMINATION_KILLED
             session.suppress_exit_notification = True
             await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
             if session.watch_task is not None:
@@ -518,7 +531,7 @@ class BackgroundProcessManager:
             session.suppress_exit_notification = True
             if session.state == "running":
                 if session.termination_reason is None:
-                    session.termination_reason = "shutdown"
+                    session.termination_reason = PROCESS_TERMINATION_SHUTDOWN
                 await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
             if session.watch_task is not None:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
