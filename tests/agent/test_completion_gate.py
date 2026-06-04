@@ -71,6 +71,7 @@ from opensprite.agent.task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
     PLANNER_INVALID_JSON_REASON,
+    REPOSITORY_STATUS_QUALITY_CHECK,
     TaskContract,
     _contract_from_planner_payload,
 )
@@ -3599,7 +3600,7 @@ async def test_completion_gate_uses_judge_for_missing_git_metadata_claimed_clean
         acceptance_criteria=(
             AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
         ),
-        planner_metadata={"quality_checks": ["repository_status"]},
+        planner_metadata={"quality_checks": [REPOSITORY_STATUS_QUALITY_CHECK]},
     )
 
     result = await _evaluate_with_static_judge(
@@ -3627,7 +3628,7 @@ def test_quality_gate_accepts_missing_git_metadata_as_blocker():
         acceptance_criteria=(
             AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
         ),
-        planner_metadata={"quality_checks": ["repository_status"]},
+        planner_metadata={"quality_checks": [REPOSITORY_STATUS_QUALITY_CHECK]},
     )
 
     result = QualityGateService().evaluate(
