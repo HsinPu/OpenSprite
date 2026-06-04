@@ -5,6 +5,12 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.bus.message import UserMessage
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
+from opensprite.runs.events import (
+    HARNESS_CHECKPOINT_RECORDED_EVENT,
+    HARNESS_POLICY_SELECTED_EVENT,
+    HARNESS_PROFILE_SELECTED_EVENT,
+    HARNESS_SCORECARD_RECORDED_EVENT,
+)
 from opensprite.storage import MemoryStorage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
@@ -124,8 +130,8 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
 
     response, tool_names_by_call, events, parts = asyncio.run(scenario())
     event_types = [event.event_type for event in events]
-    checkpoint = next(event for event in events if event.event_type == "harness_checkpoint.recorded")
-    scorecard = next(event for event in events if event.event_type == "harness_scorecard.recorded")
+    checkpoint = next(event for event in events if event.event_type == HARNESS_CHECKPOINT_RECORDED_EVENT)
+    scorecard = next(event for event in events if event.event_type == HARNESS_SCORECARD_RECORDED_EVENT)
     checkpoint_part = next(part for part in parts if part.part_type == "harness_checkpoint")
     scorecard_part = next(part for part in parts if part.part_type == "harness_scorecard")
 
@@ -133,9 +139,9 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert tool_names_by_call[-1] == []
     assert "task_contract.planned" in event_types
     assert "task_contract.validated" in event_types
-    assert "harness_profile.selected" in event_types
-    assert "harness_policy.selected" in event_types
-    effective_profile = next(event for event in events if event.event_type == "harness_profile.selected")
+    assert HARNESS_PROFILE_SELECTED_EVENT in event_types
+    assert HARNESS_POLICY_SELECTED_EVENT in event_types
+    effective_profile = next(event for event in events if event.event_type == HARNESS_PROFILE_SELECTED_EVENT)
     assert effective_profile.payload["name"] == "chat"
     assert effective_profile.payload["selection_phase"] == "contract"
     assert checkpoint.payload["harness_profile"]["name"] == "chat"
