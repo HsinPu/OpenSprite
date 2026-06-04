@@ -37,6 +37,8 @@ from opensprite.runs.lifecycle import (
     RUN_STARTED_EVENT,
 )
 from opensprite.runs.schema import (
+    RUN_SUMMARY_STATUS_NOT_ATTEMPTED,
+    RUN_SUMMARY_STATUS_PASSED,
     RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC,
     RUN_WARNING_HARNESS_PREFIX,
     RUN_WARNING_PARALLEL_DELEGATION_FAILED,
@@ -1330,7 +1332,13 @@ def test_serialize_run_summary_builds_stable_card_payload():
     assert summary["objective"] == "Ship the fix"
     assert summary["duration_seconds"] == 6.5
     assert summary["tools"] == [{"name": "demo", "count": 1}]
-    assert summary["verification"] == {"attempted": True, "passed": True, "status": "passed", "name": "pytest", "summary": "ok"}
+    assert summary["verification"] == {
+        "attempted": True,
+        "passed": True,
+        "status": RUN_SUMMARY_STATUS_PASSED,
+        "name": "pytest",
+        "summary": "ok",
+    }
     assert summary["review"] == {
         "required": False,
         "attempted": False,
@@ -1806,7 +1814,7 @@ def test_serialize_run_summary_marks_review_warning_when_required_review_missing
         "required": True,
         "attempted": False,
         "passed": False,
-        "status": "not_attempted",
+        "status": RUN_SUMMARY_STATUS_NOT_ATTEMPTED,
         "summary": "",
         "prompt_types": [],
         "finding_count": 0,

@@ -114,6 +114,10 @@ RUN_WARNING_HARNESS_STATUSES = frozenset({"warn", "fail"})
 RUN_FAILED_STATUSES = frozenset({"failed", "error"})
 RUN_CANCELLED_STATUSES = frozenset({"cancelled", "cancelling"})
 RUN_STATUS_WARNING_STATUSES = frozenset({"failed", "cancelled"})
+RUN_SUMMARY_STATUS_NOT_ATTEMPTED = "not_attempted"
+RUN_SUMMARY_STATUS_NOT_REQUIRED = "not_required"
+RUN_SUMMARY_STATUS_PASSED = "passed"
+RUN_SUMMARY_STATUS_FAILED = "failed"
 MAX_SERIALIZED_RUN_EVENTS = 80
 MAX_SERIALIZED_TEXT_EVENTS = 24
 
@@ -1027,11 +1031,11 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
     if latest is not None:
         passed = latest.get("ok") is not False and str(latest.get(VERIFICATION_STATUS_METADATA_FIELD) or "").lower() not in {"failed", "error"}
 
-    status = "not_attempted"
+    status = RUN_SUMMARY_STATUS_NOT_ATTEMPTED
     name = None
     summary = ""
     if attempted:
-        status = "passed" if passed else "failed"
+        status = RUN_SUMMARY_STATUS_PASSED if passed else RUN_SUMMARY_STATUS_FAILED
     if latest is not None:
         status = str(latest.get(VERIFICATION_STATUS_METADATA_FIELD) or status)
         name = latest.get(VERIFICATION_NAME_METADATA_FIELD)
@@ -1050,14 +1054,14 @@ def _summarize_review(completion: dict[str, Any]) -> dict[str, Any]:
     required = bool(completion.get("review_required"))
     attempted = bool(completion.get("review_attempted"))
     passed = bool(completion.get("review_passed"))
-    status = "not_required"
+    status = RUN_SUMMARY_STATUS_NOT_REQUIRED
     if required:
         if passed:
-            status = "passed"
+            status = RUN_SUMMARY_STATUS_PASSED
         elif attempted:
-            status = "failed"
+            status = RUN_SUMMARY_STATUS_FAILED
         else:
-            status = "not_attempted"
+            status = RUN_SUMMARY_STATUS_NOT_ATTEMPTED
     prompt_types = [
         str(item).strip()
         for item in (completion.get("review_prompt_types") if isinstance(completion.get("review_prompt_types"), list) else [])
