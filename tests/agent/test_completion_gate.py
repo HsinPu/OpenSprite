@@ -71,6 +71,7 @@ from opensprite.agent.task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
     ITEMIZED_OUTPUT_CRITERION_KIND,
+    OPERATION_REPORT_CRITERION_KIND,
     PLANNER_INVALID_JSON_REASON,
     REPOSITORY_STATUS_QUALITY_CHECK,
     SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
@@ -807,7 +808,7 @@ def test_completion_gate_does_not_require_verification_for_operations_report():
         objective=intent.objective,
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="scheduling"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         allow_no_tool_final=False,
     )
 
@@ -832,7 +833,7 @@ def test_completion_gate_rejects_repo_state_answer_for_command_version_question(
         objective=intent.objective,
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
@@ -865,7 +866,7 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
         objective=intent.objective,
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
@@ -896,7 +897,7 @@ def test_completion_gate_rejects_ungrounded_command_version_number():
         objective=intent.objective,
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
@@ -928,7 +929,7 @@ def test_completion_gate_rejects_command_unavailable_claim_without_execution_evi
         objective=intent.objective,
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
-        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 

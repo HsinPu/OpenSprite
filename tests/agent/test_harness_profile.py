@@ -27,6 +27,7 @@ from opensprite.agent.harness_profile import (
 )
 from opensprite.agent.task_contract import (
     EvidenceRequirement,
+    OPERATION_REPORT_CRITERION_KIND,
     TaskContract,
     TaskContractPlanner,
     WORKSPACE_LOCATION_CRITERION_KIND,
@@ -295,7 +296,7 @@ async def test_task_contract_planner_builds_scheduling_contract_from_llm_json():
 
     assert contract.task_type == "operations"
     assert any(item.kind == "tool_group" and item.tool_group == "scheduling" for item in contract.requirements)
-    assert any(item.kind == "operation_report" for item in contract.acceptance_criteria)
+    assert any(item.kind == OPERATION_REPORT_CRITERION_KIND for item in contract.acceptance_criteria)
     assert contract.allow_no_tool_final is False
 
 
@@ -322,7 +323,7 @@ async def test_task_contract_planner_builds_execution_contract_from_llm_json():
 
     assert contract.task_type == "operations"
     assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
-    assert any(item.kind == "operation_report" for item in contract.acceptance_criteria)
+    assert any(item.kind == OPERATION_REPORT_CRITERION_KIND for item in contract.acceptance_criteria)
     assert contract.allow_no_tool_final is False
 
 
