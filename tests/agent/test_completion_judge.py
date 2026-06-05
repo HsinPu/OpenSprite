@@ -302,6 +302,48 @@ async def test_completion_gate_evaluate_with_judge_requires_contract_evidence():
 
 
 @pytest.mark.anyio
+async def test_completion_gate_retries_blocker_without_current_tool_evidence():
+    intent = TaskIntent(kind="task", objective="List current schedules")
+    contract = TaskContract(
+        objective="List current schedules",
+        task_type="operations",
+        requirements=(
+            EvidenceRequirement(
+                kind="tool_group",
+                tool_group="scheduling",
+                min_count=1,
+                description="Use scheduling tools before finalizing.",
+            ),
+        ),
+        allow_no_tool_final=False,
+    )
+    judge = FakeJudgeService(
+        verdict=CompletionJudgeVerdict(
+            status="blocked",
+            reason="stale permission timeout",
+            active_task_status="blocked",
+            missing_evidence=("cron list output",),
+            metadata={"method": "llm"},
+        )
+    )
+    service = CompletionGateService(llm_config=_llm_config(), judge_service=judge)
+
+    result = await service.evaluate_with_judge(
+        task_intent=intent,
+        response_text="Blocked because cron permission timed out.",
+        execution_result=ExecutionResult(content="Blocked because cron permission timed out.", task_contract=contract),
+        provider=object(),
+        model="model",
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "required task evidence was not produced"
+    assert result.active_task_status is None
+    assert result.missing_evidence == ("Use scheduling tools before finalizing.",)
+    assert result.judge_metadata["method"] == "llm"
+
+
+@pytest.mark.anyio
 async def test_completion_gate_evaluate_with_judge_blocks_on_judge_error():
     intent = TaskIntent(kind="task", objective="answer")
     judge = FakeJudgeService(error=CompletionJudgeError("bad judge"))
