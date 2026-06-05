@@ -1,6 +1,6 @@
 from opensprite.agent.harness_policy import (
     CHAT_HARNESS_POLICY_REASON,
-    HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON,
+    HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON,
     MEDIA_HARNESS_POLICY_REASON,
     OPERATIONS_HARNESS_POLICY_REASON,
     POLICY_RESOLUTION_METADATA_REASON,
@@ -86,8 +86,8 @@ def test_harness_policy_reasons_are_stable():
     assert POLICY_RESOLUTION_METADATA_REASON == (
         "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
     )
-    assert HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON == (
-        "harness approval requirements cannot be relaxed by user settings"
+    assert HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON == (
+        "harness approval requirements remain active in the executable policy"
     )
 
 
@@ -317,7 +317,7 @@ def test_profile_permission_override_is_composed_with_harness_policy():
     assert filtered.tool_names == ["read_file"]
 
 
-def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
+def test_harness_policy_resolution_metadata_explains_protected_approval_requirements():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(approval_mode="auto", allowed_risk_levels=["read", "write", "configuration", "mcp"])
     )
@@ -334,9 +334,9 @@ def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
     assert metadata["effective_policy"]["kind"] == "composite"
     assert metadata["reason"] == POLICY_RESOLUTION_METADATA_REASON
     assert "profile permission override" in metadata["constraints_applied"]
-    approval_blocks = [item for item in metadata["blocked_relaxations"] if item["field"] == "approval_mode"]
-    assert approval_blocks
-    assert all(item["reason"] == HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON for item in approval_blocks)
+    approval_protections = [item for item in metadata["protected_approval_requirements"] if item["field"] == "approval_mode"]
+    assert approval_protections
+    assert all(item["reason"] == HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON for item in approval_protections)
 
 
 def _registry_for_permission_baseline() -> ToolRegistry:

@@ -341,25 +341,25 @@ function policySelectedDecision(payload, event, index) {
 
 function policyMergedDecision(payload, event, index) {
   const policy = payload.harness_policy || payload.harnessPolicy || {};
-  const blocked = countItems(payload.blocked_relaxations || payload.blockedRelaxations);
+  const protectedApprovals = countItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements);
   return {
     id: decisionId(event, index),
     eventIds: decisionEventId(event),
     phase: "policy",
-    status: blocked > 0 ? "warning" : "success",
+    status: protectedApprovals > 0 ? "warning" : "success",
     titleKey: "policyMerged",
     title: "Policy merged",
     summary: compactJoin([
       policy.name,
       `${countItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
-      blocked ? `${blocked} blocked relaxations` : "",
+      protectedApprovals ? `${protectedApprovals} protected approvals` : "",
     ]),
     reason: "",
     createdAt: event.createdAt,
     details: compactDetails([
       decisionDetail("policy", policy.name),
       decisionDetail("constraints", formatShortList(payload.constraints_applied || payload.constraintsApplied, 5)),
-      decisionDetail("blockedRelaxations", formatShortList(payload.blocked_relaxations || payload.blockedRelaxations, 5), blocked > 0 ? "warning" : "neutral"),
+      decisionDetail("protectedApprovals", formatShortList(payload.protected_approval_requirements || payload.protectedApprovalRequirements, 5), protectedApprovals > 0 ? "warning" : "neutral"),
     ]),
   };
 }

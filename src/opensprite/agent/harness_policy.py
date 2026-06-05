@@ -72,8 +72,8 @@ CHAT_HARNESS_POLICY_REASON = "chat turns default to read-only local context and 
 POLICY_RESOLUTION_METADATA_REASON = (
     "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
 )
-HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON = (
-    "harness approval requirements cannot be relaxed by user settings"
+HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON = (
+    "harness approval requirements remain active in the executable policy"
 )
 
 
@@ -241,7 +241,7 @@ class HarnessPolicyService:
             "harness_executable_policy": harness_executable_policy.to_metadata(),
             "effective_policy": effective_policy.to_metadata(),
             "constraints_applied": _constraints_applied(profile_permission_policy, harness_policy),
-            "blocked_relaxations": _blocked_relaxations(global_policy, profile_permission_policy, harness_executable_policy),
+            "protected_approval_requirements": _protected_approval_requirements(global_policy, profile_permission_policy, harness_executable_policy),
             "reason": POLICY_RESOLUTION_METADATA_REASON,
         }
 
@@ -278,36 +278,23 @@ def _with_profile_denied_tools(policy: HarnessPolicy, harness_profile: HarnessPr
     )
 
 
-def _blocked_relaxations(
+def _protected_approval_requirements(
     global_policy: ToolPermissionPolicy,
     profile_permission_policy: ToolPermissionPolicy | None,
     harness_policy: HarnessPolicy,
 ) -> list[dict[str, Any]]:
-    blocked: list[dict[str, Any]] = []
-    harness_allowed_risks = set(harness_policy.allowed_risk_levels)
-    harness_denied_risks = set(harness_policy.denied_risk_levels)
+    protected: list[dict[str, Any]] = []
     for source, policy in (("global_policy", global_policy), ("profile_override", profile_permission_policy)):
         if policy is None:
             continue
-        policy_allowed = set(policy.allowed_risk_levels)
-        relaxed_risks = sorted((policy_allowed - harness_allowed_risks) | (policy_allowed & harness_denied_risks))
-        if relaxed_risks:
-            blocked.append(
-                {
-                    "source": source,
-                    "field": "allowed_risk_levels",
-                    "blocked_by": "harness_policy",
-                    "risk_levels": relaxed_risks,
-                }
-            )
         if policy.approval_mode == APPROVAL_MODE_AUTO and (harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels):
-            blocked.append(
+            protected.append(
                 {
                     "source": source,
                     "field": "approval_mode",
                     "value": APPROVAL_MODE_AUTO,
-                    "blocked_by": "harness_policy",
-                    "reason": HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON,
+                    "preserved_by": "harness_executable_policy",
+                    "reason": HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON,
                 }
             )
-    return blocked
+    return protected

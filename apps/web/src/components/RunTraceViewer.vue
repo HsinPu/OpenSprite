@@ -763,7 +763,7 @@ function formatPolicyResolution(payload, labels) {
   }
   return compactJoin([
     `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} ${labels.constraints || "constraints"}`,
-    `${countPayloadItems(payload.blocked_relaxations || payload.blockedRelaxations)} ${labels.blockedRelaxations || "blocked relaxations"}`,
+    `${countPayloadItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements)} ${labels.protectedApprovals || "protected approvals"}`,
   ], " · ");
 }
 
@@ -847,7 +847,7 @@ function eventSummary(event) {
     return compactJoin([
       payload.harness_policy?.name || payload.harnessPolicy?.name,
       `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
-      `${countPayloadItems(payload.blocked_relaxations || payload.blockedRelaxations)} blocked relaxations`,
+      `${countPayloadItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements)} protected approvals`,
     ], " · ");
   }
   if (String(event.eventType || "").startsWith("harness_eval.")) {
