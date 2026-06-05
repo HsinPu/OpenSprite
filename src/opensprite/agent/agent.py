@@ -123,7 +123,7 @@ from .tool_registration import (
 )
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
-from .turn_runner import AgentTurnRunner, SourceFallbackMessages
+from .turn_runner import AgentTurnRunner
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .workflow_status import is_workflow_failed_status
 from .worktree import WorktreeSandboxInspector
@@ -749,12 +749,6 @@ class AgentLoop:
             get_queued_outbound_media=self._get_queued_outbound_media,
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
-            source_fallback_messages=lambda: SourceFallbackMessages(
-                intro=self.messages.agent.source_fallback_intro,
-                answer_header=self.messages.agent.source_fallback_answer_header,
-                details_header=self.messages.agent.source_fallback_details_header,
-                sources_header=self.messages.agent.source_fallback_sources_header,
-            ),
             completion_blocker_messages=lambda: CompletionBlockerMessages(
                 intro=self.messages.agent.completion_blocker_intro,
                 reason_prefix=self.messages.agent.completion_blocker_reason_prefix,

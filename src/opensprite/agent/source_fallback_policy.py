@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any, TYPE_CHECKING
 
 from .completion_status import (
@@ -45,12 +44,3 @@ def task_contract_requires_web_sources(contract: Any) -> bool:
         if is_source_acceptance_criterion_kind(getattr(criterion, "kind", None)):
             return True
     return False
-
-
-def clean_source_fallback_snippet(snippet: str) -> str:
-    cleaned = str(snippet or "")
-    cleaned = re.sub(r"\[!\[[^\]]*]\([^)]+\)]\([^)]+\)", "", cleaned)
-    cleaned = re.sub(r"!\[[^\]]*]\([^)]+\)", "", cleaned)
-    cleaned = re.sub(r"\[([^\]]+)]\((https?://[^)]+)\)", r"\1", cleaned)
-    cleaned = re.sub(r"https?://\S+", "", cleaned)
-    return " ".join(cleaned.split())

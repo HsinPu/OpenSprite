@@ -61,7 +61,7 @@ from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
-from .source_fallback_policy import clean_source_fallback_snippet, source_fallback_allowed
+from .source_fallback_policy import source_fallback_allowed
 from .source_fallback_ranking import rank_web_sources_for_objective, web_source_relevance_score
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
@@ -117,14 +117,6 @@ class TurnPassEvaluation:
     collected_workflow_outcomes: tuple[dict[str, Any], ...]
 
 
-@dataclass(frozen=True)
-class SourceFallbackMessages:
-    intro: str
-    answer_header: str
-    details_header: str
-    sources_header: str
-
-
 class AgentTurnRunner:
     """Runs user-turn branches after inbound turn input is prepared."""
 
@@ -152,7 +144,6 @@ class AgentTurnRunner:
         get_queued_outbound_media: Callable[[], dict[str, list[str]]],
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
-        source_fallback_messages: Callable[[], SourceFallbackMessages],
         completion_blocker_messages: Callable[[], CompletionBlockerMessages],
         format_log_preview: Callable[..., str],
         set_session_overlay_id: Callable[[str, dict[str, Any] | None, str | None, str | None], None],
@@ -191,7 +182,6 @@ class AgentTurnRunner:
         self._get_queued_outbound_media = get_queued_outbound_media
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
-        self._source_fallback_messages = source_fallback_messages
         self._completion_blocker_messages = completion_blocker_messages
         self._format_log_preview = format_log_preview
         self._set_session_overlay_id = set_session_overlay_id
@@ -929,12 +919,97 @@ class AgentTurnRunner:
                 )
             break
 
+        ran_source_finalization = False
+        if _source_finalization_available(completion_result, aggregate_result):
+            finalization_prompt = self.auto_continue.build_prompt(
+                task_intent=task_intent,
+                completion_result=completion_result,
+                previous_response=response,
+                compaction_handoff=aggregate_result.compaction_handoff,
+                harness_profile=harness_profile,
+                execution_result=aggregate_result,
+                allow_tools=False,
+            )
+            finalization_result = await self._call_llm(
+                turn.session_id,
+                current_message=finalization_prompt,
+                channel=turn.channel,
+                user_images=[],
+                user_image_files=[],
+                user_audio_files=[],
+                user_video_files=[],
+                external_chat_id=turn.external_chat_id,
+                emit_tool_progress=True,
+                task_intent=task_intent,
+                allow_tools=False,
+                task_contract_override=aggregate_result.task_contract,
+            )
+            finalization_result = self._apply_runtime_progress(
+                finalization_result,
+                self.turn_context.snapshot_work_progress(),
+            )
+            execution_results.append(finalization_result)
+            response = finalization_result.content
+            aggregate_result = self._aggregate_execution_results(execution_results, content=response)
+            ran_source_finalization = True
+        if ran_source_finalization or response != aggregate_result.content:
+            aggregate_result.content = response
+            completion_result = await self._evaluate_completion(
+                task_intent=task_intent,
+                response_text=response,
+                execution_result=aggregate_result,
+            )
+            completion_metadata = self._completion_metadata(
+                completion_result,
+                auto_continue_attempts=auto_continue_attempts,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                COMPLETION_GATE_EVALUATED_EVENT,
+                completion_metadata,
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            work_progress = self.work_progress.evaluate(
+                task_intent=task_intent,
+                completion_result=completion_result,
+                execution_result=aggregate_result,
+                auto_continue_attempts=auto_continue_attempts,
+                pass_index=len(execution_results),
+                harness_profile=harness_profile,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                WORK_PROGRESS_UPDATED_EVENT,
+                work_progress.to_metadata(),
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            final_harness_scorecard = _harness_scorecard_metadata(
+                harness_profile=harness_profile,
+                aggregate_result=aggregate_result,
+                completion_result=completion_result,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                HARNESS_SCORECARD_RECORDED_EVENT,
+                final_harness_scorecard,
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            await self.run_trace.record_harness_scorecard_part(
+                turn.session_id,
+                run_id,
+                final_harness_scorecard,
+            )
+
         response = _final_response_after_exhausted_continuation(
             response=response,
             completion_result=completion_result,
             auto_continue_attempts=auto_continue_attempts,
-            execution_result=aggregate_result,
-            source_fallback_messages=self._source_fallback_messages(),
             completion_blocker_messages=self._completion_blocker_messages(),
         )
         if response != aggregate_result.content:
@@ -1483,13 +1558,8 @@ def _final_response_after_exhausted_continuation(
     response: str,
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
-    source_fallback_messages: SourceFallbackMessages,
     completion_blocker_messages: CompletionBlockerMessages,
-    execution_result: ExecutionResult | None = None,
 ) -> str:
-    source_fallback = _source_fallback_response(completion_result, execution_result, source_fallback_messages)
-    if source_fallback:
-        return source_fallback
     if not _should_replace_nonfinal_response(
         response=response,
         completion_result=completion_result,
@@ -1527,15 +1597,21 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
     return f"{message}\n\n[Runtime context]\n" + "\n".join(f"- {line}" for line in context_lines)
 
 
-def _source_fallback_response(
+def _source_finalization_available(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult | None,
-    messages: SourceFallbackMessages,
-) -> str:
+) -> bool:
+    return bool(_source_finalization_sources(completion_result, execution_result))
+
+
+def _source_finalization_sources(
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult | None,
+) -> list[dict[str, Any]]:
     if execution_result is None:
-        return ""
+        return []
     if not source_fallback_allowed(completion_result, execution_result):
-        return ""
+        return []
     evidence_urls = _completion_evidence_urls(completion_result)
     objective = _execution_objective(execution_result)
     sources = _merge_web_sources(
@@ -1546,41 +1622,13 @@ def _source_fallback_response(
         ),
     )
     if not sources:
-        return ""
+        return []
     sources = rank_web_sources_for_objective(sources, objective)
     if execution_result.had_tool_error:
         top_score = web_source_relevance_score(sources[0], objective) if sources else 0
         if top_score <= 0:
-            return ""
-
-    answer_lines = _source_fallback_answer_lines(sources, evidence_urls, objective)
-    detail_lines: list[str] = []
-    source_lines: list[str] = []
-    for index, source in enumerate(sources[:4], start=1):
-        title = str(source.get("title") or "").strip() or str(source.get("url") or "").strip()
-        url = str(source.get("url") or "").strip()
-        snippet = _source_fallback_snippet(source, evidence_urls)
-        if snippet:
-            detail_lines.append(f"{index}. {title}: {snippet[:280]}")
-        else:
-            detail_lines.append(f"{index}. {title}")
-        source_lines.append(f"{index}. {url}")
-
-    sections = []
-    if answer_lines:
-        sections.append(
-            f"{messages.answer_header}\n"
-            + "\n".join(f"{index}. {line}" for index, line in enumerate(answer_lines, start=1))
-        )
-    else:
-        sections.append(messages.intro)
-    sections.extend(
-        [
-            f"{messages.details_header}\n" + "\n".join(detail_lines),
-            f"{messages.sources_header}\n" + "\n".join(source_lines),
-        ]
-    )
-    return "\n\n".join(sections)
+            return []
+    return sources
 
 
 def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:
@@ -1690,56 +1738,9 @@ def _web_sources_matching_base_url_context(
     return sources
 
 
-def _source_fallback_snippet(source: dict[str, Any], evidence_urls: tuple[str, ...]) -> str:
-    raw_text = str(source.get("snippet") or source.get("content") or "")
-    if not raw_text:
-        return ""
-    for evidence_url in evidence_urls:
-        index = raw_text.find(evidence_url)
-        if index < 0:
-            continue
-        start = max(0, index - 140)
-        end = min(len(raw_text), index + len(evidence_url) + 140)
-        return " ".join(raw_text[start:end].split())
-    return clean_source_fallback_snippet(raw_text)
-
-
-def _source_fallback_answer_lines(
-    sources: list[dict[str, Any]],
-    evidence_urls: tuple[str, ...],
-    objective: str,
-) -> list[str]:
-    answer_lines: list[str] = []
-    for evidence_url in evidence_urls:
-        for source in sources:
-            haystack = str(source.get("snippet") or source.get("content") or "")
-            if evidence_url not in haystack:
-                continue
-            answer_lines.append(_source_fallback_answer_line(evidence_url, source, objective))
-            break
-    if not answer_lines and _objective_requests_base_url(objective):
-        answer_lines.extend(
-            _source_fallback_answer_line(candidate, source, objective)
-            for candidate, source in _preferred_base_url_candidate_sources(sources, objective)
-        )
-    return list(dict.fromkeys(answer_lines))[:3]
-
-
-def _source_fallback_answer_line(answer: str, source: dict[str, Any], objective: str) -> str:
-    source_url = str(source.get("url") or "").strip()
-    if source_url and _objective_requests_source_url(objective):
-        return f"{answer} (source: {source_url})"
-    return answer
-
-
 def _objective_requests_base_url(objective: str) -> bool:
     text = str(objective or "").lower()
     return "base url" in text or "base_url" in text or "api base" in text
-
-
-def _objective_requests_source_url(objective: str) -> bool:
-    text = str(objective or "").lower()
-    return "source" in text or "citation" in text or "來源" in str(objective or "") or "引用" in str(objective or "")
 
 
 def _source_base_url_candidates(sources: list[dict[str, Any]]) -> list[str]:
@@ -1754,38 +1755,6 @@ def _source_base_url_candidates(sources: list[dict[str, Any]]) -> list[str]:
                 continue
             candidates.append(_clean_extracted_url(match.group(0)))
     return candidates
-
-
-def _preferred_base_url_candidates(candidates: list[str], objective: str) -> list[str]:
-    if "openrouter" not in str(objective or "").lower():
-        return candidates
-    official = [url for url in candidates if _url_domain(url) == "openrouter.ai"]
-    return official or candidates
-
-
-def _preferred_base_url_candidate_sources(
-    sources: list[dict[str, Any]],
-    objective: str,
-) -> list[tuple[str, dict[str, Any]]]:
-    pairs: list[tuple[str, dict[str, Any]]] = []
-    for source in sources:
-        pairs.extend((candidate, source) for candidate in _source_base_url_candidates([source]))
-    if "openrouter" in str(objective or "").lower():
-        official_pairs = [(candidate, source) for candidate, source in pairs if _url_domain(candidate) == "openrouter.ai"]
-        if official_pairs:
-            pairs = official_pairs
-    seen_candidates: set[str] = set()
-    unique_pairs: list[tuple[str, dict[str, Any]]] = []
-    for candidate, source in pairs:
-        if candidate in seen_candidates:
-            continue
-        seen_candidates.add(candidate)
-        unique_pairs.append((candidate, source))
-    return unique_pairs
-
-
-def _url_domain(url: str) -> str:
-    return re.sub(r"^https?://", "", str(url or "").lower()).split("/", 1)[0].removeprefix("www.")
 
 
 def _extract_urls(text: str) -> list[str]:

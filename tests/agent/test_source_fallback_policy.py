@@ -1,7 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.source_fallback_policy import (
-    clean_source_fallback_snippet,
     source_fallback_allowed,
     task_contract_requires_web_sources,
 )
@@ -53,9 +52,3 @@ def test_source_fallback_policy_detects_source_requirements_and_criteria():
             acceptance_criteria=(AcceptanceCriterion(kind="source_reference"),),
         )
     )
-
-
-def test_clean_source_fallback_snippet_removes_embedded_links():
-    snippet = "[![](/ad.gif)](https://example.com/ad) [Docs](https://example.com/docs) keep this https://example.com/raw"
-
-    assert clean_source_fallback_snippet(snippet) == "Docs keep this"

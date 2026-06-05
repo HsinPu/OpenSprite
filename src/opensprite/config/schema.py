@@ -192,10 +192,6 @@ class AgentMessagesConfig(BaseModel):
         "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。\n\n"
         "最後一次工具錯誤：\n{result}"
     )
-    source_fallback_intro: str = "根據已取得來源，以下是可交付的重點整理。"
-    source_fallback_answer_header: str = "重點答案："
-    source_fallback_details_header: str = "重點摘要："
-    source_fallback_sources_header: str = "來源："
     completion_blocker_intro: str = "目前還不能可靠完成這次請求。"
     completion_blocker_reason_prefix: str = "原因："
     completion_blocker_detail_header: str = "仍缺的部分："
