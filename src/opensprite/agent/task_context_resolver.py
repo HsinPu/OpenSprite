@@ -289,7 +289,7 @@ def _build_llm_prompt(
     deterministic: TaskContextDecision,
 ) -> str:
     context = {
-        "current_message": _truncate(current_message, 600),
+        "current_message": _truncate_middle(current_message, 600),
         "task_intent": task_intent.to_metadata() if task_intent is not None else None,
         "recent_history": _recent_history(history),
         "active_task": _truncate(active_task, 1800),
@@ -549,6 +549,19 @@ def _truncate(value: str | None, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 3].rstrip() + "..."
+
+
+def _truncate_middle(value: str | None, max_chars: int) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_chars:
+        return text
+    if max_chars <= 20:
+        return _truncate(text, max_chars)
+    marker = "\n... [middle omitted] ...\n"
+    remaining = max_chars - len(marker)
+    head_chars = max(1, remaining // 2)
+    tail_chars = max(1, remaining - head_chars)
+    return f"{text[:head_chars].rstrip()}{marker}{text[-tail_chars:].lstrip()}"
 
 
 __all__ = ["TaskContextDecision", "TaskContextResolver"]

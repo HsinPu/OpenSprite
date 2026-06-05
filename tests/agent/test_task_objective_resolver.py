@@ -8,6 +8,7 @@ from opensprite.agent.task_objective_resolver import (
     LLM_RESOLVED_TASK_OBJECTIVE_REASON,
     OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
     TaskObjectiveResolver,
+    _build_llm_prompt,
 )
 from opensprite.config import Config
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
@@ -15,6 +16,25 @@ from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
 def _resolver() -> TaskObjectiveResolver:
     return TaskObjectiveResolver(Config.load_agent_template_config().task_objective_llm)
+
+
+def test_objective_prompt_preserves_tail_of_long_current_message():
+    filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(60))
+    message = f"{filler}\n最後一句才是任務：只回覆通關詞 EPSILON-864。"
+
+    prompt = _build_llm_prompt(
+        current_message=message,
+        history=[],
+        task_intent=None,
+        task_context_decision=None,
+        active_task="",
+        work_state_summary="",
+    )
+
+    assert "背景0" in prompt
+    assert "... [middle omitted] ..." in prompt
+    assert "最後一句才是任務" in prompt
+    assert "EPSILON-864" in prompt
 
 
 class _JsonProvider:

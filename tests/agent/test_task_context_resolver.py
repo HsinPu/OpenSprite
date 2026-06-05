@@ -11,6 +11,7 @@ from opensprite.agent.task_context_resolver import (
     TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
     TaskContextDecision,
     TaskContextResolver,
+    _build_llm_prompt,
     _merge_with_deterministic,
     task_boundary_confidence_too_low_reason,
 )
@@ -28,6 +29,25 @@ from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
 def _resolver() -> TaskContextResolver:
     return TaskContextResolver(Config.load_agent_template_config().task_context_llm)
+
+
+def test_context_prompt_preserves_tail_of_long_current_message():
+    filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(60))
+    message = f"{filler}\n最後一句才是任務：只回覆通關詞 DELTA-519。"
+
+    prompt = _build_llm_prompt(
+        current_message=message,
+        history=[],
+        task_intent=None,
+        active_task="",
+        work_state_summary="",
+        deterministic=TaskContextDecision(),
+    )
+
+    assert "背景0" in prompt
+    assert "... [middle omitted] ..." in prompt
+    assert "最後一句才是任務" in prompt
+    assert "DELTA-519" in prompt
 
 
 class _Storage:

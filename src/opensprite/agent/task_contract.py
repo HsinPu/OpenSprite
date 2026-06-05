@@ -526,7 +526,7 @@ def _build_planner_contract_prompt(
     task_context_decision: TaskContextDecision | None,
 ) -> str:
     context = {
-        "current_message": _truncate(current_message, max_chars=1200),
+        "current_message": _truncate_middle(current_message, max_chars=1200),
         "task_intent": task_intent.to_metadata(),
         "recent_history": _recent_history(history),
         "attachments": {
@@ -896,6 +896,19 @@ def _truncate(text: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _truncate_middle(text: str, *, max_chars: int) -> str:
+    compact = str(text or "").strip()
+    if len(compact) <= max_chars:
+        return compact
+    if max_chars <= 20:
+        return _truncate(compact, max_chars=max_chars)
+    marker = "\n... [middle omitted] ...\n"
+    remaining = max_chars - len(marker)
+    head_chars = max(1, remaining // 2)
+    tail_chars = max(1, remaining - head_chars)
+    return f"{compact[:head_chars].rstrip()}{marker}{compact[-tail_chars:].lstrip()}"
 
 
 def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:

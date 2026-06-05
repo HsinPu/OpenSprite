@@ -12,6 +12,7 @@ from opensprite.agent.task_contract import (
     TaskContract,
     VERIFICATION_OR_GAP_CRITERION_KIND,
     WORKSPACE_LOCATION_CRITERION_KIND,
+    _build_planner_contract_prompt,
     _contract_from_planner_payload,
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
@@ -30,6 +31,7 @@ from opensprite.agent.task_contract import (
     is_workspace_location_criterion,
     missing_evidence,
 )
+from opensprite.agent.task_intent import TaskIntent
 from opensprite.tools.evidence import ToolEvidence
 
 
@@ -63,6 +65,26 @@ def test_planner_fallback_reasons_are_centralized():
     )
 
     assert validated_contract.planner_metadata["reason"] == PLANNER_VALIDATED_REASON
+
+
+def test_planner_prompt_preserves_tail_of_long_current_message():
+    filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(80))
+    message = f"{filler}\n最後一句才是任務：只回覆通關詞 GAMMA-772。"
+
+    prompt = _build_planner_contract_prompt(
+        current_message=message,
+        history=[],
+        task_intent=TaskIntent(kind="question", objective="long context stress test"),
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert "背景0" in prompt
+    assert "... [middle omitted] ..." in prompt
+    assert "最後一句才是任務" in prompt
+    assert "GAMMA-772" in prompt
 
 
 def test_planner_tool_group_aliases_are_normalized_without_duplicates():
