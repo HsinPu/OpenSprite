@@ -92,7 +92,7 @@ class ToolAccessResolver:
         policies = [global_policy]
         if profile_permission_policy is not None:
             policies.append(profile_permission_policy)
-        policies.append(harness_policy.to_permission_policy())
+        policies.append(harness_policy.to_executable_permission_policy())
         effective_policy = CompositeToolPermissionPolicy(*policies)
         metadata = self._harness_policies.policy_resolution_metadata(
             global_policy,

@@ -70,7 +70,7 @@ OPERATIONS_HARNESS_POLICY_REASON = (
 )
 CHAT_HARNESS_POLICY_REASON = "chat turns default to read-only local context and avoid external side effects"
 POLICY_RESOLUTION_METADATA_REASON = (
-    "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy"
+    "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
 )
 HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON = (
     "harness approval requirements cannot be relaxed by user settings"
@@ -92,13 +92,26 @@ class HarnessPolicy:
     reason: str = ""
 
     def to_permission_policy(self) -> ToolPermissionPolicy:
-        """Build the executable tool permission policy for this harness turn."""
+        """Build the guidance permission policy described by this harness turn."""
         approval_mode = APPROVAL_MODE_ASK if self.approval_required_tools or self.approval_required_risk_levels else None
         return ToolPermissionPolicy(
             allowed_tools=list(self.allowed_tools),
             denied_tools=list(self.denied_tools),
             allowed_risk_levels=list(self.allowed_risk_levels),
             denied_risk_levels=list(self.denied_risk_levels),
+            approval_mode=approval_mode,
+            approval_required_tools=list(self.approval_required_tools),
+            approval_required_risk_levels=list(self.approval_required_risk_levels),
+        )
+
+    def to_executable_permission_policy(self) -> ToolPermissionPolicy:
+        """Build the executable harness policy without profile scope restrictions."""
+        approval_mode = APPROVAL_MODE_ASK if self.approval_required_tools or self.approval_required_risk_levels else None
+        return ToolPermissionPolicy(
+            allowed_tools=["*"],
+            denied_tools=list(self.denied_tools),
+            allowed_risk_levels=list(ALL_RISK_LEVELS_ORDER),
+            denied_risk_levels=[],
             approval_mode=approval_mode,
             approval_required_tools=list(self.approval_required_tools),
             approval_required_risk_levels=list(self.approval_required_risk_levels),
@@ -217,16 +230,18 @@ class HarnessPolicyService:
     ) -> dict[str, Any]:
         """Explain how the final executable permission policy was resolved."""
         profile_metadata = profile_permission_policy.to_metadata() if profile_permission_policy is not None else None
-        harness_permission_policy = harness_policy.to_permission_policy()
+        harness_guidance_policy = harness_policy.to_permission_policy()
+        harness_executable_policy = harness_policy.to_executable_permission_policy()
         return {
             "schema_version": 1,
             "global_policy": global_policy.to_metadata(),
             "profile_override": profile_metadata,
             "harness_policy": harness_policy.to_metadata(),
-            "harness_permission_policy": harness_permission_policy.to_metadata(),
+            "harness_guidance_policy": harness_guidance_policy.to_metadata(),
+            "harness_executable_policy": harness_executable_policy.to_metadata(),
             "effective_policy": effective_policy.to_metadata(),
             "constraints_applied": _constraints_applied(profile_permission_policy, harness_policy),
-            "blocked_relaxations": _blocked_relaxations(global_policy, profile_permission_policy, harness_policy),
+            "blocked_relaxations": _blocked_relaxations(global_policy, profile_permission_policy, harness_executable_policy),
             "reason": POLICY_RESOLUTION_METADATA_REASON,
         }
 
@@ -234,12 +249,11 @@ class HarnessPolicyService:
 def _constraints_applied(profile_permission_policy: ToolPermissionPolicy | None, harness_policy: HarnessPolicy) -> list[str]:
     constraints = [
         "global permission policy",
-        f"harness policy: {harness_policy.name}",
+        f"harness guidance: {harness_policy.name}",
+        "harness executable policy",
     ]
     if profile_permission_policy is not None:
         constraints.insert(1, "profile permission override")
-    if harness_policy.denied_risk_levels:
-        constraints.append("harness denied risk levels")
     if harness_policy.denied_tools:
         constraints.append("harness denied tools")
     if harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels:

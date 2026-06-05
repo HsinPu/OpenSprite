@@ -43,16 +43,16 @@ def test_tool_access_resolver_returns_constrained_registry_and_metadata():
 
     resolution = ToolAccessResolver().resolve(_registry(), harness_policy)
 
-    assert resolution.registry.tool_names == ["read_file", "batch"]
+    assert resolution.registry.tool_names == ["read_file", "web_search", "apply_patch", "task_update", "batch"]
     assert resolution.registry.permission_policy is resolution.effective_policy
     assert resolution.registry.permission_resolution_metadata == resolution.metadata
     assert resolution.metadata["harness_policy"]["name"] == "chat_read_policy"
     assert resolution.metadata["effective_policy"]["kind"] == "composite"
+    assert resolution.metadata["harness_guidance_policy"]["allowed_risk_levels"] == ["read"]
+    assert set(resolution.metadata["harness_executable_policy"]["allowed_risk_levels"]) >= {"read", "network", "write"}
     assert resolution.metadata["tool_access"]["registered_tool_count"] == 5
-    assert resolution.metadata["tool_access"]["exposed_tools"] == ["read_file", "batch"]
-    blocked = {item["name"]: item for item in resolution.metadata["tool_access"]["blocked_tools"]}
-    assert blocked["web_search"]["reason"] == "risk level(s) denied: network"
-    assert blocked["task_update"]["reason"] == "risk level(s) denied: memory, write"
+    assert resolution.metadata["tool_access"]["exposed_tools"] == ["read_file", "web_search", "apply_patch", "task_update", "batch"]
+    assert resolution.metadata["tool_access"]["blocked_tools"] == []
 
 
 def test_tool_access_resolver_composes_profile_override_with_harness_policy():

@@ -84,7 +84,7 @@ def test_harness_policy_reasons_are_stable():
     )
     assert CHAT_HARNESS_POLICY_REASON == "chat turns default to read-only local context and avoid external side effects"
     assert POLICY_RESOLUTION_METADATA_REASON == (
-        "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy"
+        "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
     )
     assert HARNESS_APPROVAL_RELAXATION_BLOCKED_REASON == (
         "harness approval requirements cannot be relaxed by user settings"
@@ -268,7 +268,7 @@ def test_media_policy_allows_media_tools_without_workspace_writes():
     assert permission_policy.is_tool_exposed("edit_file") is False
 
 
-def test_harness_policy_filters_tool_registry_for_research_turns():
+def test_harness_policy_guides_research_turns_without_filtering_global_permissions():
     registry = ToolRegistry()
     for name in ("read_file", "web_search", "web_fetch", "edit_file", "verify"):
         registry.register(DummyTool(name))
@@ -276,14 +276,17 @@ def test_harness_policy_filters_tool_registry_for_research_turns():
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
 
+    guidance_policy = policy.to_permission_policy()
+    assert guidance_policy.is_tool_exposed("web_search") is True
+    assert guidance_policy.is_tool_exposed("edit_file") is False
     assert "read_file" in filtered.tool_names
     assert "web_search" in filtered.tool_names
     assert "web_fetch" in filtered.tool_names
-    assert "edit_file" not in filtered.tool_names
-    assert "verify" not in filtered.tool_names
+    assert "edit_file" in filtered.tool_names
+    assert "verify" in filtered.tool_names
 
 
-def test_chat_harness_policy_uses_declared_read_only_tool_metadata():
+def test_chat_harness_policy_guidance_uses_declared_read_only_tool_metadata():
     registry = ToolRegistry()
     registry.register(DummyTool("custom_read", risk_levels=frozenset({"read"})))
     registry.register(DummyTool("custom_unknown"))
@@ -292,10 +295,14 @@ def test_chat_harness_policy_uses_declared_read_only_tool_metadata():
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
 
-    assert filtered.tool_names == ["custom_read"]
+    guidance_policy = policy.to_permission_policy()
+    assert guidance_policy.is_tool_exposed("custom_read", tool_risk_levels=frozenset({"read"})) is True
+    assert guidance_policy.is_tool_exposed("custom_unknown") is False
+    assert guidance_policy.is_tool_exposed("task_update") is False
+    assert filtered.tool_names == ["custom_read", "custom_unknown", "task_update"]
     assert filtered.get("custom_read") is not None
-    assert filtered.get("custom_unknown") is None
-    assert filtered.get("task_update") is None
+    assert filtered.get("custom_unknown") is not None
+    assert filtered.get("task_update") is not None
 
 
 def test_profile_permission_override_is_composed_with_harness_policy():
@@ -357,37 +364,37 @@ def _filtered_tool_names(profile: HarnessProfile) -> set[str]:
     return set(HarnessPolicyService().build_tool_registry(_registry_for_permission_baseline(), policy).tool_names)
 
 
-def test_permission_baseline_chat_profile_exposes_only_read_context_tools():
+def test_permission_baseline_chat_profile_keeps_global_tool_access():
     tool_names = _filtered_tool_names(HarnessProfile(name="chat", task_type="question"))
 
     assert {"read_file", "list_dir"}.issubset(tool_names)
-    assert "web_search" not in tool_names
-    assert "web_fetch" not in tool_names
-    assert "web_research" not in tool_names
-    assert "apply_patch" not in tool_names
-    assert "exec" not in tool_names
-    assert "task_update" not in tool_names
-    assert "configure_mcp" not in tool_names
+    assert "web_search" in tool_names
+    assert "web_fetch" in tool_names
+    assert "web_research" in tool_names
+    assert "apply_patch" in tool_names
+    assert "exec" in tool_names
+    assert "task_update" in tool_names
+    assert "configure_mcp" in tool_names
 
 
-def test_permission_baseline_research_profile_exposes_web_but_not_mutation_tools():
+def test_permission_baseline_research_profile_keeps_global_tool_access():
     tool_names = _filtered_tool_names(HarnessProfile(name="research", task_type="web_research"))
 
     assert {"read_file", "web_search", "web_fetch", "web_research"}.issubset(tool_names)
-    assert "apply_patch" not in tool_names
-    assert "exec" not in tool_names
-    assert "task_update" not in tool_names
-    assert "configure_mcp" not in tool_names
+    assert "apply_patch" in tool_names
+    assert "exec" in tool_names
+    assert "task_update" in tool_names
+    assert "configure_mcp" in tool_names
 
 
-def test_permission_baseline_workspace_analysis_profile_hides_task_update():
+def test_permission_baseline_workspace_analysis_profile_keeps_global_tool_access():
     tool_names = _filtered_tool_names(HarnessProfile(name="coding", task_type="workspace_analysis"))
 
     assert {"read_file", "list_dir", "web_search", "web_fetch", "delegate"}.issubset(tool_names)
-    assert "apply_patch" not in tool_names
-    assert "exec" not in tool_names
-    assert "task_update" not in tool_names
-    assert "configure_mcp" not in tool_names
+    assert "apply_patch" in tool_names
+    assert "exec" in tool_names
+    assert "task_update" in tool_names
+    assert "configure_mcp" in tool_names
 
 
 def test_permission_baseline_workspace_change_profile_allows_writes_and_asks_for_configuration():
