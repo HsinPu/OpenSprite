@@ -48,6 +48,7 @@ def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
 
     assert "幫我確認目前服務 healthz 是否正常" in message
     assert "http://127.0.0.1:8765" in message
+    assert "http://127.0.0.1:8765/healthz" in message
     assert "`repo/`" in message
     assert "omit VCS internals" in message
 

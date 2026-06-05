@@ -31,6 +31,7 @@ from ..runs.events import (
     WORK_PROGRESS_UPDATED_EVENT,
 )
 from ..utils.log import logger
+from ..utils.url import join_url_path
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_blocker_policy import CompletionBlockerMessages, completion_blocker_response
@@ -1504,9 +1505,10 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
     context_lines: list[str] = []
     gateway_url = str(data.get("gateway_url") or "").strip()
     if gateway_url:
+        health_url = join_url_path(gateway_url, "/healthz")
         context_lines.append(
             f"OpenSprite CLI is connected to the Web gateway at {gateway_url}; "
-            "use that URL for questions about the current gateway or health endpoint."
+            f"use {health_url} for health endpoint checks."
         )
     snapshot = data.get("workspace_snapshot")
     if isinstance(snapshot, dict):
