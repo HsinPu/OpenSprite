@@ -190,7 +190,7 @@ flowchart TD
 
 目前流程是：
 
-1. `TaskPlanner.plan()` 收到 `TaskIntent`、目前訊息、history、媒體資訊、tool registry。
+1. `TaskPlanner.plan()` 收到 fallback objective、目前訊息、history、媒體資訊、tool registry。
 2. `build_planner_capability_catalog()` 從目前註冊的工具動態建立 capability catalog。
 3. Planner prompt 把能力清單交給 LLM。
 4. LLM 回 JSON。

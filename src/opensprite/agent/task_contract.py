@@ -236,7 +236,7 @@ class TaskPlanner:
         provider: Any,
         model: str | None,
         tool_registry: Any | None = None,
-        task_intent: TaskIntent | None,
+        fallback_objective: str = "",
         current_message: str,
         history: list[dict[str, Any]] | None,
         current_image_files: list[str] | None = None,
@@ -246,7 +246,7 @@ class TaskPlanner:
     ) -> TaskContract:
         if is_unconfigured_llm(provider, model):
             return _planner_blocked_contract(
-                objective=_fallback_objective(task_intent, current_message),
+                objective=_fallback_objective(fallback_objective, current_message),
                 reason=PLANNER_UNAVAILABLE_REASON,
             )
         capability_catalog = build_planner_capability_catalog(tool_registry)
@@ -270,7 +270,7 @@ class TaskPlanner:
             )
         except Exception as exc:
             return _planner_blocked_contract(
-                objective=_fallback_objective(task_intent, current_message),
+                objective=_fallback_objective(fallback_objective, current_message),
                 reason=_planner_exception_reason(exc),
             )
         response_text = str(getattr(response, "content", "") or "")
@@ -296,7 +296,7 @@ class TaskPlanner:
                 )
             except Exception as exc:
                 return _planner_blocked_contract(
-                    objective=_fallback_objective(task_intent, current_message),
+                    objective=_fallback_objective(fallback_objective, current_message),
                     reason=_planner_exception_reason(exc),
                     raw_response_preview=_truncate(response_text, max_chars=400),
                 )
@@ -306,14 +306,14 @@ class TaskPlanner:
                 response_text = repair_text or response_text
         if not payload:
             return _planner_blocked_contract(
-                objective=_fallback_objective(task_intent, current_message),
+                objective=_fallback_objective(fallback_objective, current_message),
                 status=PLANNER_INVALID_STATUS,
                 reason=PLANNER_INVALID_JSON_REASON,
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
         return _contract_from_task_planner_payload(
             payload,
-            task_intent=task_intent,
+            fallback_objective=fallback_objective,
             current_message=current_message,
             history=history,
             current_image_files=current_image_files,
@@ -629,23 +629,23 @@ def _planner_exception_reason(exc: Exception) -> str:
     return f"task planner LLM call failed: {error_type}"
 
 
-def _fallback_objective(task_intent: TaskIntent | None, current_message: str | None) -> str:
-    return str(getattr(task_intent, "objective", "") or current_message or "").strip()
+def _fallback_objective(fallback_objective: str | None, current_message: str | None) -> str:
+    return str(fallback_objective or current_message or "").strip()
 
 
 def _planner_objective(
     payload: dict[str, Any],
-    task_intent: TaskIntent | None,
+    fallback_objective: str | None,
     current_message: str | None,
 ) -> str:
     objective = _compact(payload.get("objective"))
-    return objective or _fallback_objective(task_intent, current_message)
+    return objective or _fallback_objective(fallback_objective, current_message)
 
 
 def _contract_from_task_planner_payload(
     payload: dict[str, Any],
     *,
-    task_intent: TaskIntent | None,
+    fallback_objective: str = "",
     current_message: str,
     history: list[dict[str, Any]] | None,
     current_image_files: list[str] | None,
@@ -655,7 +655,7 @@ def _contract_from_task_planner_payload(
     capability_catalog: PlannerCapabilityCatalog | None = None,
 ) -> TaskContract:
     catalog = capability_catalog or build_planner_capability_catalog()
-    objective = _planner_objective(payload, task_intent, current_message)
+    objective = _planner_objective(payload, fallback_objective, current_message)
     resource_index = ResourceIndex.from_turn_and_history(
         current_message=current_message,
         history=history,

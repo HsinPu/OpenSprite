@@ -241,7 +241,7 @@ async def test_task_planner_builds_web_contract_from_llm_json():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -269,7 +269,7 @@ async def test_task_planner_builds_workspace_change_contract_from_llm_json():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -295,7 +295,7 @@ async def test_task_planner_builds_scheduling_contract_from_llm_json():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -322,7 +322,7 @@ async def test_task_planner_builds_execution_contract_from_llm_json():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -349,7 +349,7 @@ async def test_task_planner_honors_pure_answer_for_command_version_payload():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[{"role": "assistant", "content": "`git --version` -> git version 2.47.0.windows.1"}],
     )
@@ -378,7 +378,7 @@ async def test_task_planner_honors_workspace_read_for_repository_status_payload(
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=message,
         history=[],
     )
@@ -408,7 +408,7 @@ async def test_task_planner_keeps_current_cli_usage_with_workspace_when_reading_
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=message,
         history=[],
     )
@@ -436,7 +436,7 @@ async def test_task_planner_keeps_workspace_read_when_planner_requires_it():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=message,
         history=[],
     )
@@ -464,7 +464,7 @@ async def test_task_planner_does_not_override_workspace_change_for_command_usage
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=message,
         history=[],
     )
@@ -484,7 +484,7 @@ async def test_task_planner_blocks_web_request_when_planner_json_is_invalid():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -504,7 +504,7 @@ async def test_task_planner_blocks_when_llm_call_fails():
     contract = await planner.plan(
         provider=_FailingPlannerProvider(),
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -525,7 +525,7 @@ async def test_task_planner_blocks_workspace_request_when_planner_json_is_invali
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -557,7 +557,7 @@ async def test_task_planner_repairs_invalid_json_with_second_llm_call():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )
@@ -577,7 +577,7 @@ async def test_task_planner_blocks_plain_request_when_planner_json_is_invalid():
     contract = await planner.plan(
         provider=provider,
         model="planner-model",
-        task_intent=intent,
+        fallback_objective=intent.objective,
         current_message=intent.objective,
         history=[],
     )

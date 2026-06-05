@@ -32,7 +32,6 @@ from opensprite.agent.task_contract import (
     missing_evidence,
 )
 from opensprite.agent.planner_capabilities import build_planner_capability_catalog
-from opensprite.agent.task_intent import TaskIntent
 from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.registry import ToolRegistry
@@ -83,7 +82,7 @@ def test_planner_fallback_reasons_are_centralized():
 
     contract = _contract_from_task_planner_payload(
         {"task_type": "not_allowed"},
-        task_intent=type("Intent", (), {"objective": "Plan this"})(),
+        fallback_objective="Plan this",
         current_message="Plan this",
         history=None,
         current_image_files=None,
@@ -96,7 +95,7 @@ def test_planner_fallback_reasons_are_centralized():
 
     validated_contract = _contract_from_task_planner_payload(
         {"task_type": "pure_answer"},
-        task_intent=type("Intent", (), {"objective": "Answer this"})(),
+        fallback_objective="Answer this",
         current_message="Answer this",
         history=None,
         current_image_files=None,
@@ -178,7 +177,7 @@ def test_task_planner_payload_objective_replaces_input_fallback():
             "task_type": "pure_answer",
             "required_tool_groups": [],
         },
-        task_intent=TaskIntent(kind="task", objective="Fallback objective"),
+        fallback_objective="Fallback objective",
         current_message="Fallback message",
         history=None,
         current_image_files=None,
@@ -208,7 +207,7 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
             "allow_no_tool_final": False,
             "reason": "The available market_data capability can gather quote evidence.",
         },
-        task_intent=TaskIntent(kind="question", objective="Find the current TSMC quote."),
+        fallback_objective="Find the current TSMC quote.",
         current_message="Find the current TSMC quote.",
         history=None,
         current_image_files=None,

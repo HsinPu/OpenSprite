@@ -322,7 +322,7 @@ class LlmCallService:
                     )
                 task_contract = await self._plan_task_contract(
                     tool_registry=base_tool_registry,
-                    task_intent=effective_task_intent,
+                    fallback_objective=getattr(effective_task_intent, "objective", ""),
                     current_message=prompt_message,
                     history=history_dicts,
                     current_image_files=user_image_files,
