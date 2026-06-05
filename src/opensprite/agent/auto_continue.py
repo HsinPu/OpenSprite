@@ -576,15 +576,38 @@ def _existing_web_source_context(execution_result: ExecutionResult | None) -> st
                 continue
             seen_urls.add(url)
             title = str(source.get("title") or "").strip()
-            snippet = " ".join(str(source.get("snippet") or "").split())
+            snippet = _source_context_detail(source)
             label = title or url
             line = f"- {label}: {url}"
             if snippet:
-                line += f" — {snippet[:220]}"
+                line += f" - {snippet}"
             lines.append(line)
             if len(lines) >= 6:
                 return "\n".join(lines)
     return "\n".join(lines)
+
+
+def _source_context_detail(source: dict[str, object]) -> str:
+    raw_detail = str(source.get("content") or source.get("snippet") or "").strip()
+    detail = " ".join(raw_detail.split())
+    if not detail:
+        return ""
+    tool_name = str(source.get("tool_name") or "").strip().lower()
+    prefix = ""
+    max_chars = 260
+    if tool_name == "web_fetch":
+        prefix = "fetched content"
+        try:
+            char_count = int(source.get("content_chars") or 0)
+        except (TypeError, ValueError):
+            char_count = 0
+        if char_count > 0:
+            prefix += f" ({char_count} chars)"
+        prefix += ": "
+        max_chars = 900
+    if len(detail) > max_chars:
+        detail = detail[: max_chars - 3].rstrip() + "..."
+    return f"{prefix}{detail}"
 
 
 def _quality_follow_up_instruction(

@@ -751,6 +751,59 @@ def test_auto_continue_guides_retry_after_missing_web_source_reference():
     assert "reference at least one source by URL, domain, or title" in (decision.prompt or "")
 
 
+def test_auto_continue_includes_fetched_source_detail_for_finalization():
+    intent = TaskIntentService().classify("Please find current AI agent market trends.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="judge rejected incomplete final answer",
+        active_task_detail="- Reference gathered sources and summarize the key findings",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        acceptance_criteria=(AcceptanceCriterion(kind=SOURCE_REFERENCE_CRITERION_KIND, min_count=1),),
+    )
+    detail = (
+        "Agentic AI adoption is moving from pilots into production. "
+        "Enterprise buyers are prioritizing guardrails, context engineering, and workflow integration. "
+        "The market is also shifting toward specialized agent tools for sales, support, and software development."
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(
+            content="I found sources.",
+            executed_tool_calls=1,
+            task_contract=contract,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "title": "AI agent trends",
+                                "url": "https://example.com/ai-agent-trends",
+                                "snippet": detail,
+                                "content_chars": 1800,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+        attempts_used=0,
+        previous_response="I found sources.",
+    )
+
+    assert decision.should_continue is True
+    assert "fetched content (1800 chars)" in (decision.prompt or "")
+    assert "context engineering" in (decision.prompt or "")
+    assert "software development" in (decision.prompt or "")
+
+
 def test_auto_continue_guides_retry_after_terse_final_answer():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
