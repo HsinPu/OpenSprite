@@ -1,4 +1,4 @@
-"""Ranking policy for source fallback responses."""
+"""Ranking policy for source-backed LLM finalization."""
 
 from __future__ import annotations
 

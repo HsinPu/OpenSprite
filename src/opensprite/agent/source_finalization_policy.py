@@ -1,4 +1,4 @@
-"""Policy helpers for source-backed fallback responses."""
+"""Policy helpers for source-backed LLM finalization."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .execution import ExecutionResult
 
 
-def source_fallback_allowed(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
+def source_finalization_allowed(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
     if not (
         is_incomplete_completion_status(completion_result.status)
         or normalize_completion_status(completion_result.status) == BLOCKED_COMPLETION_STATUS
