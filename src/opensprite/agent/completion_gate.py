@@ -302,7 +302,31 @@ class CompletionGateService:
             return _completion_judge_blocked_result(str(exc))
         except Exception as exc:
             return _completion_judge_blocked_result(f"completion judge failed: {type(exc).__name__}")
-        return _completion_result_from_judge_verdict(verdict, execution_result=execution_result)
+        result = _completion_result_from_judge_verdict(verdict, execution_result=execution_result)
+        evidence_result = self.evidence_gate.evaluate(
+            task_intent=task_intent,
+            execution_result=execution_result,
+            verification_passed=result.verification_passed,
+        )
+        if is_complete_completion_status(result.status) and not evidence_result.passed:
+            return CompletionGateResult(
+                status=INCOMPLETE_COMPLETION_STATUS,
+                reason=evidence_result.reason,
+                active_task_detail=evidence_result.active_task_detail,
+                verification_required=result.verification_required,
+                verification_attempted=result.verification_attempted,
+                verification_passed=result.verification_passed,
+                review_required=result.review_required,
+                review_attempted=result.review_attempted,
+                review_passed=result.review_passed,
+                review_summary=result.review_summary,
+                review_prompt_types=result.review_prompt_types,
+                review_finding_count=result.review_finding_count,
+                missing_evidence=evidence_result.missing_evidence,
+                progress_only_response=result.progress_only_response,
+                judge_metadata=result.judge_metadata,
+            )
+        return result
 
     def evaluate(
         self,

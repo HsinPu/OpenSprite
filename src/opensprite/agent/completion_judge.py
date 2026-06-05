@@ -283,6 +283,9 @@ def _build_judge_prompt(facts: dict[str, Any]) -> str:
         "Set progress_only_response to true when the assistant response is only a progress update or "
         "next-action promise, without delivering the requested result, evidence, concrete blocker, or "
         "user-facing conclusion. Judge this semantically across languages; do not rely on exact phrase matching.\n\n"
+        "If the user explicitly asked for only a specific literal token, passphrase, code, or one-line exact value, "
+        "then an assistant response containing only that requested value can be complete even when it is short and not explanatory. "
+        "Do not reject such exact-answer tasks merely because the response looks like a placeholder.\n\n"
         "Facts:\n"
         f"{json.dumps(facts, ensure_ascii=False, indent=2, default=str)}"
     )

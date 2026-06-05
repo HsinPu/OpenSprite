@@ -140,6 +140,8 @@ async def test_completion_judge_service_calls_provider_with_decoding_config():
     user_prompt = messages[1].content
     assert "Judge this semantically across languages" in user_prompt
     assert "exact phrase matching" in user_prompt
+    assert "specific literal token, passphrase, code, or one-line exact value" in user_prompt
+    assert "Do not reject such exact-answer tasks merely because the response looks like a placeholder" in user_prompt
     assert "search, fetch" not in user_prompt
     assert "in_progress" not in user_prompt
     assert "active|blocked|done|waiting_user|null" in user_prompt
@@ -255,6 +257,48 @@ async def test_completion_gate_evaluate_with_judge_returns_judge_verdict():
     assert result.active_task_status == "done"
     assert result.verification_passed is True
     assert judge.calls[0]["facts"]["assistant_response"]["text"] == "answer"
+
+
+@pytest.mark.anyio
+async def test_completion_gate_evaluate_with_judge_requires_contract_evidence():
+    intent = TaskIntent(kind="task", objective="Inspect workspace changes")
+    contract = TaskContract(
+        objective="Inspect workspace changes",
+        task_type="workspace_read",
+        requirements=(
+            EvidenceRequirement(
+                kind="tool_group",
+                tool_group="workspace_read",
+                min_count=1,
+                description="Inspect workspace evidence before answering.",
+            ),
+        ),
+        allow_no_tool_final=False,
+    )
+    judge = FakeJudgeService(
+        verdict=CompletionJudgeVerdict(
+            status="complete",
+            reason="judge says done",
+            active_task_status="done",
+            metadata={"method": "llm"},
+        )
+    )
+    service = CompletionGateService(llm_config=_llm_config(), judge_service=judge)
+
+    result = await service.evaluate_with_judge(
+        task_intent=intent,
+        response_text="No file changes found.",
+        execution_result=ExecutionResult(content="No file changes found.", task_contract=contract),
+        provider=object(),
+        model="model",
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "required task evidence was not produced"
+    assert result.active_task_detail == "- Inspect workspace evidence before answering."
+    assert result.active_task_status is None
+    assert result.missing_evidence == ("Inspect workspace evidence before answering.",)
+    assert result.judge_metadata["method"] == "llm"
 
 
 @pytest.mark.anyio
