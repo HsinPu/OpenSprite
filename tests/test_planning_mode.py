@@ -31,6 +31,14 @@ def test_resolve_planning_mode_returns_disabled_state_without_planning_contract(
     assert state.tool_registry is None
 
 
+def test_resolve_planning_mode_supports_explicit_plan_only_text_without_contract():
+    state = resolve_planning_mode("先規劃不要動手，幫我整理修復方案")
+
+    assert state.enabled is True
+    assert state.overlay.startswith("# Planning Mode")
+    assert state.tool_registry is None
+
+
 def test_resolve_planning_mode_returns_overlay_and_restricted_registry_from_contract():
     registry = ToolRegistry()
     registry.register(_NamedTool("read_file"))

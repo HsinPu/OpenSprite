@@ -11,7 +11,7 @@ def test_core_coding_subagents_are_executable_workflows(tmp_path: Path) -> None:
     expectations = {
         "implementer": ('"1.1"', "implementation", ["apply_patch", "Verification", "不要只輸出建議方案"]),
         "debugger": ('"1.1"', "implementation", ["重現", "Root Cause", "直接修正"]),
-        "code-reviewer": ('"1.2"', "read-only", ["Review Findings", "實際變更", "一般 review 預設只回報 findings"]),
+        "code-reviewer": ('"1.3"', "read-only", ["Review Findings", "實際變更", "一般 review 預設只回報 findings"]),
         "test-writer": ('"1.1"', "testing", ["直接新增或修改測試", "Verification", "regression test"]),
     }
 
