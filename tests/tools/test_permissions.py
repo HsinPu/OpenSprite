@@ -202,6 +202,23 @@ def test_permission_decision_reasons_are_centralized():
     )
 
 
+def test_cron_list_is_read_only_but_mutations_keep_side_effect_risk():
+    policy = ToolPermissionPolicy(
+        approval_mode="ask",
+        approval_required_risk_levels=["external_side_effect"],
+    )
+
+    list_decision = policy.check("cron", {"action": "list"})
+    add_decision = policy.check("cron", {"action": "add"})
+
+    assert list_decision.allowed is True
+    assert list_decision.requires_approval is False
+    assert list_decision.risk_levels == ("read",)
+    assert add_decision.allowed is False
+    assert add_decision.requires_approval is True
+    assert add_decision.risk_levels == ("external_side_effect",)
+
+
 def test_registry_restricts_allowed_tools_by_glob():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(allowed_tools=["read_*", "grep_files"])

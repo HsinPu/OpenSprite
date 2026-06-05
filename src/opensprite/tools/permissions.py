@@ -220,7 +220,11 @@ class ToolPermissionPolicy:
         if not self.enabled:
             return self._decision(True, tool_name, frozenset(), reason=PERMISSION_POLICY_DISABLED_REASON)
 
-        risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
+        risks = _risk_levels_for_params(
+            tool_name,
+            params,
+            default_risks=self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels),
+        )
         matched_allowed_tools = self._matching_patterns(tool_name, self.allowed_tools)
         matched_denied_tools = self._matching_patterns(tool_name, self.denied_tools)
         matched_allowed_risks = tuple(sorted(risk for risk in risks if risk in self.allowed_risk_levels))
@@ -363,3 +367,11 @@ def _normalize_tool_risk_levels(value: Any) -> frozenset[str] | None:
     if not risks:
         return frozenset({"external_side_effect"})
     return risks
+
+
+def _risk_levels_for_params(tool_name: str, params: Any, *, default_risks: frozenset[str]) -> frozenset[str]:
+    if tool_name == "cron" and isinstance(params, dict):
+        action = str(params.get("action") or "").strip().lower()
+        if action == "list":
+            return frozenset({"read"})
+    return default_risks
