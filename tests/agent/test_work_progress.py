@@ -145,6 +145,29 @@ def test_work_progress_uses_harness_profile_continuation_budget():
     assert service.continuation_budget(intent, harness_profile=profile) == 0
 
 
+def test_work_progress_allows_one_retry_for_incomplete_chat_with_missing_evidence():
+    service = WorkProgressService(default_continuation_budget=1, long_running_continuation_budget=3)
+    intent = TaskIntentService().classify("Explain Python ModuleNotFoundError without tools.")
+    profile = HarnessProfileService().default_chat_profile()
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="missing direct answer",
+        missing_evidence=("No debug guide content was provided",),
+    )
+
+    update = service.evaluate(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Can you clarify?"),
+        auto_continue_attempts=0,
+        pass_index=1,
+        harness_profile=profile,
+    )
+
+    assert update.continuation_budget == 1
+    assert update.next_action == "continue_work"
+
+
 def test_work_progress_tracks_verification_and_next_action():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
     completion = CompletionGateResult(

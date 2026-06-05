@@ -641,6 +641,8 @@ class WorkProgressService:
         """Summarize the current pass and choose the next high-level action."""
         signals = self._progress_signals(execution_result)
         continuation_budget = self.continuation_budget(task_intent, harness_profile=harness_profile)
+        if _completion_gap_should_get_one_retry(completion_result):
+            continuation_budget = max(continuation_budget, self.default_continuation_budget)
         if requires_evidence_follow_up(completion_result.status) or completion_result.verification_required or completion_result.review_required:
             continuation_budget = max(continuation_budget, self.long_running_continuation_budget)
         status = self._status(completion_result)
@@ -986,6 +988,14 @@ def _map_state_status(completion_result: CompletionGateResult, progress: WorkPro
     if is_blocking_completion_status(completion_result.status):
         return completion_result.status
     return _WORK_STATE_ACTIVE_STATUS
+
+
+def _completion_gap_should_get_one_retry(completion_result: CompletionGateResult) -> bool:
+    if not is_incomplete_completion_status(completion_result.status):
+        return False
+    if completion_result.progress_only_response:
+        return True
+    return bool(completion_result.missing_evidence)
 
 
 def _completed_steps(
