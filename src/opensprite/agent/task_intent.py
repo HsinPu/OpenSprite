@@ -150,7 +150,13 @@ def _compact_text(text: str | None) -> str:
 def _truncate(text: str, max_chars: int = OBJECTIVE_MAX_CHARS) -> str:
     if len(text) <= max_chars:
         return text
-    return text[: max_chars - 3].rstrip() + "..."
+    if max_chars <= 20:
+        return text[: max_chars - 3].rstrip() + "..."
+    marker = " ... [middle omitted] ... "
+    remaining = max_chars - len(marker)
+    head_chars = max(1, remaining // 2)
+    tail_chars = max(1, remaining - head_chars)
+    return f"{text[:head_chars].rstrip()}{marker}{text[-tail_chars:].lstrip()}"
 
 
 def _classify_kind(text: str, *, media_count: int) -> str:

@@ -46,6 +46,16 @@ def test_task_intent_command_and_list_markers_are_centralized():
     assert listed.long_running is True
 
 
+def test_task_intent_objective_preserves_tail_of_long_message():
+    filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(60))
+    intent = TaskIntentService().classify(f"{filler}\n最後一句才是任務：只回覆通關詞 ZETA-204。")
+
+    assert "背景0" in intent.objective
+    assert "... [middle omitted] ..." in intent.objective
+    assert "最後一句才是任務" in intent.objective
+    assert "ZETA-204" in intent.objective
+
+
 def test_task_intent_debug_diagnosis_does_not_require_code_change():
     intent = TaskIntentService().classify("Please investigate why the build is failing.")
 
