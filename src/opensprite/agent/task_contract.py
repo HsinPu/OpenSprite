@@ -215,6 +215,26 @@ def _compact_text(text: str | None) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
+def _truncate_text(text: object, *, max_chars: int) -> str:
+    compact = str(text or "").strip()
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _truncate_middle_text(text: object, *, max_chars: int) -> str:
+    compact = str(text or "").strip()
+    if len(compact) <= max_chars:
+        return compact
+    if max_chars <= 20:
+        return _truncate_text(compact, max_chars=max_chars)
+    marker = "\n... [middle omitted] ...\n"
+    remaining = max_chars - len(marker)
+    head_chars = max(1, remaining // 2)
+    tail_chars = max(1, remaining - head_chars)
+    return f"{compact[:head_chars].rstrip()}{marker}{compact[-tail_chars:].lstrip()}"
+
+
 def _policy_value(value: object) -> str:
     return str(value or "").strip()
 
@@ -1204,27 +1224,15 @@ def _resolver_coerce_confidence(value: Any) -> float:
 
 
 def _resolver_compact(value: str | None) -> str:
-    return re.sub(r"\s+", " ", str(value or "")).strip()
+    return _compact_text(value)
 
 
 def _resolver_truncate(value: str | None, max_chars: int) -> str:
-    text = str(value or "").strip()
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 3].rstrip() + "..."
+    return _truncate_text(value, max_chars=max_chars)
 
 
 def _resolver_truncate_middle(value: str | None, max_chars: int) -> str:
-    text = str(value or "").strip()
-    if len(text) <= max_chars:
-        return text
-    if max_chars <= 20:
-        return _resolver_truncate(text, max_chars)
-    marker = "\n... [middle omitted] ...\n"
-    remaining = max_chars - len(marker)
-    head_chars = max(1, remaining // 2)
-    tail_chars = max(1, remaining - head_chars)
-    return f"{text[:head_chars].rstrip()}{marker}{text[-tail_chars:].lstrip()}"
+    return _truncate_middle_text(value, max_chars=max_chars)
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _MEDIA_HISTORY_RE = re.compile(r"^(Images|Audios|Videos):\s*(?P<paths>.+)$", re.IGNORECASE | re.MULTILINE)
@@ -2596,27 +2604,15 @@ def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _compact(text: str) -> str:
-    return re.sub(r"\s+", " ", str(text or "")).strip()
+    return _compact_text(text)
 
 
 def _truncate(text: str, *, max_chars: int) -> str:
-    compact = str(text or "").strip()
-    if len(compact) <= max_chars:
-        return compact
-    return compact[: max_chars - 3].rstrip() + "..."
+    return _truncate_text(text, max_chars=max_chars)
 
 
 def _truncate_middle(text: str, *, max_chars: int) -> str:
-    compact = str(text or "").strip()
-    if len(compact) <= max_chars:
-        return compact
-    if max_chars <= 20:
-        return _truncate(compact, max_chars=max_chars)
-    marker = "\n... [middle omitted] ...\n"
-    remaining = max_chars - len(marker)
-    head_chars = max(1, remaining // 2)
-    tail_chars = max(1, remaining - head_chars)
-    return f"{compact[:head_chars].rstrip()}{marker}{compact[-tail_chars:].lstrip()}"
+    return _truncate_middle_text(text, max_chars=max_chars)
 
 
 def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:

@@ -16,12 +16,18 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_QUALITY_CHECK,
     WORKSPACE_LOCATION_CRITERION_KIND,
     _build_task_planner_prompt,
+    _compact,
     _contract_from_task_planner_payload,
     _coerce_bool,
     _ensure_task_type_tool_groups,
     _normalize_planner_quality_checks,
     _normalize_planner_tool_groups,
+    _resolver_compact,
     _resolver_coerce_bool,
+    _resolver_truncate,
+    _resolver_truncate_middle,
+    _truncate,
+    _truncate_middle,
     build_planner_capability_catalog,
     contract_expects_file_change,
     contract_requests_itemized_output,
@@ -160,6 +166,15 @@ def test_policy_bool_helpers_keep_context_specific_truthy_values():
     assert _resolver_coerce_bool(" yes ") is True
     assert _resolver_coerce_bool(" 是 ") is False
     assert _coerce_bool(" 是 ") is True
+
+
+def test_text_helpers_share_compact_and_truncate_policy():
+    text = "  alpha\n\n beta\tgamma  "
+    long_text = "  abcdefghijklmnopqrstuvwxyz  "
+
+    assert _resolver_compact(text) == _compact(text) == "alpha beta gamma"
+    assert _resolver_truncate(long_text, 10) == _truncate(long_text, max_chars=10) == "abcdefg..."
+    assert _resolver_truncate_middle(long_text, 24) == _truncate_middle(long_text, max_chars=24)
 
 
 def test_planner_prompt_preserves_tail_of_long_current_message():
