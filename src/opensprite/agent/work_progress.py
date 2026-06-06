@@ -19,7 +19,7 @@ from .completion_status import (
     is_terminal_completion_status,
     requires_evidence_follow_up,
 )
-from .execution import ExecutionResult
+from .execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
@@ -37,7 +37,6 @@ from .harness_profile import (
     is_research_profile_name,
     normalize_profile_name,
 )
-from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
 from .task_resolver import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,

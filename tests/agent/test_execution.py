@@ -6,8 +6,8 @@ import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import LLM_COMPACTION_EMPTY_REASON
 from opensprite.agent.execution import ExecutionEngine, LLM_STEP_COMPLETED_STATUS, LLM_STEP_ERROR_STATUS
+from opensprite.agent.execution import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.prompt import PromptLoggingService
-from opensprite.agent.stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.tools.evidence import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService

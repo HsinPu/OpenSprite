@@ -17,7 +17,7 @@ from .active_task_status import (
     DONE_ACTIVE_TASK_STATUS,
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
-from .execution import ExecutionResult
+from .execution import ExecutionResult, is_max_tool_iterations_stop_reason
 from .completion_status import (
     BLOCKED_COMPLETION_STATUS,
     COMPLETE_COMPLETION_STATUS,
@@ -43,7 +43,6 @@ from .task_intent import (
     is_read_only_task_type,
 )
 from .quality_gate import QualityGateService
-from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import (
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,

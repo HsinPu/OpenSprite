@@ -14,7 +14,7 @@ from .completion_status import (
     needs_review_completion_status,
     needs_verification_completion_status,
 )
-from .execution import ExecutionResult
+from .execution import ExecutionResult, is_max_tool_iterations_stop_reason
 from .harness_profile import (
     HarnessProfile,
     harness_profile_follow_up_instruction,
@@ -33,7 +33,6 @@ from .quality_gate import (
     source_material_gap_detail,
     source_material_satisfies_contract,
 )
-from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     contract_expects_file_change,

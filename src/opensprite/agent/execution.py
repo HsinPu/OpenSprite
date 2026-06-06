@@ -42,7 +42,6 @@ from .subagent_output import (
     SUBAGENT_TASK_ID_LABEL,
     parse_subagent_result_line,
 )
-from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from .tool_access import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 from ..tools.evidence import is_verification_tool_name
 from ..tools.evidence import (
@@ -67,6 +66,11 @@ LLM_COMPACTION_NO_BODY_REASON = "no_body"
 LLM_COMPACTION_NO_PROMPT_REASON = "no_prompt"
 LLM_COMPACTION_ERROR_REASON = "llm_error"
 LLM_COMPACTION_EMPTY_REASON = "llm_empty"
+MAX_TOOL_ITERATIONS_STOP_REASON = "max_tool_iterations"
+
+
+def is_max_tool_iterations_stop_reason(stop_reason: str | None) -> bool:
+    return str(stop_reason or "").strip() == MAX_TOOL_ITERATIONS_STOP_REASON
 
 
 def contains_compaction_handoff(content: str | None) -> bool:
