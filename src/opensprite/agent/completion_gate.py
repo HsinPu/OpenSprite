@@ -1500,9 +1500,9 @@ class CompletionGateService:
         verification_passed: bool,
     ) -> bool:
         """Allow exploratory discovery failures after required evidence is satisfied."""
-        has_optional_web_failures = _has_only_optional_web_discovery_failures(execution_result)
-        has_optional_workspace_failures = _has_only_optional_workspace_discovery_failures(execution_result)
-        has_optional_history_failures = _has_only_optional_history_retrieval_failures(execution_result)
+        has_optional_web_failures = has_only_optional_web_discovery_failures(execution_result)
+        has_optional_workspace_failures = has_only_optional_workspace_discovery_failures(execution_result)
+        has_optional_history_failures = has_only_optional_history_retrieval_failures(execution_result)
         if not (has_optional_web_failures or has_optional_workspace_failures or has_optional_history_failures):
             return False
 
@@ -1514,7 +1514,7 @@ class CompletionGateService:
         if not evidence_result.passed:
             return False
 
-        if has_optional_web_failures and not _has_successful_fetched_web_source_artifact(execution_result):
+        if has_optional_web_failures and not has_successful_fetched_web_source_artifact(execution_result):
             return False
 
         quality_result = self.quality_gate.evaluate(
@@ -1614,12 +1614,12 @@ def _verification_skipped_with_reported_gap(execution_result: ExecutionResult) -
 
 def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> bool:
     for artifact in execution_result.task_artifacts:
-        if not _is_verification_result_artifact_kind(artifact.kind) or not artifact.ok:
+        if not is_verification_result_artifact_kind(artifact.kind) or not artifact.ok:
             continue
         if _verification_status_is_skipped(artifact.metadata):
             return True
     for evidence in execution_result.tool_evidence:
-        if not _is_verification_tool(evidence.name) or not evidence.ok:
+        if not is_verification_tool_name(evidence.name) or not evidence.ok:
             continue
         if _verification_status_is_skipped(evidence.metadata):
             return True
@@ -1785,18 +1785,6 @@ def web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     return False
 
 
-def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult) -> bool:
-    return has_only_optional_web_discovery_failures(execution_result)
-
-
-def _has_only_optional_workspace_discovery_failures(execution_result: ExecutionResult) -> bool:
-    return has_only_optional_workspace_discovery_failures(execution_result)
-
-
-def _has_only_optional_history_retrieval_failures(execution_result: ExecutionResult) -> bool:
-    return has_only_optional_history_retrieval_failures(execution_result)
-
-
 def _requires_web_research_evidence(task_contract: Any) -> bool:
     if is_web_research_task_type(getattr(task_contract, "task_type", None)):
         return True
@@ -1806,44 +1794,12 @@ def _requires_web_research_evidence(task_contract: Any) -> bool:
     )
 
 
-def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResult) -> bool:
-    return has_successful_fetched_web_source_artifact(execution_result)
-
-
-def _is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
-    return is_optional_web_discovery_failure_tool(tool_name)
-
-
-def _is_optional_web_fetch_failure_tool(tool_name: str | None) -> bool:
-    return is_optional_web_fetch_failure_tool(tool_name)
-
-
-def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
-    return is_optional_workspace_batch_failure_tool(tool_name)
-
-
-def _is_history_retrieval_tool(tool_name: str | None) -> bool:
-    return is_history_retrieval_failure_tool(tool_name)
-
-
-def _is_verification_result_artifact_kind(kind: str | None) -> bool:
-    return is_verification_result_artifact_kind(kind)
-
-
-def _is_verification_tool(tool_name: str | None) -> bool:
-    return is_verification_tool_name(tool_name)
-
-
 def _is_verification_requirement_kind(kind: str | None) -> bool:
     return str(kind or "").strip() == VERIFICATION_REQUIREMENT_KIND
 
 
 def _is_verification_tool_group(tool_group: str | None) -> bool:
     return str(tool_group or "").strip() == VERIFICATION_TOOL_GROUP
-
-
-def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
-    return web_research_artifact_has_successful_fetch(artifact)
 
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:

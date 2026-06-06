@@ -14,20 +14,14 @@ from opensprite.agent.completion_gate import (
     _is_blocking_planner_status,
     _is_clean_structured_review_status,
     _is_completed_delegated_review_status,
-    _is_history_retrieval_tool,
     _is_cancelled_workflow_status,
     _is_failed_workflow_status,
-    _is_optional_web_discovery_failure_tool,
-    _is_optional_web_fetch_failure_tool,
-    _is_optional_workspace_batch_failure_tool,
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
     _path_requires_delegated_review,
     _is_research_then_outline_workflow,
     _is_verification_requirement_kind,
-    _is_verification_result_artifact_kind,
-    _is_verification_tool,
     _is_verification_tool_group,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
@@ -35,6 +29,10 @@ from opensprite.agent.completion_gate import (
     _workflow_fix_follow_up_fields,
     _workflow_gate_is_complete,
     _workflow_gate_needs_verification,
+    is_history_retrieval_failure_tool,
+    is_optional_web_discovery_failure_tool,
+    is_optional_web_fetch_failure_tool,
+    is_optional_workspace_batch_failure_tool,
 )
 from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.task_contract import (
@@ -83,7 +81,12 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_task_planner_payload,
 )
-from opensprite.tools.evidence import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.tools.evidence import (
+    VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON,
+    VERIFICATION_STATUS_METADATA_FIELD,
+    is_verification_result_artifact_kind,
+    is_verification_tool_name,
+)
 from opensprite.agent.completion_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
@@ -308,10 +311,10 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert _is_verification_requirement_kind("tool_group") is False
     assert _is_verification_tool_group("verification") is True
     assert _is_verification_tool_group("workspace_read") is False
-    assert _is_verification_result_artifact_kind("verification_result") is True
-    assert _is_verification_result_artifact_kind("web_source") is False
-    assert _is_verification_tool("verify") is True
-    assert _is_verification_tool("web_fetch") is False
+    assert is_verification_result_artifact_kind("verification_result") is True
+    assert is_verification_result_artifact_kind("web_source") is False
+    assert is_verification_tool_name("verify") is True
+    assert is_verification_tool_name("web_fetch") is False
 
 
 def test_completion_gate_workflow_policy_helpers_are_centralized():
@@ -355,10 +358,10 @@ def test_completion_gate_review_path_policy_helper_is_centralized():
 
 
 def test_completion_gate_web_source_evidence_helpers_are_centralized():
-    assert _is_optional_web_discovery_failure_tool("web_search") is True
-    assert _is_optional_web_discovery_failure_tool("web_fetch") is False
-    assert _is_optional_web_fetch_failure_tool("web_fetch") is True
-    assert _is_optional_web_fetch_failure_tool("web_search") is False
+    assert is_optional_web_discovery_failure_tool("web_search") is True
+    assert is_optional_web_discovery_failure_tool("web_fetch") is False
+    assert is_optional_web_fetch_failure_tool("web_fetch") is True
+    assert is_optional_web_fetch_failure_tool("web_search") is False
     assert is_web_discovery_tool("web_research") is True
     assert is_web_discovery_tool("web_fetch") is False
     assert is_fetched_web_source_artifact_tool("browser_snapshot") is True
@@ -375,10 +378,10 @@ def test_completion_gate_web_source_evidence_helpers_are_centralized():
     assert is_web_research_tool_group("workspace_read") is False
     assert is_web_source_artifact_kind("web_source") is True
     assert is_web_source_artifact_kind("verification_result") is False
-    assert _is_optional_workspace_batch_failure_tool("batch") is True
-    assert _is_optional_workspace_batch_failure_tool("read_file") is False
-    assert _is_history_retrieval_tool("search_history") is True
-    assert _is_history_retrieval_tool("web_search") is False
+    assert is_optional_workspace_batch_failure_tool("batch") is True
+    assert is_optional_workspace_batch_failure_tool("read_file") is False
+    assert is_history_retrieval_failure_tool("search_history") is True
+    assert is_history_retrieval_failure_tool("web_search") is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:
