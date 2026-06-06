@@ -140,10 +140,12 @@ from .tool_access import (
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessPolicy,
     HarnessProfile,
+    is_chat_profile_name,
+)
+from ..tools.loop_guardrail import (
     ToolLoopGuardrail,
     append_toolguard_guidance,
     build_toolguard_synthetic_result,
-    is_chat_profile_name,
 )
 
 
