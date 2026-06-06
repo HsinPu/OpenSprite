@@ -28,7 +28,7 @@ from .completion_status import (
     is_complete_completion_status,
     needs_verification_completion_status,
 )
-from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
+from .harness_policy import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
 from .task_resolver import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,

@@ -14,7 +14,7 @@ from .task_resolver import (
     is_workspace_read_task_type,
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON
-from .harness_profile import OPERATIONS_TASK_TYPE
+from .harness_policy import OPERATIONS_TASK_TYPE
 from .retrieval import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,

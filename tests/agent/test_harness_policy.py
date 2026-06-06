@@ -7,10 +7,10 @@ from opensprite.agent.harness_policy import (
     RESEARCH_HARNESS_POLICY_REASON,
     WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON,
     WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
+    HarnessProfile,
+    HarnessProfileService,
     HarnessPolicyService,
 )
-from opensprite.agent.harness_profile import HarnessProfile
-from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, LLM_PLANNER_CONTRACT_SOURCES, TaskContract
 from opensprite.agent.task_resolver import TaskIntentService
 from opensprite.tools.base import Tool

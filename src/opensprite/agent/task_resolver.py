@@ -11,7 +11,7 @@ from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
 from ..documents.active_task import has_current_active_task
-from .harness_profile import (
+from .harness_policy import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,

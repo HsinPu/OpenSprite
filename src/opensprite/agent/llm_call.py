@@ -29,10 +29,10 @@ from ..tools import ToolRegistry
 from ..utils.log import logger
 from ..documents.active_task import has_current_active_task
 from .execution import ExecutionResult
-from .harness_policy import HarnessPolicy
-from .harness_profile import (
+from .harness_policy import (
     HISTORY_RETRIEVAL_TASK_TYPE,
     HISTORY_RETRIEVAL_TOOL_GROUP,
+    HarnessPolicy,
     HarnessProfile,
     is_chat_profile_name,
 )

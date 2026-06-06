@@ -15,7 +15,7 @@ from .completion_status import (
     needs_verification_completion_status,
 )
 from .execution import ExecutionResult, is_max_tool_iterations_stop_reason
-from .harness_profile import (
+from .harness_policy import (
     HarnessProfile,
     harness_profile_follow_up_instruction,
     is_coding_profile_name,

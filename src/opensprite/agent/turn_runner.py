@@ -62,8 +62,14 @@ from .completion_status import (
     normalize_completion_status,
 )
 from .execution import ExecutionResult
-from .harness_policy import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
-from .harness_profile import HarnessProfile, HarnessProfileService, PURE_ANSWER_TASK_TYPE
+from .harness_policy import (
+    PURE_ANSWER_TASK_TYPE,
+    HarnessProfile,
+    HarnessProfileService,
+    HarnessScorecard,
+    HarnessSensorResult,
+    evaluate_harness_sensors,
+)
 from .media import (
     AgentMediaService,
     AudioInputPreprocessor,

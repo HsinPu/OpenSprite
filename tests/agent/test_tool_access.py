@@ -1,5 +1,4 @@
-from opensprite.agent.harness_policy import HarnessPolicyService
-from opensprite.agent.harness_profile import HarnessProfile
+from opensprite.agent.harness_policy import HarnessPolicyService, HarnessProfile
 from opensprite.agent.tool_access import ToolAccessResolver
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
