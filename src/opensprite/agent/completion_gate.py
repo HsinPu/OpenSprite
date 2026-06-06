@@ -70,7 +70,7 @@ from .web_source_policy import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
-from .verification_policy import (
+from ..tools.evidence import (
     REQUIRED_VERIFICATION_FAILED_REASON,
     SKIPPED_VERIFICATION_STATUS,
     VERIFICATION_STATUS_METADATA_FIELD,

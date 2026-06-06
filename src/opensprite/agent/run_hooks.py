@@ -31,7 +31,7 @@ from .mcp_lifecycle import (
     mcp_tool_display_name,
     tool_warrants_progress_notice as policy_tool_warrants_progress_notice,
 )
-from .verification_policy import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD, is_verification_tool_name
+from ..tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD, is_verification_tool_name
 
 
 _TRACE_TEXT_FIELDS = {

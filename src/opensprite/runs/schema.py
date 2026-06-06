@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agent.verification_policy import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from ..tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from .events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_EVENTS,

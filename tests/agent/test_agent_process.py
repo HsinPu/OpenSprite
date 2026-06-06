@@ -26,7 +26,7 @@ from opensprite.agent.task_contract import (
     PLANNER_VALIDATED_STATUS,
     TaskContract,
 )
-from opensprite.agent.verification_policy import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage

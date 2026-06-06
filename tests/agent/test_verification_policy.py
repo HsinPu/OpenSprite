@@ -1,4 +1,4 @@
-from opensprite.agent.verification_policy import (
+from opensprite.tools.evidence import (
     REQUIRED_VERIFICATION_FAILED_REASON,
     REQUIRED_VERIFICATION_NOT_RECORDED_REASON,
     VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON,

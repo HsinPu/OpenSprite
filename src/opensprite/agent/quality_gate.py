@@ -39,7 +39,7 @@ from .task_contract import (
     is_workspace_location_criterion,
     neutral_task_contract,
 )
-from .verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
+from ..tools.evidence import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
 from .web_source_policy import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,

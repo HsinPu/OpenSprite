@@ -83,7 +83,7 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_task_planner_payload,
 )
-from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.tools.evidence import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.quality_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,

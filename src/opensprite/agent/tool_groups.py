@@ -15,7 +15,7 @@ from .harness_profile import (
     WORKSPACE_WRITE_TOOL_GROUP,
 )
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
-from .verification_policy import VERIFICATION_TOOL_NAME
+from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
 from ..tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,

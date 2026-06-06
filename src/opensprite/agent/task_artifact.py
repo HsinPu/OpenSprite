@@ -18,7 +18,7 @@ from .web_source_policy import (
     WEB_SOURCE_ARTIFACT_TOOLS,
     is_web_source_artifact_kind,
 )
-from .verification_policy import VERIFICATION_RESULT_ARTIFACT_KIND, VERIFICATION_TOOL_NAME
+from ..tools.evidence import VERIFICATION_RESULT_ARTIFACT_KIND, VERIFICATION_TOOL_NAME
 
 
 TASK_ARTIFACTS_NOT_PRODUCED_REASON = "required task artifacts were not produced"
