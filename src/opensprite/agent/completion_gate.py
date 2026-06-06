@@ -18,7 +18,7 @@ from ..documents.active_task import (
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
-from .harness_policy import (
+from .tool_access import (
     OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,

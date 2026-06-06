@@ -1,4 +1,4 @@
-from opensprite.agent.harness_policy import (
+from opensprite.agent.tool_access import (
     CHAT_HARNESS_POLICY_REASON,
     HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON,
     MEDIA_HARNESS_POLICY_REASON,

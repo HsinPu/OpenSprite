@@ -62,7 +62,7 @@ from .completion_gate import (
     normalize_completion_status,
 )
 from .execution import ExecutionResult
-from .harness_policy import (
+from .tool_access import (
     PURE_ANSWER_TASK_TYPE,
     HarnessProfile,
     HarnessProfileService,

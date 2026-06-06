@@ -49,7 +49,7 @@ from ..utils.log import logger
 from ..utils.log_redaction import redact_log_preview
 from ..documents.active_task import has_current_active_task
 from .execution import ExecutionResult
-from .harness_policy import (
+from .tool_access import (
     HISTORY_RETRIEVAL_TASK_TYPE,
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessPolicy,

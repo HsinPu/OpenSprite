@@ -97,7 +97,7 @@ from ..documents.curator import (
     fingerprint_text_directory,
 )
 from .execution import ExecutionEngine, ExecutionResult
-from .harness_policy import HarnessPolicyService, HarnessProfileService
+from .tool_access import HarnessPolicyService, HarnessProfileService
 from .llm_call import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from .tool_access import (

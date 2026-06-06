@@ -49,7 +49,7 @@ from .completion_gate import (
     requires_evidence_follow_up,
 )
 from .execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
-from .harness_policy import (
+from .tool_access import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,

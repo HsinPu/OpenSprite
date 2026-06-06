@@ -1,6 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.harness_policy import HarnessProfile, HarnessProfileService
+from opensprite.agent.tool_access import HarnessProfile, HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_contract import TaskContextDecision
 from opensprite.agent.task_contract import TaskIntentService

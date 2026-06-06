@@ -25,7 +25,7 @@ from ..tool_names import (
     READ_SKILL_TOOL_NAME,
     TRANSCRIBE_AUDIO_TOOL_NAME,
 )
-from .harness_policy import (
+from .tool_access import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,

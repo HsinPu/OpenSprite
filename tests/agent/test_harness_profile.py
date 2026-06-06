@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from opensprite.agent.harness_policy import (
+from opensprite.agent.tool_access import (
     CONTRACT_MEDIA_PROFILE_REASON,
     CONTRACT_OPERATIONS_PROFILE_REASON,
     CONTRACT_PLANNING_PROFILE_REASON,
