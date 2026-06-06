@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Awaitable, Callable
 
 from ..utils.log import logger
-from .background_tasks import CoalescingTaskScheduler
+from .background import CoalescingTaskScheduler
 
 
 class PostResponseMaintenanceService:

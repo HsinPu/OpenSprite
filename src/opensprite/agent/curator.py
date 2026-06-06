@@ -20,7 +20,7 @@ from ..runs.events import (
     CURATOR_STARTED_EVENT,
 )
 from ..utils.log import logger
-from .background_tasks import CoalescingTaskScheduler
+from .background import CoalescingTaskScheduler
 from .execution import ExecutionResult
 
 

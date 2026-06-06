@@ -85,7 +85,7 @@ from ..storage.base import clear_storage_work_state, get_storage_work_state, ups
 from .active_task_commands import ActiveTaskCommandService
 from .active_task_status import is_current_active_task_status
 from .auto_continue import AutoContinueService
-from .background_notifications import BackgroundSessionNotificationService
+from .background import BackgroundSessionNotificationService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
 from .curator import CuratorService, fingerprint_text_directory
