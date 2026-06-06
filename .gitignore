@@ -19,8 +19,8 @@ apps/web/dist/
 # local agent instructions
 AGENTS.md
 
-# local research notes
-ai-agent-harness-report.md
+# local docs and research notes
+docs/
 tmp/
 .tmp/
 
