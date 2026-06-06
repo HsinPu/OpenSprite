@@ -147,7 +147,7 @@ from ..tools.evidence import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
-from .subagents import is_workflow_failed_status
+from .execution import is_workflow_failed_status
 
 
 TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD = "auto_continue_attempts"

@@ -1,6 +1,6 @@
 import json
 
-from opensprite.agent.subagents import parse_structured_subagent_output
+from opensprite.agent.execution import parse_structured_subagent_output
 
 
 def test_parse_structured_subagent_output_extracts_trailing_json_block():

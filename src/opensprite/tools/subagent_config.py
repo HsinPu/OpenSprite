@@ -13,7 +13,7 @@ from ..context.paths import (
     sync_subagent_prompts_from_package,
 )
 from ..subagent_prompts import load_all_metadata, read_prompt_document
-from ..agent.subagents import allowed_tool_profile_names, validate_tool_profile_name
+from ..agent.execution import allowed_tool_profile_names, validate_tool_profile_name
 from .base import Tool
 from .skill_config import (
     _validate_body_for_write,

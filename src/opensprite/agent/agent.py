@@ -110,7 +110,7 @@ from .tool_access import (
 )
 from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from .run_trace import AgentRunStateService, McpLifecycleService, RunHookService
-from .subagents import SubagentRunService
+from .execution import SubagentRunService
 from .task_contract import TaskPlanner
 from .task_contract import (
     TaskContextDecision,
@@ -122,8 +122,8 @@ from .task_contract import (
 )
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
-from .subagents import is_workflow_failed_status
-from .subagents import SubagentWorkflowService
+from .execution import is_workflow_failed_status
+from .execution import SubagentWorkflowService
 from .turn_runner import ActiveTaskCommandService, WorkProgressService, WorkProgressUpdate
 
 

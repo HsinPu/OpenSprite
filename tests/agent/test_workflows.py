@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.subagents import SubagentTaskOutcome
-from opensprite.agent.subagents import (
+from opensprite.agent.execution import SubagentTaskOutcome
+from opensprite.agent.execution import (
     SubagentWorkflowService,
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,

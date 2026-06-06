@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from ..agent.subagents import supports_parallel_delegation
+from ..agent.execution import supports_parallel_delegation
 from ..subagent_prompts import get_all_subagents
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
