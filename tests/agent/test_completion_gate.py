@@ -9,8 +9,8 @@ from opensprite.agent.completion_gate import (
     EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _completion_status_for_unsuccessful_workflow,
+    _contract_requires_verification,
     _is_blocking_planner_status,
-    _requires_verification,
     is_complete_completion_status,
     is_history_retrieval_failure_tool,
     is_research_then_outline_workflow,
@@ -306,21 +306,21 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert is_read_only_blocking_requirement_kind("tool_group") is False
     assert is_read_only_blocking_tool_group("execution") is True
     assert is_read_only_blocking_tool_group("workspace_read") is False
-    assert _requires_verification(
+    assert _contract_requires_verification(
         TaskContract(
             objective="x",
             task_type="code_change",
             requirements=(EvidenceRequirement(kind="verification"),),
         )
     ) is True
-    assert _requires_verification(
+    assert _contract_requires_verification(
         TaskContract(
             objective="x",
             task_type="code_change",
             requirements=(EvidenceRequirement(kind="tool_group", tool_group="verification"),),
         )
     ) is True
-    assert _requires_verification(
+    assert _contract_requires_verification(
         TaskContract(
             objective="x",
             task_type="code_change",
