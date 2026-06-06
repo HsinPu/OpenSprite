@@ -10,9 +10,6 @@ from opensprite.agent.completion_gate import (
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _completion_status_for_unsuccessful_workflow,
     _is_blocking_planner_status,
-    _is_python_file_path,
-    _is_python_test_path,
-    _is_web_app_path,
     _requires_verification,
     is_complete_completion_status,
     is_history_retrieval_failure_tool,
@@ -368,12 +365,6 @@ def test_completion_gate_review_path_policy_helper_is_centralized():
     assert path_requires_delegated_review("package.json") is True
     assert path_requires_delegated_review("snapshot_after/src/opensprite/app.vue") is True
     assert path_requires_delegated_review("docs/usage.md") is False
-    assert _is_web_app_path("apps/web/src/App.vue") is True
-    assert _is_web_app_path("src/opensprite/channels/web.py") is False
-    assert _is_python_file_path("src/opensprite/runtime.py") is True
-    assert _is_python_file_path("apps/web/src/App.vue") is False
-    assert _is_python_test_path("tests/agent/test_completion_gate.py") is True
-    assert _is_python_test_path("src/opensprite/runtime.py") is False
 
 
 def test_completion_gate_web_source_evidence_helpers_are_centralized():

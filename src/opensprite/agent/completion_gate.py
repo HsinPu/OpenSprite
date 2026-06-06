@@ -657,7 +657,6 @@ TASK_REVIEW_FINDINGS_FOLLOW_UP_DETAIL = (
     "Address the delegated review findings before treating the task as complete."
 )
 OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = BATCH_TOOL_NAME
-_WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 COMPLETION_RESULT_SCHEMA_VERSION_FIELD = "schema_version"
 COMPLETION_RESULT_STATUS_FIELD = "status"
 COMPLETION_RESULT_REASON_FIELD = "reason"
@@ -1992,29 +1991,29 @@ def _string_or_none(value: Any) -> str | None:
 
 def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
     touched_paths = _normalized_touched_paths(execution_result.touched_paths)
-    decision_paths = tuple(_strip_repo_snapshot_prefix(path) for path in touched_paths)
-    test_paths = tuple(path for path in decision_paths if _is_python_test_path(path))
-    has_web_touched = any(_is_web_app_path(path) for path in decision_paths)
-    has_python_touched = any(_is_python_file_path(path) for path in decision_paths)
+    decision_paths = tuple(strip_repo_snapshot_prefix(path) for path in touched_paths)
+    test_paths = tuple(path for path in decision_paths if is_python_test_path(path))
+    has_web_touched = any(is_web_app_path(path) for path in decision_paths)
+    has_python_touched = any(is_python_file_path(path) for path in decision_paths)
     if touched_paths and not has_web_touched and not has_python_touched:
         return {
             "action": "auto",
-            "path": _common_verification_path(touched_paths) or ".",
+            "path": common_verification_path(touched_paths) or ".",
             "pytest_args": (),
         }
     if has_web_touched:
-        return {"action": "web_build", "path": _WEB_APP_ROOT_PATH, "pytest_args": ()}
+        return {"action": "web_build", "path": WEB_APP_ROOT_PATH, "pytest_args": ()}
     if test_paths:
         return {"action": "pytest", "path": ".", "pytest_args": test_paths}
     if has_python_touched:
         return {
             "action": "python_compile",
-            "path": _common_verification_path(touched_paths) or ".",
+            "path": common_verification_path(touched_paths) or ".",
             "pytest_args": (),
         }
     return {
         "action": "auto",
-        "path": _common_verification_path(touched_paths) or ".",
+        "path": common_verification_path(touched_paths) or ".",
         "pytest_args": (),
     }
 
@@ -2022,25 +2021,6 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
 def _normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
     return normalized_touched_paths(paths)
 
-
-def _is_web_app_path(path: str | None) -> bool:
-    return is_web_app_path(path)
-
-
-def _is_python_file_path(path: str | None) -> bool:
-    return is_python_file_path(path)
-
-
-def _is_python_test_path(path: str | None) -> bool:
-    return is_python_test_path(path)
-
-
-def _strip_repo_snapshot_prefix(path: str) -> str:
-    return strip_repo_snapshot_prefix(path)
-
-
-def _common_verification_path(paths: tuple[str, ...]) -> str | None:
-    return common_verification_path(paths)
 
 ITEMIZED_RESPONSE_LINE_RE = re.compile(r"^(?:[-*]|\d+[.)]|\|)")
 ITEMIZED_OUTPUT_MISSING_REASON = "assistant did not provide the requested itemized result"
