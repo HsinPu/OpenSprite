@@ -17,6 +17,7 @@ from ..documents.active_task import (
     DONE_ACTIVE_TASK_STATUS,
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
+from ..subagent_prompts.profiles import REVIEW_PROMPT_TYPES
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
 from .tool_access import (
     OPERATIONS_TASK_TYPE,
@@ -47,7 +48,6 @@ from .task_contract import (
     is_workspace_read_task_type,
 )
 from .execution import (
-    REVIEW_PROMPT_TYPES,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,
     STRUCTURED_SUBAGENT_SECTIONS_FIELD,
