@@ -100,10 +100,9 @@ from .execution import ExecutionEngine, ExecutionResult
 from ..harness import HarnessPolicyService, HarnessProfileService
 from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
+from ..tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
 from .tool_access import (
-    AgentPermissionService,
     BROWSER_TOOL_NAMES,
-    PermissionEventRecorder,
     register_browser_tools,
     register_default_tools,
     register_memory_tool,
