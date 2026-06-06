@@ -2130,12 +2130,16 @@ def response_references_workspace_path(path: str, normalized_response: str) -> b
     return bool(filename and filename in normalized_response)
 
 
+def _operation_policy_value(value: str | None) -> str:
+    return str(value or "").strip()
+
+
 def is_operations_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == OPERATIONS_TASK_TYPE
+    return _operation_policy_value(task_type) == OPERATIONS_TASK_TYPE
 
 
 def is_command_execution_tool_name(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() in EXECUTION_TOOL_NAMES
+    return _operation_policy_value(tool_name) in EXECUTION_TOOL_NAMES
 
 
 def execution_has_failed_command_evidence(execution_result: ExecutionResult) -> bool:

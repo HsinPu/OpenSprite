@@ -14,10 +14,10 @@ def test_operation_validation_or_risk_missing_reason_is_stable():
 
 
 def test_operation_report_policy_classifies_operation_task_and_execution_tools():
-    assert is_operations_task_type("operations") is True
+    assert is_operations_task_type(" operations ") is True
     assert is_operations_task_type("web_research") is False
-    assert is_command_execution_tool_name("exec") is True
-    assert is_command_execution_tool_name("process") is True
+    assert is_command_execution_tool_name(" exec ") is True
+    assert is_command_execution_tool_name(" process ") is True
     assert is_command_execution_tool_name("web_search") is False
 
 
