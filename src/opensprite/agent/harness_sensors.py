@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from .completion_status import is_complete_completion_status
-from .harness_inventory import (
+from .harness_policy import (
     SENSOR_CHAT_NO_UNEXPECTED_TOOLS,
     SENSOR_CODING_FILE_CHANGE,
     SENSOR_CODING_VERIFICATION,

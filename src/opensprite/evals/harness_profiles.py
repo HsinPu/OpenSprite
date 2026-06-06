@@ -5,8 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from ..agent.harness_inventory import expected_sensor_ids_for_task_type
-from ..agent.harness_policy import HarnessPolicyService
+from ..agent.harness_policy import HarnessPolicyService, expected_sensor_ids_for_task_type
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.resource_index import ResourceRef
 from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
