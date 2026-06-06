@@ -75,9 +75,9 @@ from .task_contract import (
 )
 from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
-from .turn_context import TurnContextService
-from .turn_input import (
+from .turn import (
     PreparedTurnInput,
+    TurnContextService,
     metadata_is_cli_via_web,
     metadata_requests_direct_verification,
     metadata_requests_follow_up_resume,

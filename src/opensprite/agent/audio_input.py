@@ -7,7 +7,7 @@ from typing import Awaitable, Callable
 
 from ..bus.message import UserMessage
 from ..tools.result_status import classify_tool_result_status
-from .turn_input import PreparedTurnInput
+from .turn import PreparedTurnInput
 
 
 @dataclass(frozen=True)

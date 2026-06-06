@@ -1,4 +1,4 @@
-from opensprite.agent.turn_input import (
+from opensprite.agent.turn import (
     metadata_is_cli_via_web,
     metadata_requests_direct_verification,
     metadata_requests_follow_up_resume,
