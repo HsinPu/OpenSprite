@@ -107,7 +107,7 @@ from .mcp_lifecycle import McpLifecycleService
 from .tool_access import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
-from .run_trace import RunFileChangeService, RunTraceRecorder
+from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from .run_hooks import AgentRunStateService, RunHookService
 from .subagents import SubagentRunService
 from .task_resolver import TaskContextDecision, TaskContextResolver, TaskObjectiveDecision, TaskObjectiveResolver
@@ -123,7 +123,6 @@ from .turn import TurnContextService, TurnInputPreparer
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflows import is_workflow_failed_status
-from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
 

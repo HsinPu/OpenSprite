@@ -64,7 +64,7 @@ from .harness_policy import HarnessScorecard, HarnessSensorResult, evaluate_harn
 from .harness_profile import HarnessProfile, HarnessProfileService, PURE_ANSWER_TASK_TYPE
 from .media import AgentMediaService, AudioInputPreprocessor
 from .run_hooks import AgentRunStateService
-from .run_trace import RunTraceRecorder
+from .run_trace import RunTraceRecorder, WorktreeSandboxInspector
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
 from .task_contract import (
@@ -91,7 +91,6 @@ from ..tools.evidence import (
 )
 from .workflows import is_workflow_failed_status
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
-from .worktree import WorktreeSandboxInspector
 
 
 TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD = "auto_continue_attempts"

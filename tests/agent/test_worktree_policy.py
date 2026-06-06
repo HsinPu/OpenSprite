@@ -1,4 +1,4 @@
-from opensprite.agent.worktree import (
+from opensprite.agent.run_trace import (
     GIT_WORKTREE_ADD_FAILED_REASON,
     GIT_COMMAND_FAILED_REASON,
     GIT_WORKTREE_REMOVE_FAILED_REASON,

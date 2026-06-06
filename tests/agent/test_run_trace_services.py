@@ -13,9 +13,9 @@ from opensprite.agent.run_trace import (
     RUN_PART_CONTENT_MAX_CHARS,
     RunEventSink,
     RunTraceRecorder,
+    WorktreeSandboxInspector,
     truncate_run_part_content,
 )
-from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
