@@ -45,7 +45,6 @@ from ..tools.evidence import (
     is_web_source_evidence_tool,
 )
 from ..tools.permissions import ToolPermissionPolicy
-from .completion_status import is_complete_completion_status
 from .media import count_media_artifacts
 from .message_history import HISTORY_SEARCH_TOOL_NAME
 
@@ -912,6 +911,8 @@ def _evaluate_sensor(
 
 
 def _completion_sensor(sensor_id: str, completion_result: CompletionGateResult) -> HarnessSensorResult:
+    from .completion_gate import is_complete_completion_status
+
     complete = is_complete_completion_status(completion_result.status)
     return HarnessSensorResult(
         sensor_id,

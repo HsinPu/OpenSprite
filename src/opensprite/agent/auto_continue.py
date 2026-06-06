@@ -5,14 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .completion_gate import CompletionGateResult
-from .completion_status import (
+from .completion_gate import (
+    CompletionGateResult,
     allows_workflow_resume,
+    command_version_follow_up_instruction,
+    contract_requests_quality_check,
     is_continuable_completion_status,
     is_incomplete_completion_status,
     is_terminal_completion_status,
+    itemized_output_follow_up_instruction,
+    media_artifact_gap_detail,
     needs_review_completion_status,
     needs_verification_completion_status,
+    source_artifact_traceability_gap_detail,
+    source_material_gap_detail,
+    source_material_satisfies_contract,
 )
 from .execution import ExecutionResult, is_max_tool_iterations_stop_reason
 from .harness_policy import (
@@ -24,15 +31,6 @@ from .harness_policy import (
     is_research_profile_name,
 )
 from .media import media_artifact_gap_follow_up_instruction
-from .completion_gate import (
-    command_version_follow_up_instruction,
-    contract_requests_quality_check,
-    itemized_output_follow_up_instruction,
-    media_artifact_gap_detail,
-    source_artifact_traceability_gap_detail,
-    source_material_gap_detail,
-    source_material_satisfies_contract,
-)
 from .task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     contract_expects_file_change,

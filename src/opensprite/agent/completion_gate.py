@@ -18,16 +18,6 @@ from ..documents.active_task import (
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
-from .completion_status import (
-    BLOCKED_COMPLETION_STATUS,
-    COMPLETE_COMPLETION_STATUS,
-    INCOMPLETE_COMPLETION_STATUS,
-    NEEDS_REVIEW_COMPLETION_STATUS,
-    NEEDS_VERIFICATION_COMPLETION_STATUS,
-    WAITING_USER_COMPLETION_STATUS,
-    is_complete_completion_status,
-    needs_verification_completion_status,
-)
 from .harness_policy import OPERATIONS_TASK_TYPE, VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
 from .task_resolver import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
@@ -132,6 +122,72 @@ from .subagents import (
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
 )
+
+INCOMPLETE_COMPLETION_STATUS = "incomplete"
+NEEDS_VERIFICATION_COMPLETION_STATUS = "needs_verification"
+NEEDS_REVIEW_COMPLETION_STATUS = "needs_review"
+COMPLETE_COMPLETION_STATUS = "complete"
+BLOCKED_COMPLETION_STATUS = "blocked"
+WAITING_USER_COMPLETION_STATUS = "waiting_user"
+CONTINUABLE_COMPLETION_STATUSES = frozenset(
+    {INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS}
+)
+TERMINAL_COMPLETION_STATUSES = frozenset(
+    {BLOCKED_COMPLETION_STATUS, COMPLETE_COMPLETION_STATUS, WAITING_USER_COMPLETION_STATUS}
+)
+BLOCKING_COMPLETION_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, WAITING_USER_COMPLETION_STATUS})
+EVIDENCE_FOLLOW_UP_COMPLETION_STATUSES = frozenset(
+    {NEEDS_VERIFICATION_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS}
+)
+REPLACEABLE_NONFINAL_COMPLETION_STATUSES = frozenset(
+    {INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS}
+)
+WORKFLOW_RESUME_COMPLETION_STATUSES = frozenset({INCOMPLETE_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS})
+
+
+def normalize_completion_status(status: str | None) -> str:
+    return str(status or "").strip().lower()
+
+
+def is_continuable_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) in CONTINUABLE_COMPLETION_STATUSES
+
+
+def is_terminal_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) in TERMINAL_COMPLETION_STATUSES
+
+
+def is_complete_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == COMPLETE_COMPLETION_STATUS
+
+
+def is_incomplete_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == INCOMPLETE_COMPLETION_STATUS
+
+
+def needs_verification_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == NEEDS_VERIFICATION_COMPLETION_STATUS
+
+
+def needs_review_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == NEEDS_REVIEW_COMPLETION_STATUS
+
+
+def is_blocking_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) in BLOCKING_COMPLETION_STATUSES
+
+
+def requires_evidence_follow_up(status: str | None) -> bool:
+    return normalize_completion_status(status) in EVIDENCE_FOLLOW_UP_COMPLETION_STATUSES
+
+
+def allows_nonfinal_response_replacement(status: str | None) -> bool:
+    return normalize_completion_status(status) in REPLACEABLE_NONFINAL_COMPLETION_STATUSES
+
+
+def allows_workflow_resume(status: str | None) -> bool:
+    return normalize_completion_status(status) in WORKFLOW_RESUME_COMPLETION_STATUSES
+
 
 COMPLETION_JUDGE_STATUSES = frozenset(
     {

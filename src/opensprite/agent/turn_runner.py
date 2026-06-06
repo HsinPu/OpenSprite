@@ -51,7 +51,7 @@ from .completion_gate import (
     CompletionGateService,
     completion_blocker_response,
 )
-from .completion_status import (
+from .completion_gate import (
     BLOCKED_COMPLETION_STATUS,
     INCOMPLETE_COMPLETION_STATUS,
     allows_nonfinal_response_replacement,

@@ -1,4 +1,4 @@
-from opensprite.agent.completion_status import (
+from opensprite.agent.completion_gate import (
     allows_nonfinal_response_replacement,
     allows_workflow_resume,
     is_blocking_completion_status,

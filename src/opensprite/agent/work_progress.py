@@ -38,14 +38,14 @@ from ..documents.active_task import (
     is_terminal_active_task_status,
 )
 from ..utils.log import logger
-from .completion_gate import CompletionGateResult
-from .completion_status import (
-    is_complete_completion_status,
+from .completion_gate import (
+    CompletionGateResult,
     is_blocking_completion_status,
+    is_complete_completion_status,
     is_incomplete_completion_status,
+    is_terminal_completion_status,
     needs_review_completion_status,
     needs_verification_completion_status,
-    is_terminal_completion_status,
     requires_evidence_follow_up,
 )
 from .execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
