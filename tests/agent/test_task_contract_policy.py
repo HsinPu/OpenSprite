@@ -13,10 +13,12 @@ from opensprite.agent.task_contract import (
     SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
     TaskContract,
     VERIFICATION_OR_GAP_CRITERION_KIND,
+    WORKSPACE_LOCATION_QUALITY_CHECK,
     WORKSPACE_LOCATION_CRITERION_KIND,
     _build_task_planner_prompt,
     _contract_from_task_planner_payload,
     _ensure_task_type_tool_groups,
+    _normalize_planner_quality_checks,
     _normalize_planner_tool_groups,
     build_planner_capability_catalog,
     contract_expects_file_change,
@@ -260,9 +262,17 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
 
 
 def test_planner_tool_group_aliases_are_normalized_without_duplicates():
-    groups = _normalize_planner_tool_groups(["workspace_change", "workspace_write", "media_analysis", "ops", "unknown"])
+    groups = _normalize_planner_tool_groups(
+        [" workspace_change ", "workspace_write", " media_analysis ", " ops ", "unknown"]
+    )
 
     assert groups == ["workspace_write", "media", "verification"]
+
+
+def test_planner_quality_check_values_are_normalized_without_duplicates():
+    checks = _normalize_planner_quality_checks([" WORKSPACE_LOCATION ", "workspace_location", "unknown"])
+
+    assert checks == [WORKSPACE_LOCATION_QUALITY_CHECK]
 
 
 def test_task_type_required_tool_groups_are_added_from_policy_map():
