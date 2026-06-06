@@ -5,7 +5,7 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.subagents import SubagentRunService, _subagent_preparation_error_detail
-from opensprite.agent.subagent_profiles import RESEARCH_PROFILE, build_subagent_tool_registry
+from opensprite.agent.subagents import RESEARCH_PROFILE, build_subagent_tool_registry
 from opensprite.tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace

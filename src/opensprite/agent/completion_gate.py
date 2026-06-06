@@ -35,7 +35,7 @@ from .task_resolver import (
     is_read_only_task_type,
     is_workspace_read_task_type,
 )
-from .subagent_profiles import (
+from .subagents import (
     REVIEW_PROMPT_TYPES,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,
