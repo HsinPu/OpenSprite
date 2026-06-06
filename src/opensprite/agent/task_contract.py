@@ -1735,17 +1735,18 @@ class TaskContract:
 
 def task_planner_status(task_contract: Any) -> str:
     """Return the normalized planner status from a task contract."""
-    metadata = getattr(task_contract, "planner_metadata", None) or {}
-    if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
-    return ""
+    return _planner_metadata_value(task_contract, PLANNER_METADATA_STATUS_FIELD)
 
 
 def task_planner_reason(task_contract: Any) -> str:
     """Return the normalized planner reason from a task contract."""
+    return _planner_metadata_value(task_contract, PLANNER_METADATA_REASON_FIELD)
+
+
+def _planner_metadata_value(task_contract: Any, field: str) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_REASON_FIELD) or "").strip()
+        return str(metadata.get(field) or "").strip()
     return ""
 
 
