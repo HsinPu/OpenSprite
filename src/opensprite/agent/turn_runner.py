@@ -396,19 +396,19 @@ RUN_VERIFICATION_QUICK_ACTION = "run_verification"
 
 
 def metadata_is_cli_via_web(metadata: dict[str, Any]) -> bool:
-    return str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip() == CLI_VIA_WEB_TURN_SOURCE
+    return _metadata_value_matches(metadata, TURN_SOURCE_METADATA_KEY, CLI_VIA_WEB_TURN_SOURCE)
 
 
 def metadata_requests_follow_up_resume(metadata: dict[str, Any]) -> bool:
-    return _quick_action(metadata) == RESUME_FOLLOW_UP_QUICK_ACTION
+    return _metadata_value_matches(metadata, QUICK_ACTION_METADATA_KEY, RESUME_FOLLOW_UP_QUICK_ACTION)
 
 
 def metadata_requests_direct_verification(metadata: dict[str, Any]) -> bool:
-    return _quick_action(metadata) == RUN_VERIFICATION_QUICK_ACTION
+    return _metadata_value_matches(metadata, QUICK_ACTION_METADATA_KEY, RUN_VERIFICATION_QUICK_ACTION)
 
 
-def _quick_action(metadata: dict[str, Any]) -> str:
-    return str(metadata.get(QUICK_ACTION_METADATA_KEY) or "").strip()
+def _metadata_value_matches(metadata: dict[str, Any], key: str, expected: str) -> bool:
+    return str(metadata.get(key) or "").strip() == expected
 
 
 @dataclass(frozen=True)
