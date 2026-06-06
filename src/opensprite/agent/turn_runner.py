@@ -220,19 +220,23 @@ def web_source_relevance_score(source: dict[str, Any], objective: str) -> int:
     if not keywords:
         return 0
     score = 0
-    domain = str(source.get("domain") or "").lower()
+    domain = _web_source_text(source, "domain").lower()
     if not domain:
-        url = str(source.get("url") or "").lower()
+        url = _web_source_text(source, "url").lower()
         domain = re.sub(r"^https?://", "", url).split("/", 1)[0]
     domain_label = _domain_brand_label(domain)
     if domain_label and domain_label in _objective_brand_tokens(objective):
         score += 10
     haystack = " ".join(
-        str(source.get(key) or "")
+        _web_source_text(source, key)
         for key in ("title", "url", "snippet", "content", "domain")
     ).lower()
     score += sum(1 for keyword in keywords if keyword in haystack)
     return score
+
+
+def _web_source_text(source: dict[str, Any], key: str) -> str:
+    return str(source.get(key) or "")
 
 
 def _objective_keywords(objective: str) -> set[str]:

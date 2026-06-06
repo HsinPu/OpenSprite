@@ -33,3 +33,12 @@ def test_web_source_relevance_score_prefers_brand_domain_from_objective():
     objective = "Check the latest OpenRouter API docs"
 
     assert web_source_relevance_score(official, objective) > web_source_relevance_score(unrelated, objective)
+
+
+def test_web_source_relevance_score_uses_domain_field_without_url():
+    source = {
+        "title": "OpenRouter docs",
+        "domain": "openrouter.ai",
+    }
+
+    assert web_source_relevance_score(source, "Check OpenRouter docs") > 0
