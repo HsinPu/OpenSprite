@@ -1,5 +1,4 @@
-from opensprite.agent.planning import resolve_planning_mode
-from opensprite.agent.task_contract import TaskContract
+from opensprite.agent.task_contract import TaskContract, resolve_planning_mode
 
 
 def test_planning_mode_uses_task_contract_task_type():

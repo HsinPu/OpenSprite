@@ -25,7 +25,6 @@ from ..runs.events import (
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_OBJECTIVE_RESOLVED_EVENT,
 )
-from .planning import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
@@ -51,6 +50,7 @@ from .task_contract import (
     is_substantive_final_answer_criterion,
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
+    resolve_planning_mode,
 )
 from .task_resolver import TaskContextDecision, TaskObjectiveDecision
 from .task_intent import TaskIntent

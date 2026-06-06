@@ -16,6 +16,7 @@ from opensprite.agent.task_contract import (
     _contract_from_task_planner_payload,
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
+    build_planner_capability_catalog,
     contract_requests_itemized_output,
     contract_requests_source_material,
     contract_requests_source_reference,
@@ -31,7 +32,6 @@ from opensprite.agent.task_contract import (
     is_workspace_location_criterion,
     missing_evidence,
 )
-from opensprite.agent.planning import build_planner_capability_catalog
 from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.registry import ToolRegistry
