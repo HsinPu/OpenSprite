@@ -1,6 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.source_finalization_ranking import (
+from opensprite.agent.turn_runner import (
     source_finalization_allowed,
     task_contract_requires_web_sources,
 )
