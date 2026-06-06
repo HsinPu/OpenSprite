@@ -88,7 +88,7 @@ from .auto_continue import AutoContinueService
 from .background import BackgroundSessionNotificationService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
-from .curator import CuratorService, fingerprint_text_directory
+from .curator import CuratorService, SkillReviewService, fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
 from .harness_policy import HarnessPolicyService
@@ -104,7 +104,6 @@ from .retrieval import ProactiveRetrievalService
 from .response_finalizer import AgentResponseFinalizer
 from .run_trace import RunTraceRecorder
 from .run_hooks import AgentRunStateService, RunHookService
-from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_resolver import TaskContextDecision, TaskContextResolver, TaskObjectiveDecision, TaskObjectiveResolver
 from .task_contract import TaskPlanner
