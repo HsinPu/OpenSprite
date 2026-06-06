@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any, Awaitable, Callable
 
+from ..context.runtime import build_runtime_context
 from ..llms import ChatMessage
 from ..llms.routed import ModelRoutedProvider
 from ..llms.registry import create_llm
@@ -25,10 +26,12 @@ from ..runs.events import (
     SUBAGENT_STARTED_EVENT,
 )
 from ..runs.lifecycle import RUN_STARTED_EVENT
+from ..skills import SkillsLoader
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
 from .subagent_output import (
+    READONLY_SUBAGENT_RESULT_CONTRACT,
     STRUCTURED_SUBAGENT_CONTRACT_FIELD,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD,
@@ -44,9 +47,10 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     STRUCTURED_SUBAGENT_TRUNCATED_FIELD,
+    build_structured_subagent_contract_instructions,
     parse_structured_subagent_output,
 )
-from ..subagent_prompts import get_all_subagents, load_metadata
+from ..subagent_prompts import get_all_subagents, load_metadata, load_prompt
 from .subagent_session import (
     build_child_subagent_session_id,
     extract_subagent_prompt_type,
@@ -58,7 +62,6 @@ from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
 from .run_hooks import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
-from .subagent_builder import SubagentMessageBuilder
 from .subagent_profiles import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_registry, profile_for_subagent
 from .subagent_output import SUBAGENT_PROMPT_TYPE_LABEL, SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_status import (
@@ -76,6 +79,83 @@ from .workflow_status import (
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
 DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
+
+
+class SubagentMessageBuilder:
+    """Build prompt/messages for delegated subagent work."""
+
+    def __init__(self, prompt_loader=load_prompt, skills_loader: SkillsLoader | None = None):
+        self.prompt_loader = prompt_loader
+        self.skills_loader = skills_loader
+
+    def build_system_prompt(
+        self,
+        prompt_type: str = "writer",
+        workspace: str | Path | None = None,
+        app_home: Path | None = None,
+    ) -> str:
+        prompt_body = self.prompt_loader(
+            prompt_type,
+            app_home=app_home,
+            session_workspace=workspace,
+        )
+        prompt_metadata = load_metadata(
+            prompt_type,
+            app_home=app_home,
+            session_workspace=workspace,
+        )
+        runtime_context = build_runtime_context(workspace=workspace)
+        workspace_path = Path(workspace) if workspace is not None else None
+        skills_summary = ""
+        if self.skills_loader is not None:
+            personal_skills_dir = workspace_path / "skills" if workspace_path is not None else None
+            skills_summary = self.skills_loader.build_skills_summary(personal_skills_dir)
+
+        sections = []
+        if prompt_body:
+            sections.append(prompt_body)
+        else:
+            sections.append(
+                "## 角色（Role）\n"
+                f"你是專注於單一任務的 `{prompt_type}` 助手。\n\n"
+                "## 任務（Task）\n"
+                "1. 先理解目前任務。\n"
+                "2. 根據已提供資訊完成內容。\n"
+                "3. 若資訊不足，只提出必要問題。\n\n"
+                "## 規範（Constraints）\n"
+                "- 聚焦當前任務\n"
+                "- 不要虛構事實\n"
+                "- 直接輸出可交付內容\n\n"
+                "## 輸出（Output）\n"
+                "- 若資訊足夠：直接輸出完成內容。\n"
+                "- 若資訊不足：列出需要補充的問題。"
+            )
+
+        if str(prompt_metadata.get("structured_output_contract") or "").strip() == READONLY_SUBAGENT_RESULT_CONTRACT:
+            sections.extend(["", build_structured_subagent_contract_instructions(prompt_type)])
+
+        if skills_summary:
+            sections.extend([
+                "",
+                "If a listed skill is relevant, read it before using other non-trivial tools so you can follow its workflow first.",
+                "",
+                skills_summary,
+            ])
+        sections.extend(["", runtime_context])
+        return "\n".join(sections).strip()
+
+    def build_messages(
+        self,
+        task: str,
+        prompt_type: str = "writer",
+        workspace: str | Path | None = None,
+        app_home: Path | None = None,
+    ) -> list[ChatMessage]:
+        system_prompt = self.build_system_prompt(prompt_type, workspace=workspace, app_home=app_home)
+        return [
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=task),
+        ]
 
 
 def _subagent_error_result(
