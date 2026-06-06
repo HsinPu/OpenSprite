@@ -10,6 +10,29 @@ from ..utils.log import logger
 from .media import AgentMediaService, INBOUND_AUDIO_EXTENSIONS, INBOUND_IMAGE_EXTENSIONS, INBOUND_VIDEO_EXTENSIONS
 
 
+QUICK_ACTION_METADATA_KEY = "quick_action"
+TURN_SOURCE_METADATA_KEY = "source"
+CLI_VIA_WEB_TURN_SOURCE = "cli_via_web"
+RESUME_FOLLOW_UP_QUICK_ACTION = "resume_follow_up"
+RUN_VERIFICATION_QUICK_ACTION = "run_verification"
+
+
+def metadata_is_cli_via_web(metadata: dict[str, Any]) -> bool:
+    return str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip() == CLI_VIA_WEB_TURN_SOURCE
+
+
+def metadata_requests_follow_up_resume(metadata: dict[str, Any]) -> bool:
+    return _quick_action(metadata) == RESUME_FOLLOW_UP_QUICK_ACTION
+
+
+def metadata_requests_direct_verification(metadata: dict[str, Any]) -> bool:
+    return _quick_action(metadata) == RUN_VERIFICATION_QUICK_ACTION
+
+
+def _quick_action(metadata: dict[str, Any]) -> str:
+    return str(metadata.get(QUICK_ACTION_METADATA_KEY) or "").strip()
+
+
 @dataclass(frozen=True)
 class PreparedTurnInput:
     """Resolved user turn data used by process orchestration."""
