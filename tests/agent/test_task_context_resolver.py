@@ -7,13 +7,19 @@ from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_context_resolver import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
+    TASK_CONTEXT_RESOLUTION_PURPOSE,
+    TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX,
     TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
     TaskContextDecision,
     TaskContextResolver,
     _build_llm_prompt,
     _merge_with_deterministic,
+    llm_failed_reason,
+    llm_low_confidence_reason,
+    llm_unavailable_reason,
     task_boundary_confidence_too_low_reason,
+    task_text_tokens,
 )
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
@@ -29,6 +35,19 @@ from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
 def _resolver() -> TaskContextResolver:
     return TaskContextResolver(Config.load_agent_template_config().task_context_llm)
+
+
+def test_task_text_tokens_supports_latin_and_cjk_follow_up_text():
+    assert task_text_tokens("and this one?") == ("and", "this", "one")
+    assert task_text_tokens("那00981t呢") == ("那00981t呢",)
+
+
+def test_task_context_resolver_formats_shared_llm_fallback_reasons():
+    assert llm_unavailable_reason(TASK_CONTEXT_RESOLUTION_PURPOSE) == "llm unavailable; task context was not inferred"
+    assert llm_failed_reason(TASK_OBJECTIVE_RESOLUTION_PURPOSE) == "llm failed; objective was not enriched"
+    assert llm_low_confidence_reason(0.456, TASK_CONTEXT_RESOLUTION_PURPOSE) == (
+        "llm confidence too low (0.46); task context was not inferred"
+    )
 
 
 def test_context_prompt_preserves_tail_of_long_current_message():

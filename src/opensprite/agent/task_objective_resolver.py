@@ -11,20 +11,18 @@ from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
-from .task_context_policy import (
+from .task_context_resolver import (
+    TASK_OBJECTIVE_RESOLUTION_PURPOSE,
+    TaskContextDecision,
     is_new_task_continuation_type,
     is_objective_resolution_enrichable_type,
     is_objective_resolution_skip_type,
-)
-from .task_context_resolver import TaskContextDecision
-from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
-from .task_context_policy import task_text_tokens
-from .task_context_policy import (
-    TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     llm_failed_reason,
     llm_low_confidence_reason,
     llm_unavailable_reason,
+    task_text_tokens,
 )
+from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 
 
 _MIN_CONFIDENCE = 0.65

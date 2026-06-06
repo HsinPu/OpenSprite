@@ -38,11 +38,11 @@ from .harness_profile import (
     normalize_profile_name,
 )
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
-from .task_context_policy import (
+from .task_context_resolver import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
+    TaskContextDecision,
 )
-from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent, intent_supports_default_work_plan
 from .workflow_status import is_workflow_failed_status
 

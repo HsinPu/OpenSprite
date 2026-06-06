@@ -36,14 +36,14 @@ from .active_task_status import (
 )
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
-from .task_context_policy import (
+from .task_context_resolver import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
+    TaskContextDecision,
     is_ambiguous_boundary_continuation_type,
     is_current_task_continuation_type,
     is_current_task_replacement_type,
 )
-from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import (
