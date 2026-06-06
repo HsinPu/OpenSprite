@@ -1626,7 +1626,7 @@ def _verification_status_is_skipped(metadata: Any) -> bool:
 
 
 def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
-    paths = _normalized_touched_paths(touched_paths)
+    paths = normalized_touched_paths(touched_paths)
     if not paths:
         return True
     return any(path_requires_delegated_review(path) for path in paths)
@@ -1990,7 +1990,7 @@ def _string_or_none(value: Any) -> str | None:
 
 
 def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
-    touched_paths = _normalized_touched_paths(execution_result.touched_paths)
+    touched_paths = normalized_touched_paths(execution_result.touched_paths)
     decision_paths = tuple(strip_repo_snapshot_prefix(path) for path in touched_paths)
     test_paths = tuple(path for path in decision_paths if is_python_test_path(path))
     has_web_touched = any(is_web_app_path(path) for path in decision_paths)
@@ -2016,10 +2016,6 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
         "path": common_verification_path(touched_paths) or ".",
         "pytest_args": (),
     }
-
-
-def _normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    return normalized_touched_paths(paths)
 
 
 ITEMIZED_RESPONSE_LINE_RE = re.compile(r"^(?:[-*]|\d+[.)]|\|)")
@@ -2366,7 +2362,7 @@ def _evaluate_source_detail(
     sources = _execution_web_sources(execution_result)
     if not sources:
         return None
-    detailed_count = sum(1 for source in sources if _source_has_substantive_detail(source))
+    detailed_count = sum(1 for source in sources if web_source_has_substantive_detail(source))
     if detailed_count >= min_count:
         coverage_detail = _web_research_coverage_gap_detail(execution_result)
         if coverage_detail is None:
@@ -2499,12 +2495,12 @@ def _evaluate_command_version_answer(
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
         return None
-    if _execution_has_failed_command_evidence(execution_result):
+    if execution_has_failed_command_evidence(execution_result):
         return None
     if _response_reports_tool_result(response_text, execution_result):
         return None
     detail = command_version_missing_detail(
-        inspected_repository_state=_execution_confuses_command_version_with_repo_state(execution_result)
+        inspected_repository_state=execution_confuses_command_version_with_repo_state(execution_result)
     )
     return QualityGateResult(
         passed=False,
@@ -2512,14 +2508,6 @@ def _evaluate_command_version_answer(
         reason=COMMAND_VERSION_MISSING_REASON,
         active_task_detail=detail,
     )
-
-
-def _execution_has_failed_command_evidence(execution_result: ExecutionResult) -> bool:
-    return execution_has_failed_command_evidence(execution_result)
-
-
-def _execution_confuses_command_version_with_repo_state(execution_result: ExecutionResult) -> bool:
-    return execution_confuses_command_version_with_repo_state(execution_result)
 
 
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
@@ -2707,7 +2695,7 @@ def _substantive_source_detail_count(execution_result: ExecutionResult) -> int:
     seen: set[str] = set()
     count = 0
     for source in _execution_web_sources(execution_result):
-        if not _source_has_substantive_detail(source):
+        if not web_source_has_substantive_detail(source):
             continue
         url = str(source.get("url") or "").strip().lower()
         key = url or f"{source.get('title') or ''}|{source.get('snippet') or ''}"
@@ -2750,10 +2738,6 @@ def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "")
                     source[key] = raw_source[key]
             sources.append(source)
     return sources
-
-
-def _source_has_substantive_detail(source: dict[str, object]) -> bool:
-    return web_source_has_substantive_detail(source)
 
 
 def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
