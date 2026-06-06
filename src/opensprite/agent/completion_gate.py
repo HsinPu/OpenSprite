@@ -43,7 +43,8 @@ from .task_resolver import (
     is_read_only_task_type,
 )
 from .quality_gate import QualityGateService
-from .subagent_output import (
+from .subagent_profiles import (
+    REVIEW_PROMPT_TYPES,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,
     STRUCTURED_SUBAGENT_SECTIONS_FIELD,
@@ -51,7 +52,6 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     is_clean_structured_subagent_status,
 )
-from .subagent_profiles import REVIEW_PROMPT_TYPES
 from .task_contract import (
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,

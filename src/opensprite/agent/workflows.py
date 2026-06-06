@@ -18,7 +18,9 @@ from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_hooks import RunCancelledError
-from .subagent_output import (
+from .subagent_profiles import (
+    CODE_REVIEWER_PROMPT_TYPE,
+    REVIEW_PROMPT_TYPES,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,
     STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
@@ -30,7 +32,6 @@ from .subagent_output import (
     is_clean_structured_subagent_status,
     subagent_result_line,
 )
-from .subagent_profiles import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 
 if TYPE_CHECKING:
     from .subagents import SubagentTaskOutcome

@@ -31,7 +31,8 @@ from ..skills import SkillsLoader
 from ..storage import StorageProvider, StoredMessage
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
-from .subagent_output import (
+from .subagent_profiles import (
+    PARALLEL_SAFE_PROFILE_NAMES,
     READONLY_SUBAGENT_RESULT_CONTRACT,
     STRUCTURED_SUBAGENT_CONTRACT_FIELD,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
@@ -48,8 +49,13 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     STRUCTURED_SUBAGENT_TRUNCATED_FIELD,
+    SUBAGENT_PROMPT_TYPE_LABEL,
+    SUBAGENT_TASK_ID_LABEL,
+    build_subagent_tool_registry,
     build_structured_subagent_contract_instructions,
     parse_structured_subagent_output,
+    profile_for_subagent,
+    subagent_result_line,
 )
 from ..subagent_prompts import get_all_subagents, load_metadata, load_prompt
 from ..tools import ToolRegistry
@@ -57,8 +63,6 @@ from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
 from .run_hooks import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
-from .subagent_profiles import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_registry, profile_for_subagent
-from .subagent_output import SUBAGENT_PROMPT_TYPE_LABEL, SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflows import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,

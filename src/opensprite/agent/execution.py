@@ -50,7 +50,7 @@ from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_hooks import RunCancelledError
 from .task_contract import TaskContract
-from .subagent_output import (
+from .subagent_profiles import (
     SUBAGENT_PROMPT_TYPE_LABEL,
     SUBAGENT_TASK_ID_LABEL,
     parse_subagent_result_line,
