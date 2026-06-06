@@ -34,7 +34,7 @@ from .harness_profile import (
     is_ops_profile_name,
     is_research_profile_name,
 )
-from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
+from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
 

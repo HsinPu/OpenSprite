@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .harness_profile import is_planning_task_type
-from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
+from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 from ..tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,

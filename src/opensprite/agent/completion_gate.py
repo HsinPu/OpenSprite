@@ -59,7 +59,7 @@ from .task_contract import (
     PLANNER_METADATA_STATUS_FIELD,
     contract_expects_file_change,
 )
-from .history_retrieval_policy import is_history_retrieval_tool_name
+from .retrieval import is_history_retrieval_tool_name
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,

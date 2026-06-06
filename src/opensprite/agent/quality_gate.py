@@ -15,7 +15,7 @@ from .task_intent import (
 )
 from .execution import ExecutionResult
 from .harness_profile import OPERATIONS_TASK_TYPE
-from .history_retrieval_policy import (
+from .retrieval import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,

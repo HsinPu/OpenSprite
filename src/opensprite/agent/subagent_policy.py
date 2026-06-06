@@ -30,7 +30,7 @@ from ..tool_names import (
     WORKSPACE_WRITE_TOOL_NAMES,
     WRITE_FILE_TOOL_NAME,
 )
-from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
+from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .tool_access import ToolAccessResolver
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
