@@ -4,7 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import SubagentRunService, _subagent_preparation_error_detail
+from opensprite.agent.execution import (
+    SubagentRunService,
+    _subagent_preparation_error_detail,
+    _subagent_validation_error,
+)
 from opensprite.agent.execution import RESEARCH_PROFILE, build_subagent_tool_registry
 from opensprite.tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
@@ -72,6 +76,17 @@ def test_subagent_preparation_error_detail_uses_shared_result_status():
         )
         == "task_id missing"
     )
+
+
+def test_subagent_validation_error_uses_shared_tool_error_policy():
+    result = _subagent_validation_error(" task is required ")
+    status = classify_tool_result_status(result)
+
+    assert status.error == "task is required"
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert json.loads(result)["metadata"] == {"tool_name": "delegate"}
 
 
 def test_subagent_group_summary_uses_shared_workflow_status_helpers():

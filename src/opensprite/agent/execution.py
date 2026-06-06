@@ -3678,13 +3678,13 @@ class SubagentMessageBuilder:
         ]
 
 
-def _subagent_error_result(
+def _agent_tool_error_result(
     message: str,
     *,
+    tool_name: str,
     category: str,
-    error_type: str = "DelegateToolError",
+    error_type: str,
     invalid_arguments: bool = False,
-    tool_name: str = DELEGATE_TOOL_NAME,
 ) -> str:
     error = str(message or "").strip()
     return tool_error_result(
@@ -3694,6 +3694,23 @@ def _subagent_error_result(
         repeated_error_key=error if invalid_arguments else None,
         invalid_arguments=invalid_arguments,
         metadata={"tool_name": tool_name},
+    )
+
+
+def _subagent_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "DelegateToolError",
+    invalid_arguments: bool = False,
+    tool_name: str = DELEGATE_TOOL_NAME,
+) -> str:
+    return _agent_tool_error_result(
+        message,
+        tool_name=tool_name,
+        category=category,
+        error_type=error_type,
+        invalid_arguments=invalid_arguments,
     )
 
 
@@ -4880,14 +4897,12 @@ def _workflow_error_result(
     error_type: str = "RunWorkflowToolError",
     invalid_arguments: bool = False,
 ) -> str:
-    error = str(message or "").strip()
-    return tool_error_result(
-        error,
+    return _agent_tool_error_result(
+        message,
+        tool_name=RUN_WORKFLOW_TOOL_NAME,
         error_type=error_type,
         category=category,
-        repeated_error_key=error if invalid_arguments else None,
         invalid_arguments=invalid_arguments,
-        metadata={"tool_name": RUN_WORKFLOW_TOOL_NAME},
     )
 
 
