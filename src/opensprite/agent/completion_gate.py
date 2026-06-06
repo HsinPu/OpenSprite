@@ -51,7 +51,7 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     is_clean_structured_subagent_status,
 )
-from .subagent_policy import REVIEW_PROMPT_TYPES
+from .subagent_profiles import REVIEW_PROMPT_TYPES
 from .task_contract import (
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,

@@ -29,7 +29,7 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     is_clean_structured_subagent_status,
 )
-from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
+from .subagent_profiles import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .subagent_output import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_fields import (
     WORKFLOW_ERROR_FIELD,
