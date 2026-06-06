@@ -2135,7 +2135,7 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
     if not metadata_is_cli_via_web(data):
         return message
     context_lines: list[str] = []
-    gateway_url = str(data.get("gateway_url") or "").strip()
+    gateway_url = _metadata_text(data, "gateway_url")
     if gateway_url:
         health_url = join_url_path(gateway_url, "/healthz")
         context_lines.append(
@@ -2144,8 +2144,8 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
         )
     snapshot = data.get("workspace_snapshot")
     if isinstance(snapshot, dict):
-        snapshot_path = str(snapshot.get("path") or "").strip()
-        snapshot_source = str(snapshot.get("source") or "").strip()
+        snapshot_path = _metadata_text(snapshot, "path")
+        snapshot_source = _metadata_text(snapshot, "source")
         if snapshot_path:
             context_lines.append(
                 f"The requested workspace snapshot is available inside this session at `{snapshot_path}/`."

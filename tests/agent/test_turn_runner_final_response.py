@@ -24,10 +24,10 @@ def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
         "check healthz",
         {
             "source": "cli_via_web",
-            "gateway_url": "http://127.0.0.1:8765",
+            "gateway_url": " http://127.0.0.1:8765 ",
             "workspace_snapshot": {
-                "path": "repo",
-                "source": "C:\\Users\\win10\\Desktop\\HsinPuRepository\\opensprite",
+                "path": " repo ",
+                "source": " C:\\Users\\win10\\Desktop\\HsinPuRepository\\opensprite ",
             },
         },
     )
@@ -36,6 +36,7 @@ def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
     assert "http://127.0.0.1:8765" in message
     assert "http://127.0.0.1:8765/healthz" in message
     assert "`repo/`" in message
+    assert "`C:\\Users\\win10\\Desktop\\HsinPuRepository\\opensprite`" in message
     assert "omit VCS internals" in message
 
 
