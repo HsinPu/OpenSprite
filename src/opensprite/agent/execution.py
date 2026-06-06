@@ -43,7 +43,7 @@ from .subagent_output import (
     parse_subagent_result_line,
 )
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
-from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
+from .tool_access import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 from ..tools.evidence import is_verification_tool_name
 from ..tools.evidence import (
     is_web_research_source_artifact_tool,
