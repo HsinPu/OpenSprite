@@ -21,10 +21,10 @@ from opensprite.agent.completion_gate import (
 
 
 def test_workflow_completion_policy_classifies_workflow_families():
-    assert is_review_workflow("implement_then_review") is True
+    assert is_review_workflow(" implement_then_review ") is True
     assert is_review_workflow("bugfix_then_test_then_review") is True
     assert is_review_workflow("research_then_outline") is False
-    assert is_research_then_outline_workflow("research_then_outline") is True
+    assert is_research_then_outline_workflow(" research_then_outline ") is True
     assert is_research_then_outline_workflow("implement_then_review") is False
 
 
@@ -33,7 +33,7 @@ def test_workflow_completion_reasons_are_stable():
         WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON
         == "workflow completed but required verification evidence is still missing"
     )
-    assert workflow_unsuccessful_reason("implement_then_review") == (
+    assert workflow_unsuccessful_reason(" implement_then_review ") == (
         "workflow implement_then_review did not complete successfully"
     )
     assert workflow_review_evidence_missing_reason("implement_then_review") == (
@@ -63,7 +63,7 @@ def test_workflow_review_follow_up_details_are_stable():
 
 
 def test_workflow_completion_policy_returns_review_follow_up_step():
-    assert workflow_review_follow_up_fields("implement_then_review") == {
+    assert workflow_review_follow_up_fields(" implement_then_review ") == {
         WORKFLOW_NEXT_STEP_ID_FIELD: "review",
         WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
         WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
@@ -72,7 +72,7 @@ def test_workflow_completion_policy_returns_review_follow_up_step():
 
 
 def test_workflow_completion_policy_returns_fix_follow_up_steps():
-    assert workflow_fix_follow_up_fields("implement_then_review") == {
+    assert workflow_fix_follow_up_fields(" implement_then_review ") == {
         WORKFLOW_NEXT_STEP_ID_FIELD: "implement",
         WORKFLOW_NEXT_STEP_LABEL_FIELD: "Implement",
         WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "implementer",

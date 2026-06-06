@@ -772,23 +772,23 @@ def common_verification_path(paths: tuple[str, ...]) -> str | None:
 
 
 def workflow_unsuccessful_reason(workflow_id: str | None) -> str:
-    return f"workflow {str(workflow_id or '').strip()} did not complete successfully"
+    return f"workflow {_workflow_id(workflow_id)} did not complete successfully"
 
 
 def workflow_review_evidence_missing_reason(workflow_id: str | None) -> str:
-    return f"workflow {str(workflow_id or '').strip()} completed but review evidence is missing"
+    return f"workflow {_workflow_id(workflow_id)} completed but review evidence is missing"
 
 
 def workflow_review_findings_follow_up_reason(workflow_id: str | None) -> str:
-    return f"workflow {str(workflow_id or '').strip()} completed but review findings still require follow-up"
+    return f"workflow {_workflow_id(workflow_id)} completed but review findings still require follow-up"
 
 
 def workflow_clean_review_reason(workflow_id: str | None) -> str:
-    return f"workflow {str(workflow_id or '').strip()} completed with clean review evidence"
+    return f"workflow {_workflow_id(workflow_id)} completed with clean review evidence"
 
 
 def workflow_completed_all_steps_reason(workflow_id: str | None) -> str:
-    return f"workflow {str(workflow_id or '').strip()} completed all required steps"
+    return f"workflow {_workflow_id(workflow_id)} completed all required steps"
 
 
 def workflow_review_evidence_missing_detail() -> str:
@@ -803,12 +803,16 @@ def task_review_findings_follow_up_detail() -> str:
     return TASK_REVIEW_FINDINGS_FOLLOW_UP_DETAIL
 
 
+def _workflow_id(workflow_id: str | None) -> str:
+    return str(workflow_id or "").strip()
+
+
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:
-    return str(workflow_id or "").strip() == RESEARCH_THEN_OUTLINE_WORKFLOW_ID
+    return _workflow_id(workflow_id) == RESEARCH_THEN_OUTLINE_WORKFLOW_ID
 
 
 def is_review_workflow(workflow_id: str | None) -> bool:
-    return str(workflow_id or "").strip() in REVIEW_WORKFLOW_IDS
+    return _workflow_id(workflow_id) in REVIEW_WORKFLOW_IDS
 
 
 def workflow_review_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
@@ -822,7 +826,7 @@ def workflow_review_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
 
 
 def workflow_fix_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
-    return dict(WORKFLOW_FIX_STEPS.get(str(workflow_id or "").strip(), {}))
+    return dict(WORKFLOW_FIX_STEPS.get(_workflow_id(workflow_id), {}))
 
 
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
