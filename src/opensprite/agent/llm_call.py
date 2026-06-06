@@ -36,7 +36,7 @@ from .harness_profile import (
     HarnessProfile,
     is_chat_profile_name,
 )
-from .mcp_lifecycle import mcp_tool_names as list_mcp_tool_names
+from .run_hooks import mcp_tool_names as list_mcp_tool_names
 from .task_contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,

@@ -54,7 +54,7 @@ def test_connect_mcp_uses_retry_backoff_after_failure(tmp_path, monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
-    monkeypatch.setattr("opensprite.agent.mcp_lifecycle.time.monotonic", lambda: clock["now"])
+    monkeypatch.setattr("opensprite.agent.run_hooks.time.monotonic", lambda: clock["now"])
 
     agent = _make_agent(
         tmp_path,
@@ -145,7 +145,7 @@ def test_close_mcp_resets_state_and_closes_stack(tmp_path, monkeypatch):
     async def fake_connect(servers, registry, stack):
         return None
 
-    monkeypatch.setattr("opensprite.agent.mcp_lifecycle.AsyncExitStack", FakeStack)
+    monkeypatch.setattr("opensprite.agent.run_hooks.AsyncExitStack", FakeStack)
     monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
 
     agent = _make_agent(

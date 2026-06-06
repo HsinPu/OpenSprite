@@ -103,12 +103,11 @@ from .learning_ledger import LearningLedger
 from .llm_call import LlmCallService
 from .media import AgentMediaService
 from .message_history import HistoryResetService, MessageHistoryService
-from .mcp_lifecycle import McpLifecycleService
 from .tool_access import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
 from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
-from .run_hooks import AgentRunStateService, RunHookService
+from .run_hooks import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagents import SubagentRunService
 from .task_contract import TaskPlanner
 from .task_resolver import (
