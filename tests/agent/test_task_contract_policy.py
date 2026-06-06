@@ -19,6 +19,7 @@ from opensprite.agent.task_contract import (
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
     build_planner_capability_catalog,
+    contract_expects_file_change,
     contract_requests_itemized_output,
     contract_requests_source_material,
     contract_requests_source_reference,
@@ -300,6 +301,22 @@ def test_missing_evidence_uses_requirement_kind_policy_helpers():
     assert "Missing workspace_read coverage for: file:b" in missing
     assert "Change a file." in missing
     assert "Verify the result." in missing
+
+
+def test_contract_expects_file_change_uses_requirement_attrs():
+    file_change_contract = TaskContract(
+        objective="Change a file.",
+        task_type="analysis",
+        requirements=(EvidenceRequirement(kind="file_change"),),
+    )
+    workspace_write_contract = TaskContract(
+        objective="Write to the workspace.",
+        task_type="analysis",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_write"),),
+    )
+
+    assert contract_expects_file_change(file_change_contract) is True
+    assert contract_expects_file_change(workspace_write_contract) is True
 
 
 def test_acceptance_criterion_policy_helpers():

@@ -1951,24 +1951,8 @@ def _criterion_kind(criterion: Any) -> str:
     return str(getattr(criterion, "kind", "") or "")
 
 
-def _is_resource_coverage_requirement(requirement: EvidenceRequirement) -> bool:
-    return requirement.kind == RESOURCE_COVERAGE_REQUIREMENT_KIND
-
-
-def _is_all_resource_coverage(requirement: EvidenceRequirement) -> bool:
-    return requirement.coverage == ALL_RESOURCE_COVERAGE
-
-
-def _is_file_change_requirement(requirement: Any) -> bool:
-    return str(getattr(requirement, "kind", "") or "") == FILE_CHANGE_REQUIREMENT_KIND
-
-
-def _is_verification_requirement(requirement: EvidenceRequirement) -> bool:
-    return requirement.kind == VERIFICATION_REQUIREMENT_KIND
-
-
-def _is_workspace_write_requirement(requirement: Any) -> bool:
-    return str(getattr(requirement, "tool_group", "") or "") == WORKSPACE_WRITE_TOOL_GROUP
+def _requirement_attr(requirement: Any, attr: str) -> str:
+    return str(getattr(requirement, attr, "") or "")
 
 
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
@@ -1979,12 +1963,13 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     ok_evidence = [item for item in evidence if item.ok]
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     for requirement in contract.requirements:
+        requirement_kind = _requirement_attr(requirement, "kind")
         if is_tool_group_requirement(requirement):
             tools = _contract_tool_group_tools(contract, requirement.tool_group)
             count = sum(1 for item in ok_evidence if item.name in tools)
             if count < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Use one of: {', '.join(sorted(tools))}")
-        elif _is_resource_coverage_requirement(requirement):
+        elif requirement_kind == RESOURCE_COVERAGE_REQUIREMENT_KIND:
             tools = _contract_tool_group_tools(contract, requirement.tool_group)
             covered = {
                 alias
@@ -1994,7 +1979,7 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
                 for alias in aliases.get(resource_id, {resource_id})
             }
             required = set(requirement.resource_ids)
-            if _is_all_resource_coverage(requirement):
+            if _requirement_attr(requirement, "coverage") == ALL_RESOURCE_COVERAGE:
                 uncovered = tuple(resource_id for resource_id in requirement.resource_ids if resource_id not in covered)
                 if uncovered:
                     missing.append(
@@ -2002,9 +1987,12 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
                     )
             elif len(covered & required) < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Missing {requirement.tool_group} coverage")
-        elif _is_file_change_requirement(requirement) and file_change_count < max(1, requirement.min_count):
+        elif (
+            requirement_kind == FILE_CHANGE_REQUIREMENT_KIND
+            and file_change_count < max(1, requirement.min_count)
+        ):
             missing.append(requirement.description or "Record a workspace file change.")
-        elif _is_verification_requirement(requirement) and not verification_passed:
+        elif requirement_kind == VERIFICATION_REQUIREMENT_KIND and not verification_passed:
             missing.append(requirement.description or "Record passing verification evidence.")
     return tuple(missing)
 
@@ -2025,9 +2013,10 @@ def contract_expects_file_change(task_contract: Any) -> bool:
     if task_type in FILE_CHANGE_TASK_TYPES:
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
-        if _is_file_change_requirement(requirement):
-            return True
-        if _is_workspace_write_requirement(requirement):
+        if (
+            _requirement_attr(requirement, "kind") == FILE_CHANGE_REQUIREMENT_KIND
+            or _requirement_attr(requirement, "tool_group") == WORKSPACE_WRITE_TOOL_GROUP
+        ):
             return True
     return False
 
