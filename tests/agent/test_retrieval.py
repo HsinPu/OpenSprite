@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.agent.retrieval import (
+from opensprite.agent.message_history import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     ProactiveRetrievalService,
     history_retrieval_metadata_has_results,

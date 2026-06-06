@@ -47,7 +47,7 @@ from ..tools.evidence import (
 from ..tools.permissions import ToolPermissionPolicy
 from .completion_status import is_complete_completion_status
 from .media import count_media_artifacts
-from .retrieval import HISTORY_SEARCH_TOOL_NAME
+from .message_history import HISTORY_SEARCH_TOOL_NAME
 
 if TYPE_CHECKING:
     from .completion_gate import CompletionGateResult

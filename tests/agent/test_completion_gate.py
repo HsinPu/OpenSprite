@@ -60,7 +60,7 @@ from opensprite.tools.evidence import (
 )
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.execution import ExecutionResult, is_max_tool_iterations_stop_reason
-from opensprite.agent.retrieval import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
+from opensprite.agent.message_history import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
 from opensprite.agent.quality_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.quality_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON

@@ -15,7 +15,7 @@ from .task_resolver import (
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .harness_policy import OPERATIONS_TASK_TYPE
-from .retrieval import (
+from .message_history import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,

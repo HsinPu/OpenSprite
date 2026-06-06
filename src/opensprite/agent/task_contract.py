@@ -47,7 +47,7 @@ from .harness_policy import (
     is_planning_task_type,
 )
 from .media import MEDIA_ONLY_HISTORY_MARKER
-from .retrieval import HISTORY_SEARCH_TOOL_NAME
+from .message_history import HISTORY_SEARCH_TOOL_NAME
 from .task_resolver import TaskContextDecision, TaskContextResolver
 from .task_resolver import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from ..tools.evidence import (

@@ -38,7 +38,7 @@ from ..tools.permissions import (
 )
 from ..utils import json_safe_value
 from .harness_policy import HarnessPolicy, HarnessPolicyService, WORKSPACE_DISCOVERY_TOOLS
-from .retrieval import HISTORY_SEARCH_TOOL_NAME
+from .message_history import HISTORY_SEARCH_TOOL_NAME
 
 
 _RISK_PROBE_TOOLS = {
