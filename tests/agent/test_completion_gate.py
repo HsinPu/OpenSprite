@@ -12,25 +12,18 @@ from opensprite.agent.completion_gate import (
     _completion_status_for_unsuccessful_workflow,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
-    _is_analysis_response_intent_kind,
     _is_clean_structured_review_status,
     _is_completed_delegated_review_status,
-    _is_generic_task_response_intent_kind,
-    _is_one_turn_intent_kind,
     _is_history_retrieval_tool,
     _is_cancelled_workflow_status,
     _is_failed_workflow_status,
     _is_optional_web_discovery_failure_tool,
     _is_optional_web_fetch_failure_tool,
     _is_optional_workspace_batch_failure_tool,
-    _is_plain_answer_task_type,
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
     _path_requires_delegated_review,
-    _is_read_only_blocking_requirement_kind,
-    _is_read_only_blocking_tool_group,
-    _is_read_only_task_type,
     _is_research_then_outline_workflow,
     _is_verification_requirement_kind,
     _is_verification_result_artifact_kind,
@@ -44,6 +37,15 @@ from opensprite.agent.completion_gate import (
     _workflow_gate_needs_verification,
 )
 from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
+from opensprite.agent.task_contract import (
+    is_analysis_response_intent_kind,
+    is_generic_task_response_intent_kind,
+    is_one_turn_intent_kind,
+    is_plain_answer_task_type,
+    is_read_only_blocking_requirement_kind,
+    is_read_only_blocking_tool_group,
+    is_read_only_task_type,
+)
 from opensprite.tools.evidence import (
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
@@ -282,26 +284,26 @@ def test_completion_gate_status_helpers_normalize_policy_values():
 
 def test_completion_gate_task_type_policy_helpers_are_centralized():
     intent = TaskIntentService().classify("please answer")
-    assert _is_read_only_task_type("web_research") is True
-    assert _is_read_only_task_type("code_change") is False
-    assert _is_plain_answer_task_type("pure_answer") is True
-    assert _is_plain_answer_task_type("web_research") is False
+    assert is_read_only_task_type("web_research") is True
+    assert is_read_only_task_type("code_change") is False
+    assert is_plain_answer_task_type("pure_answer") is True
+    assert is_plain_answer_task_type("web_research") is False
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
-    assert _is_one_turn_intent_kind("command") is True
-    assert _is_one_turn_intent_kind("task") is False
-    assert _is_analysis_response_intent_kind("analysis") is True
-    assert _is_analysis_response_intent_kind("task") is False
-    assert _is_generic_task_response_intent_kind("task") is True
-    assert _is_generic_task_response_intent_kind("analysis") is False
+    assert is_one_turn_intent_kind("command") is True
+    assert is_one_turn_intent_kind("task") is False
+    assert is_analysis_response_intent_kind("analysis") is True
+    assert is_analysis_response_intent_kind("task") is False
+    assert is_generic_task_response_intent_kind("task") is True
+    assert is_generic_task_response_intent_kind("analysis") is False
     assert _is_workflow_completion_intent_kind("review") is True
     assert _is_workflow_completion_intent_kind("task") is False
     assert _accepts_final_response_task_type("planning") is True
     assert _accepts_final_response_task_type("web_research") is False
-    assert _is_read_only_blocking_requirement_kind("file_change") is True
-    assert _is_read_only_blocking_requirement_kind("tool_group") is False
-    assert _is_read_only_blocking_tool_group("execution") is True
-    assert _is_read_only_blocking_tool_group("workspace_read") is False
+    assert is_read_only_blocking_requirement_kind("file_change") is True
+    assert is_read_only_blocking_requirement_kind("tool_group") is False
+    assert is_read_only_blocking_tool_group("execution") is True
+    assert is_read_only_blocking_tool_group("workspace_read") is False
     assert _is_verification_requirement_kind("verification") is True
     assert _is_verification_requirement_kind("tool_group") is False
     assert _is_verification_tool_group("verification") is True

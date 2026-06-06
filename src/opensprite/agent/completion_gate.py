@@ -1372,7 +1372,7 @@ class CompletionGateService:
                 review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if _is_one_turn_intent_kind(task_intent.kind):
+        if is_one_turn_intent_kind(task_intent.kind):
             has_response = bool(response_text.strip())
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS if has_response else INCOMPLETE_COMPLETION_STATUS,
@@ -1388,7 +1388,7 @@ class CompletionGateService:
                 review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if _is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
+        if is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=ANALYSIS_TASK_COMPLETE_REASON,
@@ -1408,7 +1408,7 @@ class CompletionGateService:
                 review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if _is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
+        if is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=GENERIC_TASK_COMPLETE_REASON,
@@ -1597,7 +1597,7 @@ def _requires_verification(task_contract: Any) -> bool:
     if _contract_requires_verification(task_contract):
         return True
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if _is_read_only_task_type(task_type):
+    if is_read_only_task_type(task_type):
         return False
     return False
 
@@ -1654,7 +1654,7 @@ def _contract_requires_verification(task_contract: Any) -> bool:
 def _contract_allows_plain_answer(task_contract: Any) -> bool:
     return bool(
         task_contract is not None
-        and _is_plain_answer_task_type(getattr(task_contract, "task_type", None))
+        and is_plain_answer_task_type(getattr(task_contract, "task_type", None))
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
@@ -1662,43 +1662,15 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
 
 def _contract_is_read_only(task_contract: Any) -> bool:
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if _is_read_only_task_type(task_type):
+    if is_read_only_task_type(task_type):
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
-        if _is_read_only_blocking_requirement_kind(str(getattr(requirement, "kind", "") or "")):
+        if is_read_only_blocking_requirement_kind(str(getattr(requirement, "kind", "") or "")):
             return False
         tool_group = str(getattr(requirement, "tool_group", "") or "")
-        if _is_read_only_blocking_tool_group(tool_group):
+        if is_read_only_blocking_tool_group(tool_group):
             return False
     return False
-
-
-def _is_read_only_task_type(task_type: str | None) -> bool:
-    return is_read_only_task_type(task_type)
-
-
-def _is_plain_answer_task_type(task_type: str | None) -> bool:
-    return is_plain_answer_task_type(task_type)
-
-
-def _is_one_turn_intent_kind(kind: str | None) -> bool:
-    return is_one_turn_intent_kind(kind)
-
-
-def _is_analysis_response_intent_kind(kind: str | None) -> bool:
-    return is_analysis_response_intent_kind(kind)
-
-
-def _is_generic_task_response_intent_kind(kind: str | None) -> bool:
-    return is_generic_task_response_intent_kind(kind)
-
-
-def _is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
-    return is_read_only_blocking_requirement_kind(kind)
-
-
-def _is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
-    return is_read_only_blocking_tool_group(tool_group)
 
 
 def _is_blocking_planner_status(status: str | None) -> bool:
