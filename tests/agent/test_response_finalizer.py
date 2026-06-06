@@ -1,7 +1,7 @@
 import asyncio
 
-import opensprite.agent.response_finalizer as response_finalizer_module
-from opensprite.agent.response_finalizer import AgentResponseFinalizer
+import opensprite.agent.turn_runner as turn_runner_module
+from opensprite.agent.turn_runner import AgentResponseFinalizer
 from opensprite.config.schema import LogConfig
 
 
@@ -32,7 +32,7 @@ def _make_finalizer(*, log_reasoning_details=False):
 
 def test_reasoning_logging_writes_summary_without_full_details(monkeypatch):
     messages = []
-    monkeypatch.setattr(response_finalizer_module.logger, "info", lambda *args: messages.append(args))
+    monkeypatch.setattr(turn_runner_module.logger, "info", lambda *args: messages.append(args))
 
     asyncio.run(
         _make_finalizer().finalize(
@@ -61,7 +61,7 @@ def test_reasoning_logging_writes_summary_without_full_details(monkeypatch):
 
 def test_reasoning_logging_can_write_full_details(monkeypatch):
     messages = []
-    monkeypatch.setattr(response_finalizer_module.logger, "info", lambda *args: messages.append(args))
+    monkeypatch.setattr(turn_runner_module.logger, "info", lambda *args: messages.append(args))
 
     asyncio.run(
         _make_finalizer(log_reasoning_details=True).finalize(
