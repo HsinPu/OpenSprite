@@ -2762,7 +2762,7 @@ class WorkProgressService:
         profile_name = normalize_profile_name(harness_profile.name if harness_profile is not None else "")
         if is_chat_profile_name(profile_name):
             return None
-        if not _intent_supports_default_work_plan(task_intent) and profile_name == "":
+        if not intent_supports_default_work_plan(task_intent) and profile_name == "":
             return None
 
         steps: list[str]
@@ -3396,10 +3396,6 @@ def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
     required_tool_groups = set(harness_profile.required_tool_groups)
     required_evidence = set(harness_profile.required_evidence)
     return VERIFICATION_TOOL_GROUP in required_tool_groups or VERIFICATION_REQUIREMENT_KIND in required_evidence
-
-
-def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
-    return intent_supports_default_work_plan(task_intent)
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
