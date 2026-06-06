@@ -29,6 +29,7 @@ from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import (
     WORKSPACE_ANALYSIS_TASK_TYPE,
     HarnessProfile,
+    WORKSPACE_DISCOVERY_TOOLS,
     is_coding_profile_name,
     is_media_profile_name,
     is_ops_profile_name,
@@ -36,7 +37,6 @@ from .harness_profile import (
     preview_harness_profiles,
 )
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
-from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from ..tools.evidence import WEB_HARNESS_RESEARCH_TOOLS, is_web_source_artifact_kind, is_web_source_evidence_tool
 from .completion_status import is_complete_completion_status
 from .media import count_media_artifacts

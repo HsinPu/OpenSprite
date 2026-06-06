@@ -28,7 +28,7 @@ from .completion_status import (
     is_complete_completion_status,
     needs_verification_completion_status,
 )
-from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP
+from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
 from .task_intent import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
@@ -63,7 +63,6 @@ from .task_contract import (
     neutral_task_contract,
 )
 from .retrieval import is_history_retrieval_tool_name
-from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from ..tools.evidence import (
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,

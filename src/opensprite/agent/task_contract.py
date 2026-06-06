@@ -35,6 +35,9 @@ from .harness_profile import (
     OPERATIONS_TASK_TYPE,
     PLANNING_TASK_TYPE,
     PURE_ANSWER_TASK_TYPE,
+    OPERATION_TOOL_GROUPS,
+    TASK_TYPE_BY_TOOL_GROUP,
+    TOOL_GROUPS,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,
     WORKSPACE_CHANGE_TASK_TYPE,
@@ -47,7 +50,6 @@ from .media import MEDIA_ONLY_HISTORY_MARKER
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .task_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
-from .tool_groups import OPERATION_TOOL_GROUPS, TASK_TYPE_BY_TOOL_GROUP, TOOL_GROUPS
 from ..tools.evidence import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,

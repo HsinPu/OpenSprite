@@ -12,6 +12,7 @@ from .harness_profile import (
     GENERIC_TASK_TYPE,
     HISTORY_RETRIEVAL_TASK_TYPE,
     MEDIA_EXTRACTION_TASK_TYPE,
+    OPERATION_TOOL_GROUPS,
     OPERATIONS_TASK_TYPE,
     PLANNING_TASK_TYPE,
     PURE_ANSWER_TASK_TYPE,
@@ -20,7 +21,6 @@ from .harness_profile import (
     WORKSPACE_READ_TASK_TYPE,
     WORKSPACE_WRITE_TOOL_GROUP,
 )
-from .tool_groups import OPERATION_TOOL_GROUPS
 from ..tools.evidence import is_web_research_task_type
 
 
