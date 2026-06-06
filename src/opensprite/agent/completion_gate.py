@@ -784,23 +784,23 @@ def common_verification_path(paths: tuple[str, ...]) -> str | None:
 
 
 def workflow_unsuccessful_reason(workflow_id: str | None) -> str:
-    return f"workflow {_workflow_id(workflow_id)} did not complete successfully"
+    return _workflow_reason(workflow_id, "did not complete successfully")
 
 
 def workflow_review_evidence_missing_reason(workflow_id: str | None) -> str:
-    return f"workflow {_workflow_id(workflow_id)} completed but review evidence is missing"
+    return _workflow_reason(workflow_id, "completed but review evidence is missing")
 
 
 def workflow_review_findings_follow_up_reason(workflow_id: str | None) -> str:
-    return f"workflow {_workflow_id(workflow_id)} completed but review findings still require follow-up"
+    return _workflow_reason(workflow_id, "completed but review findings still require follow-up")
 
 
 def workflow_clean_review_reason(workflow_id: str | None) -> str:
-    return f"workflow {_workflow_id(workflow_id)} completed with clean review evidence"
+    return _workflow_reason(workflow_id, "completed with clean review evidence")
 
 
 def workflow_completed_all_steps_reason(workflow_id: str | None) -> str:
-    return f"workflow {_workflow_id(workflow_id)} completed all required steps"
+    return _workflow_reason(workflow_id, "completed all required steps")
 
 
 def workflow_review_evidence_missing_detail() -> str:
@@ -817,6 +817,10 @@ def task_review_findings_follow_up_detail() -> str:
 
 def _workflow_id(workflow_id: str | None) -> str:
     return _coerce_text(workflow_id)
+
+
+def _workflow_reason(workflow_id: str | None, suffix: str) -> str:
+    return f"workflow {_workflow_id(workflow_id)} {suffix}"
 
 
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:

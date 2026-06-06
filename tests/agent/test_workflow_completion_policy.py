@@ -45,6 +45,9 @@ def test_workflow_completion_reasons_are_stable():
     assert workflow_clean_review_reason("implement_then_review") == (
         "workflow implement_then_review completed with clean review evidence"
     )
+    assert workflow_clean_review_reason(" implement_then_review ") == (
+        "workflow implement_then_review completed with clean review evidence"
+    )
     assert workflow_completed_all_steps_reason("research_then_outline") == (
         "workflow research_then_outline completed all required steps"
     )
