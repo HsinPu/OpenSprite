@@ -32,7 +32,6 @@ from ..runs.events import (
 )
 from ..utils.log import logger
 from ..utils.url import join_url_path
-from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService, format_web_source_context
 from .completion_gate import (
     COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
@@ -57,7 +56,7 @@ from .completion_status import (
 from .execution import ExecutionResult
 from .harness_policy import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
 from .harness_profile import HarnessProfile, HarnessProfileService, PURE_ANSWER_TASK_TYPE
-from .media import AgentMediaService
+from .media import AgentMediaService, AudioInputPreprocessor
 from .response_finalizer import AgentResponseFinalizer
 from .run_hooks import AgentRunStateService
 from .run_trace import RunTraceRecorder
