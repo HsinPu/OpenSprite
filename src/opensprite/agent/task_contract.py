@@ -1118,16 +1118,10 @@ def _unresolved_llm_objective(original_message: str, reason: str) -> TaskObjecti
 
 
 def _resolver_parse_json_object(text: str) -> dict[str, Any]:
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
-    if fenced:
-        text = fenced.group(1)
-    else:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end < start:
-            raise ValueError("LLM did not return a JSON object")
-        text = text[start : end + 1]
-    payload = json.loads(text)
+    raw = _json_object_text(text)
+    if raw is None:
+        raise ValueError("LLM did not return a JSON object")
+    payload = json.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError("LLM JSON payload was not an object")
     return payload
@@ -2580,17 +2574,22 @@ def _append_workspace_contract(
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
-    raw = fenced.group(1) if fenced else text
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start >= 0 and end >= start:
-        raw = raw[start : end + 1]
+    raw = _json_object_text(text) or text
     try:
         parsed = json.loads(raw)
     except Exception:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _json_object_text(text: str) -> str | None:
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+    raw = fenced.group(1) if fenced else text
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end < start:
+        return None
+    return raw[start : end + 1]
 
 
 def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:

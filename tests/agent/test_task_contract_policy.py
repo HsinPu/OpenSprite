@@ -1,3 +1,5 @@
+import pytest
+
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
@@ -22,8 +24,10 @@ from opensprite.agent.task_contract import (
     _ensure_task_type_tool_groups,
     _normalize_planner_quality_checks,
     _normalize_planner_tool_groups,
+    _parse_json_object,
     _resolver_compact,
     _resolver_coerce_bool,
+    _resolver_parse_json_object,
     _resolver_truncate,
     _resolver_truncate_middle,
     _truncate,
@@ -175,6 +179,16 @@ def test_text_helpers_share_compact_and_truncate_policy():
     assert _resolver_compact(text) == _compact(text) == "alpha beta gamma"
     assert _resolver_truncate(long_text, 10) == _truncate(long_text, max_chars=10) == "abcdefg..."
     assert _resolver_truncate_middle(long_text, 24) == _truncate_middle(long_text, max_chars=24)
+
+
+def test_json_object_helpers_share_extraction_policy_but_keep_error_policy():
+    response = 'planner said:\n```json\n{"task_type": "pure_answer"}\n```\n'
+
+    assert _resolver_parse_json_object(response) == {"task_type": "pure_answer"}
+    assert _parse_json_object(response) == {"task_type": "pure_answer"}
+    assert _parse_json_object("not JSON") == {}
+    with pytest.raises(ValueError, match="LLM did not return a JSON object"):
+        _resolver_parse_json_object("not JSON")
 
 
 def test_planner_prompt_preserves_tail_of_long_current_message():
