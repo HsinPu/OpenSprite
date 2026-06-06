@@ -642,6 +642,14 @@ DELEGATED_REVIEW_EXACT_PATHS = frozenset(
         "vite.config.ts",
     }
 )
+WORKFLOW_REVIEW_STEPS = {
+    workflow_id: {
+        WORKFLOW_NEXT_STEP_ID_FIELD: "review",
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
+    }
+    for workflow_id in REVIEW_WORKFLOW_IDS
+}
 WORKFLOW_FIX_STEPS = {
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
         WORKFLOW_NEXT_STEP_ID_FIELD: "implement",
@@ -832,17 +840,15 @@ def is_review_workflow(workflow_id: str | None) -> bool:
 
 
 def workflow_review_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
-    if is_review_workflow(workflow_id):
-        return {
-            WORKFLOW_NEXT_STEP_ID_FIELD: "review",
-            WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
-            WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
-        }
-    return {}
+    return _workflow_step_fields(WORKFLOW_REVIEW_STEPS, workflow_id)
 
 
 def workflow_fix_follow_up_fields(workflow_id: str | None) -> dict[str, str]:
-    return dict(WORKFLOW_FIX_STEPS.get(_workflow_id(workflow_id), {}))
+    return _workflow_step_fields(WORKFLOW_FIX_STEPS, workflow_id)
+
+
+def _workflow_step_fields(step_fields: dict[str, dict[str, str]], workflow_id: str | None) -> dict[str, str]:
+    return dict(step_fields.get(_workflow_id(workflow_id), {}))
 
 
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:

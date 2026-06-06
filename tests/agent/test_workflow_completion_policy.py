@@ -66,11 +66,13 @@ def test_workflow_review_follow_up_details_are_stable():
 
 
 def test_workflow_completion_policy_returns_review_follow_up_step():
-    assert workflow_review_follow_up_fields(" implement_then_review ") == {
+    review_step = {
         WORKFLOW_NEXT_STEP_ID_FIELD: "review",
         WORKFLOW_NEXT_STEP_LABEL_FIELD: "Code review",
         WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: "code-reviewer",
     }
+    assert workflow_review_follow_up_fields(" implement_then_review ") == review_step
+    assert workflow_review_follow_up_fields("bugfix_then_test_then_review") == review_step
     assert workflow_review_follow_up_fields("research_then_outline") == {}
 
 
