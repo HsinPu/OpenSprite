@@ -24,9 +24,17 @@ from opensprite.agent.task_contract import (
     contract_requests_source_material,
     contract_requests_source_reference,
     contract_requests_substantive_final_answer,
+    is_allowed_continuation_type,
+    is_ambiguous_boundary_continuation_type,
+    is_current_task_continuation_type,
+    is_current_task_replacement_type,
+    is_follow_up_continuation_type,
     is_itemized_output_criterion,
     is_media_artifact_criterion,
+    is_new_task_continuation_type,
     is_operation_report_criterion,
+    is_objective_resolution_enrichable_type,
+    is_objective_resolution_skip_type,
     is_source_artifact_criterion,
     is_source_detail_criterion,
     is_source_reference_criterion,
@@ -345,3 +353,15 @@ def test_acceptance_criterion_policy_helpers():
     assert is_media_artifact_criterion(AcceptanceCriterion(kind=MEDIA_ARTIFACT_CRITERION_KIND)) is True
     assert is_verification_or_gap_criterion(AcceptanceCriterion(kind=VERIFICATION_OR_GAP_CRITERION_KIND)) is True
     assert is_operation_report_criterion(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND)) is True
+
+
+def test_continuation_type_policy_helpers_normalize_values():
+    assert is_allowed_continuation_type(" continue_active_task ") is True
+    assert is_follow_up_continuation_type(" continue_active_task ") is True
+    assert is_current_task_continuation_type(" continue_active_task ") is True
+    assert is_new_task_continuation_type(" new_task ") is True
+    assert is_current_task_replacement_type(" new_task ") is True
+    assert is_objective_resolution_skip_type(" ack ") is True
+    assert is_objective_resolution_enrichable_type(" continue_last_answer ") is True
+    assert is_ambiguous_boundary_continuation_type(" ambiguous_boundary ") is True
+    assert is_allowed_continuation_type("unknown") is False

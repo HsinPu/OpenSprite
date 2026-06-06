@@ -215,65 +215,69 @@ def _compact_text(text: str | None) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
+def _policy_value(value: object) -> str:
+    return str(value or "").strip()
+
+
 def intent_supports_fallback_active_task_update(task_intent: Any, task_contract: Any) -> bool:
     if getattr(task_intent, "needs_clarification", False):
         return False
-    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    task_type = _policy_value(getattr(task_contract, "task_type", ""))
     if not task_type:
         return False
     return task_type not in NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES
 
 
 def intent_supports_default_work_plan(task_intent: Any) -> bool:
-    return str(getattr(task_intent, "kind", "") or "").strip() in {
+    return _policy_value(getattr(task_intent, "kind", "")) in {
         ANALYSIS_INTENT_KIND,
         GENERIC_TASK_INTENT_KIND,
     } and not bool(getattr(task_intent, "needs_clarification", False))
 
 
 def is_read_only_task_type(task_type: str | None) -> bool:
-    normalized = str(task_type or "").strip()
+    normalized = _policy_value(task_type)
     return is_web_research_task_type(normalized) or normalized in READ_ONLY_TASK_TYPES
 
 
 def is_media_extraction_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == MEDIA_EXTRACTION_TASK_TYPE
+    return _policy_value(task_type) == MEDIA_EXTRACTION_TASK_TYPE
 
 
 def is_history_retrieval_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == HISTORY_RETRIEVAL_TASK_TYPE
+    return _policy_value(task_type) == HISTORY_RETRIEVAL_TASK_TYPE
 
 
 def is_workspace_read_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == WORKSPACE_READ_TASK_TYPE
+    return _policy_value(task_type) == WORKSPACE_READ_TASK_TYPE
 
 
 def is_plain_answer_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == PURE_ANSWER_TASK_TYPE
+    return _policy_value(task_type) == PURE_ANSWER_TASK_TYPE
 
 
 def is_one_turn_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() in ONE_TURN_INTENT_KINDS
+    return _policy_value(kind) in ONE_TURN_INTENT_KINDS
 
 
 def is_analysis_response_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == ANALYSIS_INTENT_KIND
+    return _policy_value(kind) == ANALYSIS_INTENT_KIND
 
 
 def is_generic_task_response_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == GENERIC_TASK_INTENT_KIND
+    return _policy_value(kind) == GENERIC_TASK_INTENT_KIND
 
 
 def is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() in READ_ONLY_BLOCKING_REQUIREMENT_KINDS
+    return _policy_value(kind) in READ_ONLY_BLOCKING_REQUIREMENT_KINDS
 
 
 def is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() in READ_ONLY_BLOCKING_TOOL_GROUPS
+    return _policy_value(tool_group) in READ_ONLY_BLOCKING_TOOL_GROUPS
 
 
 def accepts_final_response_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() in FINAL_RESPONSE_ACCEPTED_TASK_TYPES
+    return _policy_value(task_type) in FINAL_RESPONSE_ACCEPTED_TASK_TYPES
 
 
 def _truncate_intent_objective(text: str, max_chars: int = OBJECTIVE_MAX_CHARS) -> str:
@@ -295,7 +299,7 @@ def _classify_kind(text: str, *, media_count: int) -> str:
 
 
 def _is_command_text(text: str) -> bool:
-    compact = str(text or "").strip()
+    compact = _policy_value(text)
     return any(compact.startswith(prefix) for prefix in COMMAND_PREFIXES)
 
 
@@ -398,11 +402,11 @@ ALLOWED_CONTINUATION_TYPES = frozenset(
 
 
 def is_allowed_continuation_type(value: str | None) -> bool:
-    return str(value or "").strip() in ALLOWED_CONTINUATION_TYPES
+    return _policy_value(value) in ALLOWED_CONTINUATION_TYPES
 
 
 def llm_string_or_none(value: object) -> str | None:
-    normalized = str(value or "").strip()
+    normalized = _policy_value(value)
     if not normalized or normalized.lower() in LLM_EMPTY_VALUE_SENTINELS:
         return None
     return normalized
@@ -430,31 +434,31 @@ def _resolution_reason(prefix: str, purpose: str) -> str:
 
 
 def is_follow_up_continuation_type(value: str | None) -> bool:
-    return str(value or "").strip() in FOLLOW_UP_CONTINUATION_TYPES
+    return _policy_value(value) in FOLLOW_UP_CONTINUATION_TYPES
 
 
 def is_new_task_continuation_type(value: str | None) -> bool:
-    return str(value or "").strip() in NEW_TASK_CONTINUATION_TYPES
+    return _policy_value(value) in NEW_TASK_CONTINUATION_TYPES
 
 
 def is_current_task_continuation_type(value: str | None) -> bool:
-    return str(value or "").strip() in CURRENT_TASK_CONTINUATION_TYPES
+    return _policy_value(value) in CURRENT_TASK_CONTINUATION_TYPES
 
 
 def is_current_task_replacement_type(value: str | None) -> bool:
-    return str(value or "").strip() in CURRENT_TASK_REPLACEMENT_TYPES
+    return _policy_value(value) in CURRENT_TASK_REPLACEMENT_TYPES
 
 
 def is_objective_resolution_skip_type(value: str | None) -> bool:
-    return str(value or "").strip() in OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES
+    return _policy_value(value) in OBJECTIVE_RESOLUTION_SKIP_CONTINUATION_TYPES
 
 
 def is_objective_resolution_enrichable_type(value: str | None) -> bool:
-    return str(value or "").strip() in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES
+    return _policy_value(value) in OBJECTIVE_RESOLUTION_ENRICHABLE_CONTINUATION_TYPES
 
 
 def is_ambiguous_boundary_continuation_type(value: str | None) -> bool:
-    return str(value or "").strip() == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE
+    return _policy_value(value) == AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE
 
 
 _ALLOWED_TASK_TYPES = frozenset(
