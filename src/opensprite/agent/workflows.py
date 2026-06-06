@@ -17,7 +17,7 @@ from ..runs.events import (
 from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
-from .run_hooks import RunCancelledError
+from .run_trace import RunCancelledError
 from .subagent_profiles import (
     CODE_REVIEWER_PROMPT_TYPE,
     REVIEW_PROMPT_TYPES,

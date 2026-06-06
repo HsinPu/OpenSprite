@@ -7,7 +7,7 @@ from opensprite.agent.task_contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
 )
-from opensprite.agent.run_hooks import RunHookService
+from opensprite.agent.run_trace import RunHookService
 from opensprite.agent.execution import LlmStepEvent
 from opensprite.agent.run_trace import (
     RUN_PART_CONTENT_MAX_CHARS,

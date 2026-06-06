@@ -1,4 +1,4 @@
-from opensprite.agent.run_hooks import (
+from opensprite.agent.run_trace import (
     is_mcp_tool_name,
     mcp_tool_display_name,
     mcp_tool_names,

@@ -48,7 +48,7 @@ from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
-from .run_hooks import RunCancelledError
+from .run_trace import RunCancelledError
 from .task_contract import TaskContract
 from .subagent_profiles import (
     SUBAGENT_PROMPT_TYPE_LABEL,

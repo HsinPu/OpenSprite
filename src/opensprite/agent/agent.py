@@ -102,7 +102,7 @@ from .media import AgentMediaService
 from .message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from .tool_access import AgentPermissionService, PermissionEventRecorder
 from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
-from .run_hooks import AgentRunStateService, McpLifecycleService, RunHookService
+from .run_trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagents import SubagentRunService
 from .task_contract import TaskPlanner
 from .task_resolver import (

@@ -61,7 +61,7 @@ from ..subagent_prompts import get_all_subagents, load_metadata, load_prompt
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
-from .run_hooks import RunCancelledError, RunHookService
+from .run_trace import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
 from .workflows import (
     WORKFLOW_CANCELLED_STATUS,

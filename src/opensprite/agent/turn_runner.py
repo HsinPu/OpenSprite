@@ -77,7 +77,7 @@ from .media import (
     INBOUND_IMAGE_EXTENSIONS,
     INBOUND_VIDEO_EXTENSIONS,
 )
-from .run_hooks import AgentRunStateService
+from .run_trace import AgentRunStateService
 from .run_trace import RunTraceRecorder, WorktreeSandboxInspector
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
