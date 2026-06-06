@@ -1636,11 +1636,7 @@ def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
     paths = _normalized_touched_paths(touched_paths)
     if not paths:
         return True
-    return any(_path_requires_delegated_review(path) for path in paths)
-
-
-def _path_requires_delegated_review(path: str) -> bool:
-    return path_requires_delegated_review(path)
+    return any(path_requires_delegated_review(path) for path in paths)
 
 
 def _contract_requires_verification(task_contract: Any) -> bool:
@@ -1814,10 +1810,6 @@ def _contract_accepts_final_response(task_contract: Any) -> bool:
     if not bool(getattr(task_contract, "allow_no_tool_final", False)):
         return False
     task_type = str(getattr(task_contract, "task_type", "") or "").strip()
-    return _accepts_final_response_task_type(task_type)
-
-
-def _accepts_final_response_task_type(task_type: str | None) -> bool:
     return accepts_final_response_task_type(task_type)
 
 

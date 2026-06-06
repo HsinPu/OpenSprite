@@ -8,7 +8,6 @@ from opensprite.agent.completion_gate import (
     CompletionGateService,
     EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
-    _accepts_final_response_task_type,
     _completion_status_for_unsuccessful_workflow,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
@@ -19,7 +18,6 @@ from opensprite.agent.completion_gate import (
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
-    _path_requires_delegated_review,
     _is_research_then_outline_workflow,
     _is_verification_requirement_kind,
     _is_verification_tool_group,
@@ -33,9 +31,11 @@ from opensprite.agent.completion_gate import (
     is_optional_web_discovery_failure_tool,
     is_optional_web_fetch_failure_tool,
     is_optional_workspace_batch_failure_tool,
+    path_requires_delegated_review,
 )
 from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.task_contract import (
+    accepts_final_response_task_type,
     is_analysis_response_intent_kind,
     is_generic_task_response_intent_kind,
     is_one_turn_intent_kind,
@@ -301,8 +301,8 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert is_generic_task_response_intent_kind("analysis") is False
     assert _is_workflow_completion_intent_kind("review") is True
     assert _is_workflow_completion_intent_kind("task") is False
-    assert _accepts_final_response_task_type("planning") is True
-    assert _accepts_final_response_task_type("web_research") is False
+    assert accepts_final_response_task_type("planning") is True
+    assert accepts_final_response_task_type("web_research") is False
     assert is_read_only_blocking_requirement_kind("file_change") is True
     assert is_read_only_blocking_requirement_kind("tool_group") is False
     assert is_read_only_blocking_tool_group("execution") is True
@@ -345,10 +345,10 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
 
 
 def test_completion_gate_review_path_policy_helper_is_centralized():
-    assert _path_requires_delegated_review("src/opensprite/runtime.py") is True
-    assert _path_requires_delegated_review("package.json") is True
-    assert _path_requires_delegated_review("snapshot_after/src/opensprite/app.vue") is True
-    assert _path_requires_delegated_review("docs/usage.md") is False
+    assert path_requires_delegated_review("src/opensprite/runtime.py") is True
+    assert path_requires_delegated_review("package.json") is True
+    assert path_requires_delegated_review("snapshot_after/src/opensprite/app.vue") is True
+    assert path_requires_delegated_review("docs/usage.md") is False
     assert _is_web_app_path("apps/web/src/App.vue") is True
     assert _is_web_app_path("src/opensprite/channels/web.py") is False
     assert _is_python_file_path("src/opensprite/runtime.py") is True
