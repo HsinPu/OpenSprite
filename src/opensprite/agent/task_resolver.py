@@ -1,4 +1,4 @@
-"""Hybrid task-context resolution for follow-ups and active-task handoff."""
+"""Hybrid task resolution for follow-ups, active-task handoff, and objective enrichment."""
 
 from __future__ import annotations
 
@@ -184,11 +184,16 @@ _ALLOWED_TOOL_GROUPS = frozenset(
     }
 )
 _LLM_TASK_SWITCH_CONFIDENCE = 0.80
+_OBJECTIVE_MIN_CONFIDENCE = 0.65
 DETERMINISTIC_CONTEXT_METHOD = "deterministic"
+DETERMINISTIC_OBJECTIVE_METHOD = "deterministic"
 DETERMINISTIC_DECISION_CONTEXT_FIELD = "deterministic_decision"
 CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON = "current message is an acknowledgement"
 TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON = "task context requires LLM classification"
 LLM_RESOLVED_TASK_CONTEXT_REASON = "llm resolved task context"
+OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON = "objective enrichment not needed"
+LLM_RESOLVED_TASK_OBJECTIVE_REASON = "llm resolved task objective"
+LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON = "llm objective was not more specific"
 TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX = "task boundary confidence too low"
 _TASK_TYPE_BY_TOOL_GROUP = {
     "audio_text": MEDIA_EXTRACTION_TASK_TYPE,
@@ -226,6 +231,33 @@ class TaskContextDecision:
             "inherited_task_type": self.inherited_task_type,
             "inherited_tool_group": self.inherited_tool_group,
             "continuation_type": self.continuation_type,
+            "confidence": self.confidence,
+            "method": self.method,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True)
+class TaskObjectiveDecision:
+    """Resolved objective text for ACTIVE_TASK seeding."""
+
+    original_message: str
+    resolved_objective: str
+    should_use_resolved_objective: bool = False
+    confidence: float = 0.0
+    method: str = DETERMINISTIC_OBJECTIVE_METHOD
+    reason: str = ""
+
+    @property
+    def effective_objective(self) -> str:
+        return self.resolved_objective if self.should_use_resolved_objective else self.original_message
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "original_message": self.original_message,
+            "resolved_objective": self.resolved_objective,
+            "should_use_resolved_objective": self.should_use_resolved_objective,
             "confidence": self.confidence,
             "method": self.method,
             "reason": self.reason,
@@ -329,7 +361,7 @@ class TaskContextResolver:
         provider: Any,
         model: str | None,
     ) -> TaskContextDecision:
-        prompt = _build_llm_prompt(
+        prompt = _build_task_context_llm_prompt(
             current_message=current_message,
             history=history,
             task_intent=task_intent,
@@ -352,7 +384,108 @@ class TaskContextResolver:
             **self.llm_config.decoding_kwargs(),
         )
         payload = _parse_json_object(str(getattr(response, "content", "") or ""))
-        return _decision_from_payload(payload, has_active_task=_has_active_task(active_task))
+        return _task_context_decision_from_payload(payload, has_active_task=_has_active_task(active_task))
+
+
+class TaskObjectiveResolver:
+    """Infer a clear ACTIVE_TASK objective when the user turn is too short."""
+
+    def __init__(self, llm_config: DocumentLlmConfig):
+        self.llm_config = llm_config
+
+    async def resolve(
+        self,
+        *,
+        current_message: str,
+        history: list[dict[str, Any]] | None = None,
+        task_intent: TaskIntent | None = None,
+        task_context_decision: TaskContextDecision | None = None,
+        active_task: str | None = None,
+        work_state_summary: str | None = None,
+        provider: Any | None = None,
+        model: str | None = None,
+    ) -> TaskObjectiveDecision:
+        original = _compact(current_message)
+        deterministic = TaskObjectiveDecision(
+            original_message=original,
+            resolved_objective=original,
+            reason=OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
+        )
+        if not _should_resolve_objective(
+            current_message=original,
+            history=history,
+            task_intent=task_intent,
+            task_context_decision=task_context_decision,
+            active_task=active_task,
+            work_state_summary=work_state_summary,
+        ):
+            return deterministic
+        if is_unconfigured_llm(provider, model):
+            return _unresolved_llm_objective(original, llm_unavailable_reason(TASK_OBJECTIVE_RESOLUTION_PURPOSE))
+
+        try:
+            llm_decision = await self._resolve_with_llm(
+                current_message=original,
+                history=history or [],
+                task_intent=task_intent,
+                task_context_decision=task_context_decision,
+                active_task=active_task or "",
+                work_state_summary=work_state_summary or "",
+                provider=provider,
+                model=model,
+            )
+        except Exception as exc:
+            logger.warning("Task objective LLM resolution failed: {}", exc)
+            return _unresolved_llm_objective(original, llm_failed_reason(TASK_OBJECTIVE_RESOLUTION_PURPOSE))
+
+        if llm_decision.confidence < _OBJECTIVE_MIN_CONFIDENCE:
+            return _unresolved_llm_objective(
+                original,
+                llm_low_confidence_reason(llm_decision.confidence, TASK_OBJECTIVE_RESOLUTION_PURPOSE),
+            )
+        if llm_decision.should_use_resolved_objective and not _is_useful_objective(
+            llm_decision.resolved_objective,
+            original,
+        ):
+            return _unresolved_llm_objective(original, LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON)
+        return llm_decision
+
+    async def _resolve_with_llm(
+        self,
+        *,
+        current_message: str,
+        history: list[dict[str, Any]],
+        task_intent: TaskIntent | None,
+        task_context_decision: TaskContextDecision | None,
+        active_task: str,
+        work_state_summary: str,
+        provider: Any,
+        model: str | None,
+    ) -> TaskObjectiveDecision:
+        prompt = _build_task_objective_llm_prompt(
+            current_message=current_message,
+            history=history,
+            task_intent=task_intent,
+            task_context_decision=task_context_decision,
+            active_task=active_task,
+            work_state_summary=work_state_summary,
+        )
+        response = await provider.chat(
+            messages=[
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "You resolve a concise task objective for ACTIVE_TASK. "
+                        "Return only one JSON object. Do not answer the user."
+                    ),
+                ),
+                ChatMessage(role="user", content=prompt),
+            ],
+            model=model,
+            **self.llm_config.decoding_kwargs(),
+        )
+        payload = _parse_json_object(str(getattr(response, "content", "") or ""))
+        return _task_objective_decision_from_payload(payload, current_message=current_message)
 
 
 def _should_consult_llm(
@@ -377,13 +510,13 @@ def _should_consult_llm(
     if decision.is_follow_up:
         return True
     if not _has_active_task(active_task):
-        return _has_recent_context(history, work_state_summary) and _is_context_dependent_short_turn(current)
+        return _has_recent_task_context(history, work_state_summary) and _is_context_dependent_short_turn(current)
     if decision.should_inherit_active_task:
         return True
     return True
 
 
-def _build_llm_prompt(
+def _build_task_context_llm_prompt(
     *,
     current_message: str,
     history: list[dict[str, Any]],
@@ -420,7 +553,36 @@ def _build_llm_prompt(
     )
 
 
-def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = False) -> TaskContextDecision:
+def _build_task_objective_llm_prompt(
+    *,
+    current_message: str,
+    history: list[dict[str, Any]],
+    task_intent: TaskIntent | None,
+    task_context_decision: TaskContextDecision | None,
+    active_task: str,
+    work_state_summary: str,
+) -> str:
+    context = {
+        "current_message": _truncate_middle(current_message, 600),
+        "task_intent": task_intent.to_metadata() if task_intent is not None else None,
+        "task_context_decision": task_context_decision.to_metadata() if task_context_decision is not None else None,
+        "recent_history": _recent_history(history),
+        "active_task": _truncate(active_task, 1800),
+        "work_state_summary": _truncate(work_state_summary, 1200),
+    }
+    return (
+        "Rewrite the latest short or context-dependent user message into a clear task objective.\n"
+        "Use only recent_history, active_task, work_state_summary, and task_context_decision as evidence.\n"
+        "Preserve the user's intent and entities exactly; do not invent new requirements.\n"
+        "If the context is insufficient or the message should simply continue the current active task, set "
+        "should_use_resolved_objective to false.\n"
+        "Do not relax or remove evidence, verification, or completion requirements.\n"
+        "Return only JSON with these keys: resolved_objective, should_use_resolved_objective, confidence, reason.\n\n"
+        f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _task_context_decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = False) -> TaskContextDecision:
     inherited_tool_group = _allowed_string(payload.get("inherited_tool_group"), _ALLOWED_TOOL_GROUPS)
     inherited_task_type = _allowed_string(payload.get("inherited_task_type"), _ALLOWED_TASK_TYPES)
     if inherited_tool_group and inherited_task_type is None:
@@ -551,6 +713,63 @@ def _unresolved_llm_decision(reason: str) -> TaskContextDecision:
     )
 
 
+def _should_resolve_objective(
+    *,
+    current_message: str,
+    history: list[dict[str, Any]] | None,
+    task_intent: TaskIntent | None,
+    task_context_decision: TaskContextDecision | None,
+    active_task: str | None,
+    work_state_summary: str | None,
+) -> bool:
+    current = _compact(current_message)
+    if not current:
+        return False
+    if task_context_decision and is_objective_resolution_skip_type(task_context_decision.continuation_type):
+        return False
+    if task_intent and task_intent.kind == CONVERSATION_INTENT_KIND and not bool(
+        task_context_decision
+        and (
+            task_context_decision.is_follow_up
+            or is_objective_resolution_enrichable_type(task_context_decision.continuation_type)
+        )
+    ):
+        return False
+    if task_context_decision and is_new_task_continuation_type(task_context_decision.continuation_type):
+        return _is_short_objective(current)
+    if not _has_recent_objective_context(history, active_task, work_state_summary):
+        return False
+    if task_context_decision and is_objective_resolution_enrichable_type(task_context_decision.continuation_type):
+        return True
+    if task_context_decision and task_context_decision.is_follow_up:
+        return True
+    return _is_short_objective(current)
+
+
+def _task_objective_decision_from_payload(payload: dict[str, Any], *, current_message: str) -> TaskObjectiveDecision:
+    resolved = _truncate(_compact(str(payload.get("resolved_objective") or current_message)), 220)
+    should_use = _coerce_bool(payload.get("should_use_resolved_objective"))
+    return TaskObjectiveDecision(
+        original_message=current_message,
+        resolved_objective=resolved,
+        should_use_resolved_objective=should_use,
+        confidence=_coerce_confidence(payload.get("confidence")),
+        method="llm",
+        reason=_truncate(str(payload.get("reason") or LLM_RESOLVED_TASK_OBJECTIVE_REASON), 240),
+    )
+
+
+def _unresolved_llm_objective(original_message: str, reason: str) -> TaskObjectiveDecision:
+    return TaskObjectiveDecision(
+        original_message=original_message,
+        resolved_objective=original_message,
+        should_use_resolved_objective=False,
+        confidence=0.0,
+        method="llm_unresolved",
+        reason=reason,
+    )
+
+
 def _parse_json_object(text: str) -> dict[str, Any]:
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
     if fenced:
@@ -606,7 +825,7 @@ def _continuation_type_from_payload(
     return NONE_CONTINUATION_TYPE
 
 
-def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary: str | None) -> bool:
+def _has_recent_task_context(history: list[dict[str, Any]] | None, work_state_summary: str | None) -> bool:
     if _has_active_task(work_state_summary):
         return True
     return any(
@@ -618,6 +837,33 @@ def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary
 
 def _is_context_dependent_short_turn(current: str) -> bool:
     return len(task_text_tokens(current)) <= 8
+
+
+def _has_recent_objective_context(
+    history: list[dict[str, Any]] | None,
+    active_task: str | None,
+    work_state_summary: str | None,
+) -> bool:
+    if _has_active_task(active_task) or _compact(work_state_summary):
+        return True
+    return any(_compact(str(message.get("content") or "")) for message in (history or [])[-6:])
+
+
+def _is_short_objective(current_message: str) -> bool:
+    current = _compact(current_message)
+    if len(current) <= 40:
+        return True
+    return len(task_text_tokens(current)) <= 4
+
+
+def _is_useful_objective(resolved_objective: str, original_message: str) -> bool:
+    resolved = _compact(resolved_objective)
+    original = _compact(original_message)
+    if len(resolved) < 8:
+        return False
+    if resolved.lower() == original.lower():
+        return False
+    return True
 
 
 def _coerce_bool(value: Any) -> bool:
@@ -664,4 +910,13 @@ def _truncate_middle(value: str | None, max_chars: int) -> str:
     return f"{text[:head_chars].rstrip()}{marker}{text[-tail_chars:].lstrip()}"
 
 
-__all__ = ["TaskContextDecision", "TaskContextResolver"]
+__all__ = [
+    "DETERMINISTIC_OBJECTIVE_METHOD",
+    "LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON",
+    "LLM_RESOLVED_TASK_OBJECTIVE_REASON",
+    "OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON",
+    "TaskContextDecision",
+    "TaskContextResolver",
+    "TaskObjectiveDecision",
+    "TaskObjectiveResolver",
+]

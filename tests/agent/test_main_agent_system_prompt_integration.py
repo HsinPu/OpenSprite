@@ -23,7 +23,7 @@ from opensprite.context.paths import sync_templates
 from opensprite.documents.active_task import TASK_BOUNDARY_CONFIRMATION_EVENT, create_active_task_store
 from opensprite.agent.llm_call import _effective_task_intent
 from opensprite.agent.task_intent import TaskIntentService
-from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
+from opensprite.agent.task_resolver import TaskObjectiveDecision
 from opensprite.llms.base import LLMResponse
 from opensprite.search.base import SearchHit
 from opensprite.storage.base import StoredMessage

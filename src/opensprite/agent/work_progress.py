@@ -38,7 +38,7 @@ from .harness_profile import (
     normalize_profile_name,
 )
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
-from .task_context_resolver import (
+from .task_resolver import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
     TaskContextDecision,

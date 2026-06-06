@@ -74,7 +74,7 @@ from .task_contract import (
     PLANNING_ERROR_TASK_TYPE,
 )
 from .task_intent import TaskIntent, TaskIntentService
-from .task_context_resolver import TaskContextDecision, TaskContextResolver
+from .task_resolver import TaskContextDecision, TaskContextResolver
 from .turn import (
     PreparedTurnInput,
     TurnContextService,

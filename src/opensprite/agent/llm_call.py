@@ -52,9 +52,8 @@ from .task_contract import (
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
 )
-from .task_context_resolver import TaskContextDecision
+from .task_resolver import TaskContextDecision, TaskObjectiveDecision
 from .task_intent import TaskIntent
-from .task_objective_resolver import TaskObjectiveDecision
 
 
 class LlmCallService:

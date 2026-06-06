@@ -1,14 +1,14 @@
 import asyncio
 
-from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
-from opensprite.agent.task_objective_resolver import (
+from opensprite.agent.task_resolver import (
     DETERMINISTIC_OBJECTIVE_METHOD,
     LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON,
     LLM_RESOLVED_TASK_OBJECTIVE_REASON,
     OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
+    TaskContextDecision,
     TaskObjectiveResolver,
-    _build_llm_prompt,
+    _build_task_objective_llm_prompt as _build_llm_prompt,
 )
 from opensprite.config import Config
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM

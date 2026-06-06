@@ -30,7 +30,7 @@ from .harness_profile import (
 )
 from .planner_capabilities import PlannerCapabilityCatalog, build_planner_capability_catalog
 from .resource_index import ResourceIndex, ResourceRef
-from .task_context_resolver import TaskContextDecision, TaskContextResolver
+from .task_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS, TOOL_GROUPS
 from ..tools.evidence import (

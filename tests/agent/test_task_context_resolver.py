@@ -4,7 +4,7 @@ from opensprite.agent.active_task_commands import ActiveTaskCommandService
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task_context_resolver import (
+from opensprite.agent.task_resolver import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
     TASK_CONTEXT_RESOLUTION_PURPOSE,
@@ -13,7 +13,8 @@ from opensprite.agent.task_context_resolver import (
     TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
     TaskContextDecision,
     TaskContextResolver,
-    _build_llm_prompt,
+    TaskObjectiveDecision,
+    _build_task_context_llm_prompt as _build_llm_prompt,
     _merge_with_deterministic,
     llm_failed_reason,
     llm_low_confidence_reason,
@@ -22,7 +23,6 @@ from opensprite.agent.task_context_resolver import (
     task_text_tokens,
 )
 from opensprite.agent.task_intent import TaskIntentService
-from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.agent.work_progress import WorkProgressUpdate
 from opensprite.config import Config, TaskMessagesConfig
 from opensprite.documents.active_task import (

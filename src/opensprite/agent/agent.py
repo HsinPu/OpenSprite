@@ -107,10 +107,9 @@ from .run_trace import RunTraceRecorder
 from .run_hooks import AgentRunStateService, RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
-from .task_context_resolver import TaskContextDecision, TaskContextResolver
+from .task_resolver import TaskContextDecision, TaskContextResolver, TaskObjectiveDecision, TaskObjectiveResolver
 from .task_contract import TaskPlanner
 from .task_intent import TaskIntent, TaskIntentService
-from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
 from .tool_registration import (
     BROWSER_TOOL_NAMES,
     register_browser_tools,
