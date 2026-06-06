@@ -2204,7 +2204,7 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
         for raw_source in raw_sources:
             if not isinstance(raw_source, dict):
                 continue
-            url = str(raw_source.get("url") or "").strip()
+            url = _web_source_url(raw_source)
             if not url or url in seen_urls:
                 continue
             content_chars = _coerce_positive_int(raw_source.get("content_chars"))
@@ -2218,6 +2218,10 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
                 seen_urls.add(url)
                 sources.append(raw_source)
     return sources
+
+
+def _web_source_url(source: dict[str, Any]) -> str:
+    return _metadata_text(source, "url")
 
 
 def _completion_evidence_urls(completion_result: CompletionGateResult) -> tuple[str, ...]:
@@ -2238,7 +2242,7 @@ def _merge_web_sources(
     merged: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for source in (*primary, *secondary):
-        url = str(source.get("url") or "").strip()
+        url = _web_source_url(source)
         if not url or url in seen_urls:
             continue
         seen_urls.add(url)
@@ -2263,7 +2267,7 @@ def _web_sources_matching_evidence_urls(
         for raw_source in raw_sources:
             if not isinstance(raw_source, dict):
                 continue
-            url = str(raw_source.get("url") or "").strip()
+            url = _web_source_url(raw_source)
             if not url or url in seen_urls:
                 continue
             haystack = str(raw_source.get("snippet") or raw_source.get("content") or "")
@@ -2290,7 +2294,7 @@ def _web_sources_matching_base_url_context(
         for raw_source in raw_sources:
             if not isinstance(raw_source, dict):
                 continue
-            url = str(raw_source.get("url") or "").strip()
+            url = _web_source_url(raw_source)
             if not url or url in seen_urls:
                 continue
             if _source_base_url_candidates([raw_source]):

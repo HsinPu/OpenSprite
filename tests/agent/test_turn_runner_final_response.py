@@ -105,7 +105,7 @@ def test_source_finalization_available_for_traceable_web_sources():
                     "sources": [
                         {
                             "tool_name": "web_fetch",
-                            "url": "https://example.com/agent-trends",
+                            "url": " https://example.com/agent-trends ",
                             "title": "AI Agent Trends",
                             "snippet": "Agent tools are moving from pilots into governed production workflows.",
                             "content_chars": 1200,
