@@ -7,9 +7,8 @@ from opensprite.agent.auto_continue import (
     completion_gate_continue_reason,
 )
 from opensprite.agent.completion_gate import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON, CompletionGateResult
-from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution import ExecutionResult, TaskArtifact
 from opensprite.agent.harness_profile import HarnessProfileService
-from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,

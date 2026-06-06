@@ -64,8 +64,7 @@ from opensprite.agent.retrieval import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASO
 from opensprite.agent.quality_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.quality_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
-from opensprite.agent.task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON
-from opensprite.agent.task_artifact import TaskArtifact
+from opensprite.agent.execution import TASK_ARTIFACTS_NOT_PRODUCED_REASON, TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,

@@ -2,7 +2,7 @@
 import json
 from datetime import datetime
 
-from opensprite.agent.task_artifact import build_task_artifact
+from opensprite.agent.execution import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
 from opensprite.tools.evidence import ToolEvidence, build_tool_evidence
 from opensprite.tools.web_search import _format_results

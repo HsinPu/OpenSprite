@@ -23,19 +23,32 @@ from ..llms import (
 from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import (
+    ANALYZE_IMAGE_TOOL_NAME,
+    ANALYZE_VIDEO_TOOL_NAME,
     CONFIGURE_SKILL_TOOL_NAME,
     CONFIGURE_SUBAGENT_TOOL_NAME,
     DELEGATE_TOOL_NAME,
     EXEC_TOOL_NAME,
+    OCR_IMAGE_TOOL_NAME,
+    TRANSCRIBE_AUDIO_TOOL_NAME,
 )
 from ..tools import ToolRegistry
-from ..tools.evidence import ToolEvidence
+from ..tools.evidence import (
+    VERIFICATION_RESULT_ARTIFACT_KIND,
+    VERIFICATION_TOOL_NAME,
+    WEB_SOURCE_ARTIFACT_KIND,
+    WEB_SOURCE_ARTIFACT_TOOLS,
+    ToolEvidence,
+    is_verification_tool_name,
+    is_web_research_source_artifact_tool,
+    is_web_source_artifact_kind,
+    is_web_source_evidence_tool,
+)
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_hooks import RunCancelledError
-from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .subagent_output import (
     SUBAGENT_PROMPT_TYPE_LABEL,
@@ -43,12 +56,6 @@ from .subagent_output import (
     parse_subagent_result_line,
 )
 from .tool_access import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
-from ..tools.evidence import is_verification_tool_name
-from ..tools.evidence import (
-    is_web_research_source_artifact_tool,
-    is_web_source_artifact_kind,
-    is_web_source_evidence_tool,
-)
 from .workflows import WORKFLOW_COMPLETED_STATUS
 
 
@@ -67,6 +74,74 @@ LLM_COMPACTION_NO_PROMPT_REASON = "no_prompt"
 LLM_COMPACTION_ERROR_REASON = "llm_error"
 LLM_COMPACTION_EMPTY_REASON = "llm_empty"
 MAX_TOOL_ITERATIONS_STOP_REASON = "max_tool_iterations"
+TASK_ARTIFACTS_NOT_PRODUCED_REASON = "required task artifacts were not produced"
+_TOOL_ARTIFACT_KINDS: dict[str, str] = {
+    OCR_IMAGE_TOOL_NAME: "image_text",
+    ANALYZE_IMAGE_TOOL_NAME: "image_analysis",
+    TRANSCRIBE_AUDIO_TOOL_NAME: "audio_transcript",
+    ANALYZE_VIDEO_TOOL_NAME: "video_analysis",
+    **{tool_name: WEB_SOURCE_ARTIFACT_KIND for tool_name in WEB_SOURCE_ARTIFACT_TOOLS},
+    VERIFICATION_TOOL_NAME: VERIFICATION_RESULT_ARTIFACT_KIND,
+    EXEC_TOOL_NAME: "command_result",
+}
+
+
+@dataclass(frozen=True)
+class TaskArtifact:
+    """One structured output artifact available for completion quality checks."""
+
+    kind: str
+    source_tool: str
+    resource_ids: tuple[str, ...] = ()
+    content_preview: str = ""
+    ok: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "source_tool": self.source_tool,
+            "resource_ids": list(self.resource_ids),
+            "content_preview": self.content_preview,
+            "ok": self.ok,
+            "metadata": dict(self.metadata),
+        }
+
+
+def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
+    """Create a typed artifact when a tool produced reusable task output."""
+    if not evidence.ok:
+        return None
+    kind = _TOOL_ARTIFACT_KINDS.get(evidence.name)
+    if kind is None:
+        return None
+    if is_web_source_artifact_kind(kind) and not _has_traceable_sources(evidence.metadata):
+        return None
+    metadata = {"tool_args": dict(evidence.args)}
+    metadata.update(dict(evidence.metadata))
+    return TaskArtifact(
+        kind=kind,
+        source_tool=evidence.name,
+        resource_ids=tuple(evidence.resource_ids),
+        content_preview=evidence.result_preview,
+        ok=evidence.ok,
+        metadata=metadata,
+    )
+
+
+def _has_traceable_sources(metadata: dict[str, Any]) -> bool:
+    sources = metadata.get("sources") if isinstance(metadata, dict) else None
+    if not isinstance(sources, list):
+        return False
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or "").strip()
+        title = str(source.get("title") or "").strip()
+        snippet = str(source.get("snippet") or "").strip()
+        if url and (title or snippet):
+            return True
+    return False
 
 
 def is_max_tool_iterations_stop_reason(stop_reason: str | None) -> bool:

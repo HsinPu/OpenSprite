@@ -12,7 +12,7 @@ from opensprite.agent.completion_gate import (
     parse_completion_judge_json,
 )
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
-from opensprite.agent.task_artifact import TaskArtifact
+from opensprite.agent.execution import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntent
 from opensprite.config import DocumentLlmConfig

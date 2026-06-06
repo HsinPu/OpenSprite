@@ -13,7 +13,7 @@ from .task_intent import (
     is_media_extraction_task_type,
     is_workspace_read_task_type,
 )
-from .execution import ExecutionResult
+from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .harness_profile import OPERATIONS_TASK_TYPE
 from .retrieval import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
@@ -22,7 +22,6 @@ from .retrieval import (
     is_history_retrieval_tool_name,
 )
 from .media import count_media_artifacts, is_media_artifact_kind
-from .task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
