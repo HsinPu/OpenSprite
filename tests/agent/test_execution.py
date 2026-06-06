@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
-from opensprite.agent.context_compaction_policy import LLM_COMPACTION_EMPTY_REASON
+from opensprite.agent.execution import LLM_COMPACTION_EMPTY_REASON
 from opensprite.agent.execution import ExecutionEngine, LLM_STEP_COMPLETED_STATUS, LLM_STEP_ERROR_STATUS
 from opensprite.agent.prompt_logging import PromptLoggingService
 from opensprite.agent.stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON

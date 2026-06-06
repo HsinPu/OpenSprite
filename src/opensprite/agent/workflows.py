@@ -30,7 +30,7 @@ from .subagent_output import (
     is_clean_structured_subagent_status,
 )
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
-from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
+from .subagent_output import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_fields import (
     WORKFLOW_ERROR_FIELD,
     WORKFLOW_ID_FIELD,

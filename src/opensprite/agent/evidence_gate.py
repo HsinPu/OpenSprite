@@ -4,10 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .evidence_gate_policy import MISSING_TASK_EVIDENCE_REASON, missing_evidence_active_task_detail
 from .execution import ExecutionResult
 from .task_contract import TaskContract, missing_evidence, neutral_task_contract
 from .task_intent import TaskIntent
+
+
+MISSING_TASK_EVIDENCE_REASON = "required task evidence was not produced"
+
+
+def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
+    if not missing_evidence:
+        return None
+    return "\n".join(f"- {item}" for item in missing_evidence)
 
 
 @dataclass(frozen=True)

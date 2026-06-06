@@ -1,4 +1,4 @@
-from opensprite.agent.evidence_gate_policy import (
+from opensprite.agent.evidence_gate import (
     MISSING_TASK_EVIDENCE_REASON,
     missing_evidence_active_task_detail,
 )

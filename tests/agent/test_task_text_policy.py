@@ -1,4 +1,4 @@
-from opensprite.agent.task_text_policy import task_text_tokens
+from opensprite.agent.task_context_policy import task_text_tokens
 
 
 def test_task_text_tokens_supports_latin_and_cjk_follow_up_text():

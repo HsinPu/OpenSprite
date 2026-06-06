@@ -1,4 +1,4 @@
-from opensprite.agent.execution_fallback_policy import format_repeated_invalid_tool_call_content
+from opensprite.agent.execution import format_repeated_invalid_tool_call_content
 
 
 def test_repeated_invalid_tool_call_fallback_formats_configured_template():

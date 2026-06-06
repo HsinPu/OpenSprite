@@ -35,21 +35,9 @@ from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_state import RunCancelledError
-from .context_compaction_policy import (
-    COMPACTED_CONVERSATION_STATE_HEADING,
-    COMPACTED_TASK_STATE_HEADING,
-    LLM_COMPACTION_CONFIG_MISSING_REASON,
-    LLM_COMPACTION_EMPTY_REASON,
-    LLM_COMPACTION_ERROR_REASON,
-    LLM_COMPACTION_NO_BODY_REASON,
-    LLM_COMPACTION_NO_PROMPT_REASON,
-    LLM_COMPACTION_TOO_LARGE_REASON,
-    contains_compaction_handoff,
-)
-from .execution_fallback_policy import format_repeated_invalid_tool_call_content
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
-from .subagent_result_policy import (
+from .subagent_output import (
     SUBAGENT_PROMPT_TYPE_LABEL,
     SUBAGENT_TASK_ID_LABEL,
     parse_subagent_result_line,
@@ -67,6 +55,34 @@ from .workflow_status import WORKFLOW_COMPLETED_STATUS
 
 LLM_STEP_COMPLETED_STATUS = "completed"
 LLM_STEP_ERROR_STATUS = "error"
+COMPACTED_CONVERSATION_STATE_HEADING = "# Compacted Conversation State"
+COMPACTED_TASK_STATE_HEADING = "# Compacted Task State"
+COMPACTION_HANDOFF_HEADINGS = (
+    COMPACTED_CONVERSATION_STATE_HEADING,
+    COMPACTED_TASK_STATE_HEADING,
+)
+LLM_COMPACTION_TOO_LARGE_REASON = "llm_too_large"
+LLM_COMPACTION_CONFIG_MISSING_REASON = "llm_config_missing"
+LLM_COMPACTION_NO_BODY_REASON = "no_body"
+LLM_COMPACTION_NO_PROMPT_REASON = "no_prompt"
+LLM_COMPACTION_ERROR_REASON = "llm_error"
+LLM_COMPACTION_EMPTY_REASON = "llm_empty"
+
+
+def contains_compaction_handoff(content: str | None) -> bool:
+    text = str(content or "")
+    return any(heading in text for heading in COMPACTION_HANDOFF_HEADINGS)
+
+
+def format_repeated_invalid_tool_call_content(template: str | None, result: str) -> str:
+    cleaned_template = str(template or "").strip()
+    cleaned_result = str(result or "").strip()
+    if not cleaned_template:
+        return cleaned_result
+    try:
+        return cleaned_template.format(result=result)
+    except (KeyError, IndexError, ValueError):
+        return f"{cleaned_template}\n\n{result}"
 
 
 @dataclass

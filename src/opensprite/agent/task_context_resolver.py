@@ -41,7 +41,7 @@ from .task_context_policy import (
     llm_string_or_none,
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
-from .task_text_policy import task_text_tokens
+from .task_context_policy import task_text_tokens
 from .llm_resolution_policy import (
     TASK_CONTEXT_RESOLUTION_PURPOSE,
     llm_failed_reason,

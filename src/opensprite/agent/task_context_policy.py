@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 
 ACK_CONTINUATION_TYPE = "ack"
 FOLLOW_UP_CONTINUATION_TYPE = "follow_up"
@@ -18,6 +20,7 @@ NONE_CONTINUATION_TYPE = "none"
 BOUNDARY_SWITCH_REPLY_COMMAND = "switch"
 BOUNDARY_CONTINUE_REPLY_COMMAND = "continue"
 LLM_EMPTY_VALUE_SENTINELS = frozenset({NONE_CONTINUATION_TYPE, "null", "n/a"})
+TASK_TEXT_TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+")
 
 FOLLOW_UP_CONTINUATION_TYPES = frozenset(
     {
@@ -72,6 +75,11 @@ def llm_string_or_none(value: object) -> str | None:
     if not normalized or normalized.lower() in LLM_EMPTY_VALUE_SENTINELS:
         return None
     return normalized
+
+
+def task_text_tokens(text: str | None) -> tuple[str, ...]:
+    """Return coarse language-neutral tokens for short follow-up heuristics."""
+    return tuple(TASK_TEXT_TOKEN_RE.findall(str(text or "")))
 
 
 def is_follow_up_continuation_type(value: str | None) -> bool:

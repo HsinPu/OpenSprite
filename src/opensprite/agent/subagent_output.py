@@ -8,6 +8,8 @@ from typing import Any
 
 from ..utils.json_safe import json_safe_value
 
+SUBAGENT_TASK_ID_LABEL = "Task ID"
+SUBAGENT_PROMPT_TYPE_LABEL = "Subagent"
 STRUCTURED_SUBAGENT_SCHEMA_VERSION = 1
 READONLY_SUBAGENT_RESULT_CONTRACT = "readonly_subagent_result"
 STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD = "schema_version"
@@ -46,6 +48,18 @@ MAX_STRUCTURED_SUBAGENT_QUESTIONS = 8
 MAX_STRUCTURED_SUBAGENT_RESIDUAL_RISKS = 8
 MAX_STRUCTURED_SUBAGENT_SOURCES = 12
 _JSON_FENCE_RE = re.compile(r"```json\s*(?P<body>.*?)\s*```", re.IGNORECASE | re.DOTALL)
+
+
+def subagent_result_line(label: str, value: object) -> str:
+    return f"{label}: {value}"
+
+
+def parse_subagent_result_line(line: str | None, label: str) -> str | None:
+    prefix = f"{label}: "
+    text = str(line or "")
+    if not text.startswith(prefix):
+        return None
+    return text[len(prefix) :].strip() or None
 
 
 def is_clean_structured_subagent_status(status: str | None) -> bool:
