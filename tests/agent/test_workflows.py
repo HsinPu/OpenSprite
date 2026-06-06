@@ -4,14 +4,14 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.subagents import SubagentTaskOutcome
-from opensprite.agent.workflow_fields import (
+from opensprite.agent.workflows import (
+    SubagentWorkflowService,
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_REVIEW_ATTEMPTED_FIELD,
     WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
     WORKFLOW_REVIEW_PASSED_FIELD,
 )
-from opensprite.agent.workflows import SubagentWorkflowService
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
 from opensprite.runs.events import (
