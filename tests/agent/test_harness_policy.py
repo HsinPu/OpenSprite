@@ -12,7 +12,7 @@ from opensprite.agent.harness_policy import (
     HarnessPolicyService,
 )
 from opensprite.agent.task_contract import EvidenceRequirement, LLM_PLANNER_CONTRACT_SOURCES, TaskContract
-from opensprite.agent.task_resolver import TaskIntentService
+from opensprite.agent.task_contract import TaskIntentService
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry

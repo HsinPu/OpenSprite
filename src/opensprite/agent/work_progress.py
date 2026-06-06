@@ -66,7 +66,7 @@ from .harness_policy import (
     is_research_profile_name,
     normalize_profile_name,
 )
-from .task_resolver import (
+from .task_contract import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,

@@ -72,8 +72,8 @@ from .task_contract import (
     is_workspace_location_criterion,
     resolve_planning_mode,
 )
-from .task_resolver import TaskContextDecision, TaskObjectiveDecision
-from .task_resolver import TaskIntent
+from .task_contract import TaskContextDecision, TaskObjectiveDecision
+from .task_contract import TaskIntent
 
 PROMPT_TRIM_BASE_EXCEEDS_BUDGET_REASON = "base-exceeds-budget"
 PROMPT_TRIM_FIRST_MESSAGE_EXCEEDS_BUDGET_REASON = "first-message-exceeds-budget"

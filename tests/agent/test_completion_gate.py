@@ -86,8 +86,8 @@ from opensprite.agent.completion_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
 )
-from opensprite.agent.task_resolver import TaskContextDecision
-from opensprite.agent.task_resolver import TaskIntent, TaskIntentService
+from opensprite.agent.task_contract import TaskContextDecision
+from opensprite.agent.task_contract import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence

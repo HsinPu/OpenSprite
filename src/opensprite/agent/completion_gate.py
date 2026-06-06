@@ -19,7 +19,7 @@ from ..documents.active_task import (
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
 from .harness_policy import OPERATIONS_TASK_TYPE, VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
-from .task_resolver import (
+from .task_contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
     accepts_final_response_task_type,
