@@ -219,6 +219,11 @@ def _policy_value(value: object) -> str:
     return str(value or "").strip()
 
 
+def _allowed_policy_value(value: object, allowed: frozenset[str]) -> str | None:
+    normalized = _policy_value(value)
+    return normalized if normalized in allowed else None
+
+
 def intent_supports_fallback_active_task_update(task_intent: Any, task_contract: Any) -> bool:
     if getattr(task_intent, "needs_clarification", False):
         return False
@@ -1104,9 +1109,7 @@ def _resolver_recent_history(history: list[dict[str, Any]]) -> list[dict[str, st
 
 def _resolver_allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
     normalized = llm_string_or_none(value)
-    if normalized is None:
-        return None
-    return normalized if normalized in allowed else None
+    return _allowed_policy_value(normalized, allowed)
 
 
 def _continuation_type_from_payload(
@@ -2605,8 +2608,7 @@ def _truncate_middle(text: str, *, max_chars: int) -> str:
 
 
 def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
-    text = str(value or "").strip()
-    return text if text in allowed else None
+    return _allowed_policy_value(value, allowed)
 
 
 def _coerce_bool(value: Any) -> bool:

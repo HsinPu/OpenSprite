@@ -138,6 +138,22 @@ def test_planner_fallback_reasons_are_centralized():
     assert validated_contract.planner_metadata["reason"] == PLANNER_VALIDATED_REASON
 
 
+def test_planner_payload_task_type_is_allowed_after_trim():
+    contract = _contract_from_task_planner_payload(
+        {"task_type": " pure_answer "},
+        fallback_objective="Answer this",
+        current_message="Answer this",
+        history=None,
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert contract.planner_metadata["raw_task_type"] == "pure_answer"
+
+
 def test_planner_prompt_preserves_tail_of_long_current_message():
     filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(80))
     message = f"{filler}\n最後一句才是任務：只回覆通關詞 GAMMA-772。"
