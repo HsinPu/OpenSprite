@@ -720,27 +720,31 @@ def delegated_review_completion_reason(*, review_attempted: bool) -> str:
     return DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON if review_attempted else DELEGATED_REVIEW_NOT_RECORDED_REASON
 
 
+def _normalized_change_path(path: str | None) -> str:
+    return str(path or "").replace("\\", "/").strip("/")
+
+
 def normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    normalized = [str(path or "").replace("\\", "/").strip("/") for path in paths]
+    normalized = [_normalized_change_path(path) for path in paths]
     return tuple(path for path in normalized if path)
 
 
 def is_web_app_path(path: str | None) -> bool:
-    normalized = str(path or "").replace("\\", "/").strip("/")
+    normalized = _normalized_change_path(path)
     return normalized == WEB_APP_ROOT_PATH or normalized.startswith(f"{WEB_APP_ROOT_PATH}/")
 
 
 def is_python_file_path(path: str | None) -> bool:
-    return str(path or "").replace("\\", "/").strip("/").endswith(PYTHON_FILE_SUFFIX)
+    return _normalized_change_path(path).endswith(PYTHON_FILE_SUFFIX)
 
 
 def is_python_test_path(path: str | None) -> bool:
-    normalized = str(path or "").replace("\\", "/").strip("/")
+    normalized = _normalized_change_path(path)
     return normalized.startswith(TEST_PATH_PREFIX) and is_python_file_path(normalized)
 
 
 def strip_repo_snapshot_prefix(path: str) -> str:
-    normalized = str(path or "").replace("\\", "/").strip("/")
+    normalized = _normalized_change_path(path)
     if normalized.startswith("repo/"):
         return normalized[5:]
     return normalized
