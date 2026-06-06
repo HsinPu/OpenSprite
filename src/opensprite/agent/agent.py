@@ -124,7 +124,7 @@ from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextSer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .subagents import is_workflow_failed_status
 from .subagents import SubagentWorkflowService
-from .work_progress import ActiveTaskCommandService, WorkProgressService, WorkProgressUpdate
+from .turn_runner import ActiveTaskCommandService, WorkProgressService, WorkProgressUpdate
 
 
 def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:

@@ -22,7 +22,7 @@ from opensprite.agent.task_contract import (
     TaskContract,
 )
 from opensprite.agent.task_contract import TaskIntentService
-from opensprite.agent.work_progress import WorkProgressService
+from opensprite.agent.turn_runner import WorkProgressService
 from opensprite.tools.result_status import tool_error_result
 
 

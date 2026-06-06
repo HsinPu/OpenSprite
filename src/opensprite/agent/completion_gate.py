@@ -139,7 +139,7 @@ from .subagents import (
 )
 
 if TYPE_CHECKING:
-    from .work_progress import WorkProgressUpdate
+    from .turn_runner import WorkProgressUpdate
 
 INCOMPLETE_COMPLETION_STATUS = "incomplete"
 NEEDS_VERIFICATION_COMPLETION_STATUS = "needs_verification"
