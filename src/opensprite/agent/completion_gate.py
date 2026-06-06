@@ -53,6 +53,7 @@ from .execution import (
     STRUCTURED_SUBAGENT_SECTIONS_FIELD,
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    format_review_finding,
     is_clean_structured_subagent_status,
 )
 from .task_contract import (
@@ -2100,25 +2101,12 @@ def _first_review_finding(structured_output: Any) -> str:
             continue
         for item in items:
             if isinstance(item, dict):
-                detail = _format_review_finding(item)
+                detail = format_review_finding(item)
                 if detail:
                     return detail
             elif isinstance(item, str) and item.strip():
                 return item.strip()
     return ""
-
-
-def _format_review_finding(item: dict[str, Any]) -> str:
-    title = str(item.get("title") or "").strip()
-    path = str(item.get("path") or "").strip()
-    fix = str(item.get("fix") or "").strip()
-    why = str(item.get("why") or "").strip()
-    subject = f"{path}: {title}" if path and title else title or path
-    if fix:
-        return f"{subject}: {fix}" if subject else fix
-    if why:
-        return f"{subject}: {why}" if subject else why
-    return subject
 
 
 def _review_follow_up_detail(review: dict[str, Any]) -> str | None:

@@ -1,6 +1,21 @@
 import json
 
-from opensprite.agent.execution import parse_structured_subagent_output
+from opensprite.agent.execution import format_review_finding, parse_structured_subagent_output
+
+
+def test_format_review_finding_prefers_fix_detail():
+    assert (
+        format_review_finding(
+            {
+                "title": "Race condition",
+                "path": "src/foo.py",
+                "why": "Concurrent mutation may corrupt state.",
+                "fix": "Guard writes with one lock.",
+            }
+        )
+        == "src/foo.py: Race condition: Guard writes with one lock."
+    )
+    assert format_review_finding({"path": "src/foo.py", "why": "Needs review."}) == "src/foo.py: Needs review."
 
 
 def test_parse_structured_subagent_output_extracts_trailing_json_block():

@@ -4904,7 +4904,7 @@ def _result_summary(outcome: SubagentTaskOutcome) -> str:
     return outcome.content
 
 
-def _format_review_finding(item: dict[str, Any]) -> str:
+def format_review_finding(item: dict[str, Any]) -> str:
     title = str(item.get("title") or "").strip()
     path = str(item.get("path") or "").strip()
     fix = str(item.get("fix") or "").strip()
@@ -4929,7 +4929,7 @@ def _first_structured_review_finding(structured_output: dict[str, Any] | None) -
             continue
         for item in items:
             if isinstance(item, dict):
-                detail = _format_review_finding(item)
+                detail = format_review_finding(item)
                 if detail:
                     return detail
             elif isinstance(item, str) and item.strip():
