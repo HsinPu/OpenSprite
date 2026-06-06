@@ -1,7 +1,8 @@
 import pytest
 
-from opensprite.agent.completion_judge import (
+from opensprite.agent.completion_gate import (
     COMPLETION_JUDGE_ACTIVE_TASK_STATUSES,
+    CompletionGateService,
     CompletionJudgeError,
     CompletionJudgeService,
     CompletionJudgeVerdict,
@@ -10,7 +11,6 @@ from opensprite.agent.completion_judge import (
     normalize_completion_judge_payload,
     parse_completion_judge_json,
 )
-from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract

@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import (
+    CompletionJudgeVerdict,
     CompletionGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _accepts_final_response_task_type,
