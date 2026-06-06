@@ -19,7 +19,7 @@ from ..config import Config
 from ..llms.context_window import resolve_context_window_tokens
 from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
-from ..agent.run_trace import RunTraceRecorder
+from ..runs.trace import RunTraceRecorder
 from ..runs.schema import (
     serialize_file_change,
     serialize_run_artifacts,

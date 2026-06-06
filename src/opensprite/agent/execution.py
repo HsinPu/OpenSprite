@@ -117,7 +117,7 @@ from ..utils import (
 )
 from ..utils.log import logger
 from ..utils.log_redaction import redact_log_preview
-from .run_trace import RunCancelledError, RunHookService, RunTraceRecorder, mcp_tool_names as list_mcp_tool_names
+from ..runs.trace import RunCancelledError, RunHookService, RunTraceRecorder, mcp_tool_names as list_mcp_tool_names
 from .task_contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,

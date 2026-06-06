@@ -108,8 +108,8 @@ from .tool_access import (
     register_default_tools,
     register_memory_tool,
 )
-from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
-from .run_trace import AgentRunStateService, McpLifecycleService, RunHookService
+from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
+from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .execution import SubagentRunService
 from .task_contract import TaskPlanner
 from .task_contract import (

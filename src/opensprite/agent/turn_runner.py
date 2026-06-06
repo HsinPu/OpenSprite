@@ -116,8 +116,8 @@ from ..media import (
     INBOUND_IMAGE_EXTENSIONS,
     INBOUND_VIDEO_EXTENSIONS,
 )
-from .run_trace import AgentRunStateService
-from .run_trace import RunTraceRecorder, WorktreeSandboxInspector
+from ..runs.trace import AgentRunStateService
+from ..runs.trace import RunTraceRecorder, WorktreeSandboxInspector
 from ..storage import StorageProvider, StoredDelegatedTask, StoredWorkState
 from ..storage.base import (
     coerce_stored_delegated_tasks,
