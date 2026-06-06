@@ -72,7 +72,7 @@ from .message_history import (
     history_retrieval_metadata_reports_empty,
     is_history_retrieval_tool_name,
 )
-from .media import count_media_artifacts, is_media_artifact_kind
+from ..media import count_media_artifacts, is_media_artifact_kind
 from ..tools.evidence import (
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,

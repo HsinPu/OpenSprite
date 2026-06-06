@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from opensprite.agent.media import AudioInputPreprocessor
+from opensprite.media import AudioInputPreprocessor
 from opensprite.agent.turn_runner import PreparedTurnInput
 from opensprite.bus.message import UserMessage
 

@@ -45,7 +45,7 @@ from ..tools.evidence import (
     is_web_source_evidence_tool,
 )
 from ..tools.permissions import ToolPermissionPolicy
-from .media import count_media_artifacts
+from ..media import count_media_artifacts
 from .message_history import HISTORY_SEARCH_TOOL_NAME
 
 if TYPE_CHECKING:

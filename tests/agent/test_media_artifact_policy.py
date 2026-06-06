@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from opensprite.agent.media import (
+from opensprite.media import (
     count_media_artifacts,
     is_media_artifact_kind,
     media_artifact_gap_follow_up_instruction,

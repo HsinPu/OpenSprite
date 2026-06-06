@@ -43,6 +43,7 @@ from ..context.paths import (
 )
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import (
+    AgentMediaService,
     MediaRouter,
     OpenAICompatibleSpeechProvider,
     OpenAICompatibleVideoProvider,
@@ -98,7 +99,6 @@ from .curator import (
 from .execution import ExecutionEngine, ExecutionResult
 from .harness_policy import HarnessPolicyService, HarnessProfileService
 from .llm_call import LlmCallService, PromptBudgetService, PromptLoggingService
-from .media import AgentMediaService
 from .message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from .tool_access import (
     AgentPermissionService,

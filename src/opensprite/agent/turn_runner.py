@@ -70,7 +70,7 @@ from .harness_policy import (
     HarnessSensorResult,
     evaluate_harness_sensors,
 )
-from .media import (
+from ..media import (
     AgentMediaService,
     AudioInputPreprocessor,
     INBOUND_AUDIO_EXTENSIONS,

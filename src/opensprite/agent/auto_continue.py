@@ -30,7 +30,7 @@ from .harness_policy import (
     is_ops_profile_name,
     is_research_profile_name,
 )
-from .media import media_artifact_gap_follow_up_instruction
+from ..media import media_artifact_gap_follow_up_instruction
 from .task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     contract_expects_file_change,

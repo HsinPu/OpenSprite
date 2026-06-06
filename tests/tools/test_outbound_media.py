@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.agent.media import AgentMediaService
+from opensprite.media import AgentMediaService
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.result_status import classify_tool_result_status
 
