@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable
 
-from ..documents.active_task import has_current_active_task
-from ..harness import HarnessPlan, HarnessPolicy, HarnessProfile, is_chat_profile_name
-from ..runs.events import (
+from ...documents.active_task import has_current_active_task
+from ...harness import HarnessPlan, HarnessPolicy, HarnessProfile, is_chat_profile_name
+from ...runs.events import (
     HARNESS_POLICY_MERGE_RESOLVED_EVENT,
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
@@ -19,9 +19,9 @@ from ..runs.events import (
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_OBJECTIVE_RESOLVED_EVENT,
 )
-from ..tools import ToolRegistry
-from ..utils.log import logger
-from .task_contract import (
+from ...tools import ToolRegistry
+from ...utils.log import logger
+from .contract import (
     PLANNER_VALIDATED_STATUS,
     TaskContextDecision,
     TaskContract,

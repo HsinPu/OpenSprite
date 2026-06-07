@@ -26,7 +26,7 @@ from opensprite.harness import (
     is_research_profile_name,
     normalize_profile_name,
 )
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     EvidenceRequirement,
     LLM_PLANNER_CONTRACT_SOURCES,
     OPERATION_REPORT_CRITERION_KIND,
@@ -40,7 +40,7 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     WORKSPACE_LOCATION_QUALITY_CHECK,
 )
-from opensprite.agent.task_contract import TaskIntentService
+from opensprite.agent.task.contract import TaskIntentService
 from opensprite.config import Config
 
 

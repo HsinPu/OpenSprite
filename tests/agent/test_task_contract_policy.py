@@ -1,6 +1,6 @@
 import pytest
 
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
     ITEMIZED_OUTPUT_CRITERION_KIND,

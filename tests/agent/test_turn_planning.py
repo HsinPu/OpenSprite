@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     EvidenceRequirement,
@@ -9,7 +9,7 @@ from opensprite.agent.task_contract import (
     TaskIntent,
     TaskObjectiveDecision,
 )
-from opensprite.agent.turn_planning import TurnPlanningService
+from opensprite.agent.task.planning import TurnPlanningService
 from opensprite.harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
 from opensprite.runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,

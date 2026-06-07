@@ -7,11 +7,11 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any
 
-from ..config.schema import DocumentLlmConfig
-from ..documents.active_task import has_current_active_task
-from ..llms import ChatMessage, is_unconfigured_llm
-from ..utils.log import logger
-from ..tool_names import (
+from ...config.schema import DocumentLlmConfig
+from ...documents.active_task import has_current_active_task
+from ...llms import ChatMessage, is_unconfigured_llm
+from ...utils.log import logger
+from ...tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,
     ANALYZE_VIDEO_TOOL_NAME,
     BATCH_TOOL_NAME,
@@ -25,7 +25,7 @@ from ..tool_names import (
     READ_SKILL_TOOL_NAME,
     TRANSCRIBE_AUDIO_TOOL_NAME,
 )
-from ..harness import (
+from ...harness import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
@@ -48,9 +48,9 @@ from ..harness import (
     WORKSPACE_READ_TOOL_GROUP,
     is_planning_task_type,
 )
-from ..media import MEDIA_ONLY_HISTORY_MARKER
-from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
-from ..tools.evidence import (
+from ...media import MEDIA_ONLY_HISTORY_MARKER
+from ...context.message_history import HISTORY_SEARCH_TOOL_NAME
+from ...tools.evidence import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,
     SOURCE_REFERENCE_CRITERION_KIND,
@@ -60,8 +60,8 @@ from ..tools.evidence import (
     is_web_research_task_type,
     is_web_research_tool_group,
 )
-from ..tools.evidence import ToolEvidence
-from ..tools.registry import ToolRegistry
+from ...tools.evidence import ToolEvidence
+from ...tools.registry import ToolRegistry
 
 # Task intent, context, and objective resolution.
 
@@ -1548,7 +1548,7 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: ToolRegistry) -> ToolRegistry:
     """Return a read-only registry used for plan-only turns."""
-    from ..tools.access import ToolAccessResolver, planning_mode_permission_policy
+    from ...tools.access import ToolAccessResolver, planning_mode_permission_policy
 
     resolution = ToolAccessResolver().resolve_overlay(
         base_registry,

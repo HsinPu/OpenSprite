@@ -23,8 +23,8 @@ from opensprite.agent.completion_gate import (
     path_requires_delegated_review,
     workflow_fix_follow_up_fields,
 )
-from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import LLM_PLANNER_CONTRACT_SOURCES
+from opensprite.agent.task.contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     accepts_final_response_task_type,
     is_analysis_response_intent_kind,
@@ -71,7 +71,7 @@ from opensprite.agent.completion_gate import OPERATION_VALIDATION_OR_RISK_MISSIN
 from opensprite.agent.completion_gate import QualityGateService
 from opensprite.agent.completion_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.execution import TASK_ARTIFACTS_NOT_PRODUCED_REASON, TaskArtifact
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
@@ -97,8 +97,8 @@ from opensprite.agent.completion_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
 )
-from opensprite.agent.task_contract import TaskContextDecision
-from opensprite.agent.task_contract import TaskIntent, TaskIntentService
+from opensprite.agent.task.contract import TaskContextDecision
+from opensprite.agent.task.contract import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence

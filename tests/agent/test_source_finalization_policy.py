@@ -4,7 +4,7 @@ from opensprite.agent.turn_runner import (
     source_finalization_allowed,
     task_contract_requires_web_sources,
 )
-from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 
 
 def test_source_finalization_policy_requires_nonfinal_web_contract():

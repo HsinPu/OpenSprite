@@ -110,8 +110,8 @@ from ..tools.registration import (
 from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagent_run import SubagentRunService
-from .task_contract import TaskPlanner
-from .task_contract import (
+from .task.contract import TaskPlanner
+from .task.contract import (
     TaskContextDecision,
     TaskContextResolver,
     TaskIntent,
@@ -123,8 +123,8 @@ from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextSer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
-from .task_progress import WorkProgressService, WorkProgressUpdate
-from .active_task_commands import ActiveTaskCommandService
+from .task.progress import WorkProgressService, WorkProgressUpdate
+from .task.active_task import ActiveTaskCommandService
 
 
 def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:

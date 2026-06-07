@@ -11,7 +11,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterator
-from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
 from ..config import LogConfig
@@ -26,8 +25,6 @@ from ..runs.events import (
     EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
-    INBOUND_MEDIA_EVENT_PREFIX,
-    INBOUND_MEDIA_PERSISTED_EVENT,
     LLM_STATUS_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
@@ -82,20 +79,21 @@ from ..runs.trace import AgentRunStateService
 from ..runs.trace import RunTraceRecorder, WorktreeSandboxInspector
 from ..storage import StorageProvider, StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
-from .task_contract import (
+from .task.contract import (
     PLANNER_VALIDATED_STATUS,
     PLANNING_ERROR_TASK_TYPE,
     is_tool_group_requirement,
     task_planner_status,
 )
-from .task_contract import TaskContextDecision, TaskIntent, TaskIntentService
-from .task_progress import (
+from .task.contract import TaskContextDecision, TaskIntent, TaskIntentService
+from .task.progress import (
     WorkPlan,
     WorkProgressService,
     WorkProgressUpdate,
     metadata_is_work_progress_source,
 )
-from .turn_task_planning import TurnTaskPlanningService
+from .task.decision import TurnTaskPlanningService
+from .run_lifecycle import RunLifecycleService
 from ..tools.evidence import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
@@ -687,7 +685,6 @@ class AgentTurnRunner:
         self.run_trace = run_trace
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
-        self.run_state = run_state
         self.harness_profiles = harness_profiles
         self.completion_gate = completion_gate
         self._completion_judge_context = completion_judge_context
@@ -698,6 +695,14 @@ class AgentTurnRunner:
             work_progress=work_progress,
             read_active_task_snapshot=read_active_task_snapshot,
             build_runtime_message=_message_with_runtime_context,
+        )
+        self.run_lifecycle = RunLifecycleService(
+            run_trace=run_trace,
+            run_state=run_state,
+            emit_run_event=emit_run_event,
+            clear_delegated_task_updates=clear_delegated_task_updates,
+            clear_workflow_outcomes=clear_workflow_outcomes,
+            format_log_preview=format_log_preview,
         )
         self._connect_mcp = connect_mcp
         self._save_message = save_message
@@ -720,9 +725,7 @@ class AgentTurnRunner:
         self._schedule_curator = schedule_curator
         self._finalize_learning_reuse = finalize_learning_reuse
         self._consume_delegated_task_updates = consume_delegated_task_updates
-        self._clear_delegated_task_updates = clear_delegated_task_updates
         self._consume_workflow_outcomes = consume_workflow_outcomes
-        self._clear_workflow_outcomes = clear_workflow_outcomes
         self._worktree_sandbox_enabled = worktree_sandbox_enabled
         self._workspace_root = workspace_root
 
@@ -789,31 +792,9 @@ class AgentTurnRunner:
         llm_configured: bool,
     ) -> AssistantMessage:
         """Start run telemetry and dispatch one prepared user turn."""
-        run_id = f"run_{uuid4().hex}"
-        self.run_state.start(turn.session_id, run_id)
-        await self.run_trace.start_turn_run(
-            turn.session_id,
-            run_id,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-            sender_id=user_message.sender_id,
-            sender_name=user_message.sender_name,
-            text=user_message.text,
-            images=user_message.images,
-            audios=user_message.audios,
-            videos=user_message.videos,
-        )
-        for media_event in turn.media_events:
-            await self._emit_run_event(
-                turn.session_id,
-                run_id,
-                INBOUND_MEDIA_PERSISTED_EVENT
-                if media_event.get("status") == "persisted"
-                else f"{INBOUND_MEDIA_EVENT_PREFIX}{media_event.get('status') or 'unknown'}",
-                {"schema_version": 1, **dict(media_event)},
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
-        )
+        run = await self.run_lifecycle.start_turn(user_message=user_message, turn=turn)
+        run_id = run.run_id
+        await self.run_lifecycle.record_inbound_media(run=run, turn=turn)
         await self._preprocess_audio_only_message(user_message, turn, run_id)
         self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
         existing_work_state = await self._get_work_state(turn.session_id)
@@ -878,14 +859,7 @@ class AgentTurnRunner:
                         worktree_sandbox_recorded=worktree_sandbox_recorded,
                     )
                 except asyncio.CancelledError:
-                    await self.run_trace.fail_run(
-                        turn.session_id,
-                        run_id,
-                        status="cancelled",
-                        event_payload={"status": "cancelled", "error": "cancelled"},
-                        channel=turn.channel,
-                        external_chat_id=turn.external_chat_id,
-                    )
+                    await self.run_lifecycle.record_cancelled(run)
                     raise
                 except Exception as exc:
                     logger.exception(
@@ -893,22 +867,10 @@ class AgentTurnRunner:
                         f"text_len={len(user_message.text or '')}, images={len(user_message.images or [])}, audios={len(user_message.audios or [])}, videos={len(user_message.videos or [])}"
                     )
                     self._finalize_learning_reuse(turn.session_id, run_id, False)
-                    await self.run_trace.fail_run(
-                        turn.session_id,
-                        run_id,
-                        status="failed",
-                        event_payload={
-                            "status": "failed",
-                            "error": self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240),
-                        },
-                        channel=turn.channel,
-                        external_chat_id=turn.external_chat_id,
-                    )
+                    await self.run_lifecycle.record_failed(run, exc)
                     raise
         finally:
-            self._clear_delegated_task_updates(run_id)
-            self._clear_workflow_outcomes(run_id)
-            self.run_state.finish(turn.session_id, run_id)
+            self.run_lifecycle.finish_turn(run)
 
     async def run_media_only_turn(
         self,

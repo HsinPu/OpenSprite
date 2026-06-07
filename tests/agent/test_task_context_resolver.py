@@ -3,7 +3,7 @@ import asyncio
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
     TASK_CONTEXT_RESOLUTION_PURPOSE,
@@ -21,9 +21,9 @@ from opensprite.agent.task_contract import (
     task_boundary_confidence_too_low_reason,
     task_text_tokens,
 )
-from opensprite.agent.task_contract import TaskIntentService
-from opensprite.agent.task_progress import WorkProgressUpdate
-from opensprite.agent.active_task_commands import ActiveTaskCommandService
+from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.progress import WorkProgressUpdate
+from opensprite.agent.task.active_task import ActiveTaskCommandService
 from opensprite.config import Config, TaskMessagesConfig
 from opensprite.documents.active_task import (
     TASK_BOUNDARY_CONFIRMATION_EVENT,

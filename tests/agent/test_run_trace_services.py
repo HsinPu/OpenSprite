@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 from types import SimpleNamespace
 
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,

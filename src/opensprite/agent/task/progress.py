@@ -6,8 +6,8 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any
 
-from ..documents.active_task import is_current_active_task_status
-from ..harness import (
+from ...documents.active_task import is_current_active_task_status
+from ...harness import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
@@ -23,9 +23,9 @@ from ..harness import (
     is_research_profile_name,
     normalize_profile_name,
 )
-from ..storage import StoredDelegatedTask, StoredWorkState
-from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
-from .completion_gate import (
+from ...storage import StoredDelegatedTask, StoredWorkState
+from ...storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
+from ..completion_gate import (
     CompletionGateResult,
     is_blocking_completion_status,
     is_complete_completion_status,
@@ -35,15 +35,15 @@ from .completion_gate import (
     needs_verification_completion_status,
     requires_evidence_follow_up,
 )
-from .execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
-from .task_contract import (
+from ..execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
+from .contract import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
     TaskContextDecision,
     TaskIntent,
     intent_supports_default_work_plan,
 )
-from .workflow import is_workflow_failed_status
+from ..workflow import is_workflow_failed_status
 
 
 NEXT_ACTION_FINALIZE = "finalize"

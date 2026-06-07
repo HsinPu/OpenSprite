@@ -2,7 +2,7 @@ from opensprite.agent.completion_gate import CompletionBlockerMessages, Completi
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.completion_gate import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.execution import TaskArtifact
-from opensprite.agent.task_contract import TaskContract
+from opensprite.agent.task.contract import TaskContract
 from opensprite.agent.turn_runner import (
     _final_response_after_exhausted_continuation,
     _message_with_runtime_context,

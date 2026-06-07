@@ -17,7 +17,7 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.runs.trace import RunBusyError
 from opensprite.agent.execution import TaskArtifact
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     EvidenceRequirement,
     LLM_PLANNER_CONTRACT_SOURCES,
     PLANNER_INVALID_STATUS,

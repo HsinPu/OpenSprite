@@ -8,7 +8,7 @@ from opensprite.agent.completion_gate import (
 )
 from opensprite.agent.completion_gate import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON, CompletionGateResult
 from opensprite.agent.execution import ExecutionResult, TaskArtifact
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
@@ -20,8 +20,8 @@ from opensprite.agent.task_contract import (
     SOURCE_REFERENCE_CRITERION_KIND,
     TaskContract,
 )
-from opensprite.agent.task_contract import TaskIntentService
-from opensprite.agent.task_progress import WorkProgressService
+from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.progress import WorkProgressService
 from opensprite.harness import HarnessProfileService
 from opensprite.tools.result_status import tool_error_result
 

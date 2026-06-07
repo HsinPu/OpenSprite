@@ -6,8 +6,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ..harness import expected_sensor_ids_for_task_type
-from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, ResourceRef, TaskContract
-from ..agent.task_contract import TaskIntentService
+from ..agent.task.contract import AcceptanceCriterion, EvidenceRequirement, ResourceRef, TaskContract
+from ..agent.task.contract import TaskIntentService
 
 
 HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (

@@ -31,7 +31,7 @@ from ..harness import (
     is_research_profile_name,
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
-from .task_contract import (
+from .task.contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
     accepts_final_response_task_type,
@@ -54,7 +54,7 @@ from .subagent import (
     first_structured_review_finding,
     is_clean_structured_subagent_status,
 )
-from .task_contract import (
+from .task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     PLANNER_BLOCKED_STATUS,
@@ -139,7 +139,7 @@ from .workflow import (
 )
 
 if TYPE_CHECKING:
-    from .task_progress import WorkProgressUpdate
+    from .task.progress import WorkProgressUpdate
 
 INCOMPLETE_COMPLETION_STATUS = "incomplete"
 NEEDS_VERIFICATION_COMPLETION_STATUS = "needs_verification"

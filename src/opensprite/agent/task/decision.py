@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ..bus.message import UserMessage
-from ..storage import StoredWorkState
-from .task_contract import TaskContextDecision, TaskContextResolver, TaskIntent, TaskIntentService
+from ...bus.message import UserMessage
+from ...storage import StoredWorkState
+from .contract import TaskContextDecision, TaskContextResolver, TaskIntent, TaskIntentService
 
 
 @dataclass(frozen=True)

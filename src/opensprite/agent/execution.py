@@ -70,7 +70,7 @@ from ..harness import (
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessPlan,
 )
-from .task_contract import (
+from .task.contract import (
     TaskContextDecision,
     TaskContract,
     TaskIntent,
@@ -179,7 +179,7 @@ from .workflow import (
     is_workflow_running_status,
     is_workflow_unsuccessful_status,
 )
-from .turn_planning import TurnPlanningService
+from .task.planning import TurnPlanningService
 from ..tools.loop_guardrail import (
     ToolLoopGuardrail,
     append_toolguard_guidance,

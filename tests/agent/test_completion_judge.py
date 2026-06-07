@@ -13,8 +13,8 @@ from opensprite.agent.completion_gate import (
 )
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
 from opensprite.agent.execution import TaskArtifact
-from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
-from opensprite.agent.task_contract import TaskIntent
+from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task.contract import TaskIntent
 from opensprite.config import DocumentLlmConfig
 from opensprite.llms import LLMResponse
 from opensprite.tools.evidence import ToolEvidence

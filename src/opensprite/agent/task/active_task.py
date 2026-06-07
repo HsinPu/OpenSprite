@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
-from ..config import TaskMessagesConfig
-from ..documents.active_task import (
+from ...config import TaskMessagesConfig
+from ...documents.active_task import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     BLOCKED_ACTIVE_TASK_STATUS,
@@ -27,12 +27,12 @@ from ..documents.active_task import (
     is_inactive_active_task_status,
     is_terminal_active_task_status,
 )
-from ..runs.events import ACTIVE_TASK_SEEDED_EVENT
-from ..storage import StorageProvider, StoredWorkState
-from ..storage.base import get_storage_message_count
-from ..utils.log import logger
-from .completion_gate import CompletionGateResult, is_blocking_completion_status
-from .task_contract import (
+from ...runs.events import ACTIVE_TASK_SEEDED_EVENT
+from ...storage import StorageProvider, StoredWorkState
+from ...storage.base import get_storage_message_count
+from ...utils.log import logger
+from ..completion_gate import CompletionGateResult, is_blocking_completion_status
+from .contract import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
     TaskContextDecision,
@@ -42,7 +42,7 @@ from .task_contract import (
     is_current_task_continuation_type,
     is_current_task_replacement_type,
 )
-from .task_progress import (
+from .progress import (
     WORK_PROGRESS_ACTIVE_TASK_EVENT_TYPE,
     WORK_STEP_NOT_SET,
     WorkProgressService,

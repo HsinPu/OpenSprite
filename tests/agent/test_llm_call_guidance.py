@@ -1,5 +1,5 @@
 from opensprite.agent.execution import _format_acceptance_criterion
-from opensprite.agent.task_contract import (
+from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     ITEMIZED_OUTPUT_CRITERION_KIND,
     SOURCE_ARTIFACT_CRITERION_KIND,
