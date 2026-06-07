@@ -3,11 +3,12 @@ import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import SubagentTaskOutcome, WorkflowStepSpec
+from opensprite.agent.execution import SubagentTaskOutcome, WorkflowSpec, WorkflowStepSpec
 from opensprite.agent.execution import (
     SubagentWorkflowService,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_FIELD,
+    WORKFLOW_ID_FIELD,
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_REVIEW_ATTEMPTED_FIELD,
@@ -165,6 +166,46 @@ def test_workflow_payloads_share_outcome_fields():
         outcomes=[outcome],
         status=WORKFLOW_COMPLETED_STATUS,
     )
+    workflow_spec = WorkflowSpec(
+        workflow_id="implement_then_review",
+        description="Implement then review",
+        steps=(step,),
+    )
+
+    async def unused_run_subagent_task(prompt_type, task):
+        return outcome
+
+    async def unused_emit_run_event(*args, **kwargs):
+        return None
+
+    service = SubagentWorkflowService(
+        current_session_id_getter=lambda: None,
+        current_run_id_getter=lambda: None,
+        current_channel_getter=lambda: None,
+        current_external_chat_id_getter=lambda: None,
+        run_subagent_task=unused_run_subagent_task,
+        emit_run_event=unused_emit_run_event,
+        format_log_preview=lambda *args, **kwargs: "",
+        record_workflow_outcome=lambda session_id, payload: None,
+    )
+    outcome_payload = service._build_workflow_outcome(
+        workflow_run_id="workflow_123",
+        spec=workflow_spec,
+        task_preview="Implement safely",
+        outcomes=[outcome],
+        status=WORKFLOW_COMPLETED_STATUS,
+    )
+
+    expected_workflow_fields = {
+        "workflow_run_id": "workflow_123",
+        WORKFLOW_ID_FIELD: "implement_then_review",
+        WORKFLOW_STATUS_FIELD: WORKFLOW_COMPLETED_STATUS,
+        "task_preview": "Implement safely",
+        "total_steps": 1,
+    }
+    for key, value in expected_workflow_fields.items():
+        assert workflow_payload[key] == value
+        assert outcome_payload[key] == value
 
     expected = {
         WORKFLOW_STATUS_FIELD: WORKFLOW_COMPLETED_STATUS,
@@ -189,6 +230,8 @@ def test_workflow_payloads_share_outcome_fields():
 
     assert workflow_payload["completed_steps"] == 1
     assert workflow_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."
+    assert outcome_payload["completed_steps"] == 1
+    assert outcome_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."
 
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):

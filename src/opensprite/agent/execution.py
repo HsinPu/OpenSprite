@@ -5054,6 +5054,23 @@ def _workflow_error_fields(error: str = "") -> dict[str, str]:
     return {WORKFLOW_ERROR_FIELD: error} if error else {}
 
 
+def _workflow_base_fields(
+    *,
+    workflow_run_id: str,
+    workflow_id: str,
+    task_preview: str,
+    steps: tuple[WorkflowStepSpec, ...],
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "workflow_run_id": workflow_run_id,
+        WORKFLOW_ID_FIELD: workflow_id,
+        WORKFLOW_STATUS_FIELD: status,
+        "task_preview": task_preview,
+        "total_steps": len(steps),
+    }
+
+
 def _workflow_outcome_count(
     outcomes: list[SubagentTaskOutcome],
     status_matches: Callable[[str | None], bool],
@@ -5309,11 +5326,13 @@ class SubagentWorkflowService:
         )
         failed_steps = _workflow_outcome_count(outcomes, is_workflow_failed_status)
         payload = {
-            "workflow_run_id": workflow_run_id,
-            WORKFLOW_ID_FIELD: workflow_id,
-            WORKFLOW_STATUS_FIELD: status,
-            "task_preview": task_preview,
-            "total_steps": len(steps),
+            **_workflow_base_fields(
+                workflow_run_id=workflow_run_id,
+                workflow_id=workflow_id,
+                task_preview=task_preview,
+                steps=steps,
+                status=status,
+            ),
             "failed_steps": failed_steps,
             **completion_summary_fields,
             "steps": [
@@ -5417,11 +5436,13 @@ class SubagentWorkflowService:
             start_index=start_index,
         )
         return {
-            "workflow_run_id": workflow_run_id,
-            WORKFLOW_ID_FIELD: spec.workflow_id,
-            WORKFLOW_STATUS_FIELD: status,
-            "task_preview": task_preview,
-            "total_steps": len(spec.steps),
+            **_workflow_base_fields(
+                workflow_run_id=workflow_run_id,
+                workflow_id=spec.workflow_id,
+                task_preview=task_preview,
+                steps=spec.steps,
+                status=status,
+            ),
             "failed_steps": _workflow_outcome_count(outcomes, is_workflow_unsuccessful_status),
             **completion_summary_fields,
             WORKFLOW_REVIEW_ATTEMPTED_FIELD: review[WORKFLOW_REVIEW_ATTEMPTED_FIELD],
