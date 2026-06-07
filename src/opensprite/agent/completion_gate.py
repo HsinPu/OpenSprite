@@ -47,7 +47,7 @@ from .task_contract import (
     is_read_only_task_type,
     is_workspace_read_task_type,
 )
-from .execution import (
+from .subagent import (
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
@@ -113,7 +113,7 @@ from ..tools.evidence import (
     is_verification_tool_name,
     required_verification_completion_reason,
 )
-from .execution import (
+from .workflow import (
     BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
     RESEARCH_THEN_OUTLINE_WORKFLOW_ID,

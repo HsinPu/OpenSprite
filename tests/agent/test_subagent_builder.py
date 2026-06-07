@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from opensprite.agent.execution import SubagentMessageBuilder
+from opensprite.agent.subagent import SubagentMessageBuilder
 from opensprite.skills import SkillsLoader
 
 

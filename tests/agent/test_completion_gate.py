@@ -53,8 +53,10 @@ from opensprite.tools.evidence import (
 from opensprite.agent.completion_gate import AutoContinueService
 from opensprite.agent.execution import (
     ExecutionResult,
-    is_clean_structured_subagent_status,
     is_max_tool_iterations_stop_reason,
+)
+from opensprite.agent.subagent import is_clean_structured_subagent_status
+from opensprite.agent.workflow import (
     is_workflow_cancelled_status,
     is_workflow_completed_status,
     is_workflow_failed_status,

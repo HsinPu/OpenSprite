@@ -3,14 +3,10 @@ import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import SubagentTaskOutcome, WorkflowSpec, WorkflowStepSpec
-from opensprite.agent.execution import (
+from opensprite.agent.workflow import (
     SubagentWorkflowService,
-    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
-    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
-    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
-    STRUCTURED_SUBAGENT_STATUS_FIELD,
-    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    WorkflowSpec,
+    WorkflowStepSpec,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_FIELD,
     WORKFLOW_ID_FIELD,
@@ -21,6 +17,14 @@ from opensprite.agent.execution import (
     WORKFLOW_REVIEW_PASSED_FIELD,
     WORKFLOW_STATUS_FIELD,
     WORKFLOW_SUMMARY_FIELD,
+)
+from opensprite.agent.subagent import (
+    SubagentTaskOutcome,
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
 )
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse

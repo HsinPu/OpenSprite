@@ -14,7 +14,6 @@ from uuid import uuid4
 
 from ..config import AgentConfig, DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS, DocumentLlmConfig, LogConfig, ToolsConfig
 from ..config.llm_presets import provider_profile_defaults
-from ..context.runtime import build_runtime_context
 from ..llms import (
     CHAT_CONTENT_TYPE_IMAGE_URL,
     CHAT_CONTENT_TYPE_TEXT,
@@ -54,18 +53,11 @@ from ..runs.events import (
     SUBAGENT_GROUP_FAILED_EVENT,
     SUBAGENT_GROUP_STARTED_EVENT,
     SUBAGENT_STARTED_EVENT,
-    WORKFLOW_COMPLETED_EVENT,
-    WORKFLOW_FAILED_EVENT,
-    WORKFLOW_STARTED_EVENT,
-    WORKFLOW_STEP_COMPLETED_EVENT,
-    WORKFLOW_STEP_FAILED_EVENT,
-    WORKFLOW_STEP_STARTED_EVENT,
 )
 from ..context.builder import ContextBuilder
 from ..runs.lifecycle import RUN_STARTED_EVENT
-from ..skills import SkillsLoader
 from ..documents.active_task import has_current_active_task
-from ..storage import StorageProvider, StoredMessage
+from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,
@@ -78,17 +70,14 @@ from ..tool_names import (
     EDIT_FILE_TOOL_NAME,
     EXEC_TOOL_NAME,
     OCR_IMAGE_TOOL_NAME,
-    RUN_WORKFLOW_TOOL_NAME,
     TRANSCRIBE_AUDIO_TOOL_NAME,
     WRITE_FILE_TOOL_NAME,
 )
 from ..tools import ToolRegistry
-from ..subagent_prompts import get_all_subagents, load_metadata, load_prompt
+from ..subagent_prompts import get_all_subagents, load_metadata
 from ..subagent_prompts.profiles import (
-    CODE_REVIEWER_PROMPT_TYPE,
     PARALLEL_SAFE_PROFILE_NAMES,
     RESEARCH_PROFILE,
-    REVIEW_PROMPT_TYPES,
     WRITE_TOOLS,
     profile_for_subagent,
 )
@@ -106,7 +95,6 @@ from ..tools.evidence import (
 from ..tools.permissions import PermissionDecision, ToolPermissionPolicy
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
-from ..utils.json_safe import json_safe_value
 from ..utils import (
     count_messages_tokens,
     count_text_tokens,
@@ -140,6 +128,91 @@ from .task_contract import (
     is_workspace_location_criterion,
     resolve_planning_mode,
     task_planner_status,
+)
+from .subagent import (
+    DEFAULT_MAX_PARALLEL_SUBAGENTS,
+    DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS,
+    MAX_PARALLEL_SUBAGENTS,
+    READONLY_SUBAGENT_RESULT_CONTRACT,
+    STRUCTURED_SUBAGENT_CONTRACT_FIELD,
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS,
+    STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_ITEMS_FIELD,
+    STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS,
+    STRUCTURED_SUBAGENT_OK_STATUS,
+    STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD,
+    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_QUESTIONS_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD,
+    STRUCTURED_SUBAGENT_SCHEMA_VERSION,
+    STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD,
+    STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD,
+    STRUCTURED_SUBAGENT_SECTIONS_FIELD,
+    STRUCTURED_SUBAGENT_SOURCE_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_SOURCES_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    STRUCTURED_SUBAGENT_TRUNCATED_FIELD,
+    SUBAGENT_PROMPT_TYPE_LABEL,
+    SUBAGENT_TASK_ID_LABEL,
+    SUBAGENT_TASK_ID_PATTERN,
+    PreparedSubagentTask,
+    SubagentMessageBuilder,
+    SubagentTaskOutcome,
+    _structured_subagent_result_fields,
+    build_child_subagent_session_id,
+    build_structured_subagent_contract_instructions,
+    extract_subagent_prompt_type,
+    first_structured_review_finding,
+    format_review_finding,
+    is_clean_structured_subagent_status,
+    new_subagent_task_id,
+    parse_structured_subagent_output,
+    parse_subagent_result_line,
+    subagent_result_line,
+    validate_subagent_task_id,
+)
+from .workflow import (
+    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
+    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
+    RESEARCH_THEN_OUTLINE_WORKFLOW_ID,
+    REVIEW_WORKFLOW_IDS,
+    WORKFLOW_CANCELLED_STATUS,
+    WORKFLOW_COMPLETED_STATUS,
+    WORKFLOW_ERROR_FIELD,
+    WORKFLOW_ERROR_STATUS,
+    WORKFLOW_FAILED_STATUS,
+    WORKFLOW_FAILURE_STATUSES,
+    WORKFLOW_ID_FIELD,
+    WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD,
+    WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD,
+    WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
+    WORKFLOW_REVIEW_ATTEMPTED_FIELD,
+    WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
+    WORKFLOW_REVIEW_FIRST_FINDING_FIELD,
+    WORKFLOW_REVIEW_PASSED_FIELD,
+    WORKFLOW_REVIEW_SUMMARY_FIELD,
+    WORKFLOW_RUNNING_STATUS,
+    WORKFLOW_SPECS,
+    WORKFLOW_STATUS_FIELD,
+    WORKFLOW_SUMMARY_FIELD,
+    WORKFLOW_UNSUCCESSFUL_STATUSES,
+    WORKFLOW_VERIFICATION_ATTEMPTED_FIELD,
+    WORKFLOW_VERIFICATION_PASSED_FIELD,
+    SubagentWorkflowService,
+    WorkflowSpec,
+    WorkflowStepSpec,
+    is_workflow_cancelled_status,
+    is_workflow_completed_status,
+    is_workflow_failed_status,
+    is_workflow_running_status,
+    is_workflow_unsuccessful_status,
 )
 from ..tools.access import ToolAccessResolver
 from ..tools.loop_guardrail import (
@@ -3263,447 +3336,6 @@ def build_subagent_tool_registry(
     return resolution.registry
 
 
-SUBAGENT_TASK_ID_LABEL = "Task ID"
-SUBAGENT_PROMPT_TYPE_LABEL = "Subagent"
-STRUCTURED_SUBAGENT_SCHEMA_VERSION = 1
-READONLY_SUBAGENT_RESULT_CONTRACT = "readonly_subagent_result"
-STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD = "schema_version"
-STRUCTURED_SUBAGENT_CONTRACT_FIELD = "contract"
-STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD = "prompt_type"
-STRUCTURED_SUBAGENT_STATUS_FIELD = "status"
-STRUCTURED_SUBAGENT_SUMMARY_FIELD = "summary"
-STRUCTURED_SUBAGENT_SECTIONS_FIELD = "sections"
-STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD = "type"
-STRUCTURED_SUBAGENT_ITEMS_FIELD = "items"
-STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD = "section_count"
-STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD = "item_count"
-STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD = "finding_count"
-STRUCTURED_SUBAGENT_QUESTIONS_FIELD = "questions"
-STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD = "question_count"
-STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD = "residual_risks"
-STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD = "residual_risk_count"
-STRUCTURED_SUBAGENT_SOURCES_FIELD = "sources"
-STRUCTURED_SUBAGENT_SOURCE_COUNT_FIELD = "source_count"
-STRUCTURED_SUBAGENT_TRUNCATED_FIELD = "truncated"
-STRUCTURED_SUBAGENT_OK_STATUS = "ok"
-STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS = "needs_input"
-STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS = "inconclusive"
-ALLOWED_STRUCTURED_SUBAGENT_STATUSES = frozenset(
-    {
-        STRUCTURED_SUBAGENT_OK_STATUS,
-        STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS,
-        STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS,
-    }
-)
-MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS = 280
-MAX_STRUCTURED_SUBAGENT_TEXT_CHARS = 500
-MAX_STRUCTURED_SUBAGENT_SECTIONS = 8
-MAX_STRUCTURED_SUBAGENT_ITEMS_PER_SECTION = 12
-MAX_STRUCTURED_SUBAGENT_QUESTIONS = 8
-MAX_STRUCTURED_SUBAGENT_RESIDUAL_RISKS = 8
-MAX_STRUCTURED_SUBAGENT_SOURCES = 12
-_JSON_FENCE_RE = re.compile(r"```json\s*(?P<body>.*?)\s*```", re.IGNORECASE | re.DOTALL)
-
-
-def subagent_result_line(label: str, value: object) -> str:
-    return f"{label}: {value}"
-
-
-def parse_subagent_result_line(line: str | None, label: str) -> str | None:
-    prefix = f"{label}: "
-    text = str(line or "")
-    if not text.startswith(prefix):
-        return None
-    return text[len(prefix) :].strip() or None
-
-
-def is_clean_structured_subagent_status(status: str | None) -> bool:
-    """Return whether a structured subagent status represents a clean result."""
-    return str(status or "").strip() == STRUCTURED_SUBAGENT_OK_STATUS
-
-
-def _structured_subagent_result_fields(
-    structured_output: dict[str, Any],
-    *,
-    include_section_counts: bool = False,
-) -> dict[str, Any]:
-    payload = {
-        STRUCTURED_SUBAGENT_STATUS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
-        STRUCTURED_SUBAGENT_SUMMARY_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
-    }
-    if include_section_counts:
-        payload.update(
-            {
-                STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
-                STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
-            }
-        )
-    payload.update(
-        {
-            STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
-        }
-    )
-    return payload
-
-
-def parse_structured_subagent_output(
-    text: str,
-    *,
-    prompt_type: str,
-) -> tuple[str, dict[str, Any] | None, str | None]:
-    """Return visible text plus optional structured payload parsed from a trailing JSON block."""
-    raw_text = str(text or "")
-    visible_text, raw_json = _split_trailing_json_block(raw_text)
-    if raw_json is None:
-        return visible_text, None, None
-
-    try:
-        payload = json.loads(raw_json)
-    except json.JSONDecodeError as exc:
-        return _fallback_visible_text(visible_text, raw_text), None, f"invalid_json: {exc.msg}"
-
-    normalized, error = _normalize_structured_payload(payload, prompt_type=prompt_type, fallback_text=visible_text)
-    if normalized is None:
-        return _fallback_visible_text(visible_text, raw_text), None, error
-    return _fallback_visible_text(visible_text, raw_text) or normalized[STRUCTURED_SUBAGENT_SUMMARY_FIELD], normalized, None
-
-
-def build_structured_subagent_contract_instructions(prompt_type: str) -> str:
-    """Return shared prompt instructions for the structured readonly subagent contract."""
-    normalized_prompt_type = str(prompt_type or "subagent").strip() or "subagent"
-    return (
-        "## Structured Output Contract\n\n"
-        "After your normal human-readable answer, append one final fenced `json` block and do not output anything after it. "
-        "Keep the human-readable answer useful on its own because the JSON block is optional machine-readable metadata.\n\n"
-        "Rules:\n"
-        f"- The JSON block must be one object with `schema_version: 1`, `contract: \"{READONLY_SUBAGENT_RESULT_CONTRACT}\"`, and `prompt_type: \"{normalized_prompt_type}\"`.\n"
-        "- `status` must be one of `ok`, `needs_input`, or `inconclusive`.\n"
-        "- `summary` must be one concise conclusion sentence.\n"
-        "- Put main structured content in `sections`, using stable keys and one of these `type` values when applicable: `finding_list`, `bullet_list`, `outline`, `api_surface`, `pattern_matches`, `fact_check`.\n"
-        "- Use `questions` only for concrete missing-input questions.\n"
-        "- Use `residual_risks` only for unverified assumptions, blind spots, or remaining uncertainty.\n"
-        "- Use `sources` only for concrete evidence you actually inspected.\n"
-        "- Do not wrap the whole answer in JSON. Only the final fenced block should be JSON.\n\n"
-        "Template:\n"
-        "```json\n"
-        "{\n"
-        '  "schema_version": 1,\n'
-        f'  "contract": "{READONLY_SUBAGENT_RESULT_CONTRACT}",\n'
-        f'  "prompt_type": "{normalized_prompt_type}",\n'
-        '  "status": "ok",\n'
-        '  "summary": "...",\n'
-        '  "sections": [\n'
-        '    {\n'
-        '      "key": "main",\n'
-        '      "title": "Main Results",\n'
-        '      "type": "bullet_list",\n'
-        '      "items": ["..."]\n'
-        '    }\n'
-        '  ],\n'
-        '  "questions": [],\n'
-        '  "residual_risks": [],\n'
-        '  "sources": []\n'
-        "}\n"
-        "```"
-    )
-
-
-def _split_trailing_json_block(text: str) -> tuple[str, str | None]:
-    last_match = None
-    for match in _JSON_FENCE_RE.finditer(str(text or "")):
-        last_match = match
-    if last_match is None:
-        return str(text or "").strip(), None
-    visible = (str(text or "")[: last_match.start()] + str(text or "")[last_match.end():]).strip()
-    return visible, last_match.group("body").strip()
-
-
-def _fallback_visible_text(visible_text: str, raw_text: str) -> str:
-    text = str(visible_text or "").strip() or str(raw_text or "").strip()
-    return _bounded_text(text, MAX_STRUCTURED_SUBAGENT_TEXT_CHARS)
-
-
-def _normalize_structured_payload(
-    payload: Any,
-    *,
-    prompt_type: str,
-    fallback_text: str,
-) -> tuple[dict[str, Any] | None, str | None]:
-    if not isinstance(payload, dict):
-        return None, "payload_must_be_object"
-    if int(payload.get(STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD) or 0) != STRUCTURED_SUBAGENT_SCHEMA_VERSION:
-        return None, "schema_version_mismatch"
-    if str(payload.get(STRUCTURED_SUBAGENT_CONTRACT_FIELD) or "").strip() != READONLY_SUBAGENT_RESULT_CONTRACT:
-        return None, "contract_mismatch"
-
-    payload_prompt_type = str(payload.get(STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD) or "").strip()
-    if payload_prompt_type and payload_prompt_type != str(prompt_type or "").strip():
-        return None, "prompt_type_mismatch"
-
-    truncated = False
-    status = str(payload.get(STRUCTURED_SUBAGENT_STATUS_FIELD) or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS).strip() or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
-    if status not in ALLOWED_STRUCTURED_SUBAGENT_STATUSES:
-        status = STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
-        truncated = True
-
-    summary = _bounded_text(str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip() or _first_nonempty_line(fallback_text), MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS)
-    if summary != str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip():
-        truncated = truncated or bool(str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip())
-
-    sections, sections_truncated = _normalize_sections(payload.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD))
-    questions, questions_truncated = _normalize_string_list(payload.get(STRUCTURED_SUBAGENT_QUESTIONS_FIELD), limit=MAX_STRUCTURED_SUBAGENT_QUESTIONS)
-    residual_risks, residual_risks_truncated = _normalize_string_list(
-        payload.get(STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD) or payload.get("residualRisks"),
-        limit=MAX_STRUCTURED_SUBAGENT_RESIDUAL_RISKS,
-    )
-    sources, sources_truncated = _normalize_sources(payload.get(STRUCTURED_SUBAGENT_SOURCES_FIELD))
-    truncated = truncated or sections_truncated or questions_truncated or residual_risks_truncated or sources_truncated
-
-    item_count = sum(len(section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD, [])) for section in sections)
-    finding_count = sum(len(section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD, [])) for section in sections if section.get(STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD) == "finding_list")
-    return {
-        STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD: STRUCTURED_SUBAGENT_SCHEMA_VERSION,
-        STRUCTURED_SUBAGENT_CONTRACT_FIELD: READONLY_SUBAGENT_RESULT_CONTRACT,
-        STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD: str(prompt_type or "").strip() or None,
-        STRUCTURED_SUBAGENT_STATUS_FIELD: status,
-        STRUCTURED_SUBAGENT_SUMMARY_FIELD: summary,
-        STRUCTURED_SUBAGENT_SECTIONS_FIELD: sections,
-        STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: len(sections),
-        STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: item_count,
-        STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: finding_count,
-        STRUCTURED_SUBAGENT_QUESTIONS_FIELD: questions,
-        STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: len(questions),
-        STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD: residual_risks,
-        STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: len(residual_risks),
-        STRUCTURED_SUBAGENT_SOURCES_FIELD: sources,
-        STRUCTURED_SUBAGENT_SOURCE_COUNT_FIELD: len(sources),
-        STRUCTURED_SUBAGENT_TRUNCATED_FIELD: truncated,
-    }, None
-
-
-def _normalize_sections(value: Any) -> tuple[list[dict[str, Any]], bool]:
-    if not isinstance(value, list):
-        return [], False
-    truncated = len(value) > MAX_STRUCTURED_SUBAGENT_SECTIONS
-    sections: list[dict[str, Any]] = []
-    for index, section in enumerate(value[:MAX_STRUCTURED_SUBAGENT_SECTIONS], start=1):
-        if not isinstance(section, dict):
-            truncated = True
-            continue
-        key = _bounded_text(str(section.get("key") or f"section_{index}"), 64)
-        title = _bounded_text(str(section.get("title") or key), 120)
-        section_type = _bounded_text(str(section.get(STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD) or "bullet_list"), 64)
-        items_value = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
-        items: list[Any] = []
-        if isinstance(items_value, list):
-            truncated = truncated or len(items_value) > MAX_STRUCTURED_SUBAGENT_ITEMS_PER_SECTION
-            for item in items_value[:MAX_STRUCTURED_SUBAGENT_ITEMS_PER_SECTION]:
-                normalized = _bounded_json_value(item)
-                if normalized in (None, "", [], {}):
-                    continue
-                items.append(normalized)
-        elif items_value not in (None, ""):
-            truncated = True
-        sections.append(
-            {
-                "key": key,
-                "title": title,
-                STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD: section_type,
-                STRUCTURED_SUBAGENT_ITEMS_FIELD: items,
-            }
-        )
-    return sections, truncated
-
-
-def _normalize_string_list(value: Any, *, limit: int) -> tuple[list[str], bool]:
-    if not isinstance(value, list):
-        return [], False
-    truncated = len(value) > limit
-    items = [
-        _bounded_text(str(item or "").strip(), MAX_STRUCTURED_SUBAGENT_TEXT_CHARS)
-        for item in value[:limit]
-        if str(item or "").strip()
-    ]
-    return items, truncated
-
-
-def _normalize_sources(value: Any) -> tuple[list[dict[str, Any]], bool]:
-    if not isinstance(value, list):
-        return [], False
-    truncated = len(value) > MAX_STRUCTURED_SUBAGENT_SOURCES
-    items: list[dict[str, Any]] = []
-    for source in value[:MAX_STRUCTURED_SUBAGENT_SOURCES]:
-        if not isinstance(source, dict):
-            truncated = True
-            continue
-        normalized = {
-            "kind": _bounded_text(str(source.get("kind") or "unknown"), 32),
-            "path": _bounded_text(str(source.get("path") or ""), 240),
-            "title": _bounded_text(str(source.get("title") or ""), 160),
-            "url": _bounded_text(str(source.get("url") or ""), 240),
-            "start_line": _non_negative_int(source.get("start_line") or source.get("startLine")),
-            "end_line": _non_negative_int(source.get("end_line") or source.get("endLine")),
-        }
-        items.append({key: value for key, value in normalized.items() if value not in (None, "", 0)})
-    return items, truncated
-
-
-def _bounded_json_value(value: Any) -> Any:
-    safe = json_safe_value(value)
-    if isinstance(safe, str):
-        return _bounded_text(safe, MAX_STRUCTURED_SUBAGENT_TEXT_CHARS)
-    if isinstance(safe, list):
-        return [_bounded_json_value(item) for item in safe[:MAX_STRUCTURED_SUBAGENT_ITEMS_PER_SECTION]]
-    if isinstance(safe, dict):
-        limited: dict[str, Any] = {}
-        for index, (key, item) in enumerate(safe.items()):
-            if index >= 12:
-                break
-            limited[_bounded_text(str(key), 64)] = _bounded_json_value(item)
-        return limited
-    return safe
-
-
-def _bounded_text(text: str, max_chars: int) -> str:
-    value = str(text or "").strip()
-    if len(value) <= max_chars:
-        return value
-    return value[: max_chars - 1].rstrip() + "..."
-
-
-def _first_nonempty_line(text: str) -> str:
-    for line in str(text or "").splitlines():
-        candidate = str(line or "").strip()
-        if candidate:
-            return candidate
-    return ""
-
-
-def _non_negative_int(value: Any) -> int:
-    try:
-        number = int(value or 0)
-    except (TypeError, ValueError):
-        return 0
-    return max(0, number)
-
-DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
-MAX_PARALLEL_SUBAGENTS = 4
-DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
-SUBAGENT_TASK_ID_PATTERN = r"^task_[A-Za-z0-9_-]{8,64}$"
-_TASK_ID_RE = re.compile(SUBAGENT_TASK_ID_PATTERN)
-
-
-def new_subagent_task_id() -> str:
-    """Return a compact id that can be shown to the model/user and reused later."""
-    return f"task_{uuid4().hex[:12]}"
-
-
-def validate_subagent_task_id(task_id: str) -> str | None:
-    """Return an error message when a task id is malformed."""
-    value = str(task_id or "").strip()
-    if _TASK_ID_RE.fullmatch(value):
-        return None
-    return "task_id must match pattern task_[A-Za-z0-9_-]{8,64}."
-
-
-def build_child_subagent_session_id(parent_session_id: str, task_id: str) -> str:
-    """Build the storage session id for one child subagent task session."""
-    return f"{parent_session_id}:subagent:{task_id}"
-
-
-def extract_subagent_prompt_type(messages: list[StoredMessage]) -> str | None:
-    """Return the prompt type stored on the first child task message, if available."""
-    for message in messages:
-        metadata = getattr(message, "metadata", {}) or {}
-        if not isinstance(metadata, dict):
-            continue
-        if metadata.get("kind") != "subagent_task":
-            continue
-        prompt_type = metadata.get("prompt_type")
-        if isinstance(prompt_type, str) and prompt_type.strip():
-            return prompt_type.strip()
-    return None
-
-
-class SubagentMessageBuilder:
-    """Build prompt/messages for delegated subagent work."""
-
-    def __init__(self, prompt_loader=load_prompt, skills_loader: SkillsLoader | None = None):
-        self.prompt_loader = prompt_loader
-        self.skills_loader = skills_loader
-
-    def build_system_prompt(
-        self,
-        prompt_type: str = "writer",
-        workspace: str | Path | None = None,
-        app_home: Path | None = None,
-    ) -> str:
-        prompt_body = self.prompt_loader(
-            prompt_type,
-            app_home=app_home,
-            session_workspace=workspace,
-        )
-        prompt_metadata = load_metadata(
-            prompt_type,
-            app_home=app_home,
-            session_workspace=workspace,
-        )
-        runtime_context = build_runtime_context(workspace=workspace)
-        workspace_path = Path(workspace) if workspace is not None else None
-        skills_summary = ""
-        if self.skills_loader is not None:
-            personal_skills_dir = workspace_path / "skills" if workspace_path is not None else None
-            skills_summary = self.skills_loader.build_skills_summary(personal_skills_dir)
-
-        sections = []
-        if prompt_body:
-            sections.append(prompt_body)
-        else:
-            sections.append(
-                "## 角色（Role）\n"
-                f"你是專注於單一任務的 `{prompt_type}` 助手。\n\n"
-                "## 任務（Task）\n"
-                "1. 先理解目前任務。\n"
-                "2. 根據已提供資訊完成內容。\n"
-                "3. 若資訊不足，只提出必要問題。\n\n"
-                "## 規範（Constraints）\n"
-                "- 聚焦當前任務\n"
-                "- 不要虛構事實\n"
-                "- 直接輸出可交付內容\n\n"
-                "## 輸出（Output）\n"
-                "- 若資訊足夠：直接輸出完成內容。\n"
-                "- 若資訊不足：列出需要補充的問題。"
-            )
-
-        if str(prompt_metadata.get("structured_output_contract") or "").strip() == READONLY_SUBAGENT_RESULT_CONTRACT:
-            sections.extend(["", build_structured_subagent_contract_instructions(prompt_type)])
-
-        if skills_summary:
-            sections.extend([
-                "",
-                "If a listed skill is relevant, read it before using other non-trivial tools so you can follow its workflow first.",
-                "",
-                skills_summary,
-            ])
-        sections.extend(["", runtime_context])
-        return "\n".join(sections).strip()
-
-    def build_messages(
-        self,
-        task: str,
-        prompt_type: str = "writer",
-        workspace: str | Path | None = None,
-        app_home: Path | None = None,
-    ) -> list[ChatMessage]:
-        system_prompt = self.build_system_prompt(prompt_type, workspace=workspace, app_home=app_home)
-        return [
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=task),
-        ]
-
-
 def _agent_tool_error_result(
     message: str,
     *,
@@ -3767,52 +3399,6 @@ def _subagent_preparation_error_detail(message: str) -> str:
     if not status.ok and status.error:
         return status.error
     return str(message or "").strip()
-
-
-@dataclass(frozen=True)
-class PreparedSubagentTask:
-    """Resolved child-task execution inputs after validation and profile selection."""
-
-    task_text: str
-    task_preview: str
-    prompt_type: str
-    task_id: str
-    child_session_id: str
-    child_run_id: str
-    parent_session_id: str
-    parent_run_id: str | None
-    is_resume: bool
-    app_home: Path | None
-    workspace: Path
-    subagent_tools: ToolRegistry
-    subagent_profile_name: str
-    provider_override: Any | None = None
-    group_id: str | None = None
-    group_index: int | None = None
-    group_total: int | None = None
-
-
-@dataclass(frozen=True)
-class SubagentTaskOutcome:
-    """Structured result for one delegated child task."""
-
-    task_id: str
-    prompt_type: str
-    child_session_id: str
-    child_run_id: str
-    status: str
-    content: str = ""
-    error: str = ""
-    summary: str = ""
-    executed_tool_calls: int = 0
-    had_tool_error: bool = False
-    verification_attempted: bool = False
-    verification_passed: bool = False
-    is_resume: bool = False
-    structured_output: dict[str, Any] | None = None
-    group_id: str | None = None
-    group_index: int | None = None
-    group_total: int | None = None
 
 
 class SubagentRunService:
@@ -4831,833 +4417,3 @@ class SubagentRunService:
             ),
         )
         return self._format_parallel_results(ordered_outcomes, group_id=group_id, max_parallel=concurrency)
-
-WORKFLOW_COMPLETED_STATUS = "completed"
-WORKFLOW_FAILED_STATUS = "failed"
-WORKFLOW_ERROR_STATUS = "error"
-WORKFLOW_CANCELLED_STATUS = "cancelled"
-WORKFLOW_RUNNING_STATUS = "running"
-WORKFLOW_FAILURE_STATUSES = frozenset({WORKFLOW_FAILED_STATUS, WORKFLOW_ERROR_STATUS})
-WORKFLOW_UNSUCCESSFUL_STATUSES = WORKFLOW_FAILURE_STATUSES | frozenset({WORKFLOW_CANCELLED_STATUS})
-
-
-def _normalize_workflow_status(status: str | None) -> str:
-    return str(status or "").strip().lower()
-
-
-def is_workflow_running_status(status: str | None) -> bool:
-    """Return whether a workflow/subtask status is running."""
-    return _normalize_workflow_status(status) == WORKFLOW_RUNNING_STATUS
-
-
-def is_workflow_completed_status(status: str | None) -> bool:
-    """Return whether a workflow/subtask status is completed."""
-    return _normalize_workflow_status(status) == WORKFLOW_COMPLETED_STATUS
-
-
-def is_workflow_failed_status(status: str | None) -> bool:
-    """Return whether a workflow/subtask status represents failure."""
-    return _normalize_workflow_status(status) in WORKFLOW_FAILURE_STATUSES
-
-
-def is_workflow_cancelled_status(status: str | None) -> bool:
-    """Return whether a workflow/subtask status represents cancellation."""
-    return _normalize_workflow_status(status) == WORKFLOW_CANCELLED_STATUS
-
-
-def is_workflow_unsuccessful_status(status: str | None) -> bool:
-    """Return whether a workflow/subtask status is failed, errored, or cancelled."""
-    return _normalize_workflow_status(status) in WORKFLOW_UNSUCCESSFUL_STATUSES
-
-IMPLEMENT_THEN_REVIEW_WORKFLOW_ID = "implement_then_review"
-RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
-BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID = "bugfix_then_test_then_review"
-REVIEW_WORKFLOW_IDS = frozenset(
-    {
-        IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
-        BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
-    }
-)
-WORKFLOW_ID_FIELD = "workflow"
-WORKFLOW_STATUS_FIELD = "status"
-WORKFLOW_SUMMARY_FIELD = "summary"
-WORKFLOW_ERROR_FIELD = "error"
-WORKFLOW_NEXT_STEP_ID_FIELD = "next_step_id"
-WORKFLOW_NEXT_STEP_LABEL_FIELD = "next_step_label"
-WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD = "next_step_prompt_type"
-WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD = "last_completed_step_id"
-WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD = "last_completed_step_label"
-WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD = "last_completed_prompt_type"
-WORKFLOW_REVIEW_ATTEMPTED_FIELD = "review_attempted"
-WORKFLOW_REVIEW_PASSED_FIELD = "review_passed"
-WORKFLOW_REVIEW_FINDING_COUNT_FIELD = "review_finding_count"
-WORKFLOW_REVIEW_SUMMARY_FIELD = "review_summary"
-WORKFLOW_REVIEW_FIRST_FINDING_FIELD = "review_first_finding"
-WORKFLOW_VERIFICATION_ATTEMPTED_FIELD = "verification_attempted"
-WORKFLOW_VERIFICATION_PASSED_FIELD = "verification_passed"
-
-
-@dataclass(frozen=True)
-class WorkflowStepSpec:
-    """One fixed child-step inside a workflow."""
-
-    step_id: str
-    label: str
-    prompt_type: str
-    task_builder: Callable[[str, list[SubagentTaskOutcome]], str]
-    resume_task_builder: Callable[[str], str] | None = None
-
-
-@dataclass(frozen=True)
-class WorkflowSpec:
-    """One supported multi-step orchestration workflow."""
-
-    workflow_id: str
-    description: str
-    steps: tuple[WorkflowStepSpec, ...]
-
-
-def _workflow_error_result(
-    message: str,
-    *,
-    category: str,
-    error_type: str = "RunWorkflowToolError",
-    invalid_arguments: bool = False,
-) -> str:
-    return _agent_tool_error_result(
-        message,
-        tool_name=RUN_WORKFLOW_TOOL_NAME,
-        error_type=error_type,
-        category=category,
-        invalid_arguments=invalid_arguments,
-    )
-
-
-def _workflow_validation_error(message: str, *, category: str = "invalid_arguments") -> str:
-    return _agent_tool_validation_error_result(
-        message,
-        tool_name=RUN_WORKFLOW_TOOL_NAME,
-        category=category,
-    )
-
-
-def _result_summary(outcome: SubagentTaskOutcome) -> str:
-    if outcome.summary:
-        return outcome.summary
-    if outcome.error:
-        return outcome.error
-    return outcome.content
-
-
-def _workflow_outcome_payload(outcome: SubagentTaskOutcome) -> dict[str, Any]:
-    return {
-        WORKFLOW_STATUS_FIELD: outcome.status,
-        "task_id": outcome.task_id,
-        "child_session_id": outcome.child_session_id,
-        "child_run_id": outcome.child_run_id,
-        WORKFLOW_SUMMARY_FIELD: outcome.summary,
-        WORKFLOW_ERROR_FIELD: outcome.error,
-    }
-
-
-def _workflow_step_spec_payload(spec: WorkflowStepSpec) -> dict[str, str]:
-    return {
-        "step_id": spec.step_id,
-        "label": spec.label,
-        "prompt_type": spec.prompt_type,
-    }
-
-
-def format_review_finding(item: dict[str, Any]) -> str:
-    title = str(item.get("title") or "").strip()
-    path = str(item.get("path") or "").strip()
-    fix = str(item.get("fix") or "").strip()
-    why = str(item.get("why") or "").strip()
-    subject = f"{path}: {title}" if path and title else title or path
-    if fix:
-        return f"{subject}: {fix}" if subject else fix
-    if why:
-        return f"{subject}: {why}" if subject else why
-    return subject
-
-
-def first_structured_review_finding(structured_output: dict[str, Any] | None) -> str:
-    sections = structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD) if isinstance(structured_output, dict) else None
-    if not isinstance(sections, list):
-        return ""
-    for section in sections:
-        if not isinstance(section, dict):
-            continue
-        items = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
-        if not isinstance(items, list):
-            continue
-        for item in items:
-            if isinstance(item, dict):
-                detail = format_review_finding(item)
-                if detail:
-                    return detail
-            elif isinstance(item, str) and item.strip():
-                return item.strip()
-    return ""
-
-
-def _workflow_progress_fields(
-    steps: tuple[WorkflowStepSpec, ...],
-    outcomes: list[SubagentTaskOutcome],
-    *,
-    status: str,
-    start_index: int = 0,
-) -> dict[str, Any]:
-    completed_prefix = start_index
-    for outcome in outcomes[: len(steps)]:
-        if not is_workflow_completed_status(outcome.status):
-            break
-        completed_prefix += 1
-
-    payload: dict[str, Any] = {}
-    if completed_prefix > 0:
-        last_completed = steps[completed_prefix - 1]
-        payload.update(
-            {
-                WORKFLOW_LAST_COMPLETED_STEP_ID_FIELD: last_completed.step_id,
-                WORKFLOW_LAST_COMPLETED_STEP_LABEL_FIELD: last_completed.label,
-                WORKFLOW_LAST_COMPLETED_PROMPT_TYPE_FIELD: last_completed.prompt_type,
-            }
-        )
-    if not is_workflow_completed_status(status) and completed_prefix < len(steps):
-        next_step = steps[completed_prefix]
-        payload.update(
-            {
-                WORKFLOW_NEXT_STEP_ID_FIELD: next_step.step_id,
-                WORKFLOW_NEXT_STEP_LABEL_FIELD: next_step.label,
-                WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: next_step.prompt_type,
-            }
-        )
-    return payload
-
-
-def _workflow_completion_summary_fields(
-    steps: tuple[WorkflowStepSpec, ...],
-    outcomes: list[SubagentTaskOutcome],
-    *,
-    status: str,
-    start_index: int = 0,
-) -> dict[str, Any]:
-    completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
-    return {
-        "completed_steps": completed_steps,
-        WORKFLOW_SUMMARY_FIELD: (
-            f"Completed {completed_steps}/{len(steps)} workflow step(s)."
-            if is_workflow_completed_status(status)
-            else f"Workflow stopped after {completed_steps}/{len(steps)} completed step(s)."
-        ),
-    }
-
-
-def _workflow_resume_fields(steps: tuple[WorkflowStepSpec, ...], start_index: int = 0) -> dict[str, Any]:
-    if start_index <= 0:
-        return {}
-    start_step = steps[start_index]
-    return {
-        "resumed": True,
-        "start_step_id": start_step.step_id,
-        "start_step_label": start_step.label,
-    }
-
-
-def _workflow_error_fields(error: str = "") -> dict[str, str]:
-    return {WORKFLOW_ERROR_FIELD: error} if error else {}
-
-
-def _workflow_base_fields(
-    *,
-    workflow_run_id: str,
-    workflow_id: str,
-    task_preview: str,
-    steps: tuple[WorkflowStepSpec, ...],
-    status: str,
-) -> dict[str, Any]:
-    return {
-        "workflow_run_id": workflow_run_id,
-        WORKFLOW_ID_FIELD: workflow_id,
-        WORKFLOW_STATUS_FIELD: status,
-        "task_preview": task_preview,
-        "total_steps": len(steps),
-    }
-
-
-def _workflow_outcome_count(
-    outcomes: list[SubagentTaskOutcome],
-    status_matches: Callable[[str | None], bool],
-) -> int:
-    return sum(1 for outcome in outcomes if status_matches(outcome.status))
-
-
-def _resolve_start_index(spec: WorkflowSpec, start_step: str | None) -> tuple[int, WorkflowStepSpec | None, str | None]:
-    normalized = str(start_step or "").strip()
-    if not normalized:
-        return 0, None, None
-    for index, step in enumerate(spec.steps):
-        if step.step_id == normalized:
-            return index, step, None
-    available = ", ".join(step.step_id for step in spec.steps)
-    return 0, None, _workflow_validation_error(
-        f"unknown start_step '{normalized}' for workflow '{spec.workflow_id}'. Available: {available}",
-        category="unknown_start_step",
-    )
-
-
-def _build_step_task(
-    step: WorkflowStepSpec,
-    *,
-    task_text: str,
-    outcomes: list[SubagentTaskOutcome],
-    resumed: bool,
-) -> str:
-    if resumed and not outcomes:
-        builder = step.resume_task_builder
-        if builder is None:
-            return step.task_builder(task_text, outcomes).strip()
-        return builder(task_text).strip()
-    return step.task_builder(task_text, outcomes).strip()
-
-
-def _implement_review_steps() -> tuple[WorkflowStepSpec, ...]:
-    return (
-        WorkflowStepSpec(
-            step_id="implement",
-            label="Implement",
-            prompt_type="implementer",
-            task_builder=lambda task, _: task,
-            resume_task_builder=lambda task: task,
-        ),
-        WorkflowStepSpec(
-            step_id="review",
-            label="Code review",
-            prompt_type=CODE_REVIEWER_PROMPT_TYPE,
-            task_builder=lambda task, results: (
-                "Review the current workspace changes for correctness, regressions, and missing tests. "
-                "Inspect the actual files and report findings first.\n\n"
-                f"Original objective:\n{task}\n\n"
-                f"Implementation result:\n{_result_summary(results[0])}"
-            ),
-            resume_task_builder=lambda task: (
-                "Resume the code review step for the current workspace changes. "
-                "Inspect the actual files and report findings first.\n\n"
-                f"Original objective:\n{task}"
-            ),
-        ),
-    )
-
-
-def _research_outline_steps() -> tuple[WorkflowStepSpec, ...]:
-    return (
-        WorkflowStepSpec(
-            step_id="research",
-            label="Research",
-            prompt_type="researcher",
-            task_builder=lambda task, _: task,
-            resume_task_builder=lambda task: task,
-        ),
-        WorkflowStepSpec(
-            step_id="outline",
-            label="Outline",
-            prompt_type="outliner",
-            task_builder=lambda task, results: (
-                "Create a clear outline based on the research summary below.\n\n"
-                f"Original objective:\n{task}\n\n"
-                f"Research summary:\n{results[0].content}"
-            ),
-            resume_task_builder=lambda task: (
-                "Resume the outline step for the original objective below. "
-                "Use any already gathered research context available in the current session or workspace, "
-                "and clearly state missing inputs if the research context is insufficient.\n\n"
-                f"Original objective:\n{task}"
-            ),
-        ),
-    )
-
-
-def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
-    return (
-        WorkflowStepSpec(
-            step_id="bugfix",
-            label="Bug fix",
-            prompt_type="bug-fixer",
-            task_builder=lambda task, _: task,
-            resume_task_builder=lambda task: task,
-        ),
-        WorkflowStepSpec(
-            step_id="tests",
-            label="Tests",
-            prompt_type="test-writer",
-            task_builder=lambda task, results: (
-                "Add the minimal effective tests for the bug fix below. Inspect the current workspace changes first.\n\n"
-                f"Original objective:\n{task}\n\n"
-                f"Bug-fix result:\n{_result_summary(results[0])}"
-            ),
-            resume_task_builder=lambda task: (
-                "Resume the tests step for the current workspace changes related to the bug fix below. "
-                "Inspect the actual files first and add the minimal effective tests.\n\n"
-                f"Original objective:\n{task}"
-            ),
-        ),
-        WorkflowStepSpec(
-            step_id="review",
-            label="Code review",
-            prompt_type=CODE_REVIEWER_PROMPT_TYPE,
-            task_builder=lambda task, results: (
-                "Review the current workspace changes after the bug fix and test additions. "
-                "Inspect the actual files and report findings first.\n\n"
-                f"Original objective:\n{task}\n\n"
-                f"Bug-fix result:\n{_result_summary(results[0])}\n\n"
-                f"Test result:\n{_result_summary(results[1])}"
-            ),
-            resume_task_builder=lambda task: (
-                "Resume the code review step for the current workspace changes after the bug fix and test additions. "
-                "Inspect the actual files and report findings first.\n\n"
-                f"Original objective:\n{task}"
-            ),
-        ),
-    )
-
-
-WORKFLOW_SPECS: dict[str, WorkflowSpec] = {
-    IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: WorkflowSpec(
-        workflow_id=IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
-        description="Run implementer first, then inspect the workspace with code-reviewer.",
-        steps=_implement_review_steps(),
-    ),
-    RESEARCH_THEN_OUTLINE_WORKFLOW_ID: WorkflowSpec(
-        workflow_id=RESEARCH_THEN_OUTLINE_WORKFLOW_ID,
-        description="Gather research context first, then turn it into an outline.",
-        steps=_research_outline_steps(),
-    ),
-    BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID: WorkflowSpec(
-        workflow_id=BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
-        description="Fix the bug, add focused tests, then run a code review pass.",
-        steps=_bugfix_test_review_steps(),
-    ),
-}
-
-
-class SubagentWorkflowService:
-    """Runs fixed orchestration workflows on top of delegated subagents."""
-
-    def __init__(
-        self,
-        *,
-        current_session_id_getter: Callable[[], str | None],
-        current_run_id_getter: Callable[[], str | None],
-        current_channel_getter: Callable[[], str | None],
-        current_external_chat_id_getter: Callable[[], str | None],
-        run_subagent_task: Callable[[str, str], Awaitable[SubagentTaskOutcome]],
-        emit_run_event: Callable[..., Awaitable[None]],
-        format_log_preview: Callable[..., str],
-        record_workflow_outcome: Callable[[str | None, dict[str, Any]], None],
-    ):
-        self._current_session_id_getter = current_session_id_getter
-        self._current_run_id_getter = current_run_id_getter
-        self._current_channel_getter = current_channel_getter
-        self._current_external_chat_id_getter = current_external_chat_id_getter
-        self._run_subagent_task = run_subagent_task
-        self._emit_run_event = emit_run_event
-        self._format_log_preview = format_log_preview
-        self._record_workflow_outcome = record_workflow_outcome
-
-    @staticmethod
-    def catalog() -> dict[str, str]:
-        """Return workflow ids and user-facing descriptions."""
-        return {workflow_id: spec.description for workflow_id, spec in WORKFLOW_SPECS.items()}
-
-    @staticmethod
-    def _new_workflow_run_id() -> str:
-        return f"workflow_{uuid4().hex[:12]}"
-
-    async def _emit_event(self, event_type: str, payload: dict[str, Any]) -> None:
-        session_id = self._current_session_id_getter()
-        run_id = self._current_run_id_getter()
-        if session_id is None or run_id is None:
-            return
-        await self._emit_run_event(
-            session_id,
-            run_id,
-            event_type,
-            payload,
-            channel=self._current_channel_getter(),
-            external_chat_id=self._current_external_chat_id_getter(),
-        )
-
-    @staticmethod
-    def _step_payload(
-        *,
-        workflow_run_id: str,
-        workflow_id: str,
-        spec: WorkflowStepSpec,
-        step_index: int,
-        total_steps: int,
-        outcome: SubagentTaskOutcome | None = None,
-        task_preview: str = "",
-        error: str = "",
-    ) -> dict[str, Any]:
-        payload = {
-            "workflow_run_id": workflow_run_id,
-            WORKFLOW_ID_FIELD: workflow_id,
-            **_workflow_step_spec_payload(spec),
-            "step_index": step_index,
-            "total_steps": total_steps,
-            "task_preview": task_preview,
-        }
-        if outcome is not None:
-            payload.update(_workflow_outcome_payload(outcome))
-            if outcome.structured_output is not None:
-                payload["structured_output"] = _structured_subagent_result_fields(outcome.structured_output)
-        payload.update(_workflow_error_fields(error))
-        return payload
-
-    @staticmethod
-    def _workflow_payload(
-        *,
-        workflow_run_id: str,
-        workflow_id: str,
-        task_preview: str,
-        steps: tuple[WorkflowStepSpec, ...],
-        outcomes: list[SubagentTaskOutcome],
-        status: str,
-        start_index: int = 0,
-        error: str = "",
-    ) -> dict[str, Any]:
-        completion_summary_fields = _workflow_completion_summary_fields(
-            steps,
-            outcomes,
-            status=status,
-            start_index=start_index,
-        )
-        failed_steps = _workflow_outcome_count(outcomes, is_workflow_failed_status)
-        payload = {
-            **_workflow_base_fields(
-                workflow_run_id=workflow_run_id,
-                workflow_id=workflow_id,
-                task_preview=task_preview,
-                steps=steps,
-                status=status,
-            ),
-            "failed_steps": failed_steps,
-            **completion_summary_fields,
-            "steps": [
-                {
-                    **_workflow_step_spec_payload(spec),
-                    **_workflow_outcome_payload(outcome),
-                }
-                for spec, outcome in zip(steps[start_index:], outcomes)
-            ],
-            **_workflow_progress_fields(steps, outcomes, status=status, start_index=start_index),
-        }
-        payload.update(_workflow_resume_fields(steps, start_index))
-        payload.update(_workflow_error_fields(error))
-        return payload
-
-    @staticmethod
-    def _format_result(workflow_id: str, outcomes: list[SubagentTaskOutcome], *, status: str, start_index: int = 0) -> str:
-        lines = [
-            f"Workflow: {workflow_id}",
-            f"Status: {status}",
-        ]
-        if start_index > 0:
-            lines.append(f"Resumed from step: {start_index + 1}")
-        for index, outcome in enumerate(outcomes, start=start_index + 1):
-            lines.extend(
-                [
-                    "",
-                    f"[{index}] {outcome.prompt_type} | {outcome.status}",
-                    subagent_result_line(SUBAGENT_TASK_ID_LABEL, outcome.task_id),
-                    f"Run ID: {outcome.child_run_id}",
-                ]
-            )
-            if outcome.summary:
-                lines.append(f"Summary: {outcome.summary}")
-            if outcome.error:
-                lines.append(f"Failure: {outcome.error}")
-            if outcome.content:
-                lines.extend(["Result:", outcome.content])
-        return "\n".join(lines)
-
-    @staticmethod
-    def _review_outcome(outcomes: list[SubagentTaskOutcome]) -> dict[str, Any]:
-        review_outcomes = [
-            outcome
-            for outcome in outcomes
-            if outcome.prompt_type in REVIEW_PROMPT_TYPES
-        ]
-        finding_count = sum(
-            int((outcome.structured_output or {}).get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD) or 0)
-            for outcome in review_outcomes
-        )
-        attempted = any(is_workflow_completed_status(outcome.status) for outcome in review_outcomes)
-        passed = False
-        summary = ""
-        first_finding = ""
-        for outcome in review_outcomes:
-            if outcome.summary and not summary:
-                summary = outcome.summary
-            if not first_finding:
-                first_finding = first_structured_review_finding(outcome.structured_output)
-            if not is_workflow_completed_status(outcome.status):
-                continue
-            structured = outcome.structured_output or {}
-            if is_clean_structured_subagent_status(structured.get(STRUCTURED_SUBAGENT_STATUS_FIELD)) and int(structured.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD) or 0) == 0:
-                passed = True
-                continue
-        return {
-            WORKFLOW_REVIEW_ATTEMPTED_FIELD: attempted,
-            WORKFLOW_REVIEW_PASSED_FIELD: attempted and passed and finding_count == 0,
-            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: finding_count,
-            WORKFLOW_REVIEW_SUMMARY_FIELD: summary,
-            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: first_finding,
-        }
-
-    @staticmethod
-    def _verification_outcome(outcomes: list[SubagentTaskOutcome]) -> dict[str, Any]:
-        attempted = any(outcome.verification_attempted for outcome in outcomes)
-        passed = any(outcome.verification_passed for outcome in outcomes)
-        return {
-            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: attempted,
-            WORKFLOW_VERIFICATION_PASSED_FIELD: passed,
-        }
-
-    def _build_workflow_outcome(
-        self,
-        *,
-        workflow_run_id: str,
-        spec: WorkflowSpec,
-        task_preview: str,
-        outcomes: list[SubagentTaskOutcome],
-        status: str,
-        start_index: int = 0,
-        error: str = "",
-    ) -> dict[str, Any]:
-        review = self._review_outcome(outcomes)
-        verification = self._verification_outcome(outcomes)
-        completion_summary_fields = _workflow_completion_summary_fields(
-            spec.steps,
-            outcomes,
-            status=status,
-            start_index=start_index,
-        )
-        return {
-            **_workflow_base_fields(
-                workflow_run_id=workflow_run_id,
-                workflow_id=spec.workflow_id,
-                task_preview=task_preview,
-                steps=spec.steps,
-                status=status,
-            ),
-            "failed_steps": _workflow_outcome_count(outcomes, is_workflow_unsuccessful_status),
-            **completion_summary_fields,
-            WORKFLOW_REVIEW_ATTEMPTED_FIELD: review[WORKFLOW_REVIEW_ATTEMPTED_FIELD],
-            WORKFLOW_REVIEW_PASSED_FIELD: review[WORKFLOW_REVIEW_PASSED_FIELD],
-            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: review[WORKFLOW_REVIEW_FINDING_COUNT_FIELD],
-            WORKFLOW_REVIEW_SUMMARY_FIELD: review[WORKFLOW_REVIEW_SUMMARY_FIELD],
-            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: review[WORKFLOW_REVIEW_FIRST_FINDING_FIELD],
-            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: verification[WORKFLOW_VERIFICATION_ATTEMPTED_FIELD],
-            WORKFLOW_VERIFICATION_PASSED_FIELD: verification[WORKFLOW_VERIFICATION_PASSED_FIELD],
-            **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
-            **_workflow_resume_fields(spec.steps, start_index),
-            **_workflow_error_fields(error),
-        }
-
-    async def run(self, workflow_id: str, task: str) -> str:
-        workflow_key = str(workflow_id or "").strip()
-        spec = WORKFLOW_SPECS.get(workflow_key)
-        if spec is None:
-            available = ", ".join(sorted(WORKFLOW_SPECS))
-            return _workflow_error_result(
-                f"unknown workflow '{workflow_key}'. Available: {available}",
-                category="unknown_workflow",
-            )
-
-        task_text = str(task or "").strip()
-        if not task_text:
-            return _workflow_validation_error("workflow task must be a non-empty string.")
-
-        return await self.run_from_step(workflow_key, task_text)
-
-    async def run_from_step(self, workflow_id: str, task: str, start_step: str | None = None) -> str:
-        workflow_key = str(workflow_id or "").strip()
-        spec = WORKFLOW_SPECS.get(workflow_key)
-        if spec is None:
-            available = ", ".join(sorted(WORKFLOW_SPECS))
-            return _workflow_error_result(
-                f"unknown workflow '{workflow_key}'. Available: {available}",
-                category="unknown_workflow",
-            )
-
-        task_text = str(task or "").strip()
-        if not task_text:
-            return _workflow_validation_error("workflow task must be a non-empty string.")
-
-        start_index, start_spec, start_error = _resolve_start_index(spec, start_step)
-        if start_error:
-            return start_error
-
-        workflow_run_id = self._new_workflow_run_id()
-        task_preview = self._format_log_preview(task_text, max_chars=240)
-        start_step_summary = (
-            f"Resumed workflow {spec.workflow_id} from step {start_spec.step_id} ({start_spec.label})."
-            if start_spec is not None
-            else f"Started workflow {spec.workflow_id} with {len(spec.steps)} step(s)."
-        )
-        await self._emit_event(
-            WORKFLOW_STARTED_EVENT,
-            {
-                "workflow_run_id": workflow_run_id,
-                WORKFLOW_ID_FIELD: spec.workflow_id,
-                WORKFLOW_STATUS_FIELD: WORKFLOW_RUNNING_STATUS,
-                "task_preview": task_preview,
-                "total_steps": len(spec.steps),
-                WORKFLOW_SUMMARY_FIELD: start_step_summary,
-                **(
-                    {
-                        "resumed": True,
-                        "start_step_id": start_spec.step_id,
-                        "start_step_label": start_spec.label,
-                        "start_step_prompt_type": start_spec.prompt_type,
-                    }
-                    if start_spec is not None
-                    else {}
-                ),
-            },
-        )
-
-        outcomes: list[SubagentTaskOutcome] = []
-        for index, step in enumerate(spec.steps[start_index:], start=start_index + 1):
-            step_task = _build_step_task(
-                step,
-                task_text=task_text,
-                outcomes=outcomes,
-                resumed=start_spec is not None and index == start_index + 1,
-            )
-            step_preview = self._format_log_preview(step_task, max_chars=240)
-            await self._emit_event(
-                WORKFLOW_STEP_STARTED_EVENT,
-                self._step_payload(
-                    workflow_run_id=workflow_run_id,
-                    workflow_id=spec.workflow_id,
-                    spec=step,
-                    step_index=index,
-                    total_steps=len(spec.steps),
-                    task_preview=step_preview,
-                ),
-            )
-            try:
-                outcome = await self._run_subagent_task(step_task, step.prompt_type)
-            except RunCancelledError:
-                self._record_workflow_outcome(
-                    self._current_run_id_getter(),
-                    self._build_workflow_outcome(
-                        workflow_run_id=workflow_run_id,
-                        spec=spec,
-                        task_preview=task_preview,
-                        outcomes=outcomes,
-                        status=WORKFLOW_CANCELLED_STATUS,
-                        start_index=start_index,
-                        error=WORKFLOW_CANCELLED_STATUS,
-                    ),
-                )
-                await self._emit_event(
-                    WORKFLOW_FAILED_EVENT,
-                    self._workflow_payload(
-                        workflow_run_id=workflow_run_id,
-                        workflow_id=spec.workflow_id,
-                        task_preview=task_preview,
-                        steps=spec.steps,
-                        outcomes=outcomes,
-                        status=WORKFLOW_CANCELLED_STATUS,
-                        start_index=start_index,
-                        error=WORKFLOW_CANCELLED_STATUS,
-                    ),
-                )
-                raise
-            except Exception as exc:  # pragma: no cover - defensive guard
-                error_preview = self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240)
-                logger.warning("workflow.run.failed | workflow={} step={} error={}", spec.workflow_id, step.step_id, error_preview)
-                self._record_workflow_outcome(
-                    self._current_run_id_getter(),
-                    self._build_workflow_outcome(
-                        workflow_run_id=workflow_run_id,
-                        spec=spec,
-                        task_preview=task_preview,
-                        outcomes=outcomes,
-                        status=WORKFLOW_FAILED_STATUS,
-                        start_index=start_index,
-                        error=error_preview,
-                    ),
-                )
-                await self._emit_event(
-                    WORKFLOW_STEP_FAILED_EVENT,
-                    self._step_payload(
-                        workflow_run_id=workflow_run_id,
-                        workflow_id=spec.workflow_id,
-                        spec=step,
-                        step_index=index,
-                        total_steps=len(spec.steps),
-                        task_preview=step_preview,
-                        error=error_preview,
-                    ),
-                )
-                await self._emit_event(
-                    WORKFLOW_FAILED_EVENT,
-                    self._workflow_payload(
-                        workflow_run_id=workflow_run_id,
-                        workflow_id=spec.workflow_id,
-                        task_preview=task_preview,
-                        steps=spec.steps,
-                        outcomes=outcomes,
-                        status=WORKFLOW_FAILED_STATUS,
-                        start_index=start_index,
-                        error=error_preview,
-                    ),
-                )
-                return _workflow_error_result(
-                    f"workflow step '{step.step_id}' failed: {error_preview}",
-                    category="workflow_step_failed",
-                    error_type="WorkflowExecutionError",
-                )
-
-            outcomes.append(outcome)
-            await self._emit_event(
-                WORKFLOW_STEP_COMPLETED_EVENT,
-                self._step_payload(
-                    workflow_run_id=workflow_run_id,
-                    workflow_id=spec.workflow_id,
-                    spec=step,
-                    step_index=index,
-                    total_steps=len(spec.steps),
-                    outcome=outcome,
-                ),
-            )
-
-        await self._emit_event(
-            WORKFLOW_COMPLETED_EVENT,
-            self._workflow_payload(
-                workflow_run_id=workflow_run_id,
-                workflow_id=spec.workflow_id,
-                task_preview=task_preview,
-                steps=spec.steps,
-                outcomes=outcomes,
-                status=WORKFLOW_COMPLETED_STATUS,
-                start_index=start_index,
-            ),
-        )
-        self._record_workflow_outcome(
-            self._current_run_id_getter(),
-            self._build_workflow_outcome(
-                workflow_run_id=workflow_run_id,
-                spec=spec,
-                task_preview=task_preview,
-                outcomes=outcomes,
-                status=WORKFLOW_COMPLETED_STATUS,
-                start_index=start_index,
-            ),
-        )
-        return self._format_result(spec.workflow_id, outcomes, status=WORKFLOW_COMPLETED_STATUS, start_index=start_index)
