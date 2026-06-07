@@ -4600,7 +4600,10 @@ def test_completion_gate_prioritizes_workflow_review_follow_up_before_verificati
     )
 
     assert result.status == "needs_review"
+    assert result.follow_up_workflow == "implement_then_review"
     assert result.follow_up_step_id == "implement"
+    assert result.follow_up_step_label == "Implement"
+    assert result.follow_up_prompt_type == "implementer"
 
 
 def test_completion_gate_sets_workflow_review_step_target_when_review_is_missing():

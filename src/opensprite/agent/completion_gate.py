@@ -901,6 +901,15 @@ def _workflow_gate_review_result_fields(workflow_gate: dict[str, Any], review: d
     }
 
 
+def _workflow_gate_follow_up_result_fields(workflow_gate: dict[str, Any]) -> dict[str, str | None]:
+    return {
+        "follow_up_workflow": _string_or_none(workflow_gate.get(WORKFLOW_ID_FIELD)),
+        "follow_up_step_id": _string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_ID_FIELD)),
+        "follow_up_step_label": _string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
+        "follow_up_prompt_type": _string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
+    }
+
+
 def _workflow_gate_verification_result_fields(
     workflow_gate: dict[str, Any],
     *,
@@ -1301,18 +1310,16 @@ class CompletionGateService:
                 needs_verification=workflow_gate_needs_verification,
             )
             workflow_review_fields = _workflow_gate_review_result_fields(workflow_gate, review)
+            workflow_follow_up_fields = _workflow_gate_follow_up_result_fields(workflow_gate)
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
                 reason=workflow_gate[COMPLETION_RESULT_REASON_FIELD],
                 active_task_status=DONE_ACTIVE_TASK_STATUS if workflow_gate_complete else None,
                 active_task_detail=workflow_gate.get("detail") or None,
-                follow_up_workflow=_string_or_none(workflow_gate.get(WORKFLOW_ID_FIELD)),
-                follow_up_step_id=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_ID_FIELD)),
-                follow_up_step_label=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
-                follow_up_prompt_type=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
                 should_update_active_task=workflow_gate_complete
                 and intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
+                **workflow_follow_up_fields,
                 **workflow_verification_fields,
                 review_required=review_required,
                 **workflow_review_fields,
