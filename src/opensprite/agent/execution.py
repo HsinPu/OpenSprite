@@ -5021,6 +5021,24 @@ def _workflow_progress_fields(
     return payload
 
 
+def _workflow_completion_summary_fields(
+    steps: tuple[WorkflowStepSpec, ...],
+    outcomes: list[SubagentTaskOutcome],
+    *,
+    status: str,
+    start_index: int = 0,
+) -> dict[str, Any]:
+    completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
+    return {
+        "completed_steps": completed_steps,
+        WORKFLOW_SUMMARY_FIELD: (
+            f"Completed {completed_steps}/{len(steps)} workflow step(s)."
+            if is_workflow_completed_status(status)
+            else f"Workflow stopped after {completed_steps}/{len(steps)} completed step(s)."
+        ),
+    }
+
+
 def _workflow_outcome_count(
     outcomes: list[SubagentTaskOutcome],
     status_matches: Callable[[str | None], bool],
@@ -5269,22 +5287,21 @@ class SubagentWorkflowService:
         start_index: int = 0,
         error: str = "",
     ) -> dict[str, Any]:
-        completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
-        failed_steps = _workflow_outcome_count(outcomes, is_workflow_failed_status)
-        summary = (
-            f"Completed {completed_steps}/{len(steps)} workflow step(s)."
-            if is_workflow_completed_status(status)
-            else f"Workflow stopped after {completed_steps}/{len(steps)} completed step(s)."
+        completion_summary_fields = _workflow_completion_summary_fields(
+            steps,
+            outcomes,
+            status=status,
+            start_index=start_index,
         )
+        failed_steps = _workflow_outcome_count(outcomes, is_workflow_failed_status)
         payload = {
             "workflow_run_id": workflow_run_id,
             WORKFLOW_ID_FIELD: workflow_id,
             WORKFLOW_STATUS_FIELD: status,
             "task_preview": task_preview,
             "total_steps": len(steps),
-            "completed_steps": completed_steps,
             "failed_steps": failed_steps,
-            WORKFLOW_SUMMARY_FIELD: summary,
+            **completion_summary_fields,
             "steps": [
                 {
                     **_workflow_step_spec_payload(spec),
@@ -5388,20 +5405,20 @@ class SubagentWorkflowService:
     ) -> dict[str, Any]:
         review = self._review_outcome(outcomes)
         verification = self._verification_outcome(outcomes)
-        completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
+        completion_summary_fields = _workflow_completion_summary_fields(
+            spec.steps,
+            outcomes,
+            status=status,
+            start_index=start_index,
+        )
         return {
             "workflow_run_id": workflow_run_id,
             WORKFLOW_ID_FIELD: spec.workflow_id,
             WORKFLOW_STATUS_FIELD: status,
             "task_preview": task_preview,
             "total_steps": len(spec.steps),
-            "completed_steps": completed_steps,
             "failed_steps": _workflow_outcome_count(outcomes, is_workflow_unsuccessful_status),
-            WORKFLOW_SUMMARY_FIELD: (
-                f"Completed {completed_steps}/{len(spec.steps)} workflow step(s)."
-                if is_workflow_completed_status(status)
-                else f"Workflow stopped after {completed_steps}/{len(spec.steps)} completed step(s)."
-            ),
+            **completion_summary_fields,
             WORKFLOW_REVIEW_ATTEMPTED_FIELD: review[WORKFLOW_REVIEW_ATTEMPTED_FIELD],
             WORKFLOW_REVIEW_PASSED_FIELD: review[WORKFLOW_REVIEW_PASSED_FIELD],
             WORKFLOW_REVIEW_FINDING_COUNT_FIELD: review[WORKFLOW_REVIEW_FINDING_COUNT_FIELD],

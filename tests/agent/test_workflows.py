@@ -187,6 +187,9 @@ def test_workflow_payloads_share_outcome_fields():
         assert step_payload[key] == value
         assert workflow_payload["steps"][0][key] == value
 
+    assert workflow_payload["completed_steps"] == 1
+    assert workflow_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."
+
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):
     async def scenario():
@@ -317,5 +320,7 @@ def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
     assert WORKFLOW_STEP_FAILED_EVENT in event_types
     assert WORKFLOW_FAILED_EVENT in event_types
     failed_event = next(event for event in trace.events if event.event_type == WORKFLOW_FAILED_EVENT)
+    assert failed_event.payload["completed_steps"] == 1
+    assert failed_event.payload[WORKFLOW_SUMMARY_FIELD] == "Workflow stopped after 1/2 completed step(s)."
     assert failed_event.payload[WORKFLOW_NEXT_STEP_ID_FIELD] == "review"
     assert failed_event.payload[WORKFLOW_NEXT_STEP_LABEL_FIELD] == "Code review"
