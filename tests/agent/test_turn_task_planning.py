@@ -1,5 +1,5 @@
 from opensprite.agent.task_contract import TaskIntentService
-from opensprite.agent.turn_runner import WorkProgressService
+from opensprite.agent.task_progress import WorkProgressService
 from opensprite.agent.turn_task_planning import TurnTaskPlanningService
 from opensprite.bus.message import UserMessage
 

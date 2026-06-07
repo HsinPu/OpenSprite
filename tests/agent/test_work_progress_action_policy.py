@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from opensprite.agent.turn_runner import (
+from opensprite.agent.task_progress import (
     NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
     NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
     NEXT_ACTION_CONTINUE_REVIEW,
