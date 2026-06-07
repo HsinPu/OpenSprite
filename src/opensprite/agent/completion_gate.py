@@ -876,6 +876,13 @@ def _workflow_verification_metadata(workflow: dict[str, Any]) -> dict[str, bool]
     }
 
 
+def _latest_workflow_outcome(workflow_outcomes: tuple[Any, ...]) -> dict[str, Any] | None:
+    for outcome in reversed(workflow_outcomes):
+        if isinstance(outcome, dict) and _coerce_text(outcome.get(WORKFLOW_ID_FIELD)):
+            return outcome
+    return None
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1879,14 +1886,9 @@ def _workflow_gate_outcome(
     verification_attempted: bool,
     verification_passed: bool,
 ) -> dict[str, Any] | None:
-    relevant_outcomes = [
-        outcome
-        for outcome in workflow_outcomes
-        if isinstance(outcome, dict) and _coerce_text(outcome.get(WORKFLOW_ID_FIELD))
-    ]
-    if not relevant_outcomes:
+    workflow = _latest_workflow_outcome(workflow_outcomes)
+    if workflow is None:
         return None
-    workflow = relevant_outcomes[-1]
     workflow_id = _coerce_text(workflow.get(WORKFLOW_ID_FIELD))
     workflow_status = _coerce_text(workflow.get(WORKFLOW_STATUS_FIELD))
     review_metadata = _workflow_review_metadata(workflow)

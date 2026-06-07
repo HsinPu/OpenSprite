@@ -4687,6 +4687,47 @@ def test_completion_gate_allows_research_then_outline_without_completion_phrase(
     assert result.reason == "workflow research_then_outline completed all required steps"
 
 
+def test_completion_gate_uses_latest_relevant_workflow_outcome():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow result attached below.",
+        execution_result=ExecutionResult(
+            content="Workflow result attached below.",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_outline",
+                    "workflow": "research_then_outline",
+                    "status": "completed",
+                    "review_attempted": False,
+                    "review_passed": False,
+                    "review_finding_count": 0,
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                },
+                {},
+                {
+                    "workflow_run_id": "workflow_review",
+                    "workflow": " implement_then_review ",
+                    "status": "completed",
+                    "review_attempted": False,
+                    "review_passed": False,
+                    "review_finding_count": 0,
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.follow_up_workflow == "implement_then_review"
+    assert result.follow_up_step_id == "review"
+
+
 def test_completion_gate_allows_review_without_code_changes():
     intent = TaskIntentService().classify("Please review the recent changes for regressions.")
 
