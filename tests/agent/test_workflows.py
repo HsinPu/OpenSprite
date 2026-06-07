@@ -6,6 +6,11 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import SubagentTaskOutcome, WorkflowSpec, WorkflowStepSpec
 from opensprite.agent.execution import (
     SubagentWorkflowService,
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_FIELD,
     WORKFLOW_ID_FIELD,
@@ -148,6 +153,11 @@ def test_workflow_payloads_share_outcome_fields():
         child_run_id="run_implement",
         status=WORKFLOW_COMPLETED_STATUS,
         summary="Implemented safely.",
+        structured_output={
+            STRUCTURED_SUBAGENT_STATUS_FIELD: "ok",
+            STRUCTURED_SUBAGENT_SUMMARY_FIELD: "Structured summary.",
+            STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: 2,
+        },
     )
 
     step_payload = SubagentWorkflowService._step_payload(
@@ -227,6 +237,14 @@ def test_workflow_payloads_share_outcome_fields():
     for key, value in expected_step_fields.items():
         assert step_payload[key] == value
         assert workflow_payload["steps"][0][key] == value
+
+    assert step_payload["structured_output"] == {
+        STRUCTURED_SUBAGENT_STATUS_FIELD: "ok",
+        STRUCTURED_SUBAGENT_SUMMARY_FIELD: "Structured summary.",
+        STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: 2,
+        STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: 0,
+        STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: 0,
+    }
 
     assert workflow_payload["completed_steps"] == 1
     assert workflow_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."

@@ -3322,6 +3322,32 @@ def is_clean_structured_subagent_status(status: str | None) -> bool:
     return str(status or "").strip() == STRUCTURED_SUBAGENT_OK_STATUS
 
 
+def _structured_subagent_result_fields(
+    structured_output: dict[str, Any],
+    *,
+    include_section_counts: bool = False,
+) -> dict[str, Any]:
+    payload = {
+        STRUCTURED_SUBAGENT_STATUS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
+        STRUCTURED_SUBAGENT_SUMMARY_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
+    }
+    if include_section_counts:
+        payload.update(
+            {
+                STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
+                STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
+            }
+        )
+    payload.update(
+        {
+            STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
+        }
+    )
+    return payload
+
+
 def parse_structured_subagent_output(
     text: str,
     *,
@@ -4136,13 +4162,7 @@ class SubagentRunService:
             STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD),
             STRUCTURED_SUBAGENT_CONTRACT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_CONTRACT_FIELD),
             STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD: structured_output.get(STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD),
-            STRUCTURED_SUBAGENT_STATUS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
-            STRUCTURED_SUBAGENT_SUMMARY_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
-            STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
-            STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
+            **_structured_subagent_result_fields(structured_output, include_section_counts=True),
             STRUCTURED_SUBAGENT_SECTIONS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD, []),
             STRUCTURED_SUBAGENT_QUESTIONS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTIONS_FIELD, []),
             STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD, []),
@@ -4213,15 +4233,10 @@ class SubagentRunService:
                     item["error"] = outcome.error
                 compact_structured_output = cls._compact_structured_output(outcome.structured_output)
                 if compact_structured_output is not None:
-                    item["structured_output"] = {
-                        STRUCTURED_SUBAGENT_STATUS_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
-                        STRUCTURED_SUBAGENT_SUMMARY_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
-                        STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
-                        STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
-                        STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
-                        STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
-                        STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
-                    }
+                    item["structured_output"] = _structured_subagent_result_fields(
+                        compact_structured_output,
+                        include_section_counts=True,
+                    )
             tasks_payload.append(item)
 
         counts = cls._group_status_counts(statuses)
@@ -5296,13 +5311,7 @@ class SubagentWorkflowService:
         if outcome is not None:
             payload.update(_workflow_outcome_payload(outcome))
             if outcome.structured_output is not None:
-                payload["structured_output"] = {
-                    STRUCTURED_SUBAGENT_STATUS_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
-                    STRUCTURED_SUBAGENT_SUMMARY_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
-                    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
-                    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
-                    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
-                }
+                payload["structured_output"] = _structured_subagent_result_fields(outcome.structured_output)
         payload.update(_workflow_error_fields(error))
         return payload
 
