@@ -1787,6 +1787,15 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
     )
 
 
+class TaskPlannerError(RuntimeError):
+    """Raised when the LLM planner cannot produce a valid task contract."""
+
+    def __init__(self, reason: str, *, raw_response_preview: str = ""):
+        super().__init__(reason)
+        self.reason = reason
+        self.raw_response_preview = raw_response_preview
+
+
 class TaskPlanner:
     """LLM-backed planner that produces the authoritative per-turn task contract."""
 
@@ -1808,10 +1817,7 @@ class TaskPlanner:
         task_context_decision: TaskContextDecision | None = None,
     ) -> TaskContract:
         if is_unconfigured_llm(provider, model):
-            return _planner_blocked_contract(
-                objective=_fallback_objective(fallback_objective, current_message),
-                reason=PLANNER_UNAVAILABLE_REASON,
-            )
+            raise TaskPlannerError(PLANNER_UNAVAILABLE_REASON)
         capability_catalog = build_planner_capability_catalog(tool_registry)
         planner_prompt = _build_task_planner_prompt(
             current_message=current_message,
@@ -1832,10 +1838,7 @@ class TaskPlanner:
                 **self.llm_config.decoding_kwargs(),
             )
         except Exception as exc:
-            return _planner_blocked_contract(
-                objective=_fallback_objective(fallback_objective, current_message),
-                reason=_planner_exception_reason(exc),
-            )
+            raise TaskPlannerError(_planner_exception_reason(exc)) from exc
         response_text = str(getattr(response, "content", "") or "")
         payload = _parse_json_object(response_text)
         if not payload and response_text.strip():
@@ -1858,20 +1861,17 @@ class TaskPlanner:
                     **self.llm_config.decoding_kwargs(),
                 )
             except Exception as exc:
-                return _planner_blocked_contract(
-                    objective=_fallback_objective(fallback_objective, current_message),
-                    reason=_planner_exception_reason(exc),
+                raise TaskPlannerError(
+                    _planner_exception_reason(exc),
                     raw_response_preview=_truncate(response_text, max_chars=400),
-                )
+                ) from exc
             repair_text = str(getattr(repair_response, "content", "") or "")
             payload = _parse_json_object(repair_text)
             if not payload:
                 response_text = repair_text or response_text
         if not payload:
-            return _planner_blocked_contract(
-                objective=_fallback_objective(fallback_objective, current_message),
-                status=PLANNER_INVALID_STATUS,
-                reason=PLANNER_INVALID_JSON_REASON,
+            raise TaskPlannerError(
+                PLANNER_INVALID_JSON_REASON,
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
         return _contract_from_task_planner_payload(
@@ -2144,35 +2144,6 @@ def _schema_union(values: tuple[str, ...] | frozenset[str]) -> str:
     return " | ".join(ordered) if ordered else "<none>"
 
 
-def _planner_blocked_contract(
-    *,
-    objective: str,
-    reason: str,
-    status: str = PLANNER_BLOCKED_STATUS,
-    raw_response_preview: str = "",
-) -> TaskContract:
-    metadata: dict[str, Any] = {
-        PLANNER_METADATA_STATUS_FIELD: status,
-        PLANNER_METADATA_REASON_FIELD: reason,
-    }
-    if raw_response_preview:
-        metadata[PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD] = raw_response_preview
-    return TaskContract(
-        objective=objective,
-        task_type=PLANNING_ERROR_TASK_TYPE,
-        final_answer_required=True,
-        allow_no_tool_final=False,
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        acceptance_criteria=(
-            AcceptanceCriterion(
-                kind="planner_error_report",
-                description="Explain that task contract planning failed and a reliable tool profile could not be selected.",
-            ),
-        ),
-        planner_metadata=metadata,
-    )
-
-
 def _planner_exception_reason(exc: Exception) -> str:
     error_type = exc.__class__.__name__
     message = str(exc).strip()
@@ -2237,10 +2208,8 @@ def _contract_from_task_planner_payload(
     )
     raw_task_type = _allowed_string(payload.get("task_type"), _ALLOWED_PLANNER_TASK_TYPES)
     if not raw_task_type:
-        return _planner_blocked_contract(
-            objective=objective,
-            status=PLANNER_INVALID_STATUS,
-            reason=PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
+        raise TaskPlannerError(
+            PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
     raw_tool_groups = _normalize_planner_tool_groups(

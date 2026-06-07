@@ -14,6 +14,7 @@ from opensprite.agent.task.contract import (
     PLANNER_VALIDATED_REASON,
     SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
     TaskContract,
+    TaskPlannerError,
     VERIFICATION_OR_GAP_CRITERION_KIND,
     WORKSPACE_LOCATION_QUALITY_CHECK,
     WORKSPACE_LOCATION_CRITERION_KIND,
@@ -120,23 +121,22 @@ def test_task_planner_metadata_helpers_normalize_values():
     assert task_planner_reason(object()) == ""
 
 
-def test_planner_fallback_reasons_are_centralized():
+def test_planner_error_reasons_are_centralized():
     assert PLANNER_UNAVAILABLE_REASON == "task planner unavailable: llm not configured"
     assert PLANNER_INVALID_JSON_REASON == "task planner returned invalid JSON"
     assert PLANNER_VALIDATED_REASON == "llm planner returned a task contract"
 
-    contract = _contract_from_task_planner_payload(
-        {"task_type": "not_allowed"},
-        fallback_objective="Plan this",
-        current_message="Plan this",
-        history=None,
-        current_image_files=None,
-        current_audio_files=None,
-        current_video_files=None,
-        task_context_decision=None,
-    )
-
-    assert contract.planner_metadata["reason"] == PLANNER_UNSUPPORTED_TASK_TYPE_REASON
+    with pytest.raises(TaskPlannerError, match=PLANNER_UNSUPPORTED_TASK_TYPE_REASON):
+        _contract_from_task_planner_payload(
+            {"task_type": "not_allowed"},
+            fallback_objective="Plan this",
+            current_message="Plan this",
+            history=None,
+            current_image_files=None,
+            current_audio_files=None,
+            current_video_files=None,
+            task_context_decision=None,
+        )
 
     validated_contract = _contract_from_task_planner_payload(
         {"task_type": "pure_answer"},

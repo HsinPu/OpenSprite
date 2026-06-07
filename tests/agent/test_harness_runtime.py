@@ -2,7 +2,10 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent.task.contract import TaskPlannerError
 from opensprite.bus.message import UserMessage
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
@@ -214,30 +217,30 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert "profile=chat" in scorecard_part.content
 
 
-def test_harness_runtime_records_planning_error_contract_for_invalid_planner_json(tmp_path):
+def test_harness_runtime_raises_for_invalid_planner_json(tmp_path):
     async def scenario():
         provider = RecordingProvider(
             "I could not select a reliable tool profile.",
             planner_content="this is not valid planner json",
         )
         agent = _agent(tmp_path, provider)
-        response = await agent.process(
-            UserMessage(
-                text="Find the latest stock price for TSMC",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
+        with pytest.raises(TaskPlannerError, match="invalid JSON"):
+            await agent.process(
+                UserMessage(
+                    text="Find the latest stock price for TSMC",
+                    channel="web",
+                    external_chat_id="browser-1",
+                    session_id="web:browser-1",
+                )
             )
-        )
         run = next(iter(agent.storage._runs.values()))
         events = await agent.storage.get_run_events("web:browser-1", run.run_id)
-        return response, [event.event_type for event in events]
+        return [event.event_type for event in events]
 
-    result, event_types = asyncio.run(scenario())
+    event_types = asyncio.run(scenario())
 
-    assert result.text == "Harness runtime reply."
-    assert TASK_CONTRACT_VALIDATION_FAILED_EVENT in event_types
-    assert TASK_CONTRACT_CREATED_EVENT in event_types
+    assert TASK_CONTRACT_VALIDATION_FAILED_EVENT not in event_types
+    assert TASK_CONTRACT_CREATED_EVENT not in event_types
 
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):

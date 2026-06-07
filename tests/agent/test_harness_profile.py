@@ -30,13 +30,11 @@ from opensprite.agent.task.contract import (
     EvidenceRequirement,
     LLM_PLANNER_CONTRACT_SOURCES,
     OPERATION_REPORT_CRITERION_KIND,
-    PLANNER_BLOCKED_STATUS,
-    PLANNER_INVALID_STATUS,
-    PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContract,
     TaskPlanner,
+    TaskPlannerError,
     WORKSPACE_LOCATION_CRITERION_KIND,
     WORKSPACE_LOCATION_QUALITY_CHECK,
 )
@@ -492,65 +490,54 @@ async def test_task_planner_does_not_override_workspace_change_for_command_usage
 
 
 @pytest.mark.anyio
-async def test_task_planner_blocks_web_request_when_planner_json_is_invalid():
+async def test_task_planner_raises_for_web_request_when_planner_json_is_invalid():
     planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
 
-    contract = await planner.plan(
-        provider=provider,
-        model="planner-model",
-        fallback_objective=intent.objective,
-        current_message=intent.objective,
-        history=[],
-    )
+    with pytest.raises(TaskPlannerError, match="invalid JSON") as exc_info:
+        await planner.plan(
+            provider=provider,
+            model="planner-model",
+            fallback_objective=intent.objective,
+            current_message=intent.objective,
+            history=[],
+        )
 
-    assert contract.task_type == "planning_error"
-    assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
-    assert "invalid JSON" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
-    assert contract.requirements == ()
+    assert "not JSON" in exc_info.value.raw_response_preview
 
 
 @pytest.mark.anyio
-async def test_task_planner_blocks_when_llm_call_fails():
+async def test_task_planner_raises_when_llm_call_fails():
     planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Find current OpenRouter API parameter docs and cite sources")
 
-    contract = await planner.plan(
-        provider=_FailingPlannerProvider(),
-        model="planner-model",
-        fallback_objective=intent.objective,
-        current_message=intent.objective,
-        history=[],
-    )
-
-    assert contract.task_type == "planning_error"
-    assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_BLOCKED_STATUS
-    assert "TimeoutError" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
-    assert contract.requirements == ()
+    with pytest.raises(TaskPlannerError, match="TimeoutError"):
+        await planner.plan(
+            provider=_FailingPlannerProvider(),
+            model="planner-model",
+            fallback_objective=intent.objective,
+            current_message=intent.objective,
+            history=[],
+        )
 
 
 @pytest.mark.anyio
-async def test_task_planner_blocks_workspace_request_when_planner_json_is_invalid():
+async def test_task_planner_raises_for_workspace_request_when_planner_json_is_invalid():
     planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("請看目前工作區，找出 CLI chat 相關測試檔案有哪些。")
     provider = _FakePlannerProvider("I should inspect files, but this is not JSON.")
 
-    contract = await planner.plan(
-        provider=provider,
-        model="planner-model",
-        fallback_objective=intent.objective,
-        current_message=intent.objective,
-        history=[],
-    )
+    with pytest.raises(TaskPlannerError, match="invalid JSON") as exc_info:
+        await planner.plan(
+            provider=provider,
+            model="planner-model",
+            fallback_objective=intent.objective,
+            current_message=intent.objective,
+            history=[],
+        )
 
-    assert contract.task_type == "planning_error"
-    assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
-    assert "invalid JSON" in contract.planner_metadata[PLANNER_METADATA_REASON_FIELD]
-    assert contract.requirements == ()
+    assert "not JSON" in exc_info.value.raw_response_preview
 
 
 @pytest.mark.anyio
@@ -585,20 +572,16 @@ async def test_task_planner_repairs_invalid_json_with_second_llm_call():
 
 
 @pytest.mark.anyio
-async def test_task_planner_blocks_plain_request_when_planner_json_is_invalid():
+async def test_task_planner_raises_for_plain_request_when_planner_json_is_invalid():
     planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
     provider = _FakePlannerProvider("This is a simple planning answer, no tools needed.")
 
-    contract = await planner.plan(
-        provider=provider,
-        model="planner-model",
-        fallback_objective=intent.objective,
-        current_message=intent.objective,
-        history=[],
-    )
-
-    assert contract.task_type == "planning_error"
-    assert contract.allow_no_tool_final is False
-    assert contract.requirements == ()
-    assert contract.planner_metadata[PLANNER_METADATA_STATUS_FIELD] == PLANNER_INVALID_STATUS
+    with pytest.raises(TaskPlannerError, match="invalid JSON"):
+        await planner.plan(
+            provider=provider,
+            model="planner-model",
+            fallback_objective=intent.objective,
+            current_message=intent.objective,
+            history=[],
+        )
