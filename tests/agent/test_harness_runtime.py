@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
@@ -74,6 +75,8 @@ class RecordingProvider:
         )
         if "completion judge" in first_message:
             content = '{"status":"complete","reason":"test judge accepted response","active_task_status":"done"}'
+        elif "initial task shape" in first_message:
+            content = _initial_task_planning_content(messages)
         elif self.planner_content is not None and first_message.startswith("You are the OpenSprite task planner"):
             content = self.planner_content
         else:
@@ -82,6 +85,49 @@ class RecordingProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+def _initial_task_planning_content(messages) -> str:
+    latest_user_text = next(
+        (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
+        "",
+    )
+    try:
+        context = json.loads(latest_user_text.split("Input:\n", 1)[1])
+    except Exception:
+        context = {}
+    current_message = str(context.get("current_message") or "")
+    objective = current_message.split("\n\n[Runtime context]", 1)[0].strip() or "Respond to the user."
+    lowered = objective.lower()
+    kind = "conversation" if lowered in {"hello", "hi"} else "task"
+    continuation_type = "none" if kind == "conversation" else "new_task"
+    payload = {
+        "task_intent": {
+            "kind": kind,
+            "objective": objective,
+            "constraints": [],
+            "done_criteria": ["user receives a response"] if kind == "conversation" else ["requested task is handled"],
+            "needs_clarification": False,
+            "long_running": False,
+            "expects_code_change": False,
+            "expects_verification": False,
+            "verification_hint": None,
+        },
+        "task_context": {
+            "is_follow_up": False,
+            "should_inherit_active_task": False,
+            "should_seed_active_task": continuation_type == "new_task",
+            "should_replace_active_task": False,
+            "inherited_task_type": None,
+            "inherited_tool_group": None,
+            "continuation_type": continuation_type,
+            "confidence": 0.8,
+            "reason": "test initial task planning",
+        },
+        "confidence": 0.9,
+        "reason": "test initial task planning",
+    }
+    return json.dumps(payload)
 
 
 def _registry() -> ToolRegistry:

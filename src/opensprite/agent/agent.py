@@ -113,11 +113,9 @@ from .subagent_run import SubagentRunService
 from .task.contract import TaskPlanner
 from .task.contract import (
     TaskContextDecision,
-    TaskContextResolver,
     TaskIntent,
     TaskIntentService,
     TaskObjectiveDecision,
-    TaskObjectiveResolver,
 )
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
@@ -793,8 +791,6 @@ class AgentLoop:
             policy_service=self.harness_policies,
             permissions_config=self.tools_config.permissions,
         )
-        self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
-        self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
         self.task_planner = TaskPlanner(self.config.task_planner_llm)
         self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
@@ -817,7 +813,7 @@ class AgentLoop:
             response_finalizer=self.response_finalizer,
             turn_context=self.turn_context,
             run_state=self.run_state,
-            task_intents=self.task_intents,
+            task_initial_llm_config=self.config.task_context_llm,
             harness_profiles=self.harness_profiles,
             completion_gate=self.completion_gate,
             completion_judge_context=lambda: (self.provider, self.provider.get_default_model()),
@@ -1040,16 +1036,6 @@ class AgentLoop:
             log_prepared_messages=self._log_prepared_messages,
             get_work_state_summary=lambda session_id: self._get_work_state_summary(session_id),
             read_active_task_snapshot=self._read_active_task_snapshot,
-            resolve_task_context=lambda **kwargs: self.task_context_resolver.resolve(
-                provider=self.provider,
-                model=self.provider.get_default_model(),
-                **kwargs,
-            ),
-            resolve_task_objective=lambda **kwargs: self.task_objective_resolver.resolve(
-                provider=self.provider,
-                model=self.provider.get_default_model(),
-                **kwargs,
-            ),
             plan_task=lambda **kwargs: self.task_planner.plan(
                 provider=self.provider,
                 model=self.provider.get_default_model(),
@@ -1515,8 +1501,6 @@ class AgentLoop:
         self.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
         self.llm_context_window_tokens = llm_runtime.context_window_tokens
         self.llm_configured = config.is_llm_configured
-        self.task_context_resolver.llm_config = config.agent.task_context_llm
-        self.task_objective_resolver.llm_config = config.agent.task_objective_llm
         self.task_planner.llm_config = config.agent.task_planner_llm
         self.completion_gate.llm_config = config.agent.completion_judge_llm
 
@@ -1947,6 +1931,7 @@ class AgentLoop:
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
         task_intent: TaskIntent | None = None,
+        task_context_decision: TaskContextDecision | None = None,
         task_contract_override: Any | None = None,
     ) -> ExecutionResult:
         """
@@ -1985,6 +1970,7 @@ class AgentLoop:
             external_chat_id=external_chat_id,
             emit_tool_progress=emit_tool_progress,
             task_intent=task_intent,
+            task_context_decision=task_context_decision,
             task_contract_override=task_contract_override,
         )
 

@@ -17,7 +17,6 @@ from ...runs.events import (
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
-    TASK_OBJECTIVE_RESOLVED_EVENT,
 )
 from ...tools import ToolRegistry
 from ...utils.log import logger
@@ -55,16 +54,12 @@ class TurnPlanningService:
     def __init__(
         self,
         *,
-        resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
-        resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         plan_task: Callable[..., Awaitable[TaskContract]],
         plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
         maybe_seed_active_task: Callable[..., Awaitable[None]],
         augment_message_for_media: Callable[..., str],
         emit_run_event: RunEventEmitter,
     ) -> None:
-        self._resolve_task_context = resolve_task_context
-        self._resolve_task_objective = resolve_task_objective
         self._plan_task = plan_task
         self._plan_harness = plan_harness
         self._maybe_seed_active_task = maybe_seed_active_task
@@ -81,6 +76,7 @@ class TurnPlanningService:
         current_message: str,
         history: list[dict[str, Any]],
         task_intent: TaskIntent | None,
+        task_context_decision: TaskContextDecision | None,
         task_contract_override: TaskContract | None,
         active_task_snapshot: str,
         work_state_summary: str,
@@ -92,16 +88,8 @@ class TurnPlanningService:
         user_video_files: list[str] | None,
         base_tool_registry: ToolRegistry,
     ) -> TurnPlanningResult:
-        task_context_decision = None
         task_objective_decision = None
-        if task_intent is not None:
-            task_context_decision = await self._resolve_task_context(
-                current_message=current_message,
-                history=history,
-                task_intent=task_intent,
-                active_task=active_task_snapshot,
-                work_state_summary=work_state_summary,
-            )
+        if task_context_decision is not None:
             logger.info(
                 f"[{session_id}] task.context | method={task_context_decision.method} "
                 f"follow_up={task_context_decision.is_follow_up} "
@@ -119,30 +107,8 @@ class TurnPlanningService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-            task_objective_decision = await self._resolve_task_objective(
-                current_message=current_message,
-                history=history,
-                task_intent=task_intent,
-                task_context_decision=task_context_decision,
-                active_task=active_task_snapshot,
-                work_state_summary=work_state_summary,
-            )
-            logger.info(
-                f"[{session_id}] task.objective | method={task_objective_decision.method} "
-                f"use_resolved={task_objective_decision.should_use_resolved_objective} "
-                f"confidence={task_objective_decision.confidence:.2f}"
-            )
-            if run_id is not None:
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
-                    TASK_OBJECTIVE_RESOLVED_EVENT,
-                    task_objective_decision.to_metadata(),
-                    channel=channel,
-                    external_chat_id=external_chat_id,
-                )
-        effective_task_intent = _effective_task_intent(task_intent, task_objective_decision)
-        effective_current_message = _message_with_resolved_objective(current_message, task_objective_decision)
+        effective_task_intent = task_intent
+        effective_current_message = _message_with_initial_task_objective(current_message, task_intent)
         if (
             work_state_summary
             and effective_task_intent is not None
@@ -345,4 +311,21 @@ def _message_with_resolved_objective(
         f"{current_message}\n\n"
         f"Resolved task objective: {resolved_objective}\n"
         "Use the resolved objective as the concrete task for this turn while preserving the original user wording above."
+    )
+
+
+def _message_with_initial_task_objective(
+    current_message: str,
+    task_intent: TaskIntent | None,
+) -> str:
+    if task_intent is None:
+        return current_message
+    objective = str(task_intent.objective or "").strip()
+    original_message = str(current_message or "").strip()
+    if not objective or objective.lower() == original_message.lower():
+        return current_message
+    return (
+        f"{current_message}\n\n"
+        f"Initial task objective: {objective}\n"
+        "Use the initial task objective as the concrete task for this turn while preserving the original user wording above."
     )

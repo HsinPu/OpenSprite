@@ -74,7 +74,6 @@ from .task.contract import (
     TaskContextDecision,
     TaskContract,
     TaskIntent,
-    TaskObjectiveDecision,
     is_itemized_output_criterion,
     is_media_artifact_criterion,
     is_operation_report_criterion,
@@ -2535,8 +2534,6 @@ class LlmCallService:
         log_prepared_messages: Callable[[str, list[dict[str, Any]]], None],
         get_work_state_summary: Callable[[str], Awaitable[str]],
         read_active_task_snapshot: Callable[[str], str],
-        resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
-        resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         plan_task: Callable[..., Awaitable[TaskContract]],
         plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
         emit_run_event: Callable[..., Awaitable[None]],
@@ -2568,8 +2565,6 @@ class LlmCallService:
         self._get_work_state_summary = get_work_state_summary
         self._read_active_task_snapshot = read_active_task_snapshot
         self._turn_planning = TurnPlanningService(
-            resolve_task_context=resolve_task_context,
-            resolve_task_objective=resolve_task_objective,
             plan_task=plan_task,
             plan_harness=plan_harness,
             maybe_seed_active_task=maybe_seed_active_task,
@@ -2603,6 +2598,7 @@ class LlmCallService:
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
         task_intent: TaskIntent | None = None,
+        task_context_decision: TaskContextDecision | None = None,
         task_contract_override: TaskContract | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
@@ -2691,6 +2687,7 @@ class LlmCallService:
             current_message=current_message,
             history=history_dicts,
             task_intent=task_intent,
+            task_context_decision=task_context_decision,
             task_contract_override=task_contract_override,
             active_task_snapshot=active_task_snapshot,
             work_state_summary=work_state_summary,

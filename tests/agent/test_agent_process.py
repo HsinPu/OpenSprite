@@ -51,7 +51,6 @@ from opensprite.runs.events import (
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
-    TASK_OBJECTIVE_RESOLVED_EVENT,
     TOOL_APPROVAL_APPROVED_EVENT,
     TOOL_APPROVAL_REQUESTED_EVENT,
     TOOL_PERMISSION_ALLOWED_EVENT,
@@ -122,6 +121,92 @@ def _is_completion_judge_call(messages, tools=None) -> bool:
         return False
     first = str(getattr(messages[0], "content", "") or "") if messages else ""
     return "completion judge" in first
+
+
+def _is_initial_task_planning_call(messages, tools=None) -> bool:
+    if tools:
+        return False
+    first = str(getattr(messages[0], "content", "") or "") if messages else ""
+    return "initial task shape" in first
+
+
+def _initial_task_planning_response(messages) -> LLMResponse:
+    latest_user_text = next(
+        (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
+        "",
+    )
+    try:
+        context = json.loads(latest_user_text.split("Input:\n", 1)[1])
+    except Exception:
+        context = {}
+    current_message = str(context.get("current_message") or "")
+    objective = current_message.split("\n\n[Runtime context]", 1)[0].strip()
+    work_state_summary = str(context.get("work_state_summary") or "")
+    work_state_objective = ""
+    for line in work_state_summary.splitlines():
+        if line.startswith("- Objective:"):
+            work_state_objective = line.split(":", 1)[1].strip()
+            break
+    has_media = bool(context.get("has_images") or context.get("has_audios") or context.get("has_videos"))
+    lowered = objective.lower()
+    active_task = str(context.get("active_task") or "").strip()
+    has_active_context = bool(active_task or work_state_objective)
+    is_continue = lowered.strip() in {"continue", "keep going"} or objective.strip() in {"繼續", "繼續做"}
+    if has_active_context and is_continue:
+        kind = "task"
+        objective = work_state_objective or active_task
+        done_criteria = ["active task is advanced"]
+        lowered = objective.lower()
+    elif not objective and has_media:
+        kind = "media_upload"
+        objective = "Save attached media for later use."
+        done_criteria = ["attached media is saved or referenced for follow-up"]
+    elif objective.startswith("/"):
+        kind = "command"
+        done_criteria = ["command is handled"]
+    elif "review" in lowered:
+        kind = "review"
+        done_criteria = ["review findings are reported"]
+    elif "explain" in lowered or "inspect" in lowered or "analyze" in lowered or "說明" in objective:
+        kind = "analysis"
+        done_criteria = ["requested analysis is provided"]
+    elif objective:
+        kind = "task"
+        done_criteria = ["requested task is handled"]
+    else:
+        kind = "conversation"
+        objective = "Respond to the user."
+        done_criteria = ["user receives a response"]
+    expects_code_change = any(token in lowered for token in ("fix", "update", "change", "edit", "implement", "refactor"))
+    expects_verification = expects_code_change or any(token in lowered for token in ("test", "verify", "run tests"))
+    continuation_type = "continue_active_task" if has_active_context and is_continue else "new_task" if kind != "conversation" else "none"
+    payload = {
+        "task_intent": {
+            "kind": kind,
+            "objective": objective,
+            "constraints": [],
+            "done_criteria": done_criteria,
+            "needs_clarification": False,
+            "long_running": False,
+            "expects_code_change": expects_code_change,
+            "expects_verification": expects_verification,
+            "verification_hint": "run tests" if expects_verification else None,
+        },
+        "task_context": {
+            "is_follow_up": continuation_type == "continue_active_task",
+            "should_inherit_active_task": continuation_type == "continue_active_task",
+            "should_seed_active_task": continuation_type == "new_task",
+            "should_replace_active_task": False,
+            "inherited_task_type": None,
+            "inherited_tool_group": None,
+            "continuation_type": continuation_type,
+            "confidence": 0.8,
+            "reason": "test initial task planning",
+        },
+        "confidence": 0.9,
+        "reason": "test initial task planning",
+    }
+    return LLMResponse(content=json.dumps(payload), model="fake-model")
 
 
 def _completion_judge_facts(messages) -> dict:
@@ -304,6 +389,8 @@ def _planner_response(task_type: str = "code_change") -> LLMResponse:
 
 class FakeProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        if _is_initial_task_planning_call(messages, tools):
+            return _initial_task_planning_response(messages)
         if _is_planner_call(messages, tools):
             return _planner_response()
         if _is_completion_judge_call(messages, tools):
@@ -485,6 +572,8 @@ class WorkflowAuthorityProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
+        if _is_initial_task_planning_call(messages, tools):
+            return _initial_task_planning_response(messages)
         if _is_planner_call(messages, tools):
             return _planner_response()
         if _is_completion_judge_call(messages, tools):
@@ -1630,7 +1719,7 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
     assert captured["user_video_files"][0].startswith("videos/inbound-")
 
 
-def test_agent_process_does_not_seed_active_task_from_detected_intent_only(tmp_path):
+def test_agent_process_seeds_active_task_from_initial_llm_context(tmp_path):
     async def scenario():
         registry = ToolRegistry()
         registry.register(DummyTool())
@@ -1672,9 +1761,9 @@ def test_agent_process_does_not_seed_active_task_from_detected_intent_only(tmp_p
 
     task_block, events = asyncio.run(scenario())
 
-    assert "- Status: inactive" in task_block
-    assert "- Goal: not set" in task_block
-    assert not any(event["event_type"] == "seed" for event in events)
+    assert "- Status: active" in task_block
+    assert "- Goal: Please refactor the agent and run tests. Keep the public API stable." in task_block
+    assert any(event["event_type"] == "seed" for event in events)
 
 
 def test_agent_process_emits_task_context_resolved_event(tmp_path):
@@ -1716,13 +1805,11 @@ def test_agent_process_emits_task_context_resolved_event(tmp_path):
     events = asyncio.run(scenario())
 
     event = next(event for event in events if event.event_type == TASK_CONTEXT_RESOLVED_EVENT)
-    assert event.payload["method"] == "deterministic"
+    assert event.payload["method"] == "llm"
     assert event.payload["is_follow_up"] is False
-    assert event.payload["continuation_type"] == "none"
+    assert event.payload["continuation_type"] == "new_task"
     assert event.payload["confidence"] >= 0.0
-    objective_event = next(event for event in events if event.event_type == TASK_OBJECTIVE_RESOLVED_EVENT)
-    assert objective_event.payload["method"] == "deterministic"
-    assert objective_event.payload["should_use_resolved_objective"] is False
+    assert not any(event.event_type == "task.objective.resolved" for event in events)
 
 
 def test_agent_process_emits_completion_gate_needs_verification_after_code_changes(tmp_path):

@@ -21,7 +21,7 @@ from opensprite.config.schema import (
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.documents.active_task import TASK_BOUNDARY_CONFIRMATION_EVENT, create_active_task_store
-from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.contract import TaskContextDecision, TaskIntentService
 from opensprite.agent.task.contract import TaskObjectiveDecision
 from opensprite.agent.task.planning import _effective_task_intent
 from opensprite.llms.base import LLMResponse
@@ -45,152 +45,6 @@ class CapturingProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
-
-
-class TaskContextDecisionProvider(CapturingProvider):
-    """Returns a task-context JSON decision before the main assistant response."""
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_planner_call(messages):
-            return _task_contract_response(messages)
-        self.calls.append(list(messages))
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "You classify whether the latest user turn inherits task context" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"is_follow_up": false, "should_inherit_active_task": false, '
-                    '"should_seed_active_task": true, "should_replace_active_task": true, '
-                    '"inherited_task_type": null, "inherited_tool_group": null, '
-                    '"confidence": 0.88, "reason": "new concrete task should replace the current task"}'
-                ),
-                model="fake-model",
-            )
-        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"resolved_objective": "Fix tests/test_app.py and verify the tests.", '
-                    '"should_use_resolved_objective": true, "confidence": 0.87, '
-                    '"reason": "task context classified the short turn as a new concrete task"}'
-                ),
-                model="fake-model",
-            )
-        return LLMResponse(content="done", model="fake-model")
-
-
-class AmbiguousBoundaryDecisionProvider(CapturingProvider):
-    """Returns an ambiguous boundary decision before the main assistant response."""
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_planner_call(messages):
-            return _task_contract_response(messages)
-        self.calls.append(list(messages))
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "You classify whether the latest user turn inherits task context" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"continuation_type": "new_task", "is_follow_up": false, '
-                    '"should_inherit_active_task": false, '
-                    '"should_seed_active_task": true, "should_replace_active_task": true, '
-                    '"inherited_task_type": null, "inherited_tool_group": null, '
-                    '"confidence": 0.72, "reason": "might be a new README task"}'
-                ),
-                model="fake-model",
-            )
-        return LLMResponse(content="done", model="fake-model")
-
-
-class BoundaryConfirmationProvider(CapturingProvider):
-    """Returns task-boundary confirmation and objective JSON before the main response."""
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_planner_call(messages):
-            return _task_contract_response(messages)
-        self.calls.append(list(messages))
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "You classify whether the latest user turn inherits task context" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"continuation_type": "task_switch", "is_follow_up": false, '
-                    '"should_inherit_active_task": false, '
-                    '"should_seed_active_task": true, "should_replace_active_task": true, '
-                    '"inherited_task_type": null, "inherited_tool_group": null, '
-                    '"confidence": 0.92, "reason": "user confirmed the pending task-boundary request"}'
-                ),
-                model="fake-model",
-            )
-        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"resolved_objective": "please update README", '
-                    '"should_use_resolved_objective": true, "confidence": 0.9, '
-                    '"reason": "active task boundary prompt contains the pending request"}'
-                ),
-                model="fake-model",
-            )
-        return LLMResponse(content="done", model="fake-model")
-
-
-class TaskObjectiveDecisionProvider(CapturingProvider):
-    """Returns task-context and objective JSON decisions before the main response."""
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_planner_call(messages):
-            return _task_contract_response(messages)
-        self.calls.append(list(messages))
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "You classify whether the latest user turn inherits task context" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"continuation_type": "follow_up", "is_follow_up": true, '
-                    '"should_inherit_active_task": false, '
-                    '"should_seed_active_task": false, "should_replace_active_task": false, '
-                    '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
-                    '"confidence": 0.88, "reason": "The short turn refers to the prior ETF lookup."}'
-                ),
-                model="fake-model",
-            )
-        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"resolved_objective": '
-                    '"Research 00981T ETF price and basic public information using web sources.", '
-                    '"should_use_resolved_objective": true, "confidence": 0.88, '
-                    '"reason": "The short turn refers to the prior ETF lookup."}'
-                ),
-                model="fake-model",
-            )
-        return LLMResponse(content="done", model="fake-model")
-
-
-class HistoryRetrievalContextProvider(CapturingProvider):
-    """Returns a task-context decision that asks for prior chat retrieval."""
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_planner_call(messages):
-            return _task_contract_response(messages)
-        self.calls.append(list(messages))
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "You classify whether the latest user turn inherits task context" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"continuation_type": "continue_recent_context", "is_follow_up": true, '
-                    '"should_inherit_active_task": false, "should_seed_active_task": false, '
-                    '"should_replace_active_task": false, "inherited_task_type": "history_retrieval", '
-                    '"inherited_tool_group": "history_retrieval", "confidence": 0.91, '
-                    '"reason": "latest message asks about prior conversation context"}'
-                ),
-                model="fake-model",
-            )
-        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"resolved_objective": "Summarize the previous cleanup fix from chat history.", '
-                    '"should_use_resolved_objective": true, "confidence": 0.86, '
-                    '"reason": "context resolver identified a history follow-up"}'
-                ),
-                model="fake-model",
-            )
-        return LLMResponse(content="done", model="fake-model")
 
 
 def _is_task_planner_call(messages) -> bool:
@@ -562,7 +416,7 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = TaskContextDecisionProvider()
+    provider = CapturingProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -606,14 +460,21 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
             message,
             channel="telegram",
             allow_tools=False,
-            task_intent=agent.task_intents.classify(message),
+            task_intent=agent.task_intents.classify("Fix tests/test_app.py and verify the tests."),
+            task_context_decision=TaskContextDecision(
+                continuation_type="task_switch",
+                should_seed_active_task=True,
+                should_replace_active_task=True,
+                confidence=0.88,
+                method="llm",
+                reason="new concrete task should replace the current task",
+            ),
         )
 
     result = asyncio.run(_run())
 
     assert result.content == "done"
-    assert len(provider.calls) == 3
-    assert "You resolve a concise task objective for ACTIVE_TASK" in provider.calls[1][0].content
+    assert len(provider.calls) == 1
     system_text = provider.calls[-1][0].content
     assert "Goal: Fix tests/test_app.py and verify the tests." in system_text
 
@@ -632,7 +493,7 @@ def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Pat
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = AmbiguousBoundaryDecisionProvider()
+    provider = CapturingProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -677,12 +538,20 @@ def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Pat
             channel="telegram",
             allow_tools=False,
             task_intent=agent.task_intents.classify(message),
+            task_context_decision=TaskContextDecision(
+                continuation_type="ambiguous_boundary",
+                should_seed_active_task=False,
+                should_replace_active_task=False,
+                confidence=0.72,
+                method="llm",
+                reason="might be a new README task",
+            ),
         )
 
     result = asyncio.run(_run())
 
     assert result.content == "done"
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 1
     system_text = provider.calls[-1][0].content
     assert "Status: waiting_user" in system_text
     assert "Goal: Refactor the agent in small safe steps." in system_text
@@ -706,7 +575,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = BoundaryConfirmationProvider()
+    provider = CapturingProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -755,7 +624,15 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
             "switch",
             channel="telegram",
             allow_tools=False,
-            task_intent=agent.task_intents.classify("switch"),
+            task_intent=agent.task_intents.classify("please update README"),
+            task_context_decision=TaskContextDecision(
+                continuation_type="task_switch",
+                should_seed_active_task=True,
+                should_replace_active_task=True,
+                confidence=0.92,
+                method="llm",
+                reason="user confirmed the pending task-boundary request",
+            ),
         )
 
     result = asyncio.run(_run())
@@ -764,15 +641,14 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     assert result.task_contract is not None
     assert result.task_contract.task_type == "code_change"
     assert any(requirement.kind == "file_change" for requirement in result.task_contract.requirements)
-    assert len(provider.calls) == 3
+    assert len(provider.calls) == 1
     final_messages = provider.calls[-1]
     system_text = final_messages[0].content
     prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in final_messages)
     assert "Status: active" in system_text
     assert "Goal: please update README" in system_text
-    assert "Original user message: switch" in system_text
     assert "Reply `switch` to replace the active task" not in system_text
-    assert "Resolved task objective: please update README" in prompt_text
+    assert "Initial task objective: please update README" in prompt_text
     assert "Record at least one workspace file change" in prompt_text
 
 
@@ -790,7 +666,7 @@ def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_pat
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = TaskObjectiveDecisionProvider()
+    provider = CapturingProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -819,16 +695,31 @@ def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_pat
             message,
             channel="telegram",
             allow_tools=False,
-            task_intent=agent.task_intents.classify(message),
+            task_intent=agent.task_intents.classify(
+                "Research 00981T ETF price and basic public information using web sources."
+            ),
+            task_context_decision=TaskContextDecision(
+                continuation_type="follow_up",
+                is_follow_up=True,
+                should_inherit_active_task=False,
+                should_seed_active_task=True,
+                should_replace_active_task=False,
+                inherited_task_type="web_research",
+                inherited_tool_group="web_research",
+                confidence=0.88,
+                method="llm",
+                reason="The short turn refers to the prior ETF lookup.",
+            ),
         )
 
     result = asyncio.run(_run())
 
     assert result.content == "done"
-    assert any("You resolve a concise task objective for ACTIVE_TASK" in call[0].content for call in provider.calls)
+    assert not any("You resolve a concise task objective for ACTIVE_TASK" in call[0].content for call in provider.calls)
+    prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in provider.calls[-1])
     system_text = provider.calls[-1][0].content
     assert "Goal: Research 00981T ETF price and basic public information using web sources." in system_text
-    assert "Original user message: 那00981t呢" in system_text
+    assert "Initial task objective: Research 00981T ETF price and basic public information using web sources." in prompt_text
 
 
 def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_path: Path) -> None:
@@ -942,7 +833,7 @@ def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(
     registry = ToolRegistry()
     registry.register(_MinimalTool())
 
-    provider = HistoryRetrievalContextProvider()
+    provider = CapturingProvider()
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -969,7 +860,19 @@ def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(
             "and this one?",
             channel="telegram",
             allow_tools=False,
-            task_intent=agent.task_intents.classify("and this one?"),
+            task_intent=agent.task_intents.classify("Summarize the previous cleanup fix from chat history."),
+            task_context_decision=TaskContextDecision(
+                continuation_type="follow_up",
+                is_follow_up=True,
+                should_inherit_active_task=False,
+                should_seed_active_task=False,
+                should_replace_active_task=False,
+                inherited_task_type="history_retrieval",
+                inherited_tool_group="history_retrieval",
+                confidence=0.91,
+                method="llm",
+                reason="latest message asks about prior conversation context",
+            ),
         )
 
     result = asyncio.run(_run())

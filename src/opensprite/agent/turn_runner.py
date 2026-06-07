@@ -85,7 +85,7 @@ from .task.contract import (
     is_tool_group_requirement,
     task_planner_status,
 )
-from .task.contract import TaskContextDecision, TaskIntent, TaskIntentService
+from .task.contract import TaskContextDecision, TaskIntent
 from .task.progress import (
     WorkPlan,
     WorkProgressService,
@@ -648,7 +648,7 @@ class AgentTurnRunner:
         response_finalizer: AgentResponseFinalizer,
         turn_context: TurnContextService,
         run_state: AgentRunStateService,
-        task_intents: TaskIntentService,
+        task_initial_llm_config: Any | None,
         harness_profiles: HarnessProfileService,
         completion_gate: CompletionGateService,
         completion_judge_context: Callable[[], tuple[Any, str | None]],
@@ -691,10 +691,10 @@ class AgentTurnRunner:
         self.auto_continue = auto_continue
         self.work_progress = work_progress
         self.task_planning = TurnTaskPlanningService(
-            task_intents=task_intents,
             work_progress=work_progress,
             read_active_task_snapshot=read_active_task_snapshot,
             build_runtime_message=_message_with_runtime_context,
+            llm_config=task_initial_llm_config,
         )
         self.run_lifecycle = RunLifecycleService(
             run_trace=run_trace,
@@ -794,34 +794,62 @@ class AgentTurnRunner:
         """Start run telemetry and dispatch one prepared user turn."""
         run = await self.run_lifecycle.start_turn(user_message=user_message, turn=turn)
         run_id = run.run_id
-        await self.run_lifecycle.record_inbound_media(run=run, turn=turn)
-        await self._preprocess_audio_only_message(user_message, turn, run_id)
-        self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
-        existing_work_state = await self._get_work_state(turn.session_id)
-        task_plan = self.task_planning.plan(
-            user_message=user_message,
-            session_id=turn.session_id,
-            user_metadata=turn.user_metadata,
-            existing_work_state=existing_work_state,
-        )
-        task_intent = task_plan.task_intent
-        pre_work_task_context_decision = task_plan.task_context_decision
-        worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
-            turn.session_id,
-            run_id,
-            task_kind=task_intent.kind,
-            expects_code_change=False,
-        )
-        await self._emit_run_event(
-            turn.session_id,
-            run_id,
-            TASK_INTENT_DETECTED_EVENT,
-            task_intent.to_metadata(),
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-        )
-        work_plan = task_plan.work_plan
-        current_work_state = task_plan.current_work_state
+        try:
+            await self.run_lifecycle.record_inbound_media(run=run, turn=turn)
+            await self._preprocess_audio_only_message(user_message, turn, run_id)
+            self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
+            existing_work_state = await self._get_work_state(turn.session_id)
+            provider, model = self._completion_judge_context()
+            task_plan = await self.task_planning.plan(
+                user_message=user_message,
+                session_id=turn.session_id,
+                user_metadata=turn.user_metadata,
+                existing_work_state=existing_work_state,
+                provider=provider,
+                model=model,
+            )
+            task_intent = task_plan.task_intent
+            worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
+                turn.session_id,
+                run_id,
+                task_kind=task_intent.kind,
+                expects_code_change=False,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                TASK_INTENT_DETECTED_EVENT,
+                {
+                    **task_intent.to_metadata(),
+                    "classification": {
+                        "method": task_plan.task_intent_method,
+                        "confidence": task_plan.task_intent_confidence,
+                        "reason": task_plan.task_intent_reason,
+                    },
+                    "task_context": task_plan.task_context_decision.to_metadata(),
+                },
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            work_plan = task_plan.work_plan
+            current_work_state = task_plan.current_work_state
+        except asyncio.CancelledError:
+            try:
+                await self.run_lifecycle.record_cancelled(run)
+            finally:
+                self.run_lifecycle.finish_turn(run)
+            raise
+        except Exception as exc:
+            logger.exception(
+                f"[{turn.session_id}] Agent.process failed: channel={turn.channel}, "
+                f"text_len={len(user_message.text or '')}, images={len(user_message.images or [])}, audios={len(user_message.audios or [])}, videos={len(user_message.videos or [])}"
+            )
+            self._finalize_learning_reuse(turn.session_id, run_id, False)
+            try:
+                await self.run_lifecycle.record_failed(run, exc)
+            finally:
+                self.run_lifecycle.finish_turn(run)
+            raise
 
         try:
             if self.is_media_only_message(user_message):
@@ -853,6 +881,7 @@ class AgentTurnRunner:
                         turn=turn,
                         run_id=run_id,
                         task_intent=task_intent,
+                        task_context_decision=task_plan.task_context_decision,
                         harness_profile=None,
                         work_plan=work_plan,
                         current_work_state=current_work_state,
@@ -1112,6 +1141,7 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         run_id: str,
         task_intent: TaskIntent,
+        task_context_decision: TaskContextDecision,
         harness_profile: HarnessProfile | None,
         work_plan: WorkPlan | None,
         current_work_state: StoredWorkState | None,
@@ -1198,6 +1228,7 @@ class AgentTurnRunner:
                     external_chat_id=turn.external_chat_id,
                     emit_tool_progress=True,
                     task_intent=task_intent,
+                    task_context_decision=task_context_decision,
                     allow_tools=current_allow_tools,
                     task_contract_override=(
                         current_task_contract_override if auto_continue_attempts > 0 else None

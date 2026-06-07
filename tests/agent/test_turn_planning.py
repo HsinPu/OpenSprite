@@ -7,7 +7,6 @@ from opensprite.agent.task.contract import (
     TaskContextDecision,
     TaskContract,
     TaskIntent,
-    TaskObjectiveDecision,
 )
 from opensprite.agent.task.planning import TurnPlanningService
 from opensprite.harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
@@ -19,7 +18,6 @@ from opensprite.runs.events import (
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
-    TASK_OBJECTIVE_RESOLVED_EVENT,
 )
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
@@ -60,19 +58,6 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
         profile_service = HarnessProfileService()
         policy_service = HarnessPolicyService()
 
-        async def resolve_task_context(**kwargs):
-            return TaskContextDecision(method="test_context", confidence=1.0, reason="test")
-
-        async def resolve_task_objective(**kwargs):
-            return TaskObjectiveDecision(
-                original_message=kwargs["current_message"],
-                resolved_objective="Refactor task and harness planning modules.",
-                should_use_resolved_objective=True,
-                method="test_objective",
-                confidence=1.0,
-                reason="test",
-            )
-
         async def plan_task(**kwargs):
             plan_calls.append(dict(kwargs))
             return TaskContract(
@@ -93,8 +78,6 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
             events.append((event_type, dict(payload)))
 
         service = TurnPlanningService(
-            resolve_task_context=resolve_task_context,
-            resolve_task_objective=resolve_task_objective,
             plan_task=plan_task,
             plan_harness=HarnessPlanningService(
                 profile_service=profile_service,
@@ -112,7 +95,8 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
             external_chat_id="browser-1",
             current_message="Please clean up the planning flow.",
             history=[],
-            task_intent=TaskIntent(kind="task", objective="Please clean up the planning flow."),
+            task_intent=TaskIntent(kind="task", objective="Refactor task and harness planning modules."),
+            task_context_decision=TaskContextDecision(method="llm", confidence=1.0, reason="initial plan"),
             task_contract_override=None,
             active_task_snapshot="",
             work_state_summary="",
@@ -142,9 +126,8 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
     assert plan_calls[0]["fallback_objective"] == "Refactor task and harness planning modules."
 
     event_types = [event_type for event_type, _payload in events]
-    assert event_types[:8] == [
+    assert event_types[:7] == [
         TASK_CONTEXT_RESOLVED_EVENT,
-        TASK_OBJECTIVE_RESOLVED_EVENT,
         TASK_CONTRACT_PLANNING_STARTED_EVENT,
         TASK_CONTRACT_PLANNED_EVENT,
         TASK_CONTRACT_VALIDATED_EVENT,
