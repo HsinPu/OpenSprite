@@ -883,6 +883,24 @@ def _latest_workflow_outcome(workflow_outcomes: tuple[Any, ...]) -> dict[str, An
     return None
 
 
+def _workflow_gate_review_result_fields(workflow_gate: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "review_attempted": bool(
+            workflow_gate.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD, review[REVIEW_EVIDENCE_ATTEMPTED_FIELD])
+        ),
+        "review_passed": bool(
+            workflow_gate.get(WORKFLOW_REVIEW_PASSED_FIELD, review[REVIEW_EVIDENCE_PASSED_FIELD])
+        ),
+        "review_summary": _coerce_text(
+            workflow_gate.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or review[REVIEW_EVIDENCE_SUMMARY_FIELD]
+        ),
+        "review_prompt_types": review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+        "review_finding_count": int(
+            workflow_gate.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD, review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD])
+        ),
+    }
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1256,12 +1274,7 @@ class CompletionGateService:
             workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
             workflow_verification_attempted = bool(workflow_gate.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD, verification_attempted))
             workflow_verification_passed = bool(workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed))
-            workflow_review_attempted = bool(workflow_gate.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD, review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
-            workflow_review_passed = bool(workflow_gate.get(WORKFLOW_REVIEW_PASSED_FIELD, review[REVIEW_EVIDENCE_PASSED_FIELD]))
-            workflow_review_summary = _coerce_text(
-                workflow_gate.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or review[REVIEW_EVIDENCE_SUMMARY_FIELD]
-            )
-            workflow_review_finding_count = int(workflow_gate.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD, review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD]))
+            workflow_review_fields = _workflow_gate_review_result_fields(workflow_gate, review)
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
                 reason=workflow_gate[COMPLETION_RESULT_REASON_FIELD],
@@ -1284,11 +1297,7 @@ class CompletionGateService:
                 if workflow_gate_needs_verification
                 else (),
                 review_required=review_required,
-                review_attempted=workflow_review_attempted,
-                review_passed=workflow_review_passed,
-                review_summary=workflow_review_summary,
-                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
-                review_finding_count=workflow_review_finding_count,
+                **workflow_review_fields,
             )
 
         if (

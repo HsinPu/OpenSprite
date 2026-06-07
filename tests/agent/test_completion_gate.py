@@ -4532,6 +4532,7 @@ def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_t
     assert result.review_attempted is True
     assert result.review_passed is False
     assert result.review_summary == "One high-risk bug found."
+    assert result.review_prompt_types == ()
     assert result.review_finding_count == 1
 
 
