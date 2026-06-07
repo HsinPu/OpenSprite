@@ -261,6 +261,10 @@ def test_run_workflow_can_resume_from_specific_step(tmp_path):
     assert started_event.payload["resumed"] is True
     assert started_event.payload["start_step_id"] == "review"
     assert started_event.payload["start_step_label"] == "Code review"
+    completed_event = next(event for event in trace.events if event.event_type == WORKFLOW_COMPLETED_EVENT)
+    assert completed_event.payload["resumed"] is True
+    assert completed_event.payload["start_step_id"] == "review"
+    assert completed_event.payload["start_step_label"] == "Code review"
     assert any("Resume the code review step" in str(message.content) for call in calls for message in call["messages"])
 
 

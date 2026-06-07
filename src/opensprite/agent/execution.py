@@ -5039,6 +5039,17 @@ def _workflow_completion_summary_fields(
     }
 
 
+def _workflow_resume_fields(steps: tuple[WorkflowStepSpec, ...], start_index: int = 0) -> dict[str, Any]:
+    if start_index <= 0:
+        return {}
+    start_step = steps[start_index]
+    return {
+        "resumed": True,
+        "start_step_id": start_step.step_id,
+        "start_step_label": start_step.label,
+    }
+
+
 def _workflow_outcome_count(
     outcomes: list[SubagentTaskOutcome],
     status_matches: Callable[[str | None], bool],
@@ -5311,15 +5322,7 @@ class SubagentWorkflowService:
             ],
             **_workflow_progress_fields(steps, outcomes, status=status, start_index=start_index),
         }
-        if start_index > 0:
-            start_step = steps[start_index]
-            payload.update(
-                {
-                    "resumed": True,
-                    "start_step_id": start_step.step_id,
-                    "start_step_label": start_step.label,
-                }
-            )
+        payload.update(_workflow_resume_fields(steps, start_index))
         if error:
             payload[WORKFLOW_ERROR_FIELD] = error
         return payload
@@ -5427,15 +5430,7 @@ class SubagentWorkflowService:
             WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: verification[WORKFLOW_VERIFICATION_ATTEMPTED_FIELD],
             WORKFLOW_VERIFICATION_PASSED_FIELD: verification[WORKFLOW_VERIFICATION_PASSED_FIELD],
             **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
-            **(
-                {
-                    "resumed": True,
-                    "start_step_id": spec.steps[start_index].step_id,
-                    "start_step_label": spec.steps[start_index].label,
-                }
-                if start_index > 0
-                else {}
-            ),
+            **_workflow_resume_fields(spec.steps, start_index),
             **({WORKFLOW_ERROR_FIELD: error} if error else {}),
         }
 
