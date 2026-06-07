@@ -23,7 +23,7 @@ from opensprite.agent.task_contract import (
 )
 from opensprite.agent.task_contract import TaskIntentService
 from opensprite.agent.task_progress import WorkProgressUpdate
-from opensprite.agent.turn_runner import ActiveTaskCommandService
+from opensprite.agent.active_task_commands import ActiveTaskCommandService
 from opensprite.config import Config, TaskMessagesConfig
 from opensprite.documents.active_task import (
     TASK_BOUNDARY_CONFIRMATION_EVENT,
