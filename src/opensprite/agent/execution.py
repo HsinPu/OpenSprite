@@ -5050,6 +5050,10 @@ def _workflow_resume_fields(steps: tuple[WorkflowStepSpec, ...], start_index: in
     }
 
 
+def _workflow_error_fields(error: str = "") -> dict[str, str]:
+    return {WORKFLOW_ERROR_FIELD: error} if error else {}
+
+
 def _workflow_outcome_count(
     outcomes: list[SubagentTaskOutcome],
     status_matches: Callable[[str | None], bool],
@@ -5282,8 +5286,7 @@ class SubagentWorkflowService:
                     STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
                     STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
                 }
-        if error:
-            payload[WORKFLOW_ERROR_FIELD] = error
+        payload.update(_workflow_error_fields(error))
         return payload
 
     @staticmethod
@@ -5323,8 +5326,7 @@ class SubagentWorkflowService:
             **_workflow_progress_fields(steps, outcomes, status=status, start_index=start_index),
         }
         payload.update(_workflow_resume_fields(steps, start_index))
-        if error:
-            payload[WORKFLOW_ERROR_FIELD] = error
+        payload.update(_workflow_error_fields(error))
         return payload
 
     @staticmethod
@@ -5431,7 +5433,7 @@ class SubagentWorkflowService:
             WORKFLOW_VERIFICATION_PASSED_FIELD: verification[WORKFLOW_VERIFICATION_PASSED_FIELD],
             **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
             **_workflow_resume_fields(spec.steps, start_index),
-            **({WORKFLOW_ERROR_FIELD: error} if error else {}),
+            **_workflow_error_fields(error),
         }
 
     async def run(self, workflow_id: str, task: str) -> str:

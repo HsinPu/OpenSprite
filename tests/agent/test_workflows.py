@@ -323,7 +323,10 @@ def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
     event_types = [event.event_type for event in trace.events]
     assert WORKFLOW_STEP_FAILED_EVENT in event_types
     assert WORKFLOW_FAILED_EVENT in event_types
+    step_failed_event = next(event for event in trace.events if event.event_type == WORKFLOW_STEP_FAILED_EVENT)
+    assert step_failed_event.payload[WORKFLOW_ERROR_FIELD] == "RuntimeError: review step failed"
     failed_event = next(event for event in trace.events if event.event_type == WORKFLOW_FAILED_EVENT)
+    assert failed_event.payload[WORKFLOW_ERROR_FIELD] == "RuntimeError: review step failed"
     assert failed_event.payload["completed_steps"] == 1
     assert failed_event.payload[WORKFLOW_SUMMARY_FIELD] == "Workflow stopped after 1/2 completed step(s)."
     assert failed_event.payload[WORKFLOW_NEXT_STEP_ID_FIELD] == "review"
