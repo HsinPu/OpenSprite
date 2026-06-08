@@ -97,7 +97,6 @@ from ..documents.curator import (
     fingerprint_text_directory,
 )
 from .execution import ExecutionEngine, ExecutionResult
-from ..harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
 from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from ..tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
@@ -117,6 +116,7 @@ from .task.contract import (
     TaskIntentService,
     TaskObjectiveDecision,
 )
+from ..tools.access import ToolAccessResolver
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflow import is_workflow_failed_status
@@ -784,13 +784,7 @@ class AgentLoop:
             log_config=self.log_config,
         )
         self.task_intents = TaskIntentService()
-        self.harness_profiles = HarnessProfileService()
-        self.harness_policies = HarnessPolicyService()
-        self.harness_planning = HarnessPlanningService(
-            profile_service=self.harness_profiles,
-            policy_service=self.harness_policies,
-            permissions_config=self.tools_config.permissions,
-        )
+        self.tool_access = ToolAccessResolver()
         self.task_planner = TaskPlanner(self.config.task_planner_llm)
         self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
@@ -814,7 +808,6 @@ class AgentLoop:
             turn_context=self.turn_context,
             run_state=self.run_state,
             task_initial_llm_config=self.config.task_context_llm,
-            harness_profiles=self.harness_profiles,
             completion_gate=self.completion_gate,
             completion_judge_context=lambda: (self.provider, self.provider.get_default_model()),
             auto_continue=self.auto_continue,
@@ -1041,7 +1034,10 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            plan_harness=self.harness_planning.plan,
+            resolve_tool_access=lambda registry, contract: self.tool_access.resolve_required_tools(
+                registry,
+                getattr(contract, "required_tools", ()),
+            ),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,
                 run_id,

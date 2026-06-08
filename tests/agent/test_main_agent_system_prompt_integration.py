@@ -58,18 +58,18 @@ def _task_contract_response(messages) -> LLMResponse:
     if "please update readme" in prompt_lower or "tests/test_app.py" in prompt_text or "refactor the agent" in prompt_lower:
         content = (
             '{"objective":"Apply the requested workspace change","task_type":"workspace_change",'
-            '"required_tool_groups":["workspace_read","workspace_write"],'
+            '"required_tools":["read_file","apply_patch"],'
             '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner workspace change"}'
         )
     elif "00981t" in prompt_lower or "web sources" in prompt_lower:
         content = (
             '{"objective":"Research 00981T ETF price and basic public information using web sources.",'
-            '"task_type":"web_research","required_tool_groups":["web_research"],'
+            '"task_type":"web_research","required_tools":["web_search"],'
             '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner web research"}'
         )
     else:
         content = (
-            '{"objective":"Answer the user directly","task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+            '{"objective":"Answer the user directly","task_type":"pure_answer","required_tools":[],"final_answer_required":true,'
             '"allow_no_tool_final":true,"reason":"test planner contract"}'
         )
     return LLMResponse(
@@ -81,13 +81,16 @@ def _task_contract_response(messages) -> LLMResponse:
 class _MinimalTool(Tool):
     """Single dummy tool so AgentLoop does not register the full default tool set."""
 
+    def __init__(self, name: str = "noop") -> None:
+        self._name = name
+
     @property
     def name(self) -> str:
-        return "noop"
+        return self._name
 
     @property
     def description(self) -> str:
-        return "noop"
+        return self._name
 
     @property
     def parameters(self) -> dict:
@@ -95,6 +98,13 @@ class _MinimalTool(Tool):
 
     async def _execute(self, **kwargs):
         return "ok"
+
+
+def _minimal_registry() -> ToolRegistry:
+    registry = ToolRegistry()
+    for tool_name in ("noop", "read_file", "apply_patch", "web_search"):
+        registry.register(_MinimalTool(tool_name))
+    return registry
 
 
 class _MinimalMCPTool(Tool):
@@ -178,8 +188,7 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -244,8 +253,7 @@ def test_main_agent_system_prompt_lists_connected_mcp_tools(tmp_path: Path) -> N
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
     registry.register(_MinimalMCPTool())
 
     provider = CapturingProvider()
@@ -295,8 +303,7 @@ def test_main_agent_call_llm_does_not_seed_active_task_from_task_intent_only(tmp
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -346,8 +353,7 @@ def test_main_agent_call_llm_does_not_replace_active_task_without_context_decisi
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -413,8 +419,7 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -490,8 +495,7 @@ def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Pat
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -572,8 +576,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -663,8 +666,7 @@ def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_pat
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -705,7 +707,6 @@ def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_pat
                 should_seed_active_task=True,
                 should_replace_active_task=False,
                 inherited_task_type="web_research",
-                inherited_tool_group="web_research",
                 confidence=0.88,
                 method="llm",
                 reason="The short turn refers to the prior ETF lookup.",
@@ -733,8 +734,7 @@ def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_pa
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -779,8 +779,7 @@ def test_main_agent_call_llm_does_not_inject_retrieval_context_without_task_cont
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -830,8 +829,7 @@ def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(
         tool_workspace=app_home / "workspace",
     )
 
-    registry = ToolRegistry()
-    registry.register(_MinimalTool())
+    registry = _minimal_registry()
 
     provider = CapturingProvider()
     agent = AgentLoop(
@@ -868,7 +866,6 @@ def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(
                 should_seed_active_task=False,
                 should_replace_active_task=False,
                 inherited_task_type="history_retrieval",
-                inherited_tool_group="history_retrieval",
                 confidence=0.91,
                 method="llm",
                 reason="latest message asks about prior conversation context",

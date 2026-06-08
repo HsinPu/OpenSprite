@@ -1121,42 +1121,40 @@
             </div>
           </div>
 
-          <h3>{{ copy.settings.permissions.harnessPreview.title }}</h3>
+          <h3>{{ copy.settings.permissions.toolAccessPreview.title }}</h3>
           <div class="settings-card provider-card">
-            <p v-if="settingsState.harnessPolicyPreviewLoading" class="settings-inline-status">
-              {{ copy.settings.permissions.harnessPreview.loading }}
+            <p v-if="settingsState.toolAccessPreviewLoading" class="settings-inline-status">
+              {{ copy.settings.permissions.toolAccessPreview.loading }}
             </p>
-            <p v-if="settingsState.harnessPolicyPreviewError" class="settings-inline-status settings-inline-status--error">
-              {{ settingsState.harnessPolicyPreviewError }}
+            <p v-if="settingsState.toolAccessPreviewError" class="settings-inline-status settings-inline-status--error">
+              {{ settingsState.toolAccessPreviewError }}
             </p>
             <div class="provider-row provider-row--empty">
               <div>
-                <strong>{{ copy.settings.permissions.harnessPreview.effectiveTitle }}</strong>
-                <span>{{ copy.settings.permissions.harnessPreview.effectiveDescription }}</span>
+                <strong>{{ copy.settings.permissions.toolAccessPreview.effectiveTitle }}</strong>
+                <span>{{ copy.settings.permissions.toolAccessPreview.effectiveDescription }}</span>
               </div>
             </div>
-            <div v-for="row in harnessPolicyPreviewRows" :key="row.key" class="provider-row provider-row--stacked">
+            <div v-for="row in toolAccessPreviewRows" :key="row.key" class="provider-row provider-row--stacked">
               <div class="provider-row__content">
                 <div class="provider-row__main">
-                  <span class="provider-row__mark" aria-hidden="true">{{ row.profileName.slice(0, 2) }}</span>
+                  <span class="provider-row__mark" aria-hidden="true">{{ row.taskType.slice(0, 2) }}</span>
                   <div>
                     <div class="provider-row__title">
                       <strong>{{ row.title }}</strong>
-                      <span class="provider-row__badge">{{ row.policy }}</span>
+                      <span class="provider-row__badge">{{ row.taskType }}</span>
                     </div>
                     <span>{{ row.description }}</span>
                   </div>
                 </div>
               </div>
               <div class="settings-policy-preview">
-                <span>{{ copy.settings.permissions.harnessPreview.guidanceAllowed(row.guidanceAllowed) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.userAllowed(row.userAllowed) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.effectiveAllowed(row.effectiveAllowed) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.denied(row.denied) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.approval(row.approval) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.evidence(row.requiredEvidence) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.verification(row.verification) }}</span>
-                <span>{{ copy.settings.permissions.harnessPreview.continuation(row.continuation) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.requiredTools(row.requiredTools) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.exposedTools(row.exposedTools) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.blockedRequired(row.blockedRequired) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.userAllowed(row.userAllowed) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.denied(row.denied) }}</span>
+                <span>{{ copy.settings.permissions.toolAccessPreview.approval(row.approval) }}</span>
               </div>
             </div>
           </div>
@@ -1734,16 +1732,6 @@
 
             <div class="settings-row">
               <div>
-                <strong>{{ copy.settings.eval.harnessEvalTitle }}</strong>
-                <span>{{ copy.settings.eval.harnessEvalDescription }}</span>
-              </div>
-              <button class="secondary-button" type="button" :disabled="settingsState.harnessEvalRunning" @click="$emit('run-harness-controlled-eval')">
-                {{ settingsState.harnessEvalRunning ? copy.settings.eval.running : copy.settings.eval.runHarnessEval }}
-              </button>
-            </div>
-
-            <div class="settings-row">
-              <div>
                 <strong>{{ copy.settings.eval.taskCompletionTitle }}</strong>
                 <span>{{ copy.settings.eval.taskCompletionDescription }}</span>
               </div>
@@ -1787,33 +1775,6 @@
                 <span>{{ check.detail }}</span>
               </div>
               <span class="provider-row__badge">{{ check.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
-            </div>
-          </div>
-
-          <h3>{{ copy.settings.eval.harnessEvalResultsTitle }}</h3>
-          <div class="settings-card">
-            <div v-if="!settingsState.harnessEval.cases.length" class="provider-row provider-row--empty">
-              <div>
-                <strong>{{ copy.settings.eval.noHarnessEvalTitle }}</strong>
-                <span>{{ copy.settings.eval.noHarnessEvalDescription }}</span>
-              </div>
-            </div>
-            <div v-if="settingsState.harnessEval.cases.length" class="settings-row">
-              <div>
-                <strong>{{ copy.settings.eval.checksSummary(settingsState.harnessEval.summary.passed_checks, settingsState.harnessEval.summary.total_checks) }}</strong>
-                <span>{{ copy.settings.eval.historyGroupMeta(settingsState.harnessEval.summary.total_cases, settingsState.harnessEval.summary.passed_cases, settingsState.harnessEval.summary.total_cases - settingsState.harnessEval.summary.passed_cases) }}</span>
-              </div>
-              <span class="provider-row__badge">{{ settingsState.harnessEval.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
-            </div>
-            <div v-for="evalCase in settingsState.harnessEval.cases" :key="evalCase.id" class="settings-row eval-result-row">
-              <div>
-                <span class="eval-result-row__title">
-                  <strong>{{ evalCase.id }}</strong>
-                  <span class="provider-row__badge">{{ evalCase.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
-                </span>
-                <span>{{ evalCase.profile?.name || copy.settings.eval.none }} · {{ evalCase.policy?.name || copy.settings.eval.none }}</span>
-                <span v-if="failedEvalChecks(evalCase).length">{{ failedEvalChecksSummary(evalCase) }}</span>
-              </div>
             </div>
           </div>
 
@@ -3833,30 +3794,27 @@ function permissionRiskLabel(riskLevel) {
   return props.copy.settings.permissions.riskLevels?.[riskLevel] || riskLevel;
 }
 
-const harnessPolicyPreviewRows = computed(() => {
-  const rows = Array.isArray(props.settingsState.harnessPolicyPreview?.rows) ? props.settingsState.harnessPolicyPreview.rows : [];
-  const userPermissions = props.settingsState.harnessPolicyPreview?.user_permissions || props.settingsState.permissions || {};
+const toolAccessPreviewRows = computed(() => {
+  const rows = Array.isArray(props.settingsState.toolAccessPreview?.rows) ? props.settingsState.toolAccessPreview.rows : [];
+  const userPermissions = props.settingsState.toolAccessPreview?.user_permissions || props.settingsState.permissions || {};
   return rows.map((row) => {
-    const profile = row.profile || {};
-    const policy = row.policy || {};
+    const task = row.task || {};
     const user = row.user || {};
     const effective = row.effective || {};
-    const profileName = profile.name || "unknown";
-    const taskType = profile.task_type || "task";
+    const taskName = task.name || "Task";
+    const taskType = task.task_type || task.taskType || "task";
     return {
-      key: `${profileName}:${taskType}:${policy.name || "policy"}`,
-      profileName,
-      title: props.copy.settings.permissions.harnessPreview.rowTitle(profileName, taskType),
-      policy: policy.name || "policy",
-      description: policy.reason || profile.reason || "",
-      guidanceAllowed: formatRiskList(policy.allowed_risk_levels),
+      key: `${taskName}:${taskType}`,
+      taskName,
+      taskType,
+      title: props.copy.settings.permissions.toolAccessPreview.rowTitle(taskName, taskType),
+      description: task.description || "",
+      requiredTools: formatPreviewList(task.required_tools || task.requiredTools),
+      exposedTools: formatPreviewList(effective.exposed_tools || effective.exposedTools),
+      blockedRequired: formatBlockedRequiredTools(effective.blocked_required_tools || effective.blockedRequiredTools),
       userAllowed: formatRiskList(user.allowed_risk_levels || userPermissions.allowed_risk_levels),
-      effectiveAllowed: formatRiskList(effective.allowed_risk_levels),
       denied: formatRiskList(effective.denied_risk_levels),
       approval: formatRiskList(effective.approval_required_risk_levels),
-      requiredEvidence: formatPreviewList(profile.required_evidence || profile.requiredEvidence),
-      verification: profile.verification_policy || profile.verificationPolicy || props.copy.settings.permissions.harnessPreview.none,
-      continuation: profile.continuation_policy || profile.continuationPolicy || props.copy.settings.permissions.harnessPreview.none,
     };
   });
 });
@@ -3864,7 +3822,7 @@ const harnessPolicyPreviewRows = computed(() => {
 function formatRiskList(value) {
   const risks = Array.isArray(value) ? value : [];
   if (!risks.length) {
-    return props.copy.settings.permissions.harnessPreview.none;
+    return props.copy.settings.permissions.toolAccessPreview.none;
   }
   return risks.map(permissionRiskLabel).join(", ");
 }
@@ -3872,9 +3830,24 @@ function formatRiskList(value) {
 function formatPreviewList(value) {
   const items = Array.isArray(value) ? value : [];
   if (!items.length) {
-    return props.copy.settings.permissions.harnessPreview.none;
+    return props.copy.settings.permissions.toolAccessPreview.none;
   }
-  return items.map((item) => String(item || "").trim()).filter(Boolean).join(", ") || props.copy.settings.permissions.harnessPreview.none;
+  return items.map((item) => String(item || "").trim()).filter(Boolean).join(", ") || props.copy.settings.permissions.toolAccessPreview.none;
+}
+
+function formatBlockedRequiredTools(value) {
+  const items = Array.isArray(value) ? value : [];
+  const names = items
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+      const name = String(item?.name || "").trim();
+      const reason = String(item?.reason || "").trim();
+      return name && reason ? `${name} (${reason})` : name;
+    })
+    .filter(Boolean);
+  return names.join(", ") || props.copy.settings.permissions.toolAccessPreview.none;
 }
 
 const logLevelOptions = computed(() => {
@@ -4003,7 +3976,6 @@ const emit = defineEmits([
   "run-browser-install",
   "refresh-eval-status",
   "run-eval-smoke",
-  "run-harness-controlled-eval",
   "run-task-completion-smoke",
   "run-task-completion-live",
   "refresh-task-completion-history",

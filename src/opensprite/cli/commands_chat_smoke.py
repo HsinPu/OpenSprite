@@ -13,7 +13,7 @@ from typing import Any
 
 import typer
 
-from ..runs.events import HARNESS_PROFILE_SELECTED_EVENT, TASK_CONTRACT_CREATED_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
+from ..runs.events import TASK_CONTRACT_CREATED_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
 from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredRunTrace
 from .commands_chat import _json_for_stdout, run_web_chat
 
@@ -70,19 +70,6 @@ def _tool_name_from_event(event_payload: dict[str, Any]) -> str:
     tool_call = event_payload.get("tool_call")
     if isinstance(tool_call, dict) and isinstance(tool_call.get("name"), str):
         return str(tool_call["name"])
-    return ""
-
-
-def _profile_from_payload(payload: dict[str, Any]) -> str:
-    value = payload.get("name")
-    if isinstance(value, str):
-        return value
-    effective = payload.get("effective")
-    if isinstance(effective, dict) and isinstance(effective.get("name"), str):
-        return str(effective["name"])
-    profile = payload.get("harness_profile")
-    if isinstance(profile, dict) and isinstance(profile.get("name"), str):
-        return str(profile["name"])
     return ""
 
 
@@ -242,7 +229,7 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
             "run_id": fallback.get("run_id"),
             "run_status": fallback.get("run_status") or "",
             "event_count": int(fallback.get("run_event_count") or 0),
-            "profile": "",
+            "task_type": "",
             "contract": "",
             "completion_status": "",
             "completion_reason": "",
@@ -254,7 +241,7 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
 
     tools: list[str] = []
     failed_tools: list[str] = []
-    profile = ""
+    task_type = ""
     contract = ""
     completion_status = ""
     completion_reason = ""
@@ -271,10 +258,9 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
                 failed_tool = _tool_name_from_event(payload)
                 if failed_tool:
                     failed_tools.append(failed_tool)
-        elif event.event_type == HARNESS_PROFILE_SELECTED_EVENT:
-            profile = _profile_from_payload(payload) or profile
         elif event.event_type == TASK_CONTRACT_CREATED_EVENT:
             contract = _contract_type_from_payload(payload) or contract
+            task_type = contract or task_type
         elif event.event_type.startswith("completion_gate"):
             completion_status = str(payload.get("status") or completion_status)
             completion_reason = str(payload.get("reason") or completion_reason)
@@ -286,7 +272,7 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
         "event_count": len(trace.events),
         "part_count": len(trace.parts),
         "file_change_count": len(trace.file_changes),
-        "profile": profile,
+        "task_type": task_type,
         "contract": contract,
         "completion_status": completion_status,
         "completion_reason": completion_reason,
@@ -399,7 +385,7 @@ def _render_text(payload: dict[str, Any]) -> None:
         tools = ", ".join(trace.get("tools") or []) or "-"
         typer.echo(
             f"{status} {result['case']} run={trace.get('run_id') or '-'} "
-            f"profile={trace.get('profile') or '-'} tools={tools}"
+            f"task_type={trace.get('task_type') or '-'} tools={tools}"
         )
         for failure in result.get("failures") or []:
             typer.echo(f"  - {failure}")

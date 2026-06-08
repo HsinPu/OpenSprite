@@ -140,21 +140,19 @@ assertIncludes(runSummaryCard, "cleanup-worktree", "worktree cleanup action");
 assertIncludes(runTraceViewer, "codeNavigationResults", "code navigation trace rendering");
 assertIncludes(runTraceViewer, "showRetentionSummary", "trace retention summary");
 assertIncludes(runTraceViewer, "downloadDebugBundle", "run trace debug export action");
-assertIncludes(runTraceViewer, "run-trace__harness-dashboard", "harness dashboard rendering");
-assertIncludes(runTraceViewer, "data-kind", "harness dashboard card categories");
-assertIncludes(runTraceViewer, "formatProfileSelection", "harness profile selection explanation rendering");
+assertIncludes(runTraceViewer, "run-trace__task-dashboard", "task dashboard rendering");
+assertIncludes(runTraceViewer, "data-kind", "task dashboard card categories");
 assertIncludes(runTraceViewer, "formatOperationAudit", "operation audit trace rendering");
-assertIncludes(runTraceViewer, "formatToolDecisionCounts", "harness tool decision summary rendering");
-assertIncludes(runTraceViewer, "formatApprovalCounts", "harness approval lifecycle summary rendering");
-assertIncludes(runTraceViewer, "formatPolicyResolution", "harness policy resolution summary rendering");
-assertIncludes(runTraceViewer, "formatHarnessEvalResult", "harness eval result summary rendering");
+assertIncludes(runTraceViewer, "formatToolDecisionCounts", "task tool decision summary rendering");
+assertIncludes(runTraceViewer, "formatApprovalCounts", "task approval lifecycle summary rendering");
+assertIncludes(runTraceViewer, "formatTaskScorecard", "task scorecard summary rendering");
 assertIncludes(runTraceViewer, "decisionTimelineItems", "trace decision timeline rendering");
 assertIncludes(runTraceViewer, "deriveDecisionTimelineItems", "trace decision timeline uses shared normalizer");
 assertIncludes(runTraceViewer, "run-trace__decision", "trace decision timeline section");
 assertIncludes(runTraceNormalizers, "deriveDecisionTimelineItems", "trace decision timeline normalizer export");
-assertIncludes(runTraceNormalizers, "harness_profile.selected", "trace timeline captures selected profile decisions");
+assertIncludes(runTraceNormalizers, "task_scorecard.recorded", "trace timeline captures task scorecards");
 assertIncludes(runTraceNormalizers, "completion_gate.evaluated", "trace timeline captures completion gate decisions");
-assertIncludes(runTraceNormalizers, "harness_checkpoint.recorded", "trace timeline captures checkpoint decisions");
+assertIncludes(runTraceNormalizers, "task_checkpoint.recorded", "trace timeline captures checkpoint decisions");
 assertIncludes(runTraceViewer, "const artifactsExpanded = ref(false)", "run artifacts default collapsed");
 assertIncludes(runTraceViewer, "<summary class=\"run-trace__artifact-group-title\">", "run artifact groups are collapsible");
 assertNotIncludes(runTraceViewer, "class=\"run-trace__artifact-group\" open", "run artifact groups default collapsed");
@@ -163,7 +161,7 @@ assertIncludes(copy, "exportDebug", "run trace debug export copy");
 assertIncludes(copy, "taskContextResolved", "task context timeline copy");
 assertIncludes(copy, "taskObjectiveResolved", "task objective timeline copy");
 assertIncludes(styles, ".run-trace__artifact-grid", "trace artifact grid styling");
-assertIncludes(styles, ".run-trace__harness-grid", "harness dashboard grid styling");
+assertIncludes(styles, ".run-trace__task-grid", "task dashboard grid styling");
 assertIncludes(styles, ".run-trace__decision-list", "decision timeline styling");
 assertIncludes(styles, ".run-trace__decision-item", "decision timeline item styling");
 assertIncludes(copy, "Decision timeline", "decision timeline copy");
@@ -285,7 +283,6 @@ assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth c
 assertIncludes(settingsUi, "form.showWorkState", "work state settings switch");
 assertIncludes(settingsUi, "form.showRunHistory", "run history settings switch");
 assertIncludes(settingsUi, "form.accessToken", "gateway access token setting");
-assertIncludes(settingsModal, "run-harness-controlled-eval", "controlled harness eval action");
 assertIncludes(settingsModal, "run-task-completion-smoke", "task completion eval action");
 assertIncludes(settingsModal, "run-task-completion-live", "live task completion eval action");
 assertIncludes(settingsModal, "refresh-task-completion-history", "task completion history refresh action");
@@ -332,7 +329,6 @@ assertIncludes(chatClient, "persistLocalDraftSessions", "local draft sessions up
 assertIncludes(chatClient, "preserveActiveSession: quiet", "quiet history refresh preserves active trace state");
 assertIncludes(chatClient, "mergeHistorySession(existingSession, historySession", "history refresh reuses existing session objects");
 assertIncludes(chatClient, "/api/evals/task-completion/smoke", "task completion eval fetch");
-assertIncludes(chatClient, "/api/evals/harness/controlled", "controlled harness eval fetch");
 assertIncludes(chatClient, "/api/evals/task-completion/run", "live task completion eval fetch");
 assertIncludes(chatClient, "/api/evals/task-completion/history", "task completion history fetch");
 assertIncludes(chatClient, "deleteTaskCompletionHistoryItem", "task completion history delete fetch");
@@ -368,7 +364,7 @@ assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings te
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
 assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch");
-assertIncludes(settingsLogic, "/api/settings/harness-policy-preview", "harness policy preview fetch");
+assertIncludes(settingsLogic, "/api/settings/tool-access-preview", "tool access preview fetch");
 assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
 assertNotIncludes(permissionsSettingsActions, "profile_overrides", "permission profile override is preserved by backend when not edited");
 assertNotIncludes(settingsLogic, "applyPermissionProfilePreset", "unused permission profile preset helper removed");
@@ -383,11 +379,11 @@ assertIncludes(settingsLogic, "createDefaultPermissionsForm", "settings state us
 assertIncludes(settingsModal, "section === 'permissions'", "permissions settings section");
 assertIncludes(settingsModal, "save-permissions-settings", "permissions settings save event");
 assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
-assertIncludes(settingsModal, "harnessPolicyPreviewRows", "permissions harness policy preview rendering");
+assertIncludes(settingsModal, "toolAccessPreviewRows", "permissions tool access preview rendering");
 assertNotIncludes(settingsModal, "permissionProfiles", "unused permission profile list removed");
 assertNotIncludes(settingsModal, "permissionProfilePresets", "unused permission profile preset rendering removed");
 assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
-assertIncludes(styles, ".settings-policy-preview", "harness policy preview styling");
+assertIncludes(styles, ".settings-policy-preview", "tool access preview styling");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");
@@ -433,8 +429,6 @@ for (const key of [
   "dataLoadFailed",
   "dataTimelineLoadFailed",
   "taskCompletionSmokePassed",
-  "harnessEvalPassed",
-  "harnessEvalFailed",
   "taskCompletionEvalSmokeFailed",
   "taskCompletionLivePassed",
   "taskCompletionLiveEvalFailed",

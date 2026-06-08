@@ -972,21 +972,20 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert payload["permissions"]["approval_mode_options"] == ["auto", "ask", "block"]
                 assert payload["permissions"]["profile_overrides"] == {}
 
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/tool-access-preview") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                preview = payload["harness_policy_preview"]
-                assert preview["schema_version"] == 1
+                preview = payload["tool_access_preview"]
+                assert preview["schema_version"] == 2
                 assert preview["user_permissions"]["approval_mode"] == "auto"
-                policies = {row["policy"]["name"]: row for row in preview["rows"]}
-                assert "chat_guidance_policy" in policies
-                assert "workspace_change_guidance_policy" in policies
-                assert policies["chat_guidance_policy"]["profile_override"] == {}
-                assert set(policies["chat_guidance_policy"]["user"]["allowed_risk_levels"]) >= {"read", "network", "write"}
-                assert set(policies["chat_guidance_policy"]["effective"]["allowed_risk_levels"]) >= {"read", "network", "write"}
-                assert policies["workspace_change_guidance_policy"]["effective"]["denied_risk_levels"] == []
-                assert policies["operations_approval_guidance_policy"]["profile_override"] == {}
-                assert "mcp" in policies["operations_approval_guidance_policy"]["policy"]["approval_required_risk_levels"]
+                tasks = {row["task"]["task_type"]: row for row in preview["rows"]}
+                assert tasks["pure_answer"]["task"]["required_tools"] == []
+                assert tasks["pure_answer"]["effective"]["exposed_tools"] == []
+                assert tasks["web_research"]["task"]["required_tools"] == ["web_search", "web_fetch"]
+                assert set(tasks["web_research"]["effective"]["exposed_tools"]) == {"web_search", "web_fetch"}
+                assert tasks["code_change"]["task"]["required_tools"] == ["read_file", "apply_patch", "verify"]
+                assert set(tasks["code_change"]["effective"]["exposed_tools"]) == {"read_file", "apply_patch", "verify"}
+                assert tasks["operations"]["effective"]["blocked_required_tools"] == []
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/permissions",
@@ -1025,16 +1024,22 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert payload["operation_audit"]["before"]["approval_mode"] == "auto"
                 assert payload["operation_audit"]["after"]["approval_mode"] == "ask"
 
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/tool-access-preview") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                policies = {row["policy"]["name"]: row for row in payload["harness_policy_preview"]["rows"]}
-                assert policies["operations_approval_guidance_policy"]["effective"]["user_approval_mode"] == "ask"
-                assert "configuration" in policies["operations_approval_guidance_policy"]["effective"]["approval_required_risk_levels"]
-                assert "mcp" in policies["operations_approval_guidance_policy"]["effective"]["denied_risk_levels"]
-                assert policies["research_source_guidance_policy"]["user"]["allowed_risk_levels"] == ["read"]
-                assert "network" in policies["research_source_guidance_policy"]["user"]["denied_risk_levels"]
-                assert policies["research_source_guidance_policy"]["effective"]["allowed_risk_levels"] == ["read"]
+                tasks = {row["task"]["task_type"]: row for row in payload["tool_access_preview"]["rows"]}
+                assert tasks["operations"]["effective"]["user_approval_mode"] == "ask"
+                assert "configuration" in tasks["operations"]["effective"]["approval_required_risk_levels"]
+                assert "mcp" in tasks["operations"]["effective"]["denied_risk_levels"]
+                assert tasks["web_research"]["user"]["allowed_risk_levels"] == [
+                    "read",
+                    "write",
+                    "execute",
+                    "network",
+                    "external_side_effect",
+                    "configuration",
+                ]
+                assert set(tasks["web_research"]["effective"]["exposed_tools"]) == {"web_search", "web_fetch"}
 
         loaded = Config.load(config_path)
         assert loaded.tools.permissions.approval_mode == "ask"
@@ -1969,21 +1974,6 @@ async def _run_web_run_events_api():
             assert "background_process.started" in controlled_payload["event_types"]
             assert "background_process.completed" in controlled_payload["event_types"]
 
-            async with session.post(f"http://127.0.0.1:{port}/api/evals/harness/controlled") as resp:
-                assert resp.status == 200
-                harness_payload = await resp.json()
-
-            assert harness_payload["ok"] is True
-            assert harness_payload["kind"] == "controlled_harness_scenarios"
-            assert harness_payload["summary"]["passed_cases"] == 5
-            assert harness_payload["trace"]["session_id"] == "web:evaluations"
-            assert harness_payload["trace"]["part_type"] == "harness_eval_result"
-            harness_parts = await storage.get_run_parts("web:evaluations", harness_payload["trace"]["run_id"])
-            assert [part.part_type for part in harness_parts] == ["harness_eval_result"]
-            assert harness_parts[0].metadata["kind"] == "controlled_harness_scenarios"
-            harness_events = await storage.get_run_events("web:evaluations", harness_payload["trace"]["run_id"])
-            assert [event.event_type for event in harness_events] == ["harness_eval.completed"]
-
             async with session.post(f"http://127.0.0.1:{port}/api/evals/task-completion/smoke") as resp:
                 assert resp.status == 200
                 task_completion_payload = await resp.json()
@@ -2212,7 +2202,7 @@ async def _run_web_run_events_api():
                     "file": 1,
                     "verification": 0,
                 },
-                "harness_scorecard": {
+                "task_scorecard": {
                     "present": False,
                     "status": "missing",
                     "profile": "",

@@ -23,9 +23,8 @@ from opensprite.agent.task.contract import (
     _contract_from_task_planner_payload,
     _coerce_bool,
     _coerce_confidence,
-    _ensure_task_type_tool_groups,
     _normalize_planner_quality_checks,
-    _normalize_planner_tool_groups,
+    _normalize_planner_required_tools,
     _parse_json_object,
     _resolver_compact,
     _resolver_coerce_bool,
@@ -219,7 +218,7 @@ def test_planner_prompt_preserves_tail_of_long_current_message():
     assert "GAMMA-772" in prompt
 
 
-def test_planner_prompt_uses_dynamic_capability_catalog_instead_of_if_routing():
+def test_planner_prompt_uses_dynamic_tool_catalog_instead_of_if_routing():
     registry = ToolRegistry()
     registry.register(
         _CatalogTool(
@@ -241,7 +240,6 @@ def test_planner_prompt_uses_dynamic_capability_catalog_instead_of_if_routing():
         capability_catalog=catalog,
     )
 
-    assert "market_data" in prompt
     assert "quote_lookup" in prompt
     assert "Look up current public market quotes" in prompt
     assert "If the user asks" not in prompt
@@ -258,7 +256,7 @@ def test_planner_prompt_warns_against_inventing_unavailable_capabilities():
         task_context_decision=None,
     )
 
-    assert "Do not invent unavailable tool groups" in prompt
+    assert "Do not invent unavailable tool names" in prompt
     assert "Use semantic judgment" in prompt
     assert "task_intent" not in prompt
 
@@ -268,7 +266,7 @@ def test_task_planner_payload_objective_replaces_input_fallback():
         {
             "objective": "Use the planner objective",
             "task_type": "pure_answer",
-            "required_tool_groups": [],
+            "required_tools": [],
         },
         fallback_objective="Fallback objective",
         current_message="Fallback message",
@@ -282,7 +280,7 @@ def test_task_planner_payload_objective_replaces_input_fallback():
     assert contract.objective == "Use the planner objective"
 
 
-def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata():
+def test_dynamic_required_tool_is_checked_by_evidence_name():
     registry = ToolRegistry()
     registry.register(
         _CatalogTool(
@@ -296,7 +294,7 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
     contract = _contract_from_task_planner_payload(
         {
             "task_type": "task",
-            "required_tool_groups": ["market_data"],
+            "required_tools": ["quote_lookup"],
             "allow_no_tool_final": False,
             "reason": "The available market_data capability can gather quote evidence.",
         },
@@ -312,8 +310,8 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
 
     assert contract.task_type == "task"
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["capability_tools"]["market_data"] == ["quote_lookup"]
-    assert any(item.kind == "tool_group" and item.tool_group == "market_data" for item in contract.requirements)
+    assert contract.required_tools == ("quote_lookup",)
+    assert contract.planner_metadata["required_tools"] == ["quote_lookup"]
     assert missing_evidence(contract, (), file_change_count=0, verification_passed=False)
     assert missing_evidence(
         contract,
@@ -323,12 +321,13 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
     ) == ()
 
 
-def test_planner_tool_group_aliases_are_normalized_without_duplicates():
-    groups = _normalize_planner_tool_groups(
-        [" workspace_change ", "workspace_write", " media_analysis ", " ops ", "unknown"]
+def test_planner_required_tools_are_normalized_against_available_tools():
+    tools = _normalize_planner_required_tools(
+        [" read_file ", "read_file", "apply_patch", "unknown"],
+        allowed_tools=("read_file", "apply_patch"),
     )
 
-    assert groups == ["workspace_write", "media", "verification"]
+    assert tools == ["read_file", "apply_patch"]
 
 
 def test_planner_quality_check_values_are_normalized_without_duplicates():
@@ -337,31 +336,15 @@ def test_planner_quality_check_values_are_normalized_without_duplicates():
     assert checks == [WORKSPACE_LOCATION_QUALITY_CHECK]
 
 
-def test_task_type_required_tool_groups_are_added_from_policy_map():
-    groups = ["workspace_write"]
-
-    _ensure_task_type_tool_groups("code_change", groups)
-
-    assert groups == ["workspace_write", "workspace_read"]
-
-
-def test_task_type_required_tool_groups_preserve_existing_order_for_unknown_task_type():
-    groups = ["execution"]
-
-    _ensure_task_type_tool_groups("operations", groups)
-
-    assert groups == ["execution"]
-
-
 def test_missing_evidence_uses_requirement_kind_policy_helpers():
     contract = TaskContract(
         objective="Inspect two files and verify changes.",
         task_type="workspace_change",
+        required_tools=("read_file",),
         requirements=(
-            EvidenceRequirement(kind="tool_group", tool_group="workspace_read", description="Read the workspace."),
             EvidenceRequirement(
                 kind="resource_coverage",
-                tool_group="workspace_read",
+                tools=("read_file",),
                 resource_ids=("file:a", "file:b"),
                 coverage="all",
             ),
@@ -377,8 +360,8 @@ def test_missing_evidence_uses_requirement_kind_policy_helpers():
         verification_passed=False,
     )
 
-    assert "Read the workspace." not in missing
-    assert "Missing workspace_read coverage for: file:b" in missing
+    assert "Use required tool: read_file." not in missing
+    assert "Missing resource coverage for: file:b" in missing
     assert "Change a file." in missing
     assert "Verify the result." in missing
 
@@ -392,7 +375,7 @@ def test_contract_expects_file_change_uses_requirement_attrs():
     workspace_write_contract = TaskContract(
         objective="Write to the workspace.",
         task_type="analysis",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_write"),),
+        required_tools=("apply_patch",),
     )
 
     assert contract_expects_file_change(file_change_contract) is True

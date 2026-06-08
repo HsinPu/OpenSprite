@@ -8,7 +8,6 @@ from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, load_trac
 from opensprite.cli.commands_trace import trace_payload
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
-    HARNESS_PROFILE_SELECTED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
@@ -16,7 +15,7 @@ from opensprite.runs.events import (
 from opensprite.storage.base import StoredRun, StoredRunEvent, StoredRunPart, StoredRunTrace
 
 
-def test_summarize_trace_extracts_profile_tools_and_completion():
+def test_summarize_trace_extracts_task_tools_and_completion():
     trace = StoredRunTrace(
         run=StoredRun(
             run_id="run-1",
@@ -26,12 +25,6 @@ def test_summarize_trace_extracts_profile_tools_and_completion():
             updated_at=2.0,
         ),
         events=[
-            StoredRunEvent(
-                run_id="run-1",
-                session_id="web:smoke",
-                event_type=HARNESS_PROFILE_SELECTED_EVENT,
-                payload={"name": "research"},
-            ),
             StoredRunEvent(
                 run_id="run-1",
                 session_id="web:smoke",
@@ -63,7 +56,7 @@ def test_summarize_trace_extracts_profile_tools_and_completion():
 
     assert summary["run_id"] == "run-1"
     assert summary["run_status"] == "completed"
-    assert summary["profile"] == "research"
+    assert summary["task_type"] == "web_research"
     assert summary["contract"] == "web_research"
     assert summary["tools"] == ["web_research"]
     assert summary["failed_tools"] == ["web_fetch"]

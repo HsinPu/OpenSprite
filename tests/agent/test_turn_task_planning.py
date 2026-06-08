@@ -31,7 +31,6 @@ def test_turn_task_planning_builds_intent_context_and_initial_work_state():
                 "should_seed_active_task": True,
                 "should_replace_active_task": False,
                 "inherited_task_type": None,
-                "inherited_tool_group": None,
                 "continuation_type": "new_task",
                 "confidence": 0.86,
                 "reason": "The user asks for new code work.",
@@ -76,6 +75,8 @@ def test_turn_task_planning_builds_intent_context_and_initial_work_state():
     prompt = str(provider.calls[0]["messages"][-1].content)
     assert "deterministic_intent" not in prompt
     assert "deterministic_context" not in prompt
+    assert "Copy these key names exactly" in prompt
+    assert "task_intent.done_criteria must be a non-empty array of strings" in prompt
 
 
 def test_turn_task_planning_uses_llm_initial_decision_when_available():
@@ -97,7 +98,6 @@ def test_turn_task_planning_uses_llm_initial_decision_when_available():
                 "should_seed_active_task": True,
                 "should_replace_active_task": False,
                 "inherited_task_type": None,
-                "inherited_tool_group": None,
                 "continuation_type": "new_task",
                 "confidence": 0.82,
                 "reason": "The user asks for a new analysis of the task flow.",
@@ -132,6 +132,54 @@ def test_turn_task_planning_uses_llm_initial_decision_when_available():
     assert result.task_context_decision.method == "llm"
     assert result.task_context_decision.continuation_type == "new_task"
     assert result.task_intent_confidence == 0.84
+
+
+def test_turn_task_planning_accepts_llm_done_criteria_aliases():
+    provider = _JsonProvider(
+        {
+            "task_intent": {
+                "kind": "analysis",
+                "objective": "Explain the CLI flow result.",
+                "constraints": [],
+                "success_criteria": ["CLI flow result is explained"],
+                "needs_clarification": False,
+                "long_running": False,
+                "expects_code_change": False,
+                "expects_verification": False,
+            },
+            "task_context": {
+                "is_follow_up": False,
+                "should_inherit_active_task": False,
+                "should_seed_active_task": True,
+                "should_replace_active_task": False,
+                "inherited_task_type": None,
+                "continuation_type": "new_task",
+                "confidence": 0.8,
+                "reason": "The user asks for a new analysis.",
+            },
+            "confidence": 0.8,
+            "reason": "The request is an analysis task.",
+        }
+    )
+    service = TurnTaskPlanningService(
+        work_progress=WorkProgressService(),
+        read_active_task_snapshot=lambda session_id: "",
+        build_runtime_message=lambda message, metadata: message,
+        llm_config=Config.load_agent_template_config().task_context_llm,
+    )
+
+    result = asyncio.run(
+        service.plan(
+            user_message=UserMessage(text="Tell me what happened in the CLI flow."),
+            session_id="web:browser-1",
+            user_metadata={},
+            existing_work_state=None,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert result.task_intent.done_criteria == ("CLI flow result is explained",)
 
 
 def test_turn_task_planning_raises_without_configured_llm():

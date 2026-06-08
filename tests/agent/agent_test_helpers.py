@@ -58,7 +58,7 @@ class NoCallProvider:
                 (),
                 {
                     "content": (
-                        '{"task_type":"media_analysis","required_tool_groups":["media"],'
+                        '{"task_type":"media_analysis","required_tools":["analyze_image"],'
                         '"final_answer_required":true,"allow_no_tool_final":false,'
                         '"reason":"test planner media contract"}'
                     )
@@ -89,7 +89,6 @@ def _initial_task_planning_payload() -> dict[str, Any]:
             "should_seed_active_task": False,
             "should_replace_active_task": False,
             "inherited_task_type": None,
-            "inherited_tool_group": None,
             "continuation_type": "none",
             "confidence": 0.8,
             "reason": "test initial task planning",

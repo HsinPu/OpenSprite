@@ -65,10 +65,10 @@
           <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
 
-        <div v-if="harnessScorecard.present" class="run-summary-card__note" :data-tone="harnessScorecardTone">
-          <strong>{{ copy.runSummary.harness }}</strong>
-          <span>{{ harnessScorecardLabel }}</span>
-          <small v-if="harnessScorecardDetail">{{ harnessScorecardDetail }}</small>
+        <div v-if="taskScorecard.present" class="run-summary-card__note" :data-tone="taskScorecardTone">
+          <strong>{{ copy.runSummary.taskScorecard }}</strong>
+          <span>{{ taskScorecardLabel }}</span>
+          <small v-if="taskScorecardDetail">{{ taskScorecardDetail }}</small>
         </div>
 
         <div v-if="summary.review.required" class="run-summary-card__note" :data-tone="reviewTone">
@@ -327,7 +327,7 @@ const verificationTone = computed(() => {
   return summary.value.verification.passed ? "success" : "warning";
 });
 
-const harnessScorecard = computed(() => summary.value?.harnessScorecard || {
+const taskScorecard = computed(() => summary.value?.taskScorecard || {
   present: false,
   status: "missing",
   profile: "",
@@ -337,24 +337,24 @@ const harnessScorecard = computed(() => summary.value?.harnessScorecard || {
   warningSensors: [],
 });
 
-const harnessScorecardTone = computed(() => {
-  if (harnessScorecard.value.status === "fail") {
+const taskScorecardTone = computed(() => {
+  if (taskScorecard.value.status === "fail") {
     return "warning";
   }
-  if (harnessScorecard.value.status === "warn") {
+  if (taskScorecard.value.status === "warn") {
     return "warning";
   }
   return "success";
 });
 
-const harnessScorecardLabel = computed(() => {
-  const scorecard = harnessScorecard.value;
-  return props.copy.runSummary.harnessSummary(scorecard.status, scorecard.profile, scorecard.taskType);
+const taskScorecardLabel = computed(() => {
+  const scorecard = taskScorecard.value;
+  return props.copy.runSummary.taskScorecardSummary(scorecard.status, scorecard.profile, scorecard.taskType);
 });
 
-const harnessScorecardDetail = computed(() => {
-  const counts = harnessScorecard.value.sensorCounts || {};
-  return props.copy.runSummary.harnessSensors(
+const taskScorecardDetail = computed(() => {
+  const counts = taskScorecard.value.sensorCounts || {};
+  return props.copy.runSummary.taskScorecardSensors(
     counts.pass || 0,
     counts.warn || 0,
     counts.fail || 0,
@@ -717,8 +717,8 @@ function buildRunReport() {
     lines.push(`- ${data.verification.summary}`);
   }
 
-  if (data.harnessScorecard?.present) {
-    lines.push("", `## ${props.copy.runSummary.harness}`, `- ${harnessScorecardLabel.value}`, `- ${harnessScorecardDetail.value}`);
+  if (data.taskScorecard?.present) {
+    lines.push("", `## ${props.copy.runSummary.taskScorecard}`, `- ${taskScorecardLabel.value}`, `- ${taskScorecardDetail.value}`);
   }
 
   if (hasDiffSummary.value) {

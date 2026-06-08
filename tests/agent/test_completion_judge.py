@@ -279,8 +279,8 @@ async def test_completion_gate_evaluate_with_judge_requires_contract_evidence():
         task_type="workspace_read",
         requirements=(
             EvidenceRequirement(
-                kind="tool_group",
-                tool_group="workspace_read",
+                kind="required_tool",
+                tools=("read_file", "grep_files"),
                 min_count=1,
                 description="Inspect workspace evidence before answering.",
             ),
@@ -321,8 +321,8 @@ async def test_completion_gate_retries_blocker_without_current_tool_evidence():
         task_type="operations",
         requirements=(
             EvidenceRequirement(
-                kind="tool_group",
-                tool_group="scheduling",
+                kind="required_tool",
+                tools=("cron",),
                 min_count=1,
                 description="Use scheduling tools before finalizing.",
             ),

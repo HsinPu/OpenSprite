@@ -43,13 +43,13 @@
         <span v-if="retentionCounts.textTotal > 0">{{ copy.trace.retentionText(retentionCounts.textReturned, retentionCounts.textTotal) }}</span>
       </div>
 
-      <div v-if="harnessSummaryRows.length" class="run-trace__harness-dashboard" aria-label="Harness dashboard">
-        <div class="run-trace__harness-head">
-          <strong>{{ copy.trace.harnessTitle }}</strong>
-          <small>{{ copy.trace.harnessSubtitle }}</small>
+      <div v-if="taskSummaryRows.length" class="run-trace__task-dashboard" aria-label="Task dashboard">
+        <div class="run-trace__task-head">
+          <strong>{{ copy.trace.taskTitle }}</strong>
+          <small>{{ copy.trace.taskSubtitle }}</small>
         </div>
-        <div class="run-trace__harness-grid">
-          <article v-for="row in harnessSummaryRows" :key="row.label" class="run-trace__harness-card" :data-kind="row.kind">
+        <div class="run-trace__task-grid">
+          <article v-for="row in taskSummaryRows" :key="row.label" class="run-trace__task-card" :data-kind="row.kind">
             <small>{{ row.label }}</small>
             <strong>{{ row.value }}</strong>
           </article>
@@ -463,7 +463,6 @@ const processEventCount = computed(() => countEventsByCategory("process"));
 const verificationEventCount = computed(() => countEventsByCategory("verification"));
 const permissionEventCount = computed(() => countEventsByCategory("permission"));
 const textEventCount = computed(() => countEventsByCategory("text"));
-const harnessEventCount = computed(() => countEventsByCategory("harness"));
 const artifactCount = computed(() => artifacts.value.length);
 const eventCountLabel = computed(() => {
   const counts = props.run?.eventCounts || {};
@@ -498,24 +497,22 @@ const retentionCounts = computed(() => {
 
 const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 || retentionCounts.value.textTotal > retentionCounts.value.textReturned);
 
-const harnessSummaryRows = computed(() => {
-  const labels = props.copy.trace.harnessLabels || {};
-  const profilePayload = latestEventPayload("harness_profile.selected");
-  const policyPayload = latestEventPayload("harness_policy.selected");
-  const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
-  const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
+const taskSummaryRows = computed(() => {
+  const labels = props.copy.trace.taskLabels || {};
+  const eventCheckpointPayload = latestEventPayload("task_checkpoint.recorded");
+  const partCheckpointPayload = latestPartMetadata("task_checkpoint");
   const operationAuditPayload = latestPartMetadata("operation_audit");
-  const policyResolutionPayload = latestEventPayload("harness_policy.merge_resolved");
-  const evalPayload = latestEventPayload("harness_eval.completed");
-  const failedEvalPayload = latestEventPayload("harness_eval.failed");
-  const evalPartPayload = latestPartMetadata("harness_eval_result");
-  const evalSource = Object.keys(evalPayload).length ? evalPayload : (Object.keys(failedEvalPayload).length ? failedEvalPayload : evalPartPayload);
-  const scorecardEventPayload = latestEventPayload("harness_scorecard.recorded");
-  const scorecardPartPayload = latestPartMetadata("harness_scorecard");
-  const scorecardPayload = Object.keys(scorecardEventPayload).length ? scorecardEventPayload : scorecardPartPayload;
+  const toolAccessPayload = latestEventPayload("tool_access.resolved");
+  const scorecardEventPayload = latestEventPayload("task_scorecard.recorded");
+  const scorecardPartPayload = latestPartMetadata("task_scorecard");
+  const scorecardPayload = Object.keys(scorecardEventPayload).length
+    ? scorecardEventPayload
+    : scorecardPartPayload;
   const hasEventCheckpoint = Object.keys(eventCheckpointPayload).length > 0;
-  const checkpointPayload = hasEventCheckpoint ? eventCheckpointPayload : partCheckpointPayload;
-  const checkpointSource = hasEventCheckpoint ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
+  const checkpointPayload = Object.keys(eventCheckpointPayload).length
+    ? eventCheckpointPayload
+    : partCheckpointPayload;
+  const checkpointSource = Object.keys(eventCheckpointPayload).length ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
   const contractPayload = latestEventPayload("task_contract.created");
   const completionPayload = latestEventPayload("completion_gate.evaluated");
   const autoContinueEvent = latestEventWithPrefix("auto_continue.");
@@ -523,30 +520,23 @@ const harnessSummaryRows = computed(() => {
   const checkpointCompletion = checkpointPayload.completion || {};
   const checkpointProgress = checkpointPayload.work_progress || checkpointPayload.workProgress || {};
   const contractSource = Object.keys(checkpointContract).length ? checkpointContract : contractPayload;
-  const contractProfile = contractSource.harness_profile || contractSource.harnessProfile || checkpointPayload.harness_profile || checkpointPayload.harnessProfile || {};
-  const policySource = Object.keys(policyPayload).length ? policyPayload : (checkpointPayload.harness_policy || checkpointPayload.harnessPolicy || {});
+  const toolAccessSource = Object.keys(toolAccessPayload).length
+    ? toolAccessPayload
+    : (checkpointPayload.tool_access || checkpointPayload.toolAccess || {});
   const completionSource = Object.keys(checkpointCompletion).length ? checkpointCompletion : completionPayload;
-  const profileName = profilePayload.name || contractProfile.name || "";
-  const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
-  const profileSelection = profilePayload.selection || contractProfile.selection || {};
-  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length && !Object.keys(scorecardPayload).length) {
+  const taskType = checkpointPayload.task_type || checkpointPayload.taskType || contractSource.task_type || contractSource.taskType || "";
+  if (!taskType && !Object.keys(contractSource).length && !Object.keys(toolAccessSource).length && !Object.keys(checkpointPayload).length && !Object.keys(toolAccessPayload).length && !Object.keys(scorecardPayload).length) {
     return [];
   }
   const toolPermissionCounts = countToolPermissionDecisions();
   const approvalCounts = countToolApprovalEvents();
-  const evalSummary = evalSource.summary || {};
   const rows = [
-    { label: labels.profile || "Profile", value: profileName, kind: "profile" },
     { label: labels.taskType || "Task", value: taskType, kind: "profile" },
-    { label: labels.selection || "Selection", value: formatProfileSelection(profileSelection), kind: "profile" },
-    { label: labels.policy || "Policy", value: policySource.name, kind: "policy" },
-    { label: labels.verification || "Verification", value: profilePayload.verification_policy || contractProfile.verification_policy || contractProfile.verificationPolicy, kind: "contract" },
-    { label: labels.continuation || "Continuation", value: profilePayload.continuation_policy || contractProfile.continuation_policy || contractProfile.continuationPolicy, kind: "contract" },
     { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements), kind: "contract" },
     { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria), kind: "contract" },
     { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence), kind: "completion" },
-    { label: labels.policyRisks || "Risk", value: formatPolicyRisks(policySource, labels), kind: "policy" },
-    { label: labels.policyResolution || "Policy resolution", value: formatPolicyResolution(policyResolutionPayload, labels), kind: "policy" },
+    { label: labels.requiredTools || "Required tools", value: formatPayloadList(toolAccessSource.required_tools || toolAccessSource.requiredTools), kind: "policy" },
+    { label: labels.exposedTools || "Exposed tools", value: countPayloadItems(toolAccessSource.tool_access?.exposed_tools || toolAccessSource.toolAccess?.exposedTools || toolAccessSource.exposed_tools || toolAccessSource.exposedTools), kind: "policy" },
     { label: labels.toolDecisions || "Tool decisions", value: formatToolDecisionCounts(toolPermissionCounts, labels), kind: "policy" },
     { label: labels.approvals || "Approvals", value: formatApprovalCounts(approvalCounts, labels), kind: "policy" },
     { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · "), kind: "completion" },
@@ -555,8 +545,7 @@ const harnessSummaryRows = computed(() => {
     { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels), kind: "checkpoint" },
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "", kind: "next" },
     { label: labels.operationAudit || "Audit", value: formatOperationAudit(operationAuditPayload), kind: "checkpoint" },
-    { label: labels.evalResults || "Eval", value: formatHarnessEvalResult(evalSource, evalSummary, labels), kind: "checkpoint" },
-    { label: labels.scorecard || "Scorecard", value: formatHarnessScorecard(scorecardPayload, labels), kind: "checkpoint" },
+    { label: labels.scorecard || "Scorecard", value: formatTaskScorecard(scorecardPayload, labels), kind: "checkpoint" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 });
@@ -679,7 +668,6 @@ const filterOptions = computed(() => [
   { value: "tool", label: props.copy.trace.filters.tool, count: toolEventCount.value },
   { value: "verification", label: props.copy.trace.filters.verification, count: verificationEventCount.value },
   { value: "permission", label: props.copy.trace.filters.permission, count: permissionEventCount.value },
-  { value: "harness", label: props.copy.trace.filters.harness, count: harnessEventCount.value },
   { value: "process", label: props.copy.trace.filters.process, count: processEventCount.value },
   { value: "text", label: props.copy.trace.filters.text, count: textEventCount.value },
   { value: "system", label: props.copy.trace.filters.system, count: countEventsByCategory("system") },
@@ -720,7 +708,7 @@ function countToolApprovalEvents() {
 
 function eventCategory(eventType) {
   const event = typeof eventType === "object" ? eventType : null;
-  if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work", "harness"].includes(event?.kind)) {
+  if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work"].includes(event?.kind)) {
     return event.kind;
   }
   if (event?.kind) {
@@ -745,8 +733,8 @@ function eventCategory(eventType) {
   if (eventType.startsWith("permission_")) {
     return "permission";
   }
-  if (eventType.startsWith("harness_") || eventType.startsWith("task_contract.")) {
-    return "harness";
+  if (eventType.startsWith("task_contract.") || eventType.startsWith("task_checkpoint.") || eventType.startsWith("task_scorecard.")) {
+    return "work";
   }
   if (eventType === "run_part_delta" || eventType === "message_part_delta") {
     return "text";
@@ -757,15 +745,6 @@ function eventCategory(eventType) {
   return "other";
 }
 
-function formatPolicyResolution(payload, labels) {
-  if (!payload || !Object.keys(payload).length) {
-    return "";
-  }
-  return compactJoin([
-    `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} ${labels.constraints || "constraints"}`,
-    `${countPayloadItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements)} ${labels.protectedApprovals || "protected approvals"}`,
-  ], " · ");
-}
 
 function formatToolDecisionCounts(counts, labels) {
   if (!counts.checked && !counts.allowed && !counts.denied && !counts.approvalRequired) {
@@ -776,7 +755,7 @@ function formatToolDecisionCounts(counts, labels) {
     `${counts.allowed} ${labels.allowed || "allowed"}`,
     `${counts.denied} ${labels.denied || "denied"}`,
     `${counts.approvalRequired} ${labels.approvalRequired || "approval"}`,
-  ], " · ");
+  ], " 繚 ");
 }
 
 function formatApprovalCounts(counts, labels) {
@@ -788,31 +767,22 @@ function formatApprovalCounts(counts, labels) {
     `${counts.approved} ${labels.approved || "approved"}`,
     `${counts.denied} ${labels.rejected || "denied"}`,
     `${counts.expired} ${labels.expired || "expired"}`,
-  ], " · ");
+  ], " 繚 ");
 }
 
-function formatHarnessEvalResult(payload, summary, labels) {
+
+function formatTaskScorecard(payload, labels) {
   if (!payload || !Object.keys(payload).length) {
     return "";
   }
-  return compactJoin([
-    payload.ok === true ? (labels.checkpointPass || "pass") : "fail",
-    summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} ${labels.cases || "cases"}` : "",
-    summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks} ${labels.checks || "checks"}` : "",
-  ], " · ");
-}
-
-function formatHarnessScorecard(payload, labels) {
-  if (!payload || !Object.keys(payload).length) {
-    return "";
-  }
+  const task = payload.task || {};
   const profile = payload.profile || {};
   const contract = payload.contract || {};
   const completion = payload.completion || {};
   const traceHealth = payload.trace_health || payload.traceHealth || {};
   const sensorCount = Array.isArray(payload.sensors) ? payload.sensors.length : 0;
   return compactJoin([
-    profile.name || contract.task_type || contract.taskType,
+    task.task_type || task.taskType || profile.name || contract.task_type || contract.taskType,
     completion.status,
     traceHealth.status ? `${labels.traceHealth || "trace"} ${traceHealth.status}` : "",
     sensorCount ? `${sensorCount} ${labels.sensors || "sensors"}` : "",
@@ -837,33 +807,20 @@ function eventSummary(event) {
     return [artifact.title, artifact.detail].filter(Boolean).join(" · ");
   }
   const payload = event.payload || {};
-  if (event.eventType === "harness_profile.selected") {
-    return compactJoin([payload.selection_phase || payload.selectionPhase, payload.name, payload.task_type || payload.taskType, payload.reason], " / ");
-  }
-  if (event.eventType === "harness_policy.selected") {
-    return compactJoin([payload.name, `${countPayloadItems(payload.allowed_tools || payload.allowedTools)} tools`, payload.reason], " · ");
-  }
-  if (event.eventType === "harness_policy.merge_resolved") {
+  if (event.eventType === "tool_access.resolved") {
+    const toolAccess = payload.tool_access || payload.toolAccess || {};
     return compactJoin([
-      payload.harness_policy?.name || payload.harnessPolicy?.name,
-      `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
-      `${countPayloadItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements)} protected approvals`,
+      `${countPayloadItems(payload.required_tools || payload.requiredTools)} required`,
+      `${countPayloadItems(toolAccess.exposed_tools || toolAccess.exposedTools)} exposed`,
+      `${countPayloadItems(payload.blocked_required_tools || payload.blockedRequiredTools)} blocked`,
     ], " · ");
   }
-  if (String(event.eventType || "").startsWith("harness_eval.")) {
-    const summary = payload.summary || {};
-    return compactJoin([
-      payload.kind,
-      payload.ok === true ? "pass" : "fail",
-      summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} cases` : "",
-    ], " · ");
-  }
-  if (event.eventType === "harness_checkpoint.recorded") {
+  if (event.eventType === "task_checkpoint.recorded") {
     const completion = payload.completion || {};
     return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");
   }
-  if (event.eventType === "harness_scorecard.recorded") {
-    return formatHarnessScorecard(payload, props.copy.trace.harnessLabels || {});
+  if (event.eventType === "task_scorecard.recorded") {
+    return formatTaskScorecard(payload, props.copy.trace.taskLabels || {});
   }
   if (String(event.eventType || "").startsWith("tool_permission.")) {
     return compactJoin([payload.tool_name || payload.toolName, payload.decision, payload.reason], " · ");
@@ -965,39 +922,6 @@ function formatMissingEvidence(value) {
   return formatPayloadList(payloadList(value).map(previewText), 2, "; ");
 }
 
-function formatPolicyRisks(policy, labels) {
-  if (!policy || !Object.keys(policy).length) {
-    return "";
-  }
-  const allowed = formatPayloadList(policy.allowed_risk_levels || policy.allowedRiskLevels);
-  const denied = formatPayloadList(policy.denied_risk_levels || policy.deniedRiskLevels);
-  const approval = formatPayloadList(policy.approval_required_risk_levels || policy.approvalRequiredRiskLevels);
-  return compactJoin([
-    allowed ? `${labels.policyAllowed || "allow"} ${allowed}` : "",
-    denied ? `${labels.policyDenied || "deny"} ${denied}` : "",
-    approval ? `${labels.policyApproval || "approval"} ${approval}` : "",
-  ], " · ");
-}
-
-function formatProfileSelection(selection) {
-  if (!selection || !Object.keys(selection).length) {
-    return "";
-  }
-  const signals = formatPayloadList(selection.matched_signals || selection.matchedSignals, 4);
-  const selectedBy = previewText(selection.selected_by || selection.selectedBy || "");
-  return compactJoin([selectedBy, signals], " · ");
-}
-
-function formatHarnessProfilePayload(payload) {
-  if (!payload || !Object.keys(payload).length) {
-    return "";
-  }
-  return compactJoin([
-    payload.name,
-    payload.task_type || payload.taskType,
-    payload.selection_phase || payload.selectionPhase,
-  ], " / ");
-}
 
 function formatCheckpoint(payload, source, labels) {
   if (!payload || !Object.keys(payload).length) {
@@ -1700,7 +1624,7 @@ function buildDebugBundle() {
       event_counts: props.run.eventCounts || {},
     },
     summary: props.run.summary || null,
-    harness_scorecard: debugHarnessScorecard(),
+    task_scorecard: debugTaskScorecard(),
     diff_summary: props.run.diffSummary || null,
     worktree_sandbox: props.run.worktreeSandbox || null,
     file_changes: props.run.fileChanges || [],
@@ -1711,10 +1635,10 @@ function buildDebugBundle() {
   };
 }
 
-function debugHarnessScorecard() {
-  const summary = props.run?.summary?.harnessScorecard || null;
-  const eventPayload = latestEventPayload("harness_scorecard.recorded");
-  const partPayload = latestPartMetadata("harness_scorecard");
+function debugTaskScorecard() {
+  const summary = props.run?.summary?.taskScorecard || null;
+  const eventPayload = latestEventPayload("task_scorecard.recorded");
+  const partPayload = latestPartMetadata("task_scorecard");
   return {
     summary,
     event: Object.keys(eventPayload).length ? eventPayload : null,

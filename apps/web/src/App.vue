@@ -207,7 +207,6 @@
     @refresh-data-settings="loadDataSettings"
     @refresh-eval-status="loadEvalStatus"
     @run-eval-smoke="runEvalSmokeCheck"
-    @run-harness-controlled-eval="runHarnessControlledEval"
     @run-task-completion-smoke="runTaskCompletionEvalSmoke"
     @run-task-completion-live="runTaskCompletionLiveEval"
     @refresh-task-completion-history="loadTaskCompletionHistory"
@@ -366,7 +365,6 @@ const {
   loadDataSettings,
   loadEvalStatus,
   runEvalSmokeCheck,
-  runHarnessControlledEval,
   runTaskCompletionEvalSmoke,
   runTaskCompletionLiveEval,
   loadTaskCompletionHistory,

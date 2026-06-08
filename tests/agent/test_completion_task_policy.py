@@ -9,7 +9,7 @@ from opensprite.agent.task.contract import (
     is_one_turn_intent_kind,
     is_plain_answer_task_type,
     is_read_only_blocking_requirement_kind,
-    is_read_only_blocking_tool_group,
+    is_read_only_blocking_tool_name,
     is_read_only_task_type,
     is_workspace_read_task_type,
 )
@@ -45,10 +45,10 @@ def test_completion_task_policy_classifies_intent_kinds():
 def test_completion_task_policy_classifies_read_only_blockers():
     assert is_read_only_blocking_requirement_kind(" file_change ") is True
     assert is_read_only_blocking_requirement_kind("verification") is True
-    assert is_read_only_blocking_requirement_kind("tool_group") is False
-    assert is_read_only_blocking_tool_group(" execution ") is True
-    assert is_read_only_blocking_tool_group(" workspace_write ") is True
-    assert is_read_only_blocking_tool_group("workspace_read") is False
+    assert is_read_only_blocking_requirement_kind("required_tool") is False
+    assert is_read_only_blocking_tool_name(" exec ") is True
+    assert is_read_only_blocking_tool_name(" apply_patch ") is True
+    assert is_read_only_blocking_tool_name("read_file") is False
 
 
 def test_completion_task_policy_controls_fallback_active_task_updates():

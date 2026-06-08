@@ -60,8 +60,7 @@ from ..utils.text_changes import format_unified_diff, text_sha256
 RUN_PART_CONTENT_MAX_CHARS = 20_000
 RUN_FILE_REVERT_DIFF_MAX_CHARS = 12_000
 TRACE_PROFILE_FIELD = "profile"
-TRACE_HARNESS_PROFILE_FIELD = "harness_profile"
-TRACE_HARNESS_POLICY_FIELD = "harness_policy"
+TRACE_TASK_FIELD = "task"
 TRACE_POLICY_FIELD = "policy"
 TRACE_CONTRACT_FIELD = "contract"
 TRACE_COMPLETION_FIELD = "completion"
@@ -960,21 +959,22 @@ class RunTraceRecorder:
                 metadata=metadata,
             )
 
-    async def record_harness_checkpoint_part(
+    async def record_task_checkpoint_part(
         self,
         session_id: str,
         run_id: str,
         checkpoint: dict[str, Any],
     ) -> None:
-        """Persist the latest harness state as a durable run part."""
-        profile = checkpoint.get(TRACE_HARNESS_PROFILE_FIELD) if isinstance(checkpoint, dict) else {}
-        policy = checkpoint.get(TRACE_HARNESS_POLICY_FIELD) if isinstance(checkpoint, dict) else {}
+        """Persist the latest task state as a durable run part."""
+        contract = checkpoint.get(TRACE_CONTRACT_FIELD) if isinstance(checkpoint, dict) else {}
         completion = checkpoint.get(TRACE_COMPLETION_FIELD) if isinstance(checkpoint, dict) else {}
-        content = " · ".join(
+        task_type = checkpoint.get(TRACE_TASK_TYPE_FIELD) if isinstance(checkpoint, dict) else ""
+        if not task_type and isinstance(contract, dict):
+            task_type = contract.get(TRACE_TASK_TYPE_FIELD)
+        content = " 繚 ".join(
             item
             for item in (
-                f"profile={profile.get(TRACE_NAME_FIELD)}" if isinstance(profile, dict) and profile.get(TRACE_NAME_FIELD) else "",
-                f"policy={policy.get(TRACE_NAME_FIELD)}" if isinstance(policy, dict) and policy.get(TRACE_NAME_FIELD) else "",
+                f"task={task_type}" if task_type else "",
                 f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
                 f"next={checkpoint.get(TRACE_NEXT_ACTION_FIELD)}" if isinstance(checkpoint, dict) and checkpoint.get(TRACE_NEXT_ACTION_FIELD) else "",
             )
@@ -983,28 +983,32 @@ class RunTraceRecorder:
         await self.add_part(
             session_id,
             run_id,
-            "harness_checkpoint",
+            "task_checkpoint",
             content=content,
             metadata=checkpoint,
         )
 
-    async def record_harness_scorecard_part(
+    async def record_task_scorecard_part(
         self,
         session_id: str,
         run_id: str,
         scorecard: dict[str, Any],
     ) -> None:
-        """Persist the latest harness scorecard as a durable run part."""
-        profile = scorecard.get(TRACE_PROFILE_FIELD) if isinstance(scorecard, dict) else {}
+        """Persist the latest task scorecard as a durable run part."""
+        task = scorecard.get(TRACE_TASK_FIELD) if isinstance(scorecard, dict) else {}
         contract = scorecard.get(TRACE_CONTRACT_FIELD) if isinstance(scorecard, dict) else {}
         completion = scorecard.get(TRACE_COMPLETION_FIELD) if isinstance(scorecard, dict) else {}
         trace_health = scorecard.get(TRACE_TRACE_HEALTH_FIELD) if isinstance(scorecard, dict) else {}
         sensor_counts = trace_health.get(TRACE_SENSOR_COUNTS_FIELD) if isinstance(trace_health, dict) else {}
-        content = " · ".join(
+        task_type = ""
+        if isinstance(task, dict):
+            task_type = task.get(TRACE_TASK_TYPE_FIELD) or ""
+        if not task_type and isinstance(contract, dict):
+            task_type = contract.get(TRACE_TASK_TYPE_FIELD) or ""
+        content = " 繚 ".join(
             item
             for item in (
-                f"profile={profile.get(TRACE_NAME_FIELD)}" if isinstance(profile, dict) and profile.get(TRACE_NAME_FIELD) else "",
-                f"contract={contract.get(TRACE_TASK_TYPE_FIELD)}" if isinstance(contract, dict) and contract.get(TRACE_TASK_TYPE_FIELD) else "",
+                f"task={task_type}" if task_type else "",
                 f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
                 f"trace={trace_health.get(TRACE_STATUS_FIELD)}" if isinstance(trace_health, dict) and trace_health.get(TRACE_STATUS_FIELD) else "",
                 _scorecard_sensor_summary(sensor_counts),
@@ -1014,7 +1018,7 @@ class RunTraceRecorder:
         await self.add_part(
             session_id,
             run_id,
-            "harness_scorecard",
+            "task_scorecard",
             content=content,
             metadata=scorecard,
         )
@@ -1041,32 +1045,6 @@ class RunTraceRecorder:
             "operation_audit",
             content=content,
             metadata=audit,
-        )
-
-    async def record_harness_eval_result_part(
-        self,
-        session_id: str,
-        run_id: str,
-        result: dict[str, Any],
-    ) -> None:
-        """Persist a controlled harness eval result as a durable run part."""
-        summary = result.get(TRACE_SUMMARY_FIELD) if isinstance(result, dict) else {}
-        content = " · ".join(
-            item
-            for item in (
-                f"kind={result.get(TRACE_KIND_FIELD)}",
-                f"ok={bool(result.get(TRACE_OK_FIELD))}",
-                f"cases={summary.get(TRACE_PASSED_CASES_FIELD)}/{summary.get(TRACE_TOTAL_CASES_FIELD)}" if isinstance(summary, dict) else "",
-                f"checks={summary.get(TRACE_PASSED_CHECKS_FIELD)}/{summary.get(TRACE_TOTAL_CHECKS_FIELD)}" if isinstance(summary, dict) else "",
-            )
-            if item
-        )
-        await self.add_part(
-            session_id,
-            run_id,
-            "harness_eval_result",
-            content=content,
-            metadata=result,
         )
 
     async def record_task_checklist_part(

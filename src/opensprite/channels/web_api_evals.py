@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from aiohttp import web
 
-from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
 from ..runs.events import BACKGROUND_PROCESS_COMPLETED_EVENT, BACKGROUND_PROCESS_LOST_EVENT, BACKGROUND_PROCESS_STARTED_EVENT
 from ..tools.shell_runtime import CapturedOutputChunk, start_shell_process
@@ -205,15 +204,6 @@ async def handle_task_completion_eval_run(adapter: Any, request: web.Request, *,
         timeout_seconds=float(timeout_seconds),
         model_info=active_llm_model_info(adapter),
     )
-    return web.json_response(payload)
-
-
-async def handle_harness_controlled_eval(adapter: Any, request: web.Request, *, persist_harness_controlled_eval_trace: Callable[[Any, dict[str, Any]], Any]) -> web.Response:
-    payload = run_controlled_harness_scenarios()
-    trace = await persist_harness_controlled_eval_trace(adapter, payload)
-    if trace is not None:
-        payload = dict(payload)
-        payload["trace"] = trace
     return web.json_response(payload)
 
 

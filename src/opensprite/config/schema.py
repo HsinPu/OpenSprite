@@ -517,7 +517,7 @@ class CronToolConfig(BaseModel):
 
 
 class ToolPermissionProfileOverrideConfig(BaseModel):
-    """Per-harness-profile tool permission override."""
+    """Per-task permission override."""
 
     enabled: bool = True
     approval_mode: Literal["auto", "ask", "block"] | None = None

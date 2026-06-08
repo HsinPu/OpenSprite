@@ -1,4 +1,5 @@
 import asyncio
+import json
 from dataclasses import dataclass
 
 from opensprite.bus.events import RunEvent
@@ -39,11 +40,13 @@ class FakeAgent:
 
 class ReplyProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        system_text = _message_content(messages[0]) if messages else ""
+        if "initial task shape" in system_text:
+            return LLMResponse(content=_initial_task_planning_content(messages), model="fake-model")
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
-                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+                    '{"task_type":"pure_answer","required_tools":[],"final_answer_required":true,'
                     '"allow_no_tool_final":true,"reason":"test planner contract"}'
                 ),
                 model="fake-model",
@@ -71,11 +74,13 @@ class ToolReplyProvider:
         ]
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        system_text = _message_content(messages[0]) if messages else ""
+        if "initial task shape" in system_text:
+            return LLMResponse(content=_initial_task_planning_content(messages), model="fake-model")
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
-                    '{"task_type":"task","required_tool_groups":[],"final_answer_required":true,'
+                    '{"task_type":"task","required_tools":["dummy"],"final_answer_required":true,'
                     '"allow_no_tool_final":false,"reason":"test planner tool trace contract"}'
                 ),
                 model="fake-model",
@@ -84,6 +89,47 @@ class ToolReplyProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+def _message_content(message) -> str:
+    return str(getattr(message, "content", "") or "")
+
+
+def _initial_task_planning_content(messages) -> str:
+    prompt_text = "\n".join(_message_content(message) for message in messages)
+    prompt_lower = prompt_text.lower()
+    objective = "handle message"
+    kind = "conversation"
+    if "dummy" in prompt_lower or "tool" in prompt_lower:
+        objective = "use the dummy tool"
+        kind = "task"
+    return json.dumps(
+        {
+            "task_intent": {
+                "kind": kind,
+                "objective": objective,
+                "constraints": [],
+                "done_criteria": ["the request is handled"],
+                "needs_clarification": False,
+                "long_running": False,
+                "expects_code_change": False,
+                "expects_verification": False,
+                "verification_hint": None,
+            },
+            "task_context": {
+                "is_follow_up": False,
+                "should_inherit_active_task": False,
+                "should_seed_active_task": False,
+                "should_replace_active_task": False,
+                "inherited_task_type": None,
+                "continuation_type": "none",
+                "confidence": 0.8,
+                "reason": "test initial task planning",
+            },
+            "confidence": 0.9,
+            "reason": "test initial task planning",
+        }
+    )
 
 
 async def _run_queue_once(agent_channel: str, inbound_channel: str):
@@ -953,11 +999,11 @@ def test_message_queue_persists_run_trace_for_telegram_message(tmp_path):
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == [
         "llm_step",
-        "harness_checkpoint",
-        "harness_scorecard",
+        "task_checkpoint",
+        "task_scorecard",
         "assistant_message",
     ]
-    assert parts[1].metadata["harness_profile"]["name"] == "chat"
+    assert parts[1].metadata["task_type"] == "pure_answer"
     assert parts[-1].content == "trace pong"
 
 
@@ -1001,15 +1047,12 @@ def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
     assert RUN_FINISHED_EVENT in event_types
     tool_events = [event for event in events if event.event_type in {TOOL_STARTED_EVENT, TOOL_RESULT_EVENT}]
     assert [event.payload["tool_name"] for event in tool_events] == ["dummy", "dummy"]
-    assert [part.part_type for part in parts] == [
-        "tool_call",
-        "tool_result",
-        "llm_step",
-        "llm_step",
-        "harness_checkpoint",
-        "harness_scorecard",
-        "assistant_message",
-    ]
+    part_types = [part.part_type for part in parts]
+    assert part_types[:4] == ["tool_call", "tool_result", "llm_step", "llm_step"]
+    assert "task_checkpoint" in part_types
+    assert "task_scorecard" in part_types
+    assert "task_checklist" in part_types
+    assert any(part.part_type == "assistant_message" and part.content == "tool trace pong" for part in parts)
     tool_parts = [part for part in parts if part.part_type in {"tool_call", "tool_result"}]
     assert [part.tool_name for part in tool_parts] == ["dummy", "dummy"]
     assert tool_parts[0].metadata["tool_call_id"] == "tc1"
@@ -1017,7 +1060,6 @@ def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
     assert tool_parts[1].metadata["tool_call_id"] == "tc1"
     assert tool_parts[1].metadata["ok"] is True
     assert tool_parts[1].content == "ok"
-    assert parts[-1].content == "tool trace pong"
 
 
 def test_message_queue_can_bypass_immediate_commands_for_internal_messages():

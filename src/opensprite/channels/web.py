@@ -25,11 +25,6 @@ from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
 from .identity import build_session_id, normalize_identifier
-from ..harness import (
-    HarnessPolicyService,
-    HarnessProfile,
-    preview_harness_profiles,
-)
 from ..tools.access import ToolAccessResolver, summarize_effective_risks
 from ..auth.credentials import (
     CredentialNotFoundError,
@@ -107,7 +102,9 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
-from ..tools.permissions import ToolPermissionPolicy
+from ..tools.base import Tool
+from ..tools.permissions import DEFAULT_TOOL_RISKS, ToolPermissionPolicy
+from ..tools.registry import ToolRegistry
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -120,6 +117,71 @@ from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
 from . import web_settings_payloads
 from .web_routes import register_web_routes
+
+
+_PERMISSION_PREVIEW_TASKS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "Direct answer",
+        "task_type": "pure_answer",
+        "required_tools": (),
+        "description": "No tools are exposed when the planner says no tool evidence is required.",
+    },
+    {
+        "name": "Web research",
+        "task_type": "web_research",
+        "required_tools": ("web_search", "web_fetch"),
+        "description": "Source-grounded answers need explicit web tools selected by the task contract.",
+    },
+    {
+        "name": "Workspace read",
+        "task_type": "workspace_read",
+        "required_tools": ("read_file", "list_dir", "grep_files"),
+        "description": "Workspace inspection exposes only selected read tools.",
+    },
+    {
+        "name": "Code change",
+        "task_type": "code_change",
+        "required_tools": ("read_file", "apply_patch", "verify"),
+        "description": "Code edits expose only the selected read, write, and verification tools.",
+    },
+    {
+        "name": "Media extraction",
+        "task_type": "media_extraction",
+        "required_tools": ("analyze_image", "ocr_image", "transcribe_audio"),
+        "description": "Media tasks expose only the selected media analysis tools.",
+    },
+    {
+        "name": "Operations",
+        "task_type": "operations",
+        "required_tools": ("exec", "cron", "configure_mcp"),
+        "description": "Operations expose only the selected operational tools that user permissions allow.",
+    },
+)
+
+
+class _PermissionPreviewTool(Tool):
+    def __init__(self, name: str, risk_levels: frozenset[str]):
+        self._name = name
+        self._risk_levels = risk_levels
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return f"Permission preview for {self._name}"
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {"type": "object", "properties": {}}
+
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        return self._risk_levels
+
+    async def _execute(self, **kwargs: Any) -> str:
+        return "permission preview"
 
 
 class WebAdapter(MessageAdapter):
@@ -496,68 +558,67 @@ class WebAdapter(MessageAdapter):
         )
 
     @classmethod
-    def _harness_policy_preview_payload(cls, config: Config) -> dict[str, Any]:
+    def _tool_access_preview_payload(cls, config: Config) -> dict[str, Any]:
         user_permissions = cls._permissions_payload(config)
-        user_approval_mode = user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE
-        profile_overrides = user_permissions.get("profile_overrides") or {}
-        policy_service = HarnessPolicyService()
-        resolver = ToolAccessResolver(harness_policies=policy_service)
         global_permission_policy = ToolPermissionPolicy.from_config(config.tools.permissions)
-        profiles = cls._harness_policy_preview_profiles()
+        resolver = ToolAccessResolver()
+        registry = cls._permission_preview_registry(global_permission_policy)
+        user_risks = summarize_effective_risks(global_permission_policy)
         rows = []
-        for profile in profiles:
-            policy = policy_service.select(profile)
-            profile_override = profile_overrides.get(profile.name) or {}
-            override_approval_mode = profile_override.get("approval_mode") or user_approval_mode
-            profile_permission_config = config.tools.permissions.profile_overrides.get(profile.name)
-            profile_permission_policy = (
-                ToolPermissionPolicy.from_config(profile_permission_config)
-                if profile_permission_config is not None
-                else None
+        for task in _PERMISSION_PREVIEW_TASKS:
+            required_tools = tuple(str(item) for item in task["required_tools"])
+            resolution = resolver.resolve_required_tools(
+                registry,
+                required_tools,
+                metadata_kind=f"permission_preview:{task['task_type']}",
             )
-            user_risks = (
-                resolver.resolve_overlay_policy(
-                    global_permission_policy,
-                    overlay_policy=profile_permission_policy,
-                    metadata_kind=f"profile_override:{profile.name}",
-                ).metadata["effective_risks"]
-                if profile_permission_policy is not None
-                else summarize_effective_risks(global_permission_policy)
-            )
-            resolution = resolver.resolve_policy(global_permission_policy, policy, profile_permission_policy)
-            effective_risks = resolution.metadata["effective_risks"]
+            tool_access = resolution.metadata.get("tool_access", {})
             rows.append(
                 {
-                    "profile": profile.to_metadata(),
-                    "profile_override": profile_override,
+                    "task": {
+                        "name": task["name"],
+                        "task_type": task["task_type"],
+                        "description": task["description"],
+                        "required_tools": list(required_tools),
+                    },
                     "user": {
                         "allowed_risk_levels": user_risks["allowed_risk_levels"],
                         "denied_risk_levels": user_risks["denied_risk_levels"],
                         "approval_required_risk_levels": user_risks["approval_required_risk_levels"],
-                        "approval_mode": override_approval_mode,
+                        "approval_mode": user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE,
                         "permissions_enabled": bool(user_permissions["enabled"]),
                     },
-                    "policy": policy.to_metadata(),
                     "effective": {
-                        "allowed_risk_levels": effective_risks["allowed_risk_levels"],
-                        "denied_risk_levels": effective_risks["denied_risk_levels"],
-                        "approval_required_risk_levels": effective_risks["approval_required_risk_levels"],
-                        "user_approval_mode": user_approval_mode,
-                        "profile_approval_mode": override_approval_mode,
+                        "exposed_tools": list(tool_access.get("exposed_tools") or []),
+                        "blocked_tools": list(tool_access.get("blocked_tools") or []),
+                        "blocked_required_tools": list(resolution.metadata.get("blocked_required_tools") or []),
+                        "allowed_risk_levels": resolution.metadata["effective_risks"]["allowed_risk_levels"],
+                        "denied_risk_levels": resolution.metadata["effective_risks"]["denied_risk_levels"],
+                        "approval_required_risk_levels": resolution.metadata["effective_risks"]["approval_required_risk_levels"],
+                        "user_approval_mode": user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE,
                         "user_permissions_enabled": bool(user_permissions["enabled"]),
                     },
                     "resolution": resolution.metadata,
                 }
             )
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "user_permissions": user_permissions,
             "rows": rows,
         }
 
     @staticmethod
-    def _harness_policy_preview_profiles() -> tuple[HarnessProfile, ...]:
-        return preview_harness_profiles()
+    def _permission_preview_registry(permission_policy: ToolPermissionPolicy) -> ToolRegistry:
+        registry = ToolRegistry(permission_policy=permission_policy)
+        tool_names = {
+            tool_name
+            for task in _PERMISSION_PREVIEW_TASKS
+            for tool_name in task["required_tools"]
+        }
+        for tool_name in sorted(tool_names):
+            risk_levels = DEFAULT_TOOL_RISKS.get(str(tool_name), frozenset({"external_side_effect"}))
+            registry.register(_PermissionPreviewTool(str(tool_name), risk_levels))
+        return registry
 
     @classmethod
     def _coerce_approval_mode(cls, value: Any) -> str | None:
@@ -1293,8 +1354,8 @@ class WebAdapter(MessageAdapter):
     async def _handle_settings_permissions(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_permissions(self, request)
 
-    async def _handle_settings_harness_policy_preview(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_harness_policy_preview(self, request)
+    async def _handle_settings_tool_access_preview(self, request: web.Request) -> web.Response:
+        return await web_settings_handlers_app.handle_settings_tool_access_preview(self, request)
 
     async def _handle_settings_permissions_update(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_permissions_update(self, request)

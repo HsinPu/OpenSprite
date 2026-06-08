@@ -9,16 +9,15 @@ from opensprite.agent.task.contract import (
     TaskIntent,
 )
 from opensprite.agent.task.planning import TurnPlanningService
-from opensprite.harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
 from opensprite.runs.events import (
-    HARNESS_POLICY_SELECTED_EVENT,
-    HARNESS_PROFILE_SELECTED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
+    TOOL_ACCESS_RESOLVED_EVENT,
 )
+from opensprite.tools.access import ToolAccessResolver
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -50,20 +49,18 @@ def _registry() -> ToolRegistry:
     return registry
 
 
-def test_turn_planning_resolves_task_contract_and_harness_policy():
+def test_turn_planning_resolves_task_contract_and_tool_access():
     async def scenario():
         events: list[tuple[str, dict]] = []
         seed_calls: list[dict] = []
         plan_calls: list[dict] = []
-        profile_service = HarnessProfileService()
-        policy_service = HarnessPolicyService()
-
         async def plan_task(**kwargs):
             plan_calls.append(dict(kwargs))
             return TaskContract(
                 objective=kwargs["fallback_objective"],
                 task_type="code_change",
                 requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
+                required_tools=("edit_file",),
                 allow_no_tool_final=False,
                 planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
             )
@@ -79,10 +76,10 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
 
         service = TurnPlanningService(
             plan_task=plan_task,
-            plan_harness=HarnessPlanningService(
-                profile_service=profile_service,
-                policy_service=policy_service,
-            ).plan,
+            resolve_tool_access=lambda registry, contract: ToolAccessResolver().resolve_required_tools(
+                registry,
+                getattr(contract, "required_tools", ()),
+            ),
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,
@@ -95,7 +92,7 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
             external_chat_id="browser-1",
             current_message="Please clean up the planning flow.",
             history=[],
-            task_intent=TaskIntent(kind="task", objective="Refactor task and harness planning modules."),
+            task_intent=TaskIntent(kind="task", objective="Refactor task planning modules."),
             task_context_decision=TaskContextDecision(method="llm", confidence=1.0, reason="initial plan"),
             task_contract_override=None,
             active_task_snapshot="",
@@ -113,25 +110,19 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
     result, events, seed_calls, plan_calls = asyncio.run(scenario())
 
     assert result.effective_task_intent is not None
-    assert result.effective_task_intent.objective == "Refactor task and harness planning modules."
+    assert result.effective_task_intent.objective == "Refactor task planning modules."
     assert result.task_contract is not None
-    assert result.task_contract.harness_profile is not None
-    assert result.task_contract.harness_profile["name"] == "coding"
-    assert result.harness_profile is not None
-    assert result.harness_profile.name == "coding"
-    assert result.harness_policy is not None
-    assert result.harness_policy.name == "workspace_change_guidance_policy"
-    assert result.harness_tool_registry is not None
-    assert seed_calls[0]["task_intent"].objective == "Refactor task and harness planning modules."
-    assert plan_calls[0]["fallback_objective"] == "Refactor task and harness planning modules."
+    assert result.task_tool_registry is not None
+    assert result.task_tool_registry.tool_names == ["edit_file"]
+    assert seed_calls[0]["task_intent"].objective == "Refactor task planning modules."
+    assert plan_calls[0]["fallback_objective"] == "Refactor task planning modules."
 
     event_types = [event_type for event_type, _payload in events]
-    assert event_types[:7] == [
+    assert event_types[:6] == [
         TASK_CONTEXT_RESOLVED_EVENT,
         TASK_CONTRACT_PLANNING_STARTED_EVENT,
         TASK_CONTRACT_PLANNED_EVENT,
         TASK_CONTRACT_VALIDATED_EVENT,
-        HARNESS_PROFILE_SELECTED_EVENT,
         TASK_CONTRACT_CREATED_EVENT,
-        HARNESS_POLICY_SELECTED_EVENT,
+        TOOL_ACCESS_RESOLVED_EVENT,
     ]

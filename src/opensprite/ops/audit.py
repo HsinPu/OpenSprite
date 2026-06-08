@@ -19,7 +19,7 @@ class OperationAuditRecord:
     operation_id: str = field(default_factory=lambda: uuid4().hex)
     session_id: str = ""
     run_id: str = ""
-    harness_profile: str = "ops"
+    task_type: str = "operations"
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_metadata(self) -> dict[str, Any]:
@@ -30,7 +30,7 @@ class OperationAuditRecord:
             "target": self.target,
             "session_id": self.session_id,
             "run_id": self.run_id,
-            "harness_profile": self.harness_profile,
+            "task_type": self.task_type,
             "before": self.before,
             "after": self.after,
             "validation": self.validation,

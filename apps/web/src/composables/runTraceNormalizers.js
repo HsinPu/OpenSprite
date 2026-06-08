@@ -1,7 +1,7 @@
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
 
-const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "harness", "completion", "file", "process", "text", "system", "other"]);
+const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "completion", "file", "process", "text", "system", "other"]);
 
 function randomToken() {
   return Math.random().toString(36).slice(2, 8);
@@ -93,8 +93,8 @@ export function inferRunEventKind(eventType) {
   if (normalized.startsWith("permission_")) {
     return "permission";
   }
-  if (normalized.startsWith("harness_") || normalized.startsWith("task_contract.")) {
-    return "harness";
+  if (normalized.startsWith("task_contract.") || normalized.startsWith("task_checkpoint.") || normalized.startsWith("task_scorecard.")) {
+    return "work";
   }
   if (normalized.startsWith("work_") || normalized.startsWith("task_")) {
     return "work";
@@ -280,13 +280,6 @@ function compactDetails(items) {
   return items.filter(Boolean);
 }
 
-function profileName(payload) {
-  return compactJoin([
-    payload?.name,
-    payload?.task_type || payload?.taskType,
-  ], " / ");
-}
-
 function decisionId(event, index) {
   return `decision:${event.id || event.eventId || event.event_id || event.eventType || event.event_type || "event"}:${index}`;
 }
@@ -296,70 +289,28 @@ function decisionEventId(event) {
   return eventId ? [String(eventId)] : [];
 }
 
-function profileDecision(eventType, payload, event, index) {
-  const selection = payload.selection || {};
+function toolAccessDecision(payload, event, index) {
+  const toolAccess = payload.tool_access || payload.toolAccess || {};
+  const exposedTools = toolAccess.exposed_tools || toolAccess.exposedTools || [];
+  const blockedRequired = payload.blocked_required_tools || payload.blockedRequiredTools || [];
   return {
     id: decisionId(event, index),
     eventIds: decisionEventId(event),
-    phase: "profile",
-    status: "info",
-    titleKey: "profileSelected",
-    title: "Profile selected",
-    summary: compactJoin([profileName(payload), payload.reason]),
-    reason: coerceText(payload.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("profile", payload.name),
-      decisionDetail("taskType", payload.task_type || payload.taskType),
-      decisionDetail("selection", compactJoin([selection.selected_by || selection.selectedBy, formatShortList(selection.matched_signals || selection.matchedSignals, 4)])),
-      decisionDetail("verification", payload.verification_policy || payload.verificationPolicy),
-      decisionDetail("continuation", payload.continuation_policy || payload.continuationPolicy),
-    ]),
-  };
-}
-
-function policySelectedDecision(payload, event, index) {
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "policy",
-    status: "info",
-    titleKey: "policySelected",
-    title: "Policy selected",
-    summary: compactJoin([payload.name, payload.reason]),
-    reason: coerceText(payload.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("policy", payload.name),
-      decisionDetail("allowedTools", formatShortList(payload.allowed_tools || payload.allowedTools, 5)),
-      decisionDetail("allowedRisks", formatShortList(payload.allowed_risk_levels || payload.allowedRiskLevels, 5)),
-      decisionDetail("deniedRisks", formatShortList(payload.denied_risk_levels || payload.deniedRiskLevels, 5), "warning"),
-      decisionDetail("approvalRisks", formatShortList(payload.approval_required_risk_levels || payload.approvalRequiredRiskLevels, 5)),
-    ]),
-  };
-}
-
-function policyMergedDecision(payload, event, index) {
-  const policy = payload.harness_policy || payload.harnessPolicy || {};
-  const protectedApprovals = countItems(payload.protected_approval_requirements || payload.protectedApprovalRequirements);
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "policy",
-    status: protectedApprovals > 0 ? "warning" : "success",
-    titleKey: "policyMerged",
-    title: "Policy merged",
+    phase: "tools",
+    status: countItems(blockedRequired) > 0 ? "warning" : "success",
+    titleKey: "toolAccess",
+    title: "Tool access",
     summary: compactJoin([
-      policy.name,
-      `${countItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
-      protectedApprovals ? `${protectedApprovals} protected approvals` : "",
+      `${countItems(payload.required_tools || payload.requiredTools)} required`,
+      `${countItems(exposedTools)} exposed`,
+      countItems(blockedRequired) ? `${countItems(blockedRequired)} blocked` : "",
     ]),
     reason: "",
     createdAt: event.createdAt,
     details: compactDetails([
-      decisionDetail("policy", policy.name),
-      decisionDetail("constraints", formatShortList(payload.constraints_applied || payload.constraintsApplied, 5)),
-      decisionDetail("protectedApprovals", formatShortList(payload.protected_approval_requirements || payload.protectedApprovalRequirements, 5), protectedApprovals > 0 ? "warning" : "neutral"),
+      decisionDetail("requiredTools", formatShortList(payload.required_tools || payload.requiredTools, 6)),
+      decisionDetail("exposedTools", formatShortList(exposedTools, 6)),
+      decisionDetail("blockedRequiredTools", formatShortList(blockedRequired.map?.((item) => item?.name || item) || [], 6), countItems(blockedRequired) ? "warning" : "neutral"),
     ]),
   };
 }
@@ -453,7 +404,7 @@ function checkpointDecision(payload, event, index) {
 }
 
 function scorecardDecision(payload, event, index) {
-  const profile = payload.profile || {};
+  const task = payload.task || {};
   const contract = payload.contract || {};
   const completion = payload.completion || {};
   const traceHealth = payload.trace_health || payload.traceHealth || {};
@@ -464,44 +415,16 @@ function scorecardDecision(payload, event, index) {
     phase: "checkpoint",
     status: traceHealth.status === "fail" ? "failed" : traceHealth.status === "warn" ? "warning" : "success",
     titleKey: "scorecard",
-    title: "Harness scorecard",
-    summary: compactJoin([profile.name || contract.task_type || contract.taskType, completion.status, traceHealth.status]),
+    title: "Task scorecard",
+    summary: compactJoin([task.task_type || task.taskType || contract.task_type || contract.taskType, completion.status, traceHealth.status]),
     reason: coerceText(completion.reason),
     createdAt: event.createdAt,
     details: compactDetails([
-      decisionDetail("profile", profile.name),
-      decisionDetail("taskType", contract.task_type || contract.taskType),
+      decisionDetail("taskType", task.task_type || task.taskType || contract.task_type || contract.taskType),
       decisionDetail("status", completion.status),
       decisionDetail("reason", completion.reason),
       decisionDetail("traceHealth", traceHealth.status),
       decisionDetail("sensors", sensors.length),
-    ]),
-  };
-}
-
-function evalDecision(eventType, payload, event, index) {
-  const summary = payload.summary || {};
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "checkpoint",
-    status: payload.ok === true ? "success" : "failed",
-    titleKey: eventType === "harness_eval.completed" ? "evalCompleted" : "evalFailed",
-    title: "Harness eval",
-    summary: compactJoin([
-      payload.kind,
-      payload.ok === true ? "pass" : "fail",
-      summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} cases` : "",
-      summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks} checks` : "",
-    ]),
-    reason: coerceText(payload.reason || payload.error),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("kind", payload.kind),
-      decisionDetail("status", payload.ok === true ? "pass" : "fail", payload.ok === true ? "success" : "error"),
-      decisionDetail("cases", summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases}` : ""),
-      decisionDetail("checks", summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks}` : ""),
-      decisionDetail("reason", payload.reason || payload.error, payload.ok === true ? "neutral" : "error"),
     ]),
   };
 }
@@ -520,24 +443,18 @@ export function deriveDecisionTimelineItems(events = []) {
       createdAt: normalizeEventTimestamp(event?.createdAt ?? event?.created_at),
     };
     let item = null;
-    if (eventType === "harness_profile.selected") {
-      item = profileDecision(eventType, payload, eventWithTimestamp, items.length);
-    } else if (eventType === "harness_policy.selected") {
-      item = policySelectedDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "harness_policy.merge_resolved") {
-      item = policyMergedDecision(payload, eventWithTimestamp, items.length);
+    if (eventType === "tool_access.resolved") {
+      item = toolAccessDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated" || eventType === "task_contract.validation_failed") {
       item = taskContractDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "completion_gate.evaluated") {
       item = completionGateDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType.startsWith("auto_continue.")) {
       item = autoContinueDecision(eventType, payload, eventWithTimestamp, items.length);
-    } else if (eventType === "harness_checkpoint.recorded") {
+    } else if (eventType === "task_checkpoint.recorded") {
       item = checkpointDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "harness_scorecard.recorded") {
+    } else if (eventType === "task_scorecard.recorded") {
       item = scorecardDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType.startsWith("harness_eval.")) {
-      item = evalDecision(eventType, payload, eventWithTimestamp, items.length);
     }
     if (item) {
       items.push(item);

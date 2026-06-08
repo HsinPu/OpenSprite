@@ -72,7 +72,6 @@ _WEB_RESEARCH_HISTORY = [
 _FOLLOW_UP_WEB_DECISION = TaskContextDecision(
     is_follow_up=True,
     inherited_task_type="web_research",
-    inherited_tool_group="web_research",
     continuation_type="follow_up",
     confidence=0.75,
     method=DETERMINISTIC_OBJECTIVE_METHOD,

@@ -14,38 +14,47 @@ from ...utils.log import logger
 from ...tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,
     ANALYZE_VIDEO_TOOL_NAME,
+    APPLY_PATCH_TOOL_NAME,
     BATCH_TOOL_NAME,
+    CODE_NAVIGATION_TOOL_NAME,
+    CONFIGURE_MCP_TOOL_NAME,
+    CRON_TOOL_NAME,
+    DELEGATE_MANY_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+    EDIT_FILE_TOOL_NAME,
+    EXEC_TOOL_NAME,
+    EXECUTION_TOOL_NAMES,
     GLOB_FILES_TOOL_NAME,
     GREP_FILES_TOOL_NAME,
     LIST_DIR_TOOL_NAME,
     LIST_RUN_FILE_CHANGES_TOOL_NAME,
     OCR_IMAGE_TOOL_NAME,
+    PROCESS_TOOL_NAME,
     PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
     READ_FILE_TOOL_NAME,
     READ_SKILL_TOOL_NAME,
+    RUN_WORKFLOW_TOOL_NAME,
     TRANSCRIBE_AUDIO_TOOL_NAME,
+    WEB_FETCH_TOOL_NAME,
+    WEB_RESEARCH_TOOL_NAME,
+    WEB_SEARCH_TOOL_NAME,
+    WORKSPACE_DISCOVERY_TOOL_NAMES,
+    WORKSPACE_WRITE_TOOL_NAMES,
+    WRITE_FILE_TOOL_NAME,
 )
-from ...harness import (
+from .capabilities import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
     GENERIC_TASK_TYPE,
     HISTORY_RETRIEVAL_TASK_TYPE,
-    HISTORY_RETRIEVAL_TOOL_GROUP,
     MEDIA_EXTRACTION_TASK_TYPE,
-    MEDIA_TOOL_GROUP,
     OPERATIONS_TASK_TYPE,
     PLANNING_TASK_TYPE,
     PURE_ANSWER_TASK_TYPE,
-    OPERATION_TOOL_GROUPS,
-    TASK_TYPE_BY_TOOL_GROUP,
-    TOOL_GROUPS,
     VERIFICATION_REQUIREMENT_KIND,
-    VERIFICATION_TOOL_GROUP,
     WORKSPACE_CHANGE_TASK_TYPE,
-    WORKSPACE_WRITE_TOOL_GROUP,
     WORKSPACE_READ_TASK_TYPE,
-    WORKSPACE_READ_TOOL_GROUP,
     is_planning_task_type,
 )
 from ...media import MEDIA_ONLY_HISTORY_MARKER
@@ -55,10 +64,10 @@ from ...tools.evidence import (
     SOURCE_DETAIL_CRITERION_KIND,
     SOURCE_REFERENCE_CRITERION_KIND,
     WEB_RESEARCH_TASK_TYPE,
-    WEB_RESEARCH_TOOL_GROUP,
+    WEB_SOURCE_ARTIFACT_TOOLS,
     WEB_SOURCE_EVIDENCE_TOOLS,
+    VERIFICATION_TOOL_NAME,
     is_web_research_task_type,
-    is_web_research_tool_group,
 )
 from ...tools.evidence import ToolEvidence
 from ...tools.registry import ToolRegistry
@@ -119,8 +128,17 @@ READ_ONLY_TASK_TYPES = frozenset(
 )
 FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({ANALYSIS_TASK_TYPE, PLANNING_TASK_TYPE, GENERIC_TASK_TYPE})
 READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
-READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
-    {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
+READ_ONLY_BLOCKING_TOOL_NAMES = frozenset(
+    {
+        *WORKSPACE_WRITE_TOOL_NAMES,
+        *EXECUTION_TOOL_NAMES,
+        VERIFICATION_TOOL_NAME,
+        CRON_TOOL_NAME,
+        CONFIGURE_MCP_TOOL_NAME,
+        DELEGATE_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+    }
 )
 
 
@@ -321,8 +339,8 @@ def is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
     return _policy_value(kind) in READ_ONLY_BLOCKING_REQUIREMENT_KINDS
 
 
-def is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
-    return _policy_value(tool_group) in READ_ONLY_BLOCKING_TOOL_GROUPS
+def is_read_only_blocking_tool_name(tool_name: str | None) -> bool:
+    return _policy_value(tool_name) in READ_ONLY_BLOCKING_TOOL_NAMES
 
 
 def accepts_final_response_task_type(task_type: str | None) -> bool:
@@ -526,18 +544,6 @@ _ALLOWED_TASK_TYPES = frozenset(
         "writing",
     }
 )
-_ALLOWED_TOOL_GROUPS = frozenset(
-    {
-        "audio_text",
-        HISTORY_RETRIEVAL_TOOL_GROUP,
-        "image_text",
-        VERIFICATION_TOOL_GROUP,
-        "video_understanding",
-        WEB_RESEARCH_TOOL_GROUP,
-        WORKSPACE_READ_TOOL_GROUP,
-        WORKSPACE_WRITE_TOOL_GROUP,
-    }
-)
 _LLM_TASK_SWITCH_CONFIDENCE = 0.80
 _OBJECTIVE_MIN_CONFIDENCE = 0.65
 DETERMINISTIC_CONTEXT_METHOD = "deterministic"
@@ -550,17 +556,6 @@ OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON = "objective enrichment not needed"
 LLM_RESOLVED_TASK_OBJECTIVE_REASON = "llm resolved task objective"
 LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON = "llm objective was not more specific"
 TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX = "task boundary confidence too low"
-_TASK_TYPE_BY_TOOL_GROUP = {
-    "audio_text": MEDIA_EXTRACTION_TASK_TYPE,
-    "image_text": MEDIA_EXTRACTION_TASK_TYPE,
-    "video_understanding": MEDIA_EXTRACTION_TASK_TYPE,
-    HISTORY_RETRIEVAL_TOOL_GROUP: HISTORY_RETRIEVAL_TASK_TYPE,
-    WEB_RESEARCH_TOOL_GROUP: WEB_RESEARCH_TASK_TYPE,
-    WORKSPACE_READ_TOOL_GROUP: WORKSPACE_READ_TASK_TYPE,
-    WORKSPACE_WRITE_TOOL_GROUP: CODE_CHANGE_TASK_TYPE,
-}
-
-
 @dataclass(frozen=True)
 class TaskContextDecision:
     """Resolved context for one user turn before task contracts are built."""
@@ -570,7 +565,6 @@ class TaskContextDecision:
     should_seed_active_task: bool = False
     should_replace_active_task: bool = False
     inherited_task_type: str | None = None
-    inherited_tool_group: str | None = None
     continuation_type: str = NONE_CONTINUATION_TYPE
     confidence: float = 0.0
     method: str = DETERMINISTIC_CONTEXT_METHOD
@@ -584,7 +578,6 @@ class TaskContextDecision:
             "should_seed_active_task": self.should_seed_active_task,
             "should_replace_active_task": self.should_replace_active_task,
             "inherited_task_type": self.inherited_task_type,
-            "inherited_tool_group": self.inherited_tool_group,
             "continuation_type": self.continuation_type,
             "confidence": self.confidence,
             "method": self.method,
@@ -854,7 +847,7 @@ def _should_consult_llm(
     current = _resolver_compact(current_message)
     if not current or (task_intent is not None and task_intent.kind == CONVERSATION_INTENT_KIND):
         return False
-    if decision.is_follow_up and decision.inherited_tool_group:
+    if decision.is_follow_up and decision.inherited_task_type:
         return True
     if decision.confidence >= 0.7:
         return False
@@ -892,16 +885,15 @@ def _build_task_context_llm_prompt(
         "Decide whether the latest user message is a follow-up, continuation, or task switch.\n"
         "Handle multilingual, typo-heavy, shorthand, and code-mixed user turns.\n"
         "Use recent history and ACTIVE_TASK only as context.\n"
-        "If evidence should be inherited, choose one inherited_tool_group from: "
-        f"{', '.join(sorted(_ALLOWED_TOOL_GROUPS))}.\n"
+        "If evidence should be inherited, choose one inherited_task_type from the allowed task types.\n"
         "Do not mark a turn as no-tool if it likely asks for external web, media, or workspace evidence.\n"
         f"Do not remove evidence or active-task inheritance from {DETERMINISTIC_DECISION_CONTEXT_FIELD}; "
         "only add stricter context.\n"
         "If an active task exists and the latest turn might be either a new task or a continuation, use "
         f"continuation_type={AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE} instead of replacing the task.\n"
         "Return only JSON with these keys: continuation_type, is_follow_up, should_inherit_active_task, "
-        "should_seed_active_task, should_replace_active_task, inherited_task_type, inherited_tool_group, "
-        "confidence, reason. Use null when no task/tool is inherited.\n"
+        "should_seed_active_task, should_replace_active_task, inherited_task_type, "
+        "confidence, reason. Use null when no task type is inherited.\n"
         "continuation_type must be one of: "
         f"{', '.join(sorted(ALLOWED_CONTINUATION_TYPES))}.\n\n"
         f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
@@ -938,10 +930,7 @@ def _build_task_objective_llm_prompt(
 
 
 def _task_context_decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = False) -> TaskContextDecision:
-    inherited_tool_group = _resolver_allowed_string(payload.get("inherited_tool_group"), _ALLOWED_TOOL_GROUPS)
     inherited_task_type = _resolver_allowed_string(payload.get("inherited_task_type"), _ALLOWED_TASK_TYPES)
-    if inherited_tool_group and inherited_task_type is None:
-        inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
     should_inherit_active_task = _resolver_coerce_bool(payload.get("should_inherit_active_task"))
     should_replace_active_task = _resolver_coerce_bool(payload.get("should_replace_active_task"))
     should_seed_active_task = _resolver_coerce_bool(payload.get("should_seed_active_task"))
@@ -970,14 +959,12 @@ def _task_context_decision_from_payload(payload: dict[str, Any], *, has_active_t
         should_replace_active_task = False
         is_follow_up = False
         inherited_task_type = None
-        inherited_tool_group = None
     return TaskContextDecision(
         is_follow_up=is_follow_up,
         should_inherit_active_task=should_inherit_active_task,
         should_seed_active_task=should_seed_active_task,
         should_replace_active_task=should_replace_active_task,
         inherited_task_type=inherited_task_type,
-        inherited_tool_group=inherited_tool_group,
         continuation_type=continuation_type,
         confidence=_resolver_coerce_confidence(payload.get("confidence")),
         method="llm",
@@ -1000,10 +987,7 @@ def _merge_with_deterministic(
             should_inherit_active_task=False,
         )
 
-    inherited_tool_group = llm_decision.inherited_tool_group
     inherited_task_type = llm_decision.inherited_task_type
-    if inherited_tool_group and inherited_task_type is None:
-        inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
 
     continuation_type = llm_decision.continuation_type
     if (
@@ -1018,7 +1002,6 @@ def _merge_with_deterministic(
             should_seed_active_task=False,
             should_replace_active_task=False,
             inherited_task_type=None,
-            inherited_tool_group=None,
             continuation_type=AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
             reason=task_boundary_confidence_too_low_reason(llm_decision.confidence),
         )
@@ -1028,7 +1011,7 @@ def _merge_with_deterministic(
         and not is_ambiguous_boundary_continuation_type(continuation_type)
     ):
         continuation_type = CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE
-    elif inherited_tool_group and continuation_type == NONE_CONTINUATION_TYPE:
+    elif inherited_task_type and continuation_type == NONE_CONTINUATION_TYPE:
         continuation_type = FOLLOW_UP_CONTINUATION_TYPE
 
     should_replace_active_task = llm_decision.should_replace_active_task and is_new_task_continuation_type(continuation_type)
@@ -1038,7 +1021,7 @@ def _merge_with_deterministic(
         should_inherit_active_task = True
 
     is_follow_up = llm_decision.is_follow_up
-    if inherited_tool_group or is_follow_up_continuation_type(continuation_type):
+    if inherited_task_type or is_follow_up_continuation_type(continuation_type):
         is_follow_up = True
     if should_replace_active_task:
         is_follow_up = False
@@ -1050,7 +1033,6 @@ def _merge_with_deterministic(
         should_seed_active_task=should_seed_active_task,
         should_replace_active_task=should_replace_active_task,
         inherited_task_type=inherited_task_type,
-        inherited_tool_group=inherited_tool_group,
         continuation_type=continuation_type,
     )
 
@@ -1258,7 +1240,7 @@ PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or 
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
-TOOL_GROUP_REQUIREMENT_KIND = "tool_group"
+REQUIRED_TOOL_EVIDENCE_KIND = "required_tool"
 RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
 ALL_RESOURCE_COVERAGE = "all"
 ITEMIZED_OUTPUT_CRITERION_KIND = "itemized_output"
@@ -1270,7 +1252,6 @@ OPERATION_REPORT_CRITERION_KIND = "operation_report"
 COMMAND_VERSION_QUALITY_CHECK = "command_version"
 REPOSITORY_STATUS_QUALITY_CHECK = "repository_status"
 WORKSPACE_LOCATION_QUALITY_CHECK = "workspace_location"
-_ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
         COMMAND_VERSION_QUALITY_CHECK,
@@ -1300,26 +1281,57 @@ _PLANNER_TASK_TYPE_ALIASES = {
     PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_EXTRACTION_TASK_TYPE,
     PLANNER_OPS_TASK_TYPE: OPERATIONS_TASK_TYPE,
 }
-_PLANNER_TOOL_GROUP_ALIASES = {
-    WORKSPACE_CHANGE_TASK_TYPE: WORKSPACE_WRITE_TOOL_GROUP,
-    PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_TOOL_GROUP,
-    PLANNER_OPS_TASK_TYPE: VERIFICATION_TOOL_GROUP,
-}
 LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES = frozenset({"implementation", "refactor"})
 FILE_CHANGE_TASK_TYPES = frozenset({CODE_CHANGE_TASK_TYPE, *LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES})
-_TASK_TYPE_REQUIRED_TOOL_GROUPS = {
-    WEB_RESEARCH_TASK_TYPE: (WEB_RESEARCH_TOOL_GROUP,),
-    WORKSPACE_READ_TASK_TYPE: (WORKSPACE_READ_TOOL_GROUP,),
-    CODE_CHANGE_TASK_TYPE: (WORKSPACE_READ_TOOL_GROUP, WORKSPACE_WRITE_TOOL_GROUP),
-    MEDIA_EXTRACTION_TASK_TYPE: (MEDIA_TOOL_GROUP,),
-    HISTORY_RETRIEVAL_TASK_TYPE: (HISTORY_RETRIEVAL_TOOL_GROUP,),
-}
+TOOL_BACKED_TASK_TYPES = frozenset(
+    {
+        WEB_RESEARCH_TASK_TYPE,
+        WORKSPACE_READ_TASK_TYPE,
+        CODE_CHANGE_TASK_TYPE,
+        MEDIA_EXTRACTION_TASK_TYPE,
+        HISTORY_RETRIEVAL_TASK_TYPE,
+        OPERATIONS_TASK_TYPE,
+    }
+)
+PLANNER_MISSING_REQUIRED_TOOLS_REASON = "task planner returned a tool-backed task without required_tools"
+_DEFAULT_PLANNER_TOOL_NAMES = frozenset(
+    {
+        ANALYZE_IMAGE_TOOL_NAME,
+        ANALYZE_VIDEO_TOOL_NAME,
+        APPLY_PATCH_TOOL_NAME,
+        BATCH_TOOL_NAME,
+        CODE_NAVIGATION_TOOL_NAME,
+        CONFIGURE_MCP_TOOL_NAME,
+        CRON_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        DELEGATE_TOOL_NAME,
+        EDIT_FILE_TOOL_NAME,
+        EXEC_TOOL_NAME,
+        GLOB_FILES_TOOL_NAME,
+        GREP_FILES_TOOL_NAME,
+        HISTORY_SEARCH_TOOL_NAME,
+        LIST_DIR_TOOL_NAME,
+        LIST_RUN_FILE_CHANGES_TOOL_NAME,
+        OCR_IMAGE_TOOL_NAME,
+        PROCESS_TOOL_NAME,
+        PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+        READ_FILE_TOOL_NAME,
+        READ_SKILL_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+        TRANSCRIBE_AUDIO_TOOL_NAME,
+        VERIFICATION_TOOL_NAME,
+        WEB_FETCH_TOOL_NAME,
+        WEB_RESEARCH_TOOL_NAME,
+        WEB_SEARCH_TOOL_NAME,
+        WRITE_FILE_TOOL_NAME,
+    }
+)
 _TASK_PLANNER_SYSTEM_PROMPT = (
     "You are the OpenSprite task planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
-    "Choose the smallest necessary set from the available runtime capabilities supplied in the user prompt. "
-    "If no tool-backed evidence is needed, use pure_answer and an empty required_tool_groups array. "
-    "The JSON keys are: objective, task_type, required_tool_groups, final_answer_required, allow_no_tool_final, reason."
+    "Choose the smallest necessary set of concrete tool names from the available runtime tools supplied in the user prompt. "
+    "If no tool-backed evidence is needed, use pure_answer and an empty required_tools array. "
+    "The JSON keys are: objective, task_type, required_tools, quality_checks, final_answer_required, allow_no_tool_final, reason."
 )
 _PLANNER_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite task planner output. Convert the invalid planner response into exactly one "
@@ -1373,10 +1385,6 @@ class PlannerCapabilityCatalog:
     capabilities: tuple[PlannerCapability, ...]
 
     @property
-    def tool_group_ids(self) -> tuple[str, ...]:
-        return tuple(capability.id for capability in self.capabilities)
-
-    @property
     def task_types(self) -> tuple[str, ...]:
         values = [PURE_ANSWER_TASK_TYPE, PLANNING_TASK_TYPE, GENERIC_TASK_TYPE, ANALYSIS_TASK_TYPE]
         for capability in self.capabilities:
@@ -1385,17 +1393,43 @@ class PlannerCapabilityCatalog:
         return tuple(values)
 
     @property
-    def capability_tools(self) -> dict[str, tuple[str, ...]]:
-        return {capability.id: capability.tools for capability in self.capabilities}
+    def available_tool_names(self) -> tuple[str, ...]:
+        names: list[str] = []
+        for capability in self.capabilities:
+            for tool_name in capability.tools:
+                if tool_name not in names:
+                    names.append(tool_name)
+        return tuple(names)
 
-    def tools_for_group(self, tool_group: str) -> tuple[str, ...]:
-        return self.capability_tools.get(str(tool_group or "").strip(), ())
+    @property
+    def available_tools(self) -> tuple[dict[str, Any], ...]:
+        tools_by_name: dict[str, dict[str, Any]] = {}
+        for capability in self.capabilities:
+            summaries = capability.tool_summaries or tuple({"name": name} for name in capability.tools)
+            for summary in summaries:
+                name = str(summary.get("name") or "").strip()
+                if not name:
+                    continue
+                item = tools_by_name.setdefault(
+                    name,
+                    {
+                        "name": name,
+                        "task_type": capability.task_type,
+                        "risk_levels": [],
+                    },
+                )
+                if summary.get("description"):
+                    item["description"] = summary["description"]
+                for risk_level in capability.risk_levels:
+                    if risk_level not in item["risk_levels"]:
+                        item["risk_levels"].append(risk_level)
+        return tuple(tools_by_name[name] for name in tools_by_name)
 
     def to_prompt_metadata(self) -> dict[str, Any]:
         return {
             "schema_version": 1,
             "available_task_types": list(self.task_types),
-            "available_capabilities": [capability.to_prompt_metadata() for capability in self.capabilities],
+            "available_tools": list(self.available_tools),
         }
 
 
@@ -1411,39 +1445,20 @@ class PlanningModeState:
 def build_planner_capability_catalog(tool_registry: ToolRegistry | None = None) -> PlannerCapabilityCatalog:
     """Build a planner capability catalog from current runtime tools."""
     if tool_registry is None:
-        return _catalog_from_static_tool_groups()
+        return _catalog_from_static_tools()
     available_tools = _available_tools(tool_registry)
-    group_to_tools: dict[str, list[Any]] = {group: [] for group in TOOL_GROUPS}
-    dynamic_group_order: list[str] = []
-    for tool in available_tools:
-        groups = set(_known_groups_for_tool(tool.name))
-        groups.update(_declared_capability_groups(tool))
-        if not groups:
-            groups.add(f"{_UNGROUPED_TOOL_PREFIX}{tool.name}")
-        for group in groups:
-            if group not in group_to_tools:
-                group_to_tools[group] = []
-                dynamic_group_order.append(group)
-            group_to_tools[group].append(tool)
-
-    capabilities: list[PlannerCapability] = []
-    for group in (*TOOL_GROUPS.keys(), *dynamic_group_order):
-        tools = group_to_tools.get(group) or []
-        if not tools:
-            continue
-        capabilities.append(_capability_from_tools(group, tools))
-    return PlannerCapabilityCatalog(tuple(capabilities))
+    return PlannerCapabilityCatalog(tuple(_capability_from_tool(tool) for tool in available_tools))
 
 
-def _catalog_from_static_tool_groups() -> PlannerCapabilityCatalog:
+def _catalog_from_static_tools() -> PlannerCapabilityCatalog:
     capabilities = [
         PlannerCapability(
-            id=group,
-            task_type=TASK_TYPE_BY_TOOL_GROUP.get(group, GENERIC_TASK_TYPE),
-            tools=tuple(sorted(tools)),
-            tool_summaries=tuple({"name": name} for name in sorted(tools)),
+            id=tool_name,
+            task_type=_task_type_for_tool_name(tool_name),
+            tools=(tool_name,),
+            tool_summaries=({"name": tool_name},),
         )
-        for group, tools in TOOL_GROUPS.items()
+        for tool_name in sorted(_DEFAULT_PLANNER_TOOL_NAMES)
     ]
     return PlannerCapabilityCatalog(tuple(capabilities))
 
@@ -1457,42 +1472,41 @@ def _available_tools(tool_registry: ToolRegistry) -> list[Any]:
     ]
 
 
-def _known_groups_for_tool(tool_name: str) -> tuple[str, ...]:
-    return tuple(
-        group
-        for group, tool_names in TOOL_GROUPS.items()
-        if tool_name in tool_names
-    )
-
-
-def _declared_capability_groups(tool: Any) -> tuple[str, ...]:
-    raw = getattr(tool, "capability_groups", None)
-    if callable(raw):
-        raw = raw()
-    if raw is None:
-        return ()
-    groups: list[str] = []
-    for item in raw:
-        group = str(item or "").strip()
-        if group and group not in groups:
-            groups.append(group)
-    return tuple(groups)
-
-
-def _capability_from_tools(group: str, tools: list[Any]) -> PlannerCapability:
-    tool_names = tuple(dict.fromkeys(tool.name for tool in tools))
-    risk_levels = sorted({
-        risk
-        for tool in tools
-        for risk in (tool.risk_levels or ())
-    })
+def _capability_from_tool(tool: Any) -> PlannerCapability:
+    tool_name = str(getattr(tool, "name", "") or "").strip()
     return PlannerCapability(
-        id=group,
-        task_type=TASK_TYPE_BY_TOOL_GROUP.get(group, GENERIC_TASK_TYPE),
-        tools=tool_names,
-        tool_summaries=tuple(_tool_summary(tool) for tool in tools),
-        risk_levels=tuple(risk_levels),
+        id=tool_name or _UNGROUPED_TOOL_PREFIX,
+        task_type=_task_type_for_tool_name(tool_name),
+        tools=(tool_name,) if tool_name else (),
+        tool_summaries=(_tool_summary(tool),),
+        risk_levels=tuple(sorted(str(risk or "").strip() for risk in (tool.risk_levels or ()) if str(risk or "").strip())),
     )
+
+
+def _task_type_for_tool_name(tool_name: str) -> str:
+    name = str(tool_name or "").strip()
+    if name in WEB_SOURCE_ARTIFACT_TOOLS:
+        return WEB_RESEARCH_TASK_TYPE
+    if name in WORKSPACE_WRITE_TOOL_NAMES:
+        return CODE_CHANGE_TASK_TYPE
+    if name in WORKSPACE_DISCOVERY_TOOL_NAMES or name in {
+        LIST_RUN_FILE_CHANGES_TOOL_NAME,
+        PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    }:
+        return WORKSPACE_READ_TASK_TYPE
+    if name in {ANALYZE_IMAGE_TOOL_NAME, OCR_IMAGE_TOOL_NAME, TRANSCRIBE_AUDIO_TOOL_NAME, ANALYZE_VIDEO_TOOL_NAME}:
+        return MEDIA_EXTRACTION_TASK_TYPE
+    if name in {HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME}:
+        return HISTORY_RETRIEVAL_TASK_TYPE
+    if name in EXECUTION_TOOL_NAMES or name in {
+        CONFIGURE_MCP_TOOL_NAME,
+        CRON_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        DELEGATE_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+    }:
+        return OPERATIONS_TASK_TYPE
+    return GENERIC_TASK_TYPE
 
 
 def _tool_summary(tool: Any) -> dict[str, str]:
@@ -1683,7 +1697,7 @@ class EvidenceRequirement:
     """Evidence needed before the task can be treated as complete."""
 
     kind: str
-    tool_group: str = ""
+    tools: tuple[str, ...] = ()
     resource_ids: tuple[str, ...] = ()
     coverage: str = "any"
     min_count: int = 1
@@ -1692,7 +1706,7 @@ class EvidenceRequirement:
     def to_metadata(self) -> dict[str, Any]:
         return {
             "kind": self.kind,
-            "tool_group": self.tool_group,
+            "tools": list(self.tools),
             "resource_ids": list(self.resource_ids),
             "coverage": self.coverage,
             "min_count": self.min_count,
@@ -1729,10 +1743,13 @@ class TaskContract:
     requirements: tuple[EvidenceRequirement, ...] = ()
     acceptance_criteria: tuple[AcceptanceCriterion, ...] = ()
     selected_resources: tuple[ResourceRef, ...] = ()
+    required_tools: tuple[str, ...] = ()
+    blocked_tools: tuple[str, ...] = ()
+    required_evidence: tuple[str, ...] = ()
+    quality_checks: tuple[str, ...] = ()
     final_answer_required: bool = True
     allow_no_tool_final: bool = True
     contract_sources: tuple[str, ...] = DETERMINISTIC_CONTRACT_SOURCES
-    harness_profile: dict[str, Any] | None = None
     planner_metadata: dict[str, Any] | None = None
 
     def to_metadata(self) -> dict[str, Any]:
@@ -1743,14 +1760,16 @@ class TaskContract:
             "requirements": [item.to_metadata() for item in self.requirements],
             "acceptance_criteria": [item.to_metadata() for item in self.acceptance_criteria],
             "selected_resources": [item.to_metadata() for item in self.selected_resources],
+            "required_tools": list(self.required_tools),
+            "blocked_tools": list(self.blocked_tools),
+            "required_evidence": list(self.required_evidence),
+            "quality_checks": list(self.quality_checks),
             "final_answer_required": self.final_answer_required,
             "allow_no_tool_final": self.allow_no_tool_final,
             "contract_sources": list(self.contract_sources),
         }
         if self.planner_metadata:
             payload["planner_metadata"] = dict(self.planner_metadata)
-        if self.harness_profile:
-            payload["harness_profile"] = dict(self.harness_profile)
         return payload
 
 
@@ -1894,16 +1913,15 @@ def _has_requirement(
     requirements: list[EvidenceRequirement],
     *,
     kind: str,
-    tool_group: str = "",
+    tools: tuple[str, ...] | frozenset[str] = (),
 ) -> bool:
-    return any(
-        item.kind == kind and (not tool_group or item.tool_group == tool_group)
-        for item in requirements
-    )
-
-
-def is_tool_group_requirement(requirement: Any) -> bool:
-    return str(getattr(requirement, "kind", "") or "") == TOOL_GROUP_REQUIREMENT_KIND
+    expected_tools = frozenset(_policy_value(tool) for tool in tools if _policy_value(tool))
+    for item in requirements:
+        if item.kind != kind:
+            continue
+        if not expected_tools or frozenset(_requirement_tools(item)) == expected_tools:
+            return True
+    return False
 
 
 def contract_has_acceptance_criterion(task_contract: Any, *kinds: str) -> bool:
@@ -1981,6 +1999,18 @@ def _requirement_attr(requirement: Any, attr: str) -> str:
     return str(getattr(requirement, attr, "") or "")
 
 
+def _requirement_tools(requirement: Any) -> tuple[str, ...]:
+    raw_tools = getattr(requirement, "tools", ()) or ()
+    if isinstance(raw_tools, str):
+        raw_tools = (raw_tools,)
+    tools: list[str] = []
+    for value in raw_tools:
+        tool_name = _policy_value(value)
+        if tool_name and tool_name not in tools:
+            tools.append(tool_name)
+    return tuple(tools)
+
+
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
     """Return human-readable missing evidence items for a contract."""
     if contract is None:
@@ -1990,13 +2020,13 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     for requirement in contract.requirements:
         requirement_kind = _requirement_attr(requirement, "kind")
-        if is_tool_group_requirement(requirement):
-            tools = _contract_tool_group_tools(contract, requirement.tool_group)
+        if requirement_kind == REQUIRED_TOOL_EVIDENCE_KIND:
+            tools = frozenset(_requirement_tools(requirement))
             count = sum(1 for item in ok_evidence if item.name in tools)
             if count < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Use one of: {', '.join(sorted(tools))}")
         elif requirement_kind == RESOURCE_COVERAGE_REQUIREMENT_KIND:
-            tools = _contract_tool_group_tools(contract, requirement.tool_group)
+            tools = frozenset(_requirement_tools(requirement))
             covered = {
                 alias
                 for item in ok_evidence
@@ -2008,11 +2038,9 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
             if _requirement_attr(requirement, "coverage") == ALL_RESOURCE_COVERAGE:
                 uncovered = tuple(resource_id for resource_id in requirement.resource_ids if resource_id not in covered)
                 if uncovered:
-                    missing.append(
-                        f"Missing {requirement.tool_group} coverage for: {', '.join(uncovered)}"
-                    )
+                    missing.append(f"Missing resource coverage for: {', '.join(uncovered)}")
             elif len(covered & required) < max(1, requirement.min_count):
-                missing.append(requirement.description or f"Missing {requirement.tool_group} coverage")
+                missing.append(requirement.description or "Missing required resource coverage.")
         elif (
             requirement_kind == FILE_CHANGE_REQUIREMENT_KIND
             and file_change_count < max(1, requirement.min_count)
@@ -2023,16 +2051,6 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     return tuple(missing)
 
 
-def _contract_tool_group_tools(contract: TaskContract, tool_group: str) -> frozenset[str]:
-    metadata = getattr(contract, "planner_metadata", None) or {}
-    capability_tools = metadata.get("capability_tools") if isinstance(metadata, dict) else None
-    if isinstance(capability_tools, dict):
-        tools = capability_tools.get(tool_group)
-        if isinstance(tools, (list, tuple, set, frozenset)):
-            return frozenset(str(tool or "").strip() for tool in tools if str(tool or "").strip())
-    return TOOL_GROUPS.get(tool_group, frozenset())
-
-
 def contract_expects_file_change(task_contract: Any) -> bool:
     """Return whether a task contract requires workspace file changes."""
     task_type = str(getattr(task_contract, "task_type", "") or "")
@@ -2041,27 +2059,11 @@ def contract_expects_file_change(task_contract: Any) -> bool:
     for requirement in getattr(task_contract, "requirements", ()) or ():
         if (
             _requirement_attr(requirement, "kind") == FILE_CHANGE_REQUIREMENT_KIND
-            or _requirement_attr(requirement, "tool_group") == WORKSPACE_WRITE_TOOL_GROUP
         ):
             return True
-    return False
-
-
-def _tool_group_requirement(tool_group: str) -> EvidenceRequirement:
-    if is_web_research_tool_group(tool_group):
-        return EvidenceRequirement(
-            kind="tool_group",
-            tool_group=WEB_RESEARCH_TOOL_GROUP,
-            coverage="any",
-            min_count=1,
-            description="Use web research tools before answering this external information request.",
-        )
-    return EvidenceRequirement(
-        kind="tool_group",
-        tool_group=tool_group,
-        coverage="any",
-        min_count=1,
-        description=f"Use {tool_group} tools before finalizing the answer.",
+    return any(
+        _policy_value(tool_name) in WORKSPACE_WRITE_TOOL_NAMES
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
     )
 
 
@@ -2104,15 +2106,14 @@ def _build_task_planner_prompt(
     return (
         "Create the task contract for the latest user turn. The contract controls which tools the main assistant can see.\n"
         "Use semantic judgment from the message and recent history, not string matching. Select the smallest set of "
-        "required_tool_groups from capability_catalog.available_capabilities that is necessary to finish the task with "
-        "evidence. Do not invent unavailable tool groups. If no tool-backed evidence is needed, choose pure_answer with "
-        "an empty required_tool_groups array. Use quality_checks only when the final answer needs extra verification "
-        "beyond the selected capabilities.\n"
+        "required_tools from capability_catalog.available_tools that is necessary to finish the task with evidence. "
+        "Do not invent unavailable tool names. If no tool-backed evidence is needed, choose pure_answer with an empty "
+        "required_tools array. Use quality_checks only when the final answer needs extra verification beyond the selected tools.\n"
         "Return JSON only with this shape:\n"
         "{\n"
         '  "objective": "short task objective in the user language",\n'
         f'  "task_type": "{_schema_union(catalog.task_types)}",\n'
-        f'  "required_tool_groups": ["{_schema_union(catalog.tool_group_ids)}"],\n'
+        f'  "required_tools": ["{_schema_union(catalog.available_tool_names)}"],\n'
         f'  "quality_checks": ["{_schema_union(_ALLOWED_PLANNER_QUALITY_CHECKS)}"],\n'
         '  "final_answer_required": true,\n'
         '  "allow_no_tool_final": true,\n'
@@ -2212,35 +2213,30 @@ def _contract_from_task_planner_payload(
             PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
-    raw_tool_groups = _normalize_planner_tool_groups(
-        payload.get("required_tool_groups"),
-        allowed_tool_groups=catalog.tool_group_ids,
+    required_tools = _normalize_planner_required_tools(
+        payload.get("required_tools"),
+        allowed_tools=catalog.available_tool_names,
     )
     quality_checks = _normalize_planner_quality_checks(payload.get("quality_checks"))
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
-    tool_groups = raw_tool_groups
-    if task_type == HISTORY_RETRIEVAL_TASK_TYPE:
-        tool_groups = [tool_group for tool_group in tool_groups if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP]
-    inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
-    if (
-        inherited_tool_group in catalog.tool_group_ids
-        and inherited_tool_group not in tool_groups
-    ):
-        tool_groups.append(inherited_tool_group)
-    _ensure_task_type_tool_groups(task_type, tool_groups)
+    if task_type in TOOL_BACKED_TASK_TYPES and not required_tools:
+        raise TaskPlannerError(
+            PLANNER_MISSING_REQUIRED_TOOLS_REASON,
+            raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
+        )
 
     requirements: list[EvidenceRequirement] = []
     acceptance_criteria: list[AcceptanceCriterion] = []
     selected: list[ResourceRef] = []
 
-    for tool_group in tool_groups:
-        acceptance_criteria = _append_tool_group_contract(
-            tool_group,
-            requirements=requirements,
-            acceptance_criteria=acceptance_criteria,
-            resource_index=resource_index,
-            selected=selected,
-        )
+    acceptance_criteria = _append_required_tool_contract(
+        task_type,
+        required_tools,
+        requirements=requirements,
+        acceptance_criteria=acceptance_criteria,
+        resource_index=resource_index,
+        selected=selected,
+    )
 
     if WORKSPACE_LOCATION_QUALITY_CHECK in quality_checks:
         acceptance_criteria = _append_acceptance_criteria(
@@ -2252,9 +2248,8 @@ def _contract_from_task_planner_payload(
     metadata = {
         PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS,
         "raw_task_type": raw_task_type,
-        "required_tool_groups": list(tool_groups),
+        "required_tools": list(required_tools),
         "quality_checks": list(quality_checks),
-        "capability_tools": {key: list(value) for key, value in catalog.capability_tools.items()},
         PLANNER_METADATA_REASON_FIELD: planner_reason,
     }
     return TaskContract(
@@ -2263,27 +2258,48 @@ def _contract_from_task_planner_payload(
         requirements=tuple(requirements),
         acceptance_criteria=tuple(acceptance_criteria),
         selected_resources=tuple(dict.fromkeys(selected)),
+        required_tools=tuple(required_tools),
+        required_evidence=_required_evidence_from_requirements(requirements, required_tools=required_tools),
+        quality_checks=tuple(quality_checks),
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
-        allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
+        allow_no_tool_final=(
+            _coerce_bool(payload.get("allow_no_tool_final", not requirements and not required_tools))
+            and not requirements
+            and not required_tools
+        ),
         contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata=metadata,
     )
 
 
-def _normalize_planner_tool_groups(
+def _normalize_planner_required_tools(
     value: Any,
     *,
-    allowed_tool_groups: tuple[str, ...] | frozenset[str] | None = None,
+    allowed_tools: tuple[str, ...] | frozenset[str] | None = None,
 ) -> list[str]:
-    allowed = set(allowed_tool_groups or _ALLOWED_PLANNER_TOOL_GROUPS)
+    allowed = set(allowed_tools or ())
     raw_values = value if isinstance(value, list) else []
-    groups: list[str] = []
+    tools: list[str] = []
     for item in raw_values:
         text = _policy_value(item)
-        text = _PLANNER_TOOL_GROUP_ALIASES.get(text, text)
-        if text in allowed and text not in groups:
-            groups.append(text)
-    return groups
+        if text in allowed and text not in tools:
+            tools.append(text)
+    return tools
+
+
+def _required_evidence_from_requirements(
+    requirements: list[EvidenceRequirement],
+    *,
+    required_tools: list[str] | tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    evidence: list[str] = []
+    if required_tools:
+        evidence.append(REQUIRED_TOOL_EVIDENCE_KIND)
+    for requirement in requirements:
+        kind = _requirement_attr(requirement, "kind")
+        if kind and kind not in evidence:
+            evidence.append(kind)
+    return tuple(evidence)
 
 
 def _normalize_planner_quality_checks(value: Any) -> list[str]:
@@ -2294,12 +2310,6 @@ def _normalize_planner_quality_checks(value: Any) -> list[str]:
         if text in _ALLOWED_PLANNER_QUALITY_CHECKS and text not in checks:
             checks.append(text)
     return checks
-
-
-def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
-    for tool_group in _TASK_TYPE_REQUIRED_TOOL_GROUPS.get(task_type, ()):
-        if tool_group not in tool_groups:
-            tool_groups.append(tool_group)
 
 
 _CRITERION_MEDIA_FINAL_ANSWER = "media_final_answer"
@@ -2368,21 +2378,23 @@ def _acceptance_criterion(name: str) -> AcceptanceCriterion:
     return AcceptanceCriterion(**_ACCEPTANCE_CRITERION_SPECS[name])
 
 
-def _append_tool_group_contract(
-    tool_group: str,
+def _append_required_tool_contract(
+    task_type: str,
+    required_tools: list[str],
     *,
     requirements: list[EvidenceRequirement],
     acceptance_criteria: list[AcceptanceCriterion],
     resource_index: ResourceIndex,
     selected: list[ResourceRef],
 ) -> list[AcceptanceCriterion]:
-    if is_web_research_tool_group(tool_group):
+    tool_names = frozenset(required_tools)
+    if is_web_research_task_type(task_type) or tool_names & WEB_SOURCE_ARTIFACT_TOOLS:
         _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
-        return acceptance_criteria
-    if tool_group == WORKSPACE_READ_TOOL_GROUP:
+
+    if task_type == WORKSPACE_READ_TASK_TYPE or tool_names & WORKSPACE_DISCOVERY_TOOL_NAMES:
         _append_workspace_contract(requirements, acceptance_criteria)
-        return acceptance_criteria
-    if tool_group == WORKSPACE_WRITE_TOOL_GROUP:
+
+    if task_type in FILE_CHANGE_TASK_TYPES or tool_names & WORKSPACE_WRITE_TOOL_NAMES:
         _append_workspace_contract(requirements, acceptance_criteria)
         if not _has_requirement(requirements, kind=FILE_CHANGE_REQUIREMENT_KIND):
             requirements.append(
@@ -2392,44 +2404,63 @@ def _append_tool_group_contract(
                     description="Record at least one workspace file change.",
                 )
             )
-        return _append_acceptance_criteria(
+        acceptance_criteria = _append_acceptance_criteria(
             acceptance_criteria,
             (_acceptance_criterion(_CRITERION_VERIFICATION_OR_GAP),),
         )
-    if tool_group == MEDIA_TOOL_GROUP:
-        return _append_media_contract(
+
+    if task_type == MEDIA_EXTRACTION_TASK_TYPE or _is_media_tool_selected(tool_names):
+        acceptance_criteria = _append_media_contract(
             requirements,
             acceptance_criteria,
             resource_index=resource_index,
             selected=selected,
+            required_tools=tool_names,
         )
-    if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP:
-        requirements.append(_tool_group_requirement(HISTORY_RETRIEVAL_TOOL_GROUP))
-        return _append_acceptance_criteria(
+
+    if task_type == HISTORY_RETRIEVAL_TASK_TYPE or _is_history_tool_selected(tool_names):
+        _append_tool_evidence_requirement(
+            requirements,
+            tools=_history_evidence_tools(tool_names),
+            description="Search prior chat history before answering this recall request.",
+        )
+        acceptance_criteria = _append_acceptance_criteria(
             acceptance_criteria,
             (_acceptance_criterion(_CRITERION_HISTORY_FINAL_ANSWER),),
         )
-    if tool_group in OPERATION_TOOL_GROUPS:
-        requirements.append(_tool_group_requirement(tool_group))
-        return _append_acceptance_criteria(
+
+    if task_type == OPERATIONS_TASK_TYPE or _is_operation_tool_selected(tool_names):
+        _append_tool_evidence_requirement(
+            requirements,
+            tools=_operation_evidence_tools(tool_names),
+            description="Use the selected operation tool before finalizing the answer.",
+        )
+        acceptance_criteria = _append_acceptance_criteria(
             acceptance_criteria,
             (_acceptance_criterion(_CRITERION_OPERATION_REPORT),),
         )
-    if tool_group == VERIFICATION_TOOL_GROUP:
+
+    if VERIFICATION_TOOL_NAME in tool_names:
         requirements.append(
             EvidenceRequirement(
                 kind=VERIFICATION_REQUIREMENT_KIND,
-                tool_group=VERIFICATION_TOOL_GROUP,
+                tools=(VERIFICATION_TOOL_NAME,),
                 min_count=1,
                 description="Record verification evidence before finalizing.",
             )
         )
-        return acceptance_criteria
-    requirements.append(_tool_group_requirement(tool_group))
-    return _append_acceptance_criteria(
-        acceptance_criteria,
-        (_acceptance_criterion(_CRITERION_TOOL_BACKED_FINAL_ANSWER),),
-    )
+
+    if required_tools and not acceptance_criteria:
+        _append_tool_evidence_requirement(
+            requirements,
+            tools=tuple(required_tools),
+            description="Use at least one selected tool before finalizing the answer.",
+        )
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (_acceptance_criterion(_CRITERION_TOOL_BACKED_FINAL_ANSWER),),
+        )
+    return acceptance_criteria
 
 
 def _append_media_contract(
@@ -2438,6 +2469,7 @@ def _append_media_contract(
     *,
     resource_index: ResourceIndex,
     selected: list[ResourceRef],
+    required_tools: frozenset[str],
 ) -> list[AcceptanceCriterion]:
     image_resources = resource_index.by_kind("image")
     audio_resources = resource_index.by_kind("audio")
@@ -2447,7 +2479,7 @@ def _append_media_contract(
         requirements.append(
             EvidenceRequirement(
                 kind="resource_coverage",
-                tool_group="image_text",
+                tools=_coverage_tools(required_tools, (OCR_IMAGE_TOOL_NAME, ANALYZE_IMAGE_TOOL_NAME)),
                 resource_ids=tuple(item.id for item in image_resources),
                 coverage="all",
                 min_count=len(image_resources),
@@ -2458,7 +2490,7 @@ def _append_media_contract(
         requirements.append(
             EvidenceRequirement(
                 kind="resource_coverage",
-                tool_group="audio_text",
+                tools=_coverage_tools(required_tools, (TRANSCRIBE_AUDIO_TOOL_NAME,)),
                 resource_ids=tuple(item.id for item in audio_resources),
                 coverage="all",
                 min_count=len(audio_resources),
@@ -2469,15 +2501,13 @@ def _append_media_contract(
         requirements.append(
             EvidenceRequirement(
                 kind="resource_coverage",
-                tool_group="video_understanding",
+                tools=_coverage_tools(required_tools, (ANALYZE_VIDEO_TOOL_NAME,)),
                 resource_ids=tuple(item.id for item in video_resources),
                 coverage="all",
                 min_count=len(video_resources),
                 description="Analyze each referenced video before finalizing the answer.",
             )
         )
-    if not (image_resources or audio_resources or video_resources):
-        requirements.append(_tool_group_requirement(MEDIA_TOOL_GROUP))
     return _append_acceptance_criteria(
         acceptance_criteria,
         (
@@ -2493,16 +2523,11 @@ def _append_web_contract(
     *,
     min_source_count: int,
 ) -> None:
-    if not _has_requirement(requirements, kind="tool_group", tool_group=WEB_RESEARCH_TOOL_GROUP):
-        requirements.append(
-            EvidenceRequirement(
-                kind="tool_group",
-                tool_group=WEB_RESEARCH_TOOL_GROUP,
-                coverage="any",
-                min_count=1,
-                description="Use web research tools before answering this external information request.",
-            )
-        )
+    _append_tool_evidence_requirement(
+        requirements,
+        tools=tuple(sorted(WEB_SOURCE_ARTIFACT_TOOLS)),
+        description="Use web research tools before answering this external information request.",
+    )
     acceptance_criteria[:] = _append_acceptance_criteria(
         acceptance_criteria,
         (
@@ -2526,19 +2551,91 @@ def _append_workspace_contract(
     requirements: list[EvidenceRequirement],
     acceptance_criteria: list[AcceptanceCriterion],
 ) -> None:
-    if not _has_requirement(requirements, kind="tool_group", tool_group=WORKSPACE_READ_TOOL_GROUP):
-        requirements.append(
-            EvidenceRequirement(
-                kind="tool_group",
-                tool_group=WORKSPACE_READ_TOOL_GROUP,
-                coverage="any",
-                min_count=1,
-                description="Inspect the relevant workspace files or code context before answering.",
-            )
-        )
+    _append_tool_evidence_requirement(
+        requirements,
+        tools=_workspace_evidence_tools(),
+        description="Inspect the relevant workspace files or code context before answering.",
+    )
     acceptance_criteria[:] = _append_acceptance_criteria(
         acceptance_criteria,
         (_acceptance_criterion(_CRITERION_WORKSPACE_FINAL_ANSWER),),
+    )
+
+
+def _append_tool_evidence_requirement(
+    requirements: list[EvidenceRequirement],
+    *,
+    tools: tuple[str, ...],
+    description: str,
+) -> None:
+    normalized_tools = tuple(dict.fromkeys(_policy_value(tool) for tool in tools if _policy_value(tool)))
+    if not normalized_tools or _has_requirement(requirements, kind=REQUIRED_TOOL_EVIDENCE_KIND, tools=normalized_tools):
+        return
+    requirements.append(
+        EvidenceRequirement(
+            kind=REQUIRED_TOOL_EVIDENCE_KIND,
+            tools=normalized_tools,
+            min_count=1,
+            description=description,
+        )
+    )
+
+
+def _coverage_tools(required_tools: frozenset[str], candidates: tuple[str, ...]) -> tuple[str, ...]:
+    selected = tuple(tool_name for tool_name in candidates if tool_name in required_tools)
+    return selected or candidates
+
+
+def _workspace_evidence_tools() -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                *WORKSPACE_DISCOVERY_TOOL_NAMES,
+                LIST_RUN_FILE_CHANGES_TOOL_NAME,
+                PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+            }
+        )
+    )
+
+
+def _history_evidence_tools(tool_names: frozenset[str]) -> tuple[str, ...]:
+    selected = tuple(tool_name for tool_name in (HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME) if tool_name in tool_names)
+    return selected or (HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME)
+
+
+def _operation_evidence_tools(tool_names: frozenset[str]) -> tuple[str, ...]:
+    candidates = (
+        EXEC_TOOL_NAME,
+        PROCESS_TOOL_NAME,
+        CRON_TOOL_NAME,
+        CONFIGURE_MCP_TOOL_NAME,
+        DELEGATE_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+    )
+    selected = tuple(tool_name for tool_name in candidates if tool_name in tool_names)
+    return selected or candidates
+
+
+def _is_media_tool_selected(tool_names: frozenset[str]) -> bool:
+    return bool(tool_names & {ANALYZE_IMAGE_TOOL_NAME, OCR_IMAGE_TOOL_NAME, TRANSCRIBE_AUDIO_TOOL_NAME, ANALYZE_VIDEO_TOOL_NAME})
+
+
+def _is_history_tool_selected(tool_names: frozenset[str]) -> bool:
+    return bool(tool_names & {HISTORY_SEARCH_TOOL_NAME, LIST_RUN_FILE_CHANGES_TOOL_NAME})
+
+
+def _is_operation_tool_selected(tool_names: frozenset[str]) -> bool:
+    return bool(
+        tool_names
+        & {
+            *EXECUTION_TOOL_NAMES,
+            CONFIGURE_MCP_TOOL_NAME,
+            CRON_TOOL_NAME,
+            DELEGATE_MANY_TOOL_NAME,
+            DELEGATE_TOOL_NAME,
+            RUN_WORKFLOW_TOOL_NAME,
+        }
     )
 
 

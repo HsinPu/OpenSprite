@@ -24,11 +24,6 @@ from .events import (
     CURATOR_STARTED_EVENT,
     EXECUTION_STOPPED_EVENT,
     FILE_CHANGED_EVENT,
-    HARNESS_CHECKPOINT_RECORDED_EVENT,
-    HARNESS_EVENT_PREFIX,
-    HARNESS_POLICY_SELECTED_EVENT,
-    HARNESS_PROFILE_SELECTED_EVENT,
-    HARNESS_SCORECARD_RECORDED_EVENT,
     LLM_EVENT_PREFIX,
     LLM_STATUS_EVENT,
     MESSAGE_PART_DELTA_EVENT,
@@ -42,14 +37,17 @@ from .events import (
     RUN_PART_DELTA_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_CHECKPOINT_RECORDED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
+    TASK_SCORECARD_RECORDED_EVENT,
     TEXT_DELTA_EVENTS,
     TASK_EVENT_PREFIX,
+    TOOL_ACCESS_RESOLVED_EVENT,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_EVENT_PREFIX,
     TOOL_INPUT_DELTA_EVENT,
@@ -109,8 +107,8 @@ RUN_WARNING_REVIEW_NOT_PASSED = "review_not_passed"
 RUN_WARNING_PARALLEL_DELEGATION_FAILED = "parallel_delegation_failed"
 RUN_WARNING_PARALLEL_DELEGATION_CANCELLED = "parallel_delegation_cancelled"
 RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC = "external_http_via_exec"
-RUN_WARNING_HARNESS_PREFIX = "harness_"
-RUN_WARNING_HARNESS_STATUSES = frozenset({"warn", "fail"})
+RUN_WARNING_TASK_SCORECARD_PREFIX = "task_scorecard_"
+RUN_WARNING_TASK_SCORECARD_STATUSES = frozenset({"warn", "fail"})
 RUN_FAILED_STATUSES = frozenset({"failed", "error"})
 RUN_CANCELLED_STATUSES = frozenset({"cancelled", "cancelling"})
 RUN_STATUS_WARNING_STATUSES = frozenset({"failed", "cancelled"})
@@ -163,17 +161,16 @@ _EVENT_KINDS = {
     WORKTREE_CLEANUP_COMPLETED_EVENT: "work",
     WORKTREE_CLEANUP_FAILED_EVENT: "work",
     COMPLETION_GATE_EVALUATED_EVENT: "completion",
-    HARNESS_PROFILE_SELECTED_EVENT: "harness",
-    HARNESS_POLICY_SELECTED_EVENT: "harness",
-    HARNESS_CHECKPOINT_RECORDED_EVENT: "harness",
-    HARNESS_SCORECARD_RECORDED_EVENT: "harness",
-    TASK_CONTRACT_CREATED_EVENT: "harness",
+    TASK_CONTRACT_CREATED_EVENT: "work",
+    TASK_CHECKPOINT_RECORDED_EVENT: "work",
+    TASK_SCORECARD_RECORDED_EVENT: "work",
     EXECUTION_STOPPED_EVENT: "llm",
     AUTO_CONTINUE_SCHEDULED_EVENT: "run",
     AUTO_CONTINUE_COMPLETED_EVENT: "run",
     BACKGROUND_PROCESS_STARTED_EVENT: "process",
     BACKGROUND_PROCESS_COMPLETED_EVENT: "process",
     BACKGROUND_PROCESS_LOST_EVENT: "process",
+    TOOL_ACCESS_RESOLVED_EVENT: "tool",
     TOOL_STARTED_EVENT: "tool",
     TOOL_RESULT_EVENT: "tool",
     VERIFICATION_STARTED_EVENT: "verification",
@@ -250,8 +247,6 @@ def run_event_kind(event_type: str) -> str:
         return "work"
     if normalized.startswith(PERMISSION_EVENT_PREFIX):
         return "permission"
-    if normalized.startswith(HARNESS_EVENT_PREFIX):
-        return "harness"
     if normalized.startswith(RUN_EVENT_PREFIX) or normalized in AUTO_CONTINUE_EVENTS:
         return "run"
     return "other"
@@ -652,12 +647,12 @@ def run_part_kind(part_type: str) -> str:
         return "system"
     if normalized == "task_checklist":
         return "task"
+    if normalized in {"task_checkpoint", "task_scorecard"}:
+        return "task"
     if normalized == "llm_step":
         return "llm"
     if normalized == "worktree_sandbox":
         return "work"
-    if normalized in {"harness_checkpoint", "harness_scorecard"}:
-        return "harness"
     return "other"
 
 
@@ -733,12 +728,12 @@ def run_part_artifact(
     if part_type == "worktree_sandbox":
         title = "Worktree sandbox"
         detail = _text(safe_metadata.get("status") or safe_metadata.get("reason"))
-    if part_type == "harness_checkpoint":
+    if part_type == "task_checkpoint":
         completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
-        title = "Harness checkpoint"
+        title = "Task checkpoint"
         detail = _text(
             content
-            or " · ".join(
+            or " 繚 ".join(
                 item
                 for item in (
                     safe_metadata.get("next_action"),
@@ -748,9 +743,9 @@ def run_part_artifact(
                 if item
             )
         )
-    if part_type == "harness_scorecard":
+    if part_type == "task_scorecard":
         completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
-        title = "Harness scorecard"
+        title = "Task scorecard"
         detail = _text(content or completion.get("status"))
     if not detail and kind == "text":
         detail = str(content or "")[:240]
@@ -1273,7 +1268,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     parallel_delegation = _summarize_parallel_delegation(events)
     structured_subagents = _summarize_structured_subagents(events)
     workflows = _summarize_workflows(events)
-    harness_scorecard = _summarize_harness_scorecard(events, parts)
+    task_scorecard = _summarize_task_scorecard(events, parts)
     artifacts = serialize_run_artifacts(trace)
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
@@ -1287,8 +1282,8 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         warnings.append(RUN_WARNING_PARALLEL_DELEGATION_FAILED)
     if any(str(group.get("status") or "") in RUN_CANCELLED_STATUSES for group in parallel_delegation.get("groups", [])):
         warnings.append(RUN_WARNING_PARALLEL_DELEGATION_CANCELLED)
-    if harness_scorecard.get("status") in RUN_WARNING_HARNESS_STATUSES:
-        warnings.append(f"{RUN_WARNING_HARNESS_PREFIX}{harness_scorecard['status']}")
+    if task_scorecard.get("status") in RUN_WARNING_TASK_SCORECARD_STATUSES:
+        warnings.append(f"{RUN_WARNING_TASK_SCORECARD_PREFIX}{task_scorecard['status']}")
     if getattr(run, "status", None) in RUN_STATUS_WARNING_STATUSES:
         warnings.append(run.status)
     if _has_external_http_exec_artifact(artifacts):
@@ -1317,7 +1312,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         "parallel_delegation": parallel_delegation,
         "structured_subagents": structured_subagents,
         "workflows": workflows,
-        "harness_scorecard": harness_scorecard,
+        "task_scorecard": task_scorecard,
         "artifact_counts": {
             "total": len(artifacts),
             "tool": sum(1 for artifact in artifacts if artifact.get("kind") == "tool"),
@@ -1336,11 +1331,11 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     }
 
 
-def _summarize_harness_scorecard(events: list[Any], parts: list[Any]) -> dict[str, Any]:
-    payload = _latest_event_payload(events, HARNESS_SCORECARD_RECORDED_EVENT) or {}
+def _summarize_task_scorecard(events: list[Any], parts: list[Any]) -> dict[str, Any]:
+    payload = _latest_event_payload(events, TASK_SCORECARD_RECORDED_EVENT) or {}
     if not payload:
         for part in reversed(parts):
-            if getattr(part, "part_type", None) == "harness_scorecard":
+            if getattr(part, "part_type", None) == "task_scorecard":
                 payload = dict(getattr(part, "metadata", {}) or {})
                 break
     if not payload:
@@ -1353,6 +1348,7 @@ def _summarize_harness_scorecard(events: list[Any], parts: list[Any]) -> dict[st
             "failing_sensors": [],
             "warning_sensors": [],
         }
+    task = payload.get("task") if isinstance(payload.get("task"), dict) else {}
     profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
     contract = payload.get("contract") if isinstance(payload.get("contract"), dict) else {}
     trace_health = payload.get("trace_health") if isinstance(payload.get("trace_health"), dict) else {}
@@ -1362,7 +1358,7 @@ def _summarize_harness_scorecard(events: list[Any], parts: list[Any]) -> dict[st
         "present": True,
         "status": _text(trace_health.get("status") or "unknown"),
         "profile": _text(profile.get("name")),
-        "task_type": _text(contract.get("task_type")),
+        "task_type": _text(task.get("task_type") or contract.get("task_type") or profile.get("task_type")),
         "sensor_counts": {
             "pass": _non_negative_int(sensor_counts.get("pass")),
             "warn": _non_negative_int(sensor_counts.get("warn")),

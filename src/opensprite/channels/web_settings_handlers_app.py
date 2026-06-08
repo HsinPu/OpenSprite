@@ -152,9 +152,9 @@ async def handle_settings_permissions(adapter: Any, request: web.Request) -> web
     return web.json_response({"permissions": adapter._permissions_payload(config)})
 
 
-async def handle_settings_harness_policy_preview(adapter: Any, request: web.Request) -> web.Response:
+async def handle_settings_tool_access_preview(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"harness_policy_preview": adapter._harness_policy_preview_payload(config)})
+    return web.json_response({"tool_access_preview": adapter._tool_access_preview_payload(config)})
 
 
 async def handle_settings_permissions_update(adapter: Any, request: web.Request) -> web.Response:

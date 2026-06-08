@@ -37,7 +37,6 @@ class TaskContractService:
         current_audio_files: list[str] | None = None,
         current_video_files: list[str] | None = None,
         task_context_decision: TaskContextDecision | None = None,
-        harness_profile: Any | None = None,
     ) -> TaskContract:
         objective = str(task_intent.objective or current_message or "").strip()
         text = f"{objective}\n{current_message or ''}"
@@ -55,36 +54,54 @@ class TaskContractService:
         )
 
         requirements: list[EvidenceRequirement] = []
+        required_tools: list[str] = []
         criteria: list[AcceptanceCriterion] = []
         task_type = "pure_answer" if task_intent.kind in {"conversation", "question", "command"} else (task_intent.kind or "task")
         selected = []
-        inherited_tool_group = task_context_decision.inherited_tool_group
+        inherited_task_type = task_context_decision.inherited_task_type
 
-        if harness_profile is not None and getattr(harness_profile, "name", "") == "chat":
-            task_type = "pure_answer"
-        elif resource_index.by_kind("image"):
+        if resource_index.by_kind("image"):
             selected.extend(resource_index.by_kind("image"))
-            requirements.append(_resource_requirement("image_text", selected, "Inspect each referenced image before finalizing the answer."))
+            required_tools.append("analyze_image")
+            requirements.append(_resource_requirement(("analyze_image", "ocr_image"), selected, "Inspect each referenced image before finalizing the answer."))
             criteria.append(_substantive("Provide a substantive final answer that uses the inspected media results."))
             task_type = "media_extraction"
         elif resource_index.by_kind("audio"):
             selected.extend(resource_index.by_kind("audio"))
-            requirements.append(_resource_requirement("audio_text", selected, "Transcribe each referenced audio clip before finalizing the answer."))
+            required_tools.append("transcribe_audio")
+            requirements.append(_resource_requirement(("transcribe_audio",), selected, "Transcribe each referenced audio clip before finalizing the answer."))
             criteria.append(_substantive("Provide a substantive final answer that uses the inspected media results."))
             task_type = "media_extraction"
         elif resource_index.by_kind("video"):
             selected.extend(resource_index.by_kind("video"))
-            requirements.append(_resource_requirement("video_understanding", selected, "Analyze each referenced video before finalizing the answer."))
+            required_tools.append("analyze_video")
+            requirements.append(_resource_requirement(("analyze_video",), selected, "Analyze each referenced video before finalizing the answer."))
             criteria.append(_substantive("Provide a substantive final answer that uses the inspected media results."))
             task_type = "media_extraction"
 
-        if not requirements and _needs_workspace(text, inherited_tool_group):
-            requirements.append(EvidenceRequirement(kind="tool_group", tool_group="workspace_read", min_count=1, description="Inspect the relevant workspace files or code context before answering."))
+        if not requirements and not required_tools and _needs_workspace(text, inherited_task_type):
+            required_tools.append("read_file")
+            requirements.append(
+                EvidenceRequirement(
+                    kind="required_tool",
+                    tools=("read_file", "list_dir", "glob_files", "grep_files", "code_navigation"),
+                    min_count=1,
+                    description="Inspect the relevant workspace files or code context before answering.",
+                )
+            )
             criteria.append(_substantive("Answer with relevant workspace context."))
             task_type = "workspace_read"
 
-        if not requirements and _needs_web(text, inherited_tool_group):
-            requirements.append(EvidenceRequirement(kind="tool_group", tool_group="web_research", min_count=1, description="Use web research tools before answering this external information request."))
+        if not requirements and not required_tools and _needs_web(text, inherited_task_type):
+            required_tools.append("web_search")
+            requirements.append(
+                EvidenceRequirement(
+                    kind="required_tool",
+                    tools=("web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"),
+                    min_count=1,
+                    description="Use web research tools before answering this external information request.",
+                )
+            )
             criteria.extend(
                 [
                     AcceptanceCriterion(kind="source_artifact", min_count=1 if _URL_RE.search(text) else 2, description="Produce enough traceable web sources before finalizing the answer."),
@@ -98,17 +115,27 @@ class TaskContractService:
                 )
             task_type = "web_research"
 
-        if not requirements and _needs_history(text, inherited_tool_group):
-            requirements.append(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval", min_count=1, description="Search prior chat history before answering this recall request."))
+        if not requirements and not required_tools and _needs_history(text, inherited_task_type):
+            required_tools.append("search_history")
+            requirements.append(
+                EvidenceRequirement(
+                    kind="required_tool",
+                    tools=("search_history", "list_run_file_changes"),
+                    min_count=1,
+                    description="Search prior chat history before answering this recall request.",
+                )
+            )
             criteria.append(_substantive("Answer using the relevant prior conversation context."))
             task_type = "history_retrieval"
 
-        if task_intent.expects_code_change and not _chat_profile(harness_profile):
+        if task_intent.expects_code_change:
+            required_tools.extend(["read_file", "apply_patch"])
             requirements.append(EvidenceRequirement(kind="file_change", min_count=1, description="Record at least one workspace file change."))
             task_type = "code_change"
 
-        if task_intent.expects_verification and not _chat_profile(harness_profile):
-            requirements.append(EvidenceRequirement(kind="verification", tool_group="verification", min_count=1, description="Record verification evidence before finalizing."))
+        if task_intent.expects_verification:
+            required_tools.append("verify")
+            requirements.append(EvidenceRequirement(kind="verification", tools=("verify",), min_count=1, description="Record verification evidence before finalizing."))
 
         requested_count = _requested_item_count(objective)
         if requested_count >= 3:
@@ -127,39 +154,35 @@ class TaskContractService:
             requirements=tuple(requirements),
             acceptance_criteria=tuple(criteria),
             selected_resources=tuple(selected),
+            required_tools=tuple(dict.fromkeys(required_tools)),
             final_answer_required=True,
-            allow_no_tool_final=not requirements,
+            allow_no_tool_final=not requirements and not required_tools,
             contract_sources=("test_fixture",),
-            harness_profile=harness_profile.to_metadata() if harness_profile is not None and hasattr(harness_profile, "to_metadata") else None,
         )
 
 
-def _chat_profile(profile: Any | None) -> bool:
-    return profile is not None and getattr(profile, "name", "") == "chat"
-
-
-def _needs_web(text: str, inherited_tool_group: str | None) -> bool:
+def _needs_web(text: str, inherited_task_type: str | None) -> bool:
     if _NO_WEB_RE.search(text or "") or _PURE_ANSWER_RE.search(text or ""):
         return False
     if _needs_workspace(text, None):
         return False
-    return inherited_tool_group == "web_research" or bool(_URL_RE.search(text or "") or _WEB_RE.search(text or ""))
+    return inherited_task_type == "web_research" or bool(_URL_RE.search(text or "") or _WEB_RE.search(text or ""))
 
 
-def _needs_workspace(text: str, inherited_tool_group: str | None) -> bool:
+def _needs_workspace(text: str, inherited_task_type: str | None) -> bool:
     if _NO_WORKSPACE_RE.search(text or "") or _PURE_ANSWER_RE.search(text or ""):
         return False
-    return inherited_tool_group == "workspace_read" or bool(_WORKSPACE_RE.search(text or ""))
+    return inherited_task_type == "workspace_read" or bool(_WORKSPACE_RE.search(text or ""))
 
 
-def _needs_history(text: str, inherited_tool_group: str | None) -> bool:
-    return inherited_tool_group == "history_retrieval" or bool(_HISTORY_RE.search(text or ""))
+def _needs_history(text: str, inherited_task_type: str | None) -> bool:
+    return inherited_task_type == "history_retrieval" or bool(_HISTORY_RE.search(text or ""))
 
 
-def _resource_requirement(tool_group: str, selected: list[Any], description: str) -> EvidenceRequirement:
+def _resource_requirement(tools: tuple[str, ...], selected: list[Any], description: str) -> EvidenceRequirement:
     return EvidenceRequirement(
         kind="resource_coverage",
-        tool_group=tool_group,
+        tools=tools,
         resource_ids=tuple(item.id for item in selected),
         coverage="all",
         min_count=len(selected),

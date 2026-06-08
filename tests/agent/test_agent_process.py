@@ -43,14 +43,14 @@ from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
     CURATOR_STARTED_EVENT,
     FILE_CHANGED_EVENT,
-    HARNESS_CHECKPOINT_RECORDED_EVENT,
-    HARNESS_SCORECARD_RECORDED_EVENT,
     LLM_STATUS_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_CHECKPOINT_RECORDED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
+    TASK_SCORECARD_RECORDED_EVENT,
     TOOL_APPROVAL_APPROVED_EVENT,
     TOOL_APPROVAL_REQUESTED_EVENT,
     TOOL_PERMISSION_ALLOWED_EVENT,
@@ -73,6 +73,7 @@ from opensprite.tools.process_runtime import BackgroundSession
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import tool_error_result
 from opensprite.tools.shell_runtime import CapturedOutputChunk
+from tests.agent.agent_test_helpers import make_tool_registry
 
 
 class FakeContextBuilder:
@@ -198,7 +199,6 @@ def _initial_task_planning_response(messages) -> LLMResponse:
             "should_seed_active_task": continuation_type == "new_task",
             "should_replace_active_task": False,
             "inherited_task_type": None,
-            "inherited_tool_group": None,
             "continuation_type": continuation_type,
             "confidence": 0.8,
             "reason": "test initial task planning",
@@ -377,9 +377,15 @@ def _completion_judge_response(messages) -> LLMResponse:
 
 
 def _planner_response(task_type: str = "code_change") -> LLMResponse:
+    if task_type == "code_change":
+        required_tools = ["read_file", "apply_patch"]
+    elif task_type == "planning":
+        required_tools = ["read_file"]
+    else:
+        required_tools = []
     payload = {
         "task_type": task_type,
-        "required_tool_groups": ["workspace_read", "workspace_write"] if task_type == "code_change" else [],
+        "required_tools": required_tools,
         "allow_no_tool_final": task_type == "pure_answer",
         "final_answer_required": True,
         "reason": "test planner contract",
@@ -430,7 +436,7 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
     valid_contract = TaskContract(
         objective="Find sources",
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
         contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
@@ -461,7 +467,7 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
     valid_contract = TaskContract(
         objective="Find sources",
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
         contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
@@ -492,17 +498,15 @@ def test_aggregate_execution_results_keeps_tool_contract_over_auto_continue_pure
     web_contract = TaskContract(
         objective="Find sources",
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
         contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-        harness_profile={"name": "research", "task_type": "web_research"},
     )
     final_answer_contract = TaskContract(
         objective="Continue the current task",
         task_type="pure_answer",
         contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-        harness_profile={"name": "chat", "task_type": "pure_answer"},
     )
 
     aggregate = AgentTurnRunner._aggregate_execution_results(
@@ -575,7 +579,14 @@ class WorkflowAuthorityProvider:
         if _is_initial_task_planning_call(messages, tools):
             return _initial_task_planning_response(messages)
         if _is_planner_call(messages, tools):
-            return _planner_response()
+            payload = {
+                "task_type": "operations",
+                "required_tools": ["run_workflow"],
+                "allow_no_tool_final": False,
+                "final_answer_required": True,
+                "reason": "test planner workflow contract",
+            }
+            return LLMResponse(content=json.dumps(payload), model="fake-model")
         if _is_completion_judge_call(messages, tools):
             return _completion_judge_response(messages)
         latest_user_text = next(
@@ -962,9 +973,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
                     objective="hello",
                     task_type="pure_answer",
                     contract_sources=("test",),
-                    harness_profile={"name": "chat", "task_type": "pure_answer"},
                 ),
-                harness_policy={"name": "chat_guidance_policy"},
                 context_compactions=1,
                 context_compaction_events=[
                     ContextCompactionEvent(
@@ -1011,8 +1020,8 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
         LLM_STATUS_EVENT,
         COMPLETION_GATE_EVALUATED_EVENT,
         WORK_PROGRESS_UPDATED_EVENT,
-        HARNESS_CHECKPOINT_RECORDED_EVENT,
-        HARNESS_SCORECARD_RECORDED_EVENT,
+        TASK_CHECKPOINT_RECORDED_EVENT,
+        TASK_SCORECARD_RECORDED_EVENT,
         RUN_FINISHED_EVENT,
     ]
     assert events[0].payload["status"] == "running"
@@ -1021,15 +1030,15 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert events[3].payload["status"] == "complete"
     assert events[4].payload["next_action"] == "finalize"
     assert events[5].payload["next_action"] == "finalize"
-    assert events[6].payload["profile"]["name"] == "chat"
+    assert events[6].payload["task"]["task_type"] == "pure_answer"
     assert events[6].payload["completion"]["status"] == "complete"
     assert events[-1].payload["status"] == "completed"
-    assert [part.part_type for part in parts] == ["context_compaction", "harness_checkpoint", "harness_scorecard", "assistant_message"]
+    assert [part.part_type for part in parts] == ["context_compaction", "task_checkpoint", "task_scorecard", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
     assert parts[0].metadata["messages_before"] == 8
-    assert parts[1].metadata["harness_profile"]["name"] == "chat"
+    assert parts[1].metadata["task_type"] == "pure_answer"
     assert parts[1].metadata["next_action"] == "finalize"
-    assert parts[2].metadata["profile"]["name"] == "chat"
+    assert parts[2].metadata["task"]["task_type"] == "pure_answer"
     assert parts[2].metadata["completion"]["status"] == "complete"
     assert parts[3].content == "assistant reply"
     assert parts[3].metadata["executed_tool_calls"] == 0
@@ -1721,8 +1730,7 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
 
 def test_agent_process_seeds_active_task_from_initial_llm_context(tmp_path):
     async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
+        registry = make_tool_registry("read_file", "apply_patch")
         storage = FakeStorage()
         context_builder = FakeContextBuilder(tmp_path)
         context_builder.app_home = tmp_path / "home"
@@ -1983,13 +1991,11 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
                         task_type="code_change",
                         requirements=(
                             EvidenceRequirement(kind="file_change", min_count=1),
-                            EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                            EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
                         ),
                         allow_no_tool_final=False,
                         contract_sources=("test",),
-                        harness_profile={"name": "coding", "task_type": "workspace_change"},
                     ),
-                    harness_policy={"name": "workspace_change_guidance_policy"},
                 )
             return ExecutionResult(
                 content="Verification passed and the refactor is complete.",
@@ -2003,13 +2009,11 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
                     task_type="code_change",
                     requirements=(
                         EvidenceRequirement(kind="file_change", min_count=1),
-                        EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                        EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
                     ),
                     allow_no_tool_final=False,
                     contract_sources=("test",),
-                    harness_profile={"name": "coding", "task_type": "workspace_change"},
                 ),
-                harness_policy={"name": "workspace_change_guidance_policy"},
             )
 
         agent.call_llm = fake_call_llm
@@ -2040,13 +2044,13 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         WORK_PLAN_CREATED_EVENT,
         COMPLETION_GATE_EVALUATED_EVENT,
         WORK_PROGRESS_UPDATED_EVENT,
-        HARNESS_CHECKPOINT_RECORDED_EVENT,
-        HARNESS_SCORECARD_RECORDED_EVENT,
+        TASK_CHECKPOINT_RECORDED_EVENT,
+        TASK_SCORECARD_RECORDED_EVENT,
         AUTO_CONTINUE_SCHEDULED_EVENT,
         COMPLETION_GATE_EVALUATED_EVENT,
         WORK_PROGRESS_UPDATED_EVENT,
-        HARNESS_CHECKPOINT_RECORDED_EVENT,
-        HARNESS_SCORECARD_RECORDED_EVENT,
+        TASK_CHECKPOINT_RECORDED_EVENT,
+        TASK_SCORECARD_RECORDED_EVENT,
         AUTO_CONTINUE_COMPLETED_EVENT,
         AUTO_CONTINUE_SKIPPED_EVENT,
         TASK_CHECKLIST_UPDATED_EVENT,
@@ -2064,8 +2068,8 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[14].payload["reason"] == REVIEW_EVIDENCE_STILL_MISSING_REASON
     assert events[-1].payload["status"] == "needs_review"
     assert events[-1].payload["completion_gate"]["status"] == "needs_review"
-    assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
-    assert sum(1 for part in parts if part.part_type == "harness_scorecard") == 2
+    assert sum(1 for part in parts if part.part_type == "task_checkpoint") == 2
+    assert sum(1 for part in parts if part.part_type == "task_scorecard") == 2
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1
     assert assistant_part.metadata["verification_passed"] is True
@@ -2366,11 +2370,10 @@ def test_agent_process_passes_tool_contract_override_to_auto_continue(tmp_path):
         web_contract = TaskContract(
             objective="Find the OpenRouter API base URL and cite the source.",
             task_type="web_research",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research", min_count=1),),
+            requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research"), min_count=1),),
             allow_no_tool_final=False,
             contract_sources=("test",),
             planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-            harness_profile={"name": "research", "task_type": "web_research"},
         )
         calls = []
         completion_calls = 0
@@ -2934,13 +2937,11 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
                     task_type="code_change",
                     requirements=(
                         EvidenceRequirement(kind="file_change", min_count=1),
-                        EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                        EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
                     ),
                     allow_no_tool_final=False,
                     contract_sources=("test",),
-                    harness_profile={"name": "coding", "task_type": "workspace_change"},
                 ),
-                harness_policy={"name": "workspace_change_guidance_policy"},
             )
 
         agent.call_llm = fake_call_llm
@@ -3153,11 +3154,9 @@ def test_agent_call_llm_returns_to_normal_registry_after_planning_contract(tmp_p
     assert "write_file" not in planning_tools
     assert "exec" not in planning_tools
     assert "verify" not in planning_tools
-    assert "write_file" in normal_tools
-    assert "edit_file" in normal_tools
+    assert "read_file" in normal_tools
     assert "apply_patch" in normal_tools
-    assert "exec" in normal_tools
-    assert "verify" in normal_tools
+    assert "write_file" not in normal_tools
 
 
 def test_agent_process_rejects_overlapping_runs_for_same_session(tmp_path):

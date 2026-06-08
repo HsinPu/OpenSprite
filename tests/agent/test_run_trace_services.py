@@ -19,9 +19,9 @@ from opensprite.runs.trace import (
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
-    HARNESS_SCORECARD_RECORDED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
+    TASK_SCORECARD_RECORDED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     VERIFICATION_RESULT_EVENT,
@@ -40,7 +40,7 @@ from opensprite.runs.schema import (
     RUN_SUMMARY_STATUS_NOT_ATTEMPTED,
     RUN_SUMMARY_STATUS_PASSED,
     RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC,
-    RUN_WARNING_HARNESS_PREFIX,
+    RUN_WARNING_TASK_SCORECARD_PREFIX,
     RUN_WARNING_PARALLEL_DELEGATION_FAILED,
     RUN_WARNING_REVIEW_NOT_PASSED,
     compact_run_events,
@@ -192,19 +192,18 @@ def test_run_trace_recorder_persists_llm_step_part():
     assert serialize_run_part(parts[0])["artifact"]["kind"] == "llm"
 
 
-def test_run_trace_recorder_persists_harness_checkpoint_part():
+def test_run_trace_recorder_persists_task_checkpoint_part():
     async def scenario():
         storage = MemoryStorage()
         recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
         await storage.create_run("web:browser-1", "run-1")
-        await recorder.record_harness_checkpoint_part(
+        await recorder.record_task_checkpoint_part(
             "web:browser-1",
             "run-1",
             {
                 "schema_version": 1,
                 "pass_index": 1,
-                "harness_profile": {"name": "coding"},
-                "harness_policy": {"name": "coding_workspace_policy"},
+                "task_type": "code_change",
                 "completion": {"status": "incomplete", "reason": "verification_missing"},
                 "next_action": "continue_work",
             },
@@ -214,26 +213,28 @@ def test_run_trace_recorder_persists_harness_checkpoint_part():
     parts = asyncio.run(scenario())
 
     assert len(parts) == 1
-    assert parts[0].part_type == "harness_checkpoint"
-    assert parts[0].content == "profile=coding · policy=coding_workspace_policy · completion=incomplete · next=continue_work"
+    assert parts[0].part_type == "task_checkpoint"
+    assert "task=code_change" in parts[0].content
+    assert "completion=incomplete" in parts[0].content
+    assert "next=continue_work" in parts[0].content
     assert parts[0].metadata["completion"]["reason"] == "verification_missing"
     serialized = serialize_run_part(parts[0])
-    assert serialized["kind"] == "harness"
-    assert serialized["artifact"]["title"] == "Harness checkpoint"
+    assert serialized["kind"] == "task"
+    assert serialized["artifact"]["title"] == "Task checkpoint"
 
 
-def test_run_trace_recorder_persists_harness_scorecard_part():
+def test_run_trace_recorder_persists_task_scorecard_part():
     async def scenario():
         storage = MemoryStorage()
         recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
         await storage.create_run("web:browser-1", "run-1")
-        await recorder.record_harness_scorecard_part(
+        await recorder.record_task_scorecard_part(
             "web:browser-1",
             "run-1",
             {
                 "schema_version": 1,
-                "kind": "harness_scorecard",
-                "profile": {"name": "coding"},
+                "kind": "task_scorecard",
+                "task": {"task_type": "code_change"},
                 "contract": {"task_type": "code_change"},
                 "completion": {"status": "incomplete"},
                 "trace_health": {"status": "fail", "sensor_counts": {"pass": 1, "warn": 1, "fail": 2}},
@@ -244,16 +245,15 @@ def test_run_trace_recorder_persists_harness_scorecard_part():
     parts = asyncio.run(scenario())
 
     assert len(parts) == 1
-    assert parts[0].part_type == "harness_scorecard"
-    assert "profile=coding" in parts[0].content
-    assert "contract=code_change" in parts[0].content
+    assert parts[0].part_type == "task_scorecard"
+    assert "task=code_change" in parts[0].content
     assert "completion=incomplete" in parts[0].content
     assert "trace=fail" in parts[0].content
     assert "sensors=1 pass/1 warn/2 fail" in parts[0].content
-    assert parts[0].metadata["profile"]["name"] == "coding"
+    assert parts[0].metadata["task"]["task_type"] == "code_change"
     serialized = serialize_run_part(parts[0])
-    assert serialized["kind"] == "harness"
-    assert serialized["artifact"]["title"] == "Harness scorecard"
+    assert serialized["kind"] == "task"
+    assert serialized["artifact"]["title"] == "Task scorecard"
 
 
 def test_worktree_sandbox_inspector_reports_disabled(tmp_path):
@@ -521,7 +521,7 @@ def test_serialize_run_event_classifies_planned_contract_event():
         event_type="task_contract.planned",
         payload={
             "task_type": "web_research",
-            "requirements": [{"kind": "tool_group", "tool_group": "web_research"}],
+            "requirements": [{"kind": "required_tool", "tools": ["web_search"]}],
             "planner_metadata": {PLANNER_METADATA_REASON_FIELD: "Current stock price needs web evidence."},
         },
         created_at=12.9,
@@ -536,7 +536,12 @@ def test_serialize_run_event_classifies_planned_contract_event():
 
 def test_serialize_run_events_preserves_planned_contract_routes():
     events = []
-    for event_id, tool_group in enumerate(("web_research", "workspace_read", "history_retrieval"), start=1):
+    routes = (
+        ("web_research", "web_search"),
+        ("workspace_read", "read_file"),
+        ("history_retrieval", "search_history"),
+    )
+    for event_id, (task_type, required_tool) in enumerate(routes, start=1):
         events.append(
             SimpleNamespace(
                 event_id=event_id,
@@ -544,11 +549,11 @@ def test_serialize_run_events_preserves_planned_contract_routes():
                 session_id="web:browser-1",
                 event_type="task_contract.planned",
                 payload={
-                    "task_type": tool_group,
-                    "requirements": [{"kind": "tool_group", "tool_group": tool_group}],
+                    "task_type": task_type,
+                    "requirements": [{"kind": "required_tool", "tools": [required_tool]}],
                     "planner_metadata": {
                         PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS,
-                        PLANNER_METADATA_REASON_FIELD: f"Route to {tool_group}.",
+                        PLANNER_METADATA_REASON_FIELD: f"Route to {task_type}.",
                     },
                 },
                 created_at=12.0 + event_id,
@@ -558,10 +563,10 @@ def test_serialize_run_events_preserves_planned_contract_routes():
     payload = serialize_run_events(events)
 
     assert [event["kind"] for event in payload] == ["work", "work", "work"]
-    assert [event["payload"]["requirements"][0]["tool_group"] for event in payload] == [
-        "web_research",
-        "workspace_read",
-        "history_retrieval",
+    assert [event["payload"]["requirements"][0]["tools"][0] for event in payload] == [
+        "web_search",
+        "read_file",
+        "search_history",
     ]
     assert all(
         event["payload"]["planner_metadata"][PLANNER_METADATA_STATUS_FIELD] == PLANNER_VALIDATED_STATUS
@@ -1423,10 +1428,10 @@ def test_serialize_run_summary_warns_on_external_http_exec():
     assert RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC in summary["warnings"]
 
 
-def test_serialize_run_summary_includes_harness_scorecard_health():
+def test_serialize_run_summary_includes_task_scorecard_health():
     trace = SimpleNamespace(
         run=SimpleNamespace(
-            run_id="run-harness",
+            run_id="run-task",
             session_id="web:browser-1",
             status="completed",
             metadata={"objective": "Research"},
@@ -1437,11 +1442,11 @@ def test_serialize_run_summary_includes_harness_scorecard_health():
         events=[
             SimpleNamespace(
                 event_id=1,
-                run_id="run-harness",
+                run_id="run-task",
                 session_id="web:browser-1",
-                event_type=HARNESS_SCORECARD_RECORDED_EVENT,
+                event_type=TASK_SCORECARD_RECORDED_EVENT,
                 payload={
-                    "profile": {"name": "research"},
+                    "task": {"task_type": "web_research"},
                     "contract": {"task_type": "web_research"},
                     "trace_health": {"status": "warn", "sensor_counts": {"pass": 2, "warn": 1, "fail": 0}},
                     "sensors": [
@@ -1458,16 +1463,16 @@ def test_serialize_run_summary_includes_harness_scorecard_health():
 
     summary = serialize_run_summary(trace)
 
-    assert summary["harness_scorecard"] == {
+    assert summary["task_scorecard"] == {
         "present": True,
         "status": "warn",
-        "profile": "research",
+        "profile": "",
         "task_type": "web_research",
         "sensor_counts": {"pass": 2, "warn": 1, "fail": 0, "not_applicable": 0},
         "failing_sensors": [],
         "warning_sensors": ["research.freshness"],
     }
-    assert f"{RUN_WARNING_HARNESS_PREFIX}warn" in summary["warnings"]
+    assert f"{RUN_WARNING_TASK_SCORECARD_PREFIX}warn" in summary["warnings"]
 
 
 def test_serialize_run_summary_collects_structured_subagent_results():

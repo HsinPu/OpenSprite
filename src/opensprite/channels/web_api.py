@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from typing import Any
-from uuid import uuid4
 
 from aiohttp import web
 
@@ -17,9 +16,7 @@ from . import web_api_control, web_api_evals, web_api_runs, web_api_sessions
 from ..bus.session_commands import session_command_catalog
 from ..config import Config
 from ..llms.context_window import resolve_context_window_tokens
-from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
-from ..runs.trace import RunTraceRecorder
 from ..runs.schema import (
     serialize_file_change,
     serialize_run_artifacts,
@@ -169,13 +166,6 @@ class WebApiHandlers:
             active_llm_model_info=_active_llm_model_info,
         )
 
-    async def handle_harness_controlled_eval(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_harness_controlled_eval(
-            self.adapter,
-            request,
-            persist_harness_controlled_eval_trace=_persist_harness_controlled_eval_trace,
-        )
-
     async def handle_task_completion_eval_history(self, request: web.Request) -> web.Response:
         return await web_api_evals.handle_task_completion_eval_history(self.adapter, request)
 
@@ -235,42 +225,6 @@ def _coerce_states(raw: str | None) -> tuple[str, ...] | None:
         return None
     states = tuple(item.strip() for item in str(raw).split(",") if item.strip())
     return states or None
-
-
-async def _persist_harness_controlled_eval_trace(adapter: Any, payload: dict[str, Any]) -> dict[str, Any] | None:
-    storage_getter = getattr(adapter, "_get_storage", None)
-    storage = storage_getter() if callable(storage_getter) else None
-    if storage is None:
-        return None
-    create_run = getattr(storage, "create_run", None)
-    if not callable(create_run):
-        return None
-    session_id = "web:evaluations"
-    run_id = f"harness-eval-{uuid4().hex[:12]}"
-    recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-    await recorder.create_run(
-        session_id,
-        run_id,
-        status="completed" if payload.get("ok") else "failed",
-        metadata={"kind": payload.get("kind"), "source": "settings_eval"},
-    )
-    await recorder.emit_event(
-        session_id,
-        run_id,
-        "harness_eval.completed" if payload.get("ok") else "harness_eval.failed",
-        payload,
-        channel=getattr(adapter, "channel_instance_id", None),
-        external_chat_id=None,
-    )
-    await recorder.record_harness_eval_result_part(session_id, run_id, payload)
-    await recorder.update_run_status(
-        session_id,
-        run_id,
-        "completed" if payload.get("ok") else "failed",
-        metadata={"kind": payload.get("kind"), "source": "settings_eval"},
-        finished_at=time.time(),
-    )
-    return {"session_id": session_id, "run_id": run_id, "part_type": "harness_eval_result"}
 
 
 async def _visible_session_ids(storage: Any) -> list[str]:

@@ -3912,7 +3912,7 @@ button:disabled {
   font-weight: 700;
 }
 
-.run-trace__harness-dashboard {
+.run-trace__task-dashboard {
   display: grid;
   gap: 10px;
   padding: 12px;
@@ -3921,7 +3921,7 @@ button:disabled {
   background: linear-gradient(135deg, rgba(246, 248, 255, 0.96), rgba(255, 255, 255, 0.88));
 }
 
-.run-trace__harness-head {
+.run-trace__task-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -3929,24 +3929,24 @@ button:disabled {
   gap: 8px;
 }
 
-.run-trace__harness-head strong {
+.run-trace__task-head strong {
   color: #28365f;
   font-size: 0.82rem;
   font-weight: 850;
 }
 
-.run-trace__harness-head small {
+.run-trace__task-head small {
   color: var(--text-muted);
   font-size: 0.74rem;
 }
 
-.run-trace__harness-grid {
+.run-trace__task-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 
-.run-trace__harness-card {
+.run-trace__task-card {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -3956,7 +3956,7 @@ button:disabled {
   background: rgba(255, 255, 255, 0.74);
 }
 
-.run-trace__harness-card small {
+.run-trace__task-card small {
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 750;
@@ -3964,15 +3964,15 @@ button:disabled {
   letter-spacing: 0.04em;
 }
 
-.run-trace__harness-card strong {
+.run-trace__task-card strong {
   overflow-wrap: anywhere;
   color: #1f2d4f;
   font-size: 0.78rem;
   line-height: 1.35;
 }
 
-.run-trace__harness-card[data-kind="completion"] strong,
-.run-trace__harness-card[data-kind="next"] strong {
+.run-trace__task-card[data-kind="completion"] strong,
+.run-trace__task-card[data-kind="next"] strong {
   color: #6d460b;
 }
 
@@ -5190,7 +5190,7 @@ button:disabled {
 .trace-sidebar .run-trace__parts,
 .trace-sidebar .run-trace__debug,
 .trace-sidebar .run-trace__retention,
-.trace-sidebar .run-trace__harness-dashboard,
+.trace-sidebar .run-trace__task-dashboard,
 .trace-sidebar .run-trace__artifact-group,
 .trace-sidebar .run-trace__parallel-group,
 .trace-sidebar .run-trace__artifact-card,
@@ -5311,17 +5311,17 @@ button:disabled {
   background: var(--warning-soft);
 }
 
-.trace-sidebar .run-trace__harness-dashboard {
+.trace-sidebar .run-trace__task-dashboard {
   border-color: var(--border-soft);
   background: var(--surface);
 }
 
-.trace-sidebar .run-trace__harness-head strong,
-.trace-sidebar .run-trace__harness-card strong {
+.trace-sidebar .run-trace__task-head strong,
+.trace-sidebar .run-trace__task-card strong {
   color: var(--text);
 }
 
-.trace-sidebar .run-trace__harness-card {
+.trace-sidebar .run-trace__task-card {
   border-color: var(--border-soft);
   background: var(--panel-subtle);
 }

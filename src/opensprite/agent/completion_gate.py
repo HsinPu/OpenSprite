@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from ..config import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..storage.base import StoredDelegatedTask
-from ..tool_names import BATCH_TOOL_NAME, EXECUTION_TOOL_NAMES
+from ..tool_names import BATCH_TOOL_NAME, EXECUTION_TOOL_NAMES, WORKSPACE_DISCOVERY_TOOL_NAMES
 from ..documents.active_task import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_STATUS,
@@ -18,17 +18,9 @@ from ..documents.active_task import (
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
 from ..subagent_prompts.profiles import REVIEW_PROMPT_TYPES
-from ..harness import (
+from .task.capabilities import (
     OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
-    VERIFICATION_TOOL_GROUP,
-    WORKSPACE_DISCOVERY_TOOLS,
-    HarnessProfile,
-    harness_profile_follow_up_instruction,
-    is_coding_profile_name,
-    is_media_profile_name,
-    is_ops_profile_name,
-    is_research_profile_name,
 )
 from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
 from .task.contract import (
@@ -43,7 +35,7 @@ from .task.contract import (
     is_one_turn_intent_kind,
     is_plain_answer_task_type,
     is_read_only_blocking_requirement_kind,
-    is_read_only_blocking_tool_group,
+    is_read_only_blocking_tool_name,
     is_read_only_task_type,
     is_workspace_read_task_type,
 )
@@ -98,8 +90,8 @@ from ..tools.evidence import (
     is_web_fetch_source_record_tool,
     is_web_research_task_type,
     is_web_research_source_artifact_tool,
-    is_web_research_tool_group,
     is_web_source_artifact_kind,
+    is_web_source_evidence_tool,
     ungrounded_response_source_urls,
     web_source_has_substantive_detail,
     web_source_is_referenced,
@@ -1776,10 +1768,14 @@ def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
 
 
 def _contract_requires_verification(task_contract: Any) -> bool:
-    return any(
+    if any(
         str(getattr(requirement, "kind", "") or "").strip() == VERIFICATION_REQUIREMENT_KIND
-        or str(getattr(requirement, "tool_group", "") or "").strip() == VERIFICATION_TOOL_GROUP
         for requirement in getattr(task_contract, "requirements", ()) or ()
+    ):
+        return True
+    return any(
+        is_verification_tool_name(tool_name)
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
     )
 
 
@@ -1799,8 +1795,8 @@ def _contract_is_read_only(task_contract: Any) -> bool:
     for requirement in getattr(task_contract, "requirements", ()) or ():
         if is_read_only_blocking_requirement_kind(str(getattr(requirement, "kind", "") or "")):
             return False
-        tool_group = str(getattr(requirement, "tool_group", "") or "")
-        if is_read_only_blocking_tool_group(tool_group):
+    for tool_name in getattr(task_contract, "required_tools", ()) or ():
+        if is_read_only_blocking_tool_name(tool_name):
             return False
     return False
 
@@ -1829,10 +1825,10 @@ def has_only_optional_workspace_discovery_failures(execution_result: ExecutionRe
     failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
     if not failed_evidence:
         return False
-    if not any(item.ok and item.name in WORKSPACE_DISCOVERY_TOOLS for item in execution_result.tool_evidence):
+    if not any(item.ok and item.name in WORKSPACE_DISCOVERY_TOOL_NAMES for item in execution_result.tool_evidence):
         return False
     for item in failed_evidence:
-        if item.name in WORKSPACE_DISCOVERY_TOOLS:
+        if item.name in WORKSPACE_DISCOVERY_TOOL_NAMES:
             continue
         if is_optional_workspace_batch_failure_tool(item.name) and execution_result.file_change_count <= 0:
             continue
@@ -1908,9 +1904,11 @@ def web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
 def _requires_web_research_evidence(task_contract: Any) -> bool:
     if is_web_research_task_type(getattr(task_contract, "task_type", None)):
         return True
+    if contract_requests_source_material(task_contract):
+        return True
     return any(
-        is_web_research_tool_group(getattr(requirement, "tool_group", None))
-        for requirement in getattr(task_contract, "requirements", ())
+        is_web_source_evidence_tool(tool_name)
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
     )
 
 
@@ -2927,7 +2925,6 @@ AUTO_CONTINUE_DIRECT_START_STEP_FIELD = "direct_start_step"
 AUTO_CONTINUE_DIRECT_VERIFY_ACTION_FIELD = "direct_verify_action"
 AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD = "direct_verify_path"
 AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD = "direct_verify_pytest_args"
-AUTO_CONTINUE_HARNESS_PROFILE_FIELD = "harness_profile"
 AUTO_CONTINUE_ALLOW_TOOLS_FIELD = "allow_tools"
 
 
@@ -3031,7 +3028,6 @@ class AutoContinueDecision:
     direct_verify_action: str | None = None
     direct_verify_path: str | None = None
     direct_verify_pytest_args: tuple[str, ...] = ()
-    harness_profile_name: str = ""
     allow_tools: bool = True
     emit_skipped_event: bool = False
 
@@ -3056,8 +3052,6 @@ class AutoContinueDecision:
             payload[AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD] = self.direct_verify_path
         if self.direct_verify_pytest_args:
             payload[AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD] = list(self.direct_verify_pytest_args)
-        if self.harness_profile_name:
-            payload[AUTO_CONTINUE_HARNESS_PROFILE_FIELD] = self.harness_profile_name
         if not self.allow_tools:
             payload[AUTO_CONTINUE_ALLOW_TOOLS_FIELD] = False
         return payload
@@ -3095,10 +3089,8 @@ class AutoContinueService:
         same_target_verify_attempts: int = 0,
         verification_available: bool = True,
         compaction_handoff: str | None = None,
-        harness_profile: HarnessProfile | None = None,
     ) -> AutoContinueDecision:
         """Return whether another bounded pass should run."""
-        profile_name = harness_profile.name if harness_profile is not None else ""
         next_attempt = attempts_used + 1
         max_attempts = work_progress.continuation_budget if work_progress is not None else self.max_auto_continues
         if is_terminal_completion_status(completion_result.status):
@@ -3190,7 +3182,6 @@ class AutoContinueService:
                 completion_result=completion_result,
                 previous_response=previous_response,
                 compaction_handoff=compaction_handoff,
-                harness_profile=harness_profile,
                 execution_result=execution_result,
                 allow_tools=allow_tools,
             ),
@@ -3199,7 +3190,6 @@ class AutoContinueService:
             direct_verify_action=direct_verify_action,
             direct_verify_path=direct_verify_path,
             direct_verify_pytest_args=direct_verify_pytest_args,
-            harness_profile_name=profile_name,
             allow_tools=allow_tools,
         )
 
@@ -3210,7 +3200,6 @@ class AutoContinueService:
         completion_result: CompletionGateResult,
         previous_response: str,
         compaction_handoff: str | None = None,
-        harness_profile: HarnessProfile | None = None,
         execution_result: ExecutionResult | None = None,
         allow_tools: bool = True,
         source_context_override: str | None = None,
@@ -3285,16 +3274,15 @@ class AutoContinueService:
         source_context = source_context_override if source_context_override is not None else _existing_web_source_context(execution_result)
         source_section = existing_web_source_section(source_context, allow_tools=allow_tools)
         quality_instruction = _quality_follow_up_instruction(completion_result, execution_result)
-        profile_instruction = harness_profile_follow_up_instruction(
-            harness_profile.name if harness_profile is not None else None
-        )
+        task_contract = execution_result.task_contract if execution_result is not None else None
+        contract_instruction = task_contract_follow_up_instruction(task_contract)
 
         return (
             "Continue the current task without asking the user unless you are blocked.\n"
             f"- Original objective: {task_intent.objective}\n"
             f"- Completion gate status: {completion_result.status}\n"
             f"- Completion gate reason: {completion_result.reason}"
-            f"{profile_instruction}\n"
+            f"{contract_instruction}\n"
             f"{verification_instruction}\n"
             f"{review_instruction}\n"
             f"{incomplete_instruction}\n"
@@ -3400,6 +3388,71 @@ class AutoContinueService:
         ):
             return None, None, ()
         return action, path, pytest_args
+
+
+def task_contract_follow_up_instruction(task_contract: TaskContract | None) -> str:
+    """Return retry guidance from the task contract."""
+    if task_contract is None:
+        return ""
+    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    tool_clause = _task_contract_required_tool_clause(task_contract)
+    if is_web_research_task_type(task_type) or _requires_web_research_evidence(task_contract):
+        return (
+            "\n- Task contract: web_research. Gather or reuse traceable source evidence before finalizing, "
+            "and reference gathered sources in the final answer."
+            f"{tool_clause}"
+        )
+    if is_media_extraction_task_type(task_type):
+        return (
+            "\n- Task contract: media_extraction. Use the relevant media tools to produce the required artifact "
+            "before finalizing."
+            f"{tool_clause}"
+        )
+    if contract_expects_file_change(task_contract):
+        return (
+            "\n- Task contract: code_change. Inspect workspace context, make the requested change, and run or report "
+            "focused verification when required."
+            f"{tool_clause}"
+        )
+    if is_operations_task_type(task_type):
+        return (
+            "\n- Task contract: operations. Execute only the requested operation, honor user permissions, and report "
+            "validation or blockers explicitly."
+            f"{tool_clause}"
+        )
+    if is_workspace_read_task_type(task_type):
+        return (
+            "\n- Task contract: workspace_read. Inspect the required workspace context and answer with concrete file "
+            "or code evidence."
+            f"{tool_clause}"
+        )
+    if is_history_retrieval_task_type(task_type):
+        return (
+            "\n- Task contract: history_retrieval. Retrieve the required prior context before finalizing."
+            f"{tool_clause}"
+        )
+    if _task_contract_required_tool_names(task_contract):
+        return "\n- Task contract tools: Use the required tools before finalizing." f"{tool_clause}"
+    return ""
+
+
+def _task_contract_required_tool_clause(task_contract: TaskContract) -> str:
+    required_tools = _task_contract_required_tool_names(task_contract)
+    if not required_tools:
+        return ""
+    return " Required tools: " + ", ".join(f"`{tool_name}`" for tool_name in required_tools) + "."
+
+
+def _task_contract_required_tool_names(task_contract: TaskContract) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for value in getattr(task_contract, "required_tools", ()) or ():
+        name = str(value or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return tuple(names)
 
 
 def _should_answer_from_existing_web_sources(

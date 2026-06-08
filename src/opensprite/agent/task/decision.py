@@ -56,6 +56,12 @@ _INITIAL_CONTINUATION_TYPES = (
     "ambiguous_boundary",
     "none",
 )
+_INITIAL_DONE_CRITERIA_KEYS = (
+    "done_criteria",
+    "success_criteria",
+    "acceptance_criteria",
+    "definition_of_done",
+)
 
 
 class InitialTaskPlanningError(RuntimeError):
@@ -252,7 +258,7 @@ def _task_intent_from_initial_payload(
     objective = _truncate_intent_objective(_compact_text(payload.get("objective")))
     if not objective:
         raise InitialTaskPlanningError("initial task planning response missing task_intent.objective")
-    done_criteria = _string_tuple(payload.get("done_criteria"))
+    done_criteria = _initial_done_criteria(payload)
     if not done_criteria:
         raise InitialTaskPlanningError("initial task planning response missing task_intent.done_criteria")
     return TaskIntent(
@@ -277,6 +283,14 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
         if text:
             items.append(text)
     return tuple(dict.fromkeys(items))
+
+
+def _initial_done_criteria(payload: dict[str, Any]) -> tuple[str, ...]:
+    for key in _INITIAL_DONE_CRITERIA_KEYS:
+        criteria = _string_tuple(payload.get(key))
+        if criteria:
+            return criteria
+    return ()
 
 
 def _optional_string(value: Any) -> str | None:
@@ -315,6 +329,31 @@ def _build_initial_task_planning_prompt(
         "allowed_intent_kinds": sorted(_INITIAL_TASK_INTENT_KINDS),
         "allowed_continuation_types": list(_INITIAL_CONTINUATION_TYPES),
     }
+    output_shape = {
+        "task_intent": {
+            "kind": "<one allowed_intent_kind>",
+            "objective": "<specific objective>",
+            "constraints": [],
+            "done_criteria": ["<one or more concrete completion checks>"],
+            "needs_clarification": False,
+            "long_running": False,
+            "expects_code_change": False,
+            "expects_verification": False,
+            "verification_hint": None,
+        },
+        "task_context": {
+            "is_follow_up": False,
+            "should_inherit_active_task": False,
+            "should_seed_active_task": True,
+            "should_replace_active_task": False,
+            "inherited_task_type": None,
+            "continuation_type": "<one allowed_continuation_type>",
+            "confidence": 0.0,
+            "reason": "<short reason>",
+        },
+        "confidence": 0.0,
+        "reason": "<short reason>",
+    }
     return (
         "Classify the latest user turn before the main assistant response.\n"
         "This is a routing decision, not the user-visible answer.\n"
@@ -323,11 +362,17 @@ def _build_initial_task_planning_prompt(
         "When the turn continues or resumes existing work, set task_intent.objective to the active/work-state objective, "
         "not the literal short message such as continue.\n"
         "Use conservative values when evidence is unclear.\n"
-        "Return only JSON with these keys:\n"
+        "Return only one JSON object. Copy these key names exactly:\n"
+        f"{json.dumps(output_shape, ensure_ascii=False, indent=2)}\n"
+        "Required fields:\n"
+        "- task_intent.done_criteria must be a non-empty array of strings and must stay under task_intent.\n"
+        "- task_context.continuation_type must be one allowed_continuation_type.\n"
+        "- task_context.confidence and confidence must be numbers from 0 to 1.\n"
+        "Output contract:\n"
         "- task_intent: object with kind, objective, constraints, done_criteria, needs_clarification, "
         "long_running, expects_code_change, expects_verification, verification_hint\n"
         "- task_context: object with is_follow_up, should_inherit_active_task, should_seed_active_task, "
-        "should_replace_active_task, inherited_task_type, inherited_tool_group, continuation_type, confidence, reason\n"
+        "should_replace_active_task, inherited_task_type, continuation_type, confidence, reason\n"
         "- confidence: number from 0 to 1 for the whole initial decision\n"
         "- reason: short reason for the whole initial decision\n"
         "Do not classify a normal slash command as a long-running task.\n"

@@ -7,21 +7,13 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from ...documents.active_task import is_current_active_task_status
-from ...harness import (
+from .capabilities import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
+    OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
-    VERIFICATION_TOOL_GROUP,
     WORKSPACE_CHANGE_TASK_TYPE,
-    WORKSPACE_WRITE_TOOL_GROUP,
-    HarnessProfile,
-    is_chat_profile_name,
-    is_coding_profile_name,
-    is_media_profile_name,
-    is_ops_profile_name,
-    is_research_profile_name,
-    normalize_profile_name,
 )
 from ...storage import StoredDelegatedTask, StoredWorkState
 from ...storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
@@ -39,10 +31,17 @@ from ..execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max
 from .contract import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
+    TaskContract,
     TaskContextDecision,
     TaskIntent,
+    contract_expects_file_change,
     intent_supports_default_work_plan,
+    is_history_retrieval_task_type,
+    is_media_extraction_task_type,
+    is_plain_answer_task_type,
+    is_workspace_read_task_type,
 )
+from ...tools.evidence import is_verification_tool_name, is_web_research_task_type, is_web_source_evidence_tool
 from ..workflow import is_workflow_failed_status
 
 
@@ -108,9 +107,6 @@ class WorkPlan:
     coding_task: bool
     expects_code_change: bool
     expects_verification: bool
-    harness_profile: str = ""
-    verification_policy: str = ""
-    continuation_policy: str = ""
 
     def to_metadata(self) -> dict[str, Any]:
         return {
@@ -124,9 +120,6 @@ class WorkPlan:
             "coding_task": self.coding_task,
             "expects_code_change": self.expects_code_change,
             "expects_verification": self.expects_verification,
-            "harness_profile": self.harness_profile,
-            "verification_policy": self.verification_policy,
-            "continuation_policy": self.continuation_policy,
         }
 
 
@@ -199,41 +192,29 @@ class WorkProgressService:
         self.default_continuation_budget = max(0, default_continuation_budget)
         self.long_running_continuation_budget = max(self.default_continuation_budget, long_running_continuation_budget)
 
-    def create_plan(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> WorkPlan | None:
+    def create_plan(
+        self,
+        task_intent: TaskIntent,
+        *,
+        task_contract: TaskContract | None = None,
+    ) -> WorkPlan | None:
         """Return a plan only for actionable tasks, not casual conversation."""
-        profile_name = normalize_profile_name(harness_profile.name if harness_profile is not None else "")
-        if is_chat_profile_name(profile_name):
-            return None
-        if not intent_supports_default_work_plan(task_intent) and profile_name == "":
+        if task_contract is not None:
+            return self._create_plan_from_contract(task_intent, task_contract)
+
+        if not intent_supports_default_work_plan(task_intent):
             return None
 
         steps: list[str]
-        if is_research_profile_name(profile_name):
-            steps = ["search for relevant sources", "fetch or inspect source details", "answer with cited evidence"]
-        elif is_coding_profile_name(profile_name):
-            steps = [
-                "inspect relevant workspace context",
-                "make the smallest correct change or collect concrete workspace evidence",
-                "run focused verification or state the verification gap",
-                "summarize changes, evidence, and remaining risk",
-            ]
-        elif is_media_profile_name(profile_name):
-            steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
-        elif is_ops_profile_name(profile_name):
-            steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
-        elif task_intent.kind == ANALYSIS_TASK_TYPE:
+        if task_intent.kind == ANALYSIS_TASK_TYPE:
             steps = ["inspect the relevant context", "collect concrete evidence", "deliver the findings clearly"]
         elif task_intent.long_running:
             steps = ["make measurable progress", "verify or summarize remaining work"]
         else:
             steps = ["complete the requested task"]
 
-        if harness_profile is not None:
-            expects_code_change = _profile_requires_code_change(harness_profile)
-            expects_verification = _profile_requires_verification(harness_profile)
-        else:
-            expects_code_change = False
-            expects_verification = False
+        expects_code_change = False
+        expects_verification = False
         done_criteria = list(task_intent.done_criteria)
         verification_done = _DEFAULT_VERIFICATION_TARGET
         if expects_verification and verification_done not in done_criteria:
@@ -245,15 +226,55 @@ class WorkProgressService:
             steps=tuple(steps),
             constraints=tuple(task_intent.constraints),
             done_criteria=tuple(done_criteria),
-            long_running=task_intent.long_running
-            or is_coding_profile_name(profile_name)
-            or is_research_profile_name(profile_name),
-            coding_task=is_coding_profile_name(profile_name) or task_intent.expects_code_change or task_intent.expects_verification,
+            long_running=task_intent.long_running,
+            coding_task=task_intent.expects_code_change or task_intent.expects_verification,
             expects_code_change=expects_code_change,
             expects_verification=expects_verification,
-            harness_profile=profile_name,
-            verification_policy=harness_profile.verification_policy if harness_profile is not None else "",
-            continuation_policy=harness_profile.continuation_policy if harness_profile is not None else "",
+        )
+
+    def _create_plan_from_contract(self, task_intent: TaskIntent, task_contract: TaskContract) -> WorkPlan | None:
+        contract_kind = _contract_progress_kind(task_contract)
+        if contract_kind == "chat":
+            return None
+        if not intent_supports_default_work_plan(task_intent) and not contract_kind:
+            return None
+
+        if contract_kind == "research":
+            steps = ("search for relevant sources", "fetch or inspect source details", "answer with cited evidence")
+        elif contract_kind == "coding":
+            steps = (
+                "inspect relevant workspace context",
+                "make the smallest correct change or collect concrete workspace evidence",
+                "run focused verification or state the verification gap",
+                "summarize changes, evidence, and remaining risk",
+            )
+        elif contract_kind == "media":
+            steps = ("inspect the referenced media", "produce the required media artifact", "answer using the artifact result")
+        elif contract_kind == "ops":
+            steps = ("inspect the requested operation", "execute and validate", "report outcome and risk")
+        elif task_intent.kind == ANALYSIS_TASK_TYPE:
+            steps = ("inspect the relevant context", "collect concrete evidence", "deliver the findings clearly")
+        elif task_intent.long_running:
+            steps = ("make measurable progress", "verify or summarize remaining work")
+        else:
+            steps = ("complete the requested task",)
+
+        expects_code_change = _contract_expects_code_change(task_contract)
+        expects_verification = _contract_expects_verification(task_contract)
+        done_criteria = list(task_intent.done_criteria)
+        if expects_verification and _DEFAULT_VERIFICATION_TARGET not in done_criteria:
+            done_criteria.append(_DEFAULT_VERIFICATION_TARGET)
+
+        return WorkPlan(
+            objective=task_intent.objective,
+            kind=task_intent.kind,
+            steps=steps,
+            constraints=tuple(task_intent.constraints),
+            done_criteria=tuple(done_criteria),
+            long_running=task_intent.long_running or contract_kind in {"coding", "research"},
+            coding_task=contract_kind == "coding" or task_intent.expects_code_change or task_intent.expects_verification,
+            expects_code_change=expects_code_change,
+            expects_verification=expects_verification,
         )
 
     def resolve_intent(
@@ -346,9 +367,6 @@ class WorkProgressService:
             metadata={
                 WORK_PROGRESS_METADATA_SOURCE_KEY: WORK_PROGRESS_METADATA_SOURCE,
                 "schema_version": 1,
-                "harness_profile": work_plan.harness_profile,
-                "verification_policy": work_plan.verification_policy,
-                "continuation_policy": work_plan.continuation_policy,
             },
             created_at=now,
             updated_at=now,
@@ -551,11 +569,15 @@ class WorkProgressService:
         execution_result: ExecutionResult,
         auto_continue_attempts: int,
         pass_index: int,
-        harness_profile: HarnessProfile | None = None,
+        task_contract: TaskContract | None = None,
     ) -> WorkProgressUpdate:
         """Summarize the current pass and choose the next high-level action."""
         signals = self._progress_signals(execution_result)
-        continuation_budget = self.continuation_budget(task_intent, harness_profile=harness_profile)
+        active_contract = task_contract or execution_result.task_contract
+        continuation_budget = self.continuation_budget(
+            task_intent,
+            task_contract=active_contract,
+        )
         if _completion_gap_should_get_one_retry(completion_result):
             continuation_budget = max(continuation_budget, self.default_continuation_budget)
         if requires_evidence_follow_up(completion_result.status) or completion_result.verification_required or completion_result.review_required:
@@ -583,13 +605,20 @@ class WorkProgressService:
             continuation_budget=continuation_budget,
         )
 
-    def continuation_budget(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> int:
-        profile_name = normalize_profile_name(harness_profile.name if harness_profile is not None else "")
-        if is_chat_profile_name(profile_name):
-            return 0
-        if is_coding_profile_name(profile_name) or is_research_profile_name(profile_name):
-            return self.long_running_continuation_budget
-        if is_media_profile_name(profile_name) or is_ops_profile_name(profile_name):
+    def continuation_budget(
+        self,
+        task_intent: TaskIntent,
+        *,
+        task_contract: TaskContract | None = None,
+    ) -> int:
+        if task_contract is not None:
+            contract_kind = _contract_progress_kind(task_contract)
+            if contract_kind == "chat":
+                return 0
+            if contract_kind in {"coding", "research"}:
+                return self.long_running_continuation_budget
+            if task_intent.long_running or task_intent.expects_code_change or task_intent.expects_verification:
+                return self.long_running_continuation_budget
             return self.default_continuation_budget
         if task_intent.long_running or task_intent.expects_code_change or task_intent.expects_verification:
             return self.long_running_continuation_budget
@@ -995,20 +1024,70 @@ def _derive_verification_targets(
     return (_DEFAULT_VERIFICATION_TARGET,)
 
 
-def _profile_requires_code_change(harness_profile: HarnessProfile) -> bool:
-    required_tool_groups = set(harness_profile.required_tool_groups)
-    required_evidence = set(harness_profile.required_evidence)
+def _contract_progress_kind(task_contract: TaskContract) -> str:
+    task_type = _contract_task_type(task_contract)
+    if is_plain_answer_task_type(task_type) or task_type == "planning":
+        return "chat"
+    if is_web_research_task_type(task_type) or _contract_has_required_web_tool(task_contract):
+        return "research"
+    if is_media_extraction_task_type(task_type):
+        return "media"
+    if task_type == OPERATIONS_TASK_TYPE:
+        return "ops"
+    if _contract_expects_code_change(task_contract) or is_workspace_read_task_type(task_type):
+        return "coding"
+    if is_history_retrieval_task_type(task_type):
+        return "analysis"
+    return ""
+
+
+def _contract_expects_code_change(task_contract: TaskContract) -> bool:
+    task_type = _contract_task_type(task_contract)
     return (
-        harness_profile.task_type in {WORKSPACE_CHANGE_TASK_TYPE, CODE_CHANGE_TASK_TYPE}
-        or WORKSPACE_WRITE_TOOL_GROUP in required_tool_groups
-        or FILE_CHANGE_REQUIREMENT_KIND in required_evidence
+        contract_expects_file_change(task_contract)
+        or task_type in {CODE_CHANGE_TASK_TYPE, WORKSPACE_CHANGE_TASK_TYPE}
+        or _contract_has_required_evidence(task_contract, FILE_CHANGE_REQUIREMENT_KIND)
     )
 
 
-def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
-    required_tool_groups = set(harness_profile.required_tool_groups)
-    required_evidence = set(harness_profile.required_evidence)
-    return VERIFICATION_TOOL_GROUP in required_tool_groups or VERIFICATION_REQUIREMENT_KIND in required_evidence
+def _contract_expects_verification(task_contract: TaskContract) -> bool:
+    return (
+        _contract_has_requirement_kind(task_contract, VERIFICATION_REQUIREMENT_KIND)
+        or _contract_has_required_verification_tool(task_contract)
+        or _contract_has_required_evidence(task_contract, VERIFICATION_REQUIREMENT_KIND)
+    )
+
+
+def _contract_task_type(task_contract: TaskContract) -> str:
+    return str(getattr(task_contract, "task_type", "") or "").strip()
+
+
+def _contract_has_requirement_kind(task_contract: TaskContract, kind: str) -> bool:
+    return any(
+        str(getattr(requirement, "kind", "") or "").strip() == kind
+        for requirement in getattr(task_contract, "requirements", ()) or ()
+    )
+
+
+def _contract_has_required_web_tool(task_contract: TaskContract) -> bool:
+    return any(
+        is_web_source_evidence_tool(tool_name)
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
+    )
+
+
+def _contract_has_required_verification_tool(task_contract: TaskContract) -> bool:
+    return any(
+        is_verification_tool_name(tool_name)
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
+    )
+
+
+def _contract_has_required_evidence(task_contract: TaskContract, evidence: str) -> bool:
+    return any(
+        str(item or "").strip() == evidence
+        for item in getattr(task_contract, "required_evidence", ()) or ()
+    )
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:

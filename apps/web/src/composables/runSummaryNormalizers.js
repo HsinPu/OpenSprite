@@ -187,7 +187,7 @@ function normalizeParallelDelegationSummary(payload) {
   };
 }
 
-function normalizeHarnessScorecardSummary(payload) {
+function normalizeTaskScorecardSummary(payload) {
   if (!payload || typeof payload !== "object") {
     return {
       present: false,
@@ -228,7 +228,9 @@ export function normalizeRunSummary(payload) {
   const parallelDelegation = normalizeParallelDelegationSummary(payload.parallel_delegation || payload.parallelDelegation);
   const structuredSubagents = normalizeStructuredSubagentsSummary(payload.structured_subagents || payload.structuredSubagents);
   const workflows = normalizeWorkflowSummary(payload.workflows);
-  const harnessScorecard = normalizeHarnessScorecardSummary(payload.harness_scorecard || payload.harnessScorecard);
+  const taskScorecard = normalizeTaskScorecardSummary(
+    payload.task_scorecard || payload.taskScorecard,
+  );
   return {
     schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
     runId: String(payload.run_id || payload.runId || "").trim(),
@@ -282,7 +284,7 @@ export function normalizeRunSummary(payload) {
     parallelDelegation,
     structuredSubagents,
     workflows,
-    harnessScorecard,
+    taskScorecard,
     completion: payload.completion && typeof payload.completion === "object" ? payload.completion : {},
     nextAction: String(payload.next_action || payload.nextAction || "").trim(),
     warnings: coerceStringList(payload.warnings),

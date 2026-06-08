@@ -8,7 +8,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
       const payload = await requestSettingsJson("/api/settings/permissions");
       settingsState.permissions = normalizePermissionsSettings(payload.permissions || {});
       syncPermissionsForm(settingsState);
-      await loadHarnessPolicyPreview();
+      await loadToolAccessPreview();
     } catch (error) {
       settingsState.permissionsError = error?.message || copy.value.notices.permissionsLoadFailed;
     } finally {
@@ -16,16 +16,16 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
     }
   }
 
-  async function loadHarnessPolicyPreview() {
-    settingsState.harnessPolicyPreviewLoading = true;
-    settingsState.harnessPolicyPreviewError = "";
+  async function loadToolAccessPreview() {
+    settingsState.toolAccessPreviewLoading = true;
+    settingsState.toolAccessPreviewError = "";
     try {
-      const payload = await requestSettingsJson("/api/settings/harness-policy-preview");
-      settingsState.harnessPolicyPreview = payload.harness_policy_preview || { rows: [], user_permissions: null };
+      const payload = await requestSettingsJson("/api/settings/tool-access-preview");
+      settingsState.toolAccessPreview = payload.tool_access_preview || { rows: [], user_permissions: null };
     } catch (error) {
-      settingsState.harnessPolicyPreviewError = error?.message || copy.value.notices.permissionsLoadFailed;
+      settingsState.toolAccessPreviewError = error?.message || copy.value.notices.permissionsLoadFailed;
     } finally {
-      settingsState.harnessPolicyPreviewLoading = false;
+      settingsState.toolAccessPreviewLoading = false;
     }
   }
 
@@ -50,7 +50,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
       });
       settingsState.permissions = normalizePermissionsSettings(payload.permissions || {});
       syncPermissionsForm(settingsState);
-      await loadHarnessPolicyPreview();
+      await loadToolAccessPreview();
       setSettingsSuccess(
         "permissionsNotice",
         payload.restart_required ? copy.value.notices.permissionsRestartRequired : copy.value.notices.permissionsSaved,
@@ -64,7 +64,7 @@ export function usePermissionsSettingsActions({ settingsState, requestSettingsJs
 
   return {
     loadPermissionsSettings,
-    loadHarnessPolicyPreview,
+    loadToolAccessPreview,
     savePermissionsSettings,
   };
 }

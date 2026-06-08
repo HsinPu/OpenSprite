@@ -33,11 +33,9 @@ WEB_SOURCE_ARTIFACT_TOOLS = frozenset(
 )
 WEB_SOURCE_EVIDENCE_TOOLS = frozenset({WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME})
 WEB_BROWSER_RESEARCH_TOOLS = frozenset({"browser_snapshot", "browser_scroll"})
-WEB_HARNESS_RESEARCH_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS | WEB_BROWSER_RESEARCH_TOOLS
 WEB_FETCH_SOURCE_RECORD_TOOL = WEB_FETCH_TOOL_NAME
 WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = WEB_RESEARCH_TOOL_NAME
 WEB_RESEARCH_TASK_TYPE = "web_research"
-WEB_RESEARCH_TOOL_GROUP = "web_research"
 WEB_SOURCE_ARTIFACT_KIND = "web_source"
 SOURCE_ARTIFACT_CRITERION_KIND = "source_artifact"
 SOURCE_DETAIL_CRITERION_KIND = "source_detail"
@@ -95,10 +93,6 @@ def is_web_research_source_artifact_tool(source_tool: str | None) -> bool:
 
 def is_web_research_task_type(task_type: str | None) -> bool:
     return str(task_type or "").strip() == WEB_RESEARCH_TASK_TYPE
-
-
-def is_web_research_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() == WEB_RESEARCH_TOOL_GROUP
 
 
 def is_source_acceptance_criterion_kind(kind: str | None) -> bool:

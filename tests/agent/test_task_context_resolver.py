@@ -185,7 +185,6 @@ def test_task_context_does_not_infer_follow_up_when_llm_fails():
 
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -193,7 +192,7 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     provider = _JsonProvider(
         '{"is_follow_up": true, "should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"inherited_task_type": "web_research", '
         '"confidence": 0.86, "reason": "short follow-up refers to prior external lookup"}'
     )
 
@@ -214,7 +213,7 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"
-    assert decision.inherited_tool_group == "web_research"
+    assert decision.inherited_task_type == "web_research"
     assert decision.continuation_type == "follow_up"
 
 
@@ -222,7 +221,7 @@ def test_task_context_uses_llm_for_short_recent_context_without_follow_up_marker
     provider = _JsonProvider(
         '{"is_follow_up": true, "should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"inherited_task_type": "web_research", '
         '"confidence": 0.84, "reason": "short entity query depends on prior web lookup"}'
     )
 
@@ -240,14 +239,14 @@ def test_task_context_uses_llm_for_short_recent_context_without_follow_up_marker
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"
-    assert decision.inherited_tool_group == "web_research"
+    assert decision.inherited_task_type == "web_research"
 
 
 def test_task_context_uses_llm_for_short_recent_context_without_question_punctuation():
     provider = _JsonProvider(
         '{"is_follow_up": true, "should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"inherited_task_type": "web_research", '
         '"confidence": 0.83, "reason": "short phrasing depends on prior web lookup"}'
     )
 
@@ -264,14 +263,13 @@ def test_task_context_uses_llm_for_short_recent_context_without_question_punctua
     assert len(provider.calls) == 1
     assert decision.method == "llm"
     assert decision.inherited_task_type == "web_research"
-    assert decision.inherited_tool_group == "web_research"
+    assert decision.inherited_task_type == "web_research"
 
 
 def test_task_context_does_not_backfill_llm_tool_inheritance_from_regex():
     deterministic = TaskContextDecision(
         is_follow_up=True,
         inherited_task_type="web_research",
-        inherited_tool_group="web_research",
         continuation_type="follow_up",
         confidence=0.62,
         reason="regex guessed prior web context",
@@ -289,7 +287,6 @@ def test_task_context_does_not_backfill_llm_tool_inheritance_from_regex():
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "follow_up"
 
 
@@ -301,7 +298,7 @@ def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
             '{"continuation_type": "follow_up", "is_follow_up": true, '
             '"should_inherit_active_task": false, '
             '"should_seed_active_task": false, "should_replace_active_task": false, '
-            '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+            '"inherited_task_type": "web_research", '
             '"confidence": 0.86, "reason": "short multilingual follow-up refers to prior lookup"}'
         )
 
@@ -319,7 +316,7 @@ def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
         assert decision.method == "llm"
         assert decision.is_follow_up is True
         assert decision.inherited_task_type == "web_research"
-        assert decision.inherited_tool_group == "web_research"
+        assert decision.inherited_task_type == "web_research"
         assert decision.continuation_type == "follow_up"
 
 
@@ -338,7 +335,6 @@ def test_task_context_does_not_infer_typo_follow_up_when_llm_fails():
 
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -376,7 +372,6 @@ def test_task_context_stays_neutral_when_llm_json_is_invalid():
     assert len(provider.calls) == 1
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -384,7 +379,7 @@ def test_task_context_stays_neutral_for_low_confidence_llm_decision():
     provider = _JsonProvider(
         '{"is_follow_up": true, "should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"inherited_task_type": "web_research", '
         '"confidence": 0.2, "reason": "uncertain"}'
     )
 
@@ -400,7 +395,6 @@ def test_task_context_stays_neutral_for_low_confidence_llm_decision():
 
     assert len(provider.calls) == 1
     assert decision.method == "llm_unresolved"
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -408,7 +402,7 @@ def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
     provider = _JsonProvider(
         '{"is_follow_up": false, "should_inherit_active_task": false, '
         '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.83, "reason": "new concrete task should replace current task"}'
     )
     message = "好，現在請直接修掉 tests/test_app.py 的問題"
@@ -435,7 +429,7 @@ def test_task_context_treats_llm_empty_value_sentinels_as_absent():
         '{"continuation_type": "follow_up", "is_follow_up": true, '
         '"should_inherit_active_task": true, "should_seed_active_task": false, '
         '"should_replace_active_task": false, '
-        '"inherited_task_type": "N/A", "inherited_tool_group": "null", '
+        '"inherited_task_type": "N/A", '
         '"confidence": 0.91, "reason": "same task but no concrete inherited type"}'
     )
     message = "continue from the previous answer"
@@ -453,7 +447,6 @@ def test_task_context_treats_llm_empty_value_sentinels_as_absent():
 
     assert decision.continuation_type == "follow_up"
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
 
 
 def test_task_context_uses_llm_for_long_active_task_boundary():
@@ -461,7 +454,7 @@ def test_task_context_uses_llm_for_long_active_task_boundary():
         '{"continuation_type": "ambiguous_boundary", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.86, "reason": "long message may switch away from the active task"}'
     )
     message = (
@@ -492,7 +485,7 @@ def test_task_context_downgrades_low_confidence_task_switch_to_ambiguous_boundar
         '{"continuation_type": "new_task", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.72, "reason": "might be a new README task"}'
     )
     message = "please update README"
@@ -523,7 +516,7 @@ def test_task_context_consults_llm_for_active_task_boundary_without_seed_intent(
         '{"continuation_type": "ambiguous_boundary", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.81, "reason": "could be a new README request or a follow-up"}'
     )
     message = "what about README?"
@@ -549,7 +542,7 @@ def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
         '{"continuation_type": "ambiguous_boundary", "is_follow_up": true, '
         '"should_inherit_active_task": true, '
         '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"inherited_task_type": "web_research", '
         '"confidence": 0.82, "reason": "could be either a new task or continuation"}'
     )
     message = "please update README"
@@ -571,7 +564,6 @@ def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
     assert decision.should_replace_active_task is False
     assert decision.should_inherit_active_task is False
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
 
 
 def test_task_context_stays_neutral_when_provider_is_unconfigured():
@@ -632,7 +624,7 @@ def test_task_context_confirms_pending_boundary_switch_with_llm():
         '{"continuation_type": "task_switch", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.92, "reason": "user confirmed the pending task-boundary request"}'
     )
 
@@ -659,7 +651,7 @@ def test_task_context_confirms_pending_boundary_continue_with_llm():
         '{"continuation_type": "continue_active_task", "is_follow_up": true, '
         '"should_inherit_active_task": true, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.9, "reason": "user chose to keep the active task"}'
     )
 
@@ -685,7 +677,7 @@ def test_task_context_supports_legacy_boundary_question_format_with_llm():
         '{"continuation_type": "task_switch", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.92, "reason": "legacy boundary prompt still asks for a switch decision"}'
     )
 
@@ -722,7 +714,6 @@ def test_task_context_continue_without_active_task_stays_neutral_without_llm():
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -745,7 +736,6 @@ def test_task_context_stays_neutral_for_recent_workspace_tool_context_without_ll
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -753,7 +743,7 @@ def test_task_context_does_not_inherit_workspace_for_standalone_error_question()
     provider = _JsonProvider(
         '{"continuation_type": "none", "is_follow_up": false, '
         '"should_inherit_active_task": false, '
-        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"inherited_task_type": null, '
         '"confidence": 0.9, "reason": "standalone explanatory question"}'
     )
 
@@ -773,14 +763,13 @@ def test_task_context_does_not_inherit_workspace_for_standalone_error_question()
     assert len(provider.calls) == 1
     assert decision.method == "llm"
     assert decision.is_follow_up is False
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
 def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
     provider = _JsonProvider(
         '{"is_follow_up": true, "inherited_task_type": "workspace_read", '
-        '"inherited_tool_group": "workspace_read", "confidence": 0.9}'
+        '"inherited_task_type": "workspace_read", "confidence": 0.9}'
     )
 
     message = "I have a Python script but have not pasted it yet. What info should I prepare?"
@@ -798,7 +787,6 @@ def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
 
     assert provider.calls == []
     assert decision.is_follow_up is False
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -821,7 +809,6 @@ def test_task_context_stays_neutral_for_recent_history_tool_context_without_llm(
     assert decision.method == "llm_unresolved"
     assert decision.is_follow_up is False
     assert decision.inherited_task_type is None
-    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
 
 
@@ -830,7 +817,7 @@ def test_task_context_accepts_llm_history_retrieval_task_type():
         '{"continuation_type": "follow_up", "is_follow_up": true, '
         '"should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
-        '"inherited_task_type": "history_retrieval", "inherited_tool_group": "history_retrieval", '
+        '"inherited_task_type": "history_retrieval", '
         '"confidence": 0.88, "reason": "latest turn asks about prior conversation"}'
     )
 
@@ -850,7 +837,7 @@ def test_task_context_accepts_llm_history_retrieval_task_type():
     assert len(provider.calls) == 1
     assert decision.method == "llm"
     assert decision.inherited_task_type == "history_retrieval"
-    assert decision.inherited_tool_group == "history_retrieval"
+    assert decision.inherited_task_type == "history_retrieval"
 
 
 def test_task_contract_uses_task_context_decision_for_web_follow_up():
@@ -858,7 +845,6 @@ def test_task_contract_uses_task_context_decision_for_web_follow_up():
     decision = TaskContextDecision(
         is_follow_up=True,
         inherited_task_type="web_research",
-        inherited_tool_group="web_research",
         continuation_type="follow_up",
         confidence=0.86,
         method="llm",
@@ -873,7 +859,7 @@ def test_task_contract_uses_task_context_decision_for_web_follow_up():
 
     assert contract.task_type == "web_research"
     assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert "web_search" in contract.required_tools
 
 
 def test_completion_gate_requires_evidence_for_llm_web_follow_up():
@@ -881,7 +867,6 @@ def test_completion_gate_requires_evidence_for_llm_web_follow_up():
     decision = TaskContextDecision(
         is_follow_up=True,
         inherited_task_type="web_research",
-        inherited_tool_group="web_research",
         continuation_type="follow_up",
         confidence=0.86,
         method="llm",
@@ -1072,7 +1057,6 @@ def test_active_task_seed_uses_enriched_objective_for_short_follow_up(tmp_path):
             task_context_decision=TaskContextDecision(
                 is_follow_up=True,
                 inherited_task_type="web_research",
-                inherited_tool_group="web_research",
                 continuation_type="follow_up",
                 confidence=0.75,
             ),

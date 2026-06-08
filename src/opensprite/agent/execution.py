@@ -65,10 +65,8 @@ from ..utils import (
 from ..utils.log import logger
 from ..utils.log_redaction import redact_log_preview
 from ..runs.trace import RunCancelledError, mcp_tool_names as list_mcp_tool_names
-from ..harness import (
+from .task.capabilities import (
     HISTORY_RETRIEVAL_TASK_TYPE,
-    HISTORY_RETRIEVAL_TOOL_GROUP,
-    HarnessPlan,
 )
 from .task.contract import (
     TaskContextDecision,
@@ -365,7 +363,7 @@ class ExecutionResult:
     reasoning_details: list[dict[str, Any]] | None = None
     assistant_internal_only_response: bool = False
     task_contract: TaskContract | None = None
-    harness_policy: dict[str, Any] | None = None
+    tool_access: dict[str, Any] | None = None
     tool_evidence: tuple[ToolEvidence, ...] = ()
     task_artifacts: tuple[TaskArtifact, ...] = ()
 
@@ -2535,7 +2533,7 @@ class LlmCallService:
         get_work_state_summary: Callable[[str], Awaitable[str]],
         read_active_task_snapshot: Callable[[str], str],
         plan_task: Callable[..., Awaitable[TaskContract]],
-        plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
+        resolve_tool_access: Callable[[ToolRegistry, TaskContract], Any],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -2566,7 +2564,7 @@ class LlmCallService:
         self._read_active_task_snapshot = read_active_task_snapshot
         self._turn_planning = TurnPlanningService(
             plan_task=plan_task,
-            plan_harness=plan_harness,
+            resolve_tool_access=resolve_tool_access,
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,
@@ -2703,8 +2701,7 @@ class LlmCallService:
         effective_current_message = planning.effective_current_message
         prompt_message = planning.prompt_message
         task_contract = planning.task_contract
-        harness_policy = planning.harness_policy
-        harness_tool_registry = planning.harness_tool_registry
+        task_tool_registry = planning.task_tool_registry
         if task_contract is not None:
             guidance = _build_task_contract_guidance(task_contract)
             if guidance:
@@ -2716,17 +2713,22 @@ class LlmCallService:
                 f"allow_no_tool_final={task_contract.allow_no_tool_final}"
             )
         planning_mode = resolve_planning_mode(
-            base_registry=harness_tool_registry or base_tool_registry,
+            base_registry=task_tool_registry or base_tool_registry,
             task_contract=task_contract,
         )
-        selected_tool_registry = planning_mode.tool_registry or harness_tool_registry
+        selected_tool_registry = planning_mode.tool_registry or task_tool_registry
         if (
             not planning_mode.enabled
             and task_contract is not None
             and _should_answer_contract_without_tools(task_contract)
         ):
             selected_tool_registry = ToolRegistry(
-                permission_policy=(harness_tool_registry or base_tool_registry).permission_policy
+                permission_policy=(task_tool_registry or base_tool_registry).permission_policy
+            )
+            selected_tool_registry.permission_resolution_metadata = getattr(
+                task_tool_registry or base_tool_registry,
+                "permission_resolution_metadata",
+                None,
             )
         if planning_mode.enabled and selected_tool_registry is not None:
             logger.info(
@@ -2902,19 +2904,16 @@ class LlmCallService:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
         result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
         result.task_contract = task_contract
-        result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
+        tool_access = getattr(selected_tool_registry, "permission_resolution_metadata", None)
+        result.tool_access = dict(tool_access) if isinstance(tool_access, dict) else None
         return result
 
 
 def _structured_retrieval_decision(task_context_decision: TaskContextDecision | None) -> bool | None:
     if task_context_decision is None:
         return None
-    inherited_tool_group = str(task_context_decision.inherited_tool_group or "").strip()
     inherited_task_type = str(task_context_decision.inherited_task_type or "").strip()
-    return (
-        inherited_tool_group == HISTORY_RETRIEVAL_TOOL_GROUP
-        or inherited_task_type == HISTORY_RETRIEVAL_TASK_TYPE
-    )
+    return inherited_task_type == HISTORY_RETRIEVAL_TASK_TYPE
 
 
 def _build_task_contract_guidance(contract: TaskContract) -> str:
@@ -2946,8 +2945,8 @@ def _build_task_contract_guidance(contract: TaskContract) -> str:
         for requirement in contract.requirements:
             detail = requirement.description or requirement.kind
             qualifiers = []
-            if requirement.tool_group:
-                qualifiers.append(f"tool_group={requirement.tool_group}")
+            if requirement.tools:
+                qualifiers.append(f"tools={', '.join(requirement.tools)}")
             if requirement.coverage:
                 qualifiers.append(f"coverage={requirement.coverage}")
             qualifiers.append(f"min_count={requirement.min_count}")

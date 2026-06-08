@@ -42,7 +42,7 @@ def test_source_finalization_policy_detects_source_requirements_and_criteria():
         TaskContract(
             objective="Find sources.",
             task_type="pure_answer",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+            requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
         )
     )
     assert task_contract_requires_web_sources(

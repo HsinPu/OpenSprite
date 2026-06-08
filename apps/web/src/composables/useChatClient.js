@@ -941,7 +941,7 @@ function describeRunEvent(eventType, payload, copy) {
 function formatTaskContextDetail(payload = {}) {
   const method = String(payload.method || "deterministic").trim();
   const continuationType = String(payload.continuation_type || payload.continuationType || "").trim();
-  const inheritedToolGroup = String(payload.inherited_tool_group || payload.inheritedToolGroup || "").trim();
+  const inheritedTaskType = String(payload.inherited_task_type || payload.inheritedTaskType || "").trim();
   const flags = [
     payload.is_follow_up || payload.isFollowUp ? "follow-up" : "",
     payload.should_inherit_active_task || payload.shouldInheritActiveTask ? "inherit active" : "",
@@ -951,7 +951,7 @@ function formatTaskContextDetail(payload = {}) {
   const confidence = Number(payload.confidence);
   const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
   const reason = String(payload.reason || "").trim();
-  return [method, continuationType, inheritedToolGroup, flags, confidenceText, reason].filter(Boolean).join(" · ");
+  return [method, continuationType, inheritedTaskType, flags, confidenceText, reason].filter(Boolean).join(" · ");
 }
 
 function formatTaskObjectiveDetail(payload = {}) {
@@ -972,12 +972,12 @@ function formatTaskContractDetail(payload = {}) {
   const taskType = String(payload.task_type || payload.taskType || "").trim();
   const contractSources = coerceStringList(payload.contract_sources || payload.contractSources);
   const plannerStatus = String(metadata.planner_status || metadata.plannerStatus || "").trim();
-  const requiredToolGroups = coerceStringList(metadata.required_tool_groups || metadata.requiredToolGroups);
+  const requiredTools = coerceStringList(payload.required_tools || payload.requiredTools || metadata.required_tools || metadata.requiredTools);
   const reason = String(metadata.reason || payload.reason || "").trim();
   return [
     plannerStatus ? `planner ${plannerStatus}` : "",
     taskType,
-    requiredToolGroups.length ? `groups ${requiredToolGroups.join(", ")}` : "",
+    requiredTools.length ? `tools ${requiredTools.join(", ")}` : "",
     contractSources.length ? `source ${contractSources.join(", ")}` : "",
     reason,
   ].filter(Boolean).join(" | ");
@@ -3063,30 +3063,6 @@ export function useChatClient() {
     }
   }
 
-  async function runHarnessControlledEval() {
-    settingsState.harnessEvalRunning = true;
-    settingsState.evalError = "";
-    settingsState.evalNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/harness/controlled", { method: "POST" });
-      settingsState.harnessEval = {
-        ok: Boolean(payload?.ok),
-        cases: Array.isArray(payload?.cases) ? payload.cases : [],
-        summary: payload?.summary || {
-          passed_cases: 0,
-          total_cases: 0,
-          passed_checks: 0,
-          total_checks: 0,
-        },
-      };
-      settingsState.evalNotice = payload?.ok ? copy.value.settings.eval.harnessEvalPassed : copy.value.settings.eval.harnessEvalFailed;
-    } catch (error) {
-      settingsState.evalError = error?.message || copy.value.notices.harnessEvalFailed;
-    } finally {
-      settingsState.harnessEvalRunning = false;
-    }
-  }
-
   async function runTaskCompletionEvalSmoke() {
     settingsState.taskCompletionRunning = true;
     settingsState.evalError = "";
@@ -4180,7 +4156,6 @@ export function useChatClient() {
     loadDataSettings,
     loadEvalStatus,
     runEvalSmokeCheck,
-    runHarnessControlledEval,
     runTaskCompletionEvalSmoke,
     runTaskCompletionLiveEval,
     loadTaskCompletionHistory,

@@ -23,22 +23,20 @@ from ..runs.events import (
     DIRECT_VERIFICATION_STARTED_EVENT,
     DIRECT_WORKFLOW_RESUME_STARTED_EVENT,
     EXECUTION_STOPPED_EVENT,
-    HARNESS_CHECKPOINT_RECORDED_EVENT,
-    HARNESS_SCORECARD_RECORDED_EVENT,
     LLM_STATUS_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_CHECKPOINT_RECORDED_EVENT,
+    TASK_SCORECARD_RECORDED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
     WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
-from ..harness import (
+from .task.capabilities import (
     PURE_ANSWER_TASK_TYPE,
-    HarnessProfile,
-    HarnessProfileService,
-    HarnessScorecard,
-    HarnessSensorResult,
-    evaluate_harness_sensors,
+    TaskScorecard,
+    TaskSensorResult,
+    evaluate_task_sensors,
 )
 from ..utils.log import logger
 from ..utils.url import join_url_path
@@ -82,7 +80,6 @@ from ..storage.base import selected_delegated_task
 from .task.contract import (
     PLANNER_VALIDATED_STATUS,
     PLANNING_ERROR_TASK_TYPE,
-    is_tool_group_requirement,
     task_planner_status,
 )
 from .task.contract import TaskContextDecision, TaskIntent
@@ -98,7 +95,7 @@ from ..tools.evidence import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
     is_web_research_task_type,
-    is_web_research_tool_group,
+    is_web_source_evidence_tool,
     is_web_source_artifact_kind,
 )
 from .workflow import is_workflow_failed_status
@@ -150,8 +147,10 @@ def task_contract_requires_web_sources(contract: Any) -> bool:
         return False
     if is_web_research_task_type(getattr(contract, "task_type", None)):
         return True
+    if any(is_web_source_evidence_tool(tool_name) for tool_name in getattr(contract, "required_tools", ()) or ()):
+        return True
     for requirement in getattr(contract, "requirements", ()) or ():
-        if is_tool_group_requirement(requirement) and is_web_research_tool_group(getattr(requirement, "tool_group", None)):
+        if any(is_web_source_evidence_tool(tool_name) for tool_name in getattr(requirement, "tools", ()) or ()):
             return True
     for criterion in getattr(contract, "acceptance_criteria", ()) or ():
         if is_source_acceptance_criterion_kind(getattr(criterion, "kind", None)):
@@ -649,7 +648,6 @@ class AgentTurnRunner:
         turn_context: TurnContextService,
         run_state: AgentRunStateService,
         task_initial_llm_config: Any | None,
-        harness_profiles: HarnessProfileService,
         completion_gate: CompletionGateService,
         completion_judge_context: Callable[[], tuple[Any, str | None]],
         auto_continue: AutoContinueService,
@@ -685,7 +683,6 @@ class AgentTurnRunner:
         self.run_trace = run_trace
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
-        self.harness_profiles = harness_profiles
         self.completion_gate = completion_gate
         self._completion_judge_context = completion_judge_context
         self.auto_continue = auto_continue
@@ -882,7 +879,6 @@ class AgentTurnRunner:
                         run_id=run_id,
                         task_intent=task_intent,
                         task_context_decision=task_plan.task_context_decision,
-                        harness_profile=None,
                         work_plan=work_plan,
                         current_work_state=current_work_state,
                         worktree_sandbox_recorded=worktree_sandbox_recorded,
@@ -966,7 +962,6 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         run_id: str,
         task_intent: TaskIntent,
-        harness_profile: HarnessProfile | None,
         execution_results: list[ExecutionResult],
         response: str,
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...],
@@ -1040,7 +1035,6 @@ class AgentTurnRunner:
             execution_result=aggregate_result,
             auto_continue_attempts=auto_continue_attempts,
             pass_index=len(execution_results),
-            harness_profile=harness_profile,
         )
         await self._emit_run_event(
             turn.session_id,
@@ -1050,8 +1044,7 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        harness_checkpoint = _harness_checkpoint_metadata(
-            harness_profile=harness_profile,
+        task_checkpoint = _task_checkpoint_metadata(
             aggregate_result=aggregate_result,
             completion_result=completion_result,
             work_progress=work_progress,
@@ -1061,26 +1054,25 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            HARNESS_CHECKPOINT_RECORDED_EVENT,
-            harness_checkpoint,
+            TASK_CHECKPOINT_RECORDED_EVENT,
+            task_checkpoint,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        await self.run_trace.record_harness_checkpoint_part(turn.session_id, run_id, harness_checkpoint)
-        harness_scorecard = _harness_scorecard_metadata(
-            harness_profile=harness_profile,
+        await self.run_trace.record_task_checkpoint_part(turn.session_id, run_id, task_checkpoint)
+        task_scorecard = _task_scorecard_metadata(
             aggregate_result=aggregate_result,
             completion_result=completion_result,
         )
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            HARNESS_SCORECARD_RECORDED_EVENT,
-            harness_scorecard,
+            TASK_SCORECARD_RECORDED_EVENT,
+            task_scorecard,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        await self.run_trace.record_harness_scorecard_part(turn.session_id, run_id, harness_scorecard)
+        await self.run_trace.record_task_scorecard_part(turn.session_id, run_id, task_scorecard)
         if auto_continue_attempts > 0:
             await self._emit_run_event(
                 turn.session_id,
@@ -1142,7 +1134,6 @@ class AgentTurnRunner:
         run_id: str,
         task_intent: TaskIntent,
         task_context_decision: TaskContextDecision,
-        harness_profile: HarnessProfile | None,
         work_plan: WorkPlan | None,
         current_work_state: StoredWorkState | None,
         worktree_sandbox_recorded: bool,
@@ -1236,8 +1227,10 @@ class AgentTurnRunner:
                 )
                 exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
                 if exec_result.task_contract is not None:
-                    harness_profile = self.harness_profiles.from_contract(exec_result.task_contract)
-                    contract_work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
+                    contract_work_plan = self.work_progress.create_plan(
+                        task_intent,
+                        task_contract=exec_result.task_contract,
+                    )
                     if contract_work_plan is None:
                         if _can_replace_initial_work_state(current_work_state):
                             work_plan = None
@@ -1275,7 +1268,6 @@ class AgentTurnRunner:
                 turn=turn,
                 run_id=run_id,
                 task_intent=task_intent,
-                harness_profile=harness_profile,
                 execution_results=execution_results,
                 response=response,
                 collected_delegated_tasks=collected_delegated_tasks,
@@ -1306,7 +1298,6 @@ class AgentTurnRunner:
                 same_target_verify_attempts=same_target_verify_attempts,
                 verification_available=self._verification_available(),
                 compaction_handoff=aggregate_result.compaction_handoff,
-                harness_profile=harness_profile,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
                 await self._emit_run_event(
@@ -1415,7 +1406,6 @@ class AgentTurnRunner:
                 completion_result=completion_result,
                 previous_response=response,
                 compaction_handoff=aggregate_result.compaction_handoff,
-                harness_profile=harness_profile,
                 execution_result=aggregate_result,
                 allow_tools=False,
                 source_context_override=format_web_source_context(source_finalization_sources),
@@ -1467,7 +1457,6 @@ class AgentTurnRunner:
                 execution_result=aggregate_result,
                 auto_continue_attempts=auto_continue_attempts,
                 pass_index=len(execution_results),
-                harness_profile=harness_profile,
             )
             await self._emit_run_event(
                 turn.session_id,
@@ -1477,23 +1466,22 @@ class AgentTurnRunner:
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            final_harness_scorecard = _harness_scorecard_metadata(
-                harness_profile=harness_profile,
+            final_task_scorecard = _task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                HARNESS_SCORECARD_RECORDED_EVENT,
-                final_harness_scorecard,
+                TASK_SCORECARD_RECORDED_EVENT,
+                final_task_scorecard,
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            await self.run_trace.record_harness_scorecard_part(
+            await self.run_trace.record_task_scorecard_part(
                 turn.session_id,
                 run_id,
-                final_harness_scorecard,
+                final_task_scorecard,
             )
 
         response = _final_response_after_exhausted_continuation(
@@ -1527,7 +1515,6 @@ class AgentTurnRunner:
                 execution_result=aggregate_result,
                 auto_continue_attempts=auto_continue_attempts,
                 pass_index=len(execution_results),
-                harness_profile=harness_profile,
             )
             await self._emit_run_event(
                 turn.session_id,
@@ -1537,23 +1524,22 @@ class AgentTurnRunner:
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            final_harness_scorecard = _harness_scorecard_metadata(
-                harness_profile=harness_profile,
+            final_task_scorecard = _task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                HARNESS_SCORECARD_RECORDED_EVENT,
-                final_harness_scorecard,
+                TASK_SCORECARD_RECORDED_EVENT,
+                final_task_scorecard,
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            await self.run_trace.record_harness_scorecard_part(
+            await self.run_trace.record_task_scorecard_part(
                 turn.session_id,
                 run_id,
-                final_harness_scorecard,
+                final_task_scorecard,
             )
 
         outbound_media = self._get_queued_outbound_media()
@@ -1925,11 +1911,11 @@ class AgentTurnRunner:
             ),
             assistant_internal_only_response=bool(latest_result.assistant_internal_only_response and not content.strip()),
             task_contract=AgentTurnRunner._select_aggregate_task_contract(results),
-            harness_policy=next(
+            tool_access=next(
                 (
-                    dict(result.harness_policy)
+                    dict(result.tool_access)
                     for result in reversed(results)
-                    if result.harness_policy is not None
+                    if result.tool_access is not None
                 ),
                 None,
             ),
@@ -2014,9 +2000,8 @@ class AgentTurnRunner:
         return exec_result
 
 
-def _harness_checkpoint_metadata(
+def _task_checkpoint_metadata(
     *,
-    harness_profile: HarnessProfile | None,
     aggregate_result: ExecutionResult,
     completion_result: CompletionGateResult,
     work_progress: WorkProgressUpdate,
@@ -2024,16 +2009,12 @@ def _harness_checkpoint_metadata(
     auto_continue_attempts: int,
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
-    contract_profile = getattr(task_contract, "harness_profile", None)
-    profile_metadata = dict(contract_profile) if isinstance(contract_profile, dict) else (
-        harness_profile.to_metadata() if harness_profile is not None else None
-    )
     return {
         "schema_version": 1,
         "pass_index": max(1, pass_index),
         TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: max(0, auto_continue_attempts),
-        "harness_profile": profile_metadata,
-        "harness_policy": dict(aggregate_result.harness_policy or {}),
+        "task_type": _task_contract_type(task_contract),
+        "tool_access": dict(aggregate_result.tool_access or {}),
         TURN_METADATA_TASK_CONTRACT_FIELD: task_contract.to_metadata() if task_contract is not None else None,
         "completion": completion_result.to_metadata(),
         TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
@@ -2286,26 +2267,36 @@ def _should_replace_nonfinal_response(
     return allows_nonfinal_response_replacement(completion_result.status)
 
 
-def _harness_scorecard_metadata(
+def _task_contract_type(task_contract: Any) -> str:
+    return str(getattr(task_contract, "task_type", "") or "").strip()
+
+
+def _scorecard_sensor_task_type(task_type: str) -> str:
+    normalized = str(task_type or "").strip()
+    return {
+        "code_change": "workspace_change",
+        "workspace_read": "workspace_analysis",
+        "analysis": "workspace_analysis",
+        "task": "pure_answer",
+        "planning": "pure_answer",
+    }.get(normalized, normalized)
+
+
+def _task_scorecard_metadata(
     *,
-    harness_profile: HarnessProfile | None,
     aggregate_result: ExecutionResult,
     completion_result: CompletionGateResult,
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
-    contract_profile = getattr(task_contract, "harness_profile", None)
-    profile_metadata = dict(contract_profile) if isinstance(contract_profile, dict) else (
-        harness_profile.to_metadata() if harness_profile is not None else {}
-    )
-    task_type = str(profile_metadata.get("task_type") or "")
-    sensors = evaluate_harness_sensors(
-        task_type=task_type,
+    contract_metadata = task_contract.to_metadata() if task_contract is not None else {}
+    task_type = _task_contract_type(task_contract)
+    sensors = evaluate_task_sensors(
+        task_type=_scorecard_sensor_task_type(task_type),
         execution_result=aggregate_result,
         completion_result=completion_result,
     )
-    scorecard = HarnessScorecard(
-        profile=profile_metadata,
-        contract=task_contract.to_metadata() if task_contract is not None else {},
+    scorecard = TaskScorecard(
+        contract=contract_metadata,
         tools={
             "executed_tool_calls": aggregate_result.executed_tool_calls,
             "had_tool_error": aggregate_result.had_tool_error,
@@ -2314,32 +2305,32 @@ def _harness_scorecard_metadata(
             "task_artifact_count": len(aggregate_result.task_artifacts),
         },
         permissions={
-            "harness_policy": dict(aggregate_result.harness_policy or {}),
+            "tool_access": dict(aggregate_result.tool_access or {}),
         },
         sensors=sensors,
         completion=completion_result.to_metadata(),
-        trace_health=_harness_trace_health(
-            has_profile=harness_profile is not None,
+        trace_health=_task_trace_health(
             has_contract=task_contract is not None,
             has_completion=bool(completion_result.status),
             sensors=sensors,
         ),
     )
-    return scorecard.to_metadata()
+    metadata = scorecard.to_metadata()
+    metadata["kind"] = "task_scorecard"
+    metadata["task"] = {"task_type": task_type}
+    return metadata
 
 
-def _harness_trace_health(
+def _task_trace_health(
     *,
-    has_profile: bool,
     has_contract: bool,
     has_completion: bool,
-    sensors: tuple[HarnessSensorResult, ...],
+    sensors: tuple[TaskSensorResult, ...],
 ) -> dict[str, Any]:
     sensor_statuses = [sensor.status for sensor in sensors]
     missing_sections = [
         section
         for section, present in (
-            ("profile", has_profile),
             ("contract", has_contract),
             ("completion", has_completion),
         )
@@ -2352,7 +2343,6 @@ def _harness_trace_health(
         status = "warn"
     return {
         "status": status,
-        "has_profile": has_profile,
         "has_contract": has_contract,
         "has_completion": has_completion,
         "missing_sections": missing_sections,
@@ -2378,7 +2368,6 @@ def _can_replace_initial_work_state(state: StoredWorkState | None) -> bool:
     metadata = state.metadata if isinstance(state.metadata, dict) else {}
     return (
         metadata_is_work_progress_source(metadata)
-        and not str(metadata.get("harness_profile") or "").strip()
         and not state.completed_steps
         and not state.blockers
         and int(state.file_change_count or 0) == 0

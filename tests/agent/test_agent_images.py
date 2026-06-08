@@ -1,12 +1,16 @@
 import asyncio
 
-from agent_test_helpers import make_agent_loop
+from agent_test_helpers import make_agent_loop, make_tool_registry
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task.contract import TaskIntentService
 
 
 def _make_media_agent(tmp_path):
-    return make_agent_loop(tmp_path / "workspace", include_images=True)
+    return make_agent_loop(
+        tmp_path / "workspace",
+        include_images=True,
+        tools=make_tool_registry("analyze_image", "ocr_image"),
+    )
 
 
 def _capture_first_prompt(agent):
@@ -82,7 +86,7 @@ def test_call_llm_includes_task_contract_guidance_for_media_task(tmp_path):
     assert "Task type: media_extraction" in content
     assert "image:images/a.jpg" in content
     assert "Required evidence" in content
-    assert "tool_group=image_text" in content
+    assert "tools=analyze_image" in content
     assert "Final answer acceptance criteria" in content
     assert "substantive final answer" in content
 

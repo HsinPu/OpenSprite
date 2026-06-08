@@ -1,11 +1,11 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult, TaskArtifact
-from opensprite.harness import evaluate_harness_sensors
+from opensprite.agent.task.capabilities import evaluate_task_sensors
 from opensprite.tools.evidence import ToolEvidence
 
 
 def test_conversation_sensors_pass_for_plain_final_answer():
-    sensors = evaluate_harness_sensors(
+    sensors = evaluate_task_sensors(
         task_type="conversation",
         execution_result=ExecutionResult(content="done"),
         completion_result=CompletionGateResult(status="complete", reason="answered"),
@@ -18,7 +18,7 @@ def test_conversation_sensors_pass_for_plain_final_answer():
 
 
 def test_web_research_sensors_require_sources_and_live_evidence():
-    sensors = evaluate_harness_sensors(
+    sensors = evaluate_task_sensors(
         task_type="web_research",
         execution_result=ExecutionResult(
             content="done",
@@ -36,7 +36,7 @@ def test_web_research_sensors_require_sources_and_live_evidence():
 
 
 def test_workspace_change_sensors_record_missing_change_and_verification():
-    sensors = evaluate_harness_sensors(
+    sensors = evaluate_task_sensors(
         task_type="workspace_change",
         execution_result=ExecutionResult(content="done", verification_attempted=True, verification_passed=False),
         completion_result=CompletionGateResult(status="incomplete", reason="needs code changes"),
@@ -50,7 +50,7 @@ def test_workspace_change_sensors_record_missing_change_and_verification():
 
 
 def test_media_extraction_sensor_uses_shared_media_artifact_policy():
-    sensors = evaluate_harness_sensors(
+    sensors = evaluate_task_sensors(
         task_type="media_extraction",
         execution_result=ExecutionResult(
             content="done",

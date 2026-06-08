@@ -1,9 +1,9 @@
-from opensprite.harness import HarnessScorecard, HarnessSensorResult
-from opensprite.agent.turn_runner import _harness_trace_health
+from opensprite.agent.task.capabilities import TaskScorecard, TaskSensorResult
+from opensprite.agent.turn_runner import _task_trace_health
 
 
-def test_harness_sensor_result_metadata_is_json_safe():
-    result = HarnessSensorResult(
+def test_task_sensor_result_metadata_is_json_safe():
+    result = TaskSensorResult(
         sensor_id="chat.no_unexpected_tools",
         status="pass",
         summary="No tools were called.",
@@ -18,13 +18,12 @@ def test_harness_sensor_result_metadata_is_json_safe():
     }
 
 
-def test_harness_scorecard_metadata_has_stable_sections():
-    scorecard = HarnessScorecard(
-        profile={"name": "chat", "task_type": "conversation"},
+def test_task_scorecard_metadata_has_stable_sections():
+    scorecard = TaskScorecard(
         contract={"task_type": "pure_answer"},
         tools={"count": 0, "names": []},
         permissions={"effective_policy": {"approval_mode": "auto"}},
-        sensors=(HarnessSensorResult("chat.no_unexpected_tools", "pass"),),
+        sensors=(TaskSensorResult("chat.no_unexpected_tools", "pass"),),
         completion={"status": "complete"},
         trace_health={"status": "pass"},
     )
@@ -32,11 +31,10 @@ def test_harness_scorecard_metadata_has_stable_sections():
     payload = scorecard.to_metadata()
 
     assert payload["schema_version"] == 1
-    assert payload["kind"] == "harness_scorecard"
+    assert payload["kind"] == "task_scorecard"
     assert set(payload) == {
         "schema_version",
         "kind",
-        "profile",
         "contract",
         "tools",
         "permissions",
@@ -47,24 +45,21 @@ def test_harness_scorecard_metadata_has_stable_sections():
     assert payload["sensors"][0]["sensor_id"] == "chat.no_unexpected_tools"
 
 
-def test_harness_trace_health_uses_sensor_severity_and_missing_sections():
-    passing = _harness_trace_health(
-        has_profile=True,
+def test_task_trace_health_uses_sensor_severity_and_missing_sections():
+    passing = _task_trace_health(
         has_contract=True,
         has_completion=True,
-        sensors=(HarnessSensorResult("completion.final_answer", "pass"),),
+        sensors=(TaskSensorResult("completion.final_answer", "pass"),),
     )
-    warning = _harness_trace_health(
-        has_profile=True,
+    warning = _task_trace_health(
         has_contract=True,
         has_completion=True,
-        sensors=(HarnessSensorResult("research.freshness", "warn"),),
+        sensors=(TaskSensorResult("research.freshness", "warn"),),
     )
-    failing = _harness_trace_health(
-        has_profile=True,
+    failing = _task_trace_health(
         has_contract=False,
         has_completion=True,
-        sensors=(HarnessSensorResult("research.source_coverage", "fail"),),
+        sensors=(TaskSensorResult("research.source_coverage", "fail"),),
     )
 
     assert passing["status"] == "pass"

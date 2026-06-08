@@ -22,7 +22,6 @@ from opensprite.agent.task.contract import (
 )
 from opensprite.agent.task.contract import TaskIntentService
 from opensprite.agent.task.progress import WorkProgressService
-from opensprite.harness import HarnessProfileService
 from opensprite.tools.result_status import tool_error_result
 
 
@@ -52,14 +51,13 @@ def test_auto_continue_allows_missing_verification_once():
     assert "verify(action=\"pytest\", path=\".\")" in decision.prompt
 
 
-def test_auto_continue_prompt_includes_harness_profile_guidance():
+def test_auto_continue_prompt_includes_task_contract_guidance():
     intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
-    profile = HarnessProfileService().from_contract(
-        TaskContract(
-            objective=intent.objective,
-            task_type="web_research",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
-        )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
+        required_tools=("web_search",),
     )
     completion = CompletionGateResult(
         status="incomplete",
@@ -70,15 +68,15 @@ def test_auto_continue_prompt_includes_harness_profile_guidance():
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="我會查一下。"),
+        execution_result=ExecutionResult(content="我會查一下。", task_contract=contract),
         attempts_used=0,
         previous_response="我會查一下。",
-        harness_profile=profile,
     )
 
     assert decision.should_continue is True
-    assert decision.harness_profile_name == "research"
-    assert "Harness profile: research" in decision.prompt
+    assert "Task contract: web_research" in decision.prompt
+    assert "Required tools: `web_search`" in decision.prompt
+    assert "Task profile" not in decision.prompt
 
 
 def test_auto_continue_skips_direct_verify_when_verify_tool_is_unavailable():
@@ -397,7 +395,7 @@ def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_gene
     contract = TaskContract(
         objective=intent.objective,
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
         allow_no_tool_final=False,
     )
 

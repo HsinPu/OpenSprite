@@ -33,7 +33,7 @@ from opensprite.agent.task.contract import (
     is_one_turn_intent_kind,
     is_plain_answer_task_type,
     is_read_only_blocking_requirement_kind,
-    is_read_only_blocking_tool_group,
+    is_read_only_blocking_tool_name,
     is_read_only_task_type,
 )
 from opensprite.tools.evidence import (
@@ -46,7 +46,6 @@ from opensprite.tools.evidence import (
     is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
     is_web_research_task_type,
-    is_web_research_tool_group,
     is_web_source_artifact_kind,
     is_web_source_evidence_tool,
 )
@@ -325,9 +324,9 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert accepts_final_response_task_type("planning") is True
     assert accepts_final_response_task_type("web_research") is False
     assert is_read_only_blocking_requirement_kind("file_change") is True
-    assert is_read_only_blocking_requirement_kind("tool_group") is False
-    assert is_read_only_blocking_tool_group("execution") is True
-    assert is_read_only_blocking_tool_group("workspace_read") is False
+    assert is_read_only_blocking_requirement_kind("required_tool") is False
+    assert is_read_only_blocking_tool_name("exec") is True
+    assert is_read_only_blocking_tool_name("read_file") is False
     assert _contract_requires_verification(
         TaskContract(
             objective="x",
@@ -339,14 +338,14 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
         TaskContract(
             objective="x",
             task_type="code_change",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="verification"),),
+            required_tools=("verify",),
         )
     ) is True
     assert _contract_requires_verification(
         TaskContract(
             objective="x",
             task_type="code_change",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+            required_tools=("read_file",),
         )
     ) is False
     assert is_verification_result_artifact_kind("verification_result") is True
@@ -404,8 +403,6 @@ def test_completion_gate_web_source_evidence_helpers_are_centralized():
     assert is_web_source_evidence_tool("read_file") is False
     assert is_web_research_task_type("web_research") is True
     assert is_web_research_task_type("workspace_read") is False
-    assert is_web_research_tool_group("web_research") is True
-    assert is_web_research_tool_group("workspace_read") is False
     assert is_web_source_artifact_kind("web_source") is True
     assert is_web_source_artifact_kind("verification_result") is False
     assert is_optional_workspace_batch_failure_tool("batch") is True
@@ -521,26 +518,32 @@ def _web_research_partial_query_artifact() -> TaskArtifact:
     )
 
 
-def _tool_group_contract(intent, task_type: str, tool_group: str) -> TaskContract:
+def _required_tool_contract(intent, task_type: str, required_tool: str) -> TaskContract:
+    evidence_tools = {
+        "web_search": ("web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"),
+        "read_file": ("read_file", "list_dir", "glob_files", "grep_files", "code_navigation"),
+        "search_history": ("search_history", "list_run_file_changes"),
+    }.get(required_tool, (required_tool,))
     return TaskContract(
         objective=intent.objective,
         task_type=task_type,
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group=tool_group),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=evidence_tools),),
+        required_tools=(required_tool,),
         allow_no_tool_final=False,
         contract_sources=("test",),
     )
 
 
 def _web_contract(intent) -> TaskContract:
-    return _tool_group_contract(intent, "web_research", "web_research")
+    return _required_tool_contract(intent, "web_research", "web_search")
 
 
 def _workspace_contract(intent) -> TaskContract:
-    return _tool_group_contract(intent, "workspace_read", "workspace_read")
+    return _required_tool_contract(intent, "workspace_read", "read_file")
 
 
 def _history_contract(intent) -> TaskContract:
-    return _tool_group_contract(intent, "history_retrieval", "history_retrieval")
+    return _required_tool_contract(intent, "history_retrieval", "search_history")
 
 
 def _web_follow_up_context() -> TaskContextDecision:
@@ -548,7 +551,6 @@ def _web_follow_up_context() -> TaskContextDecision:
         is_follow_up=True,
         should_inherit_active_task=True,
         inherited_task_type="web_research",
-        inherited_tool_group="web_research",
         continuation_type="narrowing",
         confidence=0.86,
         method="llm",
@@ -560,7 +562,8 @@ def _verification_contract(intent) -> TaskContract:
     return TaskContract(
         objective=intent.objective,
         task_type="task",
-        requirements=(EvidenceRequirement(kind="verification", tool_group="verification"),),
+        requirements=(EvidenceRequirement(kind="verification", tools=("verify",)),),
+        required_tools=("verify",),
         allow_no_tool_final=False,
         contract_sources=("test",),
     )
@@ -760,7 +763,7 @@ def test_completion_gate_does_not_require_verification_for_read_only_workspace_a
     contract = TaskContract(
         objective=intent.objective,
         task_type="workspace_read",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        required_tools=("read_file",),
         acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
@@ -787,7 +790,7 @@ def test_completion_gate_allows_read_only_batch_discovery_miss_after_workspace_e
     contract = TaskContract(
         objective=intent.objective,
         task_type="analysis",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        required_tools=("read_file",),
         acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
@@ -835,7 +838,7 @@ def test_completion_gate_accepts_run_file_change_listing_as_read_only_evidence()
     contract = TaskContract(
         objective=intent.objective,
         task_type="workspace_read",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        required_tools=("read_file",),
         acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=20),),
     )
 
@@ -864,7 +867,7 @@ def test_completion_gate_accepts_run_file_change_listing_as_history_evidence():
     contract = TaskContract(
         objective=intent.objective,
         task_type="history_retrieval",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        required_tools=("search_history",),
         acceptance_criteria=(AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND, min_response_chars=40),),
     )
 
@@ -890,7 +893,7 @@ def test_completion_gate_does_not_require_verification_for_operations_report():
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="scheduling"),),
+        required_tools=("cron",),
         acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         allow_no_tool_final=False,
     )
@@ -915,7 +918,7 @@ def test_completion_gate_rejects_repo_state_answer_for_command_version_question(
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        required_tools=("exec",),
         acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
@@ -948,7 +951,7 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        required_tools=("exec",),
         acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
@@ -979,7 +982,7 @@ def test_completion_gate_rejects_ungrounded_command_version_number():
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        required_tools=("exec",),
         acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
@@ -1011,7 +1014,7 @@ def test_completion_gate_rejects_command_unavailable_claim_without_execution_evi
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        required_tools=("exec",),
         acceptance_criteria=(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND),),
         planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
@@ -1058,7 +1061,7 @@ def test_quality_gate_does_not_infer_command_version_check_from_objective_text()
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        required_tools=("exec",),
     )
 
     result = QualityGateService().evaluate(
@@ -1170,7 +1173,7 @@ def test_completion_gate_does_not_infer_blocker_from_tool_error_text():
 
 def test_completion_gate_does_not_infer_chinese_missing_files_as_blocked():
     intent = TaskIntentService().classify(
-        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
+        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa task planning selection \u554f\u984c"
     )
     response = "\u7d50\u679c\uff1a\u6240\u9700\u6a94\u6848\u4e0d\u5b58\u5728\uff0c\u7121\u6cd5\u7e7c\u7e8c\u3002"
 
@@ -1214,7 +1217,7 @@ def test_completion_gate_does_not_infer_workspace_scope_read_error_as_blocked():
 
 def test_completion_gate_does_not_infer_blocker_heading_as_blocked():
     intent = TaskIntentService().classify(
-        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
+        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa task planning selection \u554f\u984c"
     )
     response = "## Blocker\n\nRequired project files were not found."
 
@@ -1250,7 +1253,7 @@ def test_completion_gate_does_not_mark_preview_only_revert_as_blocked():
             task_contract=TaskContract(
                 objective=intent.objective,
                 task_type="workspace_read",
-                requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+                required_tools=("read_file",),
                 acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
             ),
         ),
@@ -1446,7 +1449,7 @@ def test_task_contract_requires_web_research_for_chinese_market_lookup():
 
     assert contract.task_type == "web_research"
     assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert "web_search" in contract.required_tools
     assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
         "source_artifact",
         "source_detail",
@@ -1473,7 +1476,7 @@ def test_task_contract_requires_web_research_for_high_confidence_chinese_externa
 
         assert contract.task_type == "web_research", message
         assert contract.allow_no_tool_final is False, message
-        assert any(requirement.tool_group == "web_research" for requirement in contract.requirements), message
+        assert "web_search" in contract.required_tools, message
 
 
 def test_task_contract_does_not_treat_ambiguous_chinese_lookup_words_as_web_research():
@@ -1495,7 +1498,7 @@ def test_task_contract_does_not_treat_ambiguous_chinese_lookup_words_as_web_rese
         )
 
         assert contract.task_type != "web_research", message
-        assert not any(requirement.tool_group == "web_research" for requirement in contract.requirements), message
+        assert "web_search" not in contract.required_tools, message
 
 
 def test_task_contract_requires_workspace_read_for_direct_repo_lookup():
@@ -1508,7 +1511,7 @@ def test_task_contract_requires_workspace_read_for_direct_repo_lookup():
 
     assert contract.task_type == "workspace_read"
     assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "workspace_read" for requirement in contract.requirements)
+    assert "read_file" in contract.required_tools
     assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
 
 
@@ -1690,7 +1693,7 @@ def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
 
     assert contract.task_type == "history_retrieval"
     assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
+    assert "search_history" in contract.required_tools
     assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
 
 
@@ -1700,7 +1703,7 @@ def test_task_contract_keeps_history_retrieval_when_planner_requires_it_for_foll
     contract = _contract_from_task_planner_payload(
         {
             "task_type": "history_retrieval",
-            "required_tool_groups": ["history_retrieval"],
+            "required_tools": ["search_history"],
             "final_answer_required": True,
             "allow_no_tool_final": False,
             "reason": "planner thought prior conversation state needed retrieval",
@@ -1721,12 +1724,12 @@ def test_task_contract_keeps_history_retrieval_when_planner_requires_it_for_foll
     )
 
     assert contract.task_type == "history_retrieval"
-    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
+    assert "search_history" in contract.required_tools
     assert contract.allow_no_tool_final is False
     assert "override_reason" not in contract.planner_metadata
 
 
-def test_task_contract_history_retrieval_drops_extra_web_research_group():
+def test_task_contract_history_retrieval_keeps_explicit_required_tools():
     intent = TaskIntentService().classify(
         "Which two previous questions in this session were about OpenRouter or TSMC?"
     )
@@ -1734,7 +1737,7 @@ def test_task_contract_history_retrieval_drops_extra_web_research_group():
     contract = _contract_from_task_planner_payload(
         {
             "task_type": "history_retrieval",
-            "required_tool_groups": ["history_retrieval", "web_research"],
+            "required_tools": ["search_history", "web_search"],
             "final_answer_required": True,
             "allow_no_tool_final": False,
             "reason": "The user asks about previous conversation state; OpenRouter and TSMC are only history keywords.",
@@ -1749,8 +1752,8 @@ def test_task_contract_history_retrieval_drops_extra_web_research_group():
     )
 
     assert contract.task_type == "history_retrieval"
-    assert [requirement.tool_group for requirement in contract.requirements] == ["history_retrieval"]
-    assert all(criterion.kind != "source_artifact" for criterion in contract.acceptance_criteria)
+    assert contract.required_tools == ("search_history", "web_search")
+    assert any(criterion.kind == "source_artifact" for criterion in contract.acceptance_criteria)
 
 
 def test_completion_gate_requires_history_evidence_for_prior_context_lookup():
@@ -1823,7 +1826,7 @@ def test_completion_gate_allows_partial_history_search_errors_after_successful_h
     contract = TaskContract(
         objective=intent.objective,
         task_type="history_retrieval",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        required_tools=("search_history",),
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
     )
     answer = (
@@ -1961,7 +1964,7 @@ def test_completion_gate_requires_enough_history_items():
     contract = TaskContract(
         objective=intent.objective,
         task_type="history_retrieval",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        required_tools=("search_history",),
         acceptance_criteria=(
             AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),
             AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND, min_count=3),
@@ -1995,7 +1998,7 @@ def test_completion_gate_does_not_infer_history_count_from_objective_text():
     contract = TaskContract(
         objective=intent.objective,
         task_type="history_retrieval",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        required_tools=("search_history",),
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
     )
     answer = (
@@ -2125,7 +2128,8 @@ def test_completion_gate_requires_web_evidence_for_chinese_market_lookup():
     contract = TaskContract(
         objective=intent.objective,
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search",)),),
+        required_tools=("web_search",),
         allow_no_tool_final=False,
         contract_sources=("test",),
     )
@@ -2155,7 +2159,7 @@ def test_task_contract_inherits_web_research_for_short_follow_up():
 
     assert contract.task_type == "web_research"
     assert contract.allow_no_tool_final is False
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert "web_search" in contract.required_tools
     assert {criterion.kind for criterion in contract.acceptance_criteria} >= {
         "source_artifact",
         "source_detail",
@@ -3075,7 +3079,7 @@ def test_completion_gate_allows_optional_workspace_discovery_errors_after_succes
     contract = TaskContract(
         objective=intent.objective,
         task_type="workspace_read",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        required_tools=("read_file",),
         allow_no_tool_final=False,
     )
     answer = (
@@ -3452,13 +3456,13 @@ def test_completion_gate_uses_contract_for_no_tool_final_response():
     assert result.should_update_active_task is True
 
 
-def test_task_contract_trusts_task_context_inherited_tool_group_without_message_override():
+def test_task_contract_does_not_inherit_task_type_without_required_tools():
     intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
 
     contract = _contract_from_task_planner_payload(
         {
             "task_type": "pure_answer",
-            "required_tool_groups": [],
+            "required_tools": [],
             "final_answer_required": True,
             "allow_no_tool_final": True,
             "reason": "Answer from previous sources.",
@@ -3473,13 +3477,12 @@ def test_task_contract_trusts_task_context_inherited_tool_group_without_message_
             is_follow_up=True,
             should_inherit_active_task=True,
             inherited_task_type="web_research",
-            inherited_tool_group="web_research",
             continuation_type="continue_active_task",
         ),
     )
 
     assert contract.task_type == "pure_answer"
-    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
+    assert contract.required_tools == ()
 
 
 def test_quality_gate_reports_missing_requested_items():
@@ -4179,7 +4182,7 @@ async def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplet
     contract = TaskContract(
         objective=intent.objective,
         task_type="web_research",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        required_tools=("web_search",),
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
     )
 
@@ -4337,7 +4340,7 @@ def test_completion_gate_respects_workspace_read_contract_over_code_words():
     contract = TaskContract(
         objective=intent.objective,
         task_type="workspace_read",
-        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        required_tools=("read_file",),
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
     )
     answer = "The implementation is in `src/opensprite/tools/web_research.py`, which orchestrates search and fetch."

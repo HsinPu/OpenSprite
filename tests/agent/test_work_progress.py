@@ -5,7 +5,6 @@ from opensprite.agent.task.contract import TaskContextDecision
 from opensprite.agent.task.contract import TaskIntentService
 from opensprite.agent.task.progress import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from opensprite.agent.task.progress import VERIFICATION_REQUIRED_RESUME_HINT
-from opensprite.harness import HarnessProfile, HarnessProfileService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
@@ -37,21 +36,17 @@ def test_work_progress_keeps_intent_only_plan_generic_before_contract():
     )
 
 
-def test_work_progress_uses_harness_profile_plan_steps():
+def test_work_progress_uses_task_contract_plan_steps():
     intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
-    profile = HarnessProfileService().from_contract(
-        TaskContract(
-            objective=intent.objective,
-            task_type="web_research",
-            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
-        )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        required_tools=("web_search",),
     )
 
-    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
+    plan = WorkProgressService().create_plan(intent, task_contract=contract)
 
     assert plan is not None
-    assert plan.harness_profile == "research"
-    assert plan.verification_policy == "source_grounded"
     assert plan.steps == (
         "search for relevant sources",
         "fetch or inspect source details",
@@ -59,68 +54,41 @@ def test_work_progress_uses_harness_profile_plan_steps():
     )
 
 
-def test_work_progress_chat_profile_skips_default_plan():
-    intent = TaskIntentService().classify("What does this command do?")
-    profile = HarnessProfile(name="chat", task_type="pure_answer")
-
-    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
-
-    assert plan is None
-
-
-def test_work_progress_coding_harness_plan_does_not_depend_on_intent_markers():
-    intent = TaskIntentService().classify("請看一下這段目前流程")
-    profile = HarnessProfileService().from_contract(
-        TaskContract(
-            objective=intent.objective,
-            task_type="code_change",
-            requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
-        )
-    )
-
-    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
-
-    assert plan is not None
-    assert plan.harness_profile == "coding"
-    assert plan.expects_code_change is True
-    assert plan.expects_verification is False
-    assert plan.steps == (
-        "inspect relevant workspace context",
-        "make the smallest correct change or collect concrete workspace evidence",
-        "run focused verification or state the verification gap",
-        "summarize changes, evidence, and remaining risk",
-    )
-
-
-def test_work_progress_harness_plan_uses_explicit_verification_requirement():
+def test_work_progress_task_contract_uses_explicit_verification_requirement():
+    service = WorkProgressService()
     intent = TaskIntentService().classify("Can you look at this flow?")
-    profile = HarnessProfile(
-        name="coding",
-        task_type="workspace_change",
-        required_tool_groups=("workspace_read", "workspace_write", "verification"),
-        required_evidence=("file_change", "verification"),
-        verification_policy="focused_if_possible",
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="code_change",
+        requirements=(
+            EvidenceRequirement(kind="file_change", min_count=1),
+            EvidenceRequirement(kind="verification", tools=("verify",)),
+        ),
+        required_tools=("read_file", "apply_patch", "verify"),
     )
 
-    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
+    plan = service.create_plan(intent, task_contract=contract)
 
     assert plan is not None
     assert plan.expects_code_change is True
     assert plan.expects_verification is True
+    assert plan.done_criteria[-1] == "relevant tests or checks pass, or the verification gap is stated"
 
 
 def test_work_progress_verification_targets_do_not_depend_on_done_criteria_markers():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Can you look at this flow?")
-    profile = HarnessProfile(
-        name="coding",
-        task_type="workspace_change",
-        required_tool_groups=("workspace_read", "workspace_write", "verification"),
-        required_evidence=("file_change", "verification"),
-        verification_policy="focused_if_possible",
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="code_change",
+        requirements=(
+            EvidenceRequirement(kind="file_change", min_count=1),
+            EvidenceRequirement(kind="verification", tools=("verify",)),
+        ),
+        required_tools=("read_file", "apply_patch", "verify"),
     )
 
-    plan = service.create_plan(intent, harness_profile=profile)
+    plan = service.create_plan(intent, task_contract=contract)
     assert plan is not None
     assert all(
         not any(token in item.lower() for token in ("verify", "verification", "test", "build", "check", "pass"))
@@ -137,19 +105,9 @@ def test_work_progress_verification_targets_do_not_depend_on_done_criteria_marke
     )
 
 
-def test_work_progress_uses_harness_profile_continuation_budget():
-    service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
-    intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")
-    profile = HarnessProfileService().default_chat_profile()
-
-    assert profile.name == "chat"
-    assert service.continuation_budget(intent, harness_profile=profile) == 0
-
-
 def test_work_progress_allows_one_retry_for_incomplete_chat_with_missing_evidence():
     service = WorkProgressService(default_continuation_budget=1, long_running_continuation_budget=3)
     intent = TaskIntentService().classify("Explain Python ModuleNotFoundError without tools.")
-    profile = HarnessProfileService().default_chat_profile()
     completion = CompletionGateResult(
         status="incomplete",
         reason="missing direct answer",
@@ -162,7 +120,6 @@ def test_work_progress_allows_one_retry_for_incomplete_chat_with_missing_evidenc
         execution_result=ExecutionResult(content="Can you clarify?"),
         auto_continue_attempts=0,
         pass_index=1,
-        harness_profile=profile,
     )
 
     assert update.continuation_budget == 1
@@ -220,14 +177,11 @@ def test_work_progress_uses_configured_continuation_budgets():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     task_intent = TaskIntentService().classify("Please refactor the agent and run tests.")
     question_intent = TaskIntentService().classify("What does this command do?")
-    coding_profile = HarnessProfile(
-        name="coding",
-        task_type="workspace_change",
-        required_tool_groups=("workspace_read", "workspace_write", "verification"),
-        required_evidence=("file_change", "verification"),
-    )
 
-    assert service.continuation_budget(task_intent, harness_profile=coding_profile) == 5
+    assert service.continuation_budget(
+        task_intent,
+        task_contract=TaskContract(objective=task_intent.objective, task_type="code_change"),
+    ) == 5
     assert service.continuation_budget(task_intent) == 2
     assert service.continuation_budget(question_intent) == 2
 
@@ -537,14 +491,16 @@ def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
 def test_work_progress_updates_state_and_renders_summary():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
-    profile = HarnessProfile(
-        name="coding",
-        task_type="workspace_change",
-        required_tool_groups=("workspace_read", "workspace_write", "verification"),
-        required_evidence=("file_change", "verification"),
-        verification_policy="focused_if_possible",
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="code_change",
+        requirements=(
+            EvidenceRequirement(kind="file_change", min_count=1),
+            EvidenceRequirement(kind="verification", tools=("verify",)),
+        ),
+        required_tools=("read_file", "apply_patch", "verify"),
     )
-    plan = service.create_plan(intent, harness_profile=profile)
+    plan = service.create_plan(intent, task_contract=contract)
     initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
     assert initial is not None
     progress = service.evaluate(

@@ -40,7 +40,7 @@ class RecordingProvider:
         if "OpenSprite task planner" in system_prompt:
             return LLMResponse(
                 content=(
-                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+                    '{"task_type":"pure_answer","required_tools":[],"final_answer_required":true,'
                     '"allow_no_tool_final":true,"reason":"test planner contract"}'
                 ),
                 model="fake-model",
@@ -76,7 +76,6 @@ def _initial_task_planning_payload():
             "should_seed_active_task": False,
             "should_replace_active_task": False,
             "inherited_task_type": None,
-            "inherited_tool_group": None,
             "continuation_type": "none",
             "confidence": 0.8,
             "reason": "test initial task planning",

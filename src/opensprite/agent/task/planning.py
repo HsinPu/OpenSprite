@@ -1,4 +1,4 @@
-"""Task and harness planning for one LLM-backed user turn."""
+"""Task planning for one LLM-backed user turn."""
 
 from __future__ import annotations
 
@@ -6,19 +6,17 @@ from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable
 
 from ...documents.active_task import has_current_active_task
-from ...harness import HarnessPlan, HarnessPolicy, HarnessProfile, is_chat_profile_name
 from ...runs.events import (
-    HARNESS_POLICY_MERGE_RESOLVED_EVENT,
-    HARNESS_POLICY_SELECTED_EVENT,
-    HARNESS_PROFILE_SELECTED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
+    TOOL_ACCESS_RESOLVED_EVENT,
 )
 from ...tools import ToolRegistry
+from ...tools.access import ToolAccessResolution, ToolAccessResolver
 from ...utils.log import logger
 from .contract import (
     PLANNER_VALIDATED_STATUS,
@@ -26,6 +24,7 @@ from .contract import (
     TaskContract,
     TaskIntent,
     TaskObjectiveDecision,
+    is_plain_answer_task_type,
     task_planner_status,
 )
 
@@ -43,25 +42,23 @@ class TurnPlanningResult:
     effective_current_message: str
     prompt_message: str
     task_contract: TaskContract | None
-    harness_profile: HarnessProfile | None
-    harness_policy: HarnessPolicy | None
-    harness_tool_registry: ToolRegistry | None
+    task_tool_registry: ToolRegistry | None
 
 
 class TurnPlanningService:
-    """Resolve task contract and harness policy before prompt execution."""
+    """Resolve a task contract and concrete tool access before prompt execution."""
 
     def __init__(
         self,
         *,
         plan_task: Callable[..., Awaitable[TaskContract]],
-        plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
+        resolve_tool_access: Callable[[ToolRegistry, TaskContract], ToolAccessResolution] | None = None,
         maybe_seed_active_task: Callable[..., Awaitable[None]],
         augment_message_for_media: Callable[..., str],
         emit_run_event: RunEventEmitter,
     ) -> None:
         self._plan_task = plan_task
-        self._plan_harness = plan_harness
+        self._resolve_tool_access = resolve_tool_access or _resolve_required_tool_access
         self._maybe_seed_active_task = maybe_seed_active_task
         self._augment_message_for_media = augment_message_for_media
         self._emit_run_event = emit_run_event
@@ -95,7 +92,7 @@ class TurnPlanningService:
                 f"follow_up={task_context_decision.is_follow_up} "
                 f"inherit_active={task_context_decision.should_inherit_active_task} "
                 f"replace_active={task_context_decision.should_replace_active_task} "
-                f"tool_group={task_context_decision.inherited_tool_group or '-'} "
+                f"inherited_task_type={task_context_decision.inherited_task_type or '-'} "
                 f"confidence={task_context_decision.confidence:.2f}"
             )
             if run_id is not None:
@@ -129,9 +126,7 @@ class TurnPlanningService:
             user_video_files=user_video_files,
         )
         task_contract = None
-        harness_profile = None
-        harness_policy = None
-        harness_tool_registry = None
+        task_tool_registry = None
         if effective_task_intent is not None:
             if task_contract_override is not None:
                 task_contract = task_contract_override
@@ -199,14 +194,11 @@ class TurnPlanningService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-            harness_plan = self._plan_harness(task_contract, base_tool_registry)
-            task_contract = harness_plan.task_contract
-            harness_profile = harness_plan.harness_profile
-            harness_policy = harness_plan.harness_policy
-            harness_tool_registry = harness_plan.tool_registry
+            tool_access_resolution = self._resolve_tool_access(base_tool_registry, task_contract)
+            task_tool_registry = tool_access_resolution.registry
             if _should_seed_active_task_for_contract(
                 active_task_snapshot=active_task_snapshot,
-                harness_profile=harness_profile,
+                task_contract=task_contract,
                 task_context_decision=task_context_decision,
             ):
                 await self._maybe_seed_active_task(
@@ -220,36 +212,17 @@ class TurnPlanningService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    HARNESS_PROFILE_SELECTED_EVENT,
-                    {
-                        **harness_profile.to_metadata(),
-                        "selection_phase": "contract",
-                    },
-                    channel=channel,
-                    external_chat_id=external_chat_id,
-                )
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
                     TASK_CONTRACT_CREATED_EVENT,
                     task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
-                    HARNESS_POLICY_SELECTED_EVENT,
-                    harness_policy.to_metadata(),
-                    channel=channel,
-                    external_chat_id=external_chat_id,
-                )
-                policy_resolution = getattr(harness_tool_registry, "permission_resolution_metadata", None)
+                policy_resolution = getattr(task_tool_registry, "permission_resolution_metadata", None)
                 if isinstance(policy_resolution, dict) and policy_resolution:
                     await self._emit_run_event(
                         session_id,
                         run_id,
-                        HARNESS_POLICY_MERGE_RESOLVED_EVENT,
+                        TOOL_ACCESS_RESOLVED_EVENT,
                         policy_resolution,
                         channel=channel,
                         external_chat_id=external_chat_id,
@@ -261,26 +234,35 @@ class TurnPlanningService:
             effective_current_message=effective_current_message,
             prompt_message=prompt_message,
             task_contract=task_contract,
-            harness_profile=harness_profile,
-            harness_policy=harness_policy,
-            harness_tool_registry=harness_tool_registry,
+            task_tool_registry=task_tool_registry,
         )
 
 
 def _should_seed_active_task_for_contract(
     *,
     active_task_snapshot: str,
-    harness_profile: HarnessProfile,
+    task_contract: TaskContract,
     task_context_decision: TaskContextDecision | None,
 ) -> bool:
-    profile_name = str(getattr(harness_profile, "name", "") or "").strip()
-    if not is_chat_profile_name(profile_name):
+    if not _contract_is_minimal_chat_task(task_contract):
         return True
     if has_current_active_task(active_task_snapshot):
         return True
     if task_context_decision is None:
         return False
     return bool(task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
+
+
+def _resolve_required_tool_access(base_tool_registry: ToolRegistry, task_contract: TaskContract) -> ToolAccessResolution:
+    return ToolAccessResolver().resolve_required_tools(
+        base_tool_registry,
+        getattr(task_contract, "required_tools", ()),
+    )
+
+
+def _contract_is_minimal_chat_task(task_contract: TaskContract) -> bool:
+    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    return is_plain_answer_task_type(task_type) or task_type == "planning"
 
 
 def _effective_task_intent(
