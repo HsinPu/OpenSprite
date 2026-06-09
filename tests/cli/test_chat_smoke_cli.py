@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sqlite3
 
@@ -9,6 +10,7 @@ from opensprite.cli.commands_chat_smoke import (
     check_trace,
     load_trace_readonly,
     resolve_external_chat_prefix,
+    run_smoke_cases,
     select_cases,
     summarize_trace,
 )
@@ -194,6 +196,39 @@ def test_resolve_external_chat_prefix_uses_unique_default():
 
     assert generated.startswith("cli-trace-smoke-")
     assert generated != "cli-trace-smoke"
+
+
+def test_run_smoke_cases_uses_one_external_chat_id_for_all_cases():
+    seen_external_chat_ids: list[str] = []
+
+    async def fake_send_web_chat(*args, **kwargs):
+        seen_external_chat_ids.append(str(kwargs["external_chat_id"]))
+        return {
+            "ok": True,
+            "session_id": f"web:{kwargs['external_chat_id']}",
+            "run_id": f"run-{len(seen_external_chat_ids)}",
+            "reply": "ok",
+        }
+
+    payload = asyncio.run(
+        run_smoke_cases(
+            [
+                SmokeCase("one", "one", expect_web_tools=False),
+                SmokeCase("two", "two", expect_web_tools=False),
+            ],
+            gateway_url="http://127.0.0.1:8765",
+            ws_url=None,
+            access_token=None,
+            timeout_seconds=1,
+            external_chat_prefix="smoke-session",
+            db_path=None,
+            send_web_chat=fake_send_web_chat,
+        )
+    )
+
+    assert seen_external_chat_ids == ["smoke-session", "smoke-session"]
+    assert {result["session_id"] for result in payload["results"]} == {"web:smoke-session"}
+    assert payload["ok"] is True
 
 
 def test_chat_smoke_command_outputs_json(monkeypatch):

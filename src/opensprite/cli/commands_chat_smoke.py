@@ -320,9 +320,9 @@ async def run_smoke_cases(
     """Run all smoke cases through the Web gateway and inspect their stored traces."""
     started = time.monotonic()
     results: list[dict[str, Any]] = []
+    external_chat_id = external_chat_prefix
 
     for index, case in enumerate(cases, start=1):
-        external_chat_id = f"{external_chat_prefix}-{index:02d}-{case.case_id}"
         payload = await send_web_chat(
             case.prompt,
             gateway_url=gateway_url,
