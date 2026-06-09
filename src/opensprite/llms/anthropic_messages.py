@@ -203,16 +203,13 @@ class AnthropicMessagesLLM(LLMProvider):
         model: str | None,
         max_tokens: int | None,
     ) -> dict[str, Any]:
-        if max_tokens is None:
-            raise ValueError(
-                "Anthropic Messages requests require max_tokens; pass the configured context output reserve."
-            )
         system, anthropic_messages = self._build_messages(messages)
         payload: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": anthropic_messages,
-            "max_tokens": max_tokens,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if system:
             payload["system"] = system
         if tools:

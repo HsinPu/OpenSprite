@@ -7,7 +7,7 @@ class FakeImageProvider:
     def __init__(self):
         self.calls = []
 
-    async def analyze(self, instruction, images, *, model=None, max_tokens=2048):
+    async def analyze(self, instruction, images, *, model=None, max_tokens=None):
         self.calls.append((instruction, list(images), model, max_tokens))
         return "analysis"
 
@@ -16,7 +16,7 @@ class FakeVideoProvider:
     def __init__(self):
         self.calls = []
 
-    async def analyze(self, instruction, video_data_url, *, model=None, max_tokens=2048):
+    async def analyze(self, instruction, video_data_url, *, model=None, max_tokens=None):
         self.calls.append((instruction, video_data_url, model, max_tokens))
         return "video analysis"
 
@@ -27,12 +27,12 @@ class EmptySpeechProvider:
 
 
 class EmptyImageProvider:
-    async def analyze(self, instruction, images, *, model=None, max_tokens=2048):
+    async def analyze(self, instruction, images, *, model=None, max_tokens=None):
         return ""
 
 
 class EmptyVideoProvider:
-    async def analyze(self, instruction, video_data_url, *, model=None, max_tokens=2048):
+    async def analyze(self, instruction, video_data_url, *, model=None, max_tokens=None):
         return ""
 
 
@@ -45,7 +45,7 @@ def test_media_router_uses_image_provider_for_selected_image():
     )
 
     assert result == "analysis"
-    assert provider.calls == [("describe it", ["img-b"], None, 2048)]
+    assert provider.calls == [("describe it", ["img-b"], None, None)]
 
 
 def test_media_router_uses_separate_ocr_provider_for_selected_image():
@@ -59,7 +59,7 @@ def test_media_router_uses_separate_ocr_provider_for_selected_image():
 
     assert result == "analysis"
     assert image_provider.calls == []
-    assert ocr_provider.calls == [("extract text", ["img-b"], None, 2048)]
+    assert ocr_provider.calls == [("extract text", ["img-b"], None, None)]
 
 
 def test_media_router_reports_when_provider_is_unavailable():
@@ -87,7 +87,7 @@ def test_media_router_uses_video_provider_for_selected_video():
     )
 
     assert result == "video analysis"
-    assert provider.calls == [("describe the clip", "vid-b", None, 2048)]
+    assert provider.calls == [("describe the clip", "vid-b", None, None)]
 
 
 def test_media_router_reports_empty_image_provider_result():

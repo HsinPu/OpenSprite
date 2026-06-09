@@ -55,7 +55,7 @@ class MediaRouter:
         *,
         image_index: int = 0,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         """Analyze one image from the current turn."""
         if self.image_provider is None:
@@ -79,7 +79,7 @@ class MediaRouter:
         *,
         image_index: int = 0,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         """Extract text from one image using the configured OCR provider."""
         if self.ocr_provider is None:
@@ -125,7 +125,7 @@ class MediaRouter:
         *,
         video_index: int = 0,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         """Analyze one video clip from the current turn."""
         if self.video_provider is None:

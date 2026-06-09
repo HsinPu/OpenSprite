@@ -15,7 +15,7 @@ class ImageAnalysisProvider(ABC):
         images: list[str],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         """Analyze one or more images and return a text result."""
         raise NotImplementedError
@@ -46,7 +46,7 @@ class VideoAnalysisProvider(ABC):
         video_data_url: str,
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         """Analyze one video payload and return text."""
         raise NotImplementedError

@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from opensprite.llms import ChatMessage
 from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 
@@ -41,15 +39,21 @@ def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
     assert provider.context_request_kwargs(output_token_reserve=32768) == {"max_tokens": 32768}
 
 
-def test_anthropic_messages_requires_configured_max_tokens():
+def test_anthropic_messages_omits_max_tokens_when_unset():
     provider = AnthropicMessagesLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
     )
 
-    with pytest.raises(ValueError, match="require max_tokens"):
-        provider._build_payload([ChatMessage(role="user", content="Hello")], tools=None, model=None, max_tokens=None)
+    payload = provider._build_payload(
+        [ChatMessage(role="user", content="Hello")],
+        tools=None,
+        model=None,
+        max_tokens=None,
+    )
+
+    assert "max_tokens" not in payload
 
 
 def test_anthropic_messages_applies_prompt_cache_for_official_anthropic_base_url():

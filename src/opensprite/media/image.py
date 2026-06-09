@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 from openai import AsyncOpenAI
 
@@ -25,17 +27,20 @@ class OpenAICompatibleImageProvider(ImageAnalysisProvider):
         images: list[str],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         user_content = [{"type": "text", "text": instruction or "Describe the provided image."}]
         for image in images:
             user_content.append({"type": "image_url", "image_url": {"url": image}})
 
-        response = await self.client.chat.completions.create(
-            model=model or self.default_model,
-            messages=[{"role": "user", "content": user_content}],
-            max_tokens=max_tokens,
-        )
+        params: dict[str, Any] = {
+            "model": model or self.default_model,
+            "messages": [{"role": "user", "content": user_content}],
+        }
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+
+        response = await self.client.chat.completions.create(**params)
         choices = getattr(response, "choices", None) or []
         if not choices:
             return ""
@@ -100,7 +105,7 @@ class MiniMaxImageProvider(ImageAnalysisProvider):
         images: list[str],
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         if not images:
             return ""

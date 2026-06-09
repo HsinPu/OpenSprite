@@ -119,3 +119,29 @@ def test_openai_compatible_provider_sends_openrouter_image_payload(monkeypatch):
             "max_tokens": 123,
         }
     ]
+
+
+def test_openai_compatible_provider_omits_max_tokens_when_unset(monkeypatch):
+    calls = []
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            calls.append(kwargs)
+            return _FakeResponse()
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.chat = type("FakeChat", (), {"completions": FakeCompletions()})()
+
+    monkeypatch.setattr(image_module, "AsyncOpenAI", FakeClient)
+    provider = image_module.OpenAICompatibleImageProvider(
+        api_key="secret-key",
+        default_model="google/gemini-3-flash-preview",
+        base_url="https://openrouter.ai/api/v1",
+    )
+
+    result = asyncio.run(provider.analyze("What is this?", ["data:image/jpeg;base64,abc"]))
+
+    assert result == "image summary"
+    assert "max_tokens" not in calls[0]

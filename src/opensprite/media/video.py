@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from openai import AsyncOpenAI
 
 from .base import VideoAnalysisProvider
@@ -23,18 +25,21 @@ class OpenAICompatibleVideoProvider(VideoAnalysisProvider):
         video_data_url: str,
         *,
         model: str | None = None,
-        max_tokens: int = 2048,
+        max_tokens: int | None = None,
     ) -> str:
         user_content = [
             {"type": "text", "text": instruction or "Describe the provided video."},
             {"type": "video_url", "video_url": {"url": video_data_url}},
         ]
 
-        response = await self.client.chat.completions.create(
-            model=model or self.default_model,
-            messages=[{"role": "user", "content": user_content}],
-            max_tokens=max_tokens,
-        )
+        params: dict[str, Any] = {
+            "model": model or self.default_model,
+            "messages": [{"role": "user", "content": user_content}],
+        }
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
+
+        response = await self.client.chat.completions.create(**params)
         choices = getattr(response, "choices", None) or []
         if not choices:
             return ""
