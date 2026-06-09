@@ -59,8 +59,10 @@ def test_resolve_planning_mode_returns_overlay_and_restricted_registry_from_cont
     assert state.tool_registry is not None
     tool_names = set(state.tool_registry.tool_names)
     assert tool_names == {"read_file", "web_fetch", "batch"}
-    assert state.tool_registry.permission_resolution_metadata["kind"] == "planning_mode"
-    assert state.tool_registry.permission_resolution_metadata["effective_risks"]["allowed_risk_levels"] == [
-        "read",
-        "network",
-    ]
+    metadata = state.tool_registry.tool_selection_metadata
+    assert metadata["kind"] == "planning_mode"
+    assert set(metadata["tool_selection"]["selected_tools"]) == {"read_file", "web_fetch", "batch"}
+    missing_names = {item["name"] for item in metadata["tool_selection"]["missing_required_tools"]}
+    assert "analyze_image" in missing_names
+    assert "write_file" not in missing_names
+    assert "exec" not in missing_names

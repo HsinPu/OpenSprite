@@ -131,7 +131,6 @@ from .subagent import (
 )
 from .subagent_run import (
     SubagentRunService,
-    WritePathPermissionPolicy,
     _subagent_error_result,
     _subagent_preparation_error_detail,
     _subagent_validation_error,
@@ -363,7 +362,7 @@ class ExecutionResult:
     reasoning_details: list[dict[str, Any]] | None = None
     assistant_internal_only_response: bool = False
     task_contract: TaskContract | None = None
-    tool_access: dict[str, Any] | None = None
+    tool_selection: dict[str, Any] | None = None
     tool_evidence: tuple[ToolEvidence, ...] = ()
     task_artifacts: tuple[TaskArtifact, ...] = ()
 
@@ -2533,7 +2532,7 @@ class LlmCallService:
         get_work_state_summary: Callable[[str], Awaitable[str]],
         read_active_task_snapshot: Callable[[str], str],
         plan_task: Callable[..., Awaitable[TaskContract]],
-        resolve_tool_access: Callable[[ToolRegistry, TaskContract], Any],
+        resolve_tool_selection: Callable[[ToolRegistry, TaskContract], Any],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -2564,7 +2563,7 @@ class LlmCallService:
         self._read_active_task_snapshot = read_active_task_snapshot
         self._turn_planning = TurnPlanningService(
             plan_task=plan_task,
-            resolve_tool_access=resolve_tool_access,
+            resolve_tool_selection=resolve_tool_selection,
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,
@@ -2722,12 +2721,10 @@ class LlmCallService:
             and task_contract is not None
             and _should_answer_contract_without_tools(task_contract)
         ):
-            selected_tool_registry = ToolRegistry(
-                permission_policy=(task_tool_registry or base_tool_registry).permission_policy
-            )
-            selected_tool_registry.permission_resolution_metadata = getattr(
+            selected_tool_registry = ToolRegistry()
+            selected_tool_registry.tool_selection_metadata = getattr(
                 task_tool_registry or base_tool_registry,
-                "permission_resolution_metadata",
+                "tool_selection_metadata",
                 None,
             )
         if planning_mode.enabled and selected_tool_registry is not None:
@@ -2904,8 +2901,8 @@ class LlmCallService:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
         result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
         result.task_contract = task_contract
-        tool_access = getattr(selected_tool_registry, "permission_resolution_metadata", None)
-        result.tool_access = dict(tool_access) if isinstance(tool_access, dict) else None
+        tool_selection = getattr(selected_tool_registry, "tool_selection_metadata", None)
+        result.tool_selection = dict(tool_selection) if isinstance(tool_selection, dict) else None
         return result
 
 
@@ -2993,5 +2990,5 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     if is_verification_or_gap_criterion(criterion):
         return "After code changes, run focused verification when possible; if not possible, state the verification gap explicitly."
     if is_operation_report_criterion(criterion):
-        return "Report approval, validation, rollback, blocker, or residual risk for the operation."
+        return "Report validation, rollback, blocker, or residual risk for the operation."
     return criterion.description or criterion.kind

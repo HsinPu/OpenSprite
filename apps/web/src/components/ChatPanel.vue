@@ -26,13 +26,6 @@
         />
 
         <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
-
-        <PermissionPanel
-          :copy="copy"
-          :state="permissionState"
-          :requests="permissionRequests"
-          @resolve-permission="forwardPermissionResolution"
-        />
       </div>
     </section>
 
@@ -58,7 +51,6 @@
 import ChatComposer from "./ChatComposer.vue";
 import EmptyState from "./EmptyState.vue";
 import MessageList from "./MessageList.vue";
-import PermissionPanel from "./PermissionPanel.vue";
 
 const props = defineProps({
   copy: {
@@ -74,14 +66,6 @@ const props = defineProps({
     required: true,
   },
   messages: {
-    type: Array,
-    required: true,
-  },
-  permissionState: {
-    type: Object,
-    required: true,
-  },
-  permissionRequests: {
     type: Array,
     required: true,
   },
@@ -134,11 +118,6 @@ const emit = defineEmits([
   "composer-keydown",
   "submit-message",
   "apply-command-hint",
-  "resolve-permission",
 ]);
-
-function forwardPermissionResolution(request, decision) {
-  emit("resolve-permission", request, decision);
-}
 
 </script>

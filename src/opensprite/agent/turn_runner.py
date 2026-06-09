@@ -1911,11 +1911,11 @@ class AgentTurnRunner:
             ),
             assistant_internal_only_response=bool(latest_result.assistant_internal_only_response and not content.strip()),
             task_contract=AgentTurnRunner._select_aggregate_task_contract(results),
-            tool_access=next(
+            tool_selection=next(
                 (
-                    dict(result.tool_access)
+                    dict(result.tool_selection)
                     for result in reversed(results)
-                    if result.tool_access is not None
+                    if result.tool_selection is not None
                 ),
                 None,
             ),
@@ -2014,7 +2014,7 @@ def _task_checkpoint_metadata(
         "pass_index": max(1, pass_index),
         TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: max(0, auto_continue_attempts),
         "task_type": _task_contract_type(task_contract),
-        "tool_access": dict(aggregate_result.tool_access or {}),
+        "tool_selection": dict(aggregate_result.tool_selection or {}),
         TURN_METADATA_TASK_CONTRACT_FIELD: task_contract.to_metadata() if task_contract is not None else None,
         "completion": completion_result.to_metadata(),
         TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
@@ -2304,8 +2304,8 @@ def _task_scorecard_metadata(
             "tool_evidence_count": len(aggregate_result.tool_evidence),
             "task_artifact_count": len(aggregate_result.task_artifacts),
         },
-        permissions={
-            "tool_access": dict(aggregate_result.tool_access or {}),
+        tool_selection={
+            "tool_selection": dict(aggregate_result.tool_selection or {}),
         },
         sensors=sensors,
         completion=completion_result.to_metadata(),

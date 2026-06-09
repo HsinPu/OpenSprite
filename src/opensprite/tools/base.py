@@ -30,16 +30,6 @@ class Tool(ABC):
         """JSON Schema for tool parameters."""
         pass
 
-    @property
-    def risk_levels(self) -> frozenset[str] | None:
-        """Optional risk metadata used by runtime permission policies."""
-        return None
-
-    @property
-    def capability_groups(self) -> frozenset[str] | None:
-        """Optional planner capability groups exposed by this tool."""
-        return None
-
     async def execute(self, **kwargs: Any) -> str:
         """
         Validate and execute the tool with given parameters.
@@ -76,7 +66,7 @@ class Tool(ABC):
         return validate_tool_params(self.name, self.parameters, params)
 
     def sanitize_params_for_display(self, params: Any) -> Any:
-        """Return params safe for logs, approvals, and run trace displays."""
+        """Return params safe for logs and run trace displays."""
         return params
 
     def sanitize_input_delta_for_display(self, delta: str) -> str:

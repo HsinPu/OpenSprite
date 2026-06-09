@@ -2,8 +2,6 @@ import asyncio
 import json
 
 from opensprite.tools.code_navigation import CodeNavigationTool
-from opensprite.tools.permissions import ToolPermissionPolicy
-from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
 
 
@@ -93,12 +91,3 @@ def test_code_navigation_requires_symbol_for_references(tmp_path):
     assert status.category == "invalid_arguments"
     assert status.invalid_arguments is True
     assert "requires symbol" in status.error
-
-
-def test_code_navigation_is_read_risk_tool():
-    assert ToolPermissionPolicy.risk_levels_for_tool("code_navigation") == frozenset({"read"})
-
-    registry = ToolRegistry(ToolPermissionPolicy(denied_risk_levels=["read"]))
-    registry.register(CodeNavigationTool(workspace="."))
-
-    assert "code_navigation" not in registry.tool_names

@@ -51,5 +51,5 @@ Residual Risk
 Debug Blocked
 - Known Facts: <evidence gathered>
 - Most Likely Cause: <hypothesis>
-- Needed Next Step: <log, reproduction, permission, or command needed>
+- Needed Next Step: <log, reproduction, access/config change, or command needed>
 ```

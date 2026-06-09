@@ -1,4 +1,4 @@
-"""Permission and worktree-control HTTP API helpers for the web adapter."""
+"""Worktree-control HTTP API helpers for the web adapter."""
 
 from __future__ import annotations
 
@@ -11,47 +11,6 @@ from ..runs.events import (
     WORKTREE_CLEANUP_FAILED_EVENT,
     WORKTREE_CLEANUP_STARTED_EVENT,
 )
-
-
-async def handle_permissions(adapter: Any, request: web.Request) -> web.Response:
-    agent = adapter._get_agent()
-    pending_requests = getattr(agent, "pending_permission_requests", None) if agent is not None else None
-    if not callable(pending_requests):
-        raise web.HTTPServiceUnavailable(text="Permission requests are not available")
-    permissions = [adapter._serialize_permission_request(item) for item in pending_requests()]
-    return web.json_response({"permissions": permissions})
-
-
-async def handle_permission_approve(adapter: Any, request: web.Request) -> web.Response:
-    agent = adapter._get_agent()
-    approve = getattr(agent, "approve_permission_request", None) if agent is not None else None
-    if not callable(approve):
-        raise web.HTTPServiceUnavailable(text="Permission approvals are not available")
-
-    request_id = adapter._coerce_optional_text(request.match_info.get("request_id"))
-    if request_id is None:
-        raise web.HTTPBadRequest(text="request_id is required")
-    permission = await approve(request_id)
-    if permission is None:
-        raise web.HTTPNotFound(text="Permission request not found")
-    return web.json_response({"ok": True, "permission": adapter._serialize_permission_request(permission)})
-
-
-async def handle_permission_deny(adapter: Any, request: web.Request) -> web.Response:
-    agent = adapter._get_agent()
-    deny = getattr(agent, "deny_permission_request", None) if agent is not None else None
-    if not callable(deny):
-        raise web.HTTPServiceUnavailable(text="Permission denials are not available")
-
-    request_id = adapter._coerce_optional_text(request.match_info.get("request_id"))
-    if request_id is None:
-        raise web.HTTPBadRequest(text="request_id is required")
-    body = await adapter._read_json_body(request)
-    reason = adapter._coerce_optional_text(body.get("reason"), default="user denied approval") or "user denied approval"
-    permission = await deny(request_id, reason=reason)
-    if permission is None:
-        raise web.HTTPNotFound(text="Permission request not found")
-    return web.json_response({"ok": True, "permission": adapter._serialize_permission_request(permission)})
 
 
 async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Response:

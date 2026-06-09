@@ -461,7 +461,6 @@ const filteredEvents = computed(() => {
 const toolEventCount = computed(() => countEventsByCategory("tool"));
 const processEventCount = computed(() => countEventsByCategory("process"));
 const verificationEventCount = computed(() => countEventsByCategory("verification"));
-const permissionEventCount = computed(() => countEventsByCategory("permission"));
 const textEventCount = computed(() => countEventsByCategory("text"));
 const artifactCount = computed(() => artifacts.value.length);
 const eventCountLabel = computed(() => {
@@ -502,7 +501,7 @@ const taskSummaryRows = computed(() => {
   const eventCheckpointPayload = latestEventPayload("task_checkpoint.recorded");
   const partCheckpointPayload = latestPartMetadata("task_checkpoint");
   const operationAuditPayload = latestPartMetadata("operation_audit");
-  const toolAccessPayload = latestEventPayload("tool_access.resolved");
+  const toolSelectionPayload = latestEventPayload("tool_selection.resolved");
   const scorecardEventPayload = latestEventPayload("task_scorecard.recorded");
   const scorecardPartPayload = latestPartMetadata("task_scorecard");
   const scorecardPayload = Object.keys(scorecardEventPayload).length
@@ -520,25 +519,22 @@ const taskSummaryRows = computed(() => {
   const checkpointCompletion = checkpointPayload.completion || {};
   const checkpointProgress = checkpointPayload.work_progress || checkpointPayload.workProgress || {};
   const contractSource = Object.keys(checkpointContract).length ? checkpointContract : contractPayload;
-  const toolAccessSource = Object.keys(toolAccessPayload).length
-    ? toolAccessPayload
-    : (checkpointPayload.tool_access || checkpointPayload.toolAccess || {});
+  const toolSelectionSource = Object.keys(toolSelectionPayload).length
+    ? toolSelectionPayload
+    : (checkpointPayload.tool_selection || checkpointPayload.toolSelection || {});
   const completionSource = Object.keys(checkpointCompletion).length ? checkpointCompletion : completionPayload;
   const taskType = checkpointPayload.task_type || checkpointPayload.taskType || contractSource.task_type || contractSource.taskType || "";
-  if (!taskType && !Object.keys(contractSource).length && !Object.keys(toolAccessSource).length && !Object.keys(checkpointPayload).length && !Object.keys(toolAccessPayload).length && !Object.keys(scorecardPayload).length) {
+  if (!taskType && !Object.keys(contractSource).length && !Object.keys(toolSelectionSource).length && !Object.keys(checkpointPayload).length && !Object.keys(toolSelectionPayload).length && !Object.keys(scorecardPayload).length) {
     return [];
   }
-  const toolPermissionCounts = countToolPermissionDecisions();
-  const approvalCounts = countToolApprovalEvents();
   const rows = [
     { label: labels.taskType || "Task", value: taskType, kind: "profile" },
     { label: labels.evidence || "Evidence", value: countPayloadItems(contractSource.requirements), kind: "contract" },
     { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria), kind: "contract" },
     { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence), kind: "completion" },
-    { label: labels.requiredTools || "Required tools", value: formatPayloadList(toolAccessSource.required_tools || toolAccessSource.requiredTools), kind: "policy" },
-    { label: labels.exposedTools || "Exposed tools", value: countPayloadItems(toolAccessSource.tool_access?.exposed_tools || toolAccessSource.toolAccess?.exposedTools || toolAccessSource.exposed_tools || toolAccessSource.exposedTools), kind: "policy" },
-    { label: labels.toolDecisions || "Tool decisions", value: formatToolDecisionCounts(toolPermissionCounts, labels), kind: "policy" },
-    { label: labels.approvals || "Approvals", value: formatApprovalCounts(approvalCounts, labels), kind: "policy" },
+    { label: labels.requiredTools || "Required tools", value: formatPayloadList(toolSelectionSource.required_tools || toolSelectionSource.requiredTools), kind: "policy" },
+    { label: labels.selectedTools || "Selected tools", value: countPayloadItems(toolSelectionSource.tool_selection?.selected_tools || toolSelectionSource.toolSelection?.selectedTools || toolSelectionSource.selected_tools || toolSelectionSource.selectedTools), kind: "policy" },
+    { label: labels.missingTools || "Missing tools", value: countPayloadItems(toolSelectionSource.blocked_required_tools || toolSelectionSource.blockedRequiredTools || toolSelectionSource.tool_selection?.missing_required_tools || toolSelectionSource.toolSelection?.missingRequiredTools), kind: "policy" },
     { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · "), kind: "completion" },
     { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction, kind: "next" },
     { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount, kind: "evidence" },
@@ -595,7 +591,6 @@ const artifactGroups = computed(() => {
   const toolArtifacts = artifacts.value.filter((artifact) => artifact.kind === "tool");
   const fileArtifacts = artifacts.value.filter((artifact) => artifact.kind === "file" || artifact.path);
   const verificationArtifacts = artifacts.value.filter((artifact) => artifact.kind === "verification");
-  const permissionArtifacts = artifacts.value.filter((artifact) => artifact.kind === "permission");
   const taskArtifacts = artifacts.value.filter((artifact) => artifact.kind === "task");
   const processArtifacts = artifacts.value.filter((artifact) => artifact.kind === "process");
   const workArtifacts = artifacts.value.filter((artifact) => artifact.kind === "work" && !groupedParallelArtifactIds.value.has(artifact.artifactId));
@@ -604,7 +599,6 @@ const artifactGroups = computed(() => {
     ...toolArtifacts,
     ...fileArtifacts,
     ...verificationArtifacts,
-    ...permissionArtifacts,
     ...taskArtifacts,
     ...processArtifacts,
     ...workArtifacts,
@@ -627,11 +621,6 @@ const artifactGroups = computed(() => {
       kind: "verification",
       label: props.copy.trace.artifactSections.verification,
       items: verificationArtifacts,
-    },
-    {
-      kind: "permission",
-      label: props.copy.trace.artifactSections.permission,
-      items: permissionArtifacts,
     },
     {
       kind: "task",
@@ -667,7 +656,6 @@ const filterOptions = computed(() => [
   { value: "llm", label: props.copy.trace.filters.llm, count: countEventsByCategory("llm") },
   { value: "tool", label: props.copy.trace.filters.tool, count: toolEventCount.value },
   { value: "verification", label: props.copy.trace.filters.verification, count: verificationEventCount.value },
-  { value: "permission", label: props.copy.trace.filters.permission, count: permissionEventCount.value },
   { value: "process", label: props.copy.trace.filters.process, count: processEventCount.value },
   { value: "text", label: props.copy.trace.filters.text, count: textEventCount.value },
   { value: "system", label: props.copy.trace.filters.system, count: countEventsByCategory("system") },
@@ -679,36 +667,9 @@ function countEventsByCategory(category) {
   return events.value.filter((event) => eventCategory(event) === category).length;
 }
 
-function countToolPermissionDecisions() {
-  const counts = { checked: 0, allowed: 0, denied: 0, approvalRequired: 0 };
-  for (const event of events.value) {
-    const eventType = String(event?.eventType || "");
-    if (!eventType.startsWith("tool_permission.")) {
-      continue;
-    }
-    if (eventType.endsWith(".checked")) counts.checked += 1;
-    if (eventType.endsWith(".allowed")) counts.allowed += 1;
-    if (eventType.endsWith(".denied")) counts.denied += 1;
-    if (eventType.endsWith(".approval_required")) counts.approvalRequired += 1;
-  }
-  return counts;
-}
-
-function countToolApprovalEvents() {
-  const counts = { requested: 0, approved: 0, denied: 0, expired: 0 };
-  for (const event of events.value) {
-    const eventType = String(event?.eventType || "");
-    if (eventType === "tool_approval.requested") counts.requested += 1;
-    if (eventType === "tool_approval.approved") counts.approved += 1;
-    if (eventType === "tool_approval.denied") counts.denied += 1;
-    if (eventType === "tool_approval.expired") counts.expired += 1;
-  }
-  return counts;
-}
-
 function eventCategory(eventType) {
   const event = typeof eventType === "object" ? eventType : null;
-  if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work"].includes(event?.kind)) {
+  if (["run", "llm", "tool", "verification", "process", "text", "system", "work"].includes(event?.kind)) {
     return event.kind;
   }
   if (event?.kind) {
@@ -730,9 +691,6 @@ function eventCategory(eventType) {
   if (eventType.startsWith("verification_")) {
     return "verification";
   }
-  if (eventType.startsWith("permission_")) {
-    return "permission";
-  }
   if (eventType.startsWith("task_contract.") || eventType.startsWith("task_checkpoint.") || eventType.startsWith("task_scorecard.")) {
     return "work";
   }
@@ -743,31 +701,6 @@ function eventCategory(eventType) {
     return "process";
   }
   return "other";
-}
-
-
-function formatToolDecisionCounts(counts, labels) {
-  if (!counts.checked && !counts.allowed && !counts.denied && !counts.approvalRequired) {
-    return "";
-  }
-  return compactJoin([
-    `${counts.checked} ${labels.checked || "checked"}`,
-    `${counts.allowed} ${labels.allowed || "allowed"}`,
-    `${counts.denied} ${labels.denied || "denied"}`,
-    `${counts.approvalRequired} ${labels.approvalRequired || "approval"}`,
-  ], " 繚 ");
-}
-
-function formatApprovalCounts(counts, labels) {
-  if (!counts.requested && !counts.approved && !counts.denied && !counts.expired) {
-    return "";
-  }
-  return compactJoin([
-    `${counts.requested} ${labels.requested || "requested"}`,
-    `${counts.approved} ${labels.approved || "approved"}`,
-    `${counts.denied} ${labels.rejected || "denied"}`,
-    `${counts.expired} ${labels.expired || "expired"}`,
-  ], " 繚 ");
 }
 
 
@@ -807,12 +740,12 @@ function eventSummary(event) {
     return [artifact.title, artifact.detail].filter(Boolean).join(" · ");
   }
   const payload = event.payload || {};
-  if (event.eventType === "tool_access.resolved") {
-    const toolAccess = payload.tool_access || payload.toolAccess || {};
+  if (event.eventType === "tool_selection.resolved") {
+    const toolSelection = payload.tool_selection || payload.toolSelection || {};
     return compactJoin([
       `${countPayloadItems(payload.required_tools || payload.requiredTools)} required`,
-      `${countPayloadItems(toolAccess.exposed_tools || toolAccess.exposedTools)} exposed`,
-      `${countPayloadItems(payload.blocked_required_tools || payload.blockedRequiredTools)} blocked`,
+      `${countPayloadItems(toolSelection.selected_tools || toolSelection.selectedTools)} selected`,
+      `${countPayloadItems(payload.blocked_required_tools || payload.blockedRequiredTools || toolSelection.missing_required_tools || toolSelection.missingRequiredTools)} missing`,
     ], " · ");
   }
   if (event.eventType === "task_checkpoint.recorded") {
@@ -821,12 +754,6 @@ function eventSummary(event) {
   }
   if (event.eventType === "task_scorecard.recorded") {
     return formatTaskScorecard(payload, props.copy.trace.taskLabels || {});
-  }
-  if (String(event.eventType || "").startsWith("tool_permission.")) {
-    return compactJoin([payload.tool_name || payload.toolName, payload.decision, payload.reason], " · ");
-  }
-  if (String(event.eventType || "").startsWith("tool_approval.")) {
-    return compactJoin([payload.tool_name || payload.toolName, payload.status, payload.resolution_reason || payload.resolutionReason || payload.reason], " · ");
   }
   if (event.eventType === "task_contract.created") {
     return compactJoin([

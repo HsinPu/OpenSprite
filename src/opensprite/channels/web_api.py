@@ -207,15 +207,6 @@ class WebApiHandlers:
     async def handle_run_file_change_revert(self, request: web.Request) -> web.Response:
         return await web_api_runs.handle_run_file_change_revert(self.adapter, request)
 
-    async def handle_permissions(self, request: web.Request) -> web.Response:
-        return await web_api_control.handle_permissions(self.adapter, request)
-
-    async def handle_permission_approve(self, request: web.Request) -> web.Response:
-        return await web_api_control.handle_permission_approve(self.adapter, request)
-
-    async def handle_permission_deny(self, request: web.Request) -> web.Response:
-        return await web_api_control.handle_permission_deny(self.adapter, request)
-
     async def handle_worktree_cleanup(self, request: web.Request) -> web.Response:
         return await web_api_control.handle_worktree_cleanup(self.adapter, request)
 

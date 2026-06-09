@@ -7,7 +7,6 @@ import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
 import { useNetworkSettingsActions } from "./useNetworkSettingsActions";
-import { usePermissionsSettingsActions } from "./usePermissionsSettingsActions";
 import { useProviderSettingsActions } from "./useProviderSettingsActions";
 import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
@@ -59,7 +58,7 @@ import {
   updateLiveTraceEventCounts,
 } from "./runTraceNormalizers";
 import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
-import { createCuratorState, createPermissionState, createSettingsForm, createSettingsState } from "./useSettingsState";
+import { createCuratorState, createSettingsForm, createSettingsState } from "./useSettingsState";
 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
@@ -114,14 +113,12 @@ const TIMELINE_EVENT_TYPES = new Set([
   "task_contract.validated",
   "task_contract.validation_failed",
   "task_contract.created",
+  "tool_selection.resolved",
   "llm_status",
   "tool_started",
   "file_changed",
   "verification_started",
   "verification_result",
-  "permission_requested",
-  "permission_granted",
-  "permission_denied",
   "subagent.started",
   "subagent.group.started",
   "subagent.group.completed",
@@ -698,23 +695,6 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
-  if (eventType === "permission_requested") {
-    return {
-      label: `${copy.trace.filters.permission}: ${payload.tool_name || copy.run.unknownTool}`,
-      detail: payload.reason || payload.args_preview || "",
-      tone: "warning",
-    };
-  }
-
-  if (eventType === "permission_granted" || eventType === "permission_denied") {
-    const granted = eventType === "permission_granted";
-    return {
-      label: `${copy.trace.filters.permission}: ${payload.tool_name || copy.run.unknownTool}`,
-      detail: payload.resolution_reason || payload.status || "",
-      tone: granted ? "success" : "error",
-    };
-  }
-
   if (eventType === "subagent.group.started") {
     return {
       label: copy.run.parallelDelegationStarted,
@@ -1095,7 +1075,6 @@ export function useChatClient() {
   const settingsSection = ref("general");
   const settingsForm = reactive(createSettingsForm(state));
   const settingsState = reactive(createSettingsState());
-  const permissionState = reactive(createPermissionState());
   const curatorState = reactive(createCuratorState());
 
   let activeSocket = null;
@@ -1201,24 +1180,6 @@ export function useChatClient() {
       title: latestEvent.label,
       tone: runTone(run.status, latestEvent.tone),
     };
-  });
-
-  const currentPermissionRequests = computed(() => {
-    const session = currentSession.value;
-    if (!session) {
-      return permissionState.requests;
-    }
-    const sessionIds = new Set([
-      session.sessionId,
-      session.externalChatId,
-      session.transportExternalChatId,
-    ].filter(Boolean));
-    return permissionState.requests.filter((request) => {
-      if (request.status && request.status !== "pending") {
-        return false;
-      }
-      return !request.sessionId || sessionIds.has(request.sessionId) || sessionIds.has(request.externalChatId);
-    });
   });
 
   const currentCuratorStatus = computed(() => curatorState.status || null);
@@ -1960,13 +1921,6 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
-  const { loadPermissionsSettings, savePermissionsSettings } = usePermissionsSettingsActions({
-    settingsState,
-    requestSettingsJson,
-    copy,
-    setSettingsSuccess,
-  });
-
   const { loadSearchSettings, loadSearxngOptions, saveSearchSettings } = useSearchSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -2406,68 +2360,6 @@ export function useChatClient() {
         curatorActionToken = "";
         curatorState.action = "";
       }
-    }
-  }
-
-  function normalizePermissionRequest(payload) {
-    const requestId = String(payload?.request_id || payload?.requestId || "").trim();
-    if (!requestId) {
-      return null;
-    }
-    return {
-      requestId,
-      toolName: String(payload?.tool_name || payload?.toolName || copy.value.run.unknownTool).trim() || copy.value.run.unknownTool,
-      reason: String(payload?.reason || "").trim(),
-      status: String(payload?.status || "pending").trim() || "pending",
-      actionType: String(payload?.action_type || payload?.actionType || "").trim(),
-      riskLevel: String(payload?.risk_level || payload?.riskLevel || "").trim(),
-      riskLevels: Array.isArray(payload?.risk_levels) ? payload.risk_levels.map((item) => String(item || "").trim()).filter(Boolean) : [],
-      resource: String(payload?.resource || "").trim(),
-      preview: String(payload?.preview || "").trim(),
-      recommendedDecision: String(payload?.recommended_decision || payload?.recommendedDecision || "").trim(),
-      sessionId: String(payload?.session_id || payload?.sessionId || "").trim(),
-      externalChatId: String(payload?.external_chat_id || payload?.externalChatId || "").trim(),
-      createdAt: normalizeEventTimestamp(payload?.created_at ?? payload?.createdAt),
-      params: payload?.params && typeof payload.params === "object" ? payload.params : {},
-    };
-  }
-
-  async function loadPermissionRequests() {
-    permissionState.loading = true;
-    permissionState.error = "";
-    try {
-      const payload = await requestSettingsJson("/api/permissions");
-      permissionState.requests = Array.isArray(payload?.permissions)
-        ? payload.permissions.map(normalizePermissionRequest).filter(Boolean)
-        : [];
-    } catch (error) {
-      permissionState.error = error?.message || copy.value.permissions.loadFailed;
-    } finally {
-      permissionState.loading = false;
-    }
-  }
-
-  async function resolvePermissionRequest(request, decision) {
-    if (!request?.requestId || !["approve", "deny"].includes(decision)) {
-      return;
-    }
-    permissionState.resolvingIds[request.requestId] = true;
-    try {
-      await requestSettingsJson(`/api/permissions/${encodeURIComponent(request.requestId)}/${decision}`, {
-        method: "POST",
-        body: JSON.stringify({ reason: "" }),
-      });
-      permissionState.requests = permissionState.requests.filter((entry) => entry.requestId !== request.requestId);
-      setNotice(
-        decision === "approve" ? copy.value.permissions.approved(request.toolName) : copy.value.permissions.denied(request.toolName),
-        decision === "approve" ? "success" : "warning",
-      );
-      void loadCurrentSessionRuns({ force: true });
-    } catch (error) {
-      setNotice(error?.message || copy.value.permissions.resolveFailed, "error");
-      void loadPermissionRequests();
-    } finally {
-      delete permissionState.resolvingIds[request.requestId];
     }
   }
 
@@ -3199,10 +3091,6 @@ export function useChatClient() {
       loadNetworkSettings();
       return;
     }
-    if (sectionName === "permissions") {
-      loadPermissionsSettings();
-      return;
-    }
     if (sectionName === "search") {
       loadSearchSettings();
       return;
@@ -3552,9 +3440,6 @@ export function useChatClient() {
 
     if (payload.type === "run_event") {
       handleRunEvent(payload);
-      if (String(payload.event_type || "").startsWith("permission_")) {
-        void loadPermissionRequests();
-      }
       scrollMessagesToBottom();
       return;
     }
@@ -4032,7 +3917,6 @@ export function useChatClient() {
       return;
     }
     void loadCommandCatalog();
-    void loadPermissionRequests();
     persistActiveSession();
     connectSocket();
   }
@@ -4104,7 +3988,6 @@ export function useChatClient() {
     settingsForm,
     settingsState,
     toasts,
-    permissionState,
     currentEntries,
     currentMessages,
     currentWorkState,
@@ -4114,7 +3997,6 @@ export function useChatClient() {
     currentRun,
     currentRunTimeline,
     currentRunSummary,
-    currentPermissionRequests,
     curatorState,
     currentCuratorStatus,
     currentSessionApiId,
@@ -4148,7 +4030,6 @@ export function useChatClient() {
     loadChannelSettings,
     loadScheduleSettings,
     loadNetworkSettings,
-    loadPermissionsSettings,
     loadSearchSettings,
     loadSearxngOptions,
     loadBrowserSettings,
@@ -4200,7 +4081,6 @@ export function useChatClient() {
     applyMcpJson,
     saveScheduleSettings,
     saveNetworkSettings,
-    savePermissionsSettings,
     saveSearchSettings,
     saveBrowserSettings,
     runBrowserTest,
@@ -4227,7 +4107,6 @@ export function useChatClient() {
     loadCuratorStatus,
     refreshCuratorState,
     runCuratorAction,
-    resolvePermissionRequest,
     toggleSettingsConnection,
     submitMessage,
     resumeFollowUp,

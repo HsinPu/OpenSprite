@@ -58,8 +58,6 @@ def _content_type_from_artifact(artifact: dict[str, Any]) -> str:
         return "file"
     if kind == "verification":
         return "verification"
-    if kind == "permission":
-        return "permission"
     if kind == "task" or artifact_type == "task_checklist":
         return "task"
     if kind == "llm" or artifact_type == "llm_step":

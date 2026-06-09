@@ -1815,8 +1815,6 @@ def has_only_optional_web_discovery_failures(execution_result: ExecutionResult) 
             continue
         if is_web_fetch_source_record_tool(item.name) and has_successful_fetch_sources:
             continue
-        if tool_failure_is_non_exposed_permission_block(item.metadata):
-            continue
         return False
     return True
 
@@ -1832,8 +1830,6 @@ def has_only_optional_workspace_discovery_failures(execution_result: ExecutionRe
             continue
         if is_optional_workspace_batch_failure_tool(item.name) and execution_result.file_change_count <= 0:
             continue
-        if tool_failure_is_non_exposed_permission_block(item.metadata):
-            continue
         return False
     return True
 
@@ -1846,8 +1842,6 @@ def has_only_optional_history_retrieval_failures(execution_result: ExecutionResu
         return False
     for item in failed_evidence:
         if is_history_retrieval_tool_name(item.name):
-            continue
-        if tool_failure_is_non_exposed_permission_block(item.metadata):
             continue
         return False
     return True
@@ -1866,15 +1860,6 @@ def has_successful_fetched_web_source_artifact(execution_result: ExecutionResult
         ):
             return True
     return False
-
-
-def tool_failure_is_non_exposed_permission_block(metadata: Any) -> bool:
-    permission = metadata.get("permission") if isinstance(metadata, dict) else None
-    return bool(
-        isinstance(permission, dict)
-        and permission.get("blocked") is True
-        and permission.get("exposed") is False
-    )
 
 
 def is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
@@ -3416,7 +3401,7 @@ def task_contract_follow_up_instruction(task_contract: TaskContract | None) -> s
         )
     if is_operations_task_type(task_type):
         return (
-            "\n- Task contract: operations. Execute only the requested operation, honor user permissions, and report "
+            "\n- Task contract: operations. Execute only the requested operation, use only selected tools, and report "
             "validation or blockers explicitly."
             f"{tool_clause}"
         )

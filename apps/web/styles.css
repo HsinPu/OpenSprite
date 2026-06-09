@@ -199,10 +199,6 @@
   background: linear-gradient(180deg, rgba(32, 201, 151, 0.12), rgba(29, 32, 39, 0.92));
 }
 
-:root[data-color-scheme="dark"] .permission-panel {
-  background: linear-gradient(180deg, rgba(242, 184, 75, 0.12), rgba(29, 32, 39, 0.92));
-}
-
 :root[data-color-scheme="dark"] .question-panel {
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.12), rgba(29, 32, 39, 0.92));
 }
@@ -226,12 +222,10 @@
 :root[data-color-scheme="dark"] .run-timeline__status,
 :root[data-color-scheme="dark"] .run-block-toggle,
 :root[data-color-scheme="dark"] .run-history,
-:root[data-color-scheme="dark"] .permission-card,
 :root[data-color-scheme="dark"] .question-card,
 :root[data-color-scheme="dark"] .run-history__select select,
 :root[data-color-scheme="dark"] .work-state-card__status,
 :root[data-color-scheme="dark"] .work-state-card__toggle,
-:root[data-color-scheme="dark"] .permission-card code,
 :root[data-color-scheme="dark"] .question-card code,
 :root[data-color-scheme="dark"] .question-card textarea,
 :root[data-color-scheme="dark"] .work-state-card__grid div,
@@ -524,10 +518,6 @@
 :root[data-color-scheme="dark"] .settings-fieldset legend,
 :root[data-color-scheme="dark"] .settings-check-row {
   color: var(--text);
-}
-
-:root[data-color-scheme="dark"] .settings-policy-preview {
-  color: var(--text-muted);
 }
 
 * {
@@ -2388,10 +2378,6 @@ button:disabled {
   border-left-color: var(--purple);
 }
 
-.message__artifact[data-type="permission"] {
-  border-left-color: var(--warning);
-}
-
 .message__artifact[data-type="task"] {
   border-left-color: var(--info-text);
 }
@@ -2664,98 +2650,6 @@ button:disabled {
 .work-state-card__paths small {
   color: var(--text-soft);
   font-size: 0.72rem;
-}
-
-.permission-panel {
-  display: grid;
-  gap: 10px;
-  margin: 14px 0 4px 46px;
-  padding: 14px;
-  border: 1px solid var(--warning-border);
-  border-radius: var(--radius-lg);
-  background: var(--warning-soft);
-}
-
-.permission-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.permission-panel__header div {
-  display: grid;
-  gap: 3px;
-}
-
-.permission-panel__header span {
-  color: var(--text-soft);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.permission-panel__header strong {
-  color: var(--text);
-  font-size: 0.94rem;
-  font-weight: 680;
-}
-
-.permission-panel__header small,
-.permission-panel__error {
-  color: var(--warning);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.permission-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--warning-border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-
-.permission-card__body {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
-}
-
-.permission-card__body strong {
-  color: var(--text);
-  font-size: 0.9rem;
-}
-
-.permission-card__body p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.permission-card code {
-  width: fit-content;
-  max-width: 100%;
-  overflow: hidden;
-  padding: 3px 7px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  color: var(--text-soft);
-  background: rgba(255, 255, 255, 0.76);
-  font-size: 0.72rem;
-  text-overflow: ellipsis;
-}
-
-.permission-card__actions {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
 }
 
 .question-panel {
@@ -6978,15 +6872,6 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-.settings-policy-preview {
-  display: grid;
-  gap: 6px;
-  padding: 0 0 2px 44px;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
 .settings-profile-card {
   display: grid;
   gap: 10px;
@@ -7560,7 +7445,6 @@ textarea:focus-visible {
   }
 
   .work-state-card,
-  .permission-panel,
   .question-panel,
   .run-history,
   .run-summary-card,
@@ -7572,15 +7456,11 @@ textarea:focus-visible {
     display: grid;
   }
 
-  .permission-card,
-  .permission-panel__header,
-  .permission-card__actions,
   .question-panel__header,
   .question-card__actions {
     display: grid;
   }
 
-  .permission-card__actions,
   .question-card__actions {
     justify-content: stretch;
   }

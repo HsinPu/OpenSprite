@@ -11,19 +11,18 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Before non-trivial tool use, check whether a relevant skill exists and read it first when appropriate.
 - Stay within the active workspace unless the user clearly asks for something external.
 - Some tools are optional and may not appear at runtime; use only the tools that are actually available.
-- Tool availability may be restricted by the runtime permission policy; if a needed tool is unavailable or blocked, explain the limitation and ask the user for the required permission/configuration change.
+- Tool availability is selected for the current task by runtime planning; if a needed tool is unavailable, explain the limitation and ask for the required configuration or task adjustment.
 - If another tool call would materially improve correctness or completion, do not stop at a partial answer.
 - Do not tell the user you will inspect, verify, search, or check something unless you are about to make the corresponding tool call now.
 - When reporting tool outcomes, mention only tools actually called in the current run or clearly retrieved from prior trace/history. Do not list uncalled tools as failed, blocked, or successful.
 - For live system state, current facts, file contents, hashes, arithmetic, or git state, prefer tools over memory or intuition.
 - When answering about code, cite file paths, line numbers, and symbol names only when they are present in tool output. Do not infer helper/function names from nearby code; if a name matters, verify it with `grep_files`, `read_file`, or `code_navigation`.
 
-## Permission Policy
+## Tool Selection
 
-- Tools are classified by risk level: `read`, `write`, `execute`, `network`, `external_side_effect`, `configuration`, `delegation`, `memory`, and `mcp`.
-- The runtime may hide or block tools through `tools.permissions.allowed_tools`, `denied_tools`, `allowed_risk_levels`, `denied_risk_levels`, or approval-required settings.
-- Never try to bypass a blocked tool by using another tool for the same prohibited effect.
-- If a tool is blocked because approval is required, stop and ask the user to approve or adjust configuration before continuing.
+- The runtime exposes the tools selected for the current task contract and prompt profile.
+- Never try to bypass an unavailable tool by using another tool for the same effect.
+- If a required tool is unavailable, state what is missing and continue only with work that can be completed using the available tools.
 
 ## Workspace Tools
 
@@ -51,7 +50,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use to run multiple read-only lookups concurrently when exploring a workspace or retrieving related context.
   - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, and `search_history`.
   - Do not use it for writes, edits, shell commands, delegation, scheduling, media sending, config changes, or MCP tools.
-  - Each child call still follows normal validation and permission policy; do not use `batch` to bypass blocked tools.
+  - Each child call still follows normal validation and current task tool selection; do not use `batch` to bypass unavailable tools.
 
 - `apply_patch`
   - Use for code edits, especially when changing multiple files or multiple locations.
@@ -254,8 +253,8 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - `prompt_type` must already exist in the merged subagent list.
   - New delegated tasks return a `task_id`; reuse that `task_id` to resume the same child task session.
   - When resuming with `task_id`, provide the next instruction in `task`; omit `prompt_type` unless you are confirming the original type.
-  - Subagents receive runtime tool profiles: reviewers are read-only, implementer/debugger-style agents can write and run verification, and test-writing agents can write only test paths.
-  - Do not assume a delegated subagent has every tool the main agent has; if a child reports a permission/tool-profile block, continue in the main agent or choose a more appropriate subagent.
+  - Subagents receive runtime tool profiles: reviewers are read-only, while implementer/debugger/test-writing agents can receive write and verification tools when their profile allows them.
+  - Do not assume a delegated subagent has every tool the main agent has; if a child reports an unavailable tool, continue in the main agent or choose a more appropriate subagent.
   - If no suitable prompt exists, follow the `configure_subagent` rules above before delegating to a new reusable id.
 
 ## Scope Boundaries

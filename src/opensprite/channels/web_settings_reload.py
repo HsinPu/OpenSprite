@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import Config
-from ..tools.permissions import ToolPermissionPolicy
 
 
 def reload_agent_llm_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
@@ -90,31 +89,6 @@ def reload_schedule_from_config(adapter: Any, payload: dict[str, Any], *, force:
     return updated
 
 
-def reload_permissions_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
-    if not force and not payload.get("restart_required"):
-        return payload
-
-    updated = dict(payload)
-    agent = adapter._get_agent()
-    tools = getattr(agent, "tools", None) if agent is not None else None
-    set_permission_policy = getattr(tools, "set_permission_policy", None)
-    if agent is None or not callable(set_permission_policy):
-        updated["runtime_reloaded"] = False
-        return updated
-
-    try:
-        config = Config.load(adapter._get_config_path())
-        agent.tools_config = config.tools
-        set_permission_policy(ToolPermissionPolicy.from_config(config.tools.permissions))
-    except Exception as exc:
-        logger.warning("Tool permission runtime reload failed after settings change: {}", exc)
-        updated["runtime_reloaded"] = False
-        updated["reload_error"] = str(exc)
-        return updated
-
-    updated["restart_required"] = False
-    updated["runtime_reloaded"] = True
-    return updated
 
 
 def reload_media_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:

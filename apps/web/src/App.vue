@@ -49,8 +49,6 @@
       :prompts="prompts"
       :entries="currentEntries"
       :messages="currentMessages"
-      :permission-state="permissionState"
-      :permission-requests="currentPermissionRequests"
       :notice="state.notice"
       :session-meta="sessionMeta"
       :runtime-hint="composerHint"
@@ -67,7 +65,6 @@
       @composer-keydown="handleComposerKeydown"
       @submit-message="submitMessage"
       @apply-command-hint="applyCommandHint"
-      @resolve-permission="resolvePermissionRequest"
     />
 
     <aside
@@ -197,7 +194,6 @@
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
-    @save-permissions-settings="savePermissionsSettings"
     @load-search-searxng-options="loadSearxngOptions"
     @save-search-settings="saveSearchSettings"
     @save-browser-settings="saveBrowserSettings"
@@ -284,7 +280,6 @@ const {
   settingsForm,
   settingsState,
   toasts,
-  permissionState,
   currentEntries,
   currentMessages,
   currentWorkState,
@@ -294,7 +289,6 @@ const {
   currentRun,
   currentRunTimeline,
   currentRunSummary,
-  currentPermissionRequests,
   curatorState,
   currentCuratorStatus,
   currentSessionApiId,
@@ -355,7 +349,6 @@ const {
   applyMcpJson,
   saveScheduleSettings,
   saveNetworkSettings,
-  savePermissionsSettings,
   loadSearxngOptions,
   saveSearchSettings,
   saveBrowserSettings,
@@ -386,7 +379,6 @@ const {
   deleteSessions: deleteSessionsNow,
   clearWebSessions: clearWebSessionsNow,
   cancelRun,
-  resolvePermissionRequest,
   revertRunFileChange,
   cleanupWorktreeSandbox,
   resumeFollowUp,

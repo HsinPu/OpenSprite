@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import fnmatch
 import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -29,17 +28,13 @@ from ..runs.trace import RunCancelledError, RunHookService, RunTraceRecorder
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..subagent_prompts import get_all_subagents, load_metadata
-from ..subagent_prompts.profiles import PARALLEL_SAFE_PROFILE_NAMES, WRITE_TOOLS, profile_for_subagent
+from ..subagent_prompts.profiles import PARALLEL_SAFE_PROFILE_NAMES, profile_for_subagent
 from ..tool_names import (
-    APPLY_PATCH_TOOL_NAME,
     DELEGATE_MANY_TOOL_NAME,
     DELEGATE_TOOL_NAME,
-    EDIT_FILE_TOOL_NAME,
-    WRITE_FILE_TOOL_NAME,
 )
 from ..tools import ToolRegistry
-from ..tools.access import ToolAccessResolver
-from ..tools.permissions import PermissionDecision, ToolPermissionPolicy
+from ..tools.selection import ToolSelectionResolver
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
 from .subagent import (
@@ -80,60 +75,6 @@ from .workflow import (
     is_workflow_running_status,
 )
 
-class WritePathPermissionPolicy(ToolPermissionPolicy):
-    """Restrict filesystem write tools to an allowlist of workspace-relative paths."""
-
-    def __init__(self, allowed_patterns: frozenset[str]):
-        self.allowed_patterns = allowed_patterns
-
-    def to_metadata(self) -> dict[str, Any]:
-        """Return a JSON-safe snapshot of the write path guardrail."""
-        return {
-            "kind": "subagent_write_path",
-            "allowed_patterns": sorted(self.allowed_patterns),
-        }
-
-    def is_tool_exposed(self, tool_name: str, tool_risk_levels: Any = None) -> bool:
-        del tool_name, tool_risk_levels
-        return True
-
-    @staticmethod
-    def _normalize_path(value: Any) -> str:
-        return str(value or "").replace("\\", "/").lstrip("./")
-
-    def _path_allowed(self, path: str) -> bool:
-        normalized = self._normalize_path(path)
-        if not normalized:
-            return False
-        return any(fnmatch.fnmatch(normalized, pattern) for pattern in self.allowed_patterns)
-
-    @staticmethod
-    def _write_paths(tool_name: str, params: Any) -> list[str]:
-        if not isinstance(params, dict):
-            return []
-        if tool_name in {WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME}:
-            return [str(params.get("path") or "")]
-        if tool_name != APPLY_PATCH_TOOL_NAME:
-            return []
-        changes = params.get("changes")
-        if not isinstance(changes, list):
-            return []
-        return [str(change.get("path") or "") for change in changes if isinstance(change, dict)]
-
-    def check(self, tool_name: str, params: Any, tool_risk_levels: Any = None) -> PermissionDecision:
-        del tool_risk_levels
-        if tool_name not in WRITE_TOOLS or not self.allowed_patterns:
-            return PermissionDecision(True)
-        for path in self._write_paths(tool_name, params):
-            if not self._path_allowed(path):
-                allowed = ", ".join(sorted(self.allowed_patterns))
-                return PermissionDecision(
-                    False,
-                    f"path '{path}' is outside allowed subagent write paths ({allowed})",
-                )
-        return PermissionDecision(True)
-
-
 def build_subagent_tool_registry(
     base_registry: ToolRegistry,
     prompt_type: str,
@@ -147,17 +88,9 @@ def build_subagent_tool_registry(
         app_home=app_home,
         session_workspace=session_workspace,
     )
-    overlay_policy = ToolPermissionPolicy(allowed_tools=sorted(profile.allowed_tools))
-    extra_policies: tuple[ToolPermissionPolicy, ...] = (
-        (WritePathPermissionPolicy(profile.write_path_patterns),)
-        if profile.write_path_patterns
-        else ()
-    )
-    resolution = ToolAccessResolver().resolve_overlay(
+    resolution = ToolSelectionResolver().resolve_overlay(
         base_registry,
-        overlay_policy=overlay_policy,
         include_names=profile.allowed_tools,
-        extra_policies=extra_policies,
         metadata_kind=f"subagent:{profile.name}",
     )
     return resolution.registry

@@ -22,7 +22,7 @@ def test_task_scorecard_metadata_has_stable_sections():
     scorecard = TaskScorecard(
         contract={"task_type": "pure_answer"},
         tools={"count": 0, "names": []},
-        permissions={"effective_policy": {"approval_mode": "auto"}},
+        tool_selection={"selected_tools": []},
         sensors=(TaskSensorResult("chat.no_unexpected_tools", "pass"),),
         completion={"status": "complete"},
         trace_health={"status": "pass"},
@@ -37,7 +37,7 @@ def test_task_scorecard_metadata_has_stable_sections():
         "kind",
         "contract",
         "tools",
-        "permissions",
+        "tool_selection",
         "sensors",
         "completion",
         "trace_health",

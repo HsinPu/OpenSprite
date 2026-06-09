@@ -47,7 +47,7 @@ SENSOR_COMPLETION_VERIFICATION_OR_GAP = "completion.verification_or_gap"
 SENSOR_MEDIA_ARTIFACT = "media.artifact"
 SENSOR_COMPLETION_MEDIA_SUMMARY = "completion.media_summary"
 SENSOR_OPS_AUDIT_TRACE = "ops.audit_trace"
-SENSOR_OPS_APPROVAL_BOUNDARY = "ops.approval_boundary"
+SENSOR_OPS_TOOL_SELECTION_BOUNDARY = "ops.tool_selection_boundary"
 SENSOR_COMPLETION_OPERATION_REPORT = "completion.operation_report"
 
 SENSOR_IDS_BY_TASK_TYPE: dict[str, tuple[str, ...]] = {
@@ -58,7 +58,7 @@ SENSOR_IDS_BY_TASK_TYPE: dict[str, tuple[str, ...]] = {
     "workspace_analysis": (SENSOR_CODING_WORKSPACE_EVIDENCE, SENSOR_COMPLETION_VERIFICATION_OR_GAP),
     "workspace_change": (SENSOR_CODING_FILE_CHANGE, SENSOR_CODING_VERIFICATION, SENSOR_COMPLETION_CHANGE_SUMMARY),
     "media_extraction": (SENSOR_MEDIA_ARTIFACT, SENSOR_COMPLETION_MEDIA_SUMMARY),
-    "operations": (SENSOR_OPS_AUDIT_TRACE, SENSOR_OPS_APPROVAL_BOUNDARY, SENSOR_COMPLETION_OPERATION_REPORT),
+    "operations": (SENSOR_OPS_AUDIT_TRACE, SENSOR_OPS_TOOL_SELECTION_BOUNDARY, SENSOR_COMPLETION_OPERATION_REPORT),
 }
 
 
@@ -99,7 +99,7 @@ class TaskScorecard:
 
     contract: dict[str, Any]
     tools: dict[str, Any]
-    permissions: dict[str, Any]
+    tool_selection: dict[str, Any]
     sensors: tuple[TaskSensorResult, ...]
     completion: dict[str, Any]
     trace_health: dict[str, Any]
@@ -111,7 +111,7 @@ class TaskScorecard:
             "kind": "task_scorecard",
             "contract": dict(self.contract),
             "tools": dict(self.tools),
-            "permissions": dict(self.permissions),
+            "tool_selection": dict(self.tool_selection),
             "sensors": [sensor.to_metadata() for sensor in self.sensors],
             "completion": dict(self.completion),
             "trace_health": dict(self.trace_health),
@@ -213,12 +213,12 @@ def _evaluate_sensor(
             "Operational tool activity was recorded." if execution_result.executed_tool_calls > 0 else "No operational tool activity was recorded.",
             {"executed_tool_calls": execution_result.executed_tool_calls},
         )
-    if sensor_id == SENSOR_OPS_APPROVAL_BOUNDARY:
+    if sensor_id == SENSOR_OPS_TOOL_SELECTION_BOUNDARY:
         return TaskSensorResult(
             sensor_id,
             TASK_SENSOR_PASS_STATUS,
-            "Tool access metadata was recorded.",
-            {"has_tool_access": bool(execution_result.tool_access)},
+            "Tool selection metadata was recorded.",
+            {"has_tool_selection": bool(execution_result.tool_selection)},
         )
     if sensor_id == SENSOR_COMPLETION_OPERATION_REPORT:
         return _completion_sensor(sensor_id, completion_result)

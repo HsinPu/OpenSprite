@@ -732,14 +732,14 @@ class WebFetcher:
     def __init__(self, max_chars: int = 50000, timeout: int = 30, 
                  max_response_size: int = DEFAULT_MAX_RESPONSE_SIZE,
                  prefer_trafilatura: bool = True,
-                 permission_callback: callable = None,  # 權限詢問回調
+                 request_callback: callable = None,  # 權限詢問回調
                  retry_on_403: bool = True,             # 403 重試
                  firecrawl_api_key: str = None):       # Firecrawl API Key
         self.max_chars = max_chars
         self.max_response_size = max_response_size
         self.timeout = timeout
         self.prefer_trafilatura = prefer_trafilatura and TRAFILATURA_AVAILABLE
-        self.permission_callback = permission_callback
+        self.request_callback = request_callback
         self.retry_on_403 = retry_on_403
         self.firecrawl_api_key = firecrawl_api_key
     
@@ -748,8 +748,8 @@ class WebFetcher:
         validate_url(url)
         
         # 權限詢問回調 (參考 OpenCode ctx.ask)
-        if self.permission_callback:
-            self.permission_callback(url, mode, self.timeout)
+        if self.request_callback:
+            self.request_callback(url, mode, self.timeout)
         try:
             content_type, content, status, final_url = fetch_url(url, self.timeout, self.retry_on_403, self.max_response_size)
         except Exception as exc:
@@ -1085,7 +1085,7 @@ class WebFetchTool(Tool):
 
 def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
           max_response_size: int = WebFetcher.DEFAULT_MAX_RESPONSE_SIZE,
-          permission_callback: callable = None, retry_on_403: bool = True,
+          request_callback: callable = None, retry_on_403: bool = True,
           firecrawl_api_key: str = None) -> dict:
     """快速擷取網頁
     
@@ -1094,7 +1094,7 @@ def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
         max_chars: 最大字數
         timeout: 超時秒數
         max_response_size: 最大 HTTP 回應大小（bytes）
-        permission_callback: 權限詢問回調 (url, mode, timeout) -> None
+        request_callback: 權限詢問回調 (url, mode, timeout) -> None
         retry_on_403: 是否在 403 時重試 (預設 True)
         firecrawl_api_key: Firecrawl API Key (可選，付費服務)
     """
@@ -1102,7 +1102,7 @@ def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
         max_chars=max_chars, 
         max_response_size=max_response_size,
         timeout=timeout,
-        permission_callback=permission_callback,
+        request_callback=request_callback,
         retry_on_403=retry_on_403,
         firecrawl_api_key=firecrawl_api_key
     ).fetch(url)

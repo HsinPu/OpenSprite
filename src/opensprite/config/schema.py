@@ -5,7 +5,6 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..channels.registry import coerce_channel_instances, default_channel_instances
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, DEFAULT_APPROVAL_MODE, PERMISSION_PROFILE_NAMES
 from .defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -516,34 +515,6 @@ class CronToolConfig(BaseModel):
     default_timezone: str = DEFAULT_CRON_TIMEZONE
 
 
-class ToolPermissionProfileOverrideConfig(BaseModel):
-    """Per-task permission override."""
-
-    enabled: bool = True
-    approval_mode: Literal["auto", "ask", "block"] | None = None
-    allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
-    denied_tools: list[str] = Field(default_factory=list)
-    allowed_risk_levels: list[str] = Field(default_factory=lambda: list(ALL_RISK_LEVELS_ORDER))
-    denied_risk_levels: list[str] = Field(default_factory=list)
-    approval_required_tools: list[str] = Field(default_factory=list)
-    approval_required_risk_levels: list[str] = Field(default_factory=list)
-
-
-class ToolPermissionsConfig(BaseModel):
-    """Centralized tool exposure and execution policy."""
-
-    enabled: bool = True
-    approval_mode: Literal["auto", "ask", "block"] | None = DEFAULT_APPROVAL_MODE
-    approval_timeout_seconds: float = Field(default=300.0, gt=0)
-    allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
-    denied_tools: list[str] = Field(default_factory=list)
-    allowed_risk_levels: list[str] = Field(default_factory=lambda: list(ALL_RISK_LEVELS_ORDER))
-    denied_risk_levels: list[str] = Field(default_factory=list)
-    approval_required_tools: list[str] = Field(default_factory=list)
-    approval_required_risk_levels: list[str] = Field(default_factory=list)
-    profile_overrides: dict[str, ToolPermissionProfileOverrideConfig] = Field(default_factory=dict)
-
-
 class ToolsConfig(BaseModel):
     """Tool configurations."""
 
@@ -557,7 +528,6 @@ class ToolsConfig(BaseModel):
     web_fetch: WebFetchToolConfig = Field(default_factory=WebFetchToolConfig)
     browser: BrowserToolConfig = Field(default_factory=BrowserToolConfig)
     cron: CronToolConfig = Field(default_factory=CronToolConfig)
-    permissions: ToolPermissionsConfig = Field(default_factory=ToolPermissionsConfig)
     mcp_servers_file: str = DEFAULT_MCP_SERVERS_FILE
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
@@ -1499,7 +1469,6 @@ class Config:
                 "web_fetch": self.tools.web_fetch.model_dump(by_alias=True),
                 "browser": self.tools.browser.model_dump(by_alias=True),
                 "cron": self.tools.cron.model_dump(by_alias=True),
-                "permissions": self.tools.permissions.model_dump(by_alias=True),
                 "mcp_servers_file": self.tools.mcp_servers_file,
             },
             "agent": {

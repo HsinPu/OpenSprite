@@ -21,13 +21,10 @@ from opensprite.runs.events import (
     SUBAGENT_STARTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
-    TOOL_PERMISSION_ALLOWED_EVENT,
-    TOOL_PERMISSION_CHECKED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.runs.schema import serialize_run_artifacts
 from opensprite.storage import MemoryStorage
-from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status, tool_error_result
@@ -359,44 +356,16 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
 
 
 def test_subagent_tool_registry_uses_overlay_resolver_metadata():
-    registry = ToolRegistry(permission_policy=ToolPermissionPolicy(denied_risk_levels=["execute"]))
+    registry = ToolRegistry()
     for name in ["read_file", "apply_patch", "exec", "batch"]:
         registry.register(DummyTool(name))
 
     child_registry = build_subagent_tool_registry(registry, "implementer")
 
-    assert set(child_registry.tool_names) == {"read_file", "apply_patch", "batch"}
-    metadata = child_registry.permission_resolution_metadata
+    assert set(child_registry.tool_names) == {"read_file", "apply_patch", "exec", "batch"}
+    metadata = child_registry.tool_selection_metadata
     assert metadata["kind"] == "subagent:implementation"
-    assert metadata["overlay_permission_policy"]["allowed_tools"] == [
-        "apply_patch",
-        "batch",
-        "edit_file",
-        "exec",
-        "glob_files",
-        "grep_files",
-        "list_dir",
-        "process",
-        "read_file",
-        "read_skill",
-        "search_history",
-        "write_file",
-    ]
-    blocked = {item["name"]: item for item in metadata["tool_access"]["blocked_tools"]}
-    assert blocked["exec"]["reason"] == "risk level(s) denied: execute"
-
-
-def test_test_writer_registry_records_write_path_policy_metadata():
-    registry = ToolRegistry()
-    for name in ["read_file", "apply_patch", "batch"]:
-        registry.register(DummyTool(name))
-
-    child_registry = build_subagent_tool_registry(registry, "test-writer")
-
-    metadata = child_registry.permission_resolution_metadata
-    assert metadata["kind"] == "subagent:testing"
-    assert metadata["extra_permission_policies"][0]["kind"] == "subagent_write_path"
-    assert "tests/**" in metadata["extra_permission_policies"][0]["allowed_patterns"]
+    assert metadata["tool_selection"]["selected_tools"] == ["read_file", "apply_patch", "exec", "batch"]
 
 
 def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):
@@ -522,7 +491,7 @@ def test_code_reviewer_forbidden_write_call_is_not_executed(tmp_path):
     assert json.loads(tool_results[0][2])["metadata"]["available_tools"] == ["read_file"]
 
 
-def test_test_writer_write_tools_are_limited_to_test_paths(tmp_path):
+def test_test_writer_can_use_write_tools_for_source_paths(tmp_path):
     provider = FakeProvider(
         tool_name="apply_patch",
         tool_arguments={
@@ -557,9 +526,12 @@ def test_test_writer_write_tools_are_limited_to_test_paths(tmp_path):
     assert "Result:\ndone" in result
     tool_results = [saved for saved in storage.saved if saved[1] == "tool"]
     assert len(tool_results) == 1
-    assert tool_results[0][3] == "apply_patch"
-    assert "blocked by permission policy" in tool_results[0][2]
-    assert "outside allowed subagent write paths" in tool_results[0][2]
+    assert tool_results[0][0:4] == (
+        next(session_id for session_id in storage.messages if ":subagent:task_" in session_id),
+        "tool",
+        "tool:",
+        "apply_patch",
+    )
 
 
 def test_test_writer_can_use_write_tools_for_test_paths(tmp_path):
@@ -863,8 +835,6 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
     assert parent_trace is not None
     assert [event.event_type for event in parent_trace.events] == [
         SUBAGENT_STARTED_EVENT,
-        TOOL_PERMISSION_CHECKED_EVENT,
-        TOOL_PERMISSION_ALLOWED_EVENT,
         SUBAGENT_COMPLETED_EVENT,
     ]
     artifacts = serialize_run_artifacts(parent_trace)
@@ -893,7 +863,7 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
         "delegation_mode": "serial",
     }
     assert artifacts[0]["source"] == "event"
-    assert artifacts[0]["source_id"] == 4
+    assert artifacts[0]["source_id"] == 2
     assert artifacts[0]["sources"] == ["event"]
 
 

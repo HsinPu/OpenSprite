@@ -3,7 +3,6 @@ import json
 
 from opensprite.tools.base import Tool
 from opensprite.tools.batch import BatchTool
-from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
 
@@ -85,8 +84,8 @@ class SlowReadTool(Tool):
             self.active -= 1
 
 
-def _registry_with_batch(permission_policy=None):
-    registry = ToolRegistry(permission_policy=permission_policy)
+def _registry_with_batch():
+    registry = ToolRegistry()
     registry.register(EchoTool("read_file", "read"))
     registry.register(EchoTool("grep_files", "grep"))
     registry.register(EchoTool("write_file", "write"))
@@ -134,28 +133,6 @@ def test_batch_rejects_non_read_only_child_tools():
     assert "Invalid arguments for batch" in status.error
     assert "calls[0].tool must be one of" in status.error
     assert "write:x" not in result
-
-
-def test_batch_child_calls_still_follow_permission_policy():
-    registry = _registry_with_batch(
-        ToolPermissionPolicy(denied_tools=["read_file"])
-    )
-
-    result = asyncio.run(
-        registry.execute(
-            "batch",
-            {"calls": [{"tool": "read_file", "arguments": {"value": "notes.txt"}}]},
-        )
-    )
-
-    status = classify_tool_result_status(result)
-    payload = json.loads(result)
-    assert status.error_type == "ToolFailure"
-    assert status.category == "batch_failure"
-    assert payload["summary"] == "Batch completed: 1 call(s), 1 failed."
-    assert payload["failed"] == 1
-    assert payload["results"][0]["category"] == "tool_unavailable"
-    assert "Tool 'read_file' is not available in this turn" in payload["results"][0]["result"]
 
 
 def test_batch_counts_structured_child_failures():

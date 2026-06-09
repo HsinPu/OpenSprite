@@ -1,7 +1,6 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
-import { createDefaultPermissionsForm, createDefaultPermissionsState } from "./permissionsDefaults";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
@@ -137,14 +136,6 @@ export function createSettingsState() {
     networkNotice: "",
     network: createDefaultNetworkState(),
     networkForm: createDefaultNetworkForm(),
-    permissionsLoading: false,
-    permissionsError: "",
-    permissionsNotice: "",
-    permissions: createDefaultPermissionsState(),
-    permissionsForm: createDefaultPermissionsForm(),
-    toolAccessPreviewLoading: false,
-    toolAccessPreviewError: "",
-    toolAccessPreview: { rows: [], user_permissions: null },
     searchLoading: false,
     searchOptionsLoading: false,
     searchError: "",
@@ -283,15 +274,6 @@ export function createSettingsState() {
       showJsonInput: false,
       jsonText: "",
     },
-  };
-}
-
-export function createPermissionState() {
-  return {
-    loading: false,
-    error: "",
-    requests: [],
-    resolvingIds: {},
   };
 }
 

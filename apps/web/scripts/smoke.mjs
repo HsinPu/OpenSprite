@@ -65,9 +65,7 @@ const [
   searchDefaults,
   runTraceNormalizers,
   settingsNormalizers,
-  permissionsDefaults,
   networkSettingsActions,
-  permissionsSettingsActions,
   providerSettingsActions,
   scheduleSettingsActions,
   copy,
@@ -99,16 +97,14 @@ const [
   read("src/composables/searchDefaults.js"),
   read("src/composables/runTraceNormalizers.js"),
   read("src/composables/settingsNormalizers.js"),
-  read("src/composables/permissionsDefaults.js"),
   read("src/composables/useNetworkSettingsActions.js"),
-  read("src/composables/usePermissionsSettingsActions.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useScheduleSettingsActions.js"),
   read("src/i18n/copy.js"),
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${permissionsDefaults}\n${networkSettingsActions}\n${permissionsSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 const settingsUi = `${settingsModal}\n${generalSettingsPage}\n${shortcutsSettingsPage}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
@@ -143,8 +139,8 @@ assertIncludes(runTraceViewer, "downloadDebugBundle", "run trace debug export ac
 assertIncludes(runTraceViewer, "run-trace__task-dashboard", "task dashboard rendering");
 assertIncludes(runTraceViewer, "data-kind", "task dashboard card categories");
 assertIncludes(runTraceViewer, "formatOperationAudit", "operation audit trace rendering");
-assertIncludes(runTraceViewer, "formatToolDecisionCounts", "task tool decision summary rendering");
-assertIncludes(runTraceViewer, "formatApprovalCounts", "task approval lifecycle summary rendering");
+assertIncludes(runTraceViewer, "tool_selection.resolved", "task tool selection summary rendering");
+assertNotIncludes(runTraceViewer, "formatApprovalCounts", "task approval lifecycle summary removed");
 assertIncludes(runTraceViewer, "formatTaskScorecard", "task scorecard summary rendering");
 assertIncludes(runTraceViewer, "decisionTimelineItems", "trace decision timeline rendering");
 assertIncludes(runTraceViewer, "deriveDecisionTimelineItems", "trace decision timeline uses shared normalizer");
@@ -363,10 +359,9 @@ assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch")
 assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
-assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch");
-assertIncludes(settingsLogic, "/api/settings/tool-access-preview", "tool access preview fetch");
-assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
-assertNotIncludes(permissionsSettingsActions, "profile_overrides", "permission profile override is preserved by backend when not edited");
+assertNotIncludes(settingsLogic, "/api/settings/permissions", "permission settings fetch removed");
+assertNotIncludes(settingsLogic, "/api/settings/tool-access-preview", "tool access preview fetch removed");
+assertNotIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload removed");
 assertNotIncludes(settingsLogic, "applyPermissionProfilePreset", "unused permission profile preset helper removed");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
@@ -375,15 +370,15 @@ assertIncludes(browserDefaults, 'DEFAULT_BROWSER_BACKEND = "agent-browser"', "br
 assertIncludes(browserDefaults, "createDefaultBrowserState", "browser default state factory");
 assertIncludes(browserSettingsActions, "normalizeBrowserSettings", "browser actions use shared normalizer");
 assertIncludes(settingsLogic, "createDefaultBrowserForm", "settings state uses shared browser form factory");
-assertIncludes(settingsLogic, "createDefaultPermissionsForm", "settings state uses shared permissions form factory");
-assertIncludes(settingsModal, "section === 'permissions'", "permissions settings section");
-assertIncludes(settingsModal, "save-permissions-settings", "permissions settings save event");
-assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
-assertIncludes(settingsModal, "toolAccessPreviewRows", "permissions tool access preview rendering");
+assertNotIncludes(settingsLogic, "createDefaultPermissionsForm", "settings state permissions form removed");
+assertNotIncludes(settingsModal, "section === 'permissions'", "permissions settings section removed");
+assertNotIncludes(settingsModal, "save-permissions-settings", "permissions settings save event removed");
+assertNotIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering removed");
+assertNotIncludes(settingsModal, "toolAccessPreviewRows", "permissions tool access preview rendering removed");
 assertNotIncludes(settingsModal, "permissionProfiles", "unused permission profile list removed");
 assertNotIncludes(settingsModal, "permissionProfilePresets", "unused permission profile preset rendering removed");
-assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
-assertIncludes(styles, ".settings-policy-preview", "tool access preview styling");
+assertNotIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy removed");
+assertNotIncludes(styles, ".settings-policy-preview", "tool access preview styling removed");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");

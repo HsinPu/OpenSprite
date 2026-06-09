@@ -41,7 +41,6 @@ from .image import AnalyzeImageTool, OCRImageTool
 from .memory import SaveMemoryTool
 from .mcp_config import ConfigureMCPTool
 from .outbound_media import SendMediaTool
-from .permissions import ToolPermissionPolicy
 from .process import ProcessTool
 from .process_runtime import BackgroundProcessManager
 from .registry import ToolRegistry
@@ -474,7 +473,6 @@ def register_default_tools(
 ) -> None:
     """Register the built-in tools used by AgentLoop."""
     current_tools_config = tools_config or ToolsConfig()
-    registry.set_permission_policy(ToolPermissionPolicy.from_config(current_tools_config.permissions))
     register_filesystem_tools(
         registry,
         workspace_resolver=workspace_resolver,

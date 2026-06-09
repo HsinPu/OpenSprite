@@ -25,7 +25,6 @@ from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
 from .identity import build_session_id, normalize_identifier
-from ..tools.access import ToolAccessResolver, summarize_effective_risks
 from ..auth.credentials import (
     CredentialNotFoundError,
     CredentialStoreError,
@@ -39,8 +38,7 @@ from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
 from ..cli import service_background, service_linux
-from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
-from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES, DEFAULT_APPROVAL_MODE, PERMISSION_PROFILE_NAMES
+from ..config import Config, MessagesConfig
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -99,12 +97,8 @@ from ..ops import OperationAuditRecord
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
-from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
-from ..tools.base import Tool
-from ..tools.permissions import DEFAULT_TOOL_RISKS, ToolPermissionPolicy
-from ..tools.registry import ToolRegistry
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -117,71 +111,6 @@ from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
 from . import web_settings_payloads
 from .web_routes import register_web_routes
-
-
-_PERMISSION_PREVIEW_TASKS: tuple[dict[str, Any], ...] = (
-    {
-        "name": "Direct answer",
-        "task_type": "pure_answer",
-        "required_tools": (),
-        "description": "No tools are exposed when the planner says no tool evidence is required.",
-    },
-    {
-        "name": "Web research",
-        "task_type": "web_research",
-        "required_tools": ("web_search", "web_fetch"),
-        "description": "Source-grounded answers need explicit web tools selected by the task contract.",
-    },
-    {
-        "name": "Workspace read",
-        "task_type": "workspace_read",
-        "required_tools": ("read_file", "list_dir", "grep_files"),
-        "description": "Workspace inspection exposes only selected read tools.",
-    },
-    {
-        "name": "Code change",
-        "task_type": "code_change",
-        "required_tools": ("read_file", "apply_patch", "verify"),
-        "description": "Code edits expose only the selected read, write, and verification tools.",
-    },
-    {
-        "name": "Media extraction",
-        "task_type": "media_extraction",
-        "required_tools": ("analyze_image", "ocr_image", "transcribe_audio"),
-        "description": "Media tasks expose only the selected media analysis tools.",
-    },
-    {
-        "name": "Operations",
-        "task_type": "operations",
-        "required_tools": ("exec", "cron", "configure_mcp"),
-        "description": "Operations expose only the selected operational tools that user permissions allow.",
-    },
-)
-
-
-class _PermissionPreviewTool(Tool):
-    def __init__(self, name: str, risk_levels: frozenset[str]):
-        self._name = name
-        self._risk_levels = risk_levels
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return f"Permission preview for {self._name}"
-
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return {"type": "object", "properties": {}}
-
-    @property
-    def risk_levels(self) -> frozenset[str] | None:
-        return self._risk_levels
-
-    async def _execute(self, **kwargs: Any) -> str:
-        return "permission preview"
 
 
 class WebAdapter(MessageAdapter):
@@ -550,99 +479,6 @@ class WebAdapter(MessageAdapter):
         return web_settings_payloads.log_payload(config, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
     @classmethod
-    def _permissions_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.permissions_payload(
-            config,
-            all_risk_levels=ALL_RISK_LEVELS,
-            approval_modes=APPROVAL_MODES,
-        )
-
-    @classmethod
-    def _tool_access_preview_payload(cls, config: Config) -> dict[str, Any]:
-        user_permissions = cls._permissions_payload(config)
-        global_permission_policy = ToolPermissionPolicy.from_config(config.tools.permissions)
-        resolver = ToolAccessResolver()
-        registry = cls._permission_preview_registry(global_permission_policy)
-        user_risks = summarize_effective_risks(global_permission_policy)
-        rows = []
-        for task in _PERMISSION_PREVIEW_TASKS:
-            required_tools = tuple(str(item) for item in task["required_tools"])
-            resolution = resolver.resolve_required_tools(
-                registry,
-                required_tools,
-                metadata_kind=f"permission_preview:{task['task_type']}",
-            )
-            tool_access = resolution.metadata.get("tool_access", {})
-            rows.append(
-                {
-                    "task": {
-                        "name": task["name"],
-                        "task_type": task["task_type"],
-                        "description": task["description"],
-                        "required_tools": list(required_tools),
-                    },
-                    "user": {
-                        "allowed_risk_levels": user_risks["allowed_risk_levels"],
-                        "denied_risk_levels": user_risks["denied_risk_levels"],
-                        "approval_required_risk_levels": user_risks["approval_required_risk_levels"],
-                        "approval_mode": user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE,
-                        "permissions_enabled": bool(user_permissions["enabled"]),
-                    },
-                    "effective": {
-                        "exposed_tools": list(tool_access.get("exposed_tools") or []),
-                        "blocked_tools": list(tool_access.get("blocked_tools") or []),
-                        "blocked_required_tools": list(resolution.metadata.get("blocked_required_tools") or []),
-                        "allowed_risk_levels": resolution.metadata["effective_risks"]["allowed_risk_levels"],
-                        "denied_risk_levels": resolution.metadata["effective_risks"]["denied_risk_levels"],
-                        "approval_required_risk_levels": resolution.metadata["effective_risks"]["approval_required_risk_levels"],
-                        "user_approval_mode": user_permissions.get("approval_mode") or DEFAULT_APPROVAL_MODE,
-                        "user_permissions_enabled": bool(user_permissions["enabled"]),
-                    },
-                    "resolution": resolution.metadata,
-                }
-            )
-        return {
-            "schema_version": 2,
-            "user_permissions": user_permissions,
-            "rows": rows,
-        }
-
-    @staticmethod
-    def _permission_preview_registry(permission_policy: ToolPermissionPolicy) -> ToolRegistry:
-        registry = ToolRegistry(permission_policy=permission_policy)
-        tool_names = {
-            tool_name
-            for task in _PERMISSION_PREVIEW_TASKS
-            for tool_name in task["required_tools"]
-        }
-        for tool_name in sorted(tool_names):
-            risk_levels = DEFAULT_TOOL_RISKS.get(str(tool_name), frozenset({"external_side_effect"}))
-            registry.register(_PermissionPreviewTool(str(tool_name), risk_levels))
-        return registry
-
-    @classmethod
-    def _coerce_approval_mode(cls, value: Any) -> str | None:
-        return web_settings_coercion.coerce_approval_mode(value, approval_modes=APPROVAL_MODES)
-
-    @classmethod
-    def _coerce_risk_level_list(cls, value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
-        return web_settings_coercion.coerce_risk_level_list(
-            value,
-            field=field,
-            default=default,
-            all_risk_levels=ALL_RISK_LEVELS,
-        )
-
-    @classmethod
-    def _coerce_permission_profile_overrides(cls, value: Any, *, default: dict[str, ToolPermissionProfileOverrideConfig]) -> dict[str, ToolPermissionProfileOverrideConfig]:
-        return web_settings_coercion.coerce_permission_profile_overrides(
-            value,
-            default=default,
-            all_risk_levels=ALL_RISK_LEVELS,
-            allowed_profiles=PERMISSION_PROFILE_NAMES,
-        )
-
-    @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
         return web_settings_coercion.coerce_log_level(value, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
@@ -733,10 +569,6 @@ class WebAdapter(MessageAdapter):
     def _reload_schedule_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted scheduling settings to the running agent when possible."""
         return web_settings_reload.reload_schedule_from_config(self, payload, force=force, logger=logger)
-
-    def _reload_permissions_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
-        """Hot-apply persisted tool permission settings to the running agent when possible."""
-        return web_settings_reload.reload_permissions_from_config(self, payload, force=force, logger=logger)
 
     def _reload_media_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted media settings to the running agent when possible."""
@@ -993,40 +825,6 @@ class WebAdapter(MessageAdapter):
             "updated_at": item.updated_at,
             "metadata": self._json_safe(dict(item.metadata or {})),
         }
-
-    def _serialize_permission_request(self, request: Any) -> dict[str, Any]:
-        request_risk_levels = getattr(request, "risk_levels", None)
-        classification = classify_permission_request(
-            getattr(request, "tool_name", ""),
-            getattr(request, "params", {}),
-            risk_levels=request_risk_levels,
-        )
-        payload = {
-            "request_id": request.request_id,
-            "tool_name": request.tool_name,
-            "params": self._json_safe(request.params),
-            "reason": request.reason,
-            "status": request.status,
-            "action_type": getattr(request, "action_type", None) or classification["action_type"],
-            "risk_level": getattr(request, "risk_level", None) or classification["risk_level"],
-            "risk_levels": list(getattr(request, "risk_levels", None) or classification["risk_levels"]),
-            "resource": getattr(request, "resource", None) or classification["resource"],
-            "preview": getattr(request, "preview", None) or classification["preview"],
-            "recommended_decision": getattr(request, "recommended_decision", None) or classification["recommended_decision"],
-            "session_id": request.session_id,
-            "run_id": request.run_id,
-            "channel": request.channel,
-            "external_chat_id": request.external_chat_id,
-            "created_at": request.created_at,
-            "expires_at": request.expires_at,
-            "resolved_at": request.resolved_at,
-            "resolution_reason": request.resolution_reason,
-            "timed_out": request.timed_out,
-        }
-        destructive_reason = getattr(request, "destructive_reason", None) or classification.get("destructive_reason")
-        if destructive_reason:
-            payload["destructive_reason"] = destructive_reason
-        return payload
 
     def _require_storage(self) -> Any:
         storage = self._get_storage()
@@ -1350,15 +1148,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_network_update(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_network_update(self, request)
-
-    async def _handle_settings_permissions(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_permissions(self, request)
-
-    async def _handle_settings_tool_access_preview(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_tool_access_preview(self, request)
-
-    async def _handle_settings_permissions_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_permissions_update(self, request)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_tools.handle_settings_search(self, request)

@@ -9,7 +9,6 @@ from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
 from ..config.llm_presets import provider_profile_defaults, provider_request_options
 from ..llms.context_window import resolve_context_window_tokens
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODES_ORDER, DEFAULT_APPROVAL_MODE
 
 
 def network_payload(config: Config, *, default_http_proxy: str, default_https_proxy: str, default_no_proxy: str) -> dict[str, Any]:
@@ -19,7 +18,6 @@ def network_payload(config: Config, *, default_http_proxy: str, default_https_pr
         "https_proxy": str(getattr(network, "https_proxy", default_https_proxy) or default_https_proxy),
         "no_proxy": str(getattr(network, "no_proxy", default_no_proxy) or default_no_proxy),
     }
-
 
 def browser_payload(
     config: Config,
@@ -175,39 +173,3 @@ def log_payload(config: Config, *, default_log_level: str, log_levels: tuple[str
         "log_reasoning_details": bool(getattr(log, "log_reasoning_details", DEFAULT_LOG_REASONING_DETAILS)),
         "levels": list(log_levels),
     }
-
-
-def permissions_payload(
-    config: Config,
-    *,
-    all_risk_levels: set[str] | frozenset[str],
-    approval_modes: set[str] | frozenset[str],
-) -> dict[str, Any]:
-    permissions = getattr(getattr(config, "tools", None), "permissions", None)
-    profile_overrides = getattr(permissions, "profile_overrides", {}) or {}
-    risk_options = _ordered_subset(all_risk_levels, ALL_RISK_LEVELS_ORDER)
-    approval_options = _ordered_subset(approval_modes, APPROVAL_MODES_ORDER)
-    return {
-        "enabled": bool(getattr(permissions, "enabled", True)),
-        "approval_mode": getattr(permissions, "approval_mode", DEFAULT_APPROVAL_MODE) or DEFAULT_APPROVAL_MODE,
-        "approval_timeout_seconds": float(getattr(permissions, "approval_timeout_seconds", 300.0) or 300.0),
-        "allowed_tools": list(getattr(permissions, "allowed_tools", ["*"]) or ["*"]),
-        "denied_tools": list(getattr(permissions, "denied_tools", []) or []),
-        "allowed_risk_levels": list(getattr(permissions, "allowed_risk_levels", risk_options) or []),
-        "denied_risk_levels": list(getattr(permissions, "denied_risk_levels", []) or []),
-        "approval_required_tools": list(getattr(permissions, "approval_required_tools", []) or []),
-        "approval_required_risk_levels": list(getattr(permissions, "approval_required_risk_levels", []) or []),
-        "profile_overrides": {
-            profile: override.model_dump(by_alias=True) if hasattr(override, "model_dump") else dict(override)
-            for profile, override in profile_overrides.items()
-        },
-        "risk_level_options": risk_options,
-        "approval_mode_options": approval_options,
-    }
-
-
-def _ordered_subset(values: set[str] | frozenset[str], canonical_order: tuple[str, ...]) -> list[str]:
-    value_set = set(values)
-    ordered = [value for value in canonical_order if value in value_set]
-    ordered.extend(sorted(value_set - set(canonical_order)))
-    return ordered

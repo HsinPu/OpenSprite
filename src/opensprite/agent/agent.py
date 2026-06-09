@@ -57,18 +57,9 @@ from ..runs.events import (
     ACTIVE_TASK_UNCHANGED_EVENT,
     ACTIVE_TASK_COMMAND_APPLIED_EVENT,
     ACTIVE_TASK_COMMAND_FAILED_EVENT,
-    PERMISSION_DENIED_EVENT,
-    PERMISSION_GRANTED_EVENT,
-    PERMISSION_REQUESTED_EVENT,
-    TOOL_APPROVAL_APPROVED_EVENT,
-    TOOL_APPROVAL_DENIED_EVENT,
-    TOOL_APPROVAL_EXPIRED_EVENT,
-    TOOL_APPROVAL_REQUESTED_EVENT,
 )
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
-from ..tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequest, PermissionRequestManager
-from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.shell_runtime import format_captured_output
@@ -99,7 +90,6 @@ from ..documents.curator import (
 from .execution import ExecutionEngine, ExecutionResult
 from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
-from ..tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
 from ..tools.registration import (
     BROWSER_TOOL_NAMES,
     register_browser_tools,
@@ -116,23 +106,13 @@ from .task.contract import (
     TaskIntentService,
     TaskObjectiveDecision,
 )
-from ..tools.access import ToolAccessResolver
+from ..tools.selection import ToolSelectionResolver
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
 from .task.progress import WorkProgressService, WorkProgressUpdate
 from .task.active_task import ActiveTaskCommandService
-
-
-def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:
-    if event_type == PERMISSION_REQUESTED_EVENT:
-        return TOOL_APPROVAL_REQUESTED_EVENT
-    if event_type == PERMISSION_GRANTED_EVENT:
-        return TOOL_APPROVAL_APPROVED_EVENT
-    if event_type == PERMISSION_DENIED_EVENT:
-        return TOOL_APPROVAL_EXPIRED_EVENT if request.timed_out else TOOL_APPROVAL_DENIED_EVENT
-    return None
 
 
 class BackgroundSessionNotificationService:
@@ -582,65 +562,9 @@ class AgentLoop:
         """Drop workflow outcomes for one run without returning them."""
         self._workflow_outcomes.pop(run_id, None)
 
-    def pending_permission_requests(self) -> list[PermissionRequest]:
-        """Return permission requests waiting for an external decision."""
-        return self.permissions.pending_requests()
-
     def cleanup_worktree_sandbox(self, sandbox_path: str) -> dict[str, Any]:
         """Remove an OpenSprite-managed worktree sandbox by marker-guarded path."""
         return WorktreeSandboxInspector.cleanup(sandbox_path)
-
-    async def approve_permission_request(self, request_id: str) -> PermissionRequest | None:
-        """Approve one pending tool permission request."""
-        return await self.permissions.approve_request(request_id)
-
-    async def deny_permission_request(
-        self,
-        request_id: str,
-        reason: str = DEFAULT_PERMISSION_DENIAL_REASON,
-    ) -> PermissionRequest | None:
-        """Deny one pending tool permission request."""
-        return await self.permissions.deny_request(request_id, reason=reason)
-
-    async def _handle_tool_permission_request(
-        self,
-        tool_name: str,
-        params: Any,
-        decision: PermissionDecision,
-    ) -> PermissionApprovalResult:
-        """Create an ask-mode approval request for the current run context."""
-        return await self.permissions.handle_tool_permission_request(tool_name, params, decision)
-
-    async def _emit_tool_permission_decision(
-        self,
-        event_type: str,
-        tool_name: str,
-        payload: dict[str, Any],
-    ) -> None:
-        """Persist and publish a tool permission decision for the current run."""
-        session_id = self.turn_context.current_session_id()
-        run_id = self.turn_context.current_run_id()
-        if not session_id or not run_id:
-            return
-        await self._emit_run_event(
-            session_id,
-            run_id,
-            event_type,
-            payload,
-            channel=self.turn_context.current_channel(),
-            external_chat_id=self.turn_context.current_external_chat_id(),
-        )
-
-    async def _emit_permission_request_event(
-        self,
-        event_type: str,
-        request: PermissionRequest,
-    ) -> None:
-        """Persist and publish permission approval lifecycle events for a run."""
-        await self.permissions.emit_request_event(event_type, request)
-        approval_event_type = _tool_approval_event_type(event_type, request)
-        if approval_event_type is not None:
-            await self.permissions.emit_request_event(approval_event_type, request)
 
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:
@@ -753,10 +677,6 @@ class AgentLoop:
         self._workflow_outcomes: dict[str, dict[str, dict[str, Any]]] = {}
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
-        self.permission_requests = PermissionRequestManager(
-            timeout_seconds=self.tools_config.permissions.approval_timeout_seconds,
-            on_event=self._emit_permission_request_event,
-        )
 
         self.storage = self._setup_storage(storage)
         self.message_history = MessageHistoryService(
@@ -784,7 +704,7 @@ class AgentLoop:
             log_config=self.log_config,
         )
         self.task_intents = TaskIntentService()
-        self.tool_access = ToolAccessResolver()
+        self.tool_selection = ToolSelectionResolver()
         self.task_planner = TaskPlanner(self.config.task_planner_llm)
         self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
@@ -860,18 +780,6 @@ class AgentLoop:
             worktree_sandbox_enabled=lambda: self.config.worktree_sandbox_enabled,
             workspace_root=lambda: Path(self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())),
         )
-        self.permission_events = PermissionEventRecorder(
-            emit_run_event=self._emit_run_event,
-            format_log_preview=self._format_log_preview,
-        )
-        self.permissions = AgentPermissionService(
-            requests=self.permission_requests,
-            events=self.permission_events,
-            current_session_id=self.turn_context.current_session_id,
-            current_run_id=self.turn_context.current_run_id,
-            current_channel=self.turn_context.current_channel,
-            current_external_chat_id=self.turn_context.current_external_chat_id,
-        )
         self.run_hooks = RunHookService(
             message_bus_getter=lambda: self._message_bus,
             add_run_part=self._add_run_part,
@@ -899,8 +807,6 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
         )
         self.tools = self._setup_tools(tools)
-        self.tools.set_permission_request_handler(self._handle_tool_permission_request)
-        self.tools.set_permission_decision_hook(self._emit_tool_permission_decision)
         self.subagents = SubagentRunService(
             storage=self.storage,
             tools=self.tools,
@@ -1034,7 +940,7 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            resolve_tool_access=lambda registry, contract: self.tool_access.resolve_required_tools(
+            resolve_tool_selection=lambda registry, contract: self.tool_selection.resolve_required_tools(
                 registry,
                 getattr(contract, "required_tools", ()),
             ),

@@ -10,7 +10,6 @@ from opensprite.cron.manager import CronManager
 from opensprite.cron.types import CronJob, CronSchedule
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
-    PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
     TASK_INTENT_DETECTED_EVENT,
     TOOL_RESULT_EVENT,
@@ -837,30 +836,6 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type=PERMISSION_REQUESTED_EVENT,
-                payload={"request_id": "perm-1", "tool_name": "demo"},
-            )
-        )
-        waiting_permission = queue.session_status.get("web:browser-1")
-
-        await queue._set_session_status_from_run_event(
-            RunEvent(
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-                run_id="run-1",
-                event_type="permission_granted",
-                payload={"request_id": "perm-1", "tool_name": "demo"},
-            )
-        )
-        resumed = queue.session_status.get("web:browser-1")
-
-        await queue._set_session_status_from_run_event(
-            RunEvent(
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-                run_id="run-1",
                 event_type="llm_status",
                 payload={"status": "retry", "message": "provider busy"},
             )
@@ -889,18 +864,15 @@ def test_message_queue_maps_run_events_to_granular_session_status():
             )
         )
         idle = queue.session_status.get("web:browser-1")
-        return thinking, streaming, tool_running, waiting_permission, resumed, retry, waiting_user, idle
+        return thinking, streaming, tool_running, retry, waiting_user, idle
 
-    thinking, streaming, tool_running, waiting_permission, resumed, retry, waiting_user, idle = asyncio.run(scenario())
+    thinking, streaming, tool_running, retry, waiting_user, idle = asyncio.run(scenario())
 
     assert thinking.status == "thinking"
     assert thinking.metadata["run_id"] == "run-1"
     assert streaming.status == "streaming"
     assert tool_running.status == "tool_running"
     assert tool_running.metadata["tool_name"] == "demo"
-    assert waiting_permission.status == "waiting_permission"
-    assert waiting_permission.metadata["request_id"] == "perm-1"
-    assert resumed.status == "thinking"
     assert retry.status == "retry"
     assert retry.metadata["message"] == "provider busy"
     assert waiting_user.status == "waiting_user"

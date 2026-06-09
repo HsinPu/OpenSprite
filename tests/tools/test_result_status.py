@@ -53,20 +53,20 @@ def test_tool_result_status_honors_structured_error_payload():
 def test_tool_result_status_honors_structured_error_metadata():
     status = classify_tool_result_status(
         tool_error_result(
-            "Tool 'exec' blocked by permission policy.",
-            error_type="ToolPermissionError",
-            category="permission_block",
-            repeated_error_key="permission:exec",
+            "Tool 'exec' is not available in this turn.",
+            error_type="ToolUnavailableError",
+            category="tool_unavailable",
+            repeated_error_key="tool_unavailable:exec",
             invalid_arguments=True,
         )
     )
 
     assert status.ok is False
-    assert status.error_type == "ToolPermissionError"
-    assert status.category == "permission_block"
-    assert status.repeated_error_key == "permission:exec"
+    assert status.error_type == "ToolUnavailableError"
+    assert status.category == "tool_unavailable"
+    assert status.repeated_error_key == "tool_unavailable:exec"
     assert status.invalid_arguments is True
-    assert status.error_metadata()["category"] == "permission_block"
+    assert status.error_metadata()["category"] == "tool_unavailable"
 
 
 def test_tool_result_status_extracts_structured_execution_error_metadata():
@@ -103,17 +103,17 @@ def test_tool_result_status_exposes_structured_invalid_arguments_repeat_key():
     assert status.repeated_error_key == "Invalid arguments for web_fetch: url is required."
 
 
-def test_tool_result_status_classifies_permission_blocks():
+def test_tool_result_status_classifies_unavailable_tools():
     result = tool_error_result(
-        "Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools.",
-        error_type="ToolPermissionError",
-        category="permission_block",
+        "Tool 'exec' is not available in this turn.",
+        error_type="ToolUnavailableError",
+        category="tool_unavailable",
     )
     status = classify_tool_result_status(result)
 
     assert status.ok is False
-    assert status.error_type == "ToolPermissionError"
-    assert status.category == "permission_block"
+    assert status.error_type == "ToolUnavailableError"
+    assert status.category == "tool_unavailable"
 
 
 def test_tool_result_status_keeps_incidental_failure_words_successful():

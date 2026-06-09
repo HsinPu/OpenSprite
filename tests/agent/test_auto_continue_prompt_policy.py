@@ -77,7 +77,7 @@ def test_missing_source_citation_follow_up_instruction_uses_existing_sources():
     assert "reference at least one source" in instruction
 
 
-def test_internal_only_response_follow_up_instruction_respects_tool_access():
+def test_internal_only_response_follow_up_instruction_respects_tool_selection():
     with_tools = internal_only_response_follow_up_instruction(allow_tools=True)
     without_tools = internal_only_response_follow_up_instruction(allow_tools=False)
 

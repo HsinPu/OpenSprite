@@ -1367,14 +1367,12 @@ class PlannerCapability:
     task_type: str
     tools: tuple[str, ...]
     tool_summaries: tuple[dict[str, str], ...] = ()
-    risk_levels: tuple[str, ...] = ()
 
     def to_prompt_metadata(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "task_type": self.task_type,
             "tools": list(self.tool_summaries) or [{"name": name} for name in self.tools],
-            "risk_levels": list(self.risk_levels),
         }
 
 
@@ -1415,14 +1413,10 @@ class PlannerCapabilityCatalog:
                     {
                         "name": name,
                         "task_type": capability.task_type,
-                        "risk_levels": [],
                     },
                 )
                 if summary.get("description"):
                     item["description"] = summary["description"]
-                for risk_level in capability.risk_levels:
-                    if risk_level not in item["risk_levels"]:
-                        item["risk_levels"].append(risk_level)
         return tuple(tools_by_name[name] for name in tools_by_name)
 
     def to_prompt_metadata(self) -> dict[str, Any]:
@@ -1479,7 +1473,6 @@ def _capability_from_tool(tool: Any) -> PlannerCapability:
         task_type=_task_type_for_tool_name(tool_name),
         tools=(tool_name,) if tool_name else (),
         tool_summaries=(_tool_summary(tool),),
-        risk_levels=tuple(sorted(str(risk or "").strip() for risk in (tool.risk_levels or ()) if str(risk or "").strip())),
     )
 
 
@@ -1562,11 +1555,10 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: ToolRegistry) -> ToolRegistry:
     """Return a read-only registry used for plan-only turns."""
-    from ...tools.access import ToolAccessResolver, planning_mode_permission_policy
+    from ...tools.selection import ToolSelectionResolver
 
-    resolution = ToolAccessResolver().resolve_overlay(
+    resolution = ToolSelectionResolver().resolve_overlay(
         base_registry,
-        overlay_policy=planning_mode_permission_policy(PLANNING_ALLOWED_TOOLS),
         include_names=PLANNING_ALLOWED_TOOLS,
         metadata_kind="planning_mode",
     )
@@ -2364,7 +2356,7 @@ _ACCEPTANCE_CRITERION_SPECS: dict[str, dict[str, Any]] = {
     },
     _CRITERION_OPERATION_REPORT: {
         "kind": OPERATION_REPORT_CRITERION_KIND,
-        "description": "Report approval, validation, rollback, blocker, or residual risk for the operation.",
+        "description": "Report validation, rollback, blocker, or residual risk for the operation.",
     },
     _CRITERION_HISTORY_FINAL_ANSWER: {
         "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,

@@ -332,7 +332,7 @@ async def test_completion_gate_retries_blocker_without_current_tool_evidence():
     judge = FakeJudgeService(
         verdict=CompletionJudgeVerdict(
             status="blocked",
-            reason="stale permission timeout",
+            reason="stale tool unavailable result",
             active_task_status="blocked",
             missing_evidence=("cron list output",),
             metadata={"method": "llm"},
@@ -342,8 +342,8 @@ async def test_completion_gate_retries_blocker_without_current_tool_evidence():
 
     result = await service.evaluate_with_judge(
         task_intent=intent,
-        response_text="Blocked because cron permission timed out.",
-        execution_result=ExecutionResult(content="Blocked because cron permission timed out.", task_contract=contract),
+        response_text="Blocked because cron was not available.",
+        execution_result=ExecutionResult(content="Blocked because cron was not available.", task_contract=contract),
         provider=object(),
         model="model",
     )

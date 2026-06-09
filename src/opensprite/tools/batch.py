@@ -38,7 +38,7 @@ class BatchTool(Tool):
         "Run up to 8 read-only tool calls concurrently and return their results together. "
         "Allowed child tools: read_file, list_dir, glob_files, grep_files, read_skill, "
         "search_history. Do not use for write, edit, exec, delegate, cron, media, or config tools. "
-        "Each child call still goes through normal validation and permission policy."
+            "Each child call still goes through normal validation."
     )
 
     def __init__(self, registry_resolver: Callable[[], "ToolRegistry"]):

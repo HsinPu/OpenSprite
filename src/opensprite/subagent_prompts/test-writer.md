@@ -52,5 +52,5 @@ Test Plan
 2. <test case>: <purpose and assertion>
 
 Blocked By
-- <missing info, permission, or unavailable test environment>
+- <missing info, access/config, or unavailable test environment>
 ```

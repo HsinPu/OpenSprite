@@ -1,7 +1,6 @@
 """Tools for OpenSprite agent."""
 
 from .base import Tool
-from .approval import PermissionRequest, PermissionRequestManager
 from .registry import ToolRegistry
 from .active_task import TaskUpdateTool
 from .audio import TranscribeAudioTool
@@ -50,8 +49,6 @@ from .workflow import RunWorkflowTool
 
 __all__ = [
     "Tool",
-    "PermissionRequest",
-    "PermissionRequestManager",
     "ToolRegistry",
     "TaskUpdateTool",
     "BatchTool",

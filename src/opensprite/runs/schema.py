@@ -27,11 +27,6 @@ from .events import (
     LLM_EVENT_PREFIX,
     LLM_STATUS_EVENT,
     MESSAGE_PART_DELTA_EVENT,
-    PERMISSION_EVENT_PREFIX,
-    PERMISSION_DENIED_EVENT,
-    PERMISSION_EVENTS,
-    PERMISSION_GRANTED_EVENT,
-    PERMISSION_REQUESTED_EVENT,
     REASONING_DELTA_EVENT,
     RUN_EVENT_PREFIX,
     RUN_PART_DELTA_EVENT,
@@ -47,7 +42,7 @@ from .events import (
     TASK_SCORECARD_RECORDED_EVENT,
     TEXT_DELTA_EVENTS,
     TASK_EVENT_PREFIX,
-    TOOL_ACCESS_RESOLVED_EVENT,
+    TOOL_SELECTION_RESOLVED_EVENT,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_EVENT_PREFIX,
     TOOL_INPUT_DELTA_EVENT,
@@ -170,15 +165,12 @@ _EVENT_KINDS = {
     BACKGROUND_PROCESS_STARTED_EVENT: "process",
     BACKGROUND_PROCESS_COMPLETED_EVENT: "process",
     BACKGROUND_PROCESS_LOST_EVENT: "process",
-    TOOL_ACCESS_RESOLVED_EVENT: "tool",
+    TOOL_SELECTION_RESOLVED_EVENT: "tool",
     TOOL_STARTED_EVENT: "tool",
     TOOL_RESULT_EVENT: "tool",
     VERIFICATION_STARTED_EVENT: "verification",
     VERIFICATION_RESULT_EVENT: "verification",
     FILE_CHANGED_EVENT: "file",
-    PERMISSION_REQUESTED_EVENT: "permission",
-    PERMISSION_GRANTED_EVENT: "permission",
-    PERMISSION_DENIED_EVENT: "permission",
     RUN_PART_DELTA_EVENT: "text",
     MESSAGE_PART_DELTA_EVENT: "text",
     TOOL_INPUT_DELTA_EVENT: "tool",
@@ -245,8 +237,6 @@ def run_event_kind(event_type: str) -> str:
         return "llm"
     if normalized.startswith(WORK_EVENT_PREFIX) or normalized.startswith(TASK_EVENT_PREFIX):
         return "work"
-    if normalized.startswith(PERMISSION_EVENT_PREFIX):
-        return "permission"
     if normalized.startswith(RUN_EVENT_PREFIX) or normalized in AUTO_CONTINUE_EVENTS:
         return "run"
     return "other"
@@ -352,23 +342,6 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "status": status,
             "title": _text(data.get(VERIFICATION_NAME_METADATA_FIELD) or data.get("action") or "verification"),
             "detail": _text(data.get("result_preview") or data.get("path")),
-        }
-
-    if normalized in PERMISSION_EVENTS:
-        request_id = _text(data.get("request_id"))
-        tool_name = _text(data.get("tool_name"))
-        if not request_id and not tool_name:
-            return None
-        return {
-            "schema_version": RUN_SCHEMA_VERSION,
-            "artifact_id": f"permission:{request_id}" if request_id else None,
-            "artifact_type": "permission",
-            "kind": "permission",
-            "status": status,
-            "title": tool_name or "permission",
-            "detail": _text(data.get("reason") or data.get("resolution_reason") or data.get("args_preview")),
-            "tool_name": tool_name,
-            "request_id": request_id or None,
         }
 
     if normalized == TASK_CHECKLIST_UPDATED_EVENT:

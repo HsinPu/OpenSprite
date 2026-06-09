@@ -6,19 +6,7 @@ RUN_PART_DELTA_EVENT = "run_part_delta"
 MESSAGE_PART_DELTA_EVENT = "message_part_delta"
 TOOL_STARTED_EVENT = "tool_started"
 TOOL_RESULT_EVENT = "tool_result"
-PERMISSION_REQUESTED_EVENT = "permission_requested"
-PERMISSION_GRANTED_EVENT = "permission_granted"
-PERMISSION_DENIED_EVENT = "permission_denied"
-TOOL_APPROVAL_REQUESTED_EVENT = "tool_approval.requested"
-TOOL_APPROVAL_APPROVED_EVENT = "tool_approval.approved"
-TOOL_APPROVAL_DENIED_EVENT = "tool_approval.denied"
-TOOL_APPROVAL_EXPIRED_EVENT = "tool_approval.expired"
-TOOL_PERMISSION_CHECKED_EVENT = "tool_permission.checked"
-TOOL_PERMISSION_ALLOWED_EVENT = "tool_permission.allowed"
-TOOL_PERMISSION_DENIED_EVENT = "tool_permission.denied"
-TOOL_PERMISSION_NOT_EXPOSED_EVENT = "tool_permission.not_exposed"
-TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT = "tool_permission.approval_required"
-TOOL_ACCESS_RESOLVED_EVENT = "tool_access.resolved"
+TOOL_SELECTION_RESOLVED_EVENT = "tool_selection.resolved"
 VERIFICATION_STARTED_EVENT = "verification_started"
 VERIFICATION_RESULT_EVENT = "verification_result"
 COMPLETION_GATE_EVALUATED_EVENT = "completion_gate.evaluated"
@@ -101,18 +89,10 @@ VERIFICATION_EVENT_PREFIX = "verification_"
 LLM_EVENT_PREFIX = "llm_"
 WORK_EVENT_PREFIX = "work_"
 TASK_EVENT_PREFIX = "task_"
-PERMISSION_EVENT_PREFIX = "permission_"
 RUN_EVENT_PREFIX = "run_"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})
-PERMISSION_EVENTS = frozenset(
-    {
-        PERMISSION_REQUESTED_EVENT,
-        PERMISSION_GRANTED_EVENT,
-        PERMISSION_DENIED_EVENT,
-    }
-)
 VERIFICATION_EVENTS = frozenset({VERIFICATION_STARTED_EVENT, VERIFICATION_RESULT_EVENT})
 TASK_CONTRACT_EVENTS = frozenset(
     {

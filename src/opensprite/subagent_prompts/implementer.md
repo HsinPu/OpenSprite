@@ -48,6 +48,6 @@ Notes
 
 ```text
 Implementation Blocked
-- Blocker: <missing info, permission, failing dependency, or unsafe ambiguity>
+- Blocker: <missing info, access/config, failing dependency, or unsafe ambiguity>
 - Needed Next Step: <one concrete next action>
 ```

@@ -370,26 +370,6 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.browser.firecrawl_api_key == ""
     assert config.cron.default_timezone == "UTC"
     assert config.max_tool_iterations == DEFAULT_MAX_TOOL_ITERATIONS
-    assert config.permissions.enabled is True
-    assert config.permissions.approval_mode == "auto"
-    assert config.permissions.approval_timeout_seconds == 300.0
-    assert config.permissions.allowed_tools == ["*"]
-    assert config.permissions.denied_tools == []
-    assert config.permissions.allowed_risk_levels == [
-        "read",
-        "write",
-        "execute",
-        "network",
-        "external_side_effect",
-        "configuration",
-        "delegation",
-        "memory",
-        "mcp",
-    ]
-    assert config.permissions.denied_risk_levels == []
-    assert config.permissions.approval_required_tools == []
-    assert config.permissions.approval_required_risk_levels == []
-    assert config.permissions.profile_overrides == {}
     assert config.mcp_servers_file == "mcp_servers.json"
 
 
@@ -404,16 +384,6 @@ def test_template_web_search_defaults_match_backend_defaults():
     assert web_search["max_results"] == DEFAULT_WEB_SEARCH_MAX_RESULTS
     assert web_search["duckduckgo_max_pages"] == DEFAULT_DUCKDUCKGO_MAX_PAGES
     assert web_search["searxng_max_pages"] == DEFAULT_SEARXNG_MAX_PAGES
-
-
-def test_template_permission_defaults_match_backend_defaults():
-    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
-    template = json.loads(template_path.read_text(encoding="utf-8"))
-
-    template_permissions = ToolsConfig.model_validate({"permissions": template["tools"]["permissions"]}).permissions
-    default_permissions = ToolsConfig().permissions
-
-    assert template_permissions.model_dump(by_alias=True) == default_permissions.model_dump(by_alias=True)
 
 
 def test_template_browser_defaults_match_backend_defaults():
@@ -517,12 +487,6 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "firecrawl_base_url": "https://firecrawl.local",
             },
             "cron": {"default_timezone": "Asia/Taipei"},
-            "permissions": {
-                "approval_mode": "ask",
-                "approval_timeout_seconds": 12,
-                "denied_tools": ["exec"],
-                "denied_risk_levels": ["network"],
-            },
         }
     )
 
@@ -557,14 +521,6 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.browser.firecrawl_api_key == "fc-key"
     assert config.browser.firecrawl_base_url == "https://firecrawl.local"
     assert config.cron.default_timezone == "Asia/Taipei"
-    assert config.permissions.approval_mode == "ask"
-    assert config.permissions.approval_timeout_seconds == 12
-    assert config.permissions.denied_tools == ["exec"]
-    assert config.permissions.denied_risk_levels == ["network"]
-def test_tools_config_rejects_unknown_approval_mode():
-    with pytest.raises(ValidationError):
-        ToolsConfig(**{"permissions": {"approval_mode": "sometimes"}})
-
 
 def test_tools_config_rejects_unknown_browser_backend():
     with pytest.raises(ValidationError):

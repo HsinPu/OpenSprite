@@ -72,13 +72,9 @@ class _CatalogTool(Tool):
         name: str,
         *,
         description: str,
-        capability_groups: frozenset[str] | None = None,
-        risk_levels: frozenset[str] | None = None,
     ):
         self._name = name
         self._description = description
-        self._capability_groups = capability_groups
-        self._risk_levels = risk_levels
 
     @property
     def name(self) -> str:
@@ -91,14 +87,6 @@ class _CatalogTool(Tool):
     @property
     def parameters(self) -> dict:
         return {"type": "object", "properties": {}}
-
-    @property
-    def capability_groups(self) -> frozenset[str] | None:
-        return self._capability_groups
-
-    @property
-    def risk_levels(self) -> frozenset[str] | None:
-        return self._risk_levels
 
     async def _execute(self, **kwargs) -> str:
         return "ok"
@@ -224,8 +212,6 @@ def test_planner_prompt_uses_dynamic_tool_catalog_instead_of_if_routing():
         _CatalogTool(
             "quote_lookup",
             description="Look up current public market quotes from configured market-data sources.",
-            capability_groups=frozenset({"market_data"}),
-            risk_levels=frozenset({"network"}),
         )
     )
     catalog = build_planner_capability_catalog(registry)
@@ -286,7 +272,6 @@ def test_dynamic_required_tool_is_checked_by_evidence_name():
         _CatalogTool(
             "quote_lookup",
             description="Look up current public market quotes.",
-            capability_groups=frozenset({"market_data"}),
         )
     )
     catalog = build_planner_capability_catalog(registry)

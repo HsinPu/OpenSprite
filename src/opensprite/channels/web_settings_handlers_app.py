@@ -9,7 +9,6 @@ from aiohttp import web
 
 from ..cli import update as update_cli
 from ..config import Config
-from ..ops import OperationAuditRecord
 
 
 async def handle_settings_llm(adapter: Any, request: web.Request) -> web.Response:
@@ -145,51 +144,3 @@ async def handle_settings_network_update(adapter: Any, request: web.Request) -> 
     config.save(config_path)
     adapter._apply_network_environment(config)
     return web.json_response({"network": adapter._network_payload(config), "restart_required": False})
-
-
-async def handle_settings_permissions(adapter: Any, request: web.Request) -> web.Response:
-    config = Config.load(adapter._get_config_path())
-    return web.json_response({"permissions": adapter._permissions_payload(config)})
-
-
-async def handle_settings_tool_access_preview(adapter: Any, request: web.Request) -> web.Response:
-    config = Config.load(adapter._get_config_path())
-    return web.json_response({"tool_access_preview": adapter._tool_access_preview_payload(config)})
-
-
-async def handle_settings_permissions_update(adapter: Any, request: web.Request) -> web.Response:
-    body = await adapter._read_json_body(request)
-    config_path = adapter._get_config_path()
-    config = Config.load(config_path)
-    permissions = config.tools.permissions
-    before_permissions = adapter._permissions_payload(config)
-    permissions.enabled = adapter._coerce_bool(body.get("enabled"), field="enabled", default=permissions.enabled)
-    permissions.approval_mode = adapter._coerce_approval_mode(body.get("approval_mode", permissions.approval_mode))
-    permissions.approval_timeout_seconds = adapter._coerce_float_range(
-        body.get("approval_timeout_seconds"),
-        field="approval_timeout_seconds",
-        default=permissions.approval_timeout_seconds,
-        minimum=1.0,
-        maximum=86400.0,
-    )
-    permissions.allowed_tools = adapter._coerce_text_list(body.get("allowed_tools"), field="allowed_tools", default=permissions.allowed_tools)
-    if not permissions.allowed_tools:
-        permissions.allowed_tools = ["*"]
-    permissions.denied_tools = adapter._coerce_text_list(body.get("denied_tools"), field="denied_tools", default=permissions.denied_tools)
-    permissions.allowed_risk_levels = adapter._coerce_risk_level_list(body.get("allowed_risk_levels"), field="allowed_risk_levels", default=permissions.allowed_risk_levels)
-    permissions.denied_risk_levels = adapter._coerce_risk_level_list(body.get("denied_risk_levels"), field="denied_risk_levels", default=permissions.denied_risk_levels)
-    permissions.approval_required_tools = adapter._coerce_text_list(body.get("approval_required_tools"), field="approval_required_tools", default=permissions.approval_required_tools)
-    permissions.approval_required_risk_levels = adapter._coerce_risk_level_list(body.get("approval_required_risk_levels"), field="approval_required_risk_levels", default=permissions.approval_required_risk_levels)
-    permissions.profile_overrides = adapter._coerce_permission_profile_overrides(body.get("profile_overrides"), default=permissions.profile_overrides)
-    config.save(config_path)
-    payload = {"permissions": adapter._permissions_payload(config), "restart_required": True}
-    payload = adapter._reload_permissions_from_config(payload)
-    payload["operation_audit"] = OperationAuditRecord(
-        operation_type="settings.permissions.update",
-        target="tools.permissions",
-        before=before_permissions,
-        after=payload["permissions"],
-        validation={"runtime_reloaded": bool(payload.get("runtime_reloaded")), "restart_required": bool(payload.get("restart_required"))},
-        rollback_available=True,
-    ).to_metadata()
-    return web.json_response(payload)

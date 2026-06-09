@@ -19,7 +19,6 @@ from opensprite.runs.trace import (
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
-    PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
     TASK_SCORECARD_RECORDED_EVENT,
     TOOL_RESULT_EVENT,
@@ -139,8 +138,8 @@ def test_run_trace_recorder_persists_operation_audit_part():
             "run-1",
             {
                 "operation_id": "op-1",
-                "operation_type": "settings.permissions.update",
-                "target": "tools.permissions",
+                "operation_type": "settings.providers.update",
+                "target": "llm.providers",
                 "rollback_available": True,
             },
         )
@@ -150,7 +149,7 @@ def test_run_trace_recorder_persists_operation_audit_part():
 
     assert len(parts) == 1
     assert parts[0].part_type == "operation_audit"
-    assert "settings.permissions.update" in parts[0].content
+    assert "settings.providers.update" in parts[0].content
     assert parts[0].metadata["rollback_available"] is True
 
 
@@ -416,38 +415,6 @@ def test_serialize_run_event_projects_tool_trace_metadata():
         "search_backend": "searxng",
         "returned_items": 0,
         "error": "403 Forbidden",
-    }
-
-
-def test_serialize_run_event_projects_permission_artifacts():
-    event = SimpleNamespace(
-        event_id=43,
-        run_id="run-1",
-        session_id="web:browser-1",
-        event_type=PERMISSION_REQUESTED_EVENT,
-        payload={
-            "request_id": "perm-1",
-            "tool_name": "apply_patch",
-            "reason": "tool requires approval",
-            "status": "pending",
-        },
-        created_at=12.75,
-    )
-
-    payload = serialize_run_event(event)
-
-    assert payload["kind"] == "permission"
-    assert payload["status"] == "pending"
-    assert payload["artifact"] == {
-        "schema_version": 1,
-        "artifact_id": "permission:perm-1",
-        "artifact_type": "permission",
-        "kind": "permission",
-        "status": "pending",
-        "title": "apply_patch",
-        "detail": "tool requires approval",
-        "tool_name": "apply_patch",
-        "request_id": "perm-1",
     }
 
 

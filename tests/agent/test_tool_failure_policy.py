@@ -6,7 +6,6 @@ from opensprite.agent.completion_gate import (
     has_only_optional_workspace_discovery_failures,
     has_successful_fetched_web_source_artifact,
     is_optional_workspace_batch_failure_tool,
-    tool_failure_is_non_exposed_permission_block,
 )
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.evidence import is_web_discovery_tool, is_web_fetch_source_record_tool
@@ -22,15 +21,6 @@ def test_tool_failure_policy_classifies_optional_failure_tools():
     assert is_web_fetch_source_record_tool("web_fetch") is True
     assert is_optional_workspace_batch_failure_tool("batch") is True
     assert is_optional_workspace_batch_failure_tool("read_file") is False
-
-
-def test_tool_failure_policy_detects_non_exposed_permission_block():
-    assert tool_failure_is_non_exposed_permission_block(
-        {"permission": {"blocked": True, "exposed": False}}
-    ) is True
-    assert tool_failure_is_non_exposed_permission_block(
-        {"permission": {"blocked": True, "exposed": True}}
-    ) is False
 
 
 def test_tool_failure_policy_allows_optional_web_discovery_failure_after_fetch_source():

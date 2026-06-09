@@ -13,10 +13,10 @@ from ...runs.events import (
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
-    TOOL_ACCESS_RESOLVED_EVENT,
+    TOOL_SELECTION_RESOLVED_EVENT,
 )
 from ...tools import ToolRegistry
-from ...tools.access import ToolAccessResolution, ToolAccessResolver
+from ...tools.selection import ToolSelectionResolution, ToolSelectionResolver
 from ...utils.log import logger
 from .contract import (
     PLANNER_VALIDATED_STATUS,
@@ -52,13 +52,13 @@ class TurnPlanningService:
         self,
         *,
         plan_task: Callable[..., Awaitable[TaskContract]],
-        resolve_tool_access: Callable[[ToolRegistry, TaskContract], ToolAccessResolution] | None = None,
+        resolve_tool_selection: Callable[[ToolRegistry, TaskContract], ToolSelectionResolution] | None = None,
         maybe_seed_active_task: Callable[..., Awaitable[None]],
         augment_message_for_media: Callable[..., str],
         emit_run_event: RunEventEmitter,
     ) -> None:
         self._plan_task = plan_task
-        self._resolve_tool_access = resolve_tool_access or _resolve_required_tool_access
+        self._resolve_tool_selection = resolve_tool_selection or _resolve_required_tool_selection
         self._maybe_seed_active_task = maybe_seed_active_task
         self._augment_message_for_media = augment_message_for_media
         self._emit_run_event = emit_run_event
@@ -194,8 +194,8 @@ class TurnPlanningService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-            tool_access_resolution = self._resolve_tool_access(base_tool_registry, task_contract)
-            task_tool_registry = tool_access_resolution.registry
+            tool_selection_resolution = self._resolve_tool_selection(base_tool_registry, task_contract)
+            task_tool_registry = tool_selection_resolution.registry
             if _should_seed_active_task_for_contract(
                 active_task_snapshot=active_task_snapshot,
                 task_contract=task_contract,
@@ -217,13 +217,13 @@ class TurnPlanningService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-                policy_resolution = getattr(task_tool_registry, "permission_resolution_metadata", None)
-                if isinstance(policy_resolution, dict) and policy_resolution:
+                tool_selection = getattr(task_tool_registry, "tool_selection_metadata", None)
+                if isinstance(tool_selection, dict) and tool_selection:
                     await self._emit_run_event(
                         session_id,
                         run_id,
-                        TOOL_ACCESS_RESOLVED_EVENT,
-                        policy_resolution,
+                        TOOL_SELECTION_RESOLVED_EVENT,
+                        tool_selection,
                         channel=channel,
                         external_chat_id=external_chat_id,
                     )
@@ -253,8 +253,8 @@ def _should_seed_active_task_for_contract(
     return bool(task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
 
 
-def _resolve_required_tool_access(base_tool_registry: ToolRegistry, task_contract: TaskContract) -> ToolAccessResolution:
-    return ToolAccessResolver().resolve_required_tools(
+def _resolve_required_tool_selection(base_tool_registry: ToolRegistry, task_contract: TaskContract) -> ToolSelectionResolution:
+    return ToolSelectionResolver().resolve_required_tools(
         base_tool_registry,
         getattr(task_contract, "required_tools", ()),
     )

@@ -13,7 +13,6 @@ SessionStatusType = Literal[
     "thinking",
     "streaming",
     "tool_running",
-    "waiting_permission",
     "waiting_user",
     "cancelling",
     "retry",

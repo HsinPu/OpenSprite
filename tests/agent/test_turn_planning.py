@@ -15,9 +15,9 @@ from opensprite.runs.events import (
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
     TASK_CONTRACT_VALIDATED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
-    TOOL_ACCESS_RESOLVED_EVENT,
+    TOOL_SELECTION_RESOLVED_EVENT,
 )
-from opensprite.tools.access import ToolAccessResolver
+from opensprite.tools.selection import ToolSelectionResolver
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -49,7 +49,7 @@ def _registry() -> ToolRegistry:
     return registry
 
 
-def test_turn_planning_resolves_task_contract_and_tool_access():
+def test_turn_planning_resolves_task_contract_and_tool_selection():
     async def scenario():
         events: list[tuple[str, dict]] = []
         seed_calls: list[dict] = []
@@ -76,7 +76,7 @@ def test_turn_planning_resolves_task_contract_and_tool_access():
 
         service = TurnPlanningService(
             plan_task=plan_task,
-            resolve_tool_access=lambda registry, contract: ToolAccessResolver().resolve_required_tools(
+            resolve_tool_selection=lambda registry, contract: ToolSelectionResolver().resolve_required_tools(
                 registry,
                 getattr(contract, "required_tools", ()),
             ),
@@ -124,5 +124,5 @@ def test_turn_planning_resolves_task_contract_and_tool_access():
         TASK_CONTRACT_PLANNED_EVENT,
         TASK_CONTRACT_VALIDATED_EVENT,
         TASK_CONTRACT_CREATED_EVENT,
-        TOOL_ACCESS_RESOLVED_EVENT,
+        TOOL_SELECTION_RESOLVED_EVENT,
     ]

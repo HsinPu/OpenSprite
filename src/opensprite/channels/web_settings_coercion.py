@@ -5,22 +5,8 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from aiohttp import web
-from pydantic import ValidationError
 
-from ..config import ToolPermissionProfileOverrideConfig
-from ..permission_constants import APPROVAL_MODES_ORDER
 from ..utils.url import join_url_path
-
-
-def coerce_approval_mode(value: Any, *, approval_modes: set[str] | frozenset[str]) -> str | None:
-    if value is None or value == "":
-        return None
-    mode = str(value or "").strip().lower()
-    if mode not in approval_modes:
-        options = [item for item in APPROVAL_MODES_ORDER if item in approval_modes]
-        options.extend(sorted(set(approval_modes) - set(APPROVAL_MODES_ORDER)))
-        raise web.HTTPBadRequest(text=f"approval_mode must be one of: {', '.join(options)}")
-    return mode
 
 
 def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
@@ -38,54 +24,6 @@ def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None
         if text and text not in items:
             items.append(text)
     return items
-
-
-def coerce_risk_level_list(
-    value: Any,
-    *,
-    field: str,
-    default: list[str] | None = None,
-    all_risk_levels: set[str] | frozenset[str],
-) -> list[str]:
-    values = coerce_text_list(value, field=field, default=default)
-    invalid = [item for item in values if item not in all_risk_levels]
-    if invalid:
-        raise web.HTTPBadRequest(text=f"{field} contains invalid risk level(s): {', '.join(invalid)}")
-    return values
-
-
-def coerce_permission_profile_overrides(
-    value: Any,
-    *,
-    default: dict[str, ToolPermissionProfileOverrideConfig],
-    all_risk_levels: set[str] | frozenset[str],
-    allowed_profiles: set[str] | frozenset[str],
-) -> dict[str, ToolPermissionProfileOverrideConfig]:
-    if value is None:
-        return dict(default)
-    if not isinstance(value, dict):
-        raise web.HTTPBadRequest(text="profile_overrides must be a JSON object")
-    result: dict[str, ToolPermissionProfileOverrideConfig] = {}
-    for profile, raw_override in value.items():
-        profile_name = str(profile or "").strip().lower()
-        if profile_name not in allowed_profiles:
-            raise web.HTTPBadRequest(text=f"profile_overrides contains unknown profile: {profile}")
-        if not isinstance(raw_override, dict):
-            raise web.HTTPBadRequest(text=f"profile_overrides.{profile_name} must be a JSON object")
-        try:
-            override = ToolPermissionProfileOverrideConfig.model_validate(raw_override)
-        except ValidationError as exc:
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        invalid = sorted(
-            (set(override.allowed_risk_levels) | set(override.denied_risk_levels) | set(override.approval_required_risk_levels))
-            - all_risk_levels
-        )
-        if invalid:
-            raise web.HTTPBadRequest(
-                text=f"profile_overrides.{profile_name} contains invalid risk level(s): {', '.join(invalid)}"
-            )
-        result[profile_name] = override
-    return result
 
 
 def coerce_log_level(value: Any, *, default_log_level: str, log_levels: tuple[str, ...] | list[str]) -> str:

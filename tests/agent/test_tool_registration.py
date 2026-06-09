@@ -239,32 +239,6 @@ def test_register_default_tools_includes_run_trace_tools_when_storage_is_availab
     assert isinstance(registry.get("preview_run_file_change_revert"), PreviewRunFileChangeRevertTool)
 
 
-def test_register_default_tools_applies_permission_policy():
-    registry = ToolRegistry()
-
-    register_default_tools(
-        registry,
-        workspace_resolver=lambda: Path.cwd(),
-        get_session_id=lambda: "chat-1",
-        run_subagent=_fake_run_subagent,
-        run_subagents_many=_fake_run_subagents_many,
-        run_workflow=_fake_run_workflow,
-        workflow_catalog_getter=lambda: {"implement_then_review": "Run implementer then reviewer."},
-        config_path_resolver=lambda: Path.cwd() / "opensprite.json",
-        reload_mcp=_fake_reload_mcp,
-        tools_config=ToolsConfig(
-            **{"permissions": {"denied_tools": ["exec"], "denied_risk_levels": ["network"]}}
-        ),
-    )
-
-    assert "exec" not in registry.tool_names
-    assert "web_search" not in registry.tool_names
-    assert "web_fetch" not in registry.tool_names
-    assert "web_research" not in registry.tool_names
-    assert "read_file" in registry.tool_names
-    assert "batch" in registry.tool_names
-
-
 def test_search_and_web_tools_describe_current_research_behavior():
     registry = ToolRegistry()
 

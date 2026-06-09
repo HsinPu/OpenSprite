@@ -1,7 +1,7 @@
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
 
-const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "completion", "file", "process", "text", "system", "other"]);
+const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "work", "completion", "file", "process", "text", "system", "other"]);
 
 function randomToken() {
   return Math.random().toString(36).slice(2, 8);
@@ -89,9 +89,6 @@ export function inferRunEventKind(eventType) {
   }
   if (normalized.startsWith("verification_")) {
     return "verification";
-  }
-  if (normalized.startsWith("permission_")) {
-    return "permission";
   }
   if (normalized.startsWith("task_contract.") || normalized.startsWith("task_checkpoint.") || normalized.startsWith("task_scorecard.")) {
     return "work";
@@ -289,28 +286,28 @@ function decisionEventId(event) {
   return eventId ? [String(eventId)] : [];
 }
 
-function toolAccessDecision(payload, event, index) {
-  const toolAccess = payload.tool_access || payload.toolAccess || {};
-  const exposedTools = toolAccess.exposed_tools || toolAccess.exposedTools || [];
-  const blockedRequired = payload.blocked_required_tools || payload.blockedRequiredTools || [];
+function toolSelectionDecision(payload, event, index) {
+  const toolSelection = payload.tool_selection || payload.toolSelection || {};
+  const selectedTools = toolSelection.selected_tools || toolSelection.selectedTools || [];
+  const missingRequired = payload.blocked_required_tools || payload.blockedRequiredTools || toolSelection.missing_required_tools || toolSelection.missingRequiredTools || [];
   return {
     id: decisionId(event, index),
     eventIds: decisionEventId(event),
     phase: "tools",
-    status: countItems(blockedRequired) > 0 ? "warning" : "success",
-    titleKey: "toolAccess",
-    title: "Tool access",
+    status: countItems(missingRequired) > 0 ? "warning" : "success",
+    titleKey: "toolSelection",
+    title: "Tool selection",
     summary: compactJoin([
       `${countItems(payload.required_tools || payload.requiredTools)} required`,
-      `${countItems(exposedTools)} exposed`,
-      countItems(blockedRequired) ? `${countItems(blockedRequired)} blocked` : "",
+      `${countItems(selectedTools)} selected`,
+      countItems(missingRequired) ? `${countItems(missingRequired)} missing` : "",
     ]),
     reason: "",
     createdAt: event.createdAt,
     details: compactDetails([
       decisionDetail("requiredTools", formatShortList(payload.required_tools || payload.requiredTools, 6)),
-      decisionDetail("exposedTools", formatShortList(exposedTools, 6)),
-      decisionDetail("blockedRequiredTools", formatShortList(blockedRequired.map?.((item) => item?.name || item) || [], 6), countItems(blockedRequired) ? "warning" : "neutral"),
+      decisionDetail("selectedTools", formatShortList(selectedTools, 6)),
+      decisionDetail("missingRequiredTools", formatShortList(missingRequired.map?.((item) => item?.name || item) || [], 6), countItems(missingRequired) ? "warning" : "neutral"),
     ]),
   };
 }
@@ -443,8 +440,8 @@ export function deriveDecisionTimelineItems(events = []) {
       createdAt: normalizeEventTimestamp(event?.createdAt ?? event?.created_at),
     };
     let item = null;
-    if (eventType === "tool_access.resolved") {
-      item = toolAccessDecision(payload, eventWithTimestamp, items.length);
+    if (eventType === "tool_selection.resolved") {
+      item = toolSelectionDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated" || eventType === "task_contract.validation_failed") {
       item = taskContractDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType === "completion_gate.evaluated") {

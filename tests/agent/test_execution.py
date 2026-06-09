@@ -17,7 +17,6 @@ from opensprite.tools.base import Tool
 from opensprite.tools.credential_store import CredentialStoreTool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.image import AnalyzeImageTool
-from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import tool_error_result
 from opensprite.tools.web_fetch import WebFetchTool
@@ -783,9 +782,8 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
 
 def test_execution_engine_records_unavailable_tool_call_as_tool_error():
     tool = TaskUpdateLikeTool()
-    registry = ToolRegistry(permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"]))
+    registry = ToolRegistry()
     registry.register(RepeatingReadFileTool())
-    registry.register(tool)
     provider = FakeProvider(
         [
             LLMResponse(
