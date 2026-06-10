@@ -9,6 +9,37 @@ from opensprite.runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
 from opensprite.storage import MemoryStorage, StoredMessage
 
 
+def _minimax_response(content="final answer", model="MiniMax-M2.7"):
+    return SimpleNamespace(
+        id="response-id",
+        model=model,
+        object="chat.completion",
+        usage=None,
+        choices=[
+            SimpleNamespace(
+                finish_reason="stop",
+                message=SimpleNamespace(content=content, tool_calls=None, reasoning_details=None),
+            )
+        ],
+    )
+
+
+class RecordingCompletions:
+    def __init__(self, response=None):
+        self.response = response or _minimax_response()
+        self.calls = []
+
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+def _make_provider(completions, default_model="MiniMax-M2.7"):
+    provider = MiniMaxLLM(api_key="secret-key", default_model=default_model)
+    provider.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    return provider
+
+
 def test_minimax_chat_preserves_history_reasoning_details_without_extra_body():
     calls = []
 
@@ -54,6 +85,50 @@ def test_minimax_chat_preserves_history_reasoning_details_without_extra_body():
     assert calls[0]["messages"][0]["reasoning_details"] == [
         {"type": "reasoning.text", "text": "previous thinking"}
     ]
+
+
+def test_minimax_chat_sends_minimal_request_payload_without_optional_params():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+
+    response = asyncio.run(provider.chat([ChatMessage(role="user", content="hello")]))
+
+    assert response.content == "final answer"
+    assert completions.calls == [
+        {
+            "model": "MiniMax-M2.7",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+    ]
+
+
+def test_minimax_chat_sends_max_tokens_only_when_set():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+
+    response = asyncio.run(
+        provider.chat(
+            [ChatMessage(role="user", content="hello")],
+            model="MiniMax-M2.7-override",
+            max_tokens=1234,
+        )
+    )
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["model"] == "MiniMax-M2.7-override"
+    assert completions.calls[0]["max_tokens"] == 1234
+
+
+def test_minimax_chat_sends_tools_with_auto_tool_choice():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+    tools = [{"type": "function", "function": {"name": "lookup", "parameters": {"type": "object"}}}]
+
+    response = asyncio.run(provider.chat([ChatMessage(role="user", content="use tool")], tools=tools))
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["tools"] == tools
+    assert completions.calls[0]["tool_choice"] == "auto"
 
 
 def test_minimax_uses_configured_base_url():

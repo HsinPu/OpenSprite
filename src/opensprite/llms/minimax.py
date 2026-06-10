@@ -8,26 +8,16 @@ import asyncio
 import random
 from typing import Any, Awaitable, Callable
 
-from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
+from .base import LLMProvider, LLMResponse, ChatMessage
 from .retry import looks_like_transient_transport_error
-from .tool_args import parse_tool_arguments
+from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .response_utils import coerce_content as _coerce_content
+from .response_utils import coerce_reasoning_details as _coerce_reasoning_details
+from .response_utils import extract_openai_compatible_message
+from .response_utils import extract_openai_compatible_tool_calls
+from .response_utils import safe_len as _safe_len
 from ..utils.log_redaction import redact_log_preview
 from ..utils.log import logger
-
-
-def _safe_len(value: Any) -> str:
-    try:
-        return str(len(value))
-    except Exception:
-        return "n/a"
-
-
-def _coerce_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return str(content)
 
 
 def _preview_text(value: Any, max_chars: int = 240) -> str:
@@ -43,29 +33,6 @@ def _contains_system_reminder(value: Any) -> bool:
 
 def _count_system_reminders(value: Any) -> int:
     return _coerce_content(value).count("<system-reminder>")
-
-
-def _json_safe(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, list):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, tuple):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return _json_safe(model_dump())
-    return str(value)
-
-
-def _coerce_reasoning_details(value: Any) -> list[dict[str, Any]] | None:
-    safe = _json_safe(value)
-    if not isinstance(safe, list):
-        return None
-    details = [item for item in safe if isinstance(item, dict)]
-    return details or None
 
 
 def _is_minimax_overloaded_error(exc: BaseException) -> bool:
@@ -182,25 +149,7 @@ class MiniMaxLLM(LLMProvider):
         _ = tool_input_delta_callback
         _ = reasoning_delta_callback
         # 轉換成 OpenAI 格式
-        api_messages = []
-        for m in messages:
-            if isinstance(m, dict):
-                msg = {"role": m.get("role", "?"), "content": m.get("content", "")}
-                if m.get("tool_call_id"):
-                    msg["tool_call_id"] = m["tool_call_id"]
-                if m.get("tool_calls"):
-                    msg["tool_calls"] = m["tool_calls"]
-                if m.get("reasoning_details"):
-                    msg["reasoning_details"] = m["reasoning_details"]
-            else:
-                msg = {"role": m.role, "content": m.content}
-                if m.tool_call_id:
-                    msg["tool_call_id"] = m.tool_call_id
-                if m.tool_calls:
-                    msg["tool_calls"] = m.tool_calls
-                if m.reasoning_details:
-                    msg["reasoning_details"] = m.reasoning_details
-            api_messages.append(msg)
+        api_messages = normalize_openai_compatible_messages(messages, include_reasoning_details=True)
 
         request_reminder_hits: list[str] = []
         for index, msg in enumerate(api_messages, start=1):
@@ -225,67 +174,35 @@ class MiniMaxLLM(LLMProvider):
                 ", ".join(request_reminder_hits),
             )
 
-        params: dict[str, Any] = {
-            "model": model or self.default_model,
-            "messages": api_messages,
-        }
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
-
-        # 加入 tools 如果有
-        if tools:
-            params["tools"] = tools
-            params["tool_choice"] = "auto"
-        
-        # 呼叫 API（含 529 過載重試；可選通知使用者後再退避）
-        response = await self._chat_completions_create(params, status_callback=status_callback)
-        choices = getattr(response, "choices", None)
-        logger.info(
-            "MiniMax response summary: model={}, choices_type={}, choices_len={}",
-            getattr(response, "model", None),
-            type(choices).__name__,
-            _safe_len(choices),
+        params = build_llm_request(
+            LLMRequestOptions(
+                model=model or self.default_model,
+                messages=api_messages,
+                tools=tools,
+                max_tokens=max_tokens,
+            )
         )
 
+        # 呼叫 API（含 529 過載重試；可選通知使用者後再退避）
+        response = await self._chat_completions_create(params, status_callback=status_callback)
+        message_result = extract_openai_compatible_message(
+            response,
+            provider_name="MiniMax",
+            default_model=model or self.default_model,
+            include_usage_in_fallback=False,
+        )
         # Debug: log raw MiniMax response for diagnostics
         logger.debug(
             "MiniMax raw response: id={}, model={}, usage={}, finish_reason={}",
             getattr(response, "id", None),
             getattr(response, "model", None),
             getattr(response, "usage", None),
-            getattr(getattr(choices[0], "finish_reason", None) if choices else None, "value", None) if choices else None,
+            getattr(getattr(message_result.choice, "finish_reason", None), "value", None),
         )
 
-        if not choices:
-            logger.warning(
-                "MiniMax returned empty choices: response_id={}, model={}, object={}, usage={}",
-                getattr(response, "id", None),
-                getattr(response, "model", None),
-                getattr(response, "object", None),
-                getattr(response, "usage", None),
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-            )
-
-        try:
-            message = choices[0].message
-        except Exception:
-            logger.exception(
-                "MiniMax response parse failed: response_type={}, model={}, choices_type={}, choices_len={}, choices_preview={}",
-                type(response).__name__,
-                getattr(response, "model", None),
-                type(choices).__name__,
-                _safe_len(choices),
-                repr(choices)[:500],
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-            )
+        if message_result.fallback_response is not None:
+            return message_result.fallback_response
+        message = message_result.message
 
         # Log raw message content for debugging hidden blocks
         raw_message_content = getattr(message, "content", "")
@@ -333,33 +250,7 @@ class MiniMaxLLM(LLMProvider):
                         _preview_text(raw_arguments),
                     )
 
-        if message is None:
-            logger.warning("MiniMax response missing message payload; returning empty response")
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-            )
-        
-        # 解析 tool calls
-        tool_calls = []
-        if getattr(message, "tool_calls", None):
-            for tc in message.tool_calls:
-                function = getattr(tc, "function", None)
-                if function is None:
-                    logger.warning("MiniMax tool call missing function payload; skipping")
-                    continue
-                args = parse_tool_arguments(
-                    getattr(function, "arguments", None),
-                    provider_name="MiniMax",
-                    tool_name=getattr(function, "name", "") or "",
-                )
-                
-                tool_calls.append(ToolCall(
-                    id=getattr(tc, "id", "") or f"tool_call_{len(tool_calls) + 1}",
-                    name=getattr(function, "name", "") or "",
-                    arguments=args
-                ))
+        tool_calls = extract_openai_compatible_tool_calls(message, provider_name="MiniMax")
         
         return LLMResponse(
             content=_coerce_content(getattr(message, "content", "")),

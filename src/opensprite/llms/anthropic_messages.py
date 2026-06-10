@@ -8,19 +8,12 @@ from typing import Any, Awaitable, Callable
 import httpx
 
 from .base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from .response_utils import coerce_content as _coerce_content
 from .tool_args import parse_tool_arguments
 from ..utils.url import join_url_path
 
 
 CACHE_CONTROL_MARKER = {"type": "ephemeral"}
-
-
-def _coerce_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return str(content)
 
 
 def _as_plain_data(value: Any) -> Any:

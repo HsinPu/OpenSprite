@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from .base import LLMResponse, ToolCall
+from .response_utils import coerce_content as _coerce_content
+from .response_utils import coerce_reasoning_details
 from .tool_args import parse_tool_arguments
 from ..utils.log import logger
 
@@ -18,14 +20,6 @@ class _ToolCallBuffer:
     arguments_parts: list[str] = field(default_factory=list)
 
 
-def _coerce_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return str(content)
-
-
 def _coerce_reasoning(delta_payload: Any) -> str:
     for name in ("reasoning_content", "reasoning", "reasoning_text"):
         value = _get_attr_or_item(delta_payload, name)
@@ -35,29 +29,6 @@ def _coerce_reasoning(delta_payload: Any) -> str:
     if details:
         return "".join(_coerce_content(item.get("text") or item.get("summary") or "") for item in details)
     return ""
-
-
-def json_safe(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, list):
-        return [json_safe(item) for item in value]
-    if isinstance(value, tuple):
-        return [json_safe(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): json_safe(item) for key, item in value.items()}
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return json_safe(model_dump())
-    return str(value)
-
-
-def coerce_reasoning_details(value: Any) -> list[dict[str, Any]] | None:
-    safe = json_safe(value)
-    if not isinstance(safe, list):
-        return None
-    details = [item for item in safe if isinstance(item, dict)]
-    return details or None
 
 
 def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:

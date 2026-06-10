@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from .base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from .request_builder import LLMRequestOptions, build_llm_request
+from .response_utils import usage_payload as _usage_payload
 from .tool_args import parse_tool_arguments
 
 
@@ -61,17 +63,6 @@ def _responses_tools(tools: list[dict[str, Any]] | None) -> list[dict[str, Any]]
     return converted
 
 
-def _usage_payload(usage: Any) -> dict[str, Any]:
-    if usage is None:
-        return {}
-    if hasattr(usage, "model_dump"):
-        try:
-            return dict(usage.model_dump(exclude_none=True))
-        except Exception:
-            pass
-    return dict(usage) if isinstance(usage, dict) else {}
-
-
 def _output_items(response: Any) -> list[Any]:
     output = getattr(response, "output", None)
     return list(output) if isinstance(output, list) else []
@@ -120,18 +111,21 @@ class OpenAIResponsesLLM(LLMProvider):
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         _ = status_callback, tool_input_delta_callback
-        params: dict[str, Any] = {
-            "model": model or self.default_model,
-            "input": _response_input(messages),
-        }
-        if max_tokens is not None:
-            params["max_output_tokens"] = max_tokens
         converted_tools = _responses_tools(tools)
-        if converted_tools:
-            params["tools"] = converted_tools
+        params = build_llm_request(
+            LLMRequestOptions(
+                model=model or self.default_model,
+                messages=_response_input(messages),
+                input_key="input",
+                tools=converted_tools,
+                max_tokens=max_tokens,
+                max_tokens_param="max_output_tokens",
+                stream=response_delta_callback is not None,
+                tool_choice=None,
+            )
+        )
 
         if response_delta_callback is not None:
-            params["stream"] = True
             stream = await self.client.responses.create(**params)
             text_parts: list[str] = []
             reasoning_parts: list[dict[str, Any]] = []

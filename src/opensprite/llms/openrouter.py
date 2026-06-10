@@ -6,46 +6,19 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 """
 from typing import Any, Awaitable, Callable
 
-from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
-from .openai_streaming import collect_openai_compatible_stream, coerce_reasoning_details
-from .tool_args import parse_tool_arguments
+from .base import LLMProvider, LLMResponse, ChatMessage
+from .openai_streaming import collect_openai_compatible_stream
+from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .response_utils import coerce_content as _coerce_content
+from .response_utils import coerce_reasoning_details
+from .response_utils import extract_openai_compatible_message
+from .response_utils import extract_openai_compatible_tool_calls
+from .response_utils import usage_payload as _usage_payload
 from ..utils.log import logger
 
 
 _OPENROUTER_TIMEOUT_SECONDS = 120.0
 _OPENROUTER_CONNECT_TIMEOUT_SECONDS = 20.0
-
-
-def _safe_len(value: Any) -> str:
-    try:
-        return str(len(value))
-    except Exception:
-        return "n/a"
-
-
-def _coerce_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return str(content)
-
-
-def _usage_payload(usage: Any) -> dict[str, Any]:
-    if usage is None:
-        return {}
-    if hasattr(usage, "model_dump"):
-        try:
-            return dict(usage.model_dump(exclude_none=True))
-        except Exception:
-            pass
-    if isinstance(usage, dict):
-        return dict(usage)
-    return {
-        key: getattr(usage, key)
-        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
-        if getattr(usage, key, None) is not None
-    }
 
 
 class OpenRouterLLM(LLMProvider):
@@ -122,39 +95,19 @@ class OpenRouterLLM(LLMProvider):
         """
         _ = status_callback
         # 轉換成 OpenAI 格式
-        api_messages = []
-        for m in messages:
-            if isinstance(m, dict):
-                msg = {"role": m.get("role", "?"), "content": m.get("content", "")}
-                if m.get("tool_call_id"):
-                    msg["tool_call_id"] = m["tool_call_id"]
-                if m.get("tool_calls"):
-                    msg["tool_calls"] = m["tool_calls"]
-                if m.get("reasoning_details"):
-                    msg["reasoning_details"] = m["reasoning_details"]
-            else:
-                msg = {"role": m.role, "content": m.content}
-                if m.tool_call_id:
-                    msg["tool_call_id"] = m.tool_call_id
-                if m.tool_calls:
-                    msg["tool_calls"] = m.tool_calls
-                if m.reasoning_details:
-                    msg["reasoning_details"] = m.reasoning_details
-            api_messages.append(msg)
+        api_messages = normalize_openai_compatible_messages(messages, include_reasoning_details=True)
         
-        params: dict[str, Any] = {
-            "model": model or self.default_model,
-            "messages": api_messages,
-        }
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
-
-        if tools:
-            params["tools"] = tools
-            params["tool_choice"] = "auto"
+        params = build_llm_request(
+            LLMRequestOptions(
+                model=model or self.default_model,
+                messages=api_messages,
+                tools=tools,
+                max_tokens=max_tokens,
+                stream=response_delta_callback is not None,
+            )
+        )
 
         if response_delta_callback is not None:
-            params["stream"] = True
             stream = await self._create_completion(params)
             return await collect_openai_compatible_stream(
                 stream,
@@ -167,75 +120,15 @@ class OpenRouterLLM(LLMProvider):
 
         # 呼叫 API
         response = await self._create_completion(params)
-        choices = getattr(response, "choices", None)
-        logger.info(
-            "OpenRouter response summary: model={}, choices_type={}, choices_len={}",
-            getattr(response, "model", None),
-            type(choices).__name__,
-            _safe_len(choices),
+        message_result = extract_openai_compatible_message(
+            response,
+            provider_name="OpenRouter",
+            default_model=model or self.default_model,
         )
-
-        if not choices:
-            logger.warning(
-                "OpenRouter returned empty choices: response_id={}, model={}, object={}, usage={}",
-                getattr(response, "id", None),
-                getattr(response, "model", None),
-                getattr(response, "object", None),
-                getattr(response, "usage", None),
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-
-        try:
-            message = choices[0].message
-        except Exception:
-            logger.exception(
-                "OpenRouter response parse failed: response_type={}, model={}, choices_type={}, choices_len={}, choices_preview={}",
-                type(response).__name__,
-                getattr(response, "model", None),
-                type(choices).__name__,
-                _safe_len(choices),
-                repr(choices)[:500],
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-
-        if message is None:
-            logger.warning("OpenRouter response missing message payload; returning empty response")
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-        
-        # 解析 tool calls
-        tool_calls = []
-        if getattr(message, "tool_calls", None):
-            for tc in message.tool_calls:
-                function = getattr(tc, "function", None)
-                if function is None:
-                    logger.warning("OpenRouter tool call missing function payload; skipping")
-                    continue
-                args = parse_tool_arguments(
-                    getattr(function, "arguments", None),
-                    provider_name="OpenRouter",
-                    tool_name=getattr(function, "name", "") or "",
-                )
-                
-                tool_calls.append(ToolCall(
-                    id=getattr(tc, "id", "") or f"tool_call_{len(tool_calls) + 1}",
-                    name=getattr(function, "name", "") or "",
-                    arguments=args
-                ))
+        if message_result.fallback_response is not None:
+            return message_result.fallback_response
+        message = message_result.message
+        tool_calls = extract_openai_compatible_tool_calls(message, provider_name="OpenRouter")
 
         reasoning_details = coerce_reasoning_details(getattr(message, "reasoning_details", None))
         if reasoning_details:
@@ -246,7 +139,7 @@ class OpenRouterLLM(LLMProvider):
             model=getattr(response, "model", model or self.default_model),
             tool_calls=tool_calls,
             usage=_usage_payload(getattr(response, "usage", None)),
-            finish_reason=str(getattr(choices[0], "finish_reason", "") or "") or None,
+            finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,
             reasoning_details=reasoning_details,
         )
     

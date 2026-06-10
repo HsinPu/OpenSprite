@@ -5,6 +5,37 @@ from opensprite.llms import ChatMessage
 from opensprite.llms.openrouter import OpenRouterLLM
 
 
+def _openrouter_response(content="final answer", model="anthropic/claude-sonnet-4.6"):
+    return SimpleNamespace(
+        id="response-id",
+        model=model,
+        object="chat.completion",
+        usage=None,
+        choices=[
+            SimpleNamespace(
+                finish_reason="stop",
+                message=SimpleNamespace(content=content, tool_calls=None, reasoning_details=None),
+            )
+        ],
+    )
+
+
+class RecordingCompletions:
+    def __init__(self, response=None):
+        self.response = response or _openrouter_response()
+        self.calls = []
+
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+def _make_provider(completions, default_model="anthropic/claude-sonnet-4.6"):
+    provider = OpenRouterLLM(api_key="secret-key", default_model=default_model)
+    provider.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    return provider
+
+
 def test_openrouter_client_uses_openrouter_headers_and_longer_timeout():
     provider = OpenRouterLLM(api_key="secret-key", default_model="qwen/qwen3.6-27b")
 
@@ -16,6 +47,50 @@ def test_openrouter_client_uses_openrouter_headers_and_longer_timeout():
     assert headers["X-Title"] == "OpenSprite"
     assert timeout.connect == 20.0
     assert timeout.read == 120.0
+
+
+def test_openrouter_chat_sends_minimal_request_payload_without_optional_params():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+
+    response = asyncio.run(provider.chat([ChatMessage(role="user", content="hello")]))
+
+    assert response.content == "final answer"
+    assert completions.calls == [
+        {
+            "model": "anthropic/claude-sonnet-4.6",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+    ]
+
+
+def test_openrouter_chat_sends_max_tokens_only_when_set():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+
+    response = asyncio.run(
+        provider.chat(
+            [ChatMessage(role="user", content="hello")],
+            model="google/gemini-3-flash-preview",
+            max_tokens=1234,
+        )
+    )
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["model"] == "google/gemini-3-flash-preview"
+    assert completions.calls[0]["max_tokens"] == 1234
+
+
+def test_openrouter_chat_sends_tools_with_auto_tool_choice():
+    completions = RecordingCompletions()
+    provider = _make_provider(completions)
+    tools = [{"type": "function", "function": {"name": "lookup", "parameters": {"type": "object"}}}]
+
+    response = asyncio.run(provider.chat([ChatMessage(role="user", content="use tool")], tools=tools))
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["tools"] == tools
+    assert completions.calls[0]["tool_choice"] == "auto"
 
 
 def test_openrouter_chat_preserves_reasoning_details_in_non_streaming_calls():

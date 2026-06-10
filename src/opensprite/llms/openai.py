@@ -6,42 +6,13 @@ opensprite/llms/openai.py - OpenAI LLM 實作
 """
 from typing import Any, Awaitable, Callable
 
-from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
+from .base import LLMProvider, LLMResponse, ChatMessage
 from .openai_streaming import collect_openai_compatible_stream
-from .tool_args import parse_tool_arguments
-from ..utils.log import logger
-
-
-def _safe_len(value: Any) -> str:
-    try:
-        return str(len(value))
-    except Exception:
-        return "n/a"
-
-
-def _coerce_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return str(content)
-
-
-def _usage_payload(usage: Any) -> dict[str, Any]:
-    if usage is None:
-        return {}
-    if hasattr(usage, "model_dump"):
-        try:
-            return dict(usage.model_dump(exclude_none=True))
-        except Exception:
-            pass
-    if isinstance(usage, dict):
-        return dict(usage)
-    return {
-        key: getattr(usage, key)
-        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
-        if getattr(usage, key, None) is not None
-    }
+from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .response_utils import coerce_content as _coerce_content
+from .response_utils import extract_openai_compatible_message
+from .response_utils import extract_openai_compatible_tool_calls
+from .response_utils import usage_payload as _usage_payload
 
 
 class OpenAILLM(LLMProvider):
@@ -98,43 +69,20 @@ class OpenAILLM(LLMProvider):
         """
         _ = status_callback
         # 轉換成 OpenAI 格式
-        api_messages = []
-        for m in messages:
-            if isinstance(m, dict):
-                msg = {"role": m.get("role", "?"), "content": m.get("content", "")}
-                if m.get("tool_call_id"):
-                    msg["tool_call_id"] = m["tool_call_id"]
-                if m.get("tool_calls"):
-                    msg["tool_calls"] = m["tool_calls"]
-            else:
-                # 支援混合內容（文字+圖片）
-                if isinstance(m.content, list):
-                    # 已經是混合格式，直接傳遞
-                    msg = {"role": m.role, "content": m.content}
-                else:
-                    msg = {"role": m.role, "content": m.content}
-                
-                if m.tool_call_id:
-                    msg["tool_call_id"] = m.tool_call_id
-                if m.tool_calls:
-                    msg["tool_calls"] = m.tool_calls
-            api_messages.append(msg)
+        api_messages = normalize_openai_compatible_messages(messages)
         
         # API 參數（None = 不帶該欄位，交給服務端預設）
-        params: dict[str, Any] = {
-            "model": model or self.default_model,
-            "messages": api_messages,
-        }
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
-
-        # 加入 tools 如果有
-        if tools:
-            params["tools"] = tools
-            params["tool_choice"] = "auto"
+        params = build_llm_request(
+            LLMRequestOptions(
+                model=model or self.default_model,
+                messages=api_messages,
+                tools=tools,
+                max_tokens=max_tokens,
+                stream=response_delta_callback is not None,
+            )
+        )
 
         if response_delta_callback is not None:
-            params["stream"] = True
             stream = await self.client.chat.completions.create(**params)
             return await collect_openai_compatible_stream(
                 stream,
@@ -147,82 +95,22 @@ class OpenAILLM(LLMProvider):
 
         # 呼叫 API
         response = await self.client.chat.completions.create(**params)
-        choices = getattr(response, "choices", None)
-        logger.info(
-            "OpenAI response summary: model={}, choices_type={}, choices_len={}",
-            getattr(response, "model", None),
-            type(choices).__name__,
-            _safe_len(choices),
+        message_result = extract_openai_compatible_message(
+            response,
+            provider_name="OpenAI",
+            default_model=model or self.default_model,
         )
-
-        if not choices:
-            logger.warning(
-                "OpenAI returned empty choices: response_id={}, model={}, object={}, usage={}",
-                getattr(response, "id", None),
-                getattr(response, "model", None),
-                getattr(response, "object", None),
-                getattr(response, "usage", None),
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-
-        try:
-            message = choices[0].message
-        except Exception:
-            logger.exception(
-                "OpenAI response parse failed: response_type={}, model={}, choices_type={}, choices_len={}, choices_preview={}",
-                type(response).__name__,
-                getattr(response, "model", None),
-                type(choices).__name__,
-                _safe_len(choices),
-                repr(choices)[:500],
-            )
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-
-        if message is None:
-            logger.warning("OpenAI response missing message payload; returning empty response")
-            return LLMResponse(
-                content="",
-                model=getattr(response, "model", model or self.default_model),
-                tool_calls=[],
-                usage=_usage_payload(getattr(response, "usage", None)),
-            )
-        
-        # 解析 tool calls
-        tool_calls = []
-        if getattr(message, "tool_calls", None):
-            for tc in message.tool_calls:
-                function = getattr(tc, "function", None)
-                if function is None:
-                    logger.warning("OpenAI tool call missing function payload; skipping")
-                    continue
-                args = parse_tool_arguments(
-                    getattr(function, "arguments", None),
-                    provider_name="OpenAI",
-                    tool_name=getattr(function, "name", "") or "",
-                )
-                
-                tool_calls.append(ToolCall(
-                    id=getattr(tc, "id", "") or f"tool_call_{len(tool_calls) + 1}",
-                    name=getattr(function, "name", "") or "",
-                    arguments=args
-                ))
+        if message_result.fallback_response is not None:
+            return message_result.fallback_response
+        message = message_result.message
+        tool_calls = extract_openai_compatible_tool_calls(message, provider_name="OpenAI")
         
         return LLMResponse(
             content=_coerce_content(getattr(message, "content", "")),
             model=getattr(response, "model", model or self.default_model),
             tool_calls=tool_calls,
             usage=_usage_payload(getattr(response, "usage", None)),
-            finish_reason=str(getattr(choices[0], "finish_reason", "") or "") or None,
+            finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,
         )
     
     def get_default_model(self) -> str:

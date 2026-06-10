@@ -83,6 +83,50 @@ def test_openai_streams_text_deltas_without_tools():
     assert completions.calls[0]["stream"] is True
 
 
+def test_openai_chat_sends_minimal_request_payload_without_optional_params():
+    completions = FakeCompletions(_message_response("final answer"))
+    llm = _make_llm(completions)
+
+    response = asyncio.run(llm.chat([ChatMessage(role="user", content="hello")]))
+
+    assert response.content == "final answer"
+    assert completions.calls == [
+        {
+            "model": "gpt-test",
+            "messages": [{"role": "user", "content": "hello"}],
+        }
+    ]
+
+
+def test_openai_chat_sends_max_tokens_only_when_set():
+    completions = FakeCompletions(_message_response("final answer"))
+    llm = _make_llm(completions)
+
+    response = asyncio.run(
+        llm.chat(
+            [ChatMessage(role="user", content="hello")],
+            model="gpt-override",
+            max_tokens=1234,
+        )
+    )
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["model"] == "gpt-override"
+    assert completions.calls[0]["max_tokens"] == 1234
+
+
+def test_openai_chat_sends_tools_with_auto_tool_choice():
+    completions = FakeCompletions(_message_response("final answer"))
+    llm = _make_llm(completions)
+    tools = [{"type": "function", "function": {"name": "lookup", "parameters": {"type": "object"}}}]
+
+    response = asyncio.run(llm.chat([ChatMessage(role="user", content="use tool")], tools=tools))
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["tools"] == tools
+    assert completions.calls[0]["tool_choice"] == "auto"
+
+
 def test_openai_streams_and_assembles_tool_calls():
     completions = FakeCompletions(
         AsyncChunkStream([
