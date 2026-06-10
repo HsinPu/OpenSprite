@@ -16,7 +16,6 @@ from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_t
 from ..config import ProviderConfig
 from ..config.llm_presets import provider_profile_defaults
 from .reasoning import normalize_reasoning_effort
-from .context_window import resolve_context_window_tokens
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -128,12 +127,7 @@ def resolve_provider_runtime(
         api_mode=api_mode,
         auth_type=auth_type,
         reasoning_effort=normalize_reasoning_effort(provider.reasoning_effort),
-        context_window_tokens=resolve_context_window_tokens(
-            provider_name=configured_provider,
-            model=provider.model,
-            base_url=base_url,
-            configured_context_window_tokens=provider.context_window_tokens,
-        ),
+        context_window_tokens=provider.context_window_tokens,
     )
 
 

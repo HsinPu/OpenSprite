@@ -7,14 +7,14 @@ opensprite/llms/openai.py - OpenAI LLM 實作
 from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
-from .base import LLMProvider, LLMResponse, ChatMessage
-from .openai_streaming import collect_openai_compatible_stream
-from .reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
-from .request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
-from .response_utils import coerce_content as _coerce_content
-from .response_utils import extract_openai_compatible_message
-from .response_utils import extract_openai_compatible_tool_calls
-from .response_utils import usage_payload as _usage_payload
+from ..base import LLMProvider, LLMResponse, ChatMessage
+from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
+from ..request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
+from ..response_utils import coerce_content as _coerce_content
+from ..response_utils import extract_openai_compatible_message
+from ..response_utils import extract_openai_compatible_tool_calls
+from ..response_utils import usage_payload as _usage_payload
+from .streaming import collect_openai_compatible_stream
 
 
 _REQUEST_PROFILE = OPENAI_CHAT_REQUEST_PROFILE

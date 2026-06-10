@@ -1,11 +1,11 @@
 import asyncio
 
 from opensprite.llms import ChatMessage
-from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
+from opensprite.llms.minimax import MiniMaxLLM
 
 
-def test_anthropic_messages_builds_basic_payload_without_thinking_options():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_builds_basic_payload_without_thinking_options():
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
@@ -29,8 +29,8 @@ def test_anthropic_messages_builds_basic_payload_without_thinking_options():
     assert "cache_control" not in str(payload)
 
 
-def test_anthropic_messages_ignores_reasoning_effort_for_minimax_endpoint():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_ignores_reasoning_effort_for_minimax_endpoint():
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
@@ -47,45 +47,8 @@ def test_anthropic_messages_ignores_reasoning_effort_for_minimax_endpoint():
     assert "output_config" not in payload
 
 
-def test_anthropic_messages_maps_reasoning_effort_for_official_anthropic_endpoint():
-    provider = AnthropicMessagesLLM(
-        api_key="anthropic-key",
-        base_url="https://api.anthropic.com",
-        default_model="claude-sonnet-4-6",
-        reasoning_effort="high",
-        prompt_cache_enabled=False,
-    )
-    payload = provider._build_payload(
-        [ChatMessage(role="user", content="Think deeply")],
-        tools=None,
-        model=None,
-        max_tokens=16000,
-    )
-
-    assert payload["thinking"] == {"type": "adaptive", "display": "summarized"}
-    assert payload["output_config"] == {"effort": "high"}
-
-
-def test_anthropic_messages_downgrades_xhigh_for_claude_4_6():
-    provider = AnthropicMessagesLLM(
-        api_key="anthropic-key",
-        base_url="https://api.anthropic.com",
-        default_model="claude-opus-4-6",
-        reasoning_effort="xhigh",
-        prompt_cache_enabled=False,
-    )
-    payload = provider._build_payload(
-        [ChatMessage(role="user", content="Think deeply")],
-        tools=None,
-        model=None,
-        max_tokens=16000,
-    )
-
-    assert payload["output_config"] == {"effort": "max"}
-
-
-def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_uses_context_output_reserve_for_main_requests():
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
@@ -94,8 +57,8 @@ def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
     assert provider.context_request_kwargs(output_token_reserve=32768) == {"max_tokens": 32768}
 
 
-def test_anthropic_messages_omits_max_tokens_when_unset():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_omits_max_tokens_when_unset():
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
@@ -111,57 +74,8 @@ def test_anthropic_messages_omits_max_tokens_when_unset():
     assert "max_tokens" not in payload
 
 
-def test_anthropic_messages_applies_prompt_cache_for_official_anthropic_base_url():
-    provider = AnthropicMessagesLLM(
-        api_key="anthropic-key",
-        base_url="https://api.anthropic.com",
-        default_model="claude-sonnet-4-6",
-    )
-    payload = provider._build_payload(
-        [
-            ChatMessage(role="system", content="Stable system"),
-            ChatMessage(role="user", content="First"),
-            ChatMessage(role="assistant", content="Second"),
-            ChatMessage(role="user", content="Third"),
-            ChatMessage(role="assistant", content="Fourth"),
-        ],
-        tools=None,
-        model=None,
-        max_tokens=1024,
-    )
-
-    assert payload["system"] == [
-        {"type": "text", "text": "Stable system", "cache_control": {"type": "ephemeral"}}
-    ]
-    assert "cache_control" not in payload["messages"][0]["content"][0]
-    assert [message["content"][-1]["cache_control"] for message in payload["messages"][-3:]] == [
-        {"type": "ephemeral"},
-        {"type": "ephemeral"},
-        {"type": "ephemeral"},
-    ]
-
-
-def test_anthropic_messages_can_force_prompt_cache_for_compatible_endpoint():
-    provider = AnthropicMessagesLLM(
-        api_key="minimax-key",
-        base_url="https://api.minimax.io/anthropic",
-        default_model="MiniMax-M2.7",
-        prompt_cache_enabled=True,
-    )
-
-    payload = provider._build_payload(
-        [ChatMessage(role="system", content="Stable system"), ChatMessage(role="user", content="Hello")],
-        tools=None,
-        model=None,
-        max_tokens=1024,
-    )
-
-    assert payload["system"][-1]["cache_control"] == {"type": "ephemeral"}
-    assert payload["messages"][-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
-
-
-def test_anthropic_messages_does_not_duplicate_v1_messages_path():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_does_not_duplicate_v1_messages_path():
+    provider = MiniMaxLLM(
         api_key="anthropic-key",
         base_url="https://api.example.com/v1/",
         default_model="claude-sonnet-4-6",
@@ -171,8 +85,8 @@ def test_anthropic_messages_does_not_duplicate_v1_messages_path():
     assert provider._messages_url() == "https://api.example.com/v1/messages"
 
 
-def test_anthropic_messages_accepts_full_messages_endpoint_base_url():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_accepts_full_messages_endpoint_base_url():
+    provider = MiniMaxLLM(
         api_key="anthropic-key",
         base_url="https://api.example.com/v1/messages/",
         default_model="claude-sonnet-4-6",
@@ -181,8 +95,8 @@ def test_anthropic_messages_accepts_full_messages_endpoint_base_url():
     assert provider._messages_url() == "https://api.example.com/v1/messages"
 
 
-def test_anthropic_messages_appends_v1_messages_to_api_root():
-    provider = AnthropicMessagesLLM(
+def test_minimax_anthropic_messages_appends_v1_messages_to_api_root():
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
@@ -191,7 +105,7 @@ def test_anthropic_messages_appends_v1_messages_to_api_root():
     assert provider._messages_url() == "https://api.minimax.io/anthropic/v1/messages"
 
 
-def test_anthropic_messages_response_maps_text_thinking_and_tools():
+def test_minimax_anthropic_messages_response_maps_text_thinking_and_tools():
     calls = []
 
     async def fake_post(payload):
@@ -207,7 +121,7 @@ def test_anthropic_messages_response_maps_text_thinking_and_tools():
             ],
         }
 
-    provider = AnthropicMessagesLLM(
+    provider = MiniMaxLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic",
         default_model="MiniMax-M2.7",

@@ -2,7 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 from opensprite.llms import ChatMessage
-from opensprite.llms.openai_responses import OpenAIResponsesLLM
+from opensprite.llms.openai import OpenAIResponsesLLM
 
 
 def _response(content="final answer", model="gpt-5.1-codex"):

@@ -1,82 +1,16 @@
-"""Anthropic Messages-compatible LLM provider."""
+"""MiniMax Anthropic-compatible Messages API provider."""
 
 from __future__ import annotations
 
-import json
 from typing import Any, Awaitable, Callable
 
 import httpx
 
-from .base import ChatMessage, LLMProvider, LLMResponse, ToolCall
-from .reasoning import normalize_reasoning_effort, reasoning_config_from_effort, reasoning_effort_from_config
-from .response_utils import coerce_content as _coerce_content
-from .tool_args import parse_tool_arguments
-from ..utils.url import join_url_path
-
-
-CACHE_CONTROL_MARKER = {"type": "ephemeral"}
-ANTHROPIC_ADAPTIVE_EFFORT_MAP = {
-    "minimal": "low",
-    "low": "low",
-    "medium": "medium",
-    "high": "high",
-    "xhigh": "xhigh",
-}
-
-
-def _is_official_anthropic_endpoint(base_url: str) -> bool:
-    return "api.anthropic.com" in str(base_url or "").lower()
-
-
-def _anthropic_supports_adaptive_thinking(model: str) -> bool:
-    name = str(model or "").strip().lower()
-    if "haiku" in name or "claude-3" in name:
-        return False
-    return any(
-        marker in name
-        for marker in (
-            "claude-opus-4-6",
-            "claude-opus-4.6",
-            "claude-sonnet-4-6",
-            "claude-sonnet-4.6",
-            "claude-opus-4-7",
-            "claude-opus-4.7",
-            "claude-opus-4-8",
-            "claude-opus-4.8",
-            "claude-fable-5",
-            "claude-mythos-5",
-        )
-    )
-
-
-def _anthropic_supports_xhigh_effort(model: str) -> bool:
-    name = str(model or "").strip().lower()
-    return "4-6" not in name and "4.6" not in name
-
-
-def _anthropic_reasoning_payload(
-    *,
-    model: str,
-    base_url: str,
-    reasoning_config: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """Build official Anthropic adaptive-thinking params when explicitly configured."""
-    if not _is_official_anthropic_endpoint(base_url):
-        return {}
-    if not isinstance(reasoning_config, dict) or reasoning_config.get("enabled") is False:
-        return {}
-    if not _anthropic_supports_adaptive_thinking(model):
-        return {}
-
-    effort = reasoning_effort_from_config(reasoning_config, allow_none=False)
-    adaptive_effort = ANTHROPIC_ADAPTIVE_EFFORT_MAP.get(str(effort or "medium"), "medium")
-    if adaptive_effort == "xhigh" and not _anthropic_supports_xhigh_effort(model):
-        adaptive_effort = "max"
-
-    return {
-        "thinking": {"type": "adaptive", "display": "summarized"},
-        "output_config": {"effort": adaptive_effort},
-    }
+from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from ..reasoning import normalize_reasoning_effort, reasoning_config_from_effort
+from ..response_utils import coerce_content as _coerce_content
+from ..tool_args import parse_tool_arguments
+from ...utils.url import join_url_path
 
 
 def _as_plain_data(value: Any) -> Any:
@@ -138,58 +72,23 @@ def _convert_tool(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _content_as_blocks(content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if isinstance(content, list):
-        return [dict(block) for block in content]
-    return [{"type": "text", "text": _coerce_content(content)}]
-
-
-def _apply_cache_marker_to_content(content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
-    blocks = _content_as_blocks(content)
-    if not blocks:
-        blocks.append({"type": "text", "text": ""})
-    blocks[-1] = {**blocks[-1], "cache_control": dict(CACHE_CONTROL_MARKER)}
-    return blocks
-
-
-def apply_anthropic_cache_control(payload: dict[str, Any]) -> dict[str, Any]:
-    """Apply Anthropic prompt cache markers to system and recent messages."""
-    if payload.get("system"):
-        payload["system"] = _apply_cache_marker_to_content(payload["system"])
-
-    messages = payload.get("messages")
-    if not isinstance(messages, list):
-        return payload
-    for message in messages[-3:]:
-        if not isinstance(message, dict) or "content" not in message:
-            continue
-        message["content"] = _apply_cache_marker_to_content(message["content"])
-    return payload
-
-
-class AnthropicMessagesLLM(LLMProvider):
-    """LLM provider for Anthropic Messages-compatible endpoints such as MiniMax."""
+class MiniMaxLLM(LLMProvider):
+    """MiniMax provider using the Anthropic-compatible Messages API."""
 
     def __init__(
         self,
         api_key: str,
-        base_url: str,
-        default_model: str,
+        base_url: str | None = None,
+        default_model: str = "MiniMax-M2.7",
         *,
-        prompt_cache_enabled: bool | None = None,
         timeout_seconds: float = 900.0,
         reasoning_effort: str = "",
     ) -> None:
         self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or "https://api.minimax.io/anthropic").rstrip("/")
         self.default_model = default_model
         self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
         self.reasoning_config = reasoning_config_from_effort(self.reasoning_effort)
-        self.prompt_cache_enabled = (
-            "api.anthropic.com" in self.base_url.lower()
-            if prompt_cache_enabled is None
-            else bool(prompt_cache_enabled)
-        )
         self.timeout_seconds = timeout_seconds
 
     def context_request_kwargs(self, *, output_token_reserve: int) -> dict[str, Any]:
@@ -236,7 +135,7 @@ class AnthropicMessagesLLM(LLMProvider):
                         "name": str(function.get("name") or call.get("name") or ""),
                         "input": parse_tool_arguments(
                             function.get("arguments", call.get("arguments", {})),
-                            provider_name="Anthropic Messages",
+                            provider_name="MiniMax",
                             tool_name=str(function.get("name") or call.get("name") or ""),
                         ),
                     })
@@ -274,15 +173,6 @@ class AnthropicMessagesLLM(LLMProvider):
         if tools:
             payload["tools"] = [_convert_tool(tool) for tool in tools]
             payload["tool_choice"] = {"type": "auto"}
-        payload.update(
-            _anthropic_reasoning_payload(
-                model=str(model or self.default_model),
-                base_url=self.base_url,
-                reasoning_config=getattr(self, "reasoning_config", None),
-            )
-        )
-        if self.prompt_cache_enabled:
-            apply_anthropic_cache_control(payload)
         return payload
 
     async def _post_messages(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -326,7 +216,7 @@ class AnthropicMessagesLLM(LLMProvider):
                 tool_calls.append(ToolCall(
                     id=str(block.get("id") or f"tool_call_{len(tool_calls) + 1}"),
                     name=str(block.get("name") or ""),
-                    arguments=parse_tool_arguments(block.get("input") or {}, provider_name="Anthropic Messages", tool_name=str(block.get("name") or "")),
+                    arguments=parse_tool_arguments(block.get("input") or {}, provider_name="MiniMax", tool_name=str(block.get("name") or "")),
                 ))
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         return LLMResponse(

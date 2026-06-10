@@ -4,10 +4,9 @@ import pytest
 
 from opensprite.auth.credentials import add_credential
 from opensprite.config import ProviderConfig
-from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 from opensprite.llms.minimax import MiniMaxLLM
 from opensprite.llms.openai import OpenAILLM
-from opensprite.llms.openai_responses import OpenAIResponsesLLM
+from opensprite.llms.openai import OpenAIResponsesLLM
 from opensprite.llms.openrouter import OpenRouterLLM
 from opensprite.llms.registry import create_llm
 from opensprite.llms.runtime_provider import ProviderRuntimeError, create_llm_from_runtime, resolve_provider_runtime
@@ -250,7 +249,7 @@ def test_create_llm_passes_minimax_base_url():
         provider_name="minimax",
     )
 
-    assert isinstance(provider, MiniMaxLLM)
+    assert isinstance(provider, OpenAILLM)
     assert provider.base_url == "https://api.minimaxi.com/v1"
 
 
@@ -261,7 +260,7 @@ def test_create_llm_uses_minimax_chat_completions_base_url_without_anthropic_mod
         provider_name="minimax",
     )
 
-    assert isinstance(provider, MiniMaxLLM)
+    assert isinstance(provider, OpenAILLM)
     assert provider.base_url == "https://api.minimax.io/v1"
 
 
@@ -274,7 +273,7 @@ def test_create_llm_uses_anthropic_messages_provider_for_minimax_mode():
         api_mode="anthropic_messages",
     )
 
-    assert isinstance(provider, AnthropicMessagesLLM)
+    assert isinstance(provider, MiniMaxLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
     assert provider.reasoning_effort == ""
     assert provider.reasoning_config is None
@@ -290,8 +289,8 @@ def test_resolve_runtime_applies_minimax_profile_defaults():
     assert runtime.auth_type == "api_key"
     assert runtime.api_mode == "anthropic_messages"
     assert runtime.base_url == "https://api.minimax.io/anthropic"
-    assert runtime.context_window_tokens == 204800
-    assert isinstance(provider, AnthropicMessagesLLM)
+    assert runtime.context_window_tokens is None
+    assert isinstance(provider, MiniMaxLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
 
 
@@ -310,7 +309,7 @@ def test_resolve_runtime_rewrites_legacy_minimax_chat_base_url_for_anthropic_mod
 
     assert runtime.api_mode == "anthropic_messages"
     assert runtime.base_url == "https://api.minimax.io/anthropic"
-    assert isinstance(provider, AnthropicMessagesLLM)
+    assert isinstance(provider, MiniMaxLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
 
 
@@ -329,7 +328,7 @@ def test_resolve_runtime_preserves_minimax_chat_completions_default_url():
 
     assert runtime.api_mode == "chat_completions"
     assert runtime.base_url == ""
-    assert isinstance(provider, MiniMaxLLM)
+    assert isinstance(provider, OpenAILLM)
     assert provider.base_url == "https://api.minimax.io/v1"
 
 
@@ -341,7 +340,7 @@ def test_create_llm_uses_minimax_profile_base_url_for_anthropic_mode():
         api_mode="anthropic_messages",
     )
 
-    assert isinstance(provider, AnthropicMessagesLLM)
+    assert isinstance(provider, MiniMaxLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
 
 

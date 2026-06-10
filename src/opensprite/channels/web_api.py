@@ -15,7 +15,6 @@ from aiohttp import web
 from . import web_api_control, web_api_evals, web_api_runs, web_api_sessions
 from ..bus.session_commands import session_command_catalog
 from ..config import Config
-from ..llms.context_window import resolve_context_window_tokens
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
 from ..runs.schema import (
     serialize_file_change,
@@ -287,12 +286,9 @@ def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
         if active is not None:
             provider_name = str(getattr(active, "provider", "") or "").strip()
             model = model or str(getattr(active, "model", "") or "").strip()
-            context_window_tokens = context_window_tokens or resolve_context_window_tokens(
-                provider_name=provider_name or provider_id,
-                model=model,
-                base_url=getattr(active, "base_url", None),
-                configured_context_window_tokens=getattr(active, "context_window_tokens", None),
-            )
+            active_context_window = getattr(active, "context_window_tokens", None)
+            if context_window_tokens is None and isinstance(active_context_window, int) and active_context_window > 0:
+                context_window_tokens = active_context_window
         configured = bool(getattr(agent, "llm_configured", False))
 
     if not model:
@@ -303,12 +299,9 @@ def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
             provider_name = provider_name or str(getattr(active, "provider", "") or "").strip()
             model = str(getattr(active, "model", "") or "").strip()
             configured = bool(config.is_llm_configured)
-            context_window_tokens = context_window_tokens or resolve_context_window_tokens(
-                provider_name=provider_name or provider_id,
-                model=model,
-                base_url=getattr(active, "base_url", None),
-                configured_context_window_tokens=getattr(active, "context_window_tokens", None),
-            )
+            active_context_window = getattr(active, "context_window_tokens", None)
+            if context_window_tokens is None and isinstance(active_context_window, int) and active_context_window > 0:
+                context_window_tokens = active_context_window
         except Exception:
             pass
 

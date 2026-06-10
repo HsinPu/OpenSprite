@@ -7,16 +7,16 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 import json
 from typing import Any, Awaitable, Callable
 
-from .base import LLMProvider, LLMResponse, ChatMessage
-from .openai_streaming import collect_openai_compatible_stream
-from .reasoning import normalize_reasoning_effort, reasoning_config_or_default
-from .request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
-from .response_utils import coerce_content as _coerce_content
-from .response_utils import coerce_reasoning_details
-from .response_utils import extract_openai_compatible_message
-from .response_utils import extract_openai_compatible_tool_calls
-from .response_utils import usage_payload as _usage_payload
-from ..utils.log import logger
+from ..base import LLMProvider, LLMResponse, ChatMessage
+from ..openai.streaming import collect_openai_compatible_stream
+from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
+from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
+from ..response_utils import coerce_content as _coerce_content
+from ..response_utils import coerce_reasoning_details
+from ..response_utils import extract_openai_compatible_message
+from ..response_utils import extract_openai_compatible_tool_calls
+from ..response_utils import usage_payload as _usage_payload
+from ...utils.log import logger
 
 
 _OPENROUTER_TIMEOUT_SECONDS = 120.0
