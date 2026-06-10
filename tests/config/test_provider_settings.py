@@ -8,6 +8,7 @@ from opensprite.config import provider_settings
 from opensprite.config.provider_settings import (
     ProviderSettingsConflict,
     ProviderSettingsService,
+    ProviderSettingsValidationError,
 )
 
 _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_settings.fetch_openai_compatible_models
@@ -444,11 +445,13 @@ def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_pa
         "ok": True,
         "provider_id": "openrouter",
         "model": "openai/gpt-4o-mini",
+        "reasoning_effort": "",
         "restart_required": True,
     }
     assert main_config["llm"]["default"] == "openrouter"
     assert providers["openrouter"]["enabled"] is True
     assert providers["openrouter"]["model"] == "openai/gpt-4o-mini"
+    assert "reasoning_effort" not in providers["openrouter"]
     assert providers["openai"]["enabled"] is False
     assert models["default_provider"] == "openrouter"
     assert models["active_model"] == "openai/gpt-4o-mini"
@@ -461,9 +464,49 @@ def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_pa
     ]
     assert provider["model_metadata_fields"] == ["context_length"]
     assert provider["model_capabilities"]["openai/gpt-5.5"]["reasoning"] is True
+    assert provider["reasoning_effort"] == ""
     assert "request_options" not in provider
     assert "recommended_options" not in provider["model_capabilities"]["openai/gpt-5.5"]
     assert "options" not in provider
+
+
+def test_provider_settings_select_model_persists_reasoning_effort(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    result = service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="high")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert result["reasoning_effort"] == "high"
+    assert providers["openrouter"]["reasoning_effort"] == "high"
+    assert models["providers"][0]["reasoning_effort"] == "high"
+
+
+def test_provider_settings_omits_empty_reasoning_effort_when_cleared(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="high")
+    result = service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert result["reasoning_effort"] == ""
+    assert "reasoning_effort" not in providers["openrouter"]
+    assert models["providers"][0]["reasoning_effort"] == ""
+
+
+def test_provider_settings_rejects_unknown_reasoning_effort(tmp_path):
+    service = ProviderSettingsService(_copy_config(tmp_path))
+
+    service.connect_provider("openrouter", api_key="router-key")
+    with pytest.raises(ProviderSettingsValidationError, match="reasoning_effort"):
+        service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="turbo")
 
 
 def test_provider_settings_rejects_unconnected_model_selection(tmp_path):

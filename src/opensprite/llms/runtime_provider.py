@@ -15,6 +15,7 @@ from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
 from ..config.llm_presets import provider_profile_defaults
+from .reasoning import normalize_reasoning_effort
 from .context_window import resolve_context_window_tokens
 
 
@@ -36,6 +37,7 @@ class ResolvedProviderRuntime:
     enabled: bool
     api_mode: str | None = None
     auth_type: str = "api_key"
+    reasoning_effort: str = ""
     context_window_tokens: int | None = None
 
 
@@ -125,6 +127,7 @@ def resolve_provider_runtime(
         enabled=provider.enabled,
         api_mode=api_mode,
         auth_type=auth_type,
+        reasoning_effort=normalize_reasoning_effort(provider.reasoning_effort),
         context_window_tokens=resolve_context_window_tokens(
             provider_name=configured_provider,
             model=provider.model,
@@ -162,4 +165,5 @@ def create_llm_from_runtime(runtime: ResolvedProviderRuntime):
         enabled=runtime.enabled,
         api_mode=runtime.api_mode,
         auth_type=runtime.auth_type,
+        reasoning_effort=runtime.reasoning_effort,
     )

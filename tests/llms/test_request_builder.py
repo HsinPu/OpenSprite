@@ -1,5 +1,14 @@
 from opensprite.llms.base import ChatMessage
-from opensprite.llms.request_builder import normalize_openai_compatible_messages
+from opensprite.llms.reasoning import (
+    is_valid_reasoning_effort,
+    normalize_reasoning_effort,
+    reasoning_config_from_effort,
+)
+from opensprite.llms.request_builder import (
+    OPENAI_RESPONSES_REQUEST_PROFILE,
+    build_llm_request,
+    normalize_openai_compatible_messages,
+)
 
 
 def test_normalize_openai_compatible_messages_omits_reasoning_details_by_default():
@@ -41,3 +50,45 @@ def test_normalize_openai_compatible_messages_includes_reasoning_details_when_en
 
 def test_normalize_openai_compatible_messages_uses_legacy_dict_defaults():
     assert normalize_openai_compatible_messages([{"content": "hello"}]) == [{"role": "?", "content": "hello"}]
+
+
+def test_openai_responses_request_profile_uses_responses_param_shape():
+    params = build_llm_request(
+        OPENAI_RESPONSES_REQUEST_PROFILE.options(
+            model="gpt-test",
+            messages=[{"role": "user", "content": "hello"}],
+            tools=[{"type": "function", "name": "lookup", "parameters": {}}],
+            max_tokens=123,
+            stream=True,
+        )
+    )
+
+    assert params == {
+        "model": "gpt-test",
+        "input": [{"role": "user", "content": "hello"}],
+        "max_output_tokens": 123,
+        "tools": [{"type": "function", "name": "lookup", "parameters": {}}],
+        "stream": True,
+    }
+
+
+def test_build_llm_request_includes_provider_extra_body_when_set():
+    params = build_llm_request(
+        OPENAI_RESPONSES_REQUEST_PROFILE.options(
+            model="gpt-test",
+            messages=[{"role": "user", "content": "hello"}],
+            extra_body={"reasoning": {"enabled": True, "effort": "high"}},
+        )
+    )
+
+    assert params["extra_body"] == {"reasoning": {"enabled": True, "effort": "high"}}
+
+
+def test_reasoning_effort_helpers_normalize_supported_modes():
+    assert normalize_reasoning_effort(" HIGH ") == "high"
+    assert normalize_reasoning_effort("unknown") == ""
+    assert is_valid_reasoning_effort("xhigh") is True
+    assert is_valid_reasoning_effort("turbo") is False
+    assert reasoning_config_from_effort("") is None
+    assert reasoning_config_from_effort("none") == {"enabled": False}
+    assert reasoning_config_from_effort("low") == {"enabled": True, "effort": "low"}

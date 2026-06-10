@@ -99,6 +99,7 @@ export function createSettingsState() {
     },
     selectedTextProviderId: "",
     modelSelections: {},
+    reasoningSelections: {},
     customModels: {},
     mediaLoading: false,
     mediaError: "",

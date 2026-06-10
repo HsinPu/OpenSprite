@@ -18,10 +18,51 @@ class LLMRequestOptions:
     tools: list[dict[str, Any]] | None = None
     max_tokens: int | None = None
     max_tokens_param: str = "max_tokens"
+    extra_body: dict[str, Any] | None = None
     stream: bool = False
     tool_choice: Any = "auto"
-    extra_body: dict[str, Any] | None = None
-    request_overrides: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class LLMRequestProfile:
+    """Provider request-shape profile used to keep transport params centralized."""
+
+    input_key: str = "messages"
+    max_tokens_param: str = "max_tokens"
+    tool_choice: Any = "auto"
+    include_reasoning_details: bool = False
+
+    def options(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,
+        extra_body: dict[str, Any] | None = None,
+        stream: bool = False,
+    ) -> LLMRequestOptions:
+        """Create request options using this provider's fixed request shape."""
+        return LLMRequestOptions(
+            model=model,
+            messages=messages,
+            input_key=self.input_key,
+            tools=tools,
+            max_tokens=max_tokens,
+            max_tokens_param=self.max_tokens_param,
+            extra_body=extra_body,
+            stream=stream,
+            tool_choice=self.tool_choice,
+        )
+
+
+OPENAI_CHAT_REQUEST_PROFILE = LLMRequestProfile()
+OPENAI_REASONING_HISTORY_REQUEST_PROFILE = LLMRequestProfile(include_reasoning_details=True)
+OPENAI_RESPONSES_REQUEST_PROFILE = LLMRequestProfile(
+    input_key="input",
+    max_tokens_param="max_output_tokens",
+    tool_choice=None,
+)
 
 
 def build_llm_request(options: LLMRequestOptions) -> dict[str, Any]:
@@ -34,6 +75,9 @@ def build_llm_request(options: LLMRequestOptions) -> dict[str, Any]:
     if options.max_tokens is not None:
         params[options.max_tokens_param] = options.max_tokens
 
+    if options.extra_body:
+        params["extra_body"] = options.extra_body
+
     if options.tools:
         params["tools"] = options.tools
         if options.tool_choice is not None:
@@ -41,16 +85,6 @@ def build_llm_request(options: LLMRequestOptions) -> dict[str, Any]:
 
     if options.stream:
         params["stream"] = True
-
-    if options.extra_body:
-        params["extra_body"] = dict(options.extra_body)
-
-    if options.request_overrides:
-        overrides = dict(options.request_overrides)
-        extra_body = overrides.pop("extra_body", None)
-        if isinstance(extra_body, dict):
-            params["extra_body"] = {**dict(params.get("extra_body") or {}), **extra_body}
-        params.update(overrides)
 
     return params
 

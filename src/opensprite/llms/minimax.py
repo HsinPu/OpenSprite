@@ -10,7 +10,7 @@ from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage
 from .retry import looks_like_transient_transport_error
-from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from .response_utils import coerce_content as _coerce_content
 from .response_utils import coerce_reasoning_details as _coerce_reasoning_details
 from .response_utils import extract_openai_compatible_message
@@ -18,6 +18,9 @@ from .response_utils import extract_openai_compatible_tool_calls
 from .response_utils import safe_len as _safe_len
 from ..utils.log_redaction import redact_log_preview
 from ..utils.log import logger
+
+
+_REQUEST_PROFILE = OPENAI_REASONING_HISTORY_REQUEST_PROFILE
 
 
 def _preview_text(value: Any, max_chars: int = 240) -> str:
@@ -149,7 +152,10 @@ class MiniMaxLLM(LLMProvider):
         _ = tool_input_delta_callback
         _ = reasoning_delta_callback
         # 轉換成 OpenAI 格式
-        api_messages = normalize_openai_compatible_messages(messages, include_reasoning_details=True)
+        api_messages = normalize_openai_compatible_messages(
+            messages,
+            include_reasoning_details=_REQUEST_PROFILE.include_reasoning_details,
+        )
 
         request_reminder_hits: list[str] = []
         for index, msg in enumerate(api_messages, start=1):
@@ -175,7 +181,7 @@ class MiniMaxLLM(LLMProvider):
             )
 
         params = build_llm_request(
-            LLMRequestOptions(
+            _REQUEST_PROFILE.options(
                 model=model or self.default_model,
                 messages=api_messages,
                 tools=tools,

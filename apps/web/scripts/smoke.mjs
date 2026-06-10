@@ -272,7 +272,8 @@ assertNotIncludes(settingsNormalizers, "providerRequestOptions", "provider reque
 assertNotIncludes(settingsLogic, "openRouterOptions", "provider request option state is not provider-specific");
 assertIncludes(settingsModal, "textModelOptionLabel", "provider model context option labels");
 assertIncludes(settingsModal, "<optgroup", "grouped model select rendering");
-assertIncludes(settingsModal, "@click=\"$emit('select-model', selectedTextProvider.id, settingsState.modelSelections[selectedTextProvider.id])\"", "model selection applies on explicit action");
+assertIncludes(settingsModal, "settingsState.reasoningSelections[selectedTextProvider.id]", "model selection carries reasoning mode");
+assertIncludes(settingsModal, "reasoningChoice", "reasoning mode select rendering");
 assertNotIncludes(settingsModal, "@change=\"$emit('select-model', settingsState.selectedTextProviderId", "provider selection does not auto-apply model");
 assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot auth code rendering");
 assertIncludes(settingsModal, "showCodexAuthCard", "conditional Codex auth card");

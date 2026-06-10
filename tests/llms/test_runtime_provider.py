@@ -179,7 +179,28 @@ def test_create_llm_uses_openrouter_without_provider_request_options():
 
     assert isinstance(provider, OpenRouterLLM)
     assert not hasattr(provider, "reasoning_enabled")
+    assert provider.reasoning_effort == ""
+    assert provider.reasoning_config == {"enabled": True}
     assert not hasattr(provider, "provider_sort")
+
+
+def test_openrouter_runtime_passes_reasoning_effort_to_provider():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="openrouter",
+            api_key="router-key",
+            model="google/gemini-3-flash-preview",
+            reasoning_effort="high",
+            enabled=True,
+        ),
+        provider_name="openrouter",
+    )
+    provider = create_llm_from_runtime(runtime)
+
+    assert runtime.reasoning_effort == "high"
+    assert isinstance(provider, OpenRouterLLM)
+    assert provider.reasoning_effort == "high"
+    assert provider.reasoning_config == {"enabled": True, "effort": "high"}
 
 
 def test_create_llm_passes_minimax_base_url():

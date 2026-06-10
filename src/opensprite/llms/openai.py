@@ -8,11 +8,14 @@ from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage
 from .openai_streaming import collect_openai_compatible_stream
-from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from .response_utils import coerce_content as _coerce_content
 from .response_utils import extract_openai_compatible_message
 from .response_utils import extract_openai_compatible_tool_calls
 from .response_utils import usage_payload as _usage_payload
+
+
+_REQUEST_PROFILE = OPENAI_CHAT_REQUEST_PROFILE
 
 
 class OpenAILLM(LLMProvider):
@@ -69,11 +72,14 @@ class OpenAILLM(LLMProvider):
         """
         _ = status_callback
         # 轉換成 OpenAI 格式
-        api_messages = normalize_openai_compatible_messages(messages)
+        api_messages = normalize_openai_compatible_messages(
+            messages,
+            include_reasoning_details=_REQUEST_PROFILE.include_reasoning_details,
+        )
         
         # API 參數（None = 不帶該欄位，交給服務端預設）
         params = build_llm_request(
-            LLMRequestOptions(
+            _REQUEST_PROFILE.options(
                 model=model or self.default_model,
                 messages=api_messages,
                 tools=tools,

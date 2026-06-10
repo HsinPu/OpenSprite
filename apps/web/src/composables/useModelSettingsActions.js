@@ -18,6 +18,7 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       for (const provider of settingsState.models.providers || []) {
         const selectedModel = provider.selected_model || provider.models?.[0] || "";
         settingsState.modelSelections[provider.id] = selectedModel;
+        settingsState.reasoningSelections[provider.id] = provider.reasoning_effort || "";
         settingsState.customModels[provider.id] = "";
       }
       for (const category of Object.keys(settingsState.media.sections || {})) {
@@ -38,8 +39,9 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
     }
   }
 
-  async function selectModel(providerId, model) {
+  async function selectModel(providerId, model, reasoningEffort = "") {
     const normalizedModel = String(model || "").trim();
+    const normalizedReasoningEffort = String(reasoningEffort || "").trim().toLowerCase();
     if (!normalizedModel) {
       settingsState.modelsError = copy.value.notices.modelRequired;
       return;
@@ -51,7 +53,11 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
     try {
       const payload = await requestSettingsJson("/api/settings/models/select", {
         method: "POST",
-        body: JSON.stringify({ provider_id: providerId, model: normalizedModel }),
+        body: JSON.stringify({
+          provider_id: providerId,
+          model: normalizedModel,
+          reasoning_effort: normalizedReasoningEffort,
+        }),
       });
       setSettingsSuccess(
         "modelsNotice",
@@ -59,6 +65,7 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       );
       settingsState.customModels[providerId] = "";
       settingsState.modelSelections[providerId] = normalizedModel;
+      settingsState.reasoningSelections[providerId] = payload.reasoning_effort || normalizedReasoningEffort;
       await loadModelSettings();
       await loadProviderSettings?.();
     } catch (error) {

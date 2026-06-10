@@ -16,6 +16,7 @@ from ..auth.credentials import (
     resolve_credential,
     set_provider_default,
 )
+from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from ..utils.url import join_url_path
 from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
@@ -141,6 +142,14 @@ def _positive_int(value: Any) -> int | None:
             parsed = int(normalized)
             return parsed if parsed > 0 else None
     return None
+
+
+def _validated_reasoning_effort(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if not is_valid_reasoning_effort(normalized):
+        allowed = ", ".join(option or "default" for option in REASONING_EFFORT_OPTIONS)
+        raise ProviderSettingsValidationError(f"reasoning_effort must be one of: {allowed}")
+    return normalize_reasoning_effort(normalized)
 
 
 def _openrouter_model_metadata(item: dict[str, Any]) -> dict[str, Any]:
@@ -473,6 +482,7 @@ def select_model_in_config(
     model: str,
     *,
     require_api_key: bool = True,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     """Select the active provider/model inside an in-memory config object."""
     presets = load_llm_presets()
@@ -500,6 +510,12 @@ def select_model_in_config(
     if not str(provider.get("base_url", "") or "").strip():
         provider["base_url"] = preset.default_base_url
     provider["model"] = normalized_model
+    if reasoning_effort is not None:
+        normalized_reasoning_effort = _validated_reasoning_effort(reasoning_effort)
+        if normalized_reasoning_effort:
+            provider["reasoning_effort"] = normalized_reasoning_effort
+        else:
+            provider.pop("reasoning_effort", None)
     if "model_metadata" in preset.capabilities:
         metadata = cached_openrouter_model_metadata([normalized_model]).get(normalized_model, {})
         context_length = _positive_int(metadata.get("context_length"))
@@ -592,6 +608,14 @@ def public_credential_source(provider: dict[str, Any], credential: dict[str, Any
     return "priority"
 
 
+def provider_config_to_settings_data(provider: Any) -> dict[str, Any]:
+    """Dump provider config without persisting empty optional request settings."""
+    data = provider.model_dump()
+    if not data.get("reasoning_effort"):
+        data.pop("reasoning_effort", None)
+    return data
+
+
 class ProviderSettingsService:
     """Read and mutate provider/model settings on disk."""
 
@@ -606,11 +630,11 @@ class ProviderSettingsService:
     def _load_state(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
         main_data = self._load_main_data()
         loaded = Config.from_json(self.config_path)
-        providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
+        providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
         if migrate_provider_api_keys_to_credentials(providers, app_home=self.config_path.parent):
             self._persist_llm_state(main_data, providers)
             loaded = Config.from_json(self.config_path)
-            providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
+            providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
         return main_data, providers, loaded
 
     def _persist_llm_state(self, main_data: dict[str, Any], providers: dict[str, Any]) -> None:
@@ -655,6 +679,7 @@ class ProviderSettingsService:
                     "preset_name": self._display_name(preset_id or provider_id, preset),
                     "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
                     "model": provider.get("model") or "",
+                    "reasoning_effort": provider.get("reasoning_effort") or "",
                     "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
                     "credential_id": provider.get("credential_id") or "",
                     "credential_effective_id": (credential or {}).get("id") or "",
@@ -724,6 +749,7 @@ class ProviderSettingsService:
                 "preset_name": self._display_name(provider_id, preset),
                 "base_url": provider.get("base_url") or preset.default_base_url,
                 "model": provider.get("model") or "",
+                "reasoning_effort": provider.get("reasoning_effort") or "",
                 "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
                 "credential_id": provider.get("credential_id") or "",
                 "credential_effective_id": (credential or {}).get("id") or "",
@@ -836,6 +862,7 @@ class ProviderSettingsService:
                     "is_connected": True,
                     "is_default": provider_id == loaded.llm.default,
                     "selected_model": provider.get("model") or "",
+                    "reasoning_effort": provider.get("reasoning_effort") or "",
                     "models": choices,
                     "model_source": model_source,
                     "model_metadata": {
@@ -858,11 +885,11 @@ class ProviderSettingsService:
             "restart_required": False,
         }
 
-    def select_model(self, provider_id: str, model: str) -> dict[str, Any]:
+    def select_model(self, provider_id: str, model: str, *, reasoning_effort: str | None = None) -> dict[str, Any]:
         """Select the active provider/model and persist it."""
         main_data, providers, _loaded = self._load_state()
         config_data = {"llm": {"providers": providers, "default": main_data.get("llm", {}).get("default")}}
-        select_model_in_config(config_data, provider_id, model)
+        provider = select_model_in_config(config_data, provider_id, model, reasoning_effort=reasoning_effort)
         llm_data = main_data.setdefault("llm", {})
         llm_data["default"] = provider_id
         self._persist_llm_state(main_data, providers)
@@ -870,5 +897,6 @@ class ProviderSettingsService:
             "ok": True,
             "provider_id": provider_id,
             "model": str(model).strip(),
+            "reasoning_effort": provider.get("reasoning_effort") or "",
             "restart_required": True,
         }

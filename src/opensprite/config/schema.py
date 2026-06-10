@@ -68,6 +68,7 @@ class ProviderConfig(BaseModel):
     model: str = ""
     base_url: str | None = None
     enabled: bool = False
+    reasoning_effort: Literal["", "none", "minimal", "low", "medium", "high", "xhigh"] = ""
     context_window_tokens: int | None = Field(default=None, ge=1)
 
 

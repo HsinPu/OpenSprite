@@ -41,10 +41,19 @@ async def handle_settings_model_select(adapter: Any, request: web.Request) -> we
     body = await adapter._read_json_body(request)
     provider_id = adapter._coerce_optional_text(body.get("provider_id"))
     model = adapter._coerce_optional_text(body.get("model"))
+    reasoning_effort = (
+        adapter._coerce_optional_text(body.get("reasoning_effort"), default="")
+        if "reasoning_effort" in body
+        else None
+    )
     if provider_id is None or model is None:
         raise web.HTTPBadRequest(text="provider_id and model are required")
     try:
-        payload = adapter._get_provider_settings().select_model(provider_id, model)
+        payload = adapter._get_provider_settings().select_model(
+            provider_id,
+            model,
+            reasoning_effort=reasoning_effort,
+        )
     except Exception as exc:
         adapter._raise_provider_settings_error(exc)
     payload = adapter._reload_agent_llm_from_config(payload)

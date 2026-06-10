@@ -4,11 +4,13 @@ opensprite/llms/openrouter.py - OpenRouter LLM 實作
 實作 LLMProvider 介面，使用 OpenRouter API
 OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 """
+import json
 from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage
 from .openai_streaming import collect_openai_compatible_stream
-from .request_builder import LLMRequestOptions, build_llm_request, normalize_openai_compatible_messages
+from .reasoning import normalize_reasoning_effort, reasoning_config_from_effort
+from .request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from .response_utils import coerce_content as _coerce_content
 from .response_utils import coerce_reasoning_details
 from .response_utils import extract_openai_compatible_message
@@ -19,6 +21,47 @@ from ..utils.log import logger
 
 _OPENROUTER_TIMEOUT_SECONDS = 120.0
 _OPENROUTER_CONNECT_TIMEOUT_SECONDS = 20.0
+_REQUEST_PROFILE = OPENAI_REASONING_HISTORY_REQUEST_PROFILE
+
+
+def _openrouter_reasoning_extra_body(reasoning_config: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Build OpenRouter's provider-specific reasoning payload when explicitly configured."""
+    if not reasoning_config:
+        return None
+    return {"reasoning": dict(reasoning_config)}
+
+
+def _openrouter_request_param_log_fields(params: dict[str, Any]) -> dict[str, Any]:
+    """Return safe request param fields for logs without message/tool/header content."""
+    extra_body = params.get("extra_body")
+    reasoning = extra_body.get("reasoning") if isinstance(extra_body, dict) else None
+    return {
+        "model": str(params.get("model") or "-"),
+        "messages": len(params.get("messages") or []),
+        "tools": len(params.get("tools") or []),
+        "tool_choice": str(params.get("tool_choice") or "-"),
+        "stream": bool(params.get("stream", False)),
+        "max_tokens": params.get("max_tokens") if params.get("max_tokens") is not None else "-",
+        "reasoning": (
+            json.dumps(reasoning, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if reasoning is not None
+            else "-"
+        ),
+    }
+
+
+def _log_openrouter_request_params(params: dict[str, Any]) -> None:
+    fields = _openrouter_request_param_log_fields(params)
+    logger.info(
+        "OpenRouter request params | model={} messages={} tools={} tool_choice={} stream={} max_tokens={} extra_body.reasoning={}",
+        fields["model"],
+        fields["messages"],
+        fields["tools"],
+        fields["tool_choice"],
+        fields["stream"],
+        fields["max_tokens"],
+        fields["reasoning"],
+    )
 
 
 class OpenRouterLLM(LLMProvider):
@@ -34,6 +77,7 @@ class OpenRouterLLM(LLMProvider):
         api_key: str, 
         default_model: str = "openai/gpt-4o-mini",
         base_url: str = "",
+        reasoning_effort: str = "",
     ):
         """
         初始化 OpenRouter LLM
@@ -50,6 +94,8 @@ class OpenRouterLLM(LLMProvider):
         """
         self.api_key = api_key
         self.default_model = default_model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
+        self.reasoning_config = reasoning_config_from_effort(self.reasoning_effort) or {"enabled": True}
         from httpx import Timeout
 
         self._client_kwargs = {
@@ -94,25 +140,31 @@ class OpenRouterLLM(LLMProvider):
         呼叫 OpenRouter Chat Completions API
         """
         _ = status_callback
+        resolved_model = model or self.default_model
         # 轉換成 OpenAI 格式
-        api_messages = normalize_openai_compatible_messages(messages, include_reasoning_details=True)
+        api_messages = normalize_openai_compatible_messages(
+            messages,
+            include_reasoning_details=_REQUEST_PROFILE.include_reasoning_details,
+        )
         
         params = build_llm_request(
-            LLMRequestOptions(
-                model=model or self.default_model,
+            _REQUEST_PROFILE.options(
+                model=resolved_model,
                 messages=api_messages,
                 tools=tools,
                 max_tokens=max_tokens,
+                extra_body=_openrouter_reasoning_extra_body(self.reasoning_config),
                 stream=response_delta_callback is not None,
             )
         )
+        _log_openrouter_request_params(params)
 
         if response_delta_callback is not None:
             stream = await self._create_completion(params)
             return await collect_openai_compatible_stream(
                 stream,
                 provider_name="OpenRouter",
-                default_model=model or self.default_model,
+                default_model=resolved_model,
                 response_delta_callback=response_delta_callback,
                 tool_input_delta_callback=tool_input_delta_callback,
                 reasoning_delta_callback=reasoning_delta_callback,
@@ -123,7 +175,7 @@ class OpenRouterLLM(LLMProvider):
         message_result = extract_openai_compatible_message(
             response,
             provider_name="OpenRouter",
-            default_model=model or self.default_model,
+            default_model=resolved_model,
         )
         if message_result.fallback_response is not None:
             return message_result.fallback_response
@@ -136,7 +188,7 @@ class OpenRouterLLM(LLMProvider):
         
         return LLMResponse(
             content=_coerce_content(getattr(message, "content", "")),
-            model=getattr(response, "model", model or self.default_model),
+            model=getattr(response, "model", resolved_model),
             tool_calls=tool_calls,
             usage=_usage_payload(getattr(response, "usage", None)),
             finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,

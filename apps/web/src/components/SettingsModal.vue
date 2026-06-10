@@ -397,11 +397,31 @@
                   </template>
                 </select>
               </label>
+              <label>
+                <span>{{ copy.settings.models.reasoningChoice }}</span>
+                <select
+                  v-model="settingsState.reasoningSelections[selectedTextProvider.id]"
+                  :disabled="settingsState.modelsLoading"
+                >
+                  <option value="">{{ copy.settings.models.reasoningDefault }}</option>
+                  <option value="none">{{ copy.settings.models.reasoningNone }}</option>
+                  <option value="minimal">{{ copy.settings.models.reasoningMinimal }}</option>
+                  <option value="low">{{ copy.settings.models.reasoningLow }}</option>
+                  <option value="medium">{{ copy.settings.models.reasoningMedium }}</option>
+                  <option value="high">{{ copy.settings.models.reasoningHigh }}</option>
+                  <option value="xhigh">{{ copy.settings.models.reasoningXhigh }}</option>
+                </select>
+              </label>
               <button
                 class="secondary-button"
                 type="button"
                 :disabled="settingsState.modelsLoading || !settingsState.modelSelections[selectedTextProvider.id]"
-                @click="$emit('select-model', selectedTextProvider.id, settingsState.modelSelections[selectedTextProvider.id])"
+                @click="$emit(
+                  'select-model',
+                  selectedTextProvider.id,
+                  settingsState.modelSelections[selectedTextProvider.id],
+                  settingsState.reasoningSelections[selectedTextProvider.id],
+                )"
               >
                 {{ copy.settings.models.select }}
               </button>
@@ -421,7 +441,12 @@
                 class="secondary-button"
                 type="button"
                 :disabled="settingsState.modelsLoading"
-                @click="$emit('select-model', selectedTextProvider.id, settingsState.customModels[selectedTextProvider.id])"
+                @click="$emit(
+                  'select-model',
+                  selectedTextProvider.id,
+                  settingsState.customModels[selectedTextProvider.id],
+                  settingsState.reasoningSelections[selectedTextProvider.id],
+                )"
               >
                 {{ copy.settings.models.useCustom }}
               </button>

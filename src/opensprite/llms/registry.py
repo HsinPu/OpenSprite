@@ -73,6 +73,7 @@ def create_llm(
     enabled: bool = True,
     api_mode: str | None = None,
     auth_type: str = "api_key",
+    reasoning_effort: str = "",
 ) -> LLMProvider:
     """建立 LLM Provider"""
     if not enabled:
@@ -98,6 +99,7 @@ def create_llm(
             api_key=api_key,
             default_model=model,
             base_url=base_url or provider_spec_default_base_url(spec),
+            reasoning_effort=reasoning_effort,
         )
 
     if spec.name == "minimax":
