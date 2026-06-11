@@ -8,7 +8,7 @@ def test_file_builder_includes_active_task_when_session_has_one(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     task = create_active_task_store(builder.app_home, "telegram:room-1", workspace_root=builder.tool_workspace)

@@ -78,9 +78,6 @@ class LLMsConfig(BaseModel):
     providers: dict[str, ProviderConfig] = {}
     providers_file: str = DEFAULT_LLM_PROVIDERS_FILE
     default: str | None = None
-    api_key: str = ""
-    model: str = ""
-    base_url: str | None = None
     context_window_tokens: int | None = Field(default=None, ge=1)
 
     def get_active(self) -> ProviderConfig:
@@ -95,13 +92,7 @@ class LLMsConfig(BaseModel):
                     "context_window_tokens": self.context_window_tokens,
                 }
             )
-        return ProviderConfig(
-            api_key=self.api_key,
-            model=self.model,
-            base_url=self.base_url,
-            enabled=True,
-            context_window_tokens=self.context_window_tokens,
-        )
+        return ProviderConfig(context_window_tokens=self.context_window_tokens)
 
 
 class DocumentLlmConfig(BaseModel):
@@ -1273,7 +1264,7 @@ class Config:
             if auth_type == "optional_api_key":
                 return bool(provider.model)
             return bool((provider.api_key or provider.credential_id) and provider.model)
-        return bool(self.llm.api_key)
+        return False
 
     @classmethod
     def template_path(cls) -> Path:

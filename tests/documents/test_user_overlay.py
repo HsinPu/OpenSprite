@@ -138,7 +138,7 @@ def test_second_session_can_read_promoted_overlay(tmp_path):
         bootstrap_dir=app_home / "bootstrap",
         memory_dir=app_home / "memory",
         tool_workspace=app_home / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
     profile = create_user_profile_store(app_home, "web:browser-2")
     profile.write_managed_block("- Session-local note only.")

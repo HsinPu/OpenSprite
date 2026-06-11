@@ -144,13 +144,6 @@ _BOUNDARY_ACTIVE_TASK_BLOCK = (
     "  - Reply `switch` to replace the active task (Refactor the agent in small safe steps.) "
     "with the new request (please update README), or `continue` to keep the active task."
 )
-_LEGACY_BOUNDARY_ACTIVE_TASK_BLOCK = (
-    "- Status: waiting_user\n"
-    "- Goal: Refactor the agent in small safe steps.\n"
-    "- Open questions:\n"
-    "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
-    "to the new request (please update README), or continue the active task."
-)
 _WEB_RESEARCH_HISTORY = [
     {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
     {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
@@ -670,32 +663,6 @@ def test_task_context_confirms_pending_boundary_continue_with_llm():
     assert decision.method == "llm"
     assert decision.continuation_type == "continue_active_task"
     assert decision.should_inherit_active_task is True
-
-
-def test_task_context_supports_legacy_boundary_question_format_with_llm():
-    provider = _JsonProvider(
-        '{"continuation_type": "task_switch", "is_follow_up": false, '
-        '"should_inherit_active_task": false, '
-        '"should_seed_active_task": true, "should_replace_active_task": true, '
-        '"inherited_task_type": null, '
-        '"confidence": 0.92, "reason": "legacy boundary prompt still asks for a switch decision"}'
-    )
-
-    decision = asyncio.run(
-        _resolver().resolve(
-            current_message="switch",
-            history=[],
-            task_intent=TaskIntentService().classify("switch"),
-            active_task=_LEGACY_BOUNDARY_ACTIVE_TASK_BLOCK,
-            provider=provider,
-            model=provider.get_default_model(),
-        )
-    )
-
-    assert len(provider.calls) == 1
-    assert decision.method == "llm"
-    assert decision.continuation_type == "task_switch"
-    assert decision.should_replace_active_task is True
 
 
 def test_task_context_continue_without_active_task_stays_neutral_without_llm():

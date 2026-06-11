@@ -58,7 +58,7 @@ class NoCallProvider:
                 (),
                 {
                     "content": (
-                        '{"task_type":"media_analysis","required_tools":["analyze_image"],'
+                        '{"task_type":"media_extraction","required_tools":["analyze_image"],'
                         '"final_answer_required":true,"allow_no_tool_final":false,'
                         '"reason":"test planner media contract"}'
                     )

@@ -460,34 +460,6 @@ def test_work_progress_uses_structured_verification_step_position_without_label_
     assert updated.next_step == "not set"
 
 
-def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
-    state = StoredWorkState(
-        session_id="web:browser-1",
-        objective="Finish the refactor",
-        kind="task",
-        status="active",
-        steps=("1. inspect", "2. change", "3. verify"),
-        completed_steps=("1. inspect",),
-        metadata={
-            "workboard": {
-                "pending_steps": ["2. change", "3. verify"],
-                "blockers": ["Need user decision"],
-                "verification_targets": ["tests pass"],
-                "resume_hint": "Resume at current step: 2. change",
-                "last_progress_signals": ["file_changes"],
-            }
-        },
-    )
-
-    workboard = WorkProgressService.extract_workboard(state)
-
-    assert workboard.pending_steps == ("2. change", "3. verify")
-    assert workboard.blockers == ("Need user decision",)
-    assert workboard.verification_targets == ("tests pass",)
-    assert workboard.resume_hint == "Resume at current step: 2. change"
-    assert workboard.last_progress_signals == ("file_changes",)
-
-
 def test_work_progress_updates_state_and_renders_summary():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")

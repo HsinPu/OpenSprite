@@ -13,7 +13,7 @@ def test_file_builder_loads_the_user_profile_for_the_active_session(tmp_path):
         bootstrap_dir=app_home / "bootstrap",
         memory_dir=app_home / "memory",
         tool_workspace=app_home / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     profile_a = create_user_profile_store(app_home, "telegram:user-a")
@@ -41,7 +41,7 @@ def test_file_builder_includes_stable_user_overlay_before_session_profile(tmp_pa
         bootstrap_dir=app_home / "bootstrap",
         memory_dir=app_home / "memory",
         tool_workspace=app_home / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     overlay_store = UserOverlayStore(app_home=app_home)
@@ -69,7 +69,7 @@ def test_file_builder_build_messages_includes_relevant_user_overlay_context(tmp_
         bootstrap_dir=app_home / "bootstrap",
         memory_dir=app_home / "memory",
         tool_workspace=app_home / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
     overlay_store = UserOverlayStore(app_home=app_home)
     overlay_store.write(

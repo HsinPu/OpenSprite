@@ -32,24 +32,15 @@ class SkillsLoader:
         workspace: Path | None = None,
         *,
         skills_root: Path | None = None,
-        default_skills_dir: Path | None = None,
         personal_skills_dir: Path | None = None,
-        custom_skills_dir: Path | None = None,
     ):
         self.workspace = Path(workspace).expanduser() if workspace else None
-        root = skills_root if skills_root is not None else default_skills_dir
         self.skills_root = (
-            Path(root).expanduser()
-            if root is not None
+            Path(skills_root).expanduser()
+            if skills_root is not None
             else Path.home() / ".opensprite" / "skills"
         )
-        personal_dir = personal_skills_dir if personal_skills_dir is not None else custom_skills_dir
-        self.personal_skills_dir = Path(personal_dir).expanduser() if personal_dir is not None else None
-
-    @property
-    def default_skills_dir(self) -> Path:
-        """Backward-compatible alias: the app-home skills root (``~/.opensprite/skills``)."""
-        return self.skills_root
+        self.personal_skills_dir = Path(personal_skills_dir).expanduser() if personal_skills_dir is not None else None
 
     def _resolve_personal_skills_dir(self, personal_skills_dir: Path | None = None) -> Path | None:
         """Resolve the session workspace ``skills/`` directory for this request."""

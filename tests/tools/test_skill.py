@@ -21,7 +21,7 @@ def test_read_skill_tool_prefers_personal_skill_dir(tmp_path):
     _write_skill(global_dir, "planner", "global planner", "Global body")
     _write_skill(personal_dir, "planner", "personal planner", "Personal body")
 
-    loader = SkillsLoader(default_skills_dir=global_dir)
+    loader = SkillsLoader(skills_root=global_dir)
     tool = ReadSkillTool(loader, personal_skills_dir_resolver=lambda: personal_dir)
 
     result = asyncio.run(tool.execute(skill_name="planner"))
@@ -30,7 +30,7 @@ def test_read_skill_tool_prefers_personal_skill_dir(tmp_path):
 
 
 def test_read_skill_tool_rejects_path_like_skill_name(tmp_path):
-    loader = SkillsLoader(default_skills_dir=tmp_path / "skills")
+    loader = SkillsLoader(skills_root=tmp_path / "skills")
     tool = ReadSkillTool(loader)
 
     result = asyncio.run(tool.execute(skill_name="../secret"))
@@ -46,7 +46,7 @@ def test_read_skill_tool_rejects_path_like_skill_name(tmp_path):
 def test_read_skill_tool_reports_missing_skill(tmp_path):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
-    loader = SkillsLoader(default_skills_dir=skills_dir)
+    loader = SkillsLoader(skills_root=skills_dir)
     tool = ReadSkillTool(loader)
 
     result = asyncio.run(tool.execute(skill_name="missing"))

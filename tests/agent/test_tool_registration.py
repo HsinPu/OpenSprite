@@ -57,7 +57,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         workflow_catalog_getter=lambda: {"implement_then_review": "Run implementer then reviewer."},
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "skills"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "skills"),
         search_store=FakeSearchStore(),
         search_config=SearchConfig(history_top_k=7),
     )

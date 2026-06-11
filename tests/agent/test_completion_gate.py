@@ -2325,64 +2325,6 @@ def test_completion_gate_allows_gathered_source_urls_with_punctuation():
     assert completion.status == "complete"
 
 
-def test_completion_gate_normalizes_openrouter_docs_legacy_api_reference_urls():
-    intent = TaskIntentService().classify("Check OpenRouter API parameters and cite sources")
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
-    )
-    contract = replace(
-        contract,
-        acceptance_criteria=contract.acceptance_criteria
-        + (AcceptanceCriterion(kind="source_reference", min_count=1, description="Cite source URLs."),),
-    )
-    answer = (
-        "OpenRouter documents `max_tokens` on its parameters page: "
-        "https://openrouter.ai/docs/api-reference/parameters. The page says it limits generated output "
-        "and that the maximum depends on context length minus prompt length."
-    )
-    artifact = TaskArtifact(
-        kind="web_source",
-        source_tool="web_fetch",
-        content_preview="source",
-        metadata={
-            "sources": [
-                {
-                    "tool_name": "web_search",
-                    "url": "https://openrouter.ai/docs/api/reference/overview",
-                    "title": "OpenRouter API Reference",
-                    "snippet": "OpenRouter API reference overview.",
-                },
-                {
-                    "tool_name": "web_fetch",
-                    "url": "https://openrouter.ai/docs/api/reference/parameters.md",
-                    "title": "API Parameters | OpenRouter",
-                    "snippet": "Max Tokens sets the upper limit for generated tokens.",
-                    "content_chars": 1200,
-                    "is_too_short": False,
-                    "has_main_content": True,
-                    "blocked_or_challenge": False,
-                }
-            ],
-            "source_count": 2,
-        },
-    )
-
-    completion = CompletionGateService().evaluate(
-        task_intent=intent,
-        response_text=answer,
-        execution_result=ExecutionResult(
-            content=answer,
-            task_contract=contract,
-            executed_tool_calls=1,
-            tool_evidence=(ToolEvidence(name="web_fetch", ok=True),),
-            task_artifacts=(artifact,),
-        ),
-    )
-
-    assert completion.status == "complete"
-
-
 def test_completion_gate_allows_openrouter_api_endpoint_in_answer():
     intent = TaskIntentService().classify("Check OpenRouter API base URL and cite sources")
     contract = TaskContractService.build(
@@ -4069,7 +4011,7 @@ async def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
     response = (
         "<toolcall>\n"
         '<tool name="web_fetch">\n'
-        '<parameter name="url">https://openrouter.ai/docs/api-reference/overview.md</parameter>\n'
+        '<parameter name="url">https://openrouter.ai/docs/api/reference/overview.md</parameter>\n'
         "</tool>\n"
         "</toolcall>"
     )

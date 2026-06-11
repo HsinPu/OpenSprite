@@ -33,7 +33,7 @@ def test_skills_loader_session_skills_override_system(tmp_path):
         "---\nname: shared\ndescription: from session\n---\n\nsession body\n",
         encoding="utf-8",
     )
-    loader = SkillsLoader(default_skills_dir=skills_root)
+    loader = SkillsLoader(skills_root=skills_root)
     assert loader.load_skill_content("shared", session_skills) == "session body"
     names = [s.name for s in loader.get_skills(session_skills)]
     assert names == ["shared"]
@@ -48,7 +48,7 @@ def test_skills_loader_uses_personal_over_system(tmp_path):
     _write_skill(skills_root, "system-only", "system only", "System only body")
     _write_skill(personal_skills, "planner", "session planner", "Session body")
 
-    loader = SkillsLoader(default_skills_dir=skills_root)
+    loader = SkillsLoader(skills_root=skills_root)
 
     names = [skill.name for skill in loader.get_skills(personal_skills)]
 

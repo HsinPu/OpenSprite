@@ -19,7 +19,6 @@ from .base import (
     StoredRunPart,
     StoredWorkState,
     coerce_stored_delegated_tasks,
-    legacy_delegated_tasks,
     selected_delegated_task,
 )
 
@@ -222,10 +221,7 @@ class MemoryStorage(StorageProvider):
     async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState:
         existing = self._work_states.get(state.session_id)
         created_at = existing.created_at if existing is not None and existing.created_at else float(state.created_at or time.time())
-        delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
-            state.active_delegate_task_id,
-            state.active_delegate_prompt_type,
-        )
+        delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks)
         selected_task = selected_delegated_task(delegated_tasks)
         updated = StoredWorkState(
             session_id=state.session_id,

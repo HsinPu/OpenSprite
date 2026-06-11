@@ -21,7 +21,7 @@ def test_subagent_builder_includes_skill_summary_for_workspace(tmp_path):
     _write_skill(global_dir, "global-skill", "global description", "Global body")
     _write_skill(personal_dir, "chat-skill", "chat description", "Chat body")
 
-    builder = SubagentMessageBuilder(skills_loader=SkillsLoader(default_skills_dir=global_dir))
+    builder = SubagentMessageBuilder(skills_loader=SkillsLoader(skills_root=global_dir))
     prompt = builder.build_system_prompt(
         prompt_type="implementer", workspace=workspace, app_home=tmp_path / "home"
     )

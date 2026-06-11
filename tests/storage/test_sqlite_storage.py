@@ -1,6 +1,4 @@
 import asyncio
-import json
-import sqlite3
 
 from opensprite.runs.lifecycle import RUN_STARTED_EVENT
 from opensprite.storage.base import (
@@ -10,115 +8,6 @@ from opensprite.storage.base import (
     StoredWorkState,
 )
 from opensprite.storage.sqlite import SQLiteStorage
-
-
-def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
-    db_path = tmp_path / "legacy.db"
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        """
-        CREATE TABLE sessions (
-            session_id TEXT PRIMARY KEY,
-            messages TEXT DEFAULT '[]',
-            consolidated_index INTEGER DEFAULT 0,
-            created_at REAL,
-            updated_at REAL
-        )
-        """
-    )
-    legacy_messages = [
-        {"role": "user", "content": "Please keep sqlite fts docs handy", "timestamp": 1.0},
-        {
-            "role": "tool",
-            "content": json.dumps(
-                {
-                    "type": "web_search",
-                    "query": "sqlite fts5",
-                    "url": "",
-                    "final_url": "",
-                    "title": "",
-                    "content": "",
-                    "summary": "Search results for: sqlite fts5",
-                    "provider": "duckduckgo",
-                    "extractor": "search",
-                    "status": None,
-                    "content_type": "application/json",
-                    "items": [
-                        {
-                            "title": "SQLite FTS5",
-                            "url": "https://sqlite.org/fts5.html",
-                            "content": "Official full text search docs",
-                        }
-                    ],
-                }
-            ),
-            "timestamp": 2.0,
-            "tool_name": "web_search",
-        },
-        {
-            "role": "tool",
-            "content": json.dumps(
-                {
-                    "type": "web_fetch",
-                    "query": "https://sqlite.org/fts5.html",
-                    "title": "SQLite FTS5",
-                    "url": "https://sqlite.org/fts5.html",
-                    "final_url": "https://sqlite.org/fts5.html",
-                    "content": "SQLite FTS5 supports full text search in a single database.",
-                    "summary": "SQLite FTS5",
-                    "provider": "web_fetch",
-                    "extractor": "trafilatura",
-                    "status": 200,
-                    "content_type": "text/html",
-                    "truncated": False,
-                    "items": [],
-                }
-            ),
-            "timestamp": 3.0,
-            "tool_name": "web_fetch",
-        },
-    ]
-    conn.execute(
-        "INSERT INTO sessions (session_id, messages, consolidated_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        ("chat-1", json.dumps(legacy_messages), 4, 1.0, 3.0),
-    )
-    conn.commit()
-    conn.close()
-
-    storage = SQLiteStorage(db_path)
-
-    messages = asyncio.run(storage.get_messages("chat-1"))
-    consolidated_index = asyncio.run(storage.get_consolidated_index("chat-1"))
-    chats = asyncio.run(storage.get_all_sessions())
-
-    assert [message.role for message in messages] == ["user", "tool", "tool"]
-    assert [message.tool_name for message in messages] == [None, "web_search", "web_fetch"]
-    assert consolidated_index == 4
-    assert chats == ["chat-1"]
-
-    conn = sqlite3.connect(str(db_path))
-    table_names = {
-        row[0]
-        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-    }
-    chunk_count = conn.execute("SELECT COUNT(*) FROM search_chunks").fetchone()[0]
-    conn.close()
-
-    assert "sessions" not in table_names
-    assert {
-        "chats",
-        "chat_state",
-        "messages",
-        "runs",
-        "run_events",
-        "run_parts",
-        "run_file_changes",
-        "work_states",
-        "search_chunks",
-        "search_chunks_fts",
-    }.issubset(table_names)
-    assert "knowledge_sources" not in table_names
-    assert chunk_count >= 3
 
 
 def test_sqlite_storage_supports_count_and_slice_reads(tmp_path):
@@ -303,50 +192,6 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert loaded_work_state.metadata == {"source": "test"}
     assert cleared_work_state is None
     assert chats == ["chat-1"]
-
-
-def test_sqlite_work_state_backfills_delegated_tasks_from_legacy_active_fields(tmp_path):
-    async def scenario():
-        storage = SQLiteStorage(tmp_path / "legacy-work-state.db")
-        await storage.upsert_work_state(
-            StoredWorkState(
-                session_id="chat-1",
-                objective="Finish the refactor",
-                kind="refactor",
-                status="active",
-                steps=("1. inspect",),
-                metadata={"source": "test"},
-                created_at=1.0,
-                updated_at=2.0,
-            )
-        )
-        async with storage._lock:
-            conn = storage._get_conn()
-            try:
-                conn.execute(
-                    """
-                    UPDATE work_states
-                    SET delegated_tasks_json = '[]',
-                        active_delegate_task_id = ?,
-                        active_delegate_prompt_type = ?
-                    WHERE session_id = ?
-                    """,
-                    ("task_legacy123", "implementer", "chat-1"),
-                )
-                conn.commit()
-            finally:
-                conn.close()
-        return await storage.get_work_state("chat-1")
-
-    work_state = asyncio.run(scenario())
-
-    assert work_state is not None
-    assert work_state.active_delegate_task_id == "task_legacy123"
-    assert work_state.active_delegate_prompt_type == "implementer"
-    assert len(work_state.delegated_tasks) == 1
-    assert work_state.delegated_tasks[0].task_id == "task_legacy123"
-    assert work_state.delegated_tasks[0].prompt_type == "implementer"
-    assert work_state.delegated_tasks[0].selected is True
 
 
 def test_sqlite_storage_persists_background_processes(tmp_path):

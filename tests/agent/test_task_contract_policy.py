@@ -324,7 +324,7 @@ def test_planner_quality_check_values_are_normalized_without_duplicates():
 def test_missing_evidence_uses_requirement_kind_policy_helpers():
     contract = TaskContract(
         objective="Inspect two files and verify changes.",
-        task_type="workspace_change",
+        task_type="code_change",
         required_tools=("read_file",),
         requirements=(
             EvidenceRequirement(

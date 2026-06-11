@@ -1172,8 +1172,6 @@ class MessageQueue:
             error_handler = self._error_handlers.get(self.normalize_channel(inbound.channel))
             if error_handler is not None:
                 await error_handler(session_id, str(e))
-            elif hasattr(self, 'on_error'):
-                await self.on_error(session_id, str(e))
         finally:
             await self._set_session_status(session_id, "idle")
 

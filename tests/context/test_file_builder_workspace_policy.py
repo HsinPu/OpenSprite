@@ -7,7 +7,7 @@ def test_file_builder_includes_workspace_operating_policy(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     prompt = builder.build_system_prompt("telegram:room-1")

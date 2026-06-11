@@ -57,7 +57,7 @@ def _task_contract_response(messages) -> LLMResponse:
     prompt_lower = prompt_text.lower()
     if "please update readme" in prompt_lower or "tests/test_app.py" in prompt_text or "refactor the agent" in prompt_lower:
         content = (
-            '{"objective":"Apply the requested workspace change","task_type":"workspace_change",'
+            '{"objective":"Apply the requested workspace change","task_type":"code_change",'
             '"required_tools":["read_file","apply_patch"],'
             '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner workspace change"}'
         )

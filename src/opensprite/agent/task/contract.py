@@ -58,7 +58,6 @@ from .capabilities import (
     PLANNING_TASK_TYPE,
     PURE_ANSWER_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
-    WORKSPACE_CHANGE_TASK_TYPE,
     WORKSPACE_READ_TASK_TYPE,
     is_planning_task_type,
 )
@@ -1288,8 +1287,6 @@ PLANNER_UNAVAILABLE_REASON = "task planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or missing task_type"
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
-PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
-PLANNER_OPS_TASK_TYPE = "ops"
 REQUIRED_TOOL_EVIDENCE_KIND = "required_tool"
 RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
 ALL_RESOURCE_COVERAGE = "all"
@@ -1314,25 +1311,16 @@ _ALLOWED_PLANNER_TASK_TYPES = frozenset(
         PURE_ANSWER_TASK_TYPE,
         WEB_RESEARCH_TASK_TYPE,
         WORKSPACE_READ_TASK_TYPE,
-        WORKSPACE_CHANGE_TASK_TYPE,
         CODE_CHANGE_TASK_TYPE,
-        PLANNER_MEDIA_ANALYSIS_TASK_TYPE,
         MEDIA_EXTRACTION_TASK_TYPE,
         PLANNING_TASK_TYPE,
         HISTORY_RETRIEVAL_TASK_TYPE,
-        PLANNER_OPS_TASK_TYPE,
         OPERATIONS_TASK_TYPE,
         GENERIC_TASK_TYPE,
         ANALYSIS_TASK_TYPE,
     }
 )
-_PLANNER_TASK_TYPE_ALIASES = {
-    WORKSPACE_CHANGE_TASK_TYPE: CODE_CHANGE_TASK_TYPE,
-    PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_EXTRACTION_TASK_TYPE,
-    PLANNER_OPS_TASK_TYPE: OPERATIONS_TASK_TYPE,
-}
-LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES = frozenset({"implementation", "refactor"})
-FILE_CHANGE_TASK_TYPES = frozenset({CODE_CHANGE_TASK_TYPE, *LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES})
+FILE_CHANGE_TASK_TYPES = frozenset({CODE_CHANGE_TASK_TYPE})
 TOOL_BACKED_TASK_TYPES = frozenset(
     {
         WEB_RESEARCH_TASK_TYPE,
@@ -2263,7 +2251,7 @@ def _contract_from_task_planner_payload(
         allowed_tools=catalog.available_tool_names,
     )
     quality_checks = _normalize_planner_quality_checks(payload.get("quality_checks"))
-    task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
+    task_type = raw_task_type
     if task_type in TOOL_BACKED_TASK_TYPES and not required_tools:
         raise TaskPlannerError(
             PLANNER_MISSING_REQUIRED_TOOLS_REASON,

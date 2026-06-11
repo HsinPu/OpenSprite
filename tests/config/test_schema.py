@@ -817,12 +817,12 @@ def test_config_load_reads_channels_from_external_file(tmp_path):
     assert config.channels_file == "channels.json"
 
 
-def test_config_load_ignores_legacy_top_level_channels(tmp_path):
+def test_config_load_ignores_top_level_channel_sections(tmp_path):
     config_path = tmp_path / "opensprite.json"
     config_path.write_text(
         json.dumps(
             {
-                "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
+                "llm": {},
                 "storage": {"type": "memory", "path": "memory.db"},
                 "channels": {"telegram": {"enabled": True, "token": "abc"}},
             }

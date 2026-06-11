@@ -63,14 +63,6 @@ _INITIAL_CONTINUATION_TYPES = (
     "ambiguous_boundary",
     "none",
 )
-_INITIAL_DONE_CRITERIA_KEYS = (
-    "done_criteria",
-    "success_criteria",
-    "acceptance_criteria",
-    "definition_of_done",
-)
-
-
 class InitialTaskPlanningError(RuntimeError):
     """Raised when the initial LLM task planning decision is unavailable or invalid."""
 
@@ -361,11 +353,7 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
 
 
 def _initial_done_criteria(payload: dict[str, Any]) -> tuple[str, ...]:
-    for key in _INITIAL_DONE_CRITERIA_KEYS:
-        criteria = _string_tuple(payload.get(key))
-        if criteria:
-            return criteria
-    return ()
+    return _string_tuple(payload.get("done_criteria"))
 
 
 def _optional_string(value: Any) -> str | None:

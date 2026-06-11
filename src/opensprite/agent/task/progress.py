@@ -13,10 +13,9 @@ from .capabilities import (
     FILE_CHANGE_REQUIREMENT_KIND,
     OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
-    WORKSPACE_CHANGE_TASK_TYPE,
 )
 from ...storage import StoredDelegatedTask, StoredWorkState
-from ...storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
+from ...storage.base import coerce_stored_delegated_tasks, selected_delegated_task
 from ..completion_gate import (
     CompletionGateResult,
     is_blocking_completion_status,
@@ -377,12 +376,11 @@ class WorkProgressService:
         """Return the normalized structured workboard metadata for one state."""
         if state is None:
             return WorkboardState()
-        legacy = _legacy_workboard(state)
-        pending_steps = tuple(state.pending_steps) or tuple(_string_list(legacy.get("pending_steps")))
-        blockers = tuple(state.blockers) or tuple(_string_list(legacy.get("blockers")))
-        verification_targets = tuple(state.verification_targets) or tuple(_string_list(legacy.get("verification_targets")))
-        resume_hint = state.resume_hint or str(legacy.get("resume_hint") or "")
-        last_progress_signals = tuple(state.last_progress_signals) or tuple(_string_list(legacy.get("last_progress_signals")))
+        pending_steps = tuple(state.pending_steps)
+        blockers = tuple(state.blockers)
+        verification_targets = tuple(state.verification_targets)
+        resume_hint = state.resume_hint
+        last_progress_signals = tuple(state.last_progress_signals)
         if not pending_steps:
             pending_steps = tuple(
                 step for step in state.steps if step not in state.completed_steps and step != WORK_STEP_NOT_SET
@@ -894,10 +892,7 @@ def _normalized_policy_text(value: Any) -> str:
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
     if state is None:
         return ()
-    return coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
-        state.active_delegate_task_id,
-        state.active_delegate_prompt_type,
-    )
+    return coerce_stored_delegated_tasks(state.delegated_tasks)
 
 
 def _merge_delegated_tasks(
@@ -970,18 +965,6 @@ def _numbered_steps(steps: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(f"{index}. {step}" for index, step in enumerate(steps, start=1))
 
 
-def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, (list, tuple)):
-        return []
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _legacy_workboard(state: StoredWorkState) -> dict[str, Any]:
-    metadata = state.metadata if isinstance(state.metadata, dict) else {}
-    payload = metadata.get("workboard")
-    return payload if isinstance(payload, dict) else {}
-
-
 def _apply_structured_follow_up_metadata(metadata: dict[str, Any], completion_result: CompletionGateResult) -> dict[str, Any]:
     next_metadata = dict(metadata or {})
     for key in (
@@ -1045,7 +1028,7 @@ def _contract_expects_code_change(task_contract: TaskContract) -> bool:
     task_type = _contract_task_type(task_contract)
     return (
         contract_expects_file_change(task_contract)
-        or task_type in {CODE_CHANGE_TASK_TYPE, WORKSPACE_CHANGE_TASK_TYPE}
+        or task_type == CODE_CHANGE_TASK_TYPE
         or _contract_has_required_evidence(task_contract, FILE_CHANGE_REQUIREMENT_KIND)
     )
 

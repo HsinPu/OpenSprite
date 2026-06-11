@@ -95,7 +95,7 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
             bootstrap_dir=tmp_path / "bootstrap",
             memory_dir=tmp_path / "memory",
             tool_workspace=workspace_root,
-            default_skills_dir=tmp_path / "skills",
+            skills_root=tmp_path / "skills",
         )
         registry = ToolRegistry()
         registry.register(DummyTool())

@@ -165,7 +165,7 @@ class FakeProvider:
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
-                    '{"task_type":"workspace_change","required_tools":["read_file","apply_patch"],'
+                    '{"task_type":"code_change","required_tools":["read_file","apply_patch"],'
                     '"final_answer_required":true,"allow_no_tool_final":false,'
                     '"reason":"test planner contract"}'
                 ),
@@ -728,7 +728,7 @@ class ModelRoutingProvider:
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
-                    '{"task_type":"workspace_change","required_tools":["read_file","apply_patch"],'
+                    '{"task_type":"code_change","required_tools":["read_file","apply_patch"],'
                     '"final_answer_required":true,"allow_no_tool_final":false,'
                     '"reason":"test planner contract"}'
                 ),

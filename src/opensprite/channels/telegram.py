@@ -88,7 +88,6 @@ class TelegramAdapter(MessageAdapter):
         self.channel_instance_id = normalize_identifier(channel_instance_id, fallback="telegram")
         self._typing_tasks: dict[str, asyncio.Task] = {}
         self._registered_handlers = False
-        self._used_legacy_error_handler = False
         self._started_event = asyncio.Event()
 
     def _get_int(self, key: str) -> int:
@@ -282,13 +281,8 @@ class TelegramAdapter(MessageAdapter):
         if self.mq is None or not self._registered_handlers:
             return
         self.mq.unregister_response_handler(self.channel_instance_id)
-        unregister_error_handler = getattr(self.mq, "unregister_error_handler", None)
-        if callable(unregister_error_handler):
-            unregister_error_handler(self.channel_instance_id)
-        elif self._used_legacy_error_handler:
-            self.mq.on_error = None
+        self.mq.unregister_error_handler(self.channel_instance_id)
         self._registered_handlers = False
-        self._used_legacy_error_handler = False
     
     @staticmethod
     def _resolve_update_bot(raw_update: Any, explicit_bot: Any = None) -> Any:
@@ -879,12 +873,7 @@ class TelegramAdapter(MessageAdapter):
         if self.mq is None:
             raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
         self.mq.register_response_handler(self.channel_instance_id, self._on_response)
-        register_error_handler = getattr(self.mq, "register_error_handler", None)
-        if callable(register_error_handler):
-            register_error_handler(self.channel_instance_id, self._on_error)
-        else:
-            self.mq.on_error = self._on_error
-            self._used_legacy_error_handler = True
+        self.mq.register_error_handler(self.channel_instance_id, self._on_error)
         self._registered_handlers = True
         
         # 初始化並啟動

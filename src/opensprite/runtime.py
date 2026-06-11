@@ -400,10 +400,5 @@ def gateway(config_path: str | Path | None = None) -> None:
     asyncio.run(run(config_path=config_path))
 
 
-def main(config_path: str | Path | None = None) -> None:
-    """Backward-compatible alias for the gateway entrypoint."""
-    gateway(config_path=config_path)
-
-
 if __name__ == "__main__":
-    main()
+    gateway()

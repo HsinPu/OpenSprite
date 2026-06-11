@@ -23,7 +23,7 @@ def test_rank_web_sources_for_objective_prefers_relevant_title_and_snippet():
 def test_web_source_relevance_score_prefers_brand_domain_from_objective():
     official = {
         "title": "OpenRouter docs",
-        "url": "https://openrouter.ai/docs/api-reference",
+        "url": "https://openrouter.ai/docs/api/reference",
     }
     unrelated = {
         "title": "API docs",

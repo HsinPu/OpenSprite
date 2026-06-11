@@ -24,7 +24,7 @@ def test_file_builder_includes_personal_skill_summary_for_chat(tmp_path):
         bootstrap_dir=bootstrap_dir,
         memory_dir=memory_dir,
         tool_workspace=workspace_root,
-        default_skills_dir=global_dir,
+        skills_root=global_dir,
     )
 
     personal_dir = builder.get_session_skills_dir("telegram:room-1")

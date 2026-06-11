@@ -205,30 +205,6 @@ def test_provider_settings_uses_discovered_provider_models(tmp_path, monkeypatch
     assert provider["models"][:3] == ["custom-selected-model", "live-model", "gpt-4.1-mini"]
 
 
-def test_provider_settings_migrates_legacy_api_key_to_credential_store(tmp_path):
-    config_path = _copy_config(tmp_path)
-    providers_path = tmp_path / "llm.providers.json"
-    providers = json.loads(providers_path.read_text(encoding="utf-8"))
-    providers["openai"] = {
-        "provider": "openai",
-        "auth_type": "api_key",
-        "api_key": "legacy-secret",
-        "model": "gpt-4.1-mini",
-        "base_url": "https://api.openai.com/v1",
-        "enabled": True,
-    }
-    providers_path.write_text(json.dumps(providers), encoding="utf-8")
-
-    listing = ProviderSettingsService(config_path).list_providers()
-
-    migrated = json.loads(providers_path.read_text(encoding="utf-8"))["openai"]
-    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
-    assert migrated["api_key"] == ""
-    assert migrated["credential_id"].startswith("cred_")
-    assert auth_store["credentials"]["openai"][0]["secret"] == "legacy-secret"
-    assert listing["connected"][0]["credential_preview"] == "lega...cret"
-
-
 def test_provider_settings_removes_provider_references_for_deleted_credential(tmp_path):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)

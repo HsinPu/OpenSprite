@@ -190,27 +190,16 @@ WEB_FETCH_MIN_CONTENT_CHARS = 800
 @dataclass(frozen=True)
 class DocsFallbackRule:
     domain: str
-    legacy_path_prefix: str
-    canonical_path_prefix: str
     index_path: str
     index_fallback_path: str
-    not_found_markers: tuple[str, ...]
-    not_found_required_terms: tuple[str, ...]
     index_shell_markers: tuple[str, ...]
     fallback_title: str
 
 
 _OPENROUTER_DOCS_FALLBACK_RULE = DocsFallbackRule(
     domain="openrouter.ai",
-    legacy_path_prefix="/docs/api-reference/",
-    canonical_path_prefix="/docs/api/reference/",
     index_path="/docs",
     index_fallback_path="/docs/llms.txt",
-    not_found_markers=(
-        "# page not found this page does not exist.",
-        "page not found this page does not exist.",
-    ),
-    not_found_required_terms=("page not found", "this page does not exist"),
     index_shell_markers=("no models found", "full documentation content"),
     fallback_title="OpenRouter full documentation",
 )
@@ -771,19 +760,6 @@ class WebFetcher:
                     }
             raise
 
-        alternate_url = _openrouter_docs_alternate_url(url, final_url, decode_content(content, content_type))
-        if alternate_url:
-            try:
-                content_type, content, status, final_url = fetch_url(
-                    alternate_url,
-                    self.timeout,
-                    self.retry_on_403,
-                    self.max_response_size,
-                )
-                url = alternate_url
-            except Exception:
-                pass
-        
         result = {
             'url': url, 'finalUrl': final_url, 'status': status,
             'contentType': content_type, 'extractor': 'raw',
@@ -882,36 +858,6 @@ class WebFetcher:
         else:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
 
-        post_extract_alternate_url = _openrouter_docs_alternate_url(
-            url,
-            result.get('finalUrl') or final_url,
-            result.get('text') or '',
-        )
-        if post_extract_alternate_url and post_extract_alternate_url != url:
-            try:
-                content_type, content, status, final_url = fetch_url(
-                    post_extract_alternate_url,
-                    self.timeout,
-                    self.retry_on_403,
-                    self.max_response_size,
-                )
-            except Exception:
-                pass
-            else:
-                url = post_extract_alternate_url
-                text = decode_content(content, content_type)
-                result.update(
-                    {
-                        'url': url,
-                        'finalUrl': final_url,
-                        'status': status,
-                        'contentType': content_type,
-                        'title': f"{url} ({content_type})",
-                        'extractor': 'raw',
-                    }
-                )
-                result['text'], result['truncated'] = truncate_text(text, self.max_chars)
-
         index_fallback_url = _openrouter_docs_index_fallback_url(url, result.get('finalUrl') or final_url, result.get('text') or '')
         if index_fallback_url:
             try:
@@ -938,32 +884,6 @@ class WebFetcher:
                 result['text'], result['truncated'] = truncate_text(fallback_text, self.max_chars)
         
         return result
-
-
-def _openrouter_docs_alternate_url(url: str, final_url: str, content: str) -> str | None:
-    if not _looks_like_openrouter_docs_not_found(content):
-        return None
-    rule = _OPENROUTER_DOCS_FALLBACK_RULE
-    for candidate in (url, final_url):
-        try:
-            parsed = urlparse(str(candidate or ""))
-        except Exception:
-            continue
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != rule.domain:
-            continue
-        path = parsed.path
-        if path.endswith(".md"):
-            path = path[:-3]
-        if rule.legacy_path_prefix not in path:
-            continue
-        return parsed._replace(path=path.replace(rule.legacy_path_prefix, rule.canonical_path_prefix, 1)).geturl()
-    return None
-
-
-def _looks_like_openrouter_docs_not_found(content: str) -> bool:
-    normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
-    rule = _OPENROUTER_DOCS_FALLBACK_RULE
-    return normalized in rule.not_found_markers or all(term in normalized for term in rule.not_found_required_terms)
 
 
 def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:

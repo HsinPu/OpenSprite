@@ -297,9 +297,3 @@ def test_ungrounded_response_source_urls_ignores_openrouter_api_base_url_referen
         "The API base URL is https://openrouter.ai/api/v1.",
         [{"url": "https://openrouter.ai/docs/api/reference/overview"}],
     ) == []
-
-
-def test_normalize_source_url_normalizes_openrouter_doc_aliases():
-    assert normalize_source_url("https://www.openrouter.ai/docs/api-reference/overview.md") == (
-        "https://openrouter.ai/docs/api/reference/overview"
-    )

@@ -194,9 +194,8 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         memory_dir: Path | None = None,
         tool_workspace: Path | None = None,
         skills_loader: SkillsLoader | None = None,
-        default_skills_dir: Path | None = None,
+        skills_root: Path | None = None,
         personal_skills_dir: Path | None = None,
-        custom_skills_dir: Path | None = None,
         learning_ledger: LearningLedger | None = None,
     ):
         self.app_home = get_app_home(app_home)
@@ -217,9 +216,8 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         self._session_overlay_ids: dict[str, str] = {}
         self.learning_ledger = learning_ledger
         self.skills_loader = skills_loader or SkillsLoader(
-            default_skills_dir=default_skills_dir or get_skills_dir(self.app_home),
+            skills_root=skills_root or get_skills_dir(self.app_home),
             personal_skills_dir=personal_skills_dir,
-            custom_skills_dir=custom_skills_dir,
         )
 
     def set_learning_ledger(self, ledger: LearningLedger | None) -> None:

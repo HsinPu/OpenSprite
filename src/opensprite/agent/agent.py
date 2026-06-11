@@ -153,11 +153,6 @@ class BackgroundSessionNotificationService:
             ]
         )
 
-    @staticmethod
-    def format_exit_message(session: BackgroundSession) -> str:
-        """Backward-compatible alias for the agent summary request text."""
-        return BackgroundSessionNotificationService.format_summary_request(session)
-
     def make_exit_notifier(
         self,
         *,
@@ -570,7 +565,7 @@ class AgentLoop:
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:
         """Render a concise outbound notice when a managed background session exits."""
-        return BackgroundSessionNotificationService.format_exit_message(session)
+        return BackgroundSessionNotificationService.format_summary_request(session)
 
     def _make_background_session_exit_notifier(self) -> Callable[[BackgroundSession], Awaitable[None]] | None:
         """Build an outbound notifier for managed background session completion."""

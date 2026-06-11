@@ -7,7 +7,7 @@ def test_file_builder_includes_active_workspace_agents_file(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     agents_path = builder.get_workspace_agents_path("telegram:room-1")
@@ -26,7 +26,7 @@ def test_file_builder_uses_only_the_active_session_agents_file(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     builder.get_workspace_agents_path("telegram:room-1").write_text(
@@ -53,7 +53,7 @@ def test_file_builder_blocks_suspicious_workspace_agents_file(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     agents_path = builder.get_workspace_agents_path("telegram:room-1")
@@ -76,7 +76,7 @@ def test_file_builder_blocks_invisible_unicode_in_workspace_agents_file(tmp_path
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     agents_path = builder.get_workspace_agents_path("telegram:room-1")
@@ -95,7 +95,7 @@ def test_file_builder_truncates_large_workspace_agents_file(tmp_path):
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
-        default_skills_dir=tmp_path / "skills",
+        skills_root=tmp_path / "skills",
     )
 
     agents_path = builder.get_workspace_agents_path("telegram:room-1")

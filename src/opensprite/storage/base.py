@@ -252,25 +252,6 @@ def coerce_stored_delegated_tasks(values: Any) -> tuple[StoredDelegatedTask, ...
     return tuple(items)
 
 
-def legacy_delegated_tasks(
-    active_delegate_task_id: str | None,
-    active_delegate_prompt_type: str | None,
-) -> tuple[StoredDelegatedTask, ...]:
-    """Synthesize one delegated task from legacy active-delegate fields."""
-    task_id = str(active_delegate_task_id or "").strip()
-    if not task_id:
-        return ()
-    prompt_type = str(active_delegate_prompt_type or "").strip() or None
-    return (
-        StoredDelegatedTask(
-            task_id=task_id,
-            prompt_type=prompt_type,
-            status="unknown",
-            selected=True,
-        ),
-    )
-
-
 def selected_delegated_task(tasks: tuple[StoredDelegatedTask, ...]) -> StoredDelegatedTask | None:
     """Return the selected delegated task, if any."""
     for task in tasks:

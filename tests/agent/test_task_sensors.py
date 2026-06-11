@@ -35,9 +35,9 @@ def test_web_research_sensors_require_sources_and_live_evidence():
     ]
 
 
-def test_workspace_change_sensors_record_missing_change_and_verification():
+def test_code_change_sensors_record_missing_change_and_verification():
     sensors = evaluate_task_sensors(
-        task_type="workspace_change",
+        task_type="code_change",
         execution_result=ExecutionResult(content="done", verification_attempted=True, verification_passed=False),
         completion_result=CompletionGateResult(status="incomplete", reason="needs code changes"),
     )

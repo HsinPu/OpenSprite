@@ -54,7 +54,7 @@ def test_normalize_openai_compatible_messages_includes_reasoning_details_when_en
     ]
 
 
-def test_normalize_openai_compatible_messages_uses_legacy_dict_defaults():
+def test_normalize_openai_compatible_messages_uses_dict_role_defaults():
     assert normalize_openai_compatible_messages([{"content": "hello"}]) == [{"role": "?", "content": "hello"}]
 
 

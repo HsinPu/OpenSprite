@@ -549,39 +549,6 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
     return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
 
 
-def migrate_provider_api_keys_to_credentials(
-    providers: dict[str, Any],
-    *,
-    app_home: str | Path,
-) -> bool:
-    """Move legacy provider api_key values into auth.json credential entries."""
-    changed = False
-    presets = load_llm_presets()
-    for provider_id, provider in providers.items():
-        if not isinstance(provider, dict):
-            continue
-        raw_key = str(provider.get("api_key", "") or "").strip()
-        if not raw_key or str(provider.get("credential_id", "") or "").strip():
-            continue
-        preset_id = get_provider_preset_id(provider_id, provider, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
-        if not preset or preset.auth_type != "api_key":
-            continue
-        label = str(provider.get("name") or "").strip() or ProviderSettingsService._display_name(provider_id, preset, provider)
-        credential = add_credential(
-            preset_id,
-            raw_key,
-            label=label,
-            base_url=str(provider.get("base_url") or preset.default_base_url or "").strip() or None,
-            scopes=[DEFAULT_LLM_CAPABILITY],
-            app_home=app_home,
-        )
-        provider["credential_id"] = credential["id"]
-        provider["api_key"] = ""
-        changed = True
-    return changed
-
-
 def public_credential_for_provider(provider_id: str, provider: dict[str, Any], preset_id: str | None, *, app_home: str | Path) -> dict[str, Any] | None:
     credential_id = str(provider.get("credential_id", "") or "").strip()
     if not credential_id and not preset_id:
@@ -631,10 +598,6 @@ class ProviderSettingsService:
         main_data = self._load_main_data()
         loaded = Config.from_json(self.config_path)
         providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
-        if migrate_provider_api_keys_to_credentials(providers, app_home=self.config_path.parent):
-            self._persist_llm_state(main_data, providers)
-            loaded = Config.from_json(self.config_path)
-            providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
         return main_data, providers, loaded
 
     def _persist_llm_state(self, main_data: dict[str, Any], providers: dict[str, Any]) -> None:

@@ -36,7 +36,6 @@ WORKSPACE_SESSIONS_DIRNAME = "sessions"
 USER_OVERLAYS_DIRNAME = "user_overlays"
 SESSION_MEMORY_DIRNAME = "memory"
 SESSION_STATE_DIRNAME = "state"
-LEGACY_USER_PROFILES_DIRNAME = "users"
 SUBAGENT_PROMPTS_DIRNAME = "subagent_prompts"
 USER_PROFILE_STATE_FILENAME = ".user_profile_state.json"
 RECENT_SUMMARY_STATE_FILENAME = ".recent_summary_state.json"
@@ -375,60 +374,6 @@ def _copy_missing_tree(source: Path, dest: Path, root: Path) -> list[str]:
     return copied
 
 
-def migrate_legacy_bootstrap(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
-    """Copy legacy bootstrap markdown files into ~/.opensprite/bootstrap."""
-    home = get_app_home(app_home)
-    bootstrap_dir = get_bootstrap_dir(home)
-    workspace_dir = get_tool_workspace(home)
-    migrated: list[str] = []
-
-    for source_dir in (home, workspace_dir):
-        for filename in BOOTSTRAP_FILES:
-            source = source_dir / filename
-            dest = bootstrap_dir / filename
-            if source.resolve(strict=False) == dest.resolve(strict=False):
-                continue
-            copied = _copy_missing_file(source, dest, home)
-            if copied:
-                migrated.append(copied)
-
-    if migrated and not silent:
-        logger.info("Migrated legacy bootstrap files: %s", migrated)
-
-    return migrated
-def migrate_legacy_user_profiles(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
-    """Copy legacy ~/.opensprite/users/... profiles into workspace/sessions/... (same relative paths)."""
-    home = get_app_home(app_home)
-    legacy_root = home / LEGACY_USER_PROFILES_DIRNAME
-    workspace_root = get_tool_workspace(home)
-    dest_root = workspace_root / WORKSPACE_SESSIONS_DIRNAME
-    migrated: list[str] = []
-
-    if not legacy_root.is_dir():
-        return migrated
-
-    for source in legacy_root.rglob("*"):
-        if source.is_dir():
-            continue
-        if source.name not in ("USER.md", USER_PROFILE_STATE_FILENAME):
-            continue
-        try:
-            rel = source.relative_to(legacy_root)
-        except ValueError:
-            continue
-        dest = dest_root / rel
-        if dest.exists():
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, dest)
-        migrated.append(_relative_path(dest, home))
-
-    if migrated and not silent:
-        logger.info("Migrated legacy user profile files: %s", migrated)
-
-    return migrated
-
-
 def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
     """Sync bundled templates into ~/.opensprite app directories."""
     home = get_app_home(app_home)
@@ -438,8 +383,6 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
     get_tool_workspace(home)
 
     changed: list[str] = []
-    changed.extend(migrate_legacy_bootstrap(home, silent=True))
-    changed.extend(migrate_legacy_user_profiles(home, silent=True))
 
     try:
         from importlib.resources import files as pkg_files

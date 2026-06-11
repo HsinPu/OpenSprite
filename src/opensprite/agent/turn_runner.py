@@ -2346,7 +2346,6 @@ def _task_contract_type(task_contract: Any) -> str:
 def _scorecard_sensor_task_type(task_type: str) -> str:
     normalized = str(task_type or "").strip()
     return {
-        "code_change": "workspace_change",
         "workspace_read": "workspace_analysis",
         "analysis": "workspace_analysis",
         "task": "pure_answer",

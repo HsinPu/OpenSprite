@@ -13,7 +13,6 @@ from typing import Any
 
 from ..search.indexing import (
     SearchChunkPayload,
-    build_history_chunks,
 )
 from ..utils.json_safe import json_safe_value as json_safe
 from ..utils.log import logger
@@ -27,7 +26,6 @@ from .base import (
     StoredRunPart,
     StoredWorkState,
     coerce_stored_delegated_tasks,
-    legacy_delegated_tasks,
     selected_delegated_task,
 )
 
@@ -278,14 +276,7 @@ def open_sqlite_connection(db_path: Path) -> sqlite3.Connection:
 
 
 def ensure_sqlite_schema(conn: sqlite3.Connection) -> None:
-    """Ensure the normalized schema exists, migrating the legacy table if needed."""
-    has_messages = table_exists(conn, "messages")
-    has_legacy_sessions = table_exists(conn, "sessions")
-
-    if has_legacy_sessions and not has_messages:
-        migrate_legacy_sessions(conn)
-        return
-
+    """Ensure the normalized schema exists."""
     create_schema(conn)
     ensure_schema_upgrades(conn)
     conn.execute(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
@@ -579,69 +570,6 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 
-def migrate_legacy_sessions(conn: sqlite3.Connection) -> None:
-    """Migrate the old sessions JSON table into the normalized schema."""
-    legacy_rows = conn.execute(
-        "SELECT session_id, messages, consolidated_index, created_at, updated_at FROM sessions ORDER BY session_id"
-    ).fetchall()
-    logger.info("Migrating legacy SQLite sessions schema ({} chat(s))", len(legacy_rows))
-
-    try:
-        conn.execute("BEGIN")
-        create_schema(conn)
-        for row in legacy_rows:
-            _migrate_legacy_chat(conn, row)
-        conn.execute("DROP TABLE sessions")
-        conn.execute(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-
-
-def _migrate_legacy_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
-    session_id = str(row["session_id"])
-    now = time.time()
-    session_created_at = float(row["created_at"] or 0) or now
-    session_updated_at = float(row["updated_at"] or 0) or session_created_at
-    ensure_chat_row(conn, session_id, created_at=session_created_at, updated_at=session_updated_at)
-    conn.execute(
-        "INSERT INTO chat_state (session_id, consolidated_index) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET consolidated_index = excluded.consolidated_index",
-        (session_id, int(row["consolidated_index"] or 0)),
-    )
-
-    messages_blob = row["messages"] or "[]"
-    try:
-        raw_messages = json.loads(messages_blob)
-    except json.JSONDecodeError:
-        raw_messages = []
-
-    for raw_message in raw_messages:
-        if not isinstance(raw_message, dict):
-            continue
-        created_at = float(raw_message.get("timestamp", 0) or 0) or session_created_at
-        message = StoredMessage(
-            role=str(raw_message.get("role", "user") or "user"),
-            content=str(raw_message.get("content", "") or ""),
-            timestamp=created_at,
-            tool_name=raw_message.get("tool_name"),
-            is_consolidated=bool(raw_message.get("is_consolidated", False)),
-            metadata=raw_message.get("metadata", {}) if isinstance(raw_message.get("metadata", {}), dict) else {},
-        )
-        message_id = insert_message_row(conn, session_id, message)
-        insert_search_chunks(
-            conn,
-            session_id=session_id,
-            owner_type="message",
-            owner_id=message_id,
-            chunks=build_history_chunks(
-                role=message.role,
-                content=message.content,
-                tool_name=message.tool_name,
-                created_at=created_at,
-            ),
-        )
-
 class SQLiteStorage(StorageProvider):
     """Normalized SQLite storage implementation."""
 
@@ -762,10 +690,7 @@ class SQLiteStorage(StorageProvider):
         if row is None:
             return None
         metadata = _load_metadata(row["metadata_json"])
-        legacy_workboard = _load_legacy_workboard(metadata)
-        delegated_tasks = coerce_stored_delegated_tasks(_load_json_list_or_fallback(row, "delegated_tasks_json"))
-        if not delegated_tasks:
-            delegated_tasks = legacy_delegated_tasks(row["active_delegate_task_id"], row["active_delegate_prompt_type"])
+        delegated_tasks = coerce_stored_delegated_tasks(_load_json_list(row["delegated_tasks_json"]))
         selected_task = selected_delegated_task(delegated_tasks)
         return StoredWorkState(
             session_id=str(row["session_id"]),
@@ -782,15 +707,11 @@ class SQLiteStorage(StorageProvider):
             current_step=str(row["current_step"] or "not set"),
             next_step=str(row["next_step"] or "not set"),
             completed_steps=tuple(_load_string_list(row["completed_steps_json"])),
-            pending_steps=tuple(_load_string_list_or_fallback(row, "pending_steps_json", legacy_workboard.get("pending_steps"))),
-            blockers=tuple(_load_string_list_or_fallback(row, "blockers_json", legacy_workboard.get("blockers"))),
-            verification_targets=tuple(
-                _load_string_list_or_fallback(row, "verification_targets_json", legacy_workboard.get("verification_targets"))
-            ),
-            resume_hint=_load_string_or_fallback(row, "resume_hint", legacy_workboard.get("resume_hint")),
-            last_progress_signals=tuple(
-                _load_string_list_or_fallback(row, "last_progress_signals_json", legacy_workboard.get("last_progress_signals"))
-            ),
+            pending_steps=tuple(_load_string_list(row["pending_steps_json"])),
+            blockers=tuple(_load_string_list(row["blockers_json"])),
+            verification_targets=tuple(_load_string_list(row["verification_targets_json"])),
+            resume_hint=str(row["resume_hint"] or ""),
+            last_progress_signals=tuple(_load_string_list(row["last_progress_signals_json"])),
             file_change_count=int(row["file_change_count"] or 0),
             touched_paths=tuple(_load_string_list(row["touched_paths_json"])),
             verification_attempted=bool(row["verification_attempted"]),
@@ -1242,10 +1163,7 @@ class SQLiteStorage(StorageProvider):
             try:
                 created_at = float(state.created_at or time.time())
                 updated_at = float(state.updated_at or time.time())
-                delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
-                    state.active_delegate_task_id,
-                    state.active_delegate_prompt_type,
-                )
+                delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks)
                 selected_task = selected_delegated_task(delegated_tasks)
                 ensure_chat_row(conn, state.session_id, created_at=created_at, updated_at=updated_at)
                 existing = conn.execute(
@@ -1630,47 +1548,6 @@ def _load_metadata(raw: str | None) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _load_legacy_workboard(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Return legacy workboard content still stored under metadata for old rows."""
-    payload = metadata.get("workboard") if isinstance(metadata, dict) else None
-    return payload if isinstance(payload, dict) else {}
-
-
-def _load_string_or_fallback(row: sqlite3.Row, key: str, fallback: Any = None) -> str:
-    """Read one optional text column, using fallback when the column is absent or empty."""
-    keys = row.keys() if hasattr(row, "keys") else []
-    if key in keys:
-        value = str(row[key] or "")
-        if value:
-            return value
-    return str(fallback or "")
-
-
-def _load_string_list_or_fallback(row: sqlite3.Row, key: str, fallback: Any = None) -> list[str]:
-    """Read one optional JSON string-list column, using fallback when absent or empty."""
-    keys = row.keys() if hasattr(row, "keys") else []
-    if key in keys:
-        value = _load_string_list(row[key])
-        if value:
-            return value
-    if isinstance(fallback, list):
-        return [str(item) for item in fallback if str(item).strip()]
-    return []
-
-
-def _load_json_list_or_fallback(row: sqlite3.Row, key: str, fallback: Any = None) -> list[Any]:
-    """Read one optional JSON list column, using fallback when absent or invalid."""
-    keys = row.keys() if hasattr(row, "keys") else []
-    if key in keys and row[key]:
-        try:
-            payload = json.loads(row[key])
-        except (TypeError, json.JSONDecodeError):
-            payload = None
-        if isinstance(payload, list):
-            return payload
-    return list(fallback) if isinstance(fallback, (list, tuple)) else []
-
-
 def _load_string_list(raw: str | None) -> list[str]:
     """Parse one stored JSON list into a normalized list of strings."""
     if not raw:
@@ -1682,3 +1559,14 @@ def _load_string_list(raw: str | None) -> list[str]:
     if not isinstance(payload, list):
         return []
     return [str(item) for item in payload if str(item).strip()]
+
+
+def _load_json_list(raw: str | None) -> list[Any]:
+    """Parse one stored JSON list."""
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return payload if isinstance(payload, list) else []

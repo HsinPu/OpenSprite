@@ -189,7 +189,7 @@ def test_exec_tool_allows_help_for_dangerous_command_names(tmp_path):
     assert classify_tool_result_status(result).error_type != "ToolGuardrailError"
 
 
-def test_exec_tool_accepts_notify_on_complete_alias(tmp_path):
+def test_exec_tool_accepts_notify_on_exit(tmp_path):
     from opensprite.tools.shell import ExecTool
 
     tool = ExecTool(workspace=Path(tmp_path))
@@ -198,7 +198,7 @@ def test_exec_tool_accepts_notify_on_complete_alias(tmp_path):
         result = await tool.execute(
             command=_python_shell_command("print('done', flush=True)"),
             background=True,
-            notify_on_complete=False,
+            notify_on_exit=False,
         )
         sessions = await tool.process_manager.list_sessions()
         return result, sessions
@@ -233,7 +233,7 @@ def test_exec_tool_persists_background_session_lifecycle(tmp_path):
         result = await tool.execute(
             command=_python_shell_command("print('persisted background', flush=True)"),
             background=True,
-            notify_on_complete=False,
+            notify_on_exit=False,
         )
         sessions = await manager.list_sessions()
         assert len(sessions) == 1

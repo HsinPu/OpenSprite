@@ -782,10 +782,6 @@ class ExecTool(Tool):
                     "type": "boolean",
                     "description": "Optional. Override whether a managed background session should publish a completion notification when it exits.",
                 },
-                "notify_on_complete": {
-                    "type": "boolean",
-                    "description": "Optional Hermes-compatible alias for notify_on_exit. Prefer this for long-running jobs where the user should be notified when the command finishes.",
-                },
                 "notify_on_exit_empty_success": {
                     "type": "boolean",
                     "description": "Optional. Override whether successful managed background sessions with no output should still publish a completion notification.",
@@ -801,7 +797,7 @@ class ExecTool(Tool):
         timeout_arg = kwargs.get("timeout_seconds")
         timeout_was_supplied = timeout_arg is not None
         timeout_seconds = int(timeout_arg if timeout_was_supplied else self.timeout)
-        notify_arg = kwargs.get("notify_on_complete", kwargs.get("notify_on_exit", self.notify_on_exit))
+        notify_arg = kwargs.get("notify_on_exit", self.notify_on_exit)
         notify_on_exit = bool(notify_arg)
         notify_on_exit_empty_success = bool(
             kwargs.get("notify_on_exit_empty_success", self.notify_on_exit_empty_success)

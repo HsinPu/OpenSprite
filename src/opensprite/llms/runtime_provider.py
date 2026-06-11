@@ -20,7 +20,6 @@ from .reasoning import normalize_reasoning_effort
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 GITHUB_COPILOT_BASE_URL = COPILOT_BASE_URL
-_LEGACY_MINIMAX_CHAT_BASE_URLS = frozenset({"https://api.minimax.io/v1", "https://api.minimaxi.com/v1"})
 
 
 class ProviderRuntimeError(RuntimeError):
@@ -111,12 +110,6 @@ def resolve_provider_runtime(
         api_key = "no-key-required"
     if not base_url:
         base_url = profile_base_url
-    base_url = _normalize_provider_base_url(
-        provider_name=configured_provider,
-        api_mode=api_mode,
-        base_url=base_url,
-        profile_base_url=profile_base_url,
-    )
 
     return ResolvedProviderRuntime(
         provider_name=configured_provider,
@@ -129,23 +122,6 @@ def resolve_provider_runtime(
         reasoning_effort=normalize_reasoning_effort(provider.reasoning_effort),
         context_window_tokens=provider.context_window_tokens,
     )
-
-
-def _normalize_provider_base_url(
-    *,
-    provider_name: str,
-    api_mode: str | None,
-    base_url: str,
-    profile_base_url: str,
-) -> str:
-    normalized = str(base_url or "").strip().rstrip("/")
-    if (
-        provider_name == "minimax"
-        and api_mode == "anthropic_messages"
-        and normalized.lower() in _LEGACY_MINIMAX_CHAT_BASE_URLS
-    ):
-        return (profile_base_url or "https://api.minimax.io/anthropic").rstrip("/")
-    return base_url
 
 
 def create_llm_from_runtime(runtime: ResolvedProviderRuntime):

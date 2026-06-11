@@ -128,7 +128,7 @@ def test_result_payload_includes_trace_summary():
     assert payload["trace"]["event_count"] == 4
 
 
-def test_json_for_stdout_escapes_non_ascii_for_legacy_windows_encoding():
+def test_json_for_stdout_escapes_non_ascii_for_windows_codepage_encoding():
     rendered = _json_for_stdout({"reply": "✅ 繁體中文"}, encoding="cp950")
 
     assert "\\u2705" in rendered

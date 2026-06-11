@@ -31,7 +31,7 @@ def test_configure_skill_lists_skills(tmp_path):
         encoding="utf-8",
     )
 
-    loader = SkillsLoader(default_skills_dir=skills_root)
+    loader = SkillsLoader(skills_root=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
         workspace_resolver=lambda: session_ws,
@@ -48,7 +48,7 @@ def test_configure_skill_lists_skills(tmp_path):
 
 def test_configure_skill_add_upsert_and_get(tmp_path):
     ws = tmp_path / "workspace"
-    loader = SkillsLoader(default_skills_dir=tmp_path / "global_skills")
+    loader = SkillsLoader(skills_root=tmp_path / "global_skills")
     tool = ConfigureSkillTool(
         skills_loader=loader,
         workspace_resolver=lambda: ws,
@@ -110,7 +110,7 @@ def test_configure_skill_remove(tmp_path):
         encoding="utf-8",
     )
 
-    loader = SkillsLoader(default_skills_dir=skills_root)
+    loader = SkillsLoader(skills_root=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
         workspace_resolver=lambda: session_ws,
@@ -123,7 +123,7 @@ def test_configure_skill_remove(tmp_path):
 
 def test_configure_skill_reports_missing_skill_for_get_and_remove(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
 
@@ -142,7 +142,7 @@ def test_configure_skill_reports_missing_skill_for_get_and_remove(tmp_path):
 
 def test_configure_skill_rejects_invalid_skill_id(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     out = asyncio.run(
@@ -162,7 +162,7 @@ def test_configure_skill_rejects_invalid_skill_id(tmp_path):
 
 def test_configure_skill_rejects_short_description(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     out = asyncio.run(
@@ -182,7 +182,7 @@ def test_configure_skill_rejects_short_description(tmp_path):
 
 def test_configure_skill_rejects_short_body(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     out = asyncio.run(
@@ -202,7 +202,7 @@ def test_configure_skill_rejects_short_body(tmp_path):
 
 def test_configure_skill_rejects_too_few_english_words(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     # Long enough in characters but only 10 repeated tokens.
@@ -224,7 +224,7 @@ def test_configure_skill_rejects_too_few_english_words(tmp_path):
 
 def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     glue = " ".join(
@@ -256,7 +256,7 @@ def test_configure_skill_can_shadow_system_skill_id(tmp_path):
         "---\nname: memory\ndescription: system memory skill\n---\n\n# System\n",
         encoding="utf-8",
     )
-    loader = SkillsLoader(default_skills_dir=skills_root)
+    loader = SkillsLoader(skills_root=skills_root)
     tool = ConfigureSkillTool(skills_loader=loader, workspace_resolver=lambda: session_ws)
     out = asyncio.run(
         tool.execute(
@@ -274,7 +274,7 @@ def test_configure_skill_can_shadow_system_skill_id(tmp_path):
 
 def test_configure_skill_rejects_repetitive_description(tmp_path):
     tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        skills_loader=SkillsLoader(skills_root=tmp_path / "s"),
         workspace_resolver=lambda: tmp_path / "ws",
     )
     padded = " ".join(["foobar"] * 22)
