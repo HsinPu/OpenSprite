@@ -26,6 +26,7 @@ from ..runs.events import (
     LLM_STATUS_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_CLARIFICATION_REQUESTED_EVENT,
     TASK_CHECKPOINT_RECORDED_EVENT,
     TASK_SCORECARD_RECORDED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
@@ -50,6 +51,7 @@ from .completion_gate import (
     COMPLETION_RESULT_VERIFICATION_ACTION_FIELD,
     COMPLETION_RESULT_VERIFICATION_PATH_FIELD,
     COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD,
+    COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
     CompletionBlockerMessages,
     CompletionGateResult,
     CompletionGateService,
@@ -114,6 +116,7 @@ TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD = "active_delegate_task_id"
 TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD = "active_delegate_prompt_type"
 MEDIA_ONLY_TURN_REASON = "media_only"
 LLM_NOT_CONFIGURED_TURN_REASON = "llm_not_configured"
+TASK_CLARIFICATION_TURN_REASON = "task_clarification_requested"
 LLM_NOT_CONFIGURED_LOG_REASON = "llm-not-configured"
 OBJECTIVE_KEYWORD_RE = re.compile(r"[a-z0-9.:-]{3,}")
 OBJECTIVE_CJK_SEQUENCE_RE = re.compile(r"[\u4e00-\u9fff]{2,}")
@@ -649,7 +652,7 @@ class AgentTurnRunner:
         run_state: AgentRunStateService,
         task_initial_llm_config: Any | None,
         completion_gate: CompletionGateService,
-        completion_judge_context: Callable[[], tuple[Any, str | None]],
+        completion_verifier_context: Callable[[], tuple[Any, str | None]],
         auto_continue: AutoContinueService,
         work_progress: WorkProgressService,
         connect_mcp: Callable[[], Awaitable[None]],
@@ -684,7 +687,7 @@ class AgentTurnRunner:
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
         self.completion_gate = completion_gate
-        self._completion_judge_context = completion_judge_context
+        self._completion_verifier_context = completion_verifier_context
         self.auto_continue = auto_continue
         self.work_progress = work_progress
         self.task_planning = TurnTaskPlanningService(
@@ -796,7 +799,7 @@ class AgentTurnRunner:
             await self._preprocess_audio_only_message(user_message, turn, run_id)
             self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
             existing_work_state = await self._get_work_state(turn.session_id)
-            provider, model = self._completion_judge_context()
+            provider, model = self._completion_verifier_context()
             task_plan = await self.task_planning.plan(
                 user_message=user_message,
                 session_id=turn.session_id,
@@ -806,12 +809,14 @@ class AgentTurnRunner:
                 model=model,
             )
             task_intent = task_plan.task_intent
-            worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
-                turn.session_id,
-                run_id,
-                task_kind=task_intent.kind,
-                expects_code_change=False,
-            )
+            worktree_sandbox_recorded = False
+            if not task_plan.clarification_question:
+                worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
+                    turn.session_id,
+                    run_id,
+                    task_kind=task_intent.kind,
+                    expects_code_change=False,
+                )
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
@@ -849,6 +854,17 @@ class AgentTurnRunner:
             raise
 
         try:
+            if task_plan.clarification_question:
+                return await self.run_task_clarification_turn(
+                    user_message=user_message,
+                    turn=turn,
+                    run_id=run_id,
+                    task_intent=task_intent,
+                    task_context_decision=task_plan.task_context_decision,
+                    clarification_question=task_plan.clarification_question,
+                    confidence=task_plan.task_intent_confidence,
+                    reason=task_plan.task_intent_reason,
+                )
             if self.is_media_only_message(user_message):
                 return await self.run_media_only_turn(
                     user_message=user_message,
@@ -953,6 +969,52 @@ class AgentTurnRunner:
                 "reason": LLM_NOT_CONFIGURED_TURN_REASON,
                 "response_len": len(response or ""),
             },
+            log_before_record=True,
+        )
+
+    async def run_task_clarification_turn(
+        self,
+        *,
+        user_message: UserMessage,
+        turn: PreparedTurnInput,
+        run_id: str,
+        task_intent: TaskIntent,
+        task_context_decision: TaskContextDecision,
+        clarification_question: str,
+        confidence: float,
+        reason: str,
+    ) -> AssistantMessage:
+        """Persist an unclear turn and ask the user for the missing routing detail."""
+        response = clarification_question.strip()
+        metadata = {
+            "schema_version": 1,
+            "status": "completed",
+            "reason": TASK_CLARIFICATION_TURN_REASON,
+            "response_len": len(response),
+            "confidence": confidence,
+            "classification_reason": reason,
+            "task_intent": task_intent.to_metadata(),
+            "task_context": task_context_decision.to_metadata(),
+        }
+        await self._save_message(turn.session_id, "user", user_message.text, metadata=turn.user_metadata)
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            TASK_CLARIFICATION_REQUESTED_EVENT,
+            metadata,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+        return await self.response_finalizer.finalize(
+            session_id=turn.session_id,
+            run_id=run_id,
+            response=response,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+            assistant_metadata=turn.assistant_metadata,
+            run_part_metadata=metadata,
+            run_event_payload=metadata,
+            log_prefix="clarification=true ",
             log_before_record=True,
         )
 
@@ -1104,8 +1166,8 @@ class AgentTurnRunner:
         execution_result: ExecutionResult,
         user_message_text: str = "",
     ) -> CompletionGateResult:
-        provider, model = self._completion_judge_context()
-        return await self.completion_gate.evaluate_with_judge(
+        provider, model = self._completion_verifier_context()
+        return await self.completion_gate.evaluate_with_verifier(
             task_intent=task_intent,
             response_text=response_text,
             execution_result=execution_result,
@@ -1122,12 +1184,13 @@ class AgentTurnRunner:
     ) -> dict[str, Any]:
         metadata = completion_result.to_metadata()
         metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] = auto_continue_attempts
-        judge = metadata.setdefault("judge", {})
-        if isinstance(judge, dict):
-            provider, model = self._completion_judge_context()
-            judge.setdefault("method", "llm")
-            judge.setdefault("provider", type(provider).__name__ if provider is not None else "")
-            judge.setdefault("model", model or "")
+        provider, model = self._completion_verifier_context()
+        verifier = metadata.setdefault("verifier", {})
+        if isinstance(verifier, dict):
+            verifier.setdefault("method", "llm")
+            verifier.setdefault("role", "verifier")
+            verifier.setdefault("provider", type(provider).__name__ if provider is not None else "")
+            verifier.setdefault("model", model or "")
         return metadata
 
     async def run_normal_turn(
@@ -2267,6 +2330,8 @@ def _should_replace_nonfinal_response(
 ) -> bool:
     if is_complete_completion_status(completion_result.status):
         return False
+    if completion_result.next_action == COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER:
+        return True
     if not (response or "").strip():
         return True
     if is_blocking_completion_status(completion_result.status):

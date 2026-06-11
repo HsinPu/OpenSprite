@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 from ...bus.message import UserMessage
@@ -87,6 +87,7 @@ class TurnTaskPlanningResult:
     task_intent_method: str = LLM_TASK_INTENT_METHOD
     task_intent_confidence: float = 1.0
     task_intent_reason: str = ""
+    clarification_question: str = ""
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,7 @@ class _InitialTaskDecision:
     method: str
     confidence: float
     reason: str
+    clarification_question: str = ""
 
 
 class TurnTaskPlanningService:
@@ -144,6 +146,7 @@ class TurnTaskPlanningService:
             task_intent_method=decision.method,
             task_intent_confidence=decision.confidence,
             task_intent_reason=decision.reason,
+            clarification_question=decision.clarification_question,
         )
 
     async def _resolve_with_llm(
@@ -225,11 +228,19 @@ class TurnTaskPlanningService:
         if not payload:
             raise InitialTaskPlanningError("initial task planning response was empty")
         confidence = _resolver_coerce_confidence(payload.get("confidence"))
-        if confidence < TASK_INITIAL_PLANNING_MIN_CONFIDENCE:
-            raise InitialTaskPlanningError(f"initial task planning confidence too low: {confidence:.2f}")
+        clarification_question = _initial_clarification_question(payload)
         intent = _task_intent_from_initial_payload(
             payload.get("task_intent"),
         )
+        needs_clarification = confidence < TASK_INITIAL_PLANNING_MIN_CONFIDENCE or intent.needs_clarification
+        if needs_clarification:
+            if not clarification_question:
+                raise InitialTaskPlanningError(
+                    "initial task planning requires clarification_question when confidence is low "
+                    "or task_intent.needs_clarification is true"
+                )
+            if not intent.needs_clarification:
+                intent = replace(intent, needs_clarification=True)
         context_payload = payload.get("task_context")
         if not isinstance(context_payload, dict):
             raise InitialTaskPlanningError("initial task planning response missing task_context")
@@ -248,6 +259,7 @@ class TurnTaskPlanningService:
             method=LLM_TASK_INTENT_METHOD,
             confidence=confidence,
             reason=reason,
+            clarification_question=clarification_question,
         )
 
     def _build_result(
@@ -260,8 +272,21 @@ class TurnTaskPlanningService:
         task_intent_method: str,
         task_intent_confidence: float,
         task_intent_reason: str,
+        clarification_question: str = "",
     ) -> TurnTaskPlanningResult:
         """Build work plan and state from the selected initial decision."""
+        if clarification_question:
+            return TurnTaskPlanningResult(
+                task_intent=task_intent,
+                task_context_decision=task_context_decision,
+                existing_work_state=existing_work_state,
+                work_plan=None,
+                current_work_state=None,
+                task_intent_method=task_intent_method,
+                task_intent_confidence=task_intent_confidence,
+                task_intent_reason=task_intent_reason,
+                clarification_question=clarification_question,
+            )
         task_intent = self.work_progress.resolve_intent(
             task_intent,
             existing_work_state,
@@ -312,6 +337,16 @@ def _task_intent_from_initial_payload(
         expects_code_change=_resolver_coerce_bool(payload.get("expects_code_change")),
         expects_verification=_resolver_coerce_bool(payload.get("expects_verification")),
     )
+
+
+def _initial_clarification_question(payload: dict[str, Any]) -> str:
+    value = payload.get("clarification_question")
+    if value is None:
+        return ""
+    question = _resolver_truncate(str(value).strip(), 240)
+    if question.lower() in {"", "none", "null"}:
+        return ""
+    return question
 
 
 def _string_tuple(value: Any) -> tuple[str, ...]:
@@ -393,12 +428,16 @@ def _build_initial_task_planning_prompt(
         },
         "confidence": 0.0,
         "reason": "<short reason>",
+        "clarification_question": None,
     }
     return (
         "Classify the latest user turn before the main assistant response.\n"
         "This is a routing decision, not the user-visible answer.\n"
         "Decide both the broad task intent and whether the turn inherits current task context.\n"
         "Preserve exact user entities, paths, symbols, and requested constraints.\n"
+        "If the request is ambiguous enough that confidence is below the minimum or needs_clarification is true, "
+        "set clarification_question to one concise user-visible question that asks only for the missing choice or detail.\n"
+        "If no clarification is needed, set clarification_question to null.\n"
         "When the turn continues or resumes existing work, set task_intent.objective to the active/work-state objective, "
         "not the literal short message such as continue.\n"
         "Use conservative values when evidence is unclear.\n"
@@ -415,6 +454,7 @@ def _build_initial_task_planning_prompt(
         "should_replace_active_task, inherited_task_type, continuation_type, confidence, reason\n"
         "- confidence: number from 0 to 1 for the whole initial decision\n"
         "- reason: short reason for the whole initial decision\n"
+        "- clarification_question: null when confident; otherwise one direct question to ask the user\n"
         "Do not classify a normal slash command as a long-running task.\n"
         "Do not invent code-change or verification expectations unless the user explicitly asks to modify, commit, run tests, "
         "verify, review, deploy, operate, or inspect local execution state.\n\n"

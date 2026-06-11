@@ -1,9 +1,14 @@
 from opensprite.agent.completion_gate import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService, format_web_source_context
 from opensprite.agent.completion_gate import (
+    COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
+    COMPLETION_VERIFIER_NEXT_ACTION_CONTINUE_LLM,
+    COMPLETION_VERIFIER_NEXT_ACTION_RESUME_WORKFLOW,
+    COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
     MAX_AUTO_CONTINUES_REACHED_REASON,
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
     REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON,
+    VERIFIER_REQUESTED_USER_INPUT_REASON,
     completion_gate_continue_reason,
 )
 from opensprite.agent.completion_gate import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON, CompletionGateResult
@@ -51,6 +56,102 @@ def test_auto_continue_allows_missing_verification_once():
     assert "verify(action=\"pytest\", path=\".\")" in decision.prompt
 
 
+def test_auto_continue_uses_verifier_continue_prompt():
+    intent = TaskIntentService().classify("Please finish the implementation.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="verifier found missing implementation work",
+        next_action=COMPLETION_VERIFIER_NEXT_ACTION_CONTINUE_LLM,
+        next_prompt="Inspect the changed module and implement the missing branch.",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I will continue."),
+        attempts_used=0,
+        previous_response="I will continue.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.direct_verify_action is None
+    assert decision.direct_workflow is None
+    assert "Verifier requested follow-up" in decision.prompt
+    assert "Inspect the changed module and implement the missing branch." in decision.prompt
+
+
+def test_auto_continue_uses_verifier_run_verification_action():
+    intent = TaskIntentService().classify("Please run the focused tests.")
+    completion = CompletionGateResult(
+        status="needs_verification",
+        reason="verifier requires tests",
+        next_action=COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
+        verification_required=True,
+        verification_action="pytest",
+        verification_path=".",
+        verification_pytest_args=("tests/agent/test_completion_verifier.py",),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Code changed."),
+        attempts_used=0,
+        previous_response="Code changed.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.direct_verify_action == "pytest"
+    assert decision.direct_verify_path == "."
+    assert decision.direct_verify_pytest_args == ("tests/agent/test_completion_verifier.py",)
+
+
+def test_auto_continue_uses_verifier_resume_workflow_action():
+    intent = TaskIntentService().classify("Please finish the implementation workflow.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="verifier wants workflow resume",
+        next_action=COMPLETION_VERIFIER_NEXT_ACTION_RESUME_WORKFLOW,
+        follow_up_workflow="implement_then_review",
+        follow_up_step_id="review",
+        follow_up_step_label="Code review",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Implementation finished."),
+        attempts_used=0,
+        previous_response="Implementation finished.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.direct_workflow == "implement_then_review"
+    assert decision.direct_start_step == "review"
+
+
+def test_auto_continue_stops_when_verifier_asks_user():
+    intent = TaskIntentService().classify("Please continue.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="verifier needs user clarification",
+        next_action=COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
+        next_prompt="Which file should be changed?",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I need more detail."),
+        attempts_used=0,
+        previous_response="I need more detail.",
+    )
+
+    assert decision.should_continue is False
+    assert decision.reason == VERIFIER_REQUESTED_USER_INPUT_REASON
+    assert decision.emit_skipped_event is True
+
+
 def test_auto_continue_prompt_includes_task_contract_guidance():
     intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
     contract = TaskContract(
@@ -61,7 +162,7 @@ def test_auto_continue_prompt_includes_task_contract_guidance():
     )
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge reported missing evidence",
+        reason="verifier reported missing evidence",
         missing_evidence=("Use web research tools before answering.",),
     )
 
@@ -149,7 +250,7 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     execution = ExecutionResult(
         content="Found it.",
@@ -203,7 +304,7 @@ def test_auto_continue_keeps_tools_when_existing_web_sources_lack_detail():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     execution = ExecutionResult(
         content="Found it.",
@@ -460,7 +561,7 @@ def test_auto_continue_uses_progress_only_flag_without_reason_marker():
     intent = TaskIntentService().classify("Find the latest market quote.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete answer",
+        reason="verifier rejected incomplete answer",
         progress_only_response=True,
     )
 
@@ -478,7 +579,7 @@ def test_auto_continue_uses_progress_only_flag_without_reason_marker():
 
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     intent = TaskIntentService().classify("Please implement the cleanup.")
-    completion = CompletionGateResult(status="incomplete", reason="judge rejected incomplete implementation")
+    completion = CompletionGateResult(status="incomplete", reason="verifier rejected incomplete implementation")
     contract = TaskContract(objective=intent.objective, task_type="code_change")
 
     decision = AutoContinueService(max_auto_continues=1).decide(
@@ -495,7 +596,7 @@ def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
 
 def test_auto_continue_uses_command_version_contract_for_retry_guidance():
     intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
-    completion = CompletionGateResult(status="incomplete", reason="judge rejected incomplete operations answer")
+    completion = CompletionGateResult(status="incomplete", reason="verifier rejected incomplete operations answer")
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
@@ -524,7 +625,7 @@ def test_auto_continue_guides_retry_after_missing_task_artifacts():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -552,7 +653,7 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -591,7 +692,7 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -643,7 +744,7 @@ def test_auto_continue_guides_retry_after_web_research_coverage_gap():
     intent = TaskIntentService().classify("Please research current AI browser pricing.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -704,7 +805,7 @@ def test_auto_continue_guides_retry_after_missing_web_source_reference():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
         active_task_detail="- Reference at least one gathered source by URL, domain, or title",
     )
     contract = TaskContract(
@@ -751,7 +852,7 @@ def test_auto_continue_includes_fetched_source_detail_for_finalization():
     intent = TaskIntentService().classify("Please find current AI agent market trends.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
         active_task_detail="- Reference gathered sources and summarize the key findings",
     )
     contract = TaskContract(
@@ -868,7 +969,7 @@ def test_auto_continue_guides_retry_after_terse_final_answer():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="judge rejected incomplete final answer",
+        reason="verifier rejected incomplete final answer",
         active_task_detail="Provide a substantive final answer that uses the inspected media results.",
     )
     contract = TaskContract(

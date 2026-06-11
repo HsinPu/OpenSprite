@@ -11,11 +11,11 @@ class LLMRequestMode(str, Enum):
 
     MAIN_CHAT = "main_chat"
     JSON_PLANNING = "json_planning"
-    COMPLETION_JUDGE = "completion_judge"
+    COMPLETION_VERIFIER = "completion_verifier"
 
 
 JSON_PLANNING_MIN_OUTPUT_TOKENS = 1200
-_JSON_ONLY_MODES = {LLMRequestMode.JSON_PLANNING, LLMRequestMode.COMPLETION_JUDGE}
+_JSON_ONLY_MODES = {LLMRequestMode.JSON_PLANNING, LLMRequestMode.COMPLETION_VERIFIER}
 
 
 def normalize_request_mode(mode: LLMRequestMode | str | None) -> str:

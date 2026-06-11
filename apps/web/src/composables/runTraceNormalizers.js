@@ -338,6 +338,7 @@ function taskContractDecision(payload, event, index) {
 
 function completionGateDecision(payload, event, index) {
   const missingEvidence = payload.missing_evidence || payload.missingEvidence;
+  const nextAction = payload.next_action || payload.nextAction;
   return {
     id: decisionId(event, index),
     eventIds: decisionEventId(event),
@@ -345,12 +346,14 @@ function completionGateDecision(payload, event, index) {
     status: normalizeDecisionStatus(payload.status || (payload.ok === false ? "failed" : "completed")),
     titleKey: "completionGate",
     title: "Completion gate",
-    summary: compactJoin([payload.status, payload.reason, countItems(missingEvidence) ? `${countItems(missingEvidence)} missing` : ""]),
+    summary: compactJoin([payload.status, payload.reason, nextAction, countItems(missingEvidence) ? `${countItems(missingEvidence)} missing` : ""]),
     reason: coerceText(payload.reason),
     createdAt: event.createdAt,
     details: compactDetails([
       decisionDetail("status", payload.status),
       decisionDetail("reason", payload.reason),
+      decisionDetail("nextAction", nextAction),
+      decisionDetail("confidence", payload.confidence),
       decisionDetail("missingEvidence", formatShortList(missingEvidence, 4), countItems(missingEvidence) ? "warning" : "neutral"),
       decisionDetail("attempts", payload.auto_continue_attempts ?? payload.autoContinueAttempts),
     ]),

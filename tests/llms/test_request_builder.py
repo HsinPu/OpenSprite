@@ -130,11 +130,11 @@ def test_request_param_log_fields_are_sanitized_and_provider_neutral():
             "max_output_tokens": 321,
             "reasoning": {"effort": "high"},
         },
-        request_mode=LLMRequestMode.COMPLETION_JUDGE,
+        request_mode=LLMRequestMode.COMPLETION_VERIFIER,
     )
 
     assert fields == {
-        "mode": "completion_judge",
+        "mode": "completion_verifier",
         "model": "test-model",
         "messages": 1,
         "tools": 1,

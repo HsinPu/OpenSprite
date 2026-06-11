@@ -79,7 +79,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - For command or program version questions, run the direct version command such as `<command> --version`; do not inspect repository commits, `.git`, `HEAD`, or package files unless the user asked for repo/version-control state.
   - Default timeout is 60 seconds unless configured otherwise.
   - Use managed background execution with `background=true` or `yield_ms=<milliseconds>` when the command is long-running and you need to inspect it later with `process`.
-  - Dangerous commands and obvious destructive patterns are blocked, but you must still judge user intent and risk.
+  - Dangerous commands and obvious destructive patterns are blocked, but you must still assess user intent and risk.
   - Ask before commands that may cause irreversible changes, data loss, network side effects, or costly external actions.
   - There is no interactive stdin. Commands that expect a TTY can stall or fail.
   - Do not use shell background wrappers such as `&`, `nohup`, `disown`, or `setsid`; use managed background execution instead.

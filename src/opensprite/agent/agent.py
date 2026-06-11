@@ -707,7 +707,7 @@ class AgentLoop:
         self.task_intents = TaskIntentService()
         self.tool_selection = ToolSelectionResolver()
         self.task_planner = TaskPlanner(self.config.task_planner_llm)
-        self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
+        self.completion_gate = CompletionGateService(llm_config=self.config.completion_verifier_llm)
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
             max_deterministic_actions=self.config.auto_continue_deterministic_action_budget,
@@ -730,7 +730,7 @@ class AgentLoop:
             run_state=self.run_state,
             task_initial_llm_config=self.config.task_context_llm,
             completion_gate=self.completion_gate,
-            completion_judge_context=lambda: (self.provider, self.provider.get_default_model()),
+            completion_verifier_context=lambda: (self.provider, self.provider.get_default_model()),
             auto_continue=self.auto_continue,
             work_progress=self.work_progress,
             connect_mcp=lambda: self.connect_mcp(),
@@ -1405,7 +1405,7 @@ class AgentLoop:
         self.llm_context_window_tokens = llm_runtime.context_window_tokens
         self.llm_configured = config.is_llm_configured
         self.task_planner.llm_config = config.agent.task_planner_llm
-        self.completion_gate.llm_config = config.agent.completion_judge_llm
+        self.completion_gate.llm_config = config.agent.completion_verifier_llm
 
         self.prompt_budget.provider = provider
         self.execution_engine.provider = provider

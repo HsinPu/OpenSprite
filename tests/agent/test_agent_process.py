@@ -47,6 +47,7 @@ from opensprite.runs.events import (
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
     TASK_CHECKPOINT_RECORDED_EVENT,
+    TASK_CLARIFICATION_REQUESTED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
     TASK_SCORECARD_RECORDED_EVENT,
     TOOL_RESULT_EVENT,
@@ -109,11 +110,11 @@ def _is_planner_call(messages, tools=None) -> bool:
     return "task planner" in first
 
 
-def _is_completion_judge_call(messages, tools=None) -> bool:
+def _is_completion_verifier_call(messages, tools=None) -> bool:
     if tools:
         return False
     first = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "completion judge" in first
+    return "completion verifier" in first or "completion verifier" in first
 
 
 def _is_initial_task_planning_call(messages, tools=None) -> bool:
@@ -201,7 +202,7 @@ def _initial_task_planning_response(messages) -> LLMResponse:
     return LLMResponse(content=json.dumps(payload), model="fake-model")
 
 
-def _completion_judge_facts(messages) -> dict:
+def _completion_verifier_facts(messages) -> dict:
     latest_user_text = next(
         (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
         "",
@@ -245,8 +246,8 @@ def _fake_clean_review_response() -> str:
     return "Review completed without findings.\n\n```json\n" + json.dumps(payload) + "\n```"
 
 
-def _completion_judge_response(messages) -> LLMResponse:
-    facts = _completion_judge_facts(messages)
+def _completion_verifier_response(messages) -> LLMResponse:
+    facts = _completion_verifier_facts(messages)
     response = str(facts.get("assistant_response", {}).get("text") or "")
     execution = facts.get("execution", {}) if isinstance(facts.get("execution"), dict) else {}
     contract = facts.get("task_contract", {}) if isinstance(facts.get("task_contract"), dict) else {}
@@ -324,7 +325,7 @@ def _completion_judge_response(messages) -> LLMResponse:
     elif execution.get("had_tool_error"):
         payload = {"status": "blocked", "reason": response or "tool error", "active_task_status": "blocked", "active_task_detail": response}
     elif "reviewed outcome" in response:
-        payload = {"status": "complete", "reason": "judge accepted reviewed workflow outcome", "active_task_status": "done", "review_attempted": True, "review_passed": True}
+        payload = {"status": "complete", "reason": "verifier accepted reviewed workflow outcome", "active_task_status": "done", "review_attempted": True, "review_passed": True}
     elif cancelled_workflow:
         payload = {
             "status": "needs_review",
@@ -357,7 +358,7 @@ def _completion_judge_response(messages) -> LLMResponse:
     else:
         payload = {
             "status": "complete",
-            "reason": "judge accepted test response",
+            "reason": "verifier accepted test response",
             "active_task_status": "done",
             "verification_required": "verification" in requirement_kinds,
             "verification_attempted": verification_attempted,
@@ -391,9 +392,49 @@ class FakeProvider:
             return _initial_task_planning_response(messages)
         if _is_planner_call(messages, tools):
             return _planner_response()
-        if _is_completion_judge_call(messages, tools):
-            return _completion_judge_response(messages)
+        if _is_completion_verifier_call(messages, tools):
+            return _completion_verifier_response(messages)
         raise AssertionError("provider.chat should only be called by the planner in this test")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
+class ClarificationOnlyProvider:
+    def __init__(self):
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools, "model": model, **kwargs})
+        if not _is_initial_task_planning_call(messages, tools):
+            raise AssertionError("low-confidence clarification should not reach planner or main LLM")
+        payload = {
+            "task_intent": {
+                "kind": "task",
+                "objective": "Continue the ambiguous request.",
+                "constraints": [],
+                "done_criteria": ["user clarifies the intended task"],
+                "needs_clarification": False,
+                "long_running": False,
+                "expects_code_change": False,
+                "expects_verification": False,
+                "verification_hint": None,
+            },
+            "task_context": {
+                "is_follow_up": True,
+                "should_inherit_active_task": False,
+                "should_seed_active_task": False,
+                "should_replace_active_task": False,
+                "inherited_task_type": None,
+                "continuation_type": "ambiguous_boundary",
+                "confidence": 0.41,
+                "reason": "The short turn could refer to multiple previous tasks.",
+            },
+            "confidence": 0.41,
+            "reason": "The request is ambiguous.",
+            "clarification_question": "你要我接續上一個修改任務，還是只繼續說明流程？",
+        }
+        return LLMResponse(content=json.dumps(payload), model=model or "fake-model")
 
     def get_default_model(self) -> str:
         return "fake-model"
@@ -579,8 +620,8 @@ class WorkflowAuthorityProvider:
                 "reason": "test planner workflow contract",
             }
             return LLMResponse(content=json.dumps(payload), model="fake-model")
-        if _is_completion_judge_call(messages, tools):
-            return _completion_judge_response(messages)
+        if _is_completion_verifier_call(messages, tools):
+            return _completion_verifier_response(messages)
         latest_user_text = next(
             (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
             "",
@@ -772,6 +813,49 @@ def test_agent_loop_uses_configured_continuation_budgets(tmp_path):
     assert agent.auto_continue.max_deterministic_actions == 7
     assert agent.work_progress.default_continuation_budget == 2
     assert agent.work_progress.long_running_continuation_budget == 6
+
+
+def test_agent_low_confidence_initial_planning_asks_clarification_without_main_llm(tmp_path):
+    async def scenario():
+        provider = ClarificationOnlyProvider()
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=provider,
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        response = await agent.process(
+            UserMessage(
+                text="好 繼續",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+        runs = await storage.get_runs("web:browser-1")
+        events = await storage.get_run_events("web:browser-1", runs[0].run_id)
+        messages = await storage.get_messages("web:browser-1")
+        return response, provider.calls, events, messages
+
+    response, calls, events, messages = asyncio.run(scenario())
+
+    assert response.text == "你要我接續上一個修改任務，還是只繼續說明流程？"
+    assert len(calls) == 1
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert messages[-1].content == response.text
+    event_types = [event.event_type for event in events]
+    assert TASK_INTENT_DETECTED_EVENT in event_types
+    assert TASK_CLARIFICATION_REQUESTED_EVENT in event_types
+    assert LLM_STATUS_EVENT not in event_types
 
 
 def test_agent_goal_command_persists_resumable_work_state(tmp_path):
@@ -2322,7 +2406,7 @@ def test_agent_process_passes_tool_contract_override_to_auto_continue(tmp_path):
                 task_contract=web_contract,
             )
 
-        async def fake_evaluate_with_judge(**kwargs):
+        async def fake_evaluate_with_verifier(**kwargs):
             nonlocal completion_calls
             completion_calls += 1
             if completion_calls == 1:
@@ -2335,7 +2419,7 @@ def test_agent_process_passes_tool_contract_override_to_auto_continue(tmp_path):
             return CompletionGateResult(status="complete", reason="final answer cites gathered source")
 
         agent.call_llm = fake_call_llm
-        agent.completion_gate.evaluate_with_judge = fake_evaluate_with_judge
+        agent.completion_gate.evaluate_with_verifier = fake_evaluate_with_verifier
         agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
 
         await agent.process(
@@ -2953,8 +3037,8 @@ def test_agent_call_llm_uses_read_only_registry_for_planning_contract(tmp_path):
             async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
                 if _is_planner_call(messages, tools):
                     return _planner_response("planning")
-                if _is_completion_judge_call(messages, tools):
-                    return _completion_judge_response(messages)
+                if _is_completion_verifier_call(messages, tools):
+                    return _completion_verifier_response(messages)
                 raise AssertionError("provider.chat should only be called by the planner in this test")
 
         storage = MemoryStorage()
@@ -3012,8 +3096,8 @@ def test_agent_call_llm_returns_to_normal_registry_after_planning_contract(tmp_p
                 if _is_planner_call(messages, tools):
                     task_type = self.task_types.pop(0) if self.task_types else "code_change"
                     return _planner_response(task_type)
-                if _is_completion_judge_call(messages, tools):
-                    return _completion_judge_response(messages)
+                if _is_completion_verifier_call(messages, tools):
+                    return _completion_verifier_response(messages)
                 raise AssertionError("provider.chat should only be called by the planner in this test")
 
         storage = MemoryStorage()

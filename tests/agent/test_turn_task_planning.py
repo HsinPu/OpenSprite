@@ -77,6 +77,7 @@ def test_turn_task_planning_builds_intent_context_and_initial_work_state():
     assert "deterministic_context" not in prompt
     assert "Copy these key names exactly" in prompt
     assert "task_intent.done_criteria must be a non-empty array of strings" in prompt
+    assert "clarification_question" in prompt
 
 
 def test_turn_task_planning_uses_llm_initial_decision_when_available():
@@ -180,6 +181,106 @@ def test_turn_task_planning_accepts_llm_done_criteria_aliases():
     )
 
     assert result.task_intent.done_criteria == ("CLI flow result is explained",)
+
+
+def test_turn_task_planning_returns_clarification_for_low_confidence():
+    provider = _JsonProvider(
+        {
+            "task_intent": {
+                "kind": "task",
+                "objective": "Continue the unclear request.",
+                "constraints": [],
+                "done_criteria": ["user clarifies the intended task"],
+                "needs_clarification": False,
+                "long_running": False,
+                "expects_code_change": False,
+                "expects_verification": False,
+            },
+            "task_context": {
+                "is_follow_up": True,
+                "should_inherit_active_task": False,
+                "should_seed_active_task": False,
+                "should_replace_active_task": False,
+                "inherited_task_type": None,
+                "continuation_type": "ambiguous_boundary",
+                "confidence": 0.42,
+                "reason": "The short turn could continue multiple previous tasks.",
+            },
+            "confidence": 0.42,
+            "reason": "The request is ambiguous.",
+            "clarification_question": "你要我接續上一個修改任務，還是只繼續說明流程？",
+        }
+    )
+    service = TurnTaskPlanningService(
+        work_progress=WorkProgressService(),
+        read_active_task_snapshot=lambda session_id: "Active task: refactor task planning",
+        build_runtime_message=lambda message, metadata: message,
+        llm_config=Config.load_agent_template_config().task_context_llm,
+    )
+
+    result = asyncio.run(
+        service.plan(
+            user_message=UserMessage(text="好 繼續"),
+            session_id="web:browser-1",
+            user_metadata={},
+            existing_work_state=None,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert result.task_intent.needs_clarification is True
+    assert result.task_intent_confidence == 0.42
+    assert result.clarification_question == "你要我接續上一個修改任務，還是只繼續說明流程？"
+    assert result.work_plan is None
+    assert result.current_work_state is None
+
+
+def test_turn_task_planning_requires_question_for_low_confidence():
+    provider = _JsonProvider(
+        {
+            "task_intent": {
+                "kind": "task",
+                "objective": "Continue the unclear request.",
+                "constraints": [],
+                "done_criteria": ["user clarifies the intended task"],
+                "needs_clarification": False,
+                "long_running": False,
+                "expects_code_change": False,
+                "expects_verification": False,
+            },
+            "task_context": {
+                "is_follow_up": True,
+                "should_inherit_active_task": False,
+                "should_seed_active_task": False,
+                "should_replace_active_task": False,
+                "inherited_task_type": None,
+                "continuation_type": "ambiguous_boundary",
+                "confidence": 0.42,
+                "reason": "The short turn could continue multiple previous tasks.",
+            },
+            "confidence": 0.42,
+            "reason": "The request is ambiguous.",
+        }
+    )
+    service = TurnTaskPlanningService(
+        work_progress=WorkProgressService(),
+        read_active_task_snapshot=lambda session_id: "Active task: refactor task planning",
+        build_runtime_message=lambda message, metadata: message,
+        llm_config=Config.load_agent_template_config().task_context_llm,
+    )
+
+    with pytest.raises(InitialTaskPlanningError, match="requires clarification_question"):
+        asyncio.run(
+            service.plan(
+                user_message=UserMessage(text="好 繼續"),
+                session_id="web:browser-1",
+                user_metadata={},
+                existing_work_state=None,
+                provider=provider,
+                model=provider.get_default_model(),
+            )
+        )
 
 
 def test_turn_task_planning_raises_without_configured_llm():

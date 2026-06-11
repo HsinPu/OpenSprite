@@ -4,7 +4,7 @@ import json
 import pytest
 
 from opensprite.agent.completion_gate import (
-    CompletionJudgeVerdict,
+    CompletionVerifierVerdict,
     CompletionGateService,
     EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
@@ -105,17 +105,17 @@ from opensprite.tools.result_status import tool_error_result
 from tests.agent.task_contract_test_helpers import TaskContractService
 
 
-class StaticCompletionJudge:
-    def __init__(self, verdict: CompletionJudgeVerdict):
+class StaticCompletionVerifier:
+    def __init__(self, verdict: CompletionVerifierVerdict):
         self.verdict = verdict
         self.calls = []
 
-    async def judge(self, **kwargs):
+    async def verify(self, **kwargs):
         self.calls.append(kwargs)
         return self.verdict
 
 
-async def _evaluate_with_static_judge(
+async def _evaluate_with_static_verifier(
     *,
     status: str,
     reason: str,
@@ -124,8 +124,8 @@ async def _evaluate_with_static_judge(
     execution_result: ExecutionResult,
     progress_only_response: bool = False,
 ):
-    judge = StaticCompletionJudge(
-        CompletionJudgeVerdict(
+    verifier = StaticCompletionVerifier(
+        CompletionVerifierVerdict(
             status=status,
             reason=reason,
             progress_only_response=progress_only_response,
@@ -133,9 +133,9 @@ async def _evaluate_with_static_judge(
     )
     service = CompletionGateService(
         llm_config=DocumentLlmConfig(max_tokens=700),
-        judge_service=judge,
+        verifier_service=verifier,
     )
-    return await service.evaluate_with_judge(
+    return await service.evaluate_with_verifier(
         task_intent=task_intent,
         response_text=response_text,
         execution_result=execution_result,
@@ -145,13 +145,13 @@ async def _evaluate_with_static_judge(
 
 
 @pytest.mark.anyio
-async def test_completion_gate_downgrades_complete_judge_verdict_when_review_fails():
+async def test_completion_gate_downgrades_complete_verifier_verdict_when_review_fails():
     intent = TaskIntentService().classify("Research the latest AI agent market trends.")
     response = "The answer cites domains but the review found unsupported source claims."
-    judge = StaticCompletionJudge(
-        CompletionJudgeVerdict(
+    verifier = StaticCompletionVerifier(
+        CompletionVerifierVerdict(
             status="complete",
-            reason="judge accepted answer",
+            reason="verifier accepted answer",
             active_task_status="done",
             review_required=True,
             review_attempted=True,
@@ -162,10 +162,10 @@ async def test_completion_gate_downgrades_complete_judge_verdict_when_review_fai
     )
     service = CompletionGateService(
         llm_config=DocumentLlmConfig(max_tokens=700),
-        judge_service=judge,
+        verifier_service=verifier,
     )
 
-    result = await service.evaluate_with_judge(
+    result = await service.evaluate_with_verifier(
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
@@ -1291,50 +1291,50 @@ async def test_completion_gate_marks_retry_only_conversation_response_incomplete
     )
     response = "\u62b1\u6b49\uff0c\u6211\u525b\u525b\u6c92\u6709\u7522\u751f\u53ef\u986f\u793a\u7684\u56de\u8986\uff0c\u8acb\u518d\u8a66\u4e00\u6b21\u3002"
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected retry-only response",
+        reason="verifier rejected retry-only response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "judge rejected retry-only response"
+    assert result.reason == "verifier rejected retry-only response"
 
 
 @pytest.mark.anyio
-async def test_completion_gate_uses_judge_for_blocked_status():
+async def test_completion_gate_uses_verifier_for_blocked_status():
     intent = TaskIntentService().classify("繼續驗證")
     response = "目前無法繼續，測試環境失敗。"
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="blocked",
-        reason="judge identified an external blocker",
+        reason="verifier identified an external blocker",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, had_tool_error=True),
     )
 
     assert result.status == "blocked"
-    assert result.reason == "judge identified an external blocker"
+    assert result.reason == "verifier identified an external blocker"
 
 
 @pytest.mark.anyio
-async def test_completion_gate_uses_judge_for_waiting_user_status():
+async def test_completion_gate_uses_verifier_for_waiting_user_status():
     intent = TaskIntentService().classify("繼續做")
     response = "請問你要用哪個 target branch？"
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="waiting_user",
-        reason="judge identified required user input",
+        reason="verifier identified required user input",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert result.status == "waiting_user"
-    assert result.reason == "judge identified required user input"
+    assert result.reason == "verifier identified required user input"
 
 
 def test_completion_gate_does_not_infer_waiting_from_response_question():
@@ -1915,7 +1915,7 @@ def test_completion_gate_accepts_chinese_previous_search_result_phrase():
 
 
 @pytest.mark.anyio
-async def test_completion_gate_uses_judge_for_ungrounded_history_answer():
+async def test_completion_gate_uses_verifier_for_ungrounded_history_answer():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -1928,9 +1928,9 @@ async def test_completion_gate_uses_judge_for_ungrounded_history_answer():
         "3. 補 trace observability。"
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected history answer without retrieved context grounding",
+        reason="verifier rejected history answer without retrieved context grounding",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -1942,7 +1942,7 @@ async def test_completion_gate_uses_judge_for_ungrounded_history_answer():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected history answer without retrieved context grounding"
+    assert completion.reason == "verifier rejected history answer without retrieved context grounding"
 
 
 def test_completion_gate_requires_enough_history_items():
@@ -2009,7 +2009,7 @@ def test_completion_gate_does_not_infer_history_count_from_objective_text():
 
 
 @pytest.mark.anyio
-async def test_completion_gate_uses_judge_for_answer_after_empty_history_retrieval():
+async def test_completion_gate_uses_verifier_for_answer_after_empty_history_retrieval():
     intent = TaskIntentService().classify("前面說過的 threshold 是多少")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -2020,9 +2020,9 @@ async def test_completion_gate_uses_judge_for_answer_after_empty_history_retriev
         "因此我會直接用這個數值作為目前設定的答案。"
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected invented answer after empty history retrieval",
+        reason="verifier rejected invented answer after empty history retrieval",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -2034,7 +2034,7 @@ async def test_completion_gate_uses_judge_for_answer_after_empty_history_retriev
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected invented answer after empty history retrieval"
+    assert completion.reason == "verifier rejected invented answer after empty history retrieval"
 
 
 def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval():
@@ -2500,9 +2500,9 @@ async def test_completion_gate_rejects_openrouter_base_url_source_summary_withou
         },
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected source summary without requested concrete fact",
+        reason="verifier rejected source summary without requested concrete fact",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -2515,7 +2515,7 @@ async def test_completion_gate_rejects_openrouter_base_url_source_summary_withou
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected source summary without requested concrete fact"
+    assert completion.reason == "verifier rejected source summary without requested concrete fact"
 
 
 @pytest.mark.anyio
@@ -2577,9 +2577,9 @@ async def test_completion_gate_rejects_market_quote_source_summary_without_price
         },
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected source summary without requested quote",
+        reason="verifier rejected source summary without requested quote",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -2592,7 +2592,7 @@ async def test_completion_gate_rejects_market_quote_source_summary_without_price
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected source summary without requested quote"
+    assert completion.reason == "verifier rejected source summary without requested quote"
 
 
 def test_completion_gate_rejects_recommended_ungathered_quote_url():
@@ -3293,9 +3293,9 @@ async def test_completion_gate_marks_pending_search_response_incomplete():
     intent = TaskIntentService().classify("幫我查一下今天台積電股價，請列出來源網址。")
     response = "Let我先透过网路搜寻来查今天台积电（TSMC）美股即时股价。"
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected progress-only search response",
+        reason="verifier rejected progress-only search response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, executed_tool_calls=1),
@@ -3303,7 +3303,7 @@ async def test_completion_gate_marks_pending_search_response_incomplete():
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "judge rejected progress-only search response"
+    assert result.reason == "verifier rejected progress-only search response"
     assert result.progress_only_response is True
 
 
@@ -3312,16 +3312,16 @@ async def test_completion_gate_marks_chinese_fetch_progress_response_incomplete(
     intent = TaskIntentService().classify("幫我查一下今天台積電最近可取得的股價資訊，請附來源。")
     response = "搜尋結果已取得，讓我抓取實質內容頁面來確認股價數據。"
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected progress-only fetch response",
+        reason="verifier rejected progress-only fetch response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, executed_tool_calls=1),
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "judge rejected progress-only fetch response"
+    assert result.reason == "verifier rejected progress-only fetch response"
 
 
 def test_completion_gate_does_not_mark_source_reliability_answer_as_pending():
@@ -3610,7 +3610,7 @@ def test_quality_gate_accepts_operation_report_with_successful_tool_result():
 
 
 @pytest.mark.anyio
-async def test_completion_gate_uses_judge_for_missing_git_metadata_claimed_clean():
+async def test_completion_gate_uses_verifier_for_missing_git_metadata_claimed_clean():
     intent = TaskIntentService().classify("幫我看目前 repo 是否有未提交的 source 改動")
     contract = TaskContract(
         objective=intent.objective,
@@ -3621,9 +3621,9 @@ async def test_completion_gate_uses_judge_for_missing_git_metadata_claimed_clean
         planner_metadata={"quality_checks": [REPOSITORY_STATUS_QUALITY_CHECK]},
     )
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected clean working tree claim with missing git metadata",
+        reason="verifier rejected clean working tree claim with missing git metadata",
         task_intent=intent,
         response_text="No uncommitted source changes; exec confirmed the workspace is clean.",
         execution_result=ExecutionResult(
@@ -3635,7 +3635,7 @@ async def test_completion_gate_uses_judge_for_missing_git_metadata_claimed_clean
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "judge rejected clean working tree claim with missing git metadata"
+    assert result.reason == "verifier rejected clean working tree claim with missing git metadata"
 
 
 def test_quality_gate_accepts_missing_git_metadata_as_blocker():
@@ -4030,16 +4030,16 @@ async def test_completion_gate_marks_parallel_fetch_progress_response_incomplete
         "等待所有來源回應後整合結果。"
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected progress-only parallel fetch response",
+        reason="verifier rejected progress-only parallel fetch response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected progress-only parallel fetch response"
+    assert completion.reason == "verifier rejected progress-only parallel fetch response"
 
 
 @pytest.mark.anyio
@@ -4051,16 +4051,16 @@ async def test_completion_gate_marks_shell_style_fetch_control_response_incomple
         '$INSTRUCTION = "Extract the current stock price."\n'
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected tool-control response",
+        reason="verifier rejected tool-control response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected tool-control response"
+    assert completion.reason == "verifier rejected tool-control response"
 
 
 @pytest.mark.anyio
@@ -4074,16 +4074,16 @@ async def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
         "</toolcall>"
     )
 
-    completion = await _evaluate_with_static_judge(
+    completion = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected tool-control response",
+        reason="verifier rejected tool-control response",
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response),
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "judge rejected tool-control response"
+    assert completion.reason == "verifier rejected tool-control response"
 
 
 def test_completion_gate_marks_internal_only_response_incomplete():
@@ -4112,9 +4112,9 @@ async def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplet
         acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
     )
 
-    result = await _evaluate_with_static_judge(
+    result = await _evaluate_with_static_verifier(
         status="incomplete",
-        reason="judge rejected progress-only web research response",
+        reason="verifier rejected progress-only web research response",
         task_intent=intent,
         response_text="讓我直接抓 OpenRouter 的官方 API 文件來確認。",
         execution_result=ExecutionResult(
@@ -4126,7 +4126,7 @@ async def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplet
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "judge rejected progress-only web research response"
+    assert result.reason == "verifier rejected progress-only web research response"
 
 
 def test_auto_continue_guides_retry_after_internal_only_response():

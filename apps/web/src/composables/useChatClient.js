@@ -107,6 +107,7 @@ const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "task_context.resolved",
   "task_objective.resolved",
+  "task_clarification.requested",
   "task_contract.planning_started",
   "task_contract.planned",
   "task_contract.validated",
@@ -613,6 +614,14 @@ function describeRunEvent(eventType, payload, copy) {
       label: copy.run.taskObjectiveResolved || "Task objective resolved",
       detail: formatTaskObjectiveDetail(payload),
       tone: payload.method === "fallback" ? "warning" : "running",
+    };
+  }
+
+  if (eventType === "task_clarification.requested") {
+    return {
+      label: copy.run.taskClarificationRequested || "Clarification requested",
+      detail: payload.classification_reason || payload.reason || "",
+      tone: "warning",
     };
   }
 

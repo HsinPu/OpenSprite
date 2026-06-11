@@ -112,7 +112,7 @@
     "task_planner_llm": {
       "max_tokens": 400
     },
-    "completion_judge_llm": {
+    "completion_verifier_llm": {
       "max_tokens": 700
     },
     "skill_review_enabled": true,

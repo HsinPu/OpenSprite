@@ -45,9 +45,9 @@ class RecordingProvider:
                 ),
                 model="fake-model",
             )
-        if "OpenSprite's completion judge" in system_prompt:
+        if "OpenSprite's completion verifier" in system_prompt or "OpenSprite's completion verifier" in system_prompt:
             return LLMResponse(
-                content='{"status":"complete","reason":"test judge accepted the response"}',
+                content='{"status":"complete","reason":"test verifier accepted the response"}',
                 model="fake-model",
             )
         self.system_prompts.append(system_prompt)
