@@ -13,6 +13,11 @@ import sys
 import time
 import ctypes
 
+try:  # pragma: no cover - imported only on Windows hosts
+    import winreg
+except ImportError:  # pragma: no cover - non-Windows hosts
+    winreg = None
+
 
 @dataclass
 class BackgroundServiceStatus:
@@ -25,8 +30,8 @@ class BackgroundServiceStatus:
 
 
 WINDOWS_STARTUP_TASK_NAME = "OpenSprite Gateway"
-WINDOWS_STARTUP_FILE_NAME = "OpenSprite Gateway.vbs"
-WINDOWS_STARTUP_LEGACY_FILE_NAMES = ("OpenSprite Gateway.cmd",)
+WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+WINDOWS_STARTUP_LEGACY_FILE_NAMES = ("OpenSprite Gateway.vbs", "OpenSprite Gateway.cmd")
 
 
 def get_app_home(home: Path | None = None) -> Path:
@@ -52,17 +57,10 @@ def get_windows_startup_folder() -> Path:
     return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
 
-def get_windows_startup_file_path() -> Path:
-    """Return the fallback per-user Startup folder command path."""
-    return get_windows_startup_folder() / WINDOWS_STARTUP_FILE_NAME
-
-
 def get_windows_startup_file_paths() -> tuple[Path, ...]:
-    """Return current and previous fallback startup file paths."""
+    """Return previous fallback startup file paths that should be cleaned up."""
     startup_folder = get_windows_startup_folder()
-    return (startup_folder / WINDOWS_STARTUP_FILE_NAME,) + tuple(
-        startup_folder / file_name for file_name in WINDOWS_STARTUP_LEGACY_FILE_NAMES
-    )
+    return tuple(startup_folder / file_name for file_name in WINDOWS_STARTUP_LEGACY_FILE_NAMES)
 
 
 def _read_pid(pid_file: Path) -> int | None:
@@ -198,37 +196,56 @@ def _build_windows_startup_command(
     return " ".join(_quote_task_command_part(part) for part in parts)
 
 
-def _vbs_string(value: str | Path) -> str:
-    return '"' + str(value).replace('"', '""') + '"'
-
-
-def _install_dir_from_python(python_path: Path) -> Path:
-    parent = python_path.parent
-    if parent.name.lower() in {"scripts", "bin"} and parent.parent.name == ".venv":
-        return parent.parent.parent
-    return parent.parent
-
-
-def _install_startup_file(*, config_path: Path | None = None, python_executable: Path | None = None) -> str:
-    startup_file = get_windows_startup_file_path()
-    startup_file.parent.mkdir(parents=True, exist_ok=True)
-    python_path = resolve_gateway_python(python_executable)
-    command = _build_windows_startup_command(config_path, python_executable=python_path, windowless=True)
-    install_dir = _install_dir_from_python(python_path)
-    for existing_file in get_windows_startup_file_paths():
-        if existing_file == startup_file:
-            continue
+def _cleanup_windows_startup_files() -> bool:
+    removed = False
+    for startup_file in get_windows_startup_file_paths():
         try:
-            existing_file.unlink()
+            startup_file.unlink()
+            removed = True
         except (FileNotFoundError, OSError):
             pass
-    content = (
-        "Set shell = CreateObject(\"WScript.Shell\")\r\n"
-        f"shell.Environment(\"PROCESS\")(\"OPENSPRITE_INSTALL_DIR\") = {_vbs_string(install_dir)}\r\n"
-        f"shell.Run {_vbs_string(command)}, 0, False\r\n"
-    )
-    startup_file.write_text(content, encoding="utf-8")
-    return f"{WINDOWS_STARTUP_TASK_NAME} (Startup folder)"
+    return removed
+
+
+def _require_winreg():
+    if winreg is None:
+        raise RuntimeError("Windows registry is unavailable on this platform.")
+    return winreg
+
+
+def _get_windows_run_value() -> str | None:
+    registry = _require_winreg()
+    try:
+        with registry.OpenKey(registry.HKEY_CURRENT_USER, WINDOWS_RUN_KEY, 0, registry.KEY_READ) as key:
+            value, _value_type = registry.QueryValueEx(key, WINDOWS_STARTUP_TASK_NAME)
+            return str(value)
+    except OSError:
+        return None
+
+
+def _set_windows_run_value(command: str) -> None:
+    registry = _require_winreg()
+    with registry.CreateKey(registry.HKEY_CURRENT_USER, WINDOWS_RUN_KEY) as key:
+        registry.SetValueEx(key, WINDOWS_STARTUP_TASK_NAME, 0, registry.REG_SZ, command)
+
+
+def _delete_windows_run_value() -> bool:
+    registry = _require_winreg()
+    try:
+        with registry.OpenKey(registry.HKEY_CURRENT_USER, WINDOWS_RUN_KEY, 0, registry.KEY_SET_VALUE) as key:
+            registry.DeleteValue(key, WINDOWS_STARTUP_TASK_NAME)
+            return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+
+
+def _install_startup_run_value(*, config_path: Path | None = None, python_executable: Path | None = None) -> str:
+    command = _build_windows_startup_command(config_path, python_executable=python_executable, windowless=True)
+    _set_windows_run_value(command)
+    _cleanup_windows_startup_files()
+    return f"{WINDOWS_STARTUP_TASK_NAME} (Run key)"
 
 
 def install_startup_task(
@@ -262,13 +279,10 @@ def install_startup_task(
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "Failed to register Windows startup task."
         if "access is denied" in message.lower():
-            return _install_startup_file(config_path=config_path, python_executable=python_executable)
+            return _install_startup_run_value(config_path=config_path, python_executable=python_executable)
         raise RuntimeError(message)
-    for startup_file in get_windows_startup_file_paths():
-        try:
-            startup_file.unlink()
-        except (FileNotFoundError, OSError):
-            pass
+    _delete_windows_run_value()
+    _cleanup_windows_startup_files()
     return WINDOWS_STARTUP_TASK_NAME
 
 
@@ -276,15 +290,8 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
     """Remove the Windows logon startup task if it exists."""
     if platform.system() != "Windows":
         raise RuntimeError("Startup task uninstall is only supported on Windows.")
-    removed = False
-    for startup_file in get_windows_startup_file_paths():
-        try:
-            startup_file.unlink()
-            removed = True
-        except FileNotFoundError:
-            pass
-        except OSError:
-            pass
+    removed = _delete_windows_run_value()
+    removed = _cleanup_windows_startup_files() or removed
 
     result = run(
         ["schtasks", "/Delete", "/TN", WINDOWS_STARTUP_TASK_NAME, "/F"],
@@ -305,7 +312,7 @@ def is_startup_task_installed(*, run=subprocess.run) -> bool:
     """Return whether the Windows logon startup task is registered."""
     if platform.system() != "Windows":
         return False
-    if any(path.exists() for path in get_windows_startup_file_paths()):
+    if _get_windows_run_value():
         return True
     result = run(
         ["schtasks", "/Query", "/TN", WINDOWS_STARTUP_TASK_NAME],

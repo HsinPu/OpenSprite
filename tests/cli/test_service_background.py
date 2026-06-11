@@ -229,6 +229,7 @@ def test_stop_service_forces_taskkill_on_windows_after_timeout(tmp_path, monkeyp
 
 def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(service_background, "_delete_windows_run_value", lambda: False)
     calls = []
 
     def fake_run(args, **kwargs):
@@ -261,16 +262,20 @@ def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch
     assert kwargs["capture_output"] is True
 
 
-def test_install_startup_task_falls_back_to_startup_folder_on_access_denied(tmp_path, monkeypatch):
+def test_install_startup_task_falls_back_to_run_key_on_access_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
     monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    run_values = []
+    monkeypatch.setattr(service_background, "_set_windows_run_value", lambda command: run_values.append(command))
     python_path = tmp_path / "OpenSprite" / "opensprite" / ".venv" / "Scripts" / "python.exe"
     python_path.parent.mkdir(parents=True)
     python_path.write_text("", encoding="utf-8")
     python_path.with_name("pythonw.exe").write_text("", encoding="utf-8")
     legacy_startup_file = service_background.get_windows_startup_folder() / "OpenSprite Gateway.cmd"
+    legacy_vbs_file = service_background.get_windows_startup_folder() / "OpenSprite Gateway.vbs"
     legacy_startup_file.parent.mkdir(parents=True)
     legacy_startup_file.write_text("@echo off\r\n", encoding="utf-8")
+    legacy_vbs_file.write_text("WScript.Echo \"legacy\"\r\n", encoding="utf-8")
 
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="ERROR: Access is denied.")
@@ -281,30 +286,23 @@ def test_install_startup_task_falls_back_to_startup_folder_on_access_denied(tmp_
         run=fake_run,
     )
 
-    startup_file = service_background.get_windows_startup_file_path()
-    content = startup_file.read_text(encoding="utf-8")
-    assert task_name == "OpenSprite Gateway (Startup folder)"
-    assert startup_file.exists()
+    assert task_name == "OpenSprite Gateway (Run key)"
+    assert len(run_values) == 1
     assert not legacy_startup_file.exists()
-    assert 'WScript.Shell' in content
-    assert 'OPENSPRITE_INSTALL_DIR") = ' in content
-    assert str(tmp_path / "OpenSprite" / "opensprite") in content
-    assert str(python_path.with_name("pythonw.exe").resolve()) in content
-    assert "-m" in content
-    assert "opensprite" in content
-    assert "service" in content
-    assert "start" in content
-    assert str((tmp_path / ".opensprite" / "opensprite.json").resolve()) in content
-    assert ", 0, False" in content
+    assert not legacy_vbs_file.exists()
+    command = run_values[0]
+    assert str(python_path.with_name("pythonw.exe").resolve()) in command
+    assert "-m" in command
+    assert "opensprite" in command
+    assert "service" in command
+    assert "start" in command
+    assert str((tmp_path / ".opensprite" / "opensprite.json").resolve()) in command
 
 
-def test_startup_status_detects_startup_folder_fallback(tmp_path, monkeypatch):
+def test_startup_status_detects_run_key_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
     monkeypatch.setattr(service_background, "is_process_running", lambda pid: False)
-    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
-    startup_file = service_background.get_windows_startup_file_path()
-    startup_file.parent.mkdir(parents=True)
-    startup_file.write_text("@echo off\r\n", encoding="utf-8")
+    monkeypatch.setattr(service_background, "_get_windows_run_value", lambda: '"pythonw.exe" "-m" "opensprite"')
 
     status = service_background.get_service_status(home=tmp_path, include_startup=True)
 
