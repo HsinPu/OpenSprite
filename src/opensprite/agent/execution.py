@@ -66,6 +66,7 @@ from .execution_support.events import (
     contains_compaction_handoff,
     format_repeated_invalid_tool_call_content,
 )
+from .execution_support.tool_persistence import ToolResultPersistence
 from .subagent import (
     DEFAULT_MAX_PARALLEL_SUBAGENTS,
     DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS,
@@ -218,37 +219,6 @@ class _ProactiveCompactionResult:
     strategy: str
     fallback_reason: str | None = None
     error: str | None = None
-
-
-class ToolResultPersistence:
-    """Persist tool execution results to storage."""
-
-    def __init__(
-        self,
-        *,
-        save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
-    ):
-        self.save_message = save_message
-
-    async def persist(
-        self,
-        *,
-        session_id: str | None,
-        tool_name: str,
-        tool_args: dict[str, Any],
-        result: str,
-    ) -> None:
-        """Persist a single tool result when a target session is available."""
-        if session_id is None:
-            return
-
-        await self.save_message(
-            session_id,
-            "tool",
-            result,
-            tool_name,
-            {"tool_args": dict(tool_args or {})},
-        )
 
 
 class ExecutionEngine:
