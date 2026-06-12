@@ -56,7 +56,6 @@ from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..documents.user_overlay_identity import resolve_user_overlay_id
 from ..tool_names import (
     PROCESS_TOOL_NAME,
-    READ_SKILL_TOOL_NAME,
 )
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
@@ -90,6 +89,7 @@ from .task.intent import TaskIntent, TaskIntentService
 from ..tools.selection import ToolSelectionResolver
 from .agent_run_hooks import AgentRunHookFactory
 from . import active_task_runtime
+from . import learning_runtime
 from .background_session_notifications import BackgroundSessionNotificationService
 from .response_finalizer import AgentResponseFinalizer
 from .config_reload import (
@@ -530,7 +530,12 @@ class AgentLoop:
                 external_chat_id,
                 result,
             ),
-            finalize_learning_reuse=lambda session_id, run_id, success: self._finalize_learning_reuse(session_id, run_id, success),
+            finalize_learning_reuse=lambda session_id, run_id, success: learning_runtime.finalize_learning_reuse(
+                self,
+                session_id,
+                run_id,
+                success,
+            ),
             consume_delegated_task_updates=self._consume_delegated_task_updates,
             clear_delegated_task_updates=self._clear_delegated_task_updates,
             consume_workflow_outcomes=self._consume_workflow_outcomes,
@@ -655,7 +660,7 @@ class AgentLoop:
             read_user_profile_snapshot=self._read_user_profile_snapshot,
             read_active_task_snapshot=self._read_active_task_snapshot,
             read_skill_snapshot=self._read_skill_snapshot,
-            record_learning=lambda *args, **kwargs: self._record_learning(*args, **kwargs),
+            record_learning=lambda *args, **kwargs: learning_runtime.record_learning(self, *args, **kwargs),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel, external_chat_id: self._emit_run_event(
                 session_id,
                 run_id,
@@ -1515,65 +1520,6 @@ class AgentLoop:
         if self.curator is None:
             return None
         return self.curator.resume(session_id)
-
-    def _record_learning(
-        self,
-        session_id: str,
-        *,
-        kind: str,
-        target_id: str,
-        summary: str,
-        source_run_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> None:
-        """Persist one learned artifact into the session learning ledger."""
-        if self.learning_ledger is None:
-            return
-        self.learning_ledger.record_learning(
-            session_id,
-            kind=kind,
-            target_id=target_id,
-            summary=summary,
-            source_run_id=source_run_id,
-            metadata=metadata,
-        )
-
-    def _skill_description(self, skill_name: str, session_id: str) -> str:
-        """Return the best available description for one skill in the current session scope."""
-        skills_loader = getattr(self._context_builder, "skills_loader", None)
-        session_skills_dir_resolver = getattr(self._context_builder, "get_session_skills_dir", None)
-        if skills_loader is None or not callable(session_skills_dir_resolver):
-            return ""
-        try:
-            session_skills_dir = session_skills_dir_resolver(session_id)
-            for skill in skills_loader.get_skills(session_skills_dir):
-                if skill.name == skill_name:
-                    return str(skill.description or "").strip()
-        except Exception:
-            logger.exception("[%s] learning.skill-metadata.failed | skill=%s", session_id, skill_name)
-        return ""
-
-    def _finalize_learning_reuse(self, session_id: str, run_id: str, success: bool) -> None:
-        """Mark any skills read during one run as reused in the learning ledger."""
-        skill_names = sorted(self._run_skill_reads.pop(run_id, set()))
-        if not skill_names or self.learning_ledger is None:
-            return
-        outcome = "success" if success else "failed"
-        for skill_name in skill_names:
-            description = self._skill_description(skill_name, session_id)
-            summary = description or f"Skill '{skill_name}' was reused by the agent."
-            metadata = {"source": READ_SKILL_TOOL_NAME, "skill_name": skill_name}
-            if description:
-                metadata["description"] = description
-            self.learning_ledger.mark_used(
-                session_id,
-                kind="skill",
-                target_id=skill_name,
-                outcome=outcome,
-                summary=summary,
-                source_run_id=run_id,
-                metadata=metadata,
-            )
 
     async def _run_skill_review(self, session_id: str) -> list[dict[str, Any]]:
         tool_registry = self._skill_review_tool_registry()

@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from agent_test_helpers import make_agent_loop
+from opensprite.agent import learning_runtime
 from opensprite.context.message_history import LearningLedger
 from opensprite.context.paths import get_session_learning_state_file
 
@@ -45,7 +46,7 @@ def test_agent_loop_marks_read_skill_reuse_in_learning_ledger(tmp_path):
         )
         assert hook is not None
         await hook("read_skill", {"skill_name": "pytest-helper"}, "Skill body")
-        agent._finalize_learning_reuse("telegram:room-1", "run-1", True)
+        learning_runtime.finalize_learning_reuse(agent, "telegram:room-1", "run-1", True)
         return agent.learning_ledger.recent_entries("telegram:room-1", limit=1)
 
     entries = asyncio.run(scenario())
@@ -69,7 +70,7 @@ def test_agent_loop_ignores_failed_read_skill_for_learning_ledger(tmp_path):
         assert hook is not None
         result = json.dumps({"ok": False, "error": "skill missing"})
         await hook("read_skill", {"skill_name": "pytest-helper"}, result)
-        agent._finalize_learning_reuse("telegram:room-1", "run-1", True)
+        learning_runtime.finalize_learning_reuse(agent, "telegram:room-1", "run-1", True)
         return agent.learning_ledger.recent_entries("telegram:room-1", limit=1)
 
     entries = asyncio.run(scenario())
