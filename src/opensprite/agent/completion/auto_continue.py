@@ -29,6 +29,16 @@ from .quality_gate import (
     contract_requests_quality_check,
     media_artifact_gap_detail,
 )
+from .auto_continue_prompts import (
+    existing_web_source_section,
+    insufficient_source_detail_follow_up_instruction,
+    internal_only_response_follow_up_instruction,
+    missing_source_citation_follow_up_instruction,
+    missing_tool_evidence_follow_up_instruction,
+    source_traceability_follow_up_instruction,
+    terse_final_answer_follow_up_instruction,
+    web_research_coverage_gap_follow_up_instruction,
+)
 from .response_quality import (
     command_version_follow_up_instruction,
     is_operations_task_type,
@@ -64,10 +74,6 @@ if TYPE_CHECKING:
     from ..task.progress import WorkProgressUpdate
 
 
-NO_TOOL_EXISTING_SOURCE_FINAL_ANSWER_INSTRUCTION = (
-    "\nDo not reply with another progress-only promise or tool-use plan. "
-    "Write the final answer now from these gathered sources."
-)
 COMPLETION_GATE_TERMINAL_STATUS_REASON = "completion_gate_terminal_status"
 COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON = "completion_gate_status_not_continuable"
 MAX_DETERMINISTIC_ACTIONS_REACHED_REASON = "max_deterministic_actions_reached"
@@ -92,81 +98,6 @@ AUTO_CONTINUE_DIRECT_VERIFY_ACTION_FIELD = "direct_verify_action"
 AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD = "direct_verify_path"
 AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD = "direct_verify_pytest_args"
 AUTO_CONTINUE_ALLOW_TOOLS_FIELD = "allow_tools"
-
-
-def existing_web_source_section(source_context: str, *, allow_tools: bool) -> str:
-    source_context = source_context.strip()
-    if not source_context:
-        return ""
-    no_tool_instruction = "" if allow_tools else NO_TOOL_EXISTING_SOURCE_FINAL_ANSWER_INSTRUCTION
-    return (
-        "\n\nExisting gathered web sources from the previous pass:\n"
-        f"{source_context}\n"
-        "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
-        f"{no_tool_instruction}"
-    )
-
-
-def terse_final_answer_follow_up_instruction() -> str:
-    return (
-        "\n- Quality follow-up: the previous final answer was too terse. "
-        "Do not reply with only a short acknowledgement, completion marker, or plan. "
-        "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
-    )
-
-
-def missing_tool_evidence_follow_up_instruction() -> str:
-    return (
-        "\n- Evidence follow-up: required tool evidence is missing. "
-        "Call the appropriate tools for the requested resources or external information before giving the final answer."
-    )
-
-
-def source_traceability_follow_up_instruction(traceability_gap: str) -> str:
-    return (
-        "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
-        "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
-        "Do not finalize from an untraceable source artifact.\n"
-        f"{traceability_gap}"
-    )
-
-
-def web_research_coverage_gap_follow_up_instruction(coverage_gap: str) -> str:
-    return (
-        "\n- Source follow-up: `web_research` reported coverage gaps. "
-        "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
-        "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
-        f"{coverage_gap}"
-    )
-
-
-def insufficient_source_detail_follow_up_instruction() -> str:
-    return (
-        "\n- Source follow-up: the previous pass did not inspect enough source material. "
-        "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
-        "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
-    )
-
-
-def missing_source_citation_follow_up_instruction() -> str:
-    return (
-        "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
-        "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
-    )
-
-
-def internal_only_response_follow_up_instruction(*, allow_tools: bool) -> str:
-    instruction = (
-        "\n- The previous response only contained internal control text and no user-visible work. "
-        "Do not repeat internal tags such as <system-reminder> or <think>. "
-        "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
-    )
-    if not allow_tools:
-        instruction += (
-            "\n- Do not call tools again in this continuation. The runtime already gathered traceable sources; "
-            "answer directly using those sources."
-        )
-    return instruction
 
 
 def review_follow_up_skip_reason(*, review_attempted: bool) -> str:
