@@ -1,4 +1,4 @@
-from opensprite.agent.completion_gate import (
+from opensprite.agent.completion.evidence_gate import (
     MISSING_TASK_EVIDENCE_REASON,
     missing_evidence_active_task_detail,
 )

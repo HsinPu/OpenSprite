@@ -5,7 +5,6 @@ import pytest
 
 from opensprite.agent.completion_gate import (
     CompletionGateService,
-    EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _coerce_bool,
     _completion_status_for_unsuccessful_workflow,
@@ -21,6 +20,7 @@ from opensprite.agent.completion_gate import (
     path_requires_delegated_review,
     workflow_fix_follow_up_fields,
 )
+from opensprite.agent.completion.evidence_gate import EvidenceGateService
 from opensprite.agent.completion.verifier import CompletionVerifierVerdict, _optional_text
 from opensprite.agent.task.contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.task.contract import (
