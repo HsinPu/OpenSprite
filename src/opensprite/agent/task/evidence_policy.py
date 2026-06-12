@@ -25,6 +25,7 @@ from .contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
 )
 from .resources import ResourceIndex
+from .value_utils import _policy_value
 
 FILE_CHANGE_TASK_TYPES = frozenset({CODE_CHANGE_TASK_TYPE})
 
@@ -172,7 +173,3 @@ def _requirement_tools(requirement: Any) -> tuple[str, ...]:
         if tool_name and tool_name not in tools:
             tools.append(tool_name)
     return tuple(tools)
-
-
-def _policy_value(value: object) -> str:
-    return str(value or "").strip().lower()

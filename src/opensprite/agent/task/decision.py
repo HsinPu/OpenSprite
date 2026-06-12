@@ -20,7 +20,6 @@ from .contract import (
     TaskContextDecision,
     TaskIntent,
     _chat_json_planning_llm,
-    _compact_text,
     _llm_response_preview,
     _llm_response_text,
     _resolver_coerce_bool,
@@ -30,6 +29,7 @@ from .contract import (
     _task_context_decision_from_payload,
     _truncate_intent_objective,
 )
+from .value_utils import _compact_text
 
 
 LLM_TASK_INTENT_METHOD = "llm"
