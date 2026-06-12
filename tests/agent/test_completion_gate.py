@@ -12,10 +12,10 @@ from opensprite.agent.completion_gate import (
     _truthy,
     is_complete_completion_status,
     needs_verification_completion_status,
-    is_optional_workspace_batch_failure_tool,
     path_requires_delegated_review,
 )
 from opensprite.agent.completion.evidence_gate import EvidenceGateService
+from opensprite.agent.completion.tool_evidence import is_optional_workspace_batch_failure_tool
 from opensprite.agent.completion.workflow_gate import _completion_status_for_unsuccessful_workflow, _string_or_none
 from opensprite.agent.completion.workflow_rules import (
     is_research_then_outline_workflow,
