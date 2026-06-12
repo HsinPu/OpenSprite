@@ -24,7 +24,7 @@ from opensprite.agent.task.contract import (
     EvidenceRequirement,
     TaskContract,
 )
-from opensprite.agent.task.contract import TaskIntent
+from opensprite.agent.task.intent import TaskIntent
 from opensprite.config import DocumentLlmConfig
 from opensprite.llms import LLMResponse
 from opensprite.tools.evidence import ToolEvidence

@@ -24,7 +24,7 @@ from opensprite.agent.completion.workflow_rules import (
 )
 from opensprite.agent.completion.verifier import CompletionVerifierVerdict, _optional_text
 from opensprite.agent.task.contract import LLM_PLANNER_CONTRACT_SOURCES
-from opensprite.agent.task.contract import (
+from opensprite.agent.task.intent import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     accepts_final_response_task_type,
     is_analysis_response_intent_kind,
@@ -95,7 +95,7 @@ from opensprite.agent.completion_gate import (
     WORKSPACE_LOCATION_MISSING_REASON,
 )
 from opensprite.agent.task.contract import TaskContextDecision
-from opensprite.agent.task.contract import TaskIntent, TaskIntentService
+from opensprite.agent.task.intent import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence

@@ -30,11 +30,13 @@ from ..task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     TaskContract,
+    neutral_task_contract,
+)
+from ..task.intent import (
     TaskIntent,
     is_history_retrieval_task_type,
     is_media_extraction_task_type,
     is_workspace_read_task_type,
-    neutral_task_contract,
 )
 from ..task.evidence_policy import (
     is_itemized_output_criterion,

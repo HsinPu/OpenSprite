@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.agent.task.contract import TaskIntent, TaskIntentService
+from opensprite.agent.task.intent import TaskIntent, TaskIntentService
 from opensprite.agent.task.contract import (
     DETERMINISTIC_OBJECTIVE_METHOD,
     JSON_PLANNING_MIN_OUTPUT_TOKENS,

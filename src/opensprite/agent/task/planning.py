@@ -23,11 +23,10 @@ from .contract import (
     REQUIRED_TOOL_EVIDENCE_KIND,
     TaskContextDecision,
     TaskContract,
-    TaskIntent,
     TaskObjectiveDecision,
-    is_plain_answer_task_type,
     task_planner_status,
 )
+from .intent import TaskIntent, is_plain_answer_task_type
 
 
 RunEventEmitter = Callable[..., Awaitable[None]]

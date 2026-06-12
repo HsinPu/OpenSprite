@@ -6,8 +6,8 @@ from opensprite.agent.task.contract import (
     EvidenceRequirement,
     TaskContextDecision,
     TaskContract,
-    TaskIntent,
 )
+from opensprite.agent.task.intent import TaskIntent
 from opensprite.agent.task.planning import TurnPlanningService
 from opensprite.runs.events import (
     TASK_CONTRACT_CREATED_EVENT,

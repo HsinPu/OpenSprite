@@ -36,12 +36,12 @@ from .contract import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
     TaskContextDecision,
-    TaskIntent,
     TaskObjectiveDecision,
     is_ambiguous_boundary_continuation_type,
     is_current_task_continuation_type,
     is_current_task_replacement_type,
 )
+from .intent import TaskIntent
 from .progress import (
     WORK_PROGRESS_ACTIVE_TASK_EVENT_TYPE,
     WORK_STEP_NOT_SET,

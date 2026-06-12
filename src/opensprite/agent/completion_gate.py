@@ -13,7 +13,7 @@ from ..documents.active_task import (
 )
 from .execution import ExecutionResult
 from .execution_support.events import is_max_tool_iterations_stop_reason
-from .task.contract import (
+from .task.intent import (
     TaskIntent,
     intent_supports_fallback_active_task_update,
     is_analysis_response_intent_kind,

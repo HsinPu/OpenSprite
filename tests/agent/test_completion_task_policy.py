@@ -1,4 +1,4 @@
-from opensprite.agent.task.contract import (
+from opensprite.agent.task.intent import (
     accepts_final_response_task_type,
     intent_supports_default_work_plan,
     intent_supports_fallback_active_task_update,
@@ -14,7 +14,7 @@ from opensprite.agent.task.contract import (
     is_workspace_read_task_type,
 )
 from opensprite.agent.task.contract import TaskContract
-from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.intent import TaskIntentService
 
 
 def test_completion_task_policy_classifies_task_types():

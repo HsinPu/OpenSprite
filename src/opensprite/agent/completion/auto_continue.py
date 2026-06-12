@@ -15,6 +15,8 @@ from ..execution_support.events import is_max_tool_iterations_stop_reason
 from ..task.contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     TaskContract,
+)
+from ..task.intent import (
     TaskIntent,
     is_history_retrieval_task_type,
     is_media_extraction_task_type,

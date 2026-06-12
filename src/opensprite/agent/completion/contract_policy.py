@@ -7,6 +7,8 @@ from typing import Any
 from ..task.contract import (
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,
+)
+from ..task.intent import (
     accepts_final_response_task_type,
     is_plain_answer_task_type,
     is_read_only_blocking_requirement_kind,

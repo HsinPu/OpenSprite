@@ -33,6 +33,9 @@ from .contract import (
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
     TaskContract,
     TaskContextDecision,
+)
+from .evidence_policy import contract_expects_file_change
+from .intent import (
     TaskIntent,
     intent_supports_default_work_plan,
     is_history_retrieval_task_type,
@@ -40,7 +43,6 @@ from .contract import (
     is_plain_answer_task_type,
     is_workspace_read_task_type,
 )
-from .evidence_policy import contract_expects_file_change
 from ...tools.evidence import is_verification_tool_name, is_web_research_task_type, is_web_source_evidence_tool
 from ..workflow import is_workflow_failed_status
 

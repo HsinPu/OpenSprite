@@ -82,10 +82,10 @@ from ..storage import StorageProvider, StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
 from .task.contract import (
     PLANNER_VALIDATED_STATUS,
-    PLANNING_ERROR_TASK_TYPE,
     task_planner_status,
 )
-from .task.contract import TaskContextDecision, TaskIntent
+from .task.contract import TaskContextDecision
+from .task.intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from .task.progress import (
     WorkPlan,
     WorkProgressService,

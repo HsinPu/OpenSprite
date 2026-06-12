@@ -10,15 +10,7 @@ from ...bus.message import UserMessage
 from ...llms import ChatMessage, is_unconfigured_llm
 from ...storage import StoredWorkState
 from .contract import (
-    ANALYSIS_INTENT_KIND,
-    COMMAND_INTENT_KIND,
-    CONVERSATION_INTENT_KIND,
-    GENERIC_TASK_INTENT_KIND,
-    MEDIA_UPLOAD_INTENT_KIND,
-    QUESTION_INTENT_KIND,
-    REVIEW_INTENT_KIND,
     TaskContextDecision,
-    TaskIntent,
     _chat_json_planning_llm,
     _llm_response_preview,
     _llm_response_text,
@@ -27,6 +19,16 @@ from .contract import (
     _resolver_parse_json_object,
     _resolver_truncate,
     _task_context_decision_from_payload,
+)
+from .intent import (
+    ANALYSIS_INTENT_KIND,
+    COMMAND_INTENT_KIND,
+    CONVERSATION_INTENT_KIND,
+    GENERIC_TASK_INTENT_KIND,
+    MEDIA_UPLOAD_INTENT_KIND,
+    QUESTION_INTENT_KIND,
+    REVIEW_INTENT_KIND,
+    TaskIntent,
     _truncate_intent_objective,
 )
 from .value_utils import _compact_text

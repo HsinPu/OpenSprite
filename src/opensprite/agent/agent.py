@@ -104,10 +104,9 @@ from .subagent_run import SubagentRunService
 from .task.contract import TaskPlanner
 from .task.contract import (
     TaskContextDecision,
-    TaskIntent,
-    TaskIntentService,
     TaskObjectiveDecision,
 )
+from .task.intent import TaskIntent, TaskIntentService
 from ..tools.selection import ToolSelectionResolver
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME

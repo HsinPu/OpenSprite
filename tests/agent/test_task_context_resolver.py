@@ -22,7 +22,7 @@ from opensprite.agent.task.contract import (
     task_boundary_confidence_too_low_reason,
     task_text_tokens,
 )
-from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.intent import TaskIntentService
 from opensprite.agent.task.progress import WorkProgressUpdate
 from opensprite.agent.task.active_task import ActiveTaskCommandService
 from opensprite.config import Config, TaskMessagesConfig

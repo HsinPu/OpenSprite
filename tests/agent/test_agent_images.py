@@ -2,7 +2,7 @@ import asyncio
 
 from agent_test_helpers import make_agent_loop, make_tool_registry
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.intent import TaskIntentService
 
 
 def _make_media_agent(tmp_path):

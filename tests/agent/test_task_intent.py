@@ -1,4 +1,4 @@
-from opensprite.agent.task.contract import TaskIntentService
+from opensprite.agent.task.intent import TaskIntentService
 
 
 def test_task_intent_classifier_keeps_execution_expectations_neutral():

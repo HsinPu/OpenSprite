@@ -15,8 +15,10 @@ from ..subagent import (
     is_clean_structured_subagent_status,
 )
 from ..task.contract import (
-    WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskContract,
+)
+from ..task.intent import (
+    WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
     intent_supports_fallback_active_task_update,
 )
