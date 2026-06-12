@@ -42,12 +42,7 @@ from .task.capabilities import (
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .completion.auto_continue import AutoContinueService
-from .completion.source_finalization import (
-    rank_web_sources_for_objective,
-    source_finalization_allowed,
-    web_source_body_text,
-    web_source_relevance_score,
-)
+from .completion.source_finalization import source_finalization_sources
 from .completion.source_material import format_web_source_context
 from .completion_gate import (
     COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
@@ -96,10 +91,6 @@ from .task.progress import (
 )
 from .task.decision import TurnTaskPlanningService
 from .run_lifecycle import RunLifecycleService
-from ..tools.evidence import (
-    is_web_fetch_source_record_tool,
-    is_web_source_artifact_kind,
-)
 from .workflow import is_workflow_failed_status
 
 
@@ -1361,8 +1352,8 @@ class AgentTurnRunner:
             break
 
         ran_source_finalization = False
-        source_finalization_sources = _source_finalization_sources(completion_result, aggregate_result)
-        if source_finalization_sources:
+        source_finalization_source_list = source_finalization_sources(completion_result, aggregate_result)
+        if source_finalization_source_list:
             finalization_prompt = self.auto_continue.build_prompt(
                 task_intent=task_intent,
                 completion_result=completion_result,
@@ -1370,7 +1361,7 @@ class AgentTurnRunner:
                 compaction_handoff=aggregate_result.compaction_handoff,
                 execution_result=aggregate_result,
                 allow_tools=False,
-                source_context_override=format_web_source_context(source_finalization_sources),
+                source_context_override=format_web_source_context(source_finalization_source_list),
             )
             finalization_result = await self._call_llm(
                 turn.session_id,
@@ -2030,190 +2021,6 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
     if not context_lines:
         return message
     return f"{message}\n\n[Runtime context]\n" + "\n".join(f"- {line}" for line in context_lines)
-
-
-def _source_finalization_available(
-    completion_result: CompletionGateResult,
-    execution_result: ExecutionResult | None,
-) -> bool:
-    return bool(_source_finalization_sources(completion_result, execution_result))
-
-
-def _source_finalization_sources(
-    completion_result: CompletionGateResult,
-    execution_result: ExecutionResult | None,
-) -> list[dict[str, Any]]:
-    if execution_result is None:
-        return []
-    if not source_finalization_allowed(completion_result, execution_result):
-        return []
-    evidence_urls = _completion_evidence_urls(completion_result)
-    objective = _execution_objective(execution_result)
-    sources = _merge_web_sources(
-        _substantive_web_sources(execution_result),
-        _merge_web_sources(
-            _web_sources_matching_evidence_urls(execution_result, evidence_urls),
-            _web_sources_matching_base_url_context(execution_result, objective),
-        ),
-    )
-    if not sources:
-        return []
-    sources = rank_web_sources_for_objective(sources, objective)
-    if execution_result.had_tool_error:
-        top_score = web_source_relevance_score(sources[0], objective) if sources else 0
-        if top_score <= 0:
-            return []
-    return sources
-
-
-def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:
-    sources: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    for artifact in execution_result.task_artifacts:
-        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
-            continue
-        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if not isinstance(raw_sources, list):
-            continue
-        for raw_source in raw_sources:
-            if not isinstance(raw_source, dict):
-                continue
-            url = _web_source_url(raw_source)
-            if not url or url in seen_urls:
-                continue
-            content_chars = _coerce_positive_int(raw_source.get("content_chars"))
-            is_too_short = bool(raw_source.get("is_too_short"))
-            has_main_content = bool(raw_source.get("has_main_content"))
-            if (
-                is_web_fetch_source_record_tool(raw_source.get("tool_name"))
-                and (content_chars >= 800 or has_main_content)
-                and not is_too_short
-            ):
-                seen_urls.add(url)
-                sources.append(raw_source)
-    return sources
-
-
-def _web_source_url(source: dict[str, Any]) -> str:
-    return _metadata_text(source, "url")
-
-
-def _completion_evidence_urls(completion_result: CompletionGateResult) -> tuple[str, ...]:
-    text = " ".join(
-        (
-            str(completion_result.reason or ""),
-            str(completion_result.active_task_detail or ""),
-            " ".join(str(item or "") for item in completion_result.missing_evidence),
-        )
-    )
-    return tuple(dict.fromkeys(_extract_urls(text)))
-
-
-def _merge_web_sources(
-    primary: list[dict[str, Any]],
-    secondary: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    for source in (*primary, *secondary):
-        url = _web_source_url(source)
-        if not url or url in seen_urls:
-            continue
-        seen_urls.add(url)
-        merged.append(source)
-    return merged
-
-
-def _web_sources_matching_evidence_urls(
-    execution_result: ExecutionResult,
-    evidence_urls: tuple[str, ...],
-) -> list[dict[str, Any]]:
-    if not evidence_urls:
-        return []
-    sources: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    for artifact in execution_result.task_artifacts:
-        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
-            continue
-        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if not isinstance(raw_sources, list):
-            continue
-        for raw_source in raw_sources:
-            if not isinstance(raw_source, dict):
-                continue
-            url = _web_source_url(raw_source)
-            if not url or url in seen_urls:
-                continue
-            haystack = web_source_body_text(raw_source)
-            if any(evidence_url in haystack for evidence_url in evidence_urls):
-                seen_urls.add(url)
-                sources.append(raw_source)
-    return sources
-
-
-def _web_sources_matching_base_url_context(
-    execution_result: ExecutionResult,
-    objective: str,
-) -> list[dict[str, Any]]:
-    if not _objective_requests_base_url(objective):
-        return []
-    sources: list[dict[str, Any]] = []
-    seen_urls: set[str] = set()
-    for artifact in execution_result.task_artifacts:
-        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
-            continue
-        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if not isinstance(raw_sources, list):
-            continue
-        for raw_source in raw_sources:
-            if not isinstance(raw_source, dict):
-                continue
-            url = _web_source_url(raw_source)
-            if not url or url in seen_urls:
-                continue
-            if _source_base_url_candidates([raw_source]):
-                seen_urls.add(url)
-                sources.append(raw_source)
-    return sources
-
-
-def _objective_requests_base_url(objective: str) -> bool:
-    text = str(objective or "").lower()
-    return "base url" in text or "base_url" in text or "api base" in text
-
-
-def _source_base_url_candidates(sources: list[dict[str, Any]]) -> list[str]:
-    candidates: list[str] = []
-    for source in sources:
-        text = web_source_body_text(source)
-        for match in re.finditer(r"https?://\S+", text):
-            start = max(0, match.start() - 100)
-            end = min(len(text), match.end() + 100)
-            context = text[start:end].lower()
-            if "base url" not in context and "base_url" not in context and "api base" not in context:
-                continue
-            candidates.append(_clean_extracted_url(match.group(0)))
-    return candidates
-
-
-def _extract_urls(text: str) -> list[str]:
-    return [_clean_extracted_url(match.group(0)) for match in re.finditer(r"https?://\S+", str(text or ""))]
-
-
-def _clean_extracted_url(url: str) -> str:
-    return str(url or "").strip().rstrip(".,;:)]}>\"'")
-
-
-def _execution_objective(execution_result: ExecutionResult) -> str:
-    task_contract = getattr(execution_result, "task_contract", None)
-    return str(getattr(task_contract, "objective", "") or "").strip()
-
-
-def _coerce_positive_int(value: Any) -> int:
-    try:
-        return max(int(value), 0)
-    except (TypeError, ValueError):
-        return 0
 
 
 def _should_replace_nonfinal_response(

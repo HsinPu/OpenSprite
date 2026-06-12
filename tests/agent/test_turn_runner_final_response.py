@@ -1,12 +1,12 @@
-from opensprite.agent.completion_gate import CompletionBlockerMessages, CompletionGateResult
+﻿from opensprite.agent.completion_gate import CompletionBlockerMessages, CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.completion_gate import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import TaskContract
+from opensprite.agent.completion.source_finalization import source_finalization_available
 from opensprite.agent.turn_runner import (
     _final_response_after_exhausted_continuation,
     _message_with_runtime_context,
-    _source_finalization_available,
 )
 
 
@@ -118,7 +118,7 @@ def test_source_finalization_available_for_traceable_web_sources():
         ),
     )
 
-    assert _source_finalization_available(
+    assert source_finalization_available(
         CompletionGateResult(status="incomplete", reason=TERSE_FINAL_ANSWER_REASON),
         result,
     )
@@ -153,7 +153,7 @@ def test_source_finalization_uses_content_when_snippet_is_blank_for_evidence_url
         ),
     )
 
-    assert _source_finalization_available(
+    assert source_finalization_available(
         CompletionGateResult(
             status="incomplete",
             reason="Need cite https://example.com/evidence.",
@@ -171,7 +171,7 @@ def test_source_finalization_not_available_without_traceable_sources():
         ),
     )
 
-    assert not _source_finalization_available(
+    assert not source_finalization_available(
         CompletionGateResult(status="incomplete", reason=TERSE_FINAL_ANSWER_REASON),
         result,
     )
