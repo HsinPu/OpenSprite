@@ -90,6 +90,7 @@ from ..tools.selection import ToolSelectionResolver
 from .agent_run_hooks import AgentRunHookFactory
 from . import active_task_runtime
 from . import learning_runtime
+from . import media_runtime
 from .background_session_notifications import BackgroundSessionNotificationService
 from .response_finalizer import AgentResponseFinalizer
 from .config_reload import (
@@ -494,11 +495,11 @@ class AgentLoop:
             save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
-            transcribe_audio=lambda audios: self._transcribe_audio_input(audios),
+            transcribe_audio=lambda audios: media_runtime.transcribe_audio_input(self, audios),
             run_workflow=lambda workflow, task, start_step=None: self.run_workflow(workflow, task, start_step),
             run_verify=lambda action, path, pytest_args=(): self.run_verify(action=action, path=path, pytest_args=pytest_args),
             verification_available=lambda: self.tools.get(VERIFICATION_TOOL_NAME) is not None,
-            get_queued_outbound_media=self._get_queued_outbound_media,
+            get_queued_outbound_media=lambda: media_runtime.get_queued_outbound_media(self),
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             completion_blocker_messages=lambda: CompletionBlockerMessages(
@@ -689,9 +690,9 @@ class AgentLoop:
                 task_objective_decision=task_objective_decision,
             ),
             load_history=lambda session_id: self._load_history(session_id),
-            get_current_audios=self._get_current_audios,
-            get_current_videos=self._get_current_videos,
-            augment_message_for_media=lambda *args, **kwargs: self._augment_message_for_media(*args, **kwargs),
+            get_current_audios=lambda: media_runtime.get_current_audios(self),
+            get_current_videos=lambda: media_runtime.get_current_videos(self),
+            augment_message_for_media=lambda *args, **kwargs: media_runtime.augment_message_for_media(*args, **kwargs),
             estimate_tool_schema_tokens=lambda *args, **kwargs: self._estimate_tool_schema_tokens(*args, **kwargs),
             trim_history_to_token_budget=lambda *args, **kwargs: self._trim_history_to_token_budget(*args, **kwargs),
             effective_context_token_budget=self._effective_context_token_budget,
@@ -1218,41 +1219,6 @@ class AgentLoop:
         """Safely revert one captured file change; defaults to dry-run inspection."""
         return await self.file_changes.revert(session_id, run_id, change_id, dry_run=dry_run)
 
-    @staticmethod
-    def _decode_media_data_url(payload: str, media_prefix: str) -> tuple[str, bytes] | None:
-        """Decode a media data URL into a MIME type and bytes."""
-        return AgentMediaService.decode_data_url(payload, media_prefix)
-
-    def _persist_inbound_media(
-        self,
-        session_id: str,
-        media_items: list[str] | None,
-        *,
-        media_prefix: str,
-        directory_name: str,
-        extensions: dict[str, str],
-    ) -> list[str]:
-        """Persist inbound media data URLs under a session workspace directory."""
-        return self.media_service.persist_inbound_media(
-            session_id,
-            media_items,
-            media_prefix=media_prefix,
-            directory_name=directory_name,
-            extensions=extensions,
-        )
-
-    def _persist_inbound_images(self, session_id: str, images: list[str] | None) -> list[str]:
-        """Persist inbound image data URLs under the session workspace images directory."""
-        return self.media_service.persist_inbound_images(session_id, images)
-
-    def _persist_inbound_audios(self, session_id: str, audios: list[str] | None) -> list[str]:
-        """Persist inbound audio data URLs under the session workspace audios directory."""
-        return self.media_service.persist_inbound_audios(session_id, audios)
-
-    def _persist_inbound_videos(self, session_id: str, videos: list[str] | None) -> list[str]:
-        """Persist inbound video data URLs under the session workspace videos directory."""
-        return self.media_service.persist_inbound_videos(session_id, videos)
-
     async def _load_history(self, session_id: str) -> list[ChatMessage]:
         """
         從儲存區載入對話歷史。
@@ -1344,52 +1310,6 @@ class AgentLoop:
     def _build_subagent_tools(self, prompt_type: str, *, workspace: Path | None = None) -> ToolRegistry:
         """Build the tool registry exposed to one subagent profile."""
         return self.subagents.build_tools(prompt_type, workspace=workspace)
-
-    def _get_current_images(self) -> list[str] | None:
-        """Return images attached to the current active turn."""
-        return self.turn_context.current_images()
-
-    def _get_current_audios(self) -> list[str] | None:
-        """Return audios attached to the current active turn."""
-        return self.turn_context.current_audios()
-
-    def _get_current_videos(self) -> list[str] | None:
-        """Return videos attached to the current active turn."""
-        return self.turn_context.current_videos()
-
-    async def _transcribe_audio_input(self, audios: list[str]) -> str:
-        """Transcribe inbound audio before treating it as user text."""
-        router = self.media_router or MediaRouter()
-        return await router.transcribe_audio(audios)
-
-    def _queue_outbound_media(self, kind: str, payload: str) -> str | None:
-        """Queue one media payload to be attached to the current assistant reply."""
-        return self.turn_context.queue_outbound_media(kind, payload)
-
-    def _get_queued_outbound_media(self) -> dict[str, list[str]]:
-        """Return queued outbound media for the current turn."""
-        return self.turn_context.queued_outbound_media()
-
-    @staticmethod
-    def _augment_message_for_media(
-        current_message: str,
-        user_images: list[str] | None,
-        user_audios: list[str] | None,
-        user_videos: list[str] | None,
-        user_image_files: list[str] | None = None,
-        user_audio_files: list[str] | None = None,
-        user_video_files: list[str] | None = None,
-    ) -> str:
-        """Add lightweight prompt hints when the current turn includes media."""
-        return AgentMediaService.augment_message_for_media(
-            current_message,
-            user_images,
-            user_audios,
-            user_videos,
-            user_image_files=user_image_files,
-            user_audio_files=user_audio_files,
-            user_video_files=user_video_files,
-        )
 
     async def call_llm(
         self,

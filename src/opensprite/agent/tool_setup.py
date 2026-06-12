@@ -8,6 +8,7 @@ from ..storage.base import get_storage_message_count
 from ..tools import ToolRegistry
 from ..tools.registration import register_default_tools
 from ..utils.log import logger
+from . import media_runtime
 
 
 def setup_agent_tools(agent: Any, tools: ToolRegistry | None) -> ToolRegistry:
@@ -41,10 +42,10 @@ def register_default_agent_tools(agent: Any) -> None:
         cron_manager=agent.cron_manager,
         cron_messages_config=agent.messages.cron,
         media_router=agent.media_router,
-        get_current_images=agent._get_current_images,
-        get_current_audios=agent._get_current_audios,
-        get_current_videos=agent._get_current_videos,
-        queue_outbound_media=agent._queue_outbound_media,
+        get_current_images=lambda: media_runtime.get_current_images(agent),
+        get_current_audios=lambda: media_runtime.get_current_audios(agent),
+        get_current_videos=lambda: media_runtime.get_current_videos(agent),
+        queue_outbound_media=lambda kind, payload: media_runtime.queue_outbound_media(agent, kind, payload),
         background_notification_factory=agent._make_background_session_exit_notifier,
         background_session_owner_factory=agent._current_background_session_owner,
         process_manager_callback=agent._set_background_process_manager,

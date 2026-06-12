@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent import media_runtime
 from opensprite.agent.active_task_runtime import task_intent_for_explicit_goal
 from opensprite.agent.completion.auto_continue import (
     NO_PROGRESS_DURING_CONTINUATION_REASON,
@@ -1557,7 +1558,7 @@ def test_agent_process_routes_audio_only_message_to_llm(tmp_path):
             **kwargs,
         ):
             captured.setdefault("current_message", current_message)
-            captured.setdefault("current_audios", list(agent._get_current_audios() or []))
+            captured.setdefault("current_audios", list(media_runtime.get_current_audios(agent) or []))
             captured.setdefault("user_audio_files", list(user_audio_files or []))
             return ExecutionResult(content="transcript reply", executed_tool_calls=1, used_configure_skill=False)
 
@@ -3388,10 +3389,10 @@ def test_agent_process_returns_queued_outbound_media(tmp_path):
         )
 
         async def fake_call_llm(session_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
-            assert agent._queue_outbound_media("image", "img-out") is None
-            assert agent._queue_outbound_media("voice", "voice-out") is None
-            assert agent._queue_outbound_media("audio", "audio-out") is None
-            assert agent._queue_outbound_media("video", "video-out") is None
+            assert media_runtime.queue_outbound_media(agent, "image", "img-out") is None
+            assert media_runtime.queue_outbound_media(agent, "voice", "voice-out") is None
+            assert media_runtime.queue_outbound_media(agent, "audio", "audio-out") is None
+            assert media_runtime.queue_outbound_media(agent, "video", "video-out") is None
             return ExecutionResult(content="sending media", executed_tool_calls=1, used_configure_skill=False)
 
         async def fake_maintenance(session_id):
