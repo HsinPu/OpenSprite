@@ -1536,9 +1536,21 @@ export function useChatClient() {
     return session.title;
   }
 
-  function ensureSession(externalChatId, sessionId) {
+  function ensureSession(externalChatId, sessionId, options = {}) {
+    const allowDeleted = Boolean(options?.allowDeleted);
     const resolvedExternalChatId = externalChatId || generateExternalChatId();
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!allowDeleted && isDeletedSessionIdentity({
+      externalChatId: resolvedExternalChatId,
+      sessionId: normalizedSessionId,
+      transportExternalChatId: resolvedExternalChatId,
+    })) {
+      return null;
+    }
     let session = state.sessions.find((entry) => entry.externalChatId === resolvedExternalChatId);
+    if (!allowDeleted && session && isDeletedSessionTombstoned(session)) {
+      return null;
+    }
     if (!session) {
       session = createSession(resolvedExternalChatId);
       session.messages = [
@@ -1550,9 +1562,9 @@ export function useChatClient() {
       ];
       state.sessions.unshift(session);
     }
-    if (sessionId) {
-      session.sessionId = sessionId;
-      session.channel = channelFromSessionId(sessionId);
+    if (normalizedSessionId) {
+      session.sessionId = normalizedSessionId;
+      session.channel = channelFromSessionId(normalizedSessionId);
     }
     session.transportExternalChatId = resolvedExternalChatId;
     session.updatedAt = Date.now();
@@ -1573,6 +1585,9 @@ export function useChatClient() {
       return;
     }
     const session = ensureSession(externalChatId, sessionId);
+    if (!session) {
+      return;
+    }
     session.channel = channel;
     session.transportExternalChatId = transportExternalChatId;
     session.status = {
@@ -1606,18 +1621,29 @@ export function useChatClient() {
   function shouldAcceptLivePayload(payload, externalChatId = "") {
     const sessionId = String(payload?.session_id || payload?.sessionId || "").trim();
     const channel = String(payload?.channel || channelFromSessionId(sessionId) || "web").trim() || "web";
+    const transportExternalChatId = String(payload?.external_chat_id || payload?.externalChatId || "").trim();
+    const resolvedExternalChatId = externalChatId
+      || transportExternalChatId
+      || externalChatIdFromSessionId(sessionId)
+      || "";
+    if (isDeletedSessionIdentity({
+      externalChatId: resolvedExternalChatId,
+      sessionId,
+      transportExternalChatId,
+    })) {
+      return false;
+    }
     if (channel !== "web") {
       return true;
     }
-    const resolvedExternalChatId = externalChatId
-      || String(payload?.external_chat_id || payload?.externalChatId || "").trim()
-      || externalChatIdFromSessionId(sessionId)
-      || "";
     return hasKnownSession(resolvedExternalChatId, sessionId);
   }
 
   function addMessage(externalChatId, message) {
     const session = ensureSession(externalChatId);
+    if (!session) {
+      return null;
+    }
     session.messages.push(message);
     if (session.entries.length) {
       session.entries.push(makeLiveEntry(message));
@@ -1628,6 +1654,7 @@ export function useChatClient() {
     }
     sortSessions();
     persistLocalDraftSessions();
+    return session;
   }
 
   function findOrCreateRun(session, runId, createdAt) {
@@ -1796,6 +1823,9 @@ export function useChatClient() {
       return;
     }
     const session = ensureSession(externalChatId, payload.session_id);
+    if (!session) {
+      return;
+    }
     const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
     const eventType = String(payload.event_type || "run_event");
     const eventPayload = coerceEventPayload(payload.payload);
@@ -2085,6 +2115,9 @@ export function useChatClient() {
     }
 
     const session = ensureSession(externalChatId, ownerSessionId);
+    if (!session) {
+      return;
+    }
     session.channel = ownerChannel;
     setActiveSession(session.externalChatId);
     await loadCurrentSessionRuns({ force: true });
@@ -3327,6 +3360,9 @@ export function useChatClient() {
 
     if (payload.type === "session") {
       const session = ensureSession(payload.external_chat_id, payload.session_id);
+      if (!session) {
+        return;
+      }
       if (!state.activeExternalChatId) {
         state.activeExternalChatId = session.externalChatId;
       }
@@ -3344,6 +3380,9 @@ export function useChatClient() {
         return;
       }
       const session = ensureSession(externalChatId, payload.session_id);
+      if (!session) {
+        return;
+      }
       if (session.channel !== "web") {
         return;
       }
@@ -3485,15 +3524,28 @@ export function useChatClient() {
   }
 
   function sessionTombstoneKeys(session) {
+    const sessionId = String(session?.sessionId || "").trim();
+    const externalChatId = String(session?.externalChatId || "").trim();
+    const transportExternalChatId = String(session?.transportExternalChatId || "").trim();
+    const derivedExternalChatId = externalChatIdFromSessionId(sessionId);
     return [
-      String(session?.sessionId || "").trim(),
-      String(session?.externalChatId || "").trim(),
-      String(session?.transportExternalChatId || "").trim(),
+      sessionId,
+      externalChatId,
+      transportExternalChatId,
+      derivedExternalChatId,
     ].filter(Boolean);
   }
 
   function isDeletedSessionTombstoned(session) {
     return sessionTombstoneKeys(session).some((key) => deletedSessionTombstones.has(key));
+  }
+
+  function isDeletedSessionIdentity(identity = {}) {
+    return isDeletedSessionTombstoned({
+      sessionId: identity.sessionId,
+      externalChatId: identity.externalChatId,
+      transportExternalChatId: identity.transportExternalChatId,
+    });
   }
 
   function rememberDeletedSession(session) {
@@ -3533,6 +3585,16 @@ export function useChatClient() {
     );
   }
 
+  function reconnectSocketSoon() {
+    disconnectSocket(copy.value.notices.refreshConnection, "info", { manual: false });
+    window.setTimeout(() => {
+      if (clientDisposed || state.authRequired) {
+        return;
+      }
+      connectSocket();
+    }, 0);
+  }
+
   function ensureActiveAfterSessionRemoval(preferWeb = false) {
     if (state.sessions.some((session) => session.externalChatId === state.activeExternalChatId)) {
       writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
@@ -3569,7 +3631,15 @@ export function useChatClient() {
     rememberDeletedSessions(targets);
     const targetExternalChatIds = new Set(targets.map((session) => session.externalChatId).filter(Boolean));
     const targetSessionIds = new Set(targets.map((session) => getCuratorSessionId(session) || session.sessionId).filter(Boolean));
+    const activeSessionId = getCuratorSessionId(currentSession.value) || currentSession.value?.sessionId || "";
+    const deletesActiveSession = targets.some((session) => {
+      const sessionId = getCuratorSessionId(session) || session.sessionId || "";
+      return session.externalChatId === state.activeExternalChatId || (activeSessionId && sessionId === activeSessionId);
+    });
     removeSessionsFromState((candidate) => sessionMatchesDeleteSets(candidate, targetExternalChatIds, targetSessionIds));
+    if (deletesActiveSession) {
+      reconnectSocketSoon();
+    }
 
     const deletedSessions = [];
     const deletedExternalChatIds = new Set();
@@ -3633,6 +3703,7 @@ export function useChatClient() {
       const payload = await requestSettingsJson(buildSessionsClearPath("web"), { method: "DELETE" });
       rememberDeletedSessions(state.sessions.filter((session) => !session.channel || session.channel === "web"));
       removeSessionsFromState((session) => !session.channel || session.channel === "web", { preferWeb: true });
+      reconnectSocketSoon();
       await loadSessionHistory({ quiet: true });
       setNotice(copy.value.notices.sessionsCleared(Number(payload?.deleted || 0)), "success");
     } catch (error) {
@@ -3658,7 +3729,7 @@ export function useChatClient() {
 
     const requestedExternalChatId = settingsForm.externalChatId.trim();
     if (requestedExternalChatId) {
-      ensureSession(requestedExternalChatId);
+      ensureSession(requestedExternalChatId, "", { allowDeleted: true });
       state.activeExternalChatId = requestedExternalChatId;
     } else {
       const session = createSession();
