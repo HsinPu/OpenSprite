@@ -7,11 +7,11 @@ from opensprite.agent.completion_gate import (
     CompletionGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _coerce_bool,
-    _is_blocking_planner_status,
     _truthy,
     is_complete_completion_status,
     needs_verification_completion_status,
 )
+from opensprite.agent.completion.contract_policy import is_blocking_planner_status
 from opensprite.agent.completion.evidence_gate import EvidenceGateService
 from opensprite.agent.completion.path_rules import path_requires_delegated_review
 from opensprite.agent.completion.tool_evidence import is_optional_workspace_batch_failure_tool
@@ -266,8 +266,8 @@ def test_completion_gate_blocks_unvalidated_task_contract():
 
 
 def test_completion_gate_status_helpers_normalize_policy_values():
-    assert _is_blocking_planner_status(" INVALID ") is True
-    assert _is_blocking_planner_status("ready") is False
+    assert is_blocking_planner_status(" INVALID ") is True
+    assert is_blocking_planner_status("ready") is False
     assert is_max_tool_iterations_stop_reason("max_tool_iterations") is True
     assert is_max_tool_iterations_stop_reason("stop") is False
     assert is_workflow_unsuccessful_status("CANCELLED") is True

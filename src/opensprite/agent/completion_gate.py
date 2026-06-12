@@ -15,19 +15,12 @@ from .execution import ExecutionResult
 from .execution_support.events import is_max_tool_iterations_stop_reason
 from .task.contract import (
     TaskIntent,
-    accepts_final_response_task_type,
     intent_supports_fallback_active_task_update,
     is_analysis_response_intent_kind,
     is_generic_task_response_intent_kind,
     is_one_turn_intent_kind,
-    is_plain_answer_task_type,
-    is_read_only_blocking_requirement_kind,
-    is_read_only_blocking_tool_name,
-    is_read_only_task_type,
 )
 from .task.contract import (
-    PLANNER_BLOCKED_STATUS,
-    PLANNER_INVALID_STATUS,
     PLANNER_METADATA_REASON_FIELD,
     TaskContract,
     contract_expects_file_change,
@@ -61,6 +54,13 @@ from .completion.status import (
 from .completion.evidence_gate import (
     EvidenceGateResult,
     EvidenceGateService,
+)
+from .completion.contract_policy import (
+    contract_accepts_final_response,
+    contract_allows_plain_answer,
+    contract_has_completion_criteria,
+    contract_is_read_only,
+    is_blocking_planner_status,
 )
 from .completion.verification_gate import (
     _contract_requires_verification,
@@ -171,7 +171,6 @@ from .completion.tool_evidence import (
     has_successful_fetched_web_source_artifact,
 )
 
-_BLOCKING_PLANNER_STATUSES = frozenset({PLANNER_BLOCKED_STATUS, PLANNER_INVALID_STATUS})
 MAX_TOOL_ITERATIONS_INCOMPLETE_REASON = "max tool iterations exhausted before completion"
 MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL = (
     "The execution loop hit the configured max_tool_iterations limit and needs another bounded continuation pass."
@@ -270,13 +269,13 @@ class CompletionGateService:
         execution_result: ExecutionResult,
     ) -> CompletionGateResult:
         """Return the safest completion verdict for the current turn."""
-        contract_allows_plain_answer = _contract_allows_plain_answer(execution_result.task_contract)
+        plain_answer_allowed = contract_allows_plain_answer(execution_result.task_contract)
         verification_required = (
-            False if contract_allows_plain_answer else _contract_requires_verification(execution_result.task_contract)
+            False if plain_answer_allowed else _contract_requires_verification(execution_result.task_contract)
         )
         expects_code_change = (
             False
-            if contract_allows_plain_answer or _contract_is_read_only(execution_result.task_contract)
+            if plain_answer_allowed or contract_is_read_only(execution_result.task_contract)
             else contract_expects_file_change(execution_result.task_contract) or execution_result.file_change_count > 0
         )
         verification_attempted = execution_result.verification_attempted
@@ -313,7 +312,7 @@ class CompletionGateService:
             )
 
         planner_status = task_planner_status(execution_result.task_contract)
-        if _is_blocking_planner_status(planner_status):
+        if is_blocking_planner_status(planner_status):
             reason = TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
             detail = task_planner_reason(execution_result.task_contract) or reason
             return CompletionGateResult(
@@ -406,8 +405,8 @@ class CompletionGateService:
             )
 
         if (
-            contract_allows_plain_answer
-            and not _contract_has_completion_criteria(execution_result.task_contract)
+            plain_answer_allowed
+            and not contract_has_completion_criteria(execution_result.task_contract)
             and response_text.strip()
         ):
             return CompletionGateResult(
@@ -528,7 +527,7 @@ class CompletionGateService:
                 review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if _contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
+        if contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
@@ -605,7 +604,7 @@ class CompletionGateService:
                 review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
+        if contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
             should_update_active_task = intent_supports_fallback_active_task_update(
                 task_intent,
                 evidence_result.task_contract,
@@ -807,47 +806,6 @@ def _completion_gate_blocked_result(reason: str) -> CompletionGateResult:
             "error": detail,
         },
     )
-
-
-def _contract_allows_plain_answer(task_contract: Any) -> bool:
-    return bool(
-        task_contract is not None
-        and is_plain_answer_task_type(getattr(task_contract, "task_type", None))
-        and getattr(task_contract, "allow_no_tool_final", False)
-        and not tuple(getattr(task_contract, "requirements", ()) or ())
-    )
-
-
-def _contract_is_read_only(task_contract: Any) -> bool:
-    task_type = str(getattr(task_contract, "task_type", "") or "")
-    if is_read_only_task_type(task_type):
-        return True
-    for requirement in getattr(task_contract, "requirements", ()) or ():
-        if is_read_only_blocking_requirement_kind(str(getattr(requirement, "kind", "") or "")):
-            return False
-    for tool_name in getattr(task_contract, "required_tools", ()) or ():
-        if is_read_only_blocking_tool_name(tool_name):
-            return False
-    return False
-
-
-def _is_blocking_planner_status(status: str | None) -> bool:
-    return str(status or "").strip().lower() in _BLOCKING_PLANNER_STATUSES
-
-
-def _contract_has_completion_criteria(task_contract: Any) -> bool:
-    return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
-
-
-def _contract_accepts_final_response(task_contract: Any) -> bool:
-    if task_contract is None or _contract_has_completion_criteria(task_contract):
-        return False
-    if not bool(getattr(task_contract, "final_answer_required", True)):
-        return False
-    if not bool(getattr(task_contract, "allow_no_tool_final", False)):
-        return False
-    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
-    return accepts_final_response_task_type(task_type)
 
 
 def _truthy(value: object) -> bool:
