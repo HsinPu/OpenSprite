@@ -28,7 +28,6 @@ from typing import Any, Awaitable, Callable
 
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
-from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..storage import StorageProvider, StoredDelegatedTask
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store, is_current_active_task_status
 from ..context.builder import ContextBuilder
@@ -43,9 +42,6 @@ from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryS
 from ..media import (
     AgentMediaService,
     MediaRouter,
-    OpenAICompatibleSpeechProvider,
-    OpenAICompatibleVideoProvider,
-    create_image_analysis_provider,
 )
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
@@ -61,14 +57,10 @@ from ..tools import ToolRegistry
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.result_status import tool_error_result
 from ..tools.verify import classify_verification_result
-from ..tools.web_research import WebResearchTool
-from ..tools.web_search import WebSearchTool
 from ..documents.user_overlay_identity import resolve_user_overlay_id
 from ..tool_names import (
     PROCESS_TOOL_NAME,
     READ_SKILL_TOOL_NAME,
-    WEB_RESEARCH_TOOL_NAME,
-    WEB_SEARCH_TOOL_NAME,
 )
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
@@ -89,11 +81,7 @@ from .execution_support.llm_calls import LlmCallService
 from .execution_support.prompt_budget import PromptBudgetService
 from .execution_support.prompt_logging import PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
-from ..tools.registration import (
-    BROWSER_TOOL_NAMES,
-    register_browser_tools,
-    register_memory_tool,
-)
+from ..tools.registration import register_memory_tool
 from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagent_run import SubagentRunService
@@ -107,6 +95,12 @@ from ..tools.selection import ToolSelectionResolver
 from .agent_run_hooks import AgentRunHookFactory
 from .background_session_notifications import BackgroundSessionNotificationService
 from .response_finalizer import AgentResponseFinalizer
+from .config_reload import (
+    reload_agent_browser_from_config,
+    reload_agent_llm_from_config,
+    reload_agent_media_from_config,
+    reload_agent_web_search_from_config,
+)
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
@@ -1141,165 +1135,21 @@ class AgentLoop:
         """Reload MCP settings from disk and reconnect MCP tools for this agent."""
         return await self.mcp_lifecycle.reload_from_config()
 
-    @staticmethod
-    def _refresh_consolidator_llm(consolidator: Any | None, provider: LLMProvider) -> None:
-        """Point optional background document consolidators at the active LLM."""
-        if consolidator is None:
-            return
-        if hasattr(consolidator, "provider"):
-            consolidator.provider = provider
-        if hasattr(consolidator, "model"):
-            consolidator.model = provider.get_default_model()
-
     def reload_llm_from_config(self, config: Config) -> dict[str, Any]:
         """Reload the active chat LLM from an already persisted Config."""
-        cfg = config.llm.get_active()
-        llm_runtime = resolve_provider_runtime(
-            cfg,
-            provider_name=cfg.provider or config.llm.default or "",
-            app_home=config.source_path.parent if config.source_path is not None else self.app_home,
-        )
-        provider = create_llm_from_runtime(llm_runtime)
-
-        self.provider = provider
-        self.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
-        self.llm_context_window_tokens = llm_runtime.context_window_tokens
-        self.llm_configured = config.is_llm_configured
-        self.task_planner.llm_config = config.agent.task_planner_llm
-        self.completion_gate.llm_config = config.agent.completion_verifier_llm
-
-        self.prompt_budget.provider = provider
-        self.execution_engine.provider = provider
-        self.execution_engine.context_compaction_token_budget = self._effective_context_token_budget()
-        self.execution_engine.context_window_tokens = self.llm_context_window_tokens
-        self.execution_engine.context_output_reserve_tokens = max(0, self.llm_output_reserve_tokens)
-
-        self.memory_consolidation.provider = provider
-        self._refresh_consolidator_llm(self.user_profile_update.consolidator, provider)
-        self._refresh_consolidator_llm(self.recent_summary_update.consolidator, provider)
-        self._refresh_consolidator_llm(self.active_task_update.consolidator, provider)
-
-        logger.info(
-            "LLM runtime reloaded | provider={} model={} configured={}",
-            config.llm.default or "default",
-            provider.get_default_model(),
-            self.llm_configured,
-        )
-        return {
-            "provider_id": config.llm.default,
-            "model": provider.get_default_model(),
-            "configured": self.llm_configured,
-            "context_window_tokens": self.llm_context_window_tokens,
-        }
+        return reload_agent_llm_from_config(self, config)
 
     def reload_media_from_config(self, config: Config) -> dict[str, Any]:
         """Reload media analysis providers from an already persisted Config."""
-        vision = getattr(config, "vision", None)
-        ocr = getattr(config, "ocr", None)
-        speech = getattr(config, "speech", None)
-        video = getattr(config, "video", None)
-
-        if self.media_router is None:
-            self.media_router = MediaRouter()
-
-        self.media_router.image_provider = create_image_analysis_provider(
-            provider=vision.provider,
-            api_key=vision.api_key,
-            default_model=vision.model,
-            base_url=vision.base_url,
-        ) if vision and vision.enabled else None
-        self.media_router.ocr_provider = create_image_analysis_provider(
-            provider=ocr.provider,
-            api_key=ocr.api_key,
-            default_model=ocr.model,
-            base_url=ocr.base_url,
-        ) if ocr and ocr.enabled else None
-        self.media_router.speech_provider = OpenAICompatibleSpeechProvider(
-            api_key=speech.api_key,
-            default_model=speech.model,
-            base_url=speech.base_url,
-        ) if speech and speech.enabled else None
-        self.media_router.video_provider = OpenAICompatibleVideoProvider(
-            api_key=video.api_key,
-            default_model=video.model,
-            base_url=video.base_url,
-        ) if video and video.enabled else None
-
-        logger.info(
-            "Media runtime reloaded | vision={} ocr={} speech={} video={}",
-            bool(self.media_router.image_provider),
-            bool(self.media_router.ocr_provider),
-            bool(self.media_router.speech_provider),
-            bool(self.media_router.video_provider),
-        )
-        return {
-            "vision_enabled": bool(self.media_router.image_provider),
-            "ocr_enabled": bool(self.media_router.ocr_provider),
-            "speech_enabled": bool(self.media_router.speech_provider),
-            "video_enabled": bool(self.media_router.video_provider),
-        }
+        return reload_agent_media_from_config(self, config)
 
     def reload_web_search_from_config(self, config: Config) -> dict[str, Any]:
         """Reload web search settings and update registered web tools in-place."""
-        web_search_config = config.tools.web_search
-        self.tools_config.web_search = web_search_config
-        self.tools.register(WebSearchTool(config=web_search_config))
-
-        research_tool_updated = False
-        web_research_tool = self.tools.get(WEB_RESEARCH_TOOL_NAME)
-        if isinstance(web_research_tool, WebResearchTool):
-            web_research_tool.search_config = web_search_config
-            if not web_research_tool._custom_search_tool:
-                web_research_tool.search_tool = WebSearchTool(config=web_search_config)
-            research_tool_updated = True
-
-        logger.info(
-            "Web search tools reloaded | provider={} freshness={} max_results={}",
-            web_search_config.provider,
-            web_search_config.freshness,
-            web_search_config.max_results,
-        )
-        return {
-            "provider": web_search_config.provider,
-            "freshness": web_search_config.freshness,
-            "max_results": web_search_config.max_results,
-            "searxng_max_pages": web_search_config.searxng_max_pages,
-            "searxng_engines": list(web_search_config.searxng_engines),
-            "searxng_categories": list(web_search_config.searxng_categories),
-            "tool_updated": self.tools.get(WEB_SEARCH_TOOL_NAME) is not None,
-            "research_tool_updated": research_tool_updated,
-        }
+        return reload_agent_web_search_from_config(self, config)
 
     def reload_browser_from_config(self, config: Config) -> dict[str, Any]:
         """Reload browser automation settings and update registered browser tools in-place."""
-        browser_config = config.tools.browser
-        self.tools_config.browser = browser_config
-
-        removed_tools = [name for name in BROWSER_TOOL_NAMES if self.tools.unregister(name) is not None]
-        if browser_config.enabled:
-            register_browser_tools(
-                self.tools,
-                get_session_id=self._get_current_session_id,
-                tools_config=self.tools_config,
-            )
-        registered_tools = [name for name in BROWSER_TOOL_NAMES if self.tools.get(name) is not None]
-
-        logger.info(
-            "Browser tools reloaded | enabled={} backend={} registered={} removed={}",
-            browser_config.enabled,
-            browser_config.backend,
-            len(registered_tools),
-            len(removed_tools),
-        )
-        return {
-            "enabled": browser_config.enabled,
-            "backend": browser_config.backend,
-            "command_timeout": browser_config.command_timeout,
-            "session_timeout": browser_config.session_timeout,
-            "launch_args": browser_config.launch_args,
-            "tool_updated": bool(registered_tools),
-            "tool_removed": bool(removed_tools),
-        }
+        return reload_agent_browser_from_config(self, config)
 
     def _get_current_session_id(self) -> str | None:
         """Return the current task-local session id."""
