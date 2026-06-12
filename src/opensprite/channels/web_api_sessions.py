@@ -83,17 +83,20 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
         session_prefix = f"{channel_filter}:"
         session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
 
-    if not include_cli:
-        visible_session_ids = []
-        for session_id in session_ids:
-            if not await _should_hide_from_browser_history(storage, session_id):
-                visible_session_ids.append(session_id)
-        session_ids = visible_session_ids
+    hidden_by_session_id: dict[str, bool] = {}
+    filtered_session_ids = []
+    for session_id in session_ids:
+        hidden = await _should_hide_from_browser_history(storage, session_id)
+        hidden_by_session_id[session_id] = hidden
+        if include_cli or not hidden:
+            filtered_session_ids.append(session_id)
+    session_ids = filtered_session_ids
 
-    sessions = [
-        await adapter._serialize_session_summary(storage, session_id, message_limit=message_limit)
-        for session_id in session_ids
-    ]
+    sessions = []
+    for session_id in session_ids:
+        summary = await adapter._serialize_session_summary(storage, session_id, message_limit=message_limit)
+        summary["hidden_from_browser_history"] = hidden_by_session_id.get(session_id, False)
+        sessions.append(summary)
     sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)
     return web.json_response({"sessions": sessions[:session_limit], "channel": channel_filter or adapter.channel_instance_id})
 

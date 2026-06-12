@@ -82,6 +82,15 @@
             {{ copy.sidebar.filters.web }}
           </button>
         </div>
+        <label class="session-history-toggle" :title="copy.sidebar.showHiddenSessionsTitle">
+          <input
+            type="checkbox"
+            :checked="showHiddenSessions"
+            @change="$emit('set-show-hidden-sessions', $event.target.checked)"
+          />
+          <span aria-hidden="true"></span>
+          <strong>{{ copy.sidebar.showHiddenSessions }}</strong>
+        </label>
         <div class="session-list">
           <div
             v-for="session in sessions"
@@ -167,6 +176,10 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  showHiddenSessions: {
+    type: Boolean,
+    required: true,
+  },
   collapsed: {
     type: Boolean,
     required: true,
@@ -194,6 +207,7 @@ const emit = defineEmits([
   "delete-sessions",
   "set-active-session",
   "set-session-channel-filter",
+  "set-show-hidden-sessions",
   "select-background-process",
   "refresh-background-processes",
   "toggle-sidebar-collapsed",

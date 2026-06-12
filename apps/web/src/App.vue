@@ -29,6 +29,7 @@
       :state="state"
       :sessions="sidebarSessions"
       :session-channel-filter="sessionChannelFilter"
+      :show-hidden-sessions="showHiddenSessions"
       :collapsed="sidebarCollapsed"
       :background-processes="state.backgroundProcesses"
       :active-session-id="currentSessionApiId"
@@ -38,6 +39,7 @@
       @delete-sessions="deleteSessions"
       @set-active-session="setActiveSession"
       @set-session-channel-filter="setSessionChannelFilter"
+      @set-show-hidden-sessions="setShowHiddenSessions"
       @select-background-process="selectBackgroundProcess"
       @refresh-background-processes="loadBackgroundProcesses"
       @toggle-sidebar-collapsed="toggleSidebarCollapsed"
@@ -259,6 +261,7 @@ const {
   sidebarSessions,
   webSessionCount,
   sessionChannelFilter,
+  showHiddenSessions,
   messageText,
   sidebarOpen,
   sidebarCollapsed,
@@ -293,6 +296,7 @@ const {
   getSessionTitle,
   setActiveSession,
   setSessionChannelFilter,
+  setShowHiddenSessions,
   selectBackgroundProcess,
   selectRun,
   selectSettingsSection,

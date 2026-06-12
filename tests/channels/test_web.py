@@ -2197,12 +2197,14 @@ async def _run_web_sessions_api():
         assert payload["channel"] == "web"
         assert payload["sessions"][0]["external_chat_id"] == "browser-new"
         assert payload["sessions"][0]["channel"] == "web"
+        assert payload["sessions"][0]["hidden_from_browser_history"] is False
         assert payload["sessions"][0]["title"] == "new hello"
         assert [item["session_id"] for item in all_payload["sessions"]] == [
             "telegram:123",
             "web:browser-new",
             "web:browser-old",
         ]
+        assert [item["hidden_from_browser_history"] for item in all_payload["sessions"]] == [False, False, False]
         assert [item["session_id"] for item in all_with_cli_payload["sessions"]] == [
             "cli:native-cli-test",
             "web:codex-automation-test",
@@ -2210,6 +2212,14 @@ async def _run_web_sessions_api():
             "telegram:123",
             "web:browser-new",
             "web:browser-old",
+        ]
+        assert [item["hidden_from_browser_history"] for item in all_with_cli_payload["sessions"]] == [
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
         ]
         assert all(":subagent:" not in item["session_id"] for item in all_payload["sessions"])
         assert all_payload["channel"] == "all"

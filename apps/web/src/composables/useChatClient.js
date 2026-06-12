@@ -69,6 +69,7 @@ const STORAGE_KEYS = {
   showRunTimeline: "opensprite:web:showRunTimeline",
   showRunSummary: "opensprite:web:showRunSummary",
   showRunTrace: "opensprite:web:showRunTrace",
+  showHiddenSessions: "opensprite:web:showHiddenSessions",
   language: "opensprite:web:language",
   colorScheme: "opensprite:web:colorScheme",
   sidebarCollapsed: "opensprite:web:sidebarCollapsed",
@@ -267,6 +268,7 @@ function createSession(externalChatId) {
     updatedAt: Date.now(),
     messages: [],
     entries: [],
+    hiddenFromBrowserHistory: false,
     status: { status: "idle", updatedAt: Date.now(), metadata: {} },
     workState: null,
     activeRunId: null,
@@ -1079,6 +1081,7 @@ export function useChatClient() {
   const sidebarCollapsed = ref(readStoredBoolean(STORAGE_KEYS.sidebarCollapsed, false));
   const traceInspectorCollapsed = ref(readStoredBoolean(STORAGE_KEYS.traceInspectorCollapsed, true));
   const sessionChannelFilter = ref("all");
+  const showHiddenSessions = ref(readStoredBoolean(STORAGE_KEYS.showHiddenSessions, false));
   const settingsOpen = ref(false);
   const settingsSection = ref("general");
   const settingsForm = reactive(createSettingsForm(state));
@@ -1147,10 +1150,13 @@ export function useChatClient() {
   });
 
   const sidebarSessions = computed(() => {
+    const visibleSessions = showHiddenSessions.value
+      ? state.sessions
+      : state.sessions.filter((session) => !session.hiddenFromBrowserHistory);
     if (sessionChannelFilter.value === "web") {
-      return state.sessions.filter((session) => !session.channel || session.channel === "web");
+      return visibleSessions.filter((session) => !session.channel || session.channel === "web");
     }
-    return state.sessions;
+    return visibleSessions;
   });
 
   const webSessionCount = computed(() => state.sessions.filter((session) => !session.channel || session.channel === "web").length);
@@ -2045,6 +2051,28 @@ export function useChatClient() {
     }
   }
 
+  function ensureActiveSessionVisibleInSidebar() {
+    if (sidebarSessions.value.some((session) => session.externalChatId === state.activeExternalChatId)) {
+      return;
+    }
+    let nextSession = sidebarSessions.value[0];
+    if (!nextSession) {
+      nextSession = createSession();
+      state.sessions.unshift(nextSession);
+      persistLocalDraftSessions();
+    }
+    state.activeExternalChatId = nextSession.externalChatId;
+    writeStoredValue(STORAGE_KEYS.activeExternalChatId, nextSession.externalChatId);
+  }
+
+  async function setShowHiddenSessions(value) {
+    showHiddenSessions.value = Boolean(value);
+    writeStoredValue(STORAGE_KEYS.showHiddenSessions, String(showHiddenSessions.value));
+    ensureActiveSessionVisibleInSidebar();
+    await loadSessionHistory({ quiet: true });
+    ensureActiveSessionVisibleInSidebar();
+  }
+
   async function selectBackgroundProcess(process) {
     const ownerSessionId = String(process?.ownerSessionId || "").trim();
     const ownerChannel = String(process?.ownerChannel || channelFromSessionId(ownerSessionId) || "web").trim() || "web";
@@ -2813,6 +2841,7 @@ export function useChatClient() {
     const externalChatId = channel === "web" ? transportExternalChatId : (sessionId || `${channel}:${transportExternalChatId}`);
     const session = createSession(externalChatId);
     session.channel = channel;
+    session.hiddenFromBrowserHistory = Boolean(payload?.hidden_from_browser_history ?? payload?.hiddenFromBrowserHistory);
     session.transportExternalChatId = transportExternalChatId;
     session.sessionId = sessionId || null;
     session.title = String(payload?.title || "").trim() || "New chat";
@@ -2839,6 +2868,7 @@ export function useChatClient() {
 
   function mergeHistorySession(existing, incoming, { preserveDetails = false } = {}) {
     existing.channel = incoming.channel;
+    existing.hiddenFromBrowserHistory = incoming.hiddenFromBrowserHistory;
     existing.transportExternalChatId = incoming.transportExternalChatId;
     existing.sessionId = incoming.sessionId;
     existing.title = incoming.title;
@@ -2909,7 +2939,11 @@ export function useChatClient() {
     }
     sessionHistoryRefreshing = true;
     try {
-      const payload = await requestSettingsJson("/api/sessions?channel=all&limit=50&messages=50");
+      const params = new URLSearchParams({ channel: "all", limit: "50", messages: "50" });
+      if (showHiddenSessions.value) {
+        params.set("include_cli", "true");
+      }
+      const payload = await requestSettingsJson(`/api/sessions?${params.toString()}`);
       const historySessions = Array.isArray(payload.sessions)
         ? payload.sessions.map(normalizeHistorySession)
         : [];
@@ -3849,6 +3883,7 @@ export function useChatClient() {
     sidebarSessions,
     webSessionCount,
     sessionChannelFilter,
+    showHiddenSessions,
     messageText,
     messageInput,
     messageStage,
@@ -3887,6 +3922,7 @@ export function useChatClient() {
     getSessionTitle,
     setActiveSession,
     setSessionChannelFilter,
+    setShowHiddenSessions,
     selectBackgroundProcess,
     selectRun,
     selectSettingsSection,
