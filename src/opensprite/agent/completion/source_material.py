@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..execution import ExecutionResult
 from ..task.contract import (
     TaskContract,
+    contract_requests_source_material,
     is_source_artifact_criterion,
     is_source_detail_criterion,
 )
 from ...tools.evidence import (
+    is_web_research_task_type,
     is_web_research_source_artifact_tool,
+    is_web_source_evidence_tool,
     is_web_source_artifact_kind,
     web_source_has_substantive_detail,
 )
@@ -48,6 +53,17 @@ def source_material_satisfies_contract(contract: TaskContract, execution_result:
 def source_material_gap_detail(execution_result: ExecutionResult) -> str | None:
     """Return structured web research coverage gap detail, when available."""
     return web_research_coverage_gap_detail(execution_result)
+
+
+def task_contract_requires_web_source_evidence(task_contract: Any) -> bool:
+    if is_web_research_task_type(getattr(task_contract, "task_type", None)):
+        return True
+    if contract_requests_source_material(task_contract):
+        return True
+    return any(
+        is_web_source_evidence_tool(tool_name)
+        for tool_name in getattr(task_contract, "required_tools", ()) or ()
+    )
 
 
 def source_artifact_traceability_gap_detail(contract: TaskContract, execution_result: ExecutionResult) -> str | None:

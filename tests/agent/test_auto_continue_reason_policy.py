@@ -1,4 +1,4 @@
-from opensprite.agent.completion_gate import (
+from opensprite.agent.completion.auto_continue import (
     COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON,
     COMPLETION_GATE_TERMINAL_STATUS_REASON,
     MAX_AUTO_CONTINUES_REACHED_REASON,

@@ -41,7 +41,8 @@ from .task.capabilities import (
 )
 from ..utils.log import logger
 from ..utils.url import join_url_path
-from .completion_gate import AutoContinueService, format_web_source_context
+from .completion.auto_continue import AutoContinueService
+from .completion.source_material import format_web_source_context
 from .completion_gate import (
     COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
     COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD,
