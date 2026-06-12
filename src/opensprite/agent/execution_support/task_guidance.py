@@ -8,6 +8,8 @@ from ..task.capabilities import HISTORY_RETRIEVAL_TASK_TYPE
 from ..task.contract import (
     TaskContextDecision,
     TaskContract,
+)
+from ..task.evidence_policy import (
     is_itemized_output_criterion,
     is_media_artifact_criterion,
     is_operation_report_criterion,

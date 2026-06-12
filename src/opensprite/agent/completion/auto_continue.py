@@ -16,14 +16,16 @@ from ..task.contract import (
     COMMAND_VERSION_QUALITY_CHECK,
     TaskContract,
     TaskIntent,
+    is_history_retrieval_task_type,
+    is_media_extraction_task_type,
+    is_workspace_read_task_type,
+)
+from ..task.evidence_policy import (
     contract_expects_file_change,
     contract_requests_itemized_output,
     contract_requests_source_material,
     contract_requests_source_reference,
     contract_requests_substantive_final_answer,
-    is_history_retrieval_task_type,
-    is_media_extraction_task_type,
-    is_workspace_read_task_type,
 )
 from .quality_gate import (
     contract_requests_quality_check,

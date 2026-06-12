@@ -32,9 +32,13 @@ from ..task.contract import (
     TaskContract,
     TaskIntent,
     is_history_retrieval_task_type,
+    is_media_extraction_task_type,
+    is_workspace_read_task_type,
+    neutral_task_contract,
+)
+from ..task.evidence_policy import (
     is_itemized_output_criterion,
     is_media_artifact_criterion,
-    is_media_extraction_task_type,
     is_operation_report_criterion,
     is_source_artifact_criterion,
     is_source_detail_criterion,
@@ -42,8 +46,6 @@ from ..task.contract import (
     is_substantive_final_answer_criterion,
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
-    is_workspace_read_task_type,
-    neutral_task_contract,
 )
 from ..task.resources import ResourceIndex
 from .response_quality import (

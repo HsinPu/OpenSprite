@@ -8,9 +8,9 @@ from ..execution import ExecutionResult
 from ..task.contract import (
     TaskContract,
     TaskIntent,
-    missing_evidence,
     neutral_task_contract,
 )
+from ..task.evidence_policy import missing_evidence
 
 MISSING_TASK_EVIDENCE_REASON = "required task evidence was not produced"
 

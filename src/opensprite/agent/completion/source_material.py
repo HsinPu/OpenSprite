@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from ..execution import ExecutionResult
-from ..task.contract import (
-    TaskContract,
+from ..task.contract import TaskContract
+from ..task.evidence_policy import (
     contract_requests_source_material,
     is_source_artifact_criterion,
     is_source_detail_criterion,

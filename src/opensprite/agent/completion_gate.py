@@ -23,10 +23,10 @@ from .task.contract import (
 from .task.contract import (
     PLANNER_METADATA_REASON_FIELD,
     TaskContract,
-    contract_expects_file_change,
     task_planner_reason,
     task_planner_status,
 )
+from .task.evidence_policy import contract_expects_file_change
 from ..tools.evidence import (
     REQUIRED_VERIFICATION_FAILED_REASON,
     required_verification_completion_reason,
