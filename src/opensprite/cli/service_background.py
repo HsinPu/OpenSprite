@@ -344,6 +344,8 @@ def start_service(
         raise RuntimeError(f"OpenSprite gateway is already running (PID {existing_pid}).")
 
     python_path = resolve_gateway_python(python_executable)
+    if platform.system() == "Windows":
+        python_path = _windowless_python_executable(python_path)
     command = [str(python_path), "-m", "opensprite", "gateway"]
     if config_path is not None:
         command.extend(["--config", str(Path(config_path).expanduser().resolve())])

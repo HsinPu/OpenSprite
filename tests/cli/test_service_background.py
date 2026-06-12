@@ -55,6 +55,30 @@ def test_start_service_launches_detached_gateway(tmp_path, monkeypatch):
         assert "startupinfo" in kwargs
 
 
+def test_start_service_uses_pythonw_for_windows_gateway_when_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    calls = []
+
+    def fake_popen(command, **kwargs):
+        calls.append((command, kwargs))
+        return FakeProcess()
+
+    python_path = tmp_path / "python.exe"
+    pythonw_path = tmp_path / "pythonw.exe"
+    python_path.write_text("", encoding="utf-8")
+    pythonw_path.write_text("", encoding="utf-8")
+
+    service_background.start_service(
+        home=tmp_path,
+        python_executable=python_path,
+        popen=fake_popen,
+    )
+
+    command, _kwargs = calls[0]
+    assert command[:3] == [str(pythonw_path.resolve()), "-m", "opensprite"]
+    assert command[3:] == ["gateway"]
+
+
 def test_is_process_running_uses_windows_process_exit_code(monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
 
