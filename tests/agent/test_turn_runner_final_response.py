@@ -5,9 +5,7 @@ from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import TaskContract
 from opensprite.agent.completion.source_finalization import source_finalization_available
 from opensprite.agent.turn_input import message_with_runtime_context
-from opensprite.agent.turn_runner import (
-    _final_response_after_exhausted_continuation,
-)
+from opensprite.agent.turn_outcome import final_response_after_exhausted_continuation
 
 
 COMPLETION_BLOCKER_MESSAGES = CompletionBlockerMessages(
@@ -41,7 +39,7 @@ def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
 
 
 def test_exhausted_continuation_replaces_nonfinal_response_with_blocker():
-    response = _final_response_after_exhausted_continuation(
+    response = final_response_after_exhausted_continuation(
         response="Let me keep checking that.",
         completion_result=CompletionGateResult(
             status="incomplete",
@@ -62,7 +60,7 @@ def test_exhausted_continuation_replaces_nonfinal_response_with_blocker():
 
 
 def test_exhausted_continuation_keeps_complete_response():
-    response = _final_response_after_exhausted_continuation(
+    response = final_response_after_exhausted_continuation(
         response="Done with cited sources.",
         completion_result=CompletionGateResult(status="complete", reason="done"),
         auto_continue_attempts=0,
@@ -73,7 +71,7 @@ def test_exhausted_continuation_keeps_complete_response():
 
 
 def test_exhausted_continuation_does_not_build_source_template_answer():
-    response = _final_response_after_exhausted_continuation(
+    response = final_response_after_exhausted_continuation(
         response="Sorry, I did not produce a displayable reply.",
         completion_result=CompletionGateResult(
             status="incomplete",

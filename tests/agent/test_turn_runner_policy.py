@@ -1,4 +1,4 @@
-from opensprite.agent.turn_runner import (
+from opensprite.agent.turn_outcome import (
     LLM_NOT_CONFIGURED_LOG_REASON,
     LLM_NOT_CONFIGURED_TURN_REASON,
     MEDIA_ONLY_TURN_REASON,

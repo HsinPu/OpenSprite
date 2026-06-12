@@ -29,7 +29,6 @@ from ..runs.events import (
     WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
-from .task.capabilities import PURE_ANSWER_TASK_TYPE
 from ..utils.log import logger
 from .completion.auto_continue import AutoContinueService
 from .completion.source_finalization import source_finalization_sources
@@ -46,13 +45,9 @@ from .completion_gate import (
     CompletionBlockerMessages,
     CompletionGateResult,
     CompletionGateService,
-    completion_blocker_response,
 )
-from .completion.verifier import COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER
 from .completion_gate import (
     INCOMPLETE_COMPLETION_STATUS,
-    allows_nonfinal_response_replacement,
-    is_blocking_completion_status,
     is_complete_completion_status,
 )
 from .execution import ExecutionResult
@@ -74,9 +69,8 @@ from .task.progress import (
     WorkPlan,
     WorkProgressService,
     WorkProgressUpdate,
-    metadata_is_work_progress_source,
 )
-from .task.scorecard import task_contract_type, task_scorecard_metadata
+from .task.scorecard import task_scorecard_metadata
 from .task.decision import TurnTaskPlanningService
 from .turn_context import TurnContextService
 from .turn_input import (
@@ -86,30 +80,31 @@ from .turn_input import (
     metadata_requests_follow_up_resume,
     metadata_text,
 )
+from .turn_outcome import (
+    LLM_NOT_CONFIGURED_LOG_REASON,
+    LLM_NOT_CONFIGURED_TURN_REASON,
+    MEDIA_ONLY_TURN_REASON,
+    TASK_CLARIFICATION_TURN_REASON,
+    TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD,
+    TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD,
+    TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD,
+    TURN_METADATA_COMPLETION_GATE_FIELD,
+    TURN_METADATA_COMPLETION_REASON_FIELD,
+    TURN_METADATA_COMPLETION_STATUS_FIELD,
+    TURN_METADATA_DELEGATED_TASKS_FIELD,
+    TURN_METADATA_TASK_ARTIFACTS_FIELD,
+    TURN_METADATA_TASK_CONTRACT_FIELD,
+    TURN_METADATA_TOOL_EVIDENCE_FIELD,
+    TURN_METADATA_WORK_PROGRESS_FIELD,
+    can_replace_initial_work_state,
+    final_response_after_exhausted_continuation,
+    is_tool_backed_task_contract,
+    task_checkpoint_metadata,
+    workflow_run_id,
+)
 from .run_lifecycle import RunLifecycleService
 from .response_finalizer import AgentResponseFinalizer
 from .workflow import is_workflow_failed_status
-
-
-TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD = "auto_continue_attempts"
-TURN_METADATA_COMPLETION_GATE_FIELD = "completion_gate"
-TURN_METADATA_COMPLETION_STATUS_FIELD = "completion_status"
-TURN_METADATA_COMPLETION_REASON_FIELD = "completion_reason"
-TURN_METADATA_WORK_PROGRESS_FIELD = "work_progress"
-TURN_METADATA_TASK_CONTRACT_FIELD = "task_contract"
-TURN_METADATA_TOOL_EVIDENCE_FIELD = "tool_evidence"
-TURN_METADATA_TASK_ARTIFACTS_FIELD = "task_artifacts"
-TURN_METADATA_DELEGATED_TASKS_FIELD = "delegated_tasks"
-TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD = "active_delegate_task_id"
-TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD = "active_delegate_prompt_type"
-MEDIA_ONLY_TURN_REASON = "media_only"
-LLM_NOT_CONFIGURED_TURN_REASON = "llm_not_configured"
-TASK_CLARIFICATION_TURN_REASON = "task_clarification_requested"
-LLM_NOT_CONFIGURED_LOG_REASON = "llm-not-configured"
-
-
-def _workflow_run_id(outcome: dict[str, Any]) -> str:
-    return metadata_text(outcome, "workflow_run_id")
 
 
 @dataclass(frozen=True)
@@ -591,7 +586,7 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        task_checkpoint = _task_checkpoint_metadata(
+        task_checkpoint = task_checkpoint_metadata(
             aggregate_result=aggregate_result,
             completion_result=completion_result,
             work_progress=work_progress,
@@ -782,7 +777,7 @@ class AgentTurnRunner:
                         task_contract=exec_result.task_contract,
                     )
                     if contract_work_plan is None:
-                        if _can_replace_initial_work_state(current_work_state):
+                        if can_replace_initial_work_state(current_work_state):
                             work_plan = None
                             current_work_state = None
                     else:
@@ -804,7 +799,7 @@ class AgentTurnRunner:
                                 task_kind=work_plan.kind,
                                 expects_code_change=True,
                             )
-                        if _can_replace_initial_work_state(current_work_state):
+                        if can_replace_initial_work_state(current_work_state):
                             current_work_state = self.work_progress.build_initial_state(
                                 session_id=turn.session_id,
                                 task_intent=task_intent,
@@ -828,7 +823,7 @@ class AgentTurnRunner:
             aggregate_result = evaluation.aggregate_result
             completion_result = evaluation.completion_result
             work_progress = evaluation.work_progress
-            if _is_tool_backed_task_contract(aggregate_result.task_contract):
+            if is_tool_backed_task_contract(aggregate_result.task_contract):
                 current_task_contract_override = aggregate_result.task_contract
             collected_delegated_tasks = evaluation.collected_delegated_tasks
             collected_workflow_outcomes = evaluation.collected_workflow_outcomes
@@ -1036,7 +1031,7 @@ class AgentTurnRunner:
                 final_task_scorecard,
             )
 
-        response = _final_response_after_exhausted_continuation(
+        response = final_response_after_exhausted_continuation(
             response=response,
             completion_result=completion_result,
             auto_continue_attempts=auto_continue_attempts,
@@ -1373,26 +1368,26 @@ class AgentTurnRunner:
         updates: tuple[dict[str, Any], ...],
     ) -> tuple[dict[str, Any], ...]:
         by_id = {
-            _workflow_run_id(item): dict(item)
+            workflow_run_id(item): dict(item)
             for item in existing
-            if isinstance(item, dict) and _workflow_run_id(item)
+            if isinstance(item, dict) and workflow_run_id(item)
         }
         order = [
-            _workflow_run_id(item)
+            workflow_run_id(item)
             for item in existing
-            if isinstance(item, dict) and _workflow_run_id(item)
+            if isinstance(item, dict) and workflow_run_id(item)
         ]
         for update in updates:
             if not isinstance(update, dict):
                 continue
-            workflow_run_id = _workflow_run_id(update)
-            if not workflow_run_id:
+            workflow_run_id_value = workflow_run_id(update)
+            if not workflow_run_id_value:
                 continue
-            if workflow_run_id in order:
-                order.remove(workflow_run_id)
-            order.append(workflow_run_id)
-            by_id[workflow_run_id] = dict(update)
-        return tuple(by_id[workflow_run_id] for workflow_run_id in order if workflow_run_id in by_id)
+            if workflow_run_id_value in order:
+                order.remove(workflow_run_id_value)
+            order.append(workflow_run_id_value)
+            by_id[workflow_run_id_value] = dict(update)
+        return tuple(by_id[workflow_run_id_value] for workflow_run_id_value in order if workflow_run_id_value in by_id)
 
     @staticmethod
     def _aggregate_execution_results(results: list[ExecutionResult], *, content: str) -> ExecutionResult:
@@ -1506,7 +1501,7 @@ class AgentTurnRunner:
             ),
             None,
         )
-        if validated is not None and _is_tool_backed_task_contract(validated):
+        if validated is not None and is_tool_backed_task_contract(validated):
             return validated
         tool_backed_validated = next(
             (
@@ -1515,7 +1510,7 @@ class AgentTurnRunner:
                 if (
                     result.task_contract is not None
                     and task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
-                    and _is_tool_backed_task_contract(result.task_contract)
+                    and is_tool_backed_task_contract(result.task_contract)
                 )
             ),
             None,
@@ -1551,81 +1546,3 @@ class AgentTurnRunner:
         )
         exec_result.touched_paths = touched_paths
         return exec_result
-
-
-def _task_checkpoint_metadata(
-    *,
-    aggregate_result: ExecutionResult,
-    completion_result: CompletionGateResult,
-    work_progress: WorkProgressUpdate,
-    pass_index: int,
-    auto_continue_attempts: int,
-) -> dict[str, Any]:
-    task_contract = getattr(aggregate_result, "task_contract", None)
-    return {
-        "schema_version": 1,
-        "pass_index": max(1, pass_index),
-        TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: max(0, auto_continue_attempts),
-        "task_type": task_contract_type(task_contract),
-        "tool_selection": dict(aggregate_result.tool_selection or {}),
-        TURN_METADATA_TASK_CONTRACT_FIELD: task_contract.to_metadata() if task_contract is not None else None,
-        "completion": completion_result.to_metadata(),
-        TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
-        "next_action": work_progress.next_action,
-        "tool_evidence_count": len(aggregate_result.tool_evidence),
-        "task_artifact_count": len(aggregate_result.task_artifacts),
-    }
-
-
-def _final_response_after_exhausted_continuation(
-    *,
-    response: str,
-    completion_result: CompletionGateResult,
-    auto_continue_attempts: int,
-    completion_blocker_messages: CompletionBlockerMessages,
-) -> str:
-    if not _should_replace_nonfinal_response(
-        response=response,
-        completion_result=completion_result,
-        auto_continue_attempts=auto_continue_attempts,
-    ):
-        return response
-    return completion_blocker_response(completion_result, completion_blocker_messages)
-
-
-def _should_replace_nonfinal_response(
-    *,
-    response: str,
-    completion_result: CompletionGateResult,
-    auto_continue_attempts: int,
-) -> bool:
-    if is_complete_completion_status(completion_result.status):
-        return False
-    if completion_result.next_action == COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER:
-        return True
-    if not (response or "").strip():
-        return True
-    if is_blocking_completion_status(completion_result.status):
-        return False
-    return allows_nonfinal_response_replacement(completion_result.status)
-
-
-def _is_tool_backed_task_contract(task_contract: Any) -> bool:
-    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
-    if task_type in {"", PURE_ANSWER_TASK_TYPE, PLANNING_ERROR_TASK_TYPE}:
-        return False
-    return True
-
-
-def _can_replace_initial_work_state(state: StoredWorkState | None) -> bool:
-    if state is None:
-        return True
-    metadata = state.metadata if isinstance(state.metadata, dict) else {}
-    return (
-        metadata_is_work_progress_source(metadata)
-        and not state.completed_steps
-        and not state.blockers
-        and int(state.file_change_count or 0) == 0
-        and not state.touched_paths
-        and not state.delegated_tasks
-    )
