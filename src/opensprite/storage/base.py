@@ -487,6 +487,13 @@ class StorageProvider(ABC):
     async def clear_work_state(self, session_id: str) -> None:
         """Remove persisted structured work state for one chat when supported."""
         return None
+
+    async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
+        """Return known session ids from newest to oldest when supported."""
+        session_ids = await self.get_all_sessions()
+        if limit is not None:
+            return session_ids[: max(0, int(limit))]
+        return session_ids
     
     @abstractmethod
     async def get_all_sessions(self) -> list[str]:

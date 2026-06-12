@@ -33,6 +33,25 @@ def test_sqlite_storage_supports_count_and_slice_reads(tmp_path):
     assert [message.content for message in tail] == ["m3", "m4"]
 
 
+def test_sqlite_storage_returns_recent_sessions(tmp_path):
+    db_path = tmp_path / "sessions.db"
+    storage = SQLiteStorage(db_path)
+
+    async def scenario():
+        await storage.add_message("web:old", StoredMessage(role="user", content="old", timestamp=10.0))
+        await storage.add_message("web:new", StoredMessage(role="user", content="new", timestamp=30.0))
+        await storage.create_run("web:run-latest", "run-1", status="completed", created_at=20.0)
+        await storage.update_run_status("web:run-latest", "run-1", "completed", finished_at=40.0)
+        all_sessions = await storage.get_recent_sessions()
+        limited_sessions = await storage.get_recent_sessions(limit=2)
+        return all_sessions, limited_sessions
+
+    all_sessions, limited_sessions = asyncio.run(scenario())
+
+    assert all_sessions == ["web:run-latest", "web:new", "web:old"]
+    assert limited_sessions == ["web:run-latest", "web:new"]
+
+
 def test_sqlite_storage_persists_runs_and_events(tmp_path):
     db_path = tmp_path / "runs.db"
     storage = SQLiteStorage(db_path)

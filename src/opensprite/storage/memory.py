@@ -111,6 +111,21 @@ class MemoryStorage(StorageProvider):
         session_ids.update(process.owner_session_id for process in self._background_processes.values())
         return sorted(session_ids)
 
+    async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
+        session_ids = await self.get_all_sessions()
+
+        def updated_at(session_id: str) -> float:
+            message_timestamps = [float(message.timestamp or 0) for message in self._messages.get(session_id, [])]
+            runs = [run for run in self._runs.values() if run.session_id == session_id]
+            runs.sort(key=lambda run: (run.created_at, run.run_id), reverse=True)
+            latest_run_updated_at = float(runs[0].updated_at or 0) if runs else 0.0
+            return max([*message_timestamps, latest_run_updated_at], default=0.0)
+
+        session_ids.sort(key=lambda session_id: (updated_at(session_id), session_id), reverse=True)
+        if limit is not None:
+            return session_ids[: max(0, int(limit))]
+        return session_ids
+
     async def upsert_background_process(
         self,
         process: StoredBackgroundProcess,

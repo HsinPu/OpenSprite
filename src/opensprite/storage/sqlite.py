@@ -1536,6 +1536,46 @@ class SQLiteStorage(StorageProvider):
             finally:
                 conn.close()
 
+    async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
+        """Return known session ids from newest to oldest."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                query = """
+                    SELECT
+                        c.session_id,
+                        MAX(
+                            COALESCE(
+                                (
+                                    SELECT MAX(m.created_at)
+                                    FROM messages AS m
+                                    WHERE m.session_id = c.session_id
+                                ),
+                                0
+                            ),
+                            COALESCE(
+                                (
+                                    SELECT r.updated_at
+                                    FROM runs AS r
+                                    WHERE r.session_id = c.session_id
+                                    ORDER BY r.created_at DESC, r.run_id DESC
+                                    LIMIT 1
+                                ),
+                                0
+                            )
+                        ) AS updated_at
+                    FROM chats AS c
+                    ORDER BY updated_at DESC, c.session_id DESC
+                """
+                params: tuple[Any, ...] = ()
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params = (max(0, int(limit)),)
+                rows = conn.execute(query, params).fetchall()
+                return [str(row["session_id"]) for row in rows]
+            finally:
+                conn.close()
+
 
 def _load_metadata(raw: str | None) -> dict[str, Any]:
     """Parse stored metadata JSON safely."""
