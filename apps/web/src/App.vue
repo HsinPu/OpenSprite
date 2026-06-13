@@ -28,6 +28,7 @@
       :copy="copy"
       :state="state"
       :sessions="sidebarSessions"
+      :session-total="sidebarSessionTotal"
       :session-channel-filter="sessionChannelFilter"
       :show-hidden-sessions="showHiddenSessions"
       :collapsed="sidebarCollapsed"
@@ -260,6 +261,7 @@ const {
   prompts,
   state,
   sidebarSessions,
+  sidebarSessionTotal,
   webSessionCount,
   sessionChannelFilter,
   showHiddenSessions,

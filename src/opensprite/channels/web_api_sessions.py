@@ -87,18 +87,34 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
         session_prefix = f"{channel_filter}:"
         session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
 
-    sessions = []
+    filtered_session_ids = []
+    hidden_by_session_id = {}
+    channel_totals: dict[str, int] = {"all": 0}
     for session_id in session_ids:
         hidden = await _should_hide_from_browser_history(storage, session_id)
         if hidden and not include_cli:
             continue
+        channel = adapter._channel_from_session(session_id)
+        filtered_session_ids.append(session_id)
+        hidden_by_session_id[session_id] = hidden
+        channel_totals["all"] += 1
+        channel_totals[channel] = channel_totals.get(channel, 0) + 1
+
+    sessions = []
+    for session_id in filtered_session_ids[:session_limit]:
         summary = await adapter._serialize_session_summary(storage, session_id, message_limit=message_limit)
-        summary["hidden_from_browser_history"] = hidden
+        summary["hidden_from_browser_history"] = hidden_by_session_id[session_id]
         sessions.append(summary)
-        if len(sessions) >= session_limit:
-            break
     sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)
-    return web.json_response({"sessions": sessions, "channel": channel_filter or adapter.channel_instance_id})
+    return web.json_response(
+        {
+            "sessions": sessions,
+            "channel": channel_filter or adapter.channel_instance_id,
+            "total": len(filtered_session_ids),
+            "limit": session_limit,
+            "channel_totals": channel_totals,
+        }
+    )
 
 
 async def handle_sessions_delete(

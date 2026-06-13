@@ -38,7 +38,7 @@
         <div class="sidebar__section-head">
           <span>{{ copy.sidebar.chats }}</span>
           <span class="sidebar__section-meta">
-            <small>{{ sessions.length }}/{{ state.sessions.length }}</small>
+            <small>{{ sessions.length }}/{{ sessionTotal }}</small>
             <span class="sidebar__section-actions">
               <button
                 v-if="!deleteMode"
@@ -178,6 +178,10 @@ const props = defineProps({
   },
   sessions: {
     type: Array,
+    required: true,
+  },
+  sessionTotal: {
+    type: Number,
     required: true,
   },
   sessionChannelFilter: {

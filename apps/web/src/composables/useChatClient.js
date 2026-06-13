@@ -1070,6 +1070,11 @@ export function useChatClient() {
       error: "",
       lastLoadedAt: null,
     },
+    sessionHistory: {
+      total: 0,
+      limit: 0,
+      channelTotals: {},
+    },
   });
 
   const overlayProfileId = ref(storedOverlayProfileId || generateOverlayProfileId());
@@ -1164,6 +1169,15 @@ export function useChatClient() {
       return visibleSessions.filter((session) => !session.channel || session.channel === "web");
     }
     return visibleSessions;
+  });
+
+  const sidebarSessionTotal = computed(() => {
+    const key = sessionChannelFilter.value === "web" ? "web" : "all";
+    const total = Number(state.sessionHistory.channelTotals?.[key] ?? state.sessionHistory.total);
+    if (Number.isFinite(total) && total > 0) {
+      return Math.max(sidebarSessions.value.length, total);
+    }
+    return sidebarSessions.value.length;
   });
 
   const webSessionCount = computed(() => state.sessions.filter((session) => !session.channel || session.channel === "web").length);
@@ -3006,6 +3020,11 @@ export function useChatClient() {
       const historySessions = Array.isArray(payload.sessions)
         ? payload.sessions.map(normalizeHistorySession)
         : [];
+      state.sessionHistory.total = Number(payload.total || historySessions.length);
+      state.sessionHistory.limit = Number(payload.limit || historySessions.length);
+      state.sessionHistory.channelTotals = payload.channel_totals && typeof payload.channel_totals === "object"
+        ? payload.channel_totals
+        : { all: state.sessionHistory.total };
       mergeHistorySessions(historySessions, {
         preserveActiveSession: quiet,
         pruneMissingHistorySessions: Boolean(options?.pruneMissingHistorySessions),
@@ -4059,6 +4078,7 @@ export function useChatClient() {
     prompts,
     state,
     sidebarSessions,
+    sidebarSessionTotal,
     webSessionCount,
     sessionChannelFilter,
     showHiddenSessions,

@@ -2195,6 +2195,9 @@ async def _run_web_sessions_api():
 
         assert [item["session_id"] for item in payload["sessions"]] == ["web:browser-new"]
         assert payload["channel"] == "web"
+        assert payload["total"] == 2
+        assert payload["limit"] == 1
+        assert payload["channel_totals"] == {"all": 2, "web": 2}
         assert payload["sessions"][0]["external_chat_id"] == "browser-new"
         assert payload["sessions"][0]["channel"] == "web"
         assert payload["sessions"][0]["hidden_from_browser_history"] is False
@@ -2204,6 +2207,8 @@ async def _run_web_sessions_api():
             "web:browser-new",
             "web:browser-old",
         ]
+        assert all_payload["total"] == 3
+        assert all_payload["channel_totals"] == {"all": 3, "telegram": 1, "web": 2}
         assert [item["hidden_from_browser_history"] for item in all_payload["sessions"]] == [False, False, False]
         assert [item["session_id"] for item in all_with_cli_payload["sessions"]] == [
             "cli:native-cli-test",
@@ -2213,6 +2218,8 @@ async def _run_web_sessions_api():
             "web:browser-new",
             "web:browser-old",
         ]
+        assert all_with_cli_payload["total"] == 6
+        assert all_with_cli_payload["channel_totals"] == {"all": 6, "cli": 1, "web": 4, "telegram": 1}
         assert [item["hidden_from_browser_history"] for item in all_with_cli_payload["sessions"]] == [
             True,
             True,

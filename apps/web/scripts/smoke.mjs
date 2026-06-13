@@ -188,6 +188,7 @@ assertIncludes(sidebarNav, "session-tile__select", "sidebar session selection ch
 assertIncludes(sidebarNav, "brand-mark__expand", "collapsed sidebar brand hover expand affordance");
 assertIncludes(sidebarNav, "collapsed && $emit('toggle-sidebar-collapsed')", "collapsed brand mark expands sidebar");
 assertIncludes(sidebarNav, "showHiddenSessions", "sidebar hidden session toggle prop");
+assertIncludes(sidebarNav, "sessionTotal", "sidebar displays backend session total");
 assertIncludes(sidebarNav, "set-show-hidden-sessions", "sidebar hidden session toggle event");
 assertIncludes(sidebarNav, "historySessionLabel", "sidebar non-web sessions show deletable history label");
 assertIncludes(sidebarNav, "begin-sidebar-resize", "sidebar resize event");
@@ -196,6 +197,7 @@ assertIncludes(app, "state.authRequired", "auth gate visibility");
 assertIncludes(app, "submitAccessToken", "auth gate submit wiring");
 assertIncludes(app, "deleteSessions", "conversation batch delete app wiring");
 assertIncludes(app, ":show-hidden-sessions=\"showHiddenSessions\"", "hidden session toggle app prop wiring");
+assertIncludes(app, ":session-total=\"sidebarSessionTotal\"", "sidebar total count app prop wiring");
 assertIncludes(app, "setShowHiddenSessions", "hidden session toggle app action wiring");
 assertIncludes(app, "clearWebSessions", "web conversation clear app wiring");
 assertIncludes(app, "confirmDialog", "custom confirm dialog state");
@@ -207,6 +209,7 @@ assertIncludes(chatClient, "sessionTombstoneKeys(session).some((key)", "deleted 
 assertIncludes(chatClient, "loadSessionHistory({ quiet: true, pruneMissingHistorySessions: true })", "successful delete refresh prunes missing history");
 assertIncludes(chatClient, "&& !session.hiddenFromBrowserHistory", "quiet refresh does not retain deleted hidden history");
 assertIncludes(chatClient, "isBootstrapStoredDraft", "startup does not preserve stale stored active session drafts");
+assertIncludes(chatClient, "channel_totals", "session history API total counts are stored");
 assertIncludes(settingsUi, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
