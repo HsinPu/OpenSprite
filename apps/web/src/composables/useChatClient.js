@@ -1026,12 +1026,15 @@ export function useChatClient() {
   const initialSession = createSession(
     isExternalChannelSessionId(storedExternalChatId) ? generateExternalChatId() : storedExternalChatId || generateExternalChatId(),
   );
-  const initialSessionFromStoredExternalChatId = Boolean(storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId));
+  const storedDraftSessions = readStoredDraftSessions();
+  const initialSessionMatchesStoredDraft = storedDraftSessions.some((session) => session.externalChatId === initialSession.externalChatId);
+  const initialSessionFromStoredExternalChatId = Boolean(storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId))
+    && !initialSessionMatchesStoredDraft;
   const initialSessionExternalChatId = initialSession.externalChatId;
-  const initialDraftSessions = readStoredDraftSessions()
+  const initialDraftSessions = storedDraftSessions
     .filter((session) => session.externalChatId !== initialSession.externalChatId);
   const localDraftExternalChatIds = new Set(initialDraftSessions.map((session) => session.externalChatId));
-  if (storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId)) {
+  if (initialSessionMatchesStoredDraft) {
     localDraftExternalChatIds.add(initialSession.externalChatId);
   }
 
