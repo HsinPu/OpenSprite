@@ -204,6 +204,7 @@ async def test_completion_verifier_service_calls_provider_with_request_config():
     assert kwargs["model"] == "test-model"
     assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
     assert kwargs["request_mode"] == "completion_verifier"
+    assert kwargs["response_format"] == {"type": "json_object"}
     assert "reasoning_enabled" not in kwargs
     assert messages[0].role == "system"
     assert messages[1].role == "user"
@@ -243,6 +244,7 @@ async def test_completion_verifier_service_repairs_invalid_json_once():
     assert len(provider.calls) == 2
     repair_messages, repair_kwargs = provider.calls[1]
     assert repair_kwargs["request_mode"] == "completion_verifier"
+    assert repair_kwargs["response_format"] == {"type": "json_object"}
     assert "The previous verifier response was invalid" in repair_messages[1].content
     assert "Return only one valid JSON object" in repair_messages[1].content
 

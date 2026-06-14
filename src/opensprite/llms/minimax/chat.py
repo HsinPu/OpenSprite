@@ -196,8 +196,9 @@ class MiniMaxLLM(LLMProvider):
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         request_mode: str | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
-        _ = status_callback, response_delta_callback, tool_input_delta_callback
+        _ = status_callback, response_delta_callback, tool_input_delta_callback, response_format
         payload = self._build_payload(messages, tools, model, max_tokens)
         log_llm_request_params("MiniMax", payload, request_mode=request_mode)
         data = await self._post_messages(payload)

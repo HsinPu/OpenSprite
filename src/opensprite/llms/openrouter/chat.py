@@ -11,6 +11,7 @@ from ..openai.streaming import collect_openai_compatible_stream
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
+from ..request_modes import response_format_for_request_mode
 from ..response_utils import coerce_content as _coerce_content
 from ..response_utils import coerce_reasoning_details
 from ..response_utils import extract_openai_compatible_message
@@ -103,6 +104,7 @@ class OpenRouterLLM(LLMProvider):
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         request_mode: str | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenRouter Chat Completions API
@@ -122,6 +124,11 @@ class OpenRouterLLM(LLMProvider):
                 tools=tools,
                 max_tokens=max_tokens,
                 extra_body=_openrouter_reasoning_extra_body(self.reasoning_config),
+                response_format=(
+                    response_format
+                    if response_format is not None
+                    else response_format_for_request_mode(request_mode)
+                ),
                 stream=response_delta_callback is not None,
             )
         )

@@ -8,6 +8,7 @@ from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_RESPONSES_REQUEST_PROFILE, build_llm_request
 from ..request_log_fields import log_llm_request_params
+from ..request_modes import response_format_for_request_mode
 from ..response_utils import usage_payload as _usage_payload
 from ..tool_args import parse_tool_arguments
 
@@ -15,10 +16,19 @@ from ..tool_args import parse_tool_arguments
 _REQUEST_PROFILE = OPENAI_RESPONSES_REQUEST_PROFILE
 
 
-def _openai_responses_reasoning_params(reasoning_config: dict[str, Any] | None) -> dict[str, Any]:
+def _openai_responses_reasoning_params(
+    reasoning_config: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Build Responses API reasoning params without opting into reasoning summaries."""
     effort = reasoning_effort_from_config(reasoning_config)
     return {"reasoning": {"effort": effort}} if effort else {}
+
+
+def _openai_responses_text_format_params(response_format: dict[str, Any] | None) -> dict[str, Any]:
+    """Build Responses API text.format params from provider-neutral response_format."""
+    if not response_format:
+        return {}
+    return {"text": {"format": dict(response_format)}}
 
 
 def _message_content(content: Any) -> Any:
@@ -129,18 +139,25 @@ class OpenAIResponsesLLM(LLMProvider):
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         request_mode: str | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         _ = status_callback, tool_input_delta_callback
         converted_tools = _responses_tools(tools)
+        resolved_response_format = (
+            response_format
+            if response_format is not None
+            else response_format_for_request_mode(request_mode)
+        )
         params = build_llm_request(
             _REQUEST_PROFILE.options(
                 model=model or self.default_model,
                 messages=_response_input(messages),
                 tools=converted_tools,
                 max_tokens=max_tokens,
-                extra_params=_openai_responses_reasoning_params(
-                    getattr(self, "reasoning_config", None),
-                ),
+                extra_params={
+                    **_openai_responses_reasoning_params(getattr(self, "reasoning_config", None)),
+                    **_openai_responses_text_format_params(resolved_response_format),
+                },
                 stream=response_delta_callback is not None,
             )
         )

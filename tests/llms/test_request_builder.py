@@ -6,11 +6,14 @@ from opensprite.llms.reasoning import (
 )
 from opensprite.llms.request_log_fields import request_param_log_fields
 from opensprite.llms.request_modes import (
+    JSON_OBJECT_RESPONSE_FORMAT,
     JSON_PLANNING_MIN_OUTPUT_TOKENS,
     LLMRequestMode,
     request_kwargs_for_mode,
+    request_mode_requires_json_response,
 )
 from opensprite.llms.request_builder import (
+    OPENAI_CHAT_REQUEST_PROFILE,
     OPENAI_RESPONSES_REQUEST_PROFILE,
     build_llm_request,
     normalize_openai_compatible_messages,
@@ -78,6 +81,18 @@ def test_openai_responses_request_profile_uses_responses_param_shape():
     }
 
 
+def test_build_llm_request_includes_chat_response_format_when_set():
+    params = build_llm_request(
+        OPENAI_CHAT_REQUEST_PROFILE.options(
+            model="gpt-test",
+            messages=[{"role": "user", "content": "hello"}],
+            response_format={"type": "json_object"},
+        )
+    )
+
+    assert params["response_format"] == {"type": "json_object"}
+
+
 def test_build_llm_request_includes_provider_extra_body_when_set():
     params = build_llm_request(
         OPENAI_RESPONSES_REQUEST_PROFILE.options(
@@ -117,6 +132,14 @@ def test_request_mode_json_planning_enforces_minimum_output_tokens():
 
     assert kwargs["request_mode"] == "json_planning"
     assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
+    assert kwargs["response_format"] == JSON_OBJECT_RESPONSE_FORMAT
+
+
+def test_json_only_request_modes_require_provider_json_response():
+    assert request_mode_requires_json_response(LLMRequestMode.JSON_PLANNING) is True
+    assert request_mode_requires_json_response(LLMRequestMode.COMPLETION_VERIFIER) is True
+    assert request_mode_requires_json_response("json_planning") is True
+    assert request_mode_requires_json_response(LLMRequestMode.MAIN_CHAT) is False
 
 
 def test_request_param_log_fields_are_sanitized_and_provider_neutral():
@@ -142,6 +165,7 @@ def test_request_param_log_fields_are_sanitized_and_provider_neutral():
         "stream": True,
         "max_tokens": 321,
         "reasoning": '{"effort":"high"}',
+        "response_format": "-",
     }
     assert "secret prompt" not in str(fields)
     assert "secret_tool" not in str(fields)

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from opensprite.llms import ChatMessage
 from opensprite.llms.openai import OpenAIResponsesLLM
+from opensprite.llms.request_modes import LLMRequestMode
 
 
 def _response(content="final answer", model="gpt-5.1-codex"):
@@ -78,6 +79,23 @@ def test_openai_responses_sends_reasoning_effort_without_summary():
     assert result.content == "final answer"
     assert responses.calls[0]["reasoning"] == {"effort": "high"}
     assert "summary" not in responses.calls[0]["reasoning"]
+
+
+def test_openai_responses_json_planning_enforces_json_without_disabling_reasoning():
+    responses = RecordingResponses()
+    provider = _make_provider(responses)
+    provider.reasoning_config = {"enabled": True, "effort": "high"}
+
+    result = asyncio.run(
+        provider.chat(
+            [ChatMessage(role="user", content='Return {"ok": true}')],
+            request_mode=LLMRequestMode.JSON_PLANNING,
+        )
+    )
+
+    assert result.content == "final answer"
+    assert responses.calls[0]["reasoning"] == {"effort": "high"}
+    assert responses.calls[0]["text"] == {"format": {"type": "json_object"}}
 
 
 def test_openai_responses_sends_reasoning_none_when_disabled():

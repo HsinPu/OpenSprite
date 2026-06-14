@@ -30,6 +30,7 @@ class ModelRoutedProvider(LLMProvider):
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         request_mode: str | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> LLMResponse:
         kwargs: dict[str, Any] = {
             "messages": messages,
@@ -41,6 +42,7 @@ class ModelRoutedProvider(LLMProvider):
             "tool_input_delta_callback": tool_input_delta_callback,
             "reasoning_delta_callback": reasoning_delta_callback,
             "request_mode": request_mode,
+            "response_format": response_format,
         }
         return await self.base_provider.chat(**kwargs)
 

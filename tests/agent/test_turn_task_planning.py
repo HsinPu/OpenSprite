@@ -390,6 +390,7 @@ def test_turn_task_planning_repairs_empty_reasoning_response():
     assert result.task_intent.objective == "Answer with the requested token."
     assert all("reasoning_enabled" not in call for call in provider.calls)
     assert all(call["max_tokens"] >= 1200 for call in provider.calls)
+    assert all(call["response_format"] == {"type": "json_object"} for call in provider.calls)
 
 
 def test_turn_task_planning_repair_prompt_keeps_bounded_invalid_response():

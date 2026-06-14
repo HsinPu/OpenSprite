@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from opensprite.llms.base import ChatMessage
 from opensprite.llms.openai import OpenAILLM
+from opensprite.llms.request_modes import LLMRequestMode
 
 
 class AsyncChunkStream:
@@ -136,6 +137,27 @@ def test_openai_chat_uses_max_completion_tokens_for_reasoning_models():
     )
 
     assert response.content == "final answer"
+    assert completions.calls[0]["max_completion_tokens"] == 1234
+    assert "max_tokens" not in completions.calls[0]
+
+
+def test_openai_chat_json_planning_enforces_json_without_disabling_reasoning():
+    completions = FakeCompletions(_message_response("final answer", model="gpt-5.5"))
+    llm = _make_llm(completions)
+    llm.reasoning_config = {"enabled": True, "effort": "high"}
+
+    response = asyncio.run(
+        llm.chat(
+            [ChatMessage(role="user", content='Return {"ok": true}')],
+            model="gpt-5.5",
+            max_tokens=1234,
+            request_mode=LLMRequestMode.JSON_PLANNING,
+        )
+    )
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["reasoning_effort"] == "high"
+    assert completions.calls[0]["response_format"] == {"type": "json_object"}
     assert completions.calls[0]["max_completion_tokens"] == 1234
     assert "max_tokens" not in completions.calls[0]
 

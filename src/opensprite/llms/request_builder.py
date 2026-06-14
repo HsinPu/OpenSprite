@@ -20,6 +20,7 @@ class LLMRequestOptions:
     max_tokens_param: str = "max_tokens"
     extra_body: dict[str, Any] | None = None
     extra_params: dict[str, Any] | None = None
+    response_format: dict[str, Any] | None = None
     stream: bool = False
     tool_choice: Any = "auto"
 
@@ -42,6 +43,7 @@ class LLMRequestProfile:
         max_tokens: int | None = None,
         extra_body: dict[str, Any] | None = None,
         extra_params: dict[str, Any] | None = None,
+        response_format: dict[str, Any] | None = None,
         stream: bool = False,
     ) -> LLMRequestOptions:
         """Create request options using this provider's fixed request shape."""
@@ -54,6 +56,7 @@ class LLMRequestProfile:
             max_tokens_param=self.max_tokens_param,
             extra_body=extra_body,
             extra_params=extra_params,
+            response_format=response_format,
             stream=stream,
             tool_choice=self.tool_choice,
         )
@@ -83,6 +86,9 @@ def build_llm_request(options: LLMRequestOptions) -> dict[str, Any]:
 
     if options.extra_params:
         params.update(options.extra_params)
+
+    if options.response_format:
+        params["response_format"] = dict(options.response_format)
 
     if options.tools:
         params["tools"] = options.tools

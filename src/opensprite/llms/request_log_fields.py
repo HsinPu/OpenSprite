@@ -26,6 +26,7 @@ def request_param_log_fields(
         "stream": bool(params.get("stream", False)),
         "max_tokens": _max_tokens(params),
         "reasoning": _reasoning_summary(params),
+        "response_format": _response_format_summary(params),
     }
 
 
@@ -39,7 +40,7 @@ def log_llm_request_params(
     """Log provider request metadata using one consistent, sanitized shape."""
     fields = request_param_log_fields(params, input_key=input_key, request_mode=request_mode)
     logger.info(
-        "{} request params | mode={} model={} messages={} tools={} tool_choice={} stream={} max_tokens={} reasoning={}",
+        "{} request params | mode={} model={} messages={} tools={} tool_choice={} stream={} max_tokens={} reasoning={} response_format={}",
         provider_name,
         fields["mode"],
         fields["model"],
@@ -49,6 +50,7 @@ def log_llm_request_params(
         fields["stream"],
         fields["max_tokens"],
         fields["reasoning"],
+        fields["response_format"],
     )
 
 
@@ -74,6 +76,15 @@ def _reasoning_summary(params: dict[str, Any]) -> str:
         return _safe_json(params.get("reasoning"))
     if params.get("reasoning_effort") is not None:
         return _safe_json({"effort": params.get("reasoning_effort")})
+    return "-"
+
+
+def _response_format_summary(params: dict[str, Any]) -> str:
+    if params.get("response_format") is not None:
+        return _safe_json(params.get("response_format"))
+    text = params.get("text")
+    if isinstance(text, dict) and isinstance(text.get("format"), dict):
+        return _safe_json(text.get("format"))
     return "-"
 
 
