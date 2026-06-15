@@ -197,6 +197,24 @@ def _sanitize_path_segment(value: str, default: str = "default", max_length: int
     return slug or default
 
 
+def resolve_session_workspace_path(
+    session_id: str | None,
+    *,
+    workspace_root: str | Path | None = None,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Resolve the isolated workspace path for a session without creating it."""
+    root = (
+        Path(workspace_root).expanduser()
+        if workspace_root is not None
+        else (Path(app_home).expanduser() if app_home is not None else OPENSPRITE_HOME) / WORKSPACE_DIRNAME
+    )
+    channel, external_chat_id = split_session_id(session_id)
+    safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
+    safe_external_chat_id = _sanitize_path_segment(external_chat_id, default="default")
+    return root / WORKSPACE_SESSIONS_DIRNAME / safe_channel / safe_external_chat_id
+
+
 def get_session_workspace(
     session_id: str | None,
     *,
@@ -204,11 +222,7 @@ def get_session_workspace(
     app_home: str | Path | None = None,
 ) -> Path:
     """Get the isolated workspace directory for a session."""
-    root = ensure_dir(Path(workspace_root).expanduser()) if workspace_root is not None else get_tool_workspace(app_home)
-    channel, external_chat_id = split_session_id(session_id)
-    safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
-    safe_external_chat_id = _sanitize_path_segment(external_chat_id, default="default")
-    return ensure_dir(root / WORKSPACE_SESSIONS_DIRNAME / safe_channel / safe_external_chat_id)
+    return ensure_dir(resolve_session_workspace_path(session_id, workspace_root=workspace_root, app_home=app_home))
 
 
 def get_user_overlay_dir(
@@ -266,6 +280,20 @@ def get_session_memory_file(
 ) -> Path:
     """Get the per-session MEMORY.md path under the session workspace tree."""
     return get_session_memory_dir(session_id, workspace_root=workspace_root, app_home=app_home) / "MEMORY.md"
+
+
+def resolve_session_memory_file(
+    session_id: str | None,
+    *,
+    workspace_root: str | Path | None = None,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Resolve the per-session MEMORY.md path without creating session directories."""
+    return (
+        resolve_session_workspace_path(session_id, workspace_root=workspace_root, app_home=app_home)
+        / SESSION_MEMORY_DIRNAME
+        / "MEMORY.md"
+    )
 
 
 def get_session_recent_summary_file(
@@ -378,7 +406,6 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
     """Sync bundled templates into ~/.opensprite app directories."""
     home = get_app_home(app_home)
     bootstrap_dir = get_bootstrap_dir(home)
-    memory_dir = get_memory_dir(home)
     skills_dir = get_skills_dir(home)
     get_tool_workspace(home)
 
@@ -408,13 +435,6 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
             if item.name.endswith(".md"):
                 dest = bootstrap_dir / item.name
                 _write(item, dest)
-
-        memory_templates = templates_root / "memory"
-        if memory_templates.is_dir():
-            default_memory_dir = get_session_memory_dir("default", workspace_root=get_tool_workspace(home), app_home=home)
-            for item in memory_templates.iterdir():
-                if item.name.endswith(".md"):
-                    _write(item, default_memory_dir / item.name)
 
     if skills_root.is_dir():
         skills_dir.mkdir(parents=True, exist_ok=True)

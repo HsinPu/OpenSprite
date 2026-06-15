@@ -1,7 +1,7 @@
 import asyncio
 
 from opensprite.config.schema import Config, DocumentLlmConfig
-from opensprite.context.paths import get_session_memory_file
+from opensprite.context.paths import resolve_session_memory_file
 from opensprite.documents import memory as memory_module
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.tools.memory import SaveMemoryTool
@@ -87,11 +87,26 @@ def test_memory_store_writes_into_session_tree(tmp_path):
     memory_dir = app_home / "memory"
 
     store = memory_module.MemoryStore(memory_dir, app_home=app_home, workspace_root=workspace_root)
-    session_file = get_session_memory_file("telegram:room-1", app_home=app_home, workspace_root=workspace_root)
+    session_file = resolve_session_memory_file("telegram:room-1", app_home=app_home, workspace_root=workspace_root)
+
+    assert not session_file.exists()
 
     store.write("telegram:room-1", "new memory")
 
     assert session_file.read_text(encoding="utf-8") == "new memory"
+
+
+def test_memory_store_read_does_not_create_session_tree(tmp_path):
+    app_home = tmp_path / "home"
+    workspace_root = app_home / "workspace"
+    memory_dir = app_home / "memory"
+
+    store = memory_module.MemoryStore(memory_dir, app_home=app_home, workspace_root=workspace_root)
+    session_file = resolve_session_memory_file("telegram:room-1", app_home=app_home, workspace_root=workspace_root)
+
+    assert store.read("telegram:room-1") == ""
+    assert not session_file.exists()
+    assert not session_file.parent.exists()
 
 
 def test_memory_store_blocks_unsafe_prompt_injection(tmp_path):

@@ -18,7 +18,6 @@ from .paths import (
     get_app_home,
     get_bootstrap_dir,
     get_memory_dir,
-    get_session_memory_file,
     get_session_workspace,
     get_session_skills_dir,
     get_skills_dir,
@@ -26,6 +25,7 @@ from .paths import (
     get_user_overlay_file,
     get_user_profile_file,
     load_bootstrap_files,
+    resolve_session_memory_file,
 )
 from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
 from ..documents.memory import MemoryStore
@@ -462,7 +462,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         user_profile_path = str(self.get_user_profile_path(session_id).expanduser().resolve())
         active_task_path = str(self.get_active_task_path(session_id).expanduser().resolve())
         memory_path = str(
-            get_session_memory_file(
+            resolve_session_memory_file(
                 session_id,
                 workspace_root=self.tool_workspace,
                 app_home=self.app_home,

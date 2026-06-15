@@ -12,6 +12,7 @@ from opensprite.context.paths import (
     get_user_overlay_index_file,
     get_user_overlay_state_file,
     get_user_profile_file,
+    sync_templates,
 )
 
 
@@ -25,6 +26,15 @@ def test_session_workspace_is_stable_per_session_and_separates_sessions(tmp_path
     assert workspace_a_first == workspace_a_second
     assert workspace_a_first != workspace_b
     assert workspace_a_first.name != workspace_b.name
+
+
+def test_sync_templates_does_not_seed_default_session_workspace(tmp_path):
+    app_home = tmp_path / "home"
+
+    sync_templates(app_home, silent=True)
+
+    assert (app_home / "bootstrap").is_dir()
+    assert not (app_home / "workspace" / "sessions" / "default" / "default").exists()
 
 
 def test_session_skills_dir_is_nested_under_the_same_session_workspace(tmp_path):

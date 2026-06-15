@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
-from ..context.paths import get_session_memory_file
+from ..context.paths import resolve_session_memory_file
 from ..utils import count_text_tokens
 from ..utils.log import logger
 from .base import ConversationDocumentStore
@@ -31,24 +31,23 @@ class MemoryDocumentStore(ConversationDocumentStore):
         if self.app_home is None and self.workspace_root is None:
             raise ValueError("MemoryStore requires app_home or workspace_root for session-scoped paths")
 
-    def _get_memory_file(self, session_id: str) -> Path:
-        memory_file = get_session_memory_file(
+    def _memory_file_path(self, session_id: str) -> Path:
+        return resolve_session_memory_file(
             session_id,
             workspace_root=self.workspace_root,
             app_home=self.app_home,
         )
-        memory_file.parent.mkdir(parents=True, exist_ok=True)
-        return memory_file
 
     def read(self, session_id: str) -> str:
-        memory_file = self._get_memory_file(session_id)
+        memory_file = self._memory_file_path(session_id)
         if memory_file.exists():
             return memory_file.read_text(encoding="utf-8")
         return ""
 
     def write(self, session_id: str, content: str) -> None:
         validate_durable_memory_text(content)
-        memory_file = self._get_memory_file(session_id)
+        memory_file = self._memory_file_path(session_id)
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
         memory_file.write_text(content, encoding="utf-8")
 
     def get_context(self, session_id: str) -> str:
