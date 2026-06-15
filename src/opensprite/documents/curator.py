@@ -20,6 +20,7 @@ from ..runs.events import (
     CURATOR_COMPLETED_EVENT,
     CURATOR_FAILED_EVENT,
     CURATOR_JOB_COMPLETED_EVENT,
+    CURATOR_JOB_FAILED_EVENT,
     CURATOR_JOB_SKIPPED_EVENT,
     CURATOR_JOB_STARTED_EVENT,
     CURATOR_STARTED_EVENT,
@@ -32,6 +33,7 @@ from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
 from ..utils.log import logger
 from .active_task import ActiveTaskConsolidator
+from .curator_prompts import curator_shared_rules
 from .memory import MemoryStore, consolidate
 from .user_profile import UserProfileConsolidator
 
@@ -50,12 +52,16 @@ CURATOR_HISTORY_LIMIT = 20
 CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile", "active_task")
 CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
 CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
+CURATOR_SLOW_JOB_SECONDS = 10.0
+CURATOR_VERY_SLOW_JOB_SECONDS = 30.0
 SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON = "transcript-too-short"
 SKILL_REVIEW_SYSTEM = f"""You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
 
 You may ONLY use these tools: `{READ_SKILL_TOOL_NAME}`, `{CONFIGURE_SKILL_TOOL_NAME}`.
 
 Goal: decide whether the recent conversation contains a reusable procedural workflow worth saving as a skill (SKILL.md), or an update to an existing skill.
+
+{curator_shared_rules("session skills")}
 
 Rules:
 - Prefer `action=upsert` on an existing skill when refining; use `action=add` only for a genuinely new skill id. Use `{READ_SKILL_TOOL_NAME}` with `skill-creator-design` before authoring a new skill.
@@ -558,6 +564,10 @@ class CuratorService:
             "last_run_summary": None,
             "last_run_jobs": [],
             "last_run_changed": [],
+            "last_run_failed": [],
+            "last_run_slow": [],
+            "last_run_job_results": [],
+            "last_run_status": None,
             "last_error": None,
             "history": [],
         }
@@ -568,6 +578,14 @@ class CuratorService:
             return int(value or 0)
         except (TypeError, ValueError):
             return 0
+
+    @staticmethod
+    def _string_list(value: Any) -> list[str]:
+        return [str(item) for item in value if str(item).strip()] if isinstance(value, list) else []
+
+    @staticmethod
+    def _dict_list(value: Any) -> list[dict[str, Any]]:
+        return [dict(item) for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
     def _state_file_for_session(self, session_id: str) -> Path | None:
         if self._state_path_for_session is not None:
@@ -595,8 +613,12 @@ class CuratorService:
         state["last_run_duration_seconds"] = raw.get("last_run_duration_seconds")
         state["last_run_summary"] = raw.get("last_run_summary")
         state["last_error"] = raw.get("last_error")
-        state["last_run_jobs"] = [str(item) for item in raw.get("last_run_jobs", []) if str(item).strip()] if isinstance(raw.get("last_run_jobs"), list) else []
-        state["last_run_changed"] = [str(item) for item in raw.get("last_run_changed", []) if str(item).strip()] if isinstance(raw.get("last_run_changed"), list) else []
+        state["last_run_status"] = raw.get("last_run_status")
+        state["last_run_jobs"] = self._string_list(raw.get("last_run_jobs"))
+        state["last_run_changed"] = self._string_list(raw.get("last_run_changed"))
+        state["last_run_failed"] = self._string_list(raw.get("last_run_failed"))
+        state["last_run_slow"] = self._string_list(raw.get("last_run_slow"))
+        state["last_run_job_results"] = self._dict_list(raw.get("last_run_job_results"))
         history = raw.get("history") if isinstance(raw.get("history"), list) else []
         state["history"] = [dict(item) for item in history if isinstance(item, dict)][-CURATOR_HISTORY_LIMIT:]
         return state
@@ -606,8 +628,11 @@ class CuratorService:
         normalized_state = self._default_state()
         normalized_state.update(state)
         normalized_state["run_count"] = self._safe_int(normalized_state.get("run_count"))
-        normalized_state["last_run_jobs"] = [str(item) for item in normalized_state.get("last_run_jobs", []) if str(item).strip()] if isinstance(normalized_state.get("last_run_jobs"), list) else []
-        normalized_state["last_run_changed"] = [str(item) for item in normalized_state.get("last_run_changed", []) if str(item).strip()] if isinstance(normalized_state.get("last_run_changed"), list) else []
+        normalized_state["last_run_jobs"] = self._string_list(normalized_state.get("last_run_jobs"))
+        normalized_state["last_run_changed"] = self._string_list(normalized_state.get("last_run_changed"))
+        normalized_state["last_run_failed"] = self._string_list(normalized_state.get("last_run_failed"))
+        normalized_state["last_run_slow"] = self._string_list(normalized_state.get("last_run_slow"))
+        normalized_state["last_run_job_results"] = self._dict_list(normalized_state.get("last_run_job_results"))
         history = normalized_state.get("history") if isinstance(normalized_state.get("history"), list) else []
         normalized_state["history"] = [dict(item) for item in history if isinstance(item, dict)][-CURATOR_HISTORY_LIMIT:]
         if state_path is None:
@@ -653,14 +678,26 @@ class CuratorService:
         duration_seconds: float,
         jobs: list[str],
         changed: list[str],
+        failed: list[str] | None = None,
+        slow: list[str] | None = None,
+        job_results: list[dict[str, Any]] | None = None,
         summary: str,
         error: str | None = None,
+        status: str | None = None,
     ) -> None:
+        failed_jobs = list(failed or [])
+        slow_jobs = list(slow or [])
+        result_entries = [dict(item) for item in (job_results or []) if isinstance(item, dict)]
+        run_status = status or ("failed" if error else "completed")
         state = self._session_state(session_id)
         state["last_run_at"] = started_at.isoformat()
         state["last_run_duration_seconds"] = duration_seconds
         state["last_run_jobs"] = jobs
         state["last_run_changed"] = changed
+        state["last_run_failed"] = failed_jobs
+        state["last_run_slow"] = slow_jobs
+        state["last_run_job_results"] = result_entries
+        state["last_run_status"] = run_status
         state["last_run_summary"] = summary
         state["last_error"] = error
         state["run_count"] = self._safe_int(state.get("run_count")) + 1
@@ -672,9 +709,12 @@ class CuratorService:
                 "duration_seconds": duration_seconds,
                 "jobs": list(jobs),
                 "changed": list(changed),
+                "failed": failed_jobs,
+                "slow": slow_jobs,
+                "job_results": result_entries,
                 "summary": summary,
                 "error": error,
-                "status": "failed" if error else "completed",
+                "status": run_status,
             }
         )
         state["history"] = history[-CURATOR_HISTORY_LIMIT:]
@@ -860,6 +900,10 @@ class CuratorService:
             "last_run_summary": session_state.get("last_run_summary"),
             "last_run_jobs": session_state.get("last_run_jobs") or [],
             "last_run_changed": session_state.get("last_run_changed") or [],
+            "last_run_failed": session_state.get("last_run_failed") or [],
+            "last_run_slow": session_state.get("last_run_slow") or [],
+            "last_run_job_results": session_state.get("last_run_job_results") or [],
+            "last_run_status": session_state.get("last_run_status"),
             "last_error": session_state.get("last_error"),
         }
 
@@ -873,14 +917,23 @@ class CuratorService:
     async def _emit_event(self, request: CuratorRequest, event_type: str, payload: dict[str, Any]) -> None:
         if not request.run_id:
             return
-        await self._emit_run_event(
-            request.session_id,
-            request.run_id,
-            event_type,
-            payload,
-            request.channel,
-            request.external_chat_id,
-        )
+        try:
+            await self._emit_run_event(
+                request.session_id,
+                request.run_id,
+                event_type,
+                payload,
+                request.channel,
+                request.external_chat_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[%s] curator.event.emit_failed | run_id=%s type=%s error=%s",
+                request.session_id,
+                request.run_id,
+                event_type,
+                exc,
+            )
 
     async def _run_snapshot_job(self, session_id: str, job: CuratorJob) -> tuple[bool, Any]:
         before = job.snapshot_reader(session_id)
@@ -977,12 +1030,17 @@ class CuratorService:
             self._runtime_state[session_id] = {
                 "active_jobs": list(job_keys),
                 "completed_jobs": [],
+                "failed_jobs": [],
+                "finished_jobs": [],
                 "current_job": None,
                 "current_job_label": "",
             }
             changed_keys: list[str] = []
             changed_labels: list[str] = []
-            job_results: dict[str, Any] = {}
+            failed_keys: list[str] = []
+            slow_keys: list[str] = []
+            runner_results_by_key: dict[str, Any] = {}
+            job_result_entries: list[dict[str, Any]] = []
             try:
                 await self._emit_event(
                     request,
@@ -1011,14 +1069,86 @@ class CuratorService:
                             "message": f"Running curator job: {job.label}.",
                         },
                     )
-                    changed, runner_result = await self._run_snapshot_job(session_id, job)
-                    job_results[job.key] = runner_result
+                    job_started_at = datetime.now(timezone.utc)
+                    try:
+                        changed, runner_result = await self._run_snapshot_job(session_id, job)
+                    except Exception as exc:
+                        duration_seconds = (datetime.now(timezone.utc) - job_started_at).total_seconds()
+                        error = str(exc) or exc.__class__.__name__
+                        error_type = exc.__class__.__name__
+                        failed_keys.append(job.key)
+                        if duration_seconds >= CURATOR_SLOW_JOB_SECONDS:
+                            slow_keys.append(job.key)
+                        result_entry = {
+                            "job": job.key,
+                            "label": job.label,
+                            "status": "failed",
+                            "changed": False,
+                            "duration_seconds": duration_seconds,
+                            "slow": duration_seconds >= CURATOR_SLOW_JOB_SECONDS,
+                            "very_slow": duration_seconds >= CURATOR_VERY_SLOW_JOB_SECONDS,
+                            "error": error,
+                            "error_type": error_type,
+                        }
+                        job_result_entries.append(result_entry)
+                        runtime_state = self._runtime_state.get(session_id)
+                        if runtime_state is not None:
+                            runtime_state["failed_jobs"] = [
+                                *list(runtime_state.get("failed_jobs") or []),
+                                job.key,
+                            ]
+                            runtime_state["finished_jobs"] = [
+                                *list(runtime_state.get("finished_jobs") or []),
+                                job.key,
+                            ]
+                        logger.exception("[%s] curator.job.failed | job=%s", session_id, job.key)
+                        await self._emit_event(
+                            request,
+                            CURATOR_JOB_FAILED_EVENT,
+                            {
+                                "status": "failed",
+                                "job": job.key,
+                                "label": job.label,
+                                "index": index,
+                                "total_jobs": len(job_keys),
+                                "changed": False,
+                                "duration_seconds": duration_seconds,
+                                "slow": result_entry["slow"],
+                                "very_slow": result_entry["very_slow"],
+                                "error": error,
+                                "error_type": error_type,
+                                "message": f"Curator job failed: {job.label}.",
+                            },
+                        )
+                        continue
+
+                    duration_seconds = (datetime.now(timezone.utc) - job_started_at).total_seconds()
+                    runner_results_by_key[job.key] = runner_result
+                    is_slow = duration_seconds >= CURATOR_SLOW_JOB_SECONDS
+                    is_very_slow = duration_seconds >= CURATOR_VERY_SLOW_JOB_SECONDS
+                    if is_slow:
+                        slow_keys.append(job.key)
                     runtime_state = self._runtime_state.get(session_id)
                     if runtime_state is not None:
                         runtime_state["completed_jobs"] = [
                             *list(runtime_state.get("completed_jobs") or []),
                             job.key,
                         ]
+                        runtime_state["finished_jobs"] = [
+                            *list(runtime_state.get("finished_jobs") or []),
+                            job.key,
+                        ]
+                    result_entry = {
+                        "job": job.key,
+                        "label": job.label,
+                        "status": "completed" if changed else "skipped",
+                        "changed": bool(changed),
+                        "duration_seconds": duration_seconds,
+                        "slow": is_slow,
+                        "very_slow": is_very_slow,
+                        "error": None,
+                    }
+                    job_result_entries.append(result_entry)
                     if changed:
                         changed_keys.append(job.key)
                         changed_labels.append(job.label)
@@ -1032,6 +1162,9 @@ class CuratorService:
                                 "index": index,
                                 "total_jobs": len(job_keys),
                                 "changed": True,
+                                "duration_seconds": duration_seconds,
+                                "slow": is_slow,
+                                "very_slow": is_very_slow,
                                 "summary": f"Updated {job.label}.",
                             },
                         )
@@ -1046,12 +1179,30 @@ class CuratorService:
                                 "index": index,
                                 "total_jobs": len(job_keys),
                                 "changed": False,
+                                "duration_seconds": duration_seconds,
+                                "slow": is_slow,
+                                "very_slow": is_very_slow,
                                 "reason": "no_changes",
                                 "message": f"No changes for {job.label}.",
                             },
                         )
 
-                summary = self._format_summary(changed_labels) if changed_keys else "No curator changes."
+                changed_summary = self._format_summary(changed_labels) if changed_keys else "No curator changes."
+                if failed_keys:
+                    failed_labels = [
+                        str(item.get("label") or item.get("job"))
+                        for item in job_result_entries
+                        if item.get("status") == "failed"
+                    ]
+                    summary = f"{changed_summary} Failed {', '.join(failed_labels)}."
+                else:
+                    summary = changed_summary
+                failure_error = "; ".join(
+                    f"{item.get('job')}: {item.get('error')}"
+                    for item in job_result_entries
+                    if item.get("status") == "failed"
+                ) or None
+                run_status = "completed_with_errors" if failed_keys else "completed"
                 runtime_state = self._runtime_state.get(session_id)
                 if runtime_state is not None:
                     runtime_state["current_job"] = None
@@ -1060,10 +1211,17 @@ class CuratorService:
                     request,
                     CURATOR_COMPLETED_EVENT,
                     {
-                        "status": "completed",
-                        "message": "Background curator tasks completed.",
+                        "status": run_status,
+                        "message": (
+                            "Background curator tasks completed with errors."
+                            if failed_keys
+                            else "Background curator tasks completed."
+                        ),
                         "jobs": job_keys,
                         "changed": changed_keys,
+                        "failed": failed_keys,
+                        "slow": slow_keys,
+                        "job_results": job_result_entries,
                         "summary": summary,
                     },
                 )
@@ -1074,9 +1232,14 @@ class CuratorService:
                     duration_seconds=(datetime.now(timezone.utc) - started_at).total_seconds(),
                     jobs=job_keys,
                     changed=changed_keys,
+                    failed=failed_keys,
+                    slow=slow_keys,
+                    job_results=job_result_entries,
                     summary=summary,
+                    error=failure_error,
+                    status=run_status,
                 )
-                self._record_learning_entries(request, changed_keys, job_results)
+                self._record_learning_entries(request, changed_keys, runner_results_by_key)
             except Exception as exc:
                 error = str(exc) or exc.__class__.__name__
                 runtime_state = self._runtime_state.get(session_id) or {}
@@ -1090,6 +1253,8 @@ class CuratorService:
                         "label": runtime_state.get("current_job_label"),
                         "jobs": job_keys,
                         "completed_jobs": list(runtime_state.get("completed_jobs") or []),
+                        "failed_jobs": list(runtime_state.get("failed_jobs") or []),
+                        "finished_jobs": list(runtime_state.get("finished_jobs") or []),
                         "message": "Background curator tasks failed.",
                     },
                 )
@@ -1100,8 +1265,12 @@ class CuratorService:
                     duration_seconds=(datetime.now(timezone.utc) - started_at).total_seconds(),
                     jobs=job_keys,
                     changed=changed_keys,
+                    failed=failed_keys,
+                    slow=slow_keys,
+                    job_results=job_result_entries,
                     summary=f"Curator failed: {error}",
                     error=error,
+                    status="failed",
                 )
                 raise
         finally:

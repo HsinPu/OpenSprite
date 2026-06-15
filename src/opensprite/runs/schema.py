@@ -18,6 +18,7 @@ from .events import (
     CURATOR_FAILED_EVENT,
     CURATOR_JOB_COMPLETED_EVENT,
     CURATOR_JOB_EVENTS,
+    CURATOR_JOB_FAILED_EVENT,
     CURATOR_JOB_SKIPPED_EVENT,
     CURATOR_JOB_STARTED_EVENT,
     CURATOR_RUNNING_EVENTS,
@@ -136,6 +137,7 @@ _EVENT_KINDS = {
     CURATOR_JOB_STARTED_EVENT: "work",
     CURATOR_JOB_COMPLETED_EVENT: "work",
     CURATOR_JOB_SKIPPED_EVENT: "work",
+    CURATOR_JOB_FAILED_EVENT: "work",
     CURATOR_FAILED_EVENT: "work",
     CURATOR_COMPLETED_EVENT: "work",
     SUBAGENT_STARTED_EVENT: "work",
@@ -252,6 +254,8 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
     if normalized in CURATOR_RUNNING_EVENTS:
         return explicit or "running"
     if normalized == CURATOR_FAILED_EVENT:
+        return explicit or "failed"
+    if normalized == CURATOR_JOB_FAILED_EVENT:
         return explicit or "failed"
     if normalized == CURATOR_JOB_SKIPPED_EVENT:
         return explicit or "skipped"
@@ -398,9 +402,11 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
     if normalized in CURATOR_JOB_EVENTS:
         job = _text(data.get("job"))
         label = _text(data.get("label") or job or "curator job")
-        detail = _text(data.get("summary") or data.get("message") or data.get("reason"))
+        detail = _text(data.get("summary") or data.get("message") or data.get("error") or data.get("reason"))
         if normalized == CURATOR_JOB_COMPLETED_EVENT and not detail:
             detail = f"Updated {label}."
+        if normalized == CURATOR_JOB_FAILED_EVENT and not detail:
+            detail = f"{label} failed."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
             "artifact_id": f"curator_job:{job or label}",

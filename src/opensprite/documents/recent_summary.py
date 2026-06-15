@@ -15,6 +15,7 @@ from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .base import ConversationConsolidator
+from .curator_prompts import curator_shared_rules
 from .state import JsonProgressStore
 
 _RECENT_SUMMARY_TEMPLATE = """# Active Threads
@@ -150,6 +151,8 @@ Current recent summary:
 
 Conversation chunk:
 {transcript}
+
+{curator_shared_rules("RECENT_SUMMARY.md")}
 
 Rules:
 - Keep the exact section order from the template below.

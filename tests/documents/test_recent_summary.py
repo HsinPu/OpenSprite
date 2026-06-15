@@ -50,6 +50,8 @@ def test_consolidate_recent_summary_uses_structured_prompt(tmp_path):
     assert "# Active Threads" in store.read("chat-1")
     prompt = provider.calls[0]["messages"][1]["content"]
     assert "Focus on medium-term context" in prompt
+    assert "Shared curator rules for RECENT_SUMMARY.md" in prompt
+    assert "Document responsibility boundaries:" in prompt
     assert "# Follow-ups" in prompt
 
 

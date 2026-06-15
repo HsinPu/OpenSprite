@@ -2,7 +2,8 @@ import asyncio
 
 import pytest
 
-from opensprite.documents.curator import CuratorMaintenanceServices, CuratorService
+import opensprite.documents.curator as curator_module
+from opensprite.documents.curator import CuratorMaintenanceServices, CuratorService, SKILL_REVIEW_SYSTEM
 from opensprite.context.paths import get_session_curator_state_file
 from opensprite.agent.execution import ExecutionResult
 
@@ -26,6 +27,12 @@ def test_curator_maintenance_services_define_canonical_job_order():
 
     assert [job.key for job in jobs] == ["memory", "recent_summary", "user_profile", "active_task"]
     assert [job.label for job in jobs] == ["memory", "recent summary", "user profile", "active task"]
+
+
+def test_skill_review_system_prompt_includes_shared_curator_boundaries():
+    assert "Shared curator rules for session skills" in SKILL_REVIEW_SYSTEM
+    assert "Document responsibility boundaries:" in SKILL_REVIEW_SYSTEM
+    assert "Session skills: reusable procedures only" in SKILL_REVIEW_SYSTEM
 
 
 def test_curator_service_emits_summary_for_changed_jobs():
@@ -699,7 +706,7 @@ def test_curator_service_rerun_uses_pending_request_jobs_only():
     assert calls == ["skills", "memory", "recent_summary", "user_profile", "active_task"]
 
 
-def test_curator_service_emits_failed_event_and_records_error(tmp_path):
+def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
     async def scenario():
         state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
         state_path = tmp_path / "curator_state.json"
@@ -711,6 +718,9 @@ def test_curator_service_emits_failed_event_and_records_error(tmp_path):
         async def fail_memory(_session_id):
             raise RuntimeError("memory broke")
 
+        async def update_active_task(_session_id):
+            state["active_task"] = "changed"
+
         async def noop(_session_id):
             return None
 
@@ -718,7 +728,7 @@ def test_curator_service_emits_failed_event_and_records_error(tmp_path):
             maybe_consolidate_memory=fail_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
+            maybe_update_active_task=update_active_task,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
@@ -730,13 +740,89 @@ def test_curator_service_emits_failed_event_and_records_error(tmp_path):
             state_path=state_path,
         )
 
-        service.schedule_manual_run(session_id="web:browser-1", run_id="run-1")
+        service.schedule_after_turn(
+            session_id="web:browser-1",
+            run_id="run-1",
+            channel="web",
+            external_chat_id="browser-1",
+            result=ExecutionResult(content="done", executed_tool_calls=0),
+        )
+        await service.wait()
+        return events, service.status("web:browser-1"), service.history("web:browser-1", limit=1)
+
+    events, status, history = asyncio.run(scenario())
+
+    assert [event[2] for event in events] == [
+        "curator.started",
+        "curator.job.started",
+        "curator.job.failed",
+        "curator.job.started",
+        "curator.job.skipped",
+        "curator.job.started",
+        "curator.job.skipped",
+        "curator.job.started",
+        "curator.job.completed",
+        "curator.completed",
+    ]
+    assert events[2][3]["error"] == "memory broke"
+    assert events[2][3]["job"] == "memory"
+    assert events[-1][3]["status"] == "completed_with_errors"
+    assert events[-1][3]["failed"] == ["memory"]
+    assert events[-1][3]["changed"] == ["active_task"]
+    assert status["last_run_status"] == "completed_with_errors"
+    assert status["last_run_failed"] == ["memory"]
+    assert status["last_run_changed"] == ["active_task"]
+    assert status["last_error"] == "memory: memory broke"
+    assert [item["status"] for item in status["last_run_job_results"]] == [
+        "failed",
+        "skipped",
+        "skipped",
+        "completed",
+    ]
+    assert history[0]["failed"] == ["memory"]
+    assert history[0]["changed"] == ["active_task"]
+    assert history[0]["job_results"][0]["error_type"] == "RuntimeError"
+
+
+def test_curator_service_marks_slow_jobs(monkeypatch):
+    async def scenario():
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        events = []
+
+        async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
+            events.append((session_id, run_id, event_type, payload, channel, external_chat_id))
+
+        async def update_memory(_session_id):
+            state["memory"] = "changed"
+
+        async def noop(_session_id):
+            return None
+
+        monkeypatch.setattr(curator_module, "CURATOR_SLOW_JOB_SECONDS", 0.0)
+        monkeypatch.setattr(curator_module, "CURATOR_VERY_SLOW_JOB_SECONDS", 999.0)
+        service = CuratorService(
+            maybe_consolidate_memory=update_memory,
+            maybe_update_recent_summary=noop,
+            maybe_update_user_profile=noop,
+            maybe_update_active_task=noop,
+            run_skill_review=noop,
+            should_run_skill_review=lambda result: False,
+            read_memory_snapshot=lambda _session_id: state["memory"],
+            read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
+            read_user_profile_snapshot=lambda _session_id: state["user_profile"],
+            read_active_task_snapshot=lambda _session_id: state["active_task"],
+            read_skill_snapshot=lambda _session_id: state["skills"],
+            emit_run_event=emit_run_event,
+        )
+
+        service.schedule_manual_run(session_id="web:browser-1", run_id="run-1", scope="memory")
         await service.wait()
         return events, service.status("web:browser-1")
 
     events, status = asyncio.run(scenario())
+    completed_event = next(event for event in events if event[2] == "curator.job.completed")
 
-    assert [event[2] for event in events] == ["curator.started", "curator.job.started", "curator.failed"]
-    assert events[-1][3]["error"] == "memory broke"
-    assert events[-1][3]["job"] == "memory"
-    assert status["last_error"] == "memory broke"
+    assert completed_event[3]["slow"] is True
+    assert completed_event[3]["very_slow"] is False
+    assert status["last_run_slow"] == ["memory"]
+    assert status["last_run_job_results"][0]["slow"] is True

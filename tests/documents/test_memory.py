@@ -75,6 +75,8 @@ def test_consolidate_uses_structured_merge_prompt():
     assert "Merge new durable information into the existing memory" in prompt
     assert "Treat MEMORY.md as chat continuity" in prompt
     assert "stable cross-session user preferences belong in USER.md / user overlay" in prompt
+    assert "Shared curator rules for MEMORY.md" in prompt
+    assert "Document responsibility boundaries:" in prompt
     assert "# User Preferences" in prompt
     assert "# Ongoing Tasks" in prompt
     assert "New conversation segment:" in prompt

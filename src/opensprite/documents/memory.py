@@ -11,6 +11,7 @@ from ..context.paths import resolve_session_memory_file
 from ..utils import count_text_tokens
 from ..utils.log import logger
 from .base import ConversationDocumentStore
+from .curator_prompts import curator_shared_rules
 from .safety import validate_durable_memory_text
 
 
@@ -173,6 +174,8 @@ New conversation segment:
 {conversation_block}
 
 Return the full updated memory as markdown via the save_memory tool.
+
+{curator_shared_rules("MEMORY.md")}
 
 Rules:
 - Keep the exact section order from the template below.

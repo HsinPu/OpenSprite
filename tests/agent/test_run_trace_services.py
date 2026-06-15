@@ -611,6 +611,44 @@ def test_serialize_run_event_projects_curator_job_artifact():
     }
 
 
+def test_serialize_run_event_projects_curator_job_failed_artifact():
+    event = SimpleNamespace(
+        event_id=47,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="curator.job.failed",
+        payload={
+            "status": "failed",
+            "job": "memory",
+            "label": "memory",
+            "error": "memory broke",
+            "error_type": "RuntimeError",
+        },
+        created_at=13.0,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "work"
+    assert payload["status"] == "failed"
+    assert payload["artifact"] == {
+        "schema_version": 1,
+        "artifact_id": "curator_job:memory",
+        "artifact_type": "curator_job",
+        "kind": "work",
+        "status": "failed",
+        "title": "Curator job: memory",
+        "detail": "memory broke",
+        "metadata": {
+            "status": "failed",
+            "job": "memory",
+            "label": "memory",
+            "error": "memory broke",
+            "error_type": "RuntimeError",
+        },
+    }
+
+
 def test_serialize_run_event_projects_curator_failed_artifact():
     event = SimpleNamespace(
         event_id=47,

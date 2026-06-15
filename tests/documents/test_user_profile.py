@@ -110,6 +110,8 @@ def test_user_profile_consolidator_writes_separate_profiles_per_session(tmp_path
     assert "### Communication Preferences" in profile_a.read_managed_block()
     assert "- Prefers dark mode." in profile_a.read_managed_block()
     assert "- Prefers light mode." in profile_b.read_managed_block()
+    assert "Shared curator rules for USER.md" in provider.prompts[0]
+    assert "Document responsibility boundaries:" in provider.prompts[0]
     assert profile_a.user_profile_file != profile_b.user_profile_file
 
 

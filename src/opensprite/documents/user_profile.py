@@ -12,6 +12,7 @@ from ..storage import StoredMessage, StorageProvider
 from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..utils.log import logger
 from .base import ConversationConsolidator
+from .curator_prompts import curator_shared_rules
 from .managed import ManagedMarkdownDocument
 from .safety import validate_durable_memory_text
 from .state import JsonProgressStore
@@ -222,6 +223,8 @@ Current auto-managed USER.md user-context block:
 
 Conversation to analyze:
 {transcript}
+
+{curator_shared_rules("USER.md")}
 
 Rules:
 - Return the full replacement content for the managed user-context block using exactly these sections and order: `### Communication Preferences`, `### Work Context`, `### Stable Constraints`.

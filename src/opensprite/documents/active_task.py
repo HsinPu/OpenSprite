@@ -16,6 +16,7 @@ from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..utils import count_text_tokens
 from ..utils.log import logger
 from .base import ConversationConsolidator, ConversationDocumentStore
+from .curator_prompts import ACTIVE_TASK_EXTRA_RULES, curator_shared_rules
 from .managed import ManagedMarkdownDocument
 from .state import JsonProgressStore
 
@@ -739,6 +740,10 @@ Current ACTIVE_TASK state:
 
 Conversation chunk:
 {transcript}
+
+{curator_shared_rules("ACTIVE_TASK.md")}
+
+{ACTIVE_TASK_EXTRA_RULES}
 
 Rules:
 - Keep the exact field order from the required template below.

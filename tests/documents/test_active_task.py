@@ -154,6 +154,8 @@ def test_active_task_consolidator_prompt_includes_tool_evidence(tmp_path):
     prompt = provider.prompts[0]
     assert "[TOOL:EXEC command=python -m pytest tests/agent]" in prompt
     assert "12 passed" in prompt
+    assert "Shared curator rules for ACTIVE_TASK.md" in prompt
+    assert "Do not create or keep an active task for simple one-off requests" in prompt
 
 
 def test_normalize_active_task_block_clears_steps_when_done():
