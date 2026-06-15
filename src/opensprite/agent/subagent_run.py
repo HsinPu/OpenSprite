@@ -181,7 +181,8 @@ class SubagentRunService:
         llm_config_getter: Callable[[], Any | None],
         should_cancel_parent_run: Callable[[str, str | None], bool],
         skills_loader_getter: Callable[[], Any],
-        save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
+        save_user_message: Callable[[str, str, dict[str, Any] | None], Awaitable[None]],
+        save_assistant_message: Callable[[str, str, dict[str, Any] | None], Awaitable[None]],
         execute_messages: Callable[..., Awaitable[Any]],
         log_prepared_messages: Callable[[str, list[dict[str, Any]]], None],
         format_log_preview: Callable[..., str],
@@ -203,7 +204,8 @@ class SubagentRunService:
         self._llm_config_getter = llm_config_getter
         self._should_cancel_parent_run = should_cancel_parent_run
         self._skills_loader_getter = skills_loader_getter
-        self._save_message = save_message
+        self._save_user_message = save_user_message
+        self._save_assistant_message = save_assistant_message
         self._execute_messages = execute_messages
         self._log_prepared_messages = log_prepared_messages
         self._format_log_preview = format_log_preview
@@ -653,11 +655,9 @@ class SubagentRunService:
             payload=lifecycle_payload,
         )
 
-        await self._save_message(
+        await self._save_user_message(
             prepared.child_session_id,
-            "user",
             prepared.task_text,
-            None,
             {
                 "kind": "subagent_task",
                 "task_id": prepared.task_id,
@@ -776,11 +776,9 @@ class SubagentRunService:
                     "verification_passed": sub_result.verification_passed,
                 },
             )
-            await self._save_message(
+            await self._save_assistant_message(
                 prepared.child_session_id,
-                "assistant",
                 display_content,
-                None,
                 result_metadata,
             )
             completion_payload = {

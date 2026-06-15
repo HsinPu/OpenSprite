@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from ...config import AgentConfig
-from ...llms import CHAT_ROLE_SYSTEM, CHAT_ROLE_TOOL, CHAT_ROLE_USER, ChatMessage
+from ...context.message_history import PreparedPromptHistory, TaskContextRetrievalResult
+from ...llms import CHAT_ROLE_SYSTEM, ChatMessage
 from ...runs.events import (
     HISTORY_LOADED_EVENT,
     MCP_TOOLS_SYNCED_EVENT,
@@ -26,7 +27,6 @@ from ..task.planning import TurnPlanningService
 from .task_guidance import (
     build_task_contract_guidance,
     should_answer_contract_without_tools,
-    structured_retrieval_decision as task_context_structured_retrieval_decision,
 )
 
 
@@ -38,7 +38,7 @@ class LlmCallService:
         *,
         config: AgentConfig,
         maybe_seed_active_task: Callable[..., Awaitable[None]],
-        load_history: Callable[[str], Awaitable[list[Any]]],
+        load_prompt_history: Callable[[str, str], Awaitable[PreparedPromptHistory]],
         get_current_audios: Callable[[], list[str] | None],
         get_current_videos: Callable[[], list[str] | None],
         augment_message_for_media: Callable[..., str],
@@ -56,7 +56,7 @@ class LlmCallService:
         plan_task: Callable[..., Awaitable[TaskContract]],
         resolve_tool_selection: Callable[[ToolRegistry, TaskContract], Any],
         emit_run_event: Callable[..., Awaitable[None]],
-        build_proactive_retrieval_context: Callable[..., Awaitable[str]],
+        resolve_task_context_retrieval: Callable[..., Awaitable[TaskContextRetrievalResult]],
         get_tool_registry: Callable[[], ToolRegistry],
         get_current_run_id: Callable[[], str | None],
         should_cancel_run: Callable[[str, str | None], bool],
@@ -69,7 +69,7 @@ class LlmCallService:
         execute_messages: Callable[..., Awaitable[ExecutionResult]],
     ):
         self.config = config
-        self._load_history = load_history
+        self._load_prompt_history = load_prompt_history
         self._get_current_audios = get_current_audios
         self._get_current_videos = get_current_videos
         self._estimate_tool_schema_tokens = estimate_tool_schema_tokens
@@ -91,7 +91,7 @@ class LlmCallService:
             emit_run_event=emit_run_event,
         )
         self._emit_run_event = emit_run_event
-        self._build_proactive_retrieval_context = build_proactive_retrieval_context
+        self._resolve_task_context_retrieval = resolve_task_context_retrieval
         self._get_tool_registry = get_tool_registry
         self._get_current_run_id = get_current_run_id
         self._should_cancel_run = should_cancel_run
@@ -123,42 +123,10 @@ class LlmCallService:
         """Prepare prompt messages and run the LLM/tool execution loop."""
         run_id = self._get_current_run_id()
         logger.info(f"[{session_id}] history.load | requested=true")
-        history_messages = await self._load_history(session_id)
-        loaded_history_count = len(history_messages)
-
-        # Tool results are only valid inside the turn where they were produced.
-        filtered = []
-        for m in history_messages:
-            role = m.get("role", "?") if isinstance(m, dict) else getattr(m, "role", "?")
-            if role != CHAT_ROLE_TOOL:
-                filtered.append(m)
-        history_messages = filtered
-        filtered_tool_messages = loaded_history_count - len(history_messages)
-
-        # The current user message is already passed explicitly to the context builder.
-        # Drop the newest persisted user message for this turn to avoid duplicate/blank user entries.
-        if history_messages:
-            latest = history_messages[-1]
-            latest_role = latest.get("role", "?") if isinstance(latest, dict) else getattr(latest, "role", "?")
-            latest_content = latest.get("content", "") if isinstance(latest, dict) else getattr(latest, "content", "")
-            if latest_role == CHAT_ROLE_USER and latest_content == current_message:
-                history_messages = history_messages[:-1]
-
-        history_dicts = []
-        for m in history_messages:
-            if isinstance(m, dict):
-                msg = {"role": m.get("role", "?"), "content": m.get("content", "")}
-                if m.get("tool_call_id"):
-                    msg["tool_call_id"] = m["tool_call_id"]
-                if m.get("reasoning_details"):
-                    msg["reasoning_details"] = m["reasoning_details"]
-            else:
-                msg = {"role": m.role, "content": m.content}
-                if getattr(m, "tool_call_id", None):
-                    msg["tool_call_id"] = m.tool_call_id
-                if getattr(m, "reasoning_details", None):
-                    msg["reasoning_details"] = m.reasoning_details
-            history_dicts.append(msg)
+        prompt_history = await self._load_prompt_history(session_id, current_message)
+        history_dicts = prompt_history.messages
+        loaded_history_count = prompt_history.loaded_messages
+        filtered_tool_messages = prompt_history.filtered_tool_messages
 
         logger.info(
             f"[{session_id}] prompt.build | history={len(history_dicts)} channel={channel or '-'} images={len(user_images or [])}"
@@ -276,23 +244,22 @@ class LlmCallService:
             session_id=session_id,
             tool_schema_tokens=tool_schema_tokens,
         )
-        structured_retrieval_decision = task_context_structured_retrieval_decision(task_context_decision)
-        should_retrieve = bool(structured_retrieval_decision)
-        proactive_retrieval_context = await self._build_proactive_retrieval_context(
+        task_context_retrieval = await self._resolve_task_context_retrieval(
             session_id=session_id,
             current_message=effective_current_message,
-            should_retrieve=should_retrieve,
+            task_context_decision=task_context_decision,
         )
+        proactive_retrieval_context = task_context_retrieval.context
         if run_id is not None:
             await self._emit_run_event(
                 session_id,
                 run_id,
                 RETRIEVAL_PROACTIVE_CHECKED_EVENT,
                 {
-                    "should_retrieve": should_retrieve,
+                    "should_retrieve": task_context_retrieval.should_retrieve,
                     "applied": bool(proactive_retrieval_context),
                     "context_len": len(proactive_retrieval_context or ""),
-                    "decision_source": "task_context" if structured_retrieval_decision is not None else "none",
+                    "decision_source": task_context_retrieval.decision_source,
                 },
                 channel=channel,
                 external_chat_id=external_chat_id,

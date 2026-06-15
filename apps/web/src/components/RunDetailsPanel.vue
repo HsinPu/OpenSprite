@@ -1,14 +1,4 @@
 <template>
-  <RunHistorySelector
-    v-if="showRunHistory"
-    :copy="copy"
-    :runs="runs"
-    :loading="runsLoading"
-    :error="runsError"
-    :current-run="currentRun"
-    @select-run="$emit('select-run', $event)"
-  />
-
   <RunSummaryCard
     v-if="showRunSummary && currentRun && (currentRun.summary || currentRun.summaryLoading || currentRun.summaryError)"
     :copy="copy"
@@ -47,7 +37,6 @@
 import { ref, watch } from "vue";
 
 import RunFileChangeDrawer from "./RunFileChangeDrawer.vue";
-import RunHistorySelector from "./RunHistorySelector.vue";
 import RunSummaryCard from "./RunSummaryCard.vue";
 import RunTimeline from "./RunTimeline.vue";
 import RunTraceViewer from "./RunTraceViewer.vue";
@@ -56,18 +45,6 @@ const props = defineProps({
   copy: {
     type: Object,
     required: true,
-  },
-  runs: {
-    type: Array,
-    required: true,
-  },
-  runsLoading: {
-    type: Boolean,
-    required: true,
-  },
-  runsError: {
-    type: String,
-    default: "",
   },
   currentRun: {
     type: Object,
@@ -80,10 +57,6 @@ const props = defineProps({
   runSummary: {
     type: Object,
     default: null,
-  },
-  showRunHistory: {
-    type: Boolean,
-    required: true,
   },
   showRunTimeline: {
     type: Boolean,
@@ -104,7 +77,6 @@ const emit = defineEmits([
   "cleanup-worktree",
   "resume-follow-up",
   "revert-file-change",
-  "select-run",
 ]);
 
 const selectedFileChange = ref(null);

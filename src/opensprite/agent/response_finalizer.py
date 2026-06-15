@@ -18,12 +18,12 @@ class AgentResponseFinalizer:
         self,
         *,
         run_trace: RunTraceRecorder,
-        save_message: Callable[..., Awaitable[None]],
+        save_assistant_message: Callable[..., Awaitable[None]],
         format_log_preview: Callable[..., str],
         log_config: LogConfig | None = None,
     ):
         self.run_trace = run_trace
-        self._save_message = save_message
+        self._save_assistant_message = save_assistant_message
         self._format_log_preview = format_log_preview
         self.log_config = log_config or LogConfig()
 
@@ -116,9 +116,8 @@ class AgentResponseFinalizer:
         persisted_metadata = persisted_assistant_metadata if persisted_assistant_metadata is not None else assistant_metadata
         self._log_reasoning_details(session_id, persisted_metadata)
 
-        await self._save_message(
+        await self._save_assistant_message(
             session_id,
-            "assistant",
             response,
             metadata=persisted_metadata,
         )

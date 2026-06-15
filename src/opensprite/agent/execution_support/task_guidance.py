@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..task.capabilities import HISTORY_RETRIEVAL_TASK_TYPE
 from ..task.contract import TaskContract
-from ..task.resolution import TaskContextDecision
 from ..task.evidence_policy import (
     is_itemized_output_criterion,
     is_media_artifact_criterion,
@@ -18,13 +16,6 @@ from ..task.evidence_policy import (
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
 )
-
-
-def structured_retrieval_decision(task_context_decision: TaskContextDecision | None) -> bool | None:
-    if task_context_decision is None:
-        return None
-    inherited_task_type = str(task_context_decision.inherited_task_type or "").strip()
-    return inherited_task_type == HISTORY_RETRIEVAL_TASK_TYPE
 
 
 def build_task_contract_guidance(contract: TaskContract) -> str:

@@ -108,6 +108,8 @@ export const DISPLAY_COPY = {
       jsonArray: (count) => `${count} 個項目`,
       jsonObject: (keys, count) => keys ? `${count} 個欄位：${keys}` : `${count} 個欄位`,
       jsonValue: "JSON value",
+      viewTrace: "查看 Trace",
+      viewTraceTitle: "查看這次回覆的 Trace",
       artifactTypes: {
         tool: "工具",
         file: "檔案",
@@ -1394,6 +1396,8 @@ export const DISPLAY_COPY = {
       jsonArray: (count) => `${count} item${count === 1 ? "" : "s"}`,
       jsonObject: (keys, count) => keys ? `${count} field${count === 1 ? "" : "s"}: ${keys}` : `${count} field${count === 1 ? "" : "s"}`,
       jsonValue: "JSON value",
+      viewTrace: "View Trace",
+      viewTraceTitle: "View the trace for this reply",
       artifactTypes: {
         tool: "Tool",
         file: "File",

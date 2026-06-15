@@ -7,19 +7,24 @@ import os
 import re
 import tempfile
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from ..llms import ChatMessage
+from ..llms import CHAT_ROLE_ASSISTANT, CHAT_ROLE_TOOL, CHAT_ROLE_USER, ChatMessage
 from ..runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
 from ..search.base import SearchHit, SearchStore
 from ..storage import StorageProvider, StoredMessage
+from ..documents.memory import MemoryStore
+from ..documents.recent_summary import RecentSummaryStore
+from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrievalPlanner
 from ..utils.log import logger
 
 HISTORY_SEARCH_TOOL_NAME = "search_history"
 HISTORY_RESULT_COUNT_METADATA_KEYS = ("result_count", "hit_count", "hits", "count")
 HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON = "assistant did not provide enough recalled items"
+TASK_CONTEXT_HISTORY_RETRIEVAL_TYPE = "history_retrieval"
 LEARNING_LEDGER_SCHEMA_VERSION = 1
 LEARNING_LEDGER_LIMIT = 200
 LEARNING_RELEVANT_LIMIT = 4
@@ -37,6 +42,116 @@ _TARGET_LABELS = {
     "recent_summary": "Recent summary",
     "active_task": "Active task",
 }
+
+
+@dataclass(frozen=True)
+class PreparedPromptHistory:
+    """Conversation history after prompt-specific filtering and normalization."""
+
+    messages: list[dict[str, Any]]
+    loaded_messages: int
+    filtered_tool_messages: int
+
+
+@dataclass(frozen=True)
+class PromptMemoryDocument:
+    """One durable memory document rendered for prompt injection."""
+
+    title: str
+    content: str
+
+    def render(self) -> str:
+        """Render this memory document as a system-prompt section."""
+        content = str(self.content or "").strip()
+        if not content:
+            return ""
+        return f"# {self.title}\n\n{PromptMemoryDocumentService.size_hint(content)}\n\n{content}"
+
+
+@dataclass(frozen=True)
+class TaskContextRetrievalResult:
+    """Prompt context selected from prior chat by task-context resolution."""
+
+    context: str
+    should_retrieve: bool
+    decision_source: str
+
+
+class PromptMemoryDocumentService:
+    """Loads durable memory documents and renders prompt-ready sections."""
+
+    def __init__(
+        self,
+        *,
+        memory_store: MemoryStore,
+        recent_summary_store: RecentSummaryStore,
+    ):
+        self.memory_store = memory_store
+        self.recent_summary_store = recent_summary_store
+
+    @staticmethod
+    def size_hint(content: str) -> str:
+        """Return a compact size hint for durable prompt documents."""
+        return f"Approx size: {len(str(content or '')):,} chars. Keep this document concise; use search tools for detailed past transcripts."
+
+    def load_documents(self, session_id: str) -> list[PromptMemoryDocument]:
+        """Load durable memory documents that should be injected into the system prompt."""
+        documents: list[PromptMemoryDocument] = []
+
+        memory = self.memory_store.read(session_id)
+        if memory:
+            documents.append(PromptMemoryDocument(title="Memory", content=memory))
+
+        recent_summary = self.recent_summary_store.read(session_id)
+        if recent_summary:
+            documents.append(PromptMemoryDocument(title="Recent Summary", content=recent_summary))
+
+        return documents
+
+    def build_prompt_sections(self, session_id: str) -> list[str]:
+        """Return non-empty prompt sections for durable memory documents."""
+        return [
+            section
+            for document in self.load_documents(session_id)
+            if (section := document.render())
+        ]
+
+
+class RelevantUserOverlayContextService:
+    """Tracks stable user overlay identity and renders relevant prompt context."""
+
+    def __init__(self, *, index_store: UserOverlayIndexStore):
+        self.index_store = index_store
+        self._retrieval_planner = UserOverlayRetrievalPlanner(index_store=index_store)
+        self._session_overlay_ids: dict[str, str] = {}
+
+    @staticmethod
+    def _normalize_session_id(session_id: str | None) -> str:
+        return str(session_id or "default").strip() or "default"
+
+    @staticmethod
+    def _normalize_overlay_id(overlay_id: str | None) -> str:
+        return str(overlay_id or "").strip()
+
+    def set_session_overlay_id(self, session_id: str, overlay_id: str | None) -> None:
+        """Record or clear the stable overlay identity for one session."""
+        normalized_session_id = self._normalize_session_id(session_id)
+        normalized_overlay_id = self._normalize_overlay_id(overlay_id)
+        if not normalized_overlay_id:
+            self._session_overlay_ids.pop(normalized_session_id, None)
+            return
+        self._session_overlay_ids[normalized_session_id] = normalized_overlay_id
+
+    def get_session_overlay_id(self, session_id: str) -> str | None:
+        """Return the stable overlay identity resolved for one session."""
+        return self._session_overlay_ids.get(self._normalize_session_id(session_id))
+
+    def build_context(self, session_id: str, current_message: str) -> str:
+        """Return relevant stable overlay context for the current prompt."""
+        overlay_id = self.get_session_overlay_id(session_id)
+        if not overlay_id:
+            return ""
+        return self._retrieval_planner.build_context(overlay_id, current_message)
 
 
 class LearningLedger:
@@ -313,6 +428,23 @@ class LearningLedger:
         return "\n".join(lines)
 
 
+class RelevantLearningContextService:
+    """Builds prompt context from a session learning ledger when one is attached."""
+
+    def __init__(self, learning_ledger: LearningLedger | None = None):
+        self.learning_ledger = learning_ledger
+
+    def set_learning_ledger(self, ledger: LearningLedger | None) -> None:
+        """Attach or clear the ledger used for relevant prompt hints."""
+        self.learning_ledger = ledger
+
+    def build_context(self, session_id: str, current_message: str) -> str:
+        """Return relevant learned context for the current prompt."""
+        if self.learning_ledger is None:
+            return ""
+        return self.learning_ledger.build_relevant_context(session_id, current_message)
+
+
 def is_history_retrieval_tool_name(tool_name: str | None) -> bool:
     """Return whether a tool name represents chat-history retrieval."""
     return str(tool_name or "").strip() == HISTORY_SEARCH_TOOL_NAME
@@ -414,6 +546,71 @@ class MessageHistoryService:
 
         return chat_messages
 
+    async def load_prompt_history(self, session_id: str, current_message: str) -> PreparedPromptHistory:
+        """Load and normalize conversation history for one LLM prompt."""
+        return self.prepare_prompt_history(
+            await self.load_history(session_id),
+            current_message=current_message,
+        )
+
+    @classmethod
+    def prepare_prompt_history(
+        cls,
+        history_messages: list[ChatMessage | dict[str, Any]],
+        *,
+        current_message: str,
+    ) -> PreparedPromptHistory:
+        """Filter turn-local artifacts and return prompt-ready history dicts."""
+        loaded_messages = len(history_messages)
+        prompt_messages = [
+            message
+            for message in history_messages
+            if cls._message_role(message) != CHAT_ROLE_TOOL
+        ]
+        filtered_tool_messages = loaded_messages - len(prompt_messages)
+
+        if prompt_messages:
+            latest = prompt_messages[-1]
+            if cls._message_role(latest) == CHAT_ROLE_USER and cls._message_content(latest) == current_message:
+                prompt_messages = prompt_messages[:-1]
+
+        return PreparedPromptHistory(
+            messages=[cls._message_to_prompt_dict(message) for message in prompt_messages],
+            loaded_messages=loaded_messages,
+            filtered_tool_messages=filtered_tool_messages,
+        )
+
+    @staticmethod
+    def _message_role(message: ChatMessage | dict[str, Any]) -> str:
+        return str(message.get("role", "?") if isinstance(message, dict) else getattr(message, "role", "?"))
+
+    @staticmethod
+    def _message_content(message: ChatMessage | dict[str, Any]) -> Any:
+        return message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+
+    @classmethod
+    def _message_to_prompt_dict(cls, message: ChatMessage | dict[str, Any]) -> dict[str, Any]:
+        if isinstance(message, dict):
+            prompt_message: dict[str, Any] = {
+                "role": message.get("role", "?"),
+                "content": message.get("content", ""),
+            }
+            if message.get("tool_call_id"):
+                prompt_message["tool_call_id"] = message["tool_call_id"]
+            if message.get("reasoning_details"):
+                prompt_message["reasoning_details"] = message["reasoning_details"]
+            return prompt_message
+
+        prompt_message = {
+            "role": message.role,
+            "content": message.content,
+        }
+        if getattr(message, "tool_call_id", None):
+            prompt_message["tool_call_id"] = message.tool_call_id
+        if getattr(message, "reasoning_details", None):
+            prompt_message["reasoning_details"] = message.reasoning_details
+        return prompt_message
+
     async def save_message(
         self,
         session_id: str,
@@ -459,6 +656,36 @@ class MessageHistoryService:
                     },
                 )
 
+    async def save_user_message(
+        self,
+        session_id: str,
+        content: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist and index a visible user message."""
+        await self.save_message(
+            session_id,
+            CHAT_ROLE_USER,
+            content,
+            metadata=metadata,
+        )
+
+    async def save_assistant_message(
+        self,
+        session_id: str,
+        content: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Persist and index a visible assistant message."""
+        await self.save_message(
+            session_id,
+            CHAT_ROLE_ASSISTANT,
+            content,
+            metadata=metadata,
+        )
+
 
 class HistoryResetService:
     """Clears session history and related per-session derived state."""
@@ -495,11 +722,49 @@ class HistoryResetService:
             logger.warning("[{}] Failed to clear search index: {}", session_id, e)
 
 
-class ProactiveRetrievalService:
+class TaskContextRetrievalService:
     """Fetch compact prior context when the task-context resolver asks for it."""
 
-    def __init__(self, *, search_store: SearchStore | None):
+    def __init__(
+        self,
+        *,
+        search_store: SearchStore | None,
+        history_retrieval_task_type: str = TASK_CONTEXT_HISTORY_RETRIEVAL_TYPE,
+    ):
         self.search_store = search_store
+        self.history_retrieval_task_type = str(history_retrieval_task_type or "").strip()
+
+    def should_retrieve_from_decision(self, task_context_decision: Any | None) -> bool | None:
+        """Return whether the resolver selected structured prior-chat retrieval."""
+        if task_context_decision is None:
+            return None
+        inherited_task_type = str(getattr(task_context_decision, "inherited_task_type", "") or "").strip()
+        return inherited_task_type == self.history_retrieval_task_type
+
+    async def resolve(
+        self,
+        *,
+        session_id: str,
+        current_message: str,
+        task_context_decision: Any | None = None,
+        should_retrieve: bool | None = None,
+    ) -> TaskContextRetrievalResult:
+        """Return retrieval context plus the resolver-derived decision metadata."""
+        decision = (
+            should_retrieve
+            if should_retrieve is not None
+            else self.should_retrieve_from_decision(task_context_decision)
+        )
+        context = await self.build_context(
+            session_id=session_id,
+            current_message=current_message,
+            should_retrieve=decision,
+        )
+        return TaskContextRetrievalResult(
+            context=context,
+            should_retrieve=bool(decision),
+            decision_source="task_context" if task_context_decision is not None else "none",
+        )
 
     async def build_context(
         self,
@@ -546,3 +811,6 @@ class ProactiveRetrievalService:
             lines.append(f"{index}. [{label}] {self._format_time(hit.created_at)}")
             lines.append(f"   {self._truncate(hit.content)}")
         return lines
+
+
+ProactiveRetrievalService = TaskContextRetrievalService

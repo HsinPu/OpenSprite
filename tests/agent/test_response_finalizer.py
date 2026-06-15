@@ -13,7 +13,7 @@ class _RunTrace:
         pass
 
 
-async def _save_message(*args, **kwargs):
+async def _save_assistant_message(*args, **kwargs):
     pass
 
 
@@ -24,7 +24,7 @@ def _preview(text, *, max_chars=200):
 def _make_finalizer(*, log_reasoning_details=False):
     return AgentResponseFinalizer(
         run_trace=_RunTrace(),
-        save_message=_save_message,
+        save_assistant_message=_save_assistant_message,
         format_log_preview=_preview,
         log_config=LogConfig(log_reasoning_details=log_reasoning_details),
     )
@@ -82,3 +82,31 @@ def test_reasoning_logging_can_write_full_details(monkeypatch):
     rendered = [str(item) for message in messages for item in message]
     assert any("LLM reasoning details" in item for item in rendered)
     assert any("debug thought" in item for item in rendered)
+
+
+def test_finalize_saves_assistant_message_with_persisted_metadata():
+    saved = []
+
+    async def save_assistant_message(session_id, content, metadata=None):
+        saved.append((session_id, content, metadata))
+
+    asyncio.run(
+        AgentResponseFinalizer(
+            run_trace=_RunTrace(),
+            save_assistant_message=save_assistant_message,
+            format_log_preview=_preview,
+            log_config=LogConfig(),
+        ).finalize(
+            session_id="session-1",
+            run_id="run-1",
+            response="answer",
+            channel="web",
+            external_chat_id=None,
+            assistant_metadata={"visible": True},
+            persisted_assistant_metadata={"stored": True},
+            run_part_metadata={},
+            run_event_payload={},
+        )
+    )
+
+    assert saved == [("session-1", "answer", {"stored": True})]

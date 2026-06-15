@@ -74,7 +74,13 @@ from .execution import ExecutionEngine, ExecutionResult
 from .execution_support.llm_calls import LlmCallService
 from .execution_support.prompt_budget import PromptBudgetService
 from .execution_support.prompt_logging import PromptLoggingService
-from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
+from ..context.message_history import (
+    HistoryResetService,
+    LearningLedger,
+    MessageHistoryService,
+    PreparedPromptHistory,
+    TaskContextRetrievalService,
+)
 from ..tools.registration import register_memory_tool
 from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
@@ -375,7 +381,7 @@ class AgentLoop:
             max_history_getter=lambda: self.config.max_history,
             emit_index_failure=self._emit_search_index_failure,
         )
-        self.retrieval = ProactiveRetrievalService(search_store=self.search_store)
+        self.retrieval = TaskContextRetrievalService(search_store=self.search_store)
         self._context_builder = self._setup_context_builder(context_builder)
         self.learning_ledger = self._setup_learning_ledger()
         self.history_reset = HistoryResetService(
@@ -389,7 +395,7 @@ class AgentLoop:
         )
         self.response_finalizer = AgentResponseFinalizer(
             run_trace=self.run_trace,
-            save_message=self._save_message,
+            save_assistant_message=self._save_assistant_message,
             format_log_preview=self._format_log_preview,
             log_config=self.log_config,
         )
@@ -423,7 +429,7 @@ class AgentLoop:
             auto_continue=self.auto_continue,
             work_progress=self.work_progress,
             connect_mcp=lambda: self.connect_mcp(),
-            save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
+            save_user_message=lambda *args, **kwargs: self._save_user_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
             transcribe_audio=lambda audios: media_runtime.transcribe_audio_input(self, audios),
@@ -522,7 +528,8 @@ class AgentLoop:
             llm_config_getter=lambda: self.llm_config,
             should_cancel_parent_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),
             skills_loader_getter=lambda: getattr(self._context_builder, "skills_loader", None),
-            save_message=self._save_message,
+            save_user_message=self._save_user_message,
+            save_assistant_message=self._save_assistant_message,
             execute_messages=self._execute_messages,
             log_prepared_messages=self._log_prepared_messages,
             format_log_preview=self._format_log_preview,
@@ -580,33 +587,7 @@ class AgentLoop:
             messages=self.messages.task,
         )
         self.recent_summary_update = self._setup_recent_summary_update()
-        self.curator = CuratorService(
-            maybe_consolidate_memory=lambda session_id: self._maybe_consolidate_memory(session_id),
-            maybe_update_recent_summary=lambda session_id: self._maybe_update_recent_summary(session_id),
-            maybe_update_user_profile=lambda session_id: self._maybe_update_user_profile(session_id),
-            maybe_update_active_task=lambda session_id: self._maybe_update_active_task(session_id),
-            run_skill_review=lambda session_id: self._run_skill_review(session_id),
-            should_run_skill_review=lambda result: self._should_schedule_skill_review(result),
-            read_memory_snapshot=self._read_memory_snapshot,
-            read_recent_summary_snapshot=self._read_recent_summary_snapshot,
-            read_user_profile_snapshot=self._read_user_profile_snapshot,
-            read_active_task_snapshot=self._read_active_task_snapshot,
-            read_skill_snapshot=self._read_skill_snapshot,
-            record_learning=lambda *args, **kwargs: learning_runtime.record_learning(self, *args, **kwargs),
-            emit_run_event=lambda session_id, run_id, event_type, payload, channel, external_chat_id: self._emit_run_event(
-                session_id,
-                run_id,
-                event_type,
-                payload,
-                channel=channel,
-                external_chat_id=external_chat_id,
-            ),
-            state_path_for_session=lambda session_id: get_session_curator_state_file(
-                session_id,
-                app_home=self.app_home,
-                workspace_root=self.tool_workspace,
-            ),
-        )
+        self.curator = self._setup_curator()
         self._skill_review_tasks = self.curator.tasks
         self._skill_review_rerun = self.curator.rerun_keys
         self._maintenance_tasks = self.curator.tasks
@@ -620,7 +601,10 @@ class AgentLoop:
                 task_context_decision=task_context_decision,
                 task_objective_decision=task_objective_decision,
             ),
-            load_history=lambda session_id: self._load_history(session_id),
+            load_prompt_history=lambda session_id, current_message: self._load_prompt_history(
+                session_id,
+                current_message,
+            ),
             get_current_audios=lambda: media_runtime.get_current_audios(self),
             get_current_videos=lambda: media_runtime.get_current_videos(self),
             augment_message_for_media=lambda *args, **kwargs: media_runtime.augment_message_for_media(*args, **kwargs),
@@ -652,10 +636,10 @@ class AgentLoop:
                 channel=channel,
                 external_chat_id=external_chat_id,
             ),
-            build_proactive_retrieval_context=lambda session_id, current_message, should_retrieve=None: self.retrieval.build_context(
+            resolve_task_context_retrieval=lambda session_id, current_message, task_context_decision=None: self.retrieval.resolve(
                 session_id=session_id,
                 current_message=current_message,
-                should_retrieve=should_retrieve,
+                task_context_decision=task_context_decision,
             ),
             get_tool_registry=lambda: self.tools,
             get_current_run_id=self.turn_context.current_run_id,
@@ -901,6 +885,36 @@ class AgentLoop:
             llm=self.active_task_config.llm,
         )
         return ActiveTaskUpdateService(consolidator)
+
+    def _setup_curator(self) -> CuratorService:
+        """Create the post-turn background memory and skill curator."""
+        return CuratorService(
+            maybe_consolidate_memory=lambda session_id: self._maybe_consolidate_memory(session_id),
+            maybe_update_recent_summary=lambda session_id: self._maybe_update_recent_summary(session_id),
+            maybe_update_user_profile=lambda session_id: self._maybe_update_user_profile(session_id),
+            maybe_update_active_task=lambda session_id: self._maybe_update_active_task(session_id),
+            run_skill_review=lambda session_id: self._run_skill_review(session_id),
+            should_run_skill_review=lambda result: self._should_schedule_skill_review(result),
+            read_memory_snapshot=self._read_memory_snapshot,
+            read_recent_summary_snapshot=self._read_recent_summary_snapshot,
+            read_user_profile_snapshot=self._read_user_profile_snapshot,
+            read_active_task_snapshot=self._read_active_task_snapshot,
+            read_skill_snapshot=self._read_skill_snapshot,
+            record_learning=lambda *args, **kwargs: learning_runtime.record_learning(self, *args, **kwargs),
+            emit_run_event=lambda session_id, run_id, event_type, payload, channel, external_chat_id: self._emit_run_event(
+                session_id,
+                run_id,
+                event_type,
+                payload,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            ),
+            state_path_for_session=lambda session_id: get_session_curator_state_file(
+                session_id,
+                app_home=self.app_home,
+                workspace_root=self.tool_workspace,
+            ),
+        )
 
     def _clear_recent_summary(self, session_id: str) -> None:
         memory_dir = getattr(self._context_builder, "memory_dir", None)
@@ -1164,6 +1178,36 @@ class AgentLoop:
             List of ChatMessage objects for LLM consumption.
         """
         return await self.message_history.load_history(session_id)
+
+    async def _load_prompt_history(self, session_id: str, current_message: str) -> PreparedPromptHistory:
+        """Load conversation history already normalized for prompt assembly."""
+        return await self.message_history.load_prompt_history(session_id, current_message)
+
+    async def _save_user_message(
+        self,
+        session_id: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Save a visible user message to storage and search indexing."""
+        await self.message_history.save_user_message(
+            session_id,
+            content,
+            metadata=metadata,
+        )
+
+    async def _save_assistant_message(
+        self,
+        session_id: str,
+        content: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Save a visible assistant message to storage and search indexing."""
+        await self.message_history.save_assistant_message(
+            session_id,
+            content,
+            metadata=metadata,
+        )
 
     async def _save_message(
         self,

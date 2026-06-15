@@ -44,6 +44,7 @@ const [
   runSummaryCard,
   runTraceViewer,
   runDetailsPanel,
+  runHistorySelector,
   chatPanel,
   chatComposer,
   toastStack,
@@ -74,6 +75,7 @@ const [
   read("src/components/RunSummaryCard.vue"),
   read("src/components/RunTraceViewer.vue"),
   read("src/components/RunDetailsPanel.vue"),
+  read("src/components/RunHistorySelector.vue"),
   read("src/components/ChatPanel.vue"),
   read("src/components/ChatComposer.vue"),
   read("src/components/ToastStack.vue"),
@@ -164,8 +166,11 @@ assertIncludes(styles, "grid-template-columns: auto minmax(0, 1fr) auto auto", "
 assertIncludes(styles, "grid-template-columns: auto auto minmax(0, 1fr) auto auto", "trace details use right control column");
 assertIncludes(styles, ".run-trace__part[open] > summary::after", "message part right expand indicator");
 assertIncludes(styles, ".run-trace__event[open] > summary::after", "debug event right expand indicator");
-assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selector");
-assertIncludes(runDetailsPanel, "showRunHistory", "run history visibility toggle");
+assertIncludes(runHistorySelector, "run-history", "run history selector component");
+assertIncludes(app, "RunHistorySelector", "trace sidebar owns run history selector");
+assertIncludes(app, "v-if=\"state.showRunHistory\"", "run history visibility toggle");
+assertOrder(app, "<RunHistorySelector", "<WorkStateCard", "run history appears before current task card");
+assertNotIncludes(runDetailsPanel, "RunHistorySelector", "run details panel no longer owns run history selector");
 assertIncludes(runDetailsPanel, "RunFileChangeDrawer", "run details file drawer");
 assertIncludes(app, "state.showWorkState && currentWorkState", "work state visibility toggle");
 assertIncludes(app, "WorkStateCard", "work state renders in trace sidebar");
@@ -176,7 +181,6 @@ assertIncludes(app, "trace-sidebar__resize", "right trace sidebar resize handle"
 assertIncludes(app, "opensprite:web:traceInspectorWidth", "right trace sidebar width persistence");
 assertIncludes(app, "opensprite:web:sidebarWidth", "left sidebar width persistence");
 assertIncludes(app, "beginSidebarResize", "left sidebar resize action");
-assertIncludes(app, ":show-run-history=\"state.showRunHistory\"", "run history prop wiring");
 assertIncludes(chatComposer, "composer__commands", "slash command hints rendering");
 assertIncludes(toastStack, "toast-stack", "toast stack rendering");
 assertIncludes(toastStack, "dismiss-toast", "toast dismiss event");
@@ -232,6 +236,8 @@ assertIncludes(styles, "var(--trace-sidebar-width, var(--trace-sidebar-default-w
 assertIncludes(styles, ".app-shell--trace-collapsed", "right trace sidebar collapsed app shell");
 assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
 assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize styling");
+assertIncludes(app, 'v-show="!traceInspectorCollapsed" class="trace-sidebar__rail"', "collapsed trace sidebar does not show a global open button");
+assertNotIncludes(app, "Open trace panel", "trace panel no longer has a standalone open button");
 assertIncludes(
   styles,
   "min(var(--trace-sidebar-width, 100vw), clamp(360px, 38vw, 480px))",
@@ -248,6 +254,15 @@ assertIncludes(styles, ".run-trace__tool-debug-blocks", "tool cards expose debug
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
 assertIncludes(styles, ".message + .message", "chat transcript has separators between messages");
 assertIncludes(styles, ".message__time", "chat message timestamp styling");
+assertIncludes(styles, ".message__trace-button", "assistant replies expose trace action styling");
+assertIncludes(messageList, "traceRunId", "assistant replies can map back to run traces");
+assertIncludes(messageList, "emit('view-trace', message.traceRunId)", "message trace action emits selected run");
+assertIncludes(chatPanel, '@view-trace="$emit(\'view-trace\', $event)"', "chat panel forwards message trace action");
+assertIncludes(app, ':runs="currentRuns"', "chat panel receives current runs for message trace mapping");
+assertIncludes(app, '@view-trace="viewTraceForRun"', "app handles message trace action");
+assertIncludes(app, "function viewTraceForRun", "app opens trace panel for message trace action");
+assertIncludes(app, "toggleTraceInspectorCollapsed();", "message trace action opens the collapsed trace panel");
+assertIncludes(copy, "viewTrace", "trace action copy is available");
 assertIncludesNormalized(
   styles,
   ".message {\n    grid-template-columns: 28px minmax(0, 1fr);\n    gap: 10px;\n    padding: 16px 0;\n  }\n\n  .message--user {\n    grid-template-columns: minmax(0, 1fr) 28px;\n  }",

@@ -2,7 +2,7 @@ import asyncio
 
 from opensprite.context.message_history import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
-    ProactiveRetrievalService,
+    TaskContextRetrievalService,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,
 )
@@ -27,9 +27,14 @@ class _SearchStore:
         ]
 
 
+class _TaskContextDecision:
+    def __init__(self, inherited_task_type: str | None):
+        self.inherited_task_type = inherited_task_type
+
+
 def test_proactive_retrieval_requires_structured_decision():
     store = _SearchStore()
-    service = ProactiveRetrievalService(search_store=store)
+    service = TaskContextRetrievalService(search_store=store)
 
     context = asyncio.run(
         service.build_context(
@@ -45,7 +50,7 @@ def test_proactive_retrieval_requires_structured_decision():
 
 def test_proactive_retrieval_formats_history_when_requested():
     store = _SearchStore()
-    service = ProactiveRetrievalService(search_store=store)
+    service = TaskContextRetrievalService(search_store=store)
 
     context = asyncio.run(
         service.build_context(
@@ -59,6 +64,42 @@ def test_proactive_retrieval_formats_history_when_requested():
     assert "## Retrieved History" in context
     assert "src/cleanup.py" in context
     assert store.calls == [("web:room-1", "Use the earlier fix again.", 3)]
+
+
+def test_task_context_retrieval_resolves_history_decision():
+    store = _SearchStore()
+    service = TaskContextRetrievalService(search_store=store)
+
+    result = asyncio.run(
+        service.resolve(
+            session_id="web:room-1",
+            current_message="Use the earlier fix again.",
+            task_context_decision=_TaskContextDecision("history_retrieval"),
+        )
+    )
+
+    assert result.should_retrieve
+    assert result.decision_source == "task_context"
+    assert "# Proactive Retrieval Context" in result.context
+    assert store.calls == [("web:room-1", "Use the earlier fix again.", 3)]
+
+
+def test_task_context_retrieval_skips_non_history_decision():
+    store = _SearchStore()
+    service = TaskContextRetrievalService(search_store=store)
+
+    result = asyncio.run(
+        service.resolve(
+            session_id="web:room-1",
+            current_message="Use the earlier fix again.",
+            task_context_decision=_TaskContextDecision("code_change"),
+        )
+    )
+
+    assert not result.should_retrieve
+    assert result.decision_source == "task_context"
+    assert result.context == ""
+    assert store.calls == []
 
 
 def test_history_recalled_items_insufficient_reason_is_stable():

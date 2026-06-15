@@ -31,10 +31,15 @@ from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_profile import create_user_profile_store
-from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrievalPlanner, UserOverlayStore
+from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayStore
 from ..skills import SkillsLoader
 from ..subagent_prompts import get_all_subagents
-from .message_history import LearningLedger
+from .message_history import (
+    LearningLedger,
+    PromptMemoryDocumentService,
+    RelevantLearningContextService,
+    RelevantUserOverlayContextService,
+)
 
 
 class FileContextBuilder:
@@ -209,12 +214,16 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         self.workspace = self.tool_workspace
         self.memory_store = MemoryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
         self.recent_summary_store = RecentSummaryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
+        self.prompt_memory_documents = PromptMemoryDocumentService(
+            memory_store=self.memory_store,
+            recent_summary_store=self.recent_summary_store,
+        )
         self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
         self.user_overlay_index = UserOverlayIndexStore(app_home=self.app_home)
-        self.user_overlay_planner = UserOverlayRetrievalPlanner(index_store=self.user_overlay_index)
+        self.relevant_user_overlay = RelevantUserOverlayContextService(index_store=self.user_overlay_index)
         self._runtime_mcp_tools: list[tuple[str, str]] = []
-        self._session_overlay_ids: dict[str, str] = {}
         self.learning_ledger = learning_ledger
+        self.relevant_learning = RelevantLearningContextService(learning_ledger=learning_ledger)
         self.skills_loader = skills_loader or SkillsLoader(
             skills_root=skills_root or get_skills_dir(self.app_home),
             personal_skills_dir=personal_skills_dir,
@@ -223,6 +232,7 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
     def set_learning_ledger(self, ledger: LearningLedger | None) -> None:
         """Attach the session learning ledger used for relevant prompt hints."""
         self.learning_ledger = ledger
+        self.relevant_learning.set_learning_ledger(ledger)
 
     def set_runtime_mcp_tools(self, tools: list[tuple[str, str]]) -> None:
         """Store the connected MCP tool summary for prompt generation."""
@@ -230,16 +240,11 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
 
     def set_session_overlay_id(self, session_id: str, overlay_id: str | None) -> None:
         """Record the stable overlay identity to use for one session's prompt build."""
-        normalized_session_id = str(session_id or "default").strip() or "default"
-        normalized_overlay_id = str(overlay_id or "").strip()
-        if not normalized_overlay_id:
-            self._session_overlay_ids.pop(normalized_session_id, None)
-            return
-        self._session_overlay_ids[normalized_session_id] = normalized_overlay_id
+        self.relevant_user_overlay.set_session_overlay_id(session_id, overlay_id)
 
     def get_session_overlay_id(self, session_id: str) -> str | None:
         """Return the currently resolved overlay identity for one session, if any."""
-        return self._session_overlay_ids.get(str(session_id or "default").strip() or "default")
+        return self.relevant_user_overlay.get_session_overlay_id(session_id)
 
     def get_session_workspace(self, session_id: str = "default") -> Path:
         """Resolve the current session's isolated workspace."""
@@ -286,7 +291,7 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
 
     def _read_user_overlay(self, session_id: str) -> str:
         """Load the stable cross-session overlay for this session when one is resolved."""
-        overlay_id = self._session_overlay_ids.get(str(session_id or "default").strip() or "default")
+        overlay_id = self.get_session_overlay_id(session_id)
         if not overlay_id:
             return ""
         content = self.user_overlay_store.read(overlay_id)
@@ -301,10 +306,7 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         return f"Approx size: {len(str(content or '')):,} chars. Keep this document concise; use search tools for detailed past transcripts."
 
     def _build_relevant_user_overlay_context(self, session_id: str, current_message: str) -> str:
-        overlay_id = self.get_session_overlay_id(session_id)
-        if not overlay_id:
-            return ""
-        return self.user_overlay_planner.build_context(overlay_id, current_message)
+        return self.relevant_user_overlay.build_context(session_id, current_message)
 
     def _read_workspace_agents(self, session_id: str) -> str:
         """Load AGENTS.md from the active workspace when present."""
@@ -444,13 +446,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         if mcp_tools_summary:
             parts.append(mcp_tools_summary)
 
-        memory = self.memory_store.read(session_id)
-        if memory:
-            parts.append(f"# Memory\n\n{self._size_hint(memory)}\n\n{memory}")
-
-        recent_summary = self.recent_summary_store.read(session_id)
-        if recent_summary:
-            parts.append(f"# Recent Summary\n\n{self._size_hint(recent_summary)}\n\n{recent_summary}")
+        parts.extend(self.prompt_memory_documents.build_prompt_sections(session_id))
 
         return "\n\n---\n\n".join(parts)
 
@@ -540,9 +536,7 @@ Be conservative only for actions with external side effects or boundaries outsid
 
     def _build_relevant_learning_context(self, session_id: str, current_message: str) -> str:
         """Return concise learned-context hints for the current message when available."""
-        if self.learning_ledger is None:
-            return ""
-        return self.learning_ledger.build_relevant_context(session_id, current_message)
+        return self.relevant_learning.build_context(session_id, current_message)
 
     def add_tool_result(
         self,

@@ -2,9 +2,30 @@ import asyncio
 
 import pytest
 
-from opensprite.documents.curator import CuratorService
+from opensprite.documents.curator import CuratorMaintenanceServices, CuratorService
 from opensprite.context.paths import get_session_curator_state_file
 from opensprite.agent.execution import ExecutionResult
+
+
+def test_curator_maintenance_services_define_canonical_job_order():
+    async def noop(_session_id):
+        return None
+
+    services = CuratorMaintenanceServices(
+        maybe_consolidate_memory=noop,
+        maybe_update_recent_summary=noop,
+        maybe_update_user_profile=noop,
+        maybe_update_active_task=noop,
+        read_memory_snapshot=lambda _session_id: "memory",
+        read_recent_summary_snapshot=lambda _session_id: "summary",
+        read_user_profile_snapshot=lambda _session_id: "profile",
+        read_active_task_snapshot=lambda _session_id: "task",
+    )
+
+    jobs = services.jobs()
+
+    assert [job.key for job in jobs] == ["memory", "recent_summary", "user_profile", "active_task"]
+    assert [job.label for job in jobs] == ["memory", "recent summary", "user profile", "active task"]
 
 
 def test_curator_service_emits_summary_for_changed_jobs():

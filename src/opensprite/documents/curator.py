@@ -193,6 +193,44 @@ class CuratorJob:
     runner: SessionRunner
 
 
+@dataclass(frozen=True)
+class CuratorMaintenanceServices:
+    """Maintenance services that run after a visible assistant turn."""
+
+    maybe_consolidate_memory: SessionRunner
+    maybe_update_recent_summary: SessionRunner
+    maybe_update_user_profile: SessionRunner
+    maybe_update_active_task: SessionRunner
+    read_memory_snapshot: SnapshotReader
+    read_recent_summary_snapshot: SnapshotReader
+    read_user_profile_snapshot: SnapshotReader
+    read_active_task_snapshot: SnapshotReader
+
+    def jobs(self) -> tuple[CuratorJob, ...]:
+        """Return maintenance jobs in the canonical post-turn order."""
+        return (
+            CuratorJob("memory", "memory", self.read_memory_snapshot, self.maybe_consolidate_memory),
+            CuratorJob(
+                "recent_summary",
+                "recent summary",
+                self.read_recent_summary_snapshot,
+                self.maybe_update_recent_summary,
+            ),
+            CuratorJob(
+                "user_profile",
+                "user profile",
+                self.read_user_profile_snapshot,
+                self.maybe_update_user_profile,
+            ),
+            CuratorJob(
+                "active_task",
+                "active task",
+                self.read_active_task_snapshot,
+                self.maybe_update_active_task,
+            ),
+        )
+
+
 def fingerprint_text_directory(root: Path | None) -> str:
     """Return a stable content fingerprint for one directory tree."""
     directory = Path(root).expanduser().resolve(strict=False) if root is not None else None
@@ -475,10 +513,16 @@ class CuratorService:
         state_path: Path | None = None,
         state_path_for_session: Callable[[str], Path] | None = None,
     ):
-        self._memory_runner = maybe_consolidate_memory
-        self._recent_summary_runner = maybe_update_recent_summary
-        self._user_profile_runner = maybe_update_user_profile
-        self._active_task_runner = maybe_update_active_task
+        self._maintenance_services = CuratorMaintenanceServices(
+            maybe_consolidate_memory=maybe_consolidate_memory,
+            maybe_update_recent_summary=maybe_update_recent_summary,
+            maybe_update_user_profile=maybe_update_user_profile,
+            maybe_update_active_task=maybe_update_active_task,
+            read_memory_snapshot=read_memory_snapshot,
+            read_recent_summary_snapshot=read_recent_summary_snapshot,
+            read_user_profile_snapshot=read_user_profile_snapshot,
+            read_active_task_snapshot=read_active_task_snapshot,
+        )
         self._skill_review_runner = run_skill_review
         self._should_run_skill_review = should_run_skill_review
         self._emit_run_event = emit_run_event
@@ -500,12 +544,7 @@ class CuratorService:
         )
         self.tasks = self._scheduler.tasks
         self.rerun_keys = self._scheduler.rerun_keys
-        self._maintenance_jobs: tuple[CuratorJob, ...] = (
-            CuratorJob("memory", "memory", read_memory_snapshot, self._memory_runner),
-            CuratorJob("recent_summary", "recent summary", read_recent_summary_snapshot, self._recent_summary_runner),
-            CuratorJob("user_profile", "user profile", read_user_profile_snapshot, self._user_profile_runner),
-            CuratorJob("active_task", "active task", read_active_task_snapshot, self._active_task_runner),
-        )
+        self._maintenance_jobs = self._maintenance_services.jobs()
         self._skill_job = CuratorJob("skills", "skills", read_skill_snapshot, self._skill_review_runner)
 
     @staticmethod

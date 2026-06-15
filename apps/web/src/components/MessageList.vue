@@ -18,6 +18,15 @@
           >
             {{ message.timeLabel }}
           </time>
+          <button
+            v-if="message.traceRunId"
+            class="message__trace-button"
+            type="button"
+            :title="copy.message.viewTraceTitle || copy.message.viewTrace"
+            @click="emit('view-trace', message.traceRunId)"
+          >
+            {{ copy.message.viewTrace }}
+          </button>
         </div>
         <div v-if="message.textBlocks.length" class="message__bubble">
           <MessageTextRenderer :blocks="message.textBlocks" :copy="copy" />
@@ -60,15 +69,33 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  runs: {
+    type: Array,
+    default: () => [],
+  },
   displayName: {
     type: String,
     required: true,
   },
 });
 
+const emit = defineEmits(["view-trace"]);
+
 const INTERNAL_BLOCK_RE = /<\s*(think|thinking|system-reminder)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
 const INTERNAL_OPEN_BLOCK_RE = /<\s*(think|thinking|system-reminder)\b[^>]*>[\s\S]*$/i;
 const TOOL_HISTORY_MARKER = "我嘗試了以下工具但未能完成任務：";
+const TRACE_MATCH_WINDOW_MS = 5000;
+
+const runReferences = computed(() => {
+  const references = new Map();
+  for (const run of props.runs) {
+    upsertRunReference(references, normalizeRunReference(run));
+  }
+  for (const entry of props.entries) {
+    upsertRunReference(references, normalizeRunReference(entry));
+  }
+  return Array.from(references.values()).sort((left, right) => Number(left.createdAt || 0) - Number(right.createdAt || 0));
+});
 
 function sanitizeVisibleText(value) {
   return summarizeVisibleToolHistory(String(value || ""))
@@ -159,29 +186,118 @@ function normalizeEntry(entry, index) {
     meta: entry.meta || (role === "user" ? props.displayName : "OpenSprite"),
     ...messageTimeFields(entry.createdAt ?? entry.created_at),
     content,
+    traceRunId: findTraceRunIdForEntry(entry, role),
   };
 }
 
-function isChatEntry(entry) {
-  const runId = String(entry?.runId || entry?.run_id || "").trim();
-  if (runId) {
-    return false;
+function getEntryRunId(entry) {
+  return String(
+    entry?.runId
+    || entry?.run_id
+    || entry?.metadata?.runId
+    || entry?.metadata?.run_id
+    || "",
+  ).trim();
+}
+
+function normalizeTimestamp(value) {
+  const timestamp = Number(value || 0);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return 0;
   }
+  return timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000;
+}
+
+function normalizeRunReference(source) {
+  const runId = getEntryRunId(source);
+  if (!runId) {
+    return null;
+  }
+  const createdAt = normalizeTimestamp(source?.createdAt ?? source?.created_at);
+  const updatedAt = normalizeTimestamp(source?.finishedAt ?? source?.finished_at ?? source?.updatedAt ?? source?.updated_at);
+  return {
+    runId,
+    status: String(source?.status || "").trim(),
+    createdAt,
+    updatedAt: updatedAt || createdAt,
+  };
+}
+
+function upsertRunReference(references, next) {
+  if (!next?.runId) {
+    return;
+  }
+  const existing = references.get(next.runId);
+  if (!existing) {
+    references.set(next.runId, next);
+    return;
+  }
+  existing.status = next.status || existing.status;
+  existing.createdAt = minPositiveTimestamp(existing.createdAt, next.createdAt);
+  existing.updatedAt = Math.max(Number(existing.updatedAt || 0), Number(next.updatedAt || 0));
+}
+
+function minPositiveTimestamp(left, right) {
+  const leftValue = Number(left || 0);
+  const rightValue = Number(right || 0);
+  if (leftValue > 0 && rightValue > 0) {
+    return Math.min(leftValue, rightValue);
+  }
+  return leftValue || rightValue || 0;
+}
+
+function isRunEntry(entry) {
+  const runId = String(entry?.runId || entry?.run_id || "").trim();
   const entryId = String(entry?.id || entry?.entry_id || entry?.entryId || "").trim();
   if (entryId.startsWith("run:")) {
+    return true;
+  }
+  const entryType = String(entry?.type || entry?.entry_type || entry?.entryType || "").trim();
+  if (entryType === "run") {
+    return true;
+  }
+  const text = sanitizeVisibleText(entry?.text || "");
+  const content = Array.isArray(entry?.content) ? entry.content : [];
+  return Boolean(runId && !text && content.length === 0);
+}
+
+function isChatEntry(entry) {
+  if (isRunEntry(entry)) {
     return false;
   }
   return entry?.role === "user" || entry?.role === "assistant";
 }
 
+function findTraceRunIdForEntry(entry, role) {
+  if (role !== "assistant") {
+    return "";
+  }
+  const directRunId = getEntryRunId(entry);
+  if (directRunId) {
+    return directRunId;
+  }
+  const createdAt = normalizeTimestamp(entry?.createdAt ?? entry?.created_at);
+  if (!createdAt) {
+    return "";
+  }
+  const matches = runReferences.value
+    .filter((run) => run.createdAt && run.updatedAt)
+    .filter((run) => createdAt >= run.createdAt - TRACE_MATCH_WINDOW_MS && createdAt <= run.updatedAt + TRACE_MATCH_WINDOW_MS)
+    .sort((left, right) => Math.abs(Number(left.updatedAt || 0) - createdAt) - Math.abs(Number(right.updatedAt || 0) - createdAt));
+  return matches[0]?.runId || "";
+}
+
 function normalizeMessage(message) {
   const text = sanitizeVisibleText(message.text);
+  const role = message.role === "user" ? "user" : "assistant";
   return {
     ...message,
+    role,
     text,
     textBlocks: buildMessageBlocks(text, message.id || "message"),
     ...messageTimeFields(message.createdAt ?? message.created_at),
     content: [],
+    traceRunId: findTraceRunIdForEntry(message, role),
   };
 }
 

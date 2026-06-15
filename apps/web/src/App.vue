@@ -49,6 +49,7 @@
       :prompts="prompts"
       :entries="currentEntries"
       :messages="currentMessages"
+      :runs="currentRuns"
       :notice="state.notice"
       :session-meta="sessionMeta"
       :runtime-hint="composerHint"
@@ -65,6 +66,7 @@
       @composer-keydown="handleComposerKeydown"
       @submit-message="submitMessage"
       @apply-command-hint="applyCommandHint"
+      @view-trace="viewTraceForRun"
     />
 
     <aside
@@ -80,21 +82,30 @@
         title="Drag to resize trace inspector"
         @pointerdown="beginTraceResize"
       ></button>
-      <div class="trace-sidebar__rail">
+      <div v-show="!traceInspectorCollapsed" class="trace-sidebar__rail">
         <button
           class="trace-sidebar__toggle"
           type="button"
           :aria-expanded="String(!traceInspectorCollapsed)"
-          :aria-label="traceInspectorCollapsed ? 'Open trace panel' : 'Close trace panel'"
-          :title="traceInspectorCollapsed ? 'Open trace panel' : 'Close trace panel'"
+          aria-label="Close trace panel"
+          title="Close trace panel"
           @click="toggleTraceInspectorCollapsed"
         >
-          <strong>{{ traceInspectorCollapsed ? 'Trace' : '關閉' }}</strong>
-          <span v-if="traceInspectorCollapsed" aria-hidden="true">Open</span>
+          <strong>關閉</strong>
         </button>
       </div>
 
       <div v-show="!traceInspectorCollapsed" class="trace-sidebar__body">
+        <RunHistorySelector
+          v-if="state.showRunHistory"
+          :copy="copy"
+          :runs="currentRuns"
+          :loading="currentRunsLoading"
+          :error="currentRunsError"
+          :current-run="currentRun"
+          @select-run="selectRun"
+        />
+
         <WorkStateCard
           v-if="state.showWorkState && currentWorkState"
           :copy="copy"
@@ -105,17 +116,12 @@
 
         <RunDetailsPanel
           :copy="copy"
-          :runs="currentRuns"
-          :runs-loading="currentRunsLoading"
-          :runs-error="currentRunsError"
           :current-run="currentRun"
           :run-timeline="currentRunTimeline"
           :run-summary="currentRunSummary"
-          :show-run-history="state.showRunHistory"
           :show-run-timeline="state.showRunTimeline"
           :show-run-summary="state.showRunSummary"
           :show-run-trace="state.showRunTrace"
-          @select-run="selectRun"
           @cancel-run="cancelRun"
           @cleanup-worktree="cleanupWorktreeSandbox"
           @resume-follow-up="resumeFollowUp"
@@ -242,6 +248,7 @@
 import { computed, ref } from "vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import RunDetailsPanel from "./components/RunDetailsPanel.vue";
+import RunHistorySelector from "./components/RunHistorySelector.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import SidebarNav from "./components/SidebarNav.vue";
 import ToastStack from "./components/ToastStack.vue";
@@ -376,6 +383,13 @@ const appShellStyle = computed(() => ({
   "--sidebar-width": sidebarWidth.value ? `${sidebarWidth.value}px` : undefined,
   "--trace-sidebar-width": traceInspectorWidth.value ? `${traceInspectorWidth.value}px` : undefined,
 }));
+
+function viewTraceForRun(runId) {
+  selectRun(runId);
+  if (traceInspectorCollapsed.value) {
+    toggleTraceInspectorCollapsed();
+  }
+}
 
 const confirmDialog = ref({
   open: false,

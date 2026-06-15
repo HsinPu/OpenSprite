@@ -1502,30 +1502,6 @@ button:disabled {
   border-right: 0;
 }
 
-@media (min-width: 861px) {
-  .trace-sidebar[data-collapsed="true"] .trace-sidebar__toggle {
-    display: inline-flex;
-    width: auto;
-    min-height: 34px;
-    align-items: center;
-    gap: 8px;
-    padding: 0 10px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-  }
-
-  .trace-sidebar[data-collapsed="true"] .trace-sidebar__toggle strong {
-    writing-mode: horizontal-tb;
-    letter-spacing: 0;
-  }
-
-  .trace-sidebar[data-collapsed="true"] .trace-sidebar__toggle span {
-    width: auto;
-    padding: 2px 6px;
-  }
-}
-
 .trace-sidebar:not([data-collapsed="true"]) .trace-sidebar__rail {
   position: absolute;
   top: 12px;
@@ -1563,19 +1539,6 @@ button:disabled {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
-.trace-sidebar__toggle span {
-  width: 100%;
-  padding: 2px 0;
-  border-radius: 999px;
-  color: var(--accent-blue);
-  background: color-mix(in srgb, var(--accent-blue) 9%, transparent);
-  font-size: 0.56rem;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0;
-  writing-mode: horizontal-tb;
-}
-
 .trace-sidebar__toggle strong {
   writing-mode: vertical-rl;
   text-orientation: mixed;
@@ -1592,11 +1555,6 @@ button:disabled {
   writing-mode: horizontal-tb;
   letter-spacing: 0;
   color: var(--text-muted);
-}
-
-.trace-sidebar:not([data-collapsed="true"]) .trace-sidebar__toggle span {
-  width: auto;
-  padding: 2px 6px;
 }
 
 .trace-sidebar__body {
@@ -1983,6 +1941,26 @@ button:disabled {
   font-size: 0.74rem;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.message__trace-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  color: var(--accent-dark);
+  background: var(--surface-subtle);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.message__trace-button:not(:disabled):hover {
+  border-color: var(--accent-border);
+  color: var(--accent-dark);
+  background: var(--accent-soft);
 }
 
 .message__bubble {
@@ -6721,22 +6699,6 @@ textarea:focus-visible {
     gap: 8px;
     min-height: 34px;
     padding: 0 12px;
-  }
-
-  .trace-sidebar[data-collapsed="true"] .trace-sidebar__toggle {
-    min-width: 96px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-  }
-
-  .trace-sidebar__toggle span {
-    padding: 2px 6px;
-    border-radius: 999px;
-    color: var(--accent-blue);
-    background: color-mix(in srgb, var(--accent-blue) 9%, transparent);
-    font-size: 0.64rem;
-    letter-spacing: 0.06em;
   }
 
   .trace-sidebar__toggle strong {

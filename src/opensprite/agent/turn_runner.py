@@ -134,7 +134,7 @@ class AgentTurnRunner:
         auto_continue: AutoContinueService,
         work_progress: WorkProgressService,
         connect_mcp: Callable[[], Awaitable[None]],
-        save_message: Callable[..., Awaitable[None]],
+        save_user_message: Callable[..., Awaitable[None]],
         emit_run_event: Callable[..., Awaitable[None]],
         call_llm: Callable[..., Awaitable[ExecutionResult]],
         transcribe_audio: Callable[[list[str]], Awaitable[str]],
@@ -183,7 +183,7 @@ class AgentTurnRunner:
             format_log_preview=format_log_preview,
         )
         self._connect_mcp = connect_mcp
-        self._save_message = save_message
+        self._save_user_message = save_user_message
         self._emit_run_event = emit_run_event
         self._call_llm = call_llm
         self.audio_input = AudioInputPreprocessor(transcribe_audio)
@@ -404,7 +404,7 @@ class AgentTurnRunner:
             audio_files=turn.audio_files,
             video_files=turn.video_files,
         )
-        await self._save_message(turn.session_id, "user", media_history_content, metadata=turn.user_metadata)
+        await self._save_user_message(turn.session_id, media_history_content, metadata=turn.user_metadata)
         response = self._media_saved_ack()
         return await self.response_finalizer.finalize(
             session_id=turn.session_id,
@@ -432,7 +432,7 @@ class AgentTurnRunner:
     ) -> AssistantMessage:
         """Persist a turn and return the configured setup hint when no LLM is available."""
         logger.warning("[{}] agent.skip | reason={}", turn.session_id, LLM_NOT_CONFIGURED_LOG_REASON)
-        await self._save_message(turn.session_id, "user", user_message.text, metadata=turn.user_metadata)
+        await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
         response = self._llm_not_configured_message()
         return await self.response_finalizer.finalize(
             session_id=turn.session_id,
@@ -474,7 +474,7 @@ class AgentTurnRunner:
             "task_intent": task_intent.to_metadata(),
             "task_context": task_context_decision.to_metadata(),
         }
-        await self._save_message(turn.session_id, "user", user_message.text, metadata=turn.user_metadata)
+        await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
         await self._emit_run_event(
             turn.session_id,
             run_id,
@@ -687,7 +687,7 @@ class AgentTurnRunner:
         await self._connect_mcp()
 
         # The current user message is persisted before building the prompt so history/search stay current.
-        await self._save_message(turn.session_id, "user", user_message.text, metadata=turn.user_metadata)
+        await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
 
         logger.info(f"[{turn.session_id}] agent.run | status=processing")
         await self._emit_run_event(

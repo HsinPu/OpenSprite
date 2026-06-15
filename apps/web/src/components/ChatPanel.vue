@@ -25,7 +25,14 @@
           @apply-prompt="$emit('apply-prompt', $event)"
         />
 
-        <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
+        <MessageList
+          :copy="copy"
+          :entries="entries"
+          :messages="messages"
+          :runs="runs"
+          :display-name="displayName"
+          @view-trace="$emit('view-trace', $event)"
+        />
       </div>
     </section>
 
@@ -68,6 +75,10 @@ const props = defineProps({
   messages: {
     type: Array,
     required: true,
+  },
+  runs: {
+    type: Array,
+    default: () => [],
   },
   notice: {
     type: Object,
@@ -118,6 +129,7 @@ const emit = defineEmits([
   "composer-keydown",
   "submit-message",
   "apply-command-hint",
+  "view-trace",
 ]);
 
 </script>
