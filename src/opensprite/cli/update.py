@@ -91,7 +91,7 @@ def build_frontend(
     npm_executable: str | None = None,
 ) -> str | None:
     """Install and build the bundled web frontend when its source is present."""
-    web_dir = project_root / "apps" / "web"
+    web_dir = project_root / "frontend"
     if not (web_dir / "package.json").exists():
         return None
 

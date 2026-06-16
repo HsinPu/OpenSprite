@@ -198,7 +198,7 @@ function Install-PythonPackage {
 function Install-WebFrontend {
     if ($NoWeb) { return }
 
-    $webDir = Join-Path $InstallDir "apps\web"
+    $webDir = Join-Path $InstallDir "frontend"
     if (-not (Test-Path (Join-Path $webDir "package.json"))) { return }
 
     $npm = Resolve-Npm

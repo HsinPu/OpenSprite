@@ -148,11 +148,10 @@ def test_snapshot_workspace_for_session_copies_repo_under_session_workspace(tmp_
     (source / "AGENTS.md").write_text("repo instructions", encoding="utf-8")
     (source / ".git").mkdir()
     (source / ".git" / "config").write_text("secret-ish", encoding="utf-8")
-    (source / "apps").mkdir()
-    (source / "apps" / "web").mkdir()
-    (source / "apps" / "web" / "package.json").write_text("{}", encoding="utf-8")
-    (source / "apps" / "web" / "node_modules").mkdir()
-    (source / "apps" / "web" / "node_modules" / "leftpad.js").write_text("", encoding="utf-8")
+    (source / "frontend").mkdir()
+    (source / "frontend" / "package.json").write_text("{}", encoding="utf-8")
+    (source / "frontend" / "node_modules").mkdir()
+    (source / "frontend" / "node_modules" / "leftpad.js").write_text("", encoding="utf-8")
     (source / "tmp").mkdir()
     (source / "tmp" / "screenshot.png").write_text("", encoding="utf-8")
     config_path = tmp_path / "app-home" / "opensprite.json"
@@ -162,9 +161,9 @@ def test_snapshot_workspace_for_session_copies_repo_under_session_workspace(tmp_
     assert metadata is not None
     snapshot_root = tmp_path / "app-home" / "workspace" / "sessions" / "web" / "smoke" / "repo"
     assert snapshot_root.joinpath("AGENTS.md").read_text(encoding="utf-8") == "repo instructions"
-    assert snapshot_root.joinpath("apps", "web", "package.json").exists()
+    assert snapshot_root.joinpath("frontend", "package.json").exists()
     assert not snapshot_root.joinpath(".git").exists()
-    assert not snapshot_root.joinpath("apps", "web", "node_modules").exists()
+    assert not snapshot_root.joinpath("frontend", "node_modules").exists()
     assert not snapshot_root.joinpath("tmp").exists()
     assert metadata["path"] == "repo"
     assert metadata["files"] == 2

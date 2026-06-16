@@ -46,7 +46,7 @@ def test_update_checkout_builds_web_frontend(tmp_path, monkeypatch):
     root = tmp_path
     (root / ".git").mkdir()
     (root / "pyproject.toml").write_text("[project]\nname='opensprite'\n", encoding="utf-8")
-    web_dir = root / "apps" / "web"
+    web_dir = root / "frontend"
     web_dir.mkdir(parents=True)
     (web_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
     (web_dir / "package-lock.json").write_text("{}", encoding="utf-8")

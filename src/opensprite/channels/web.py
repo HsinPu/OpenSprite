@@ -1206,7 +1206,7 @@ class WebAdapter(MessageAdapter):
                 text=(
                     "OpenSprite web frontend is not built yet. "
                     "Install Node.js 20.19+ or 22.12+ and npm if needed, "
-                    f"then restart the gateway or run `{npm_build}` in apps/web."
+                    f"then restart the gateway or run `{npm_build}` in frontend."
                 )
             )
         return web.FileResponse(self._resolve_frontend_asset("index.html"))

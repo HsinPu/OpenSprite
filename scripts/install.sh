@@ -531,7 +531,7 @@ install_python_package() {
 }
 
 install_web_frontend() {
-  local web_dir="$INSTALL_DIR/apps/web"
+  local web_dir="$INSTALL_DIR/frontend"
   if [[ ! -f "$web_dir/package.json" ]]; then
     return 0
   fi

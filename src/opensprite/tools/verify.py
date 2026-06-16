@@ -412,7 +412,7 @@ class VerifyTool(Tool):
         elif target.is_dir():
             candidates.append(target)
 
-        candidates.append(workspace / "apps" / "web")
+        candidates.append(workspace / "frontend")
         candidates.append(workspace)
 
         seen: set[Path] = set()

@@ -1,7 +1,7 @@
 {
   "name": "@opensprite/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenSprite browser client source",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

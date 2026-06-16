@@ -2010,7 +2010,7 @@ async def _run_web_sessions_api():
             next_step="verify",
             pending_steps=("build", "verify"),
             file_change_count=2,
-            touched_paths=("apps/web/src/App.vue",),
+            touched_paths=("frontend/src/App.vue",),
             verification_attempted=True,
             verification_passed=False,
             delegated_tasks=(
@@ -2052,7 +2052,7 @@ async def _run_web_sessions_api():
         "web:browser-new",
         "run-new-latest",
         "apply_patch",
-        "apps/web/src/App.vue",
+        "frontend/src/App.vue",
         "modify",
         diff="@@ -1 +1 @@\n-old\n+new\n",
         created_at=203.0,
@@ -2278,7 +2278,7 @@ async def _run_web_sessions_api():
             "resume_hint": "Continue with frontend validation.",
             "last_progress_signals": [],
             "file_change_count": 2,
-            "touched_paths": ["apps/web/src/App.vue"],
+            "touched_paths": ["frontend/src/App.vue"],
             "verification_attempted": True,
             "verification_passed": False,
             "follow_up_workflow": "implement_then_review",
@@ -2366,7 +2366,7 @@ async def _run_web_sessions_api():
             "change_count": 1,
             "additions": 1,
             "deletions": 1,
-            "paths": ["apps/web/src/App.vue"],
+            "paths": ["frontend/src/App.vue"],
             "actions": {"modify": 1},
         }
 

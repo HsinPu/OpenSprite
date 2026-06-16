@@ -28,8 +28,8 @@ def resolve_frontend_source_dir(config: Mapping[str, Any], *, module_path: Path)
     if not configured_static:
         candidates.extend(
             [
-                module_path.parents[3] / "apps" / "web",
-                Path.cwd() / "apps" / "web",
+                module_path.parents[3] / "frontend",
+                Path.cwd() / "frontend",
             ]
         )
 
@@ -182,8 +182,8 @@ def resolve_frontend_dir(config: Mapping[str, Any], *, module_path: Path) -> Pat
 
     candidates.extend(
         [
-            module_path.parents[3] / "apps" / "web" / "dist",
-            Path.cwd() / "apps" / "web" / "dist",
+            module_path.parents[3] / "frontend" / "dist",
+            Path.cwd() / "frontend" / "dist",
         ]
     )
 

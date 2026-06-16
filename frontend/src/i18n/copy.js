@@ -596,7 +596,7 @@ export const DISPLAY_COPY = {
       server: "伺服器",
       close: "關閉",
       closeAria: "關閉設定",
-      version: "v0.1.0",
+      version: "v0.1.1",
       general: {
         language: {
           title: "語言",
@@ -1884,7 +1884,7 @@ export const DISPLAY_COPY = {
       server: "Server",
       close: "Close",
       closeAria: "Close settings",
-      version: "v0.1.0",
+      version: "v0.1.1",
       general: {
         language: {
           title: "Language",

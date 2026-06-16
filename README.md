@@ -272,7 +272,7 @@ python -m pip install -e ".[dev,vector]"
 python -m pytest
 ```
 
-Web app checks live in `apps/web`:
+Web app checks live in `frontend`:
 
 ```bash
 npm ci

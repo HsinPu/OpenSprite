@@ -1,6 +1,6 @@
 """Path classification helpers used by completion evidence checks."""
 
-WEB_APP_ROOT_PATH = "apps/web"
+WEB_APP_ROOT_PATH = "frontend"
 TEST_PATH_PREFIX = "tests/"
 PYTHON_FILE_SUFFIX = ".py"
 DELEGATED_REVIEW_PATH_SUFFIXES = (

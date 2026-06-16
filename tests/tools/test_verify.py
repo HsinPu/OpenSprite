@@ -192,7 +192,7 @@ def test_verify_pytest_returns_structured_error_when_timed_out(tmp_path):
 
 
 def test_verify_web_build_uses_package_json_build_script(tmp_path):
-    package_dir = tmp_path / "apps" / "web"
+    package_dir = tmp_path / "frontend"
     package_dir.mkdir(parents=True)
     (package_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
     tool = VerifyTool(workspace=tmp_path)
@@ -227,7 +227,7 @@ def test_verify_web_build_reports_missing_package_json(tmp_path):
 
 
 def test_verify_web_build_reports_missing_script(tmp_path):
-    package_dir = tmp_path / "apps" / "web"
+    package_dir = tmp_path / "frontend"
     package_dir.mkdir(parents=True)
     (package_dir / "package.json").write_text('{"scripts":{"test":"vitest"}}', encoding="utf-8")
     tool = VerifyTool(workspace=tmp_path)
@@ -241,7 +241,7 @@ def test_verify_web_build_reports_missing_script(tmp_path):
 
 
 def test_verify_web_build_reports_missing_npm(tmp_path):
-    package_dir = tmp_path / "apps" / "web"
+    package_dir = tmp_path / "frontend"
     package_dir.mkdir(parents=True)
     (package_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
     tool = VerifyTool(workspace=tmp_path)
@@ -256,7 +256,7 @@ def test_verify_web_build_reports_missing_npm(tmp_path):
 
 
 def test_verify_web_smoke_uses_package_json_smoke_script(tmp_path):
-    package_dir = tmp_path / "apps" / "web"
+    package_dir = tmp_path / "frontend"
     package_dir.mkdir(parents=True)
     (package_dir / "package.json").write_text('{"scripts":{"test:smoke":"node smoke.mjs"}}', encoding="utf-8")
     tool = VerifyTool(workspace=tmp_path)

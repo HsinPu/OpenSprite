@@ -16,10 +16,10 @@ def test_path_requires_delegated_review_for_code_and_key_config_paths():
 
 
 def test_path_classification_helpers():
-    assert is_web_app_path("\\apps\\web\\src\\App.vue\\")
+    assert is_web_app_path("\\frontend\\src\\App.vue\\")
     assert not is_web_app_path("src/opensprite/channels/web.py")
     assert is_python_file_path("\\src\\opensprite\\runtime.py\\")
-    assert not is_python_file_path("apps/web/src/App.vue")
+    assert not is_python_file_path("frontend/src/App.vue")
     assert is_python_test_path("\\tests\\agent\\test_completion_gate.py\\")
     assert not is_python_test_path("src/opensprite/runtime.py")
 
