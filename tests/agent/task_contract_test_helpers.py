@@ -13,7 +13,7 @@ from opensprite.agent.task.resources import ResourceIndex
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _WEB_RE = re.compile(r"\b(?:web|internet|online|reddit|url|link|news|search|sources?|latest|current|recent|stock|release|releases)\b|(?:上網|網路|搜尋|來源|連結|即時|股價|市值|匯率|報價|天氣|新聞)", re.IGNORECASE)
-_WORKSPACE_RE = re.compile(r"\b(?:repo|repository|codebase|file|files|function|class|pytest|src/|tests/|apps/)\b|[\w.-]+\.(?:py|js|ts|vue|json|md|toml|yaml|yml)\b|(?:程式|程式碼|檔案|函式|專案|測試|設定)", re.IGNORECASE)
+_WORKSPACE_RE = re.compile(r"\b(?:repo|repository|codebase|file|files|function|class|pytest|src/|tests/|frontend/|apps/)\b|[\w.-]+\.(?:py|js|jsx|ts|tsx|vue|json|md|toml|yaml|yml)\b|(?:程式|程式碼|檔案|函式|專案|測試|設定)", re.IGNORECASE)
 _HISTORY_RE = re.compile(r"\b(?:again|before|earlier|history|previous|last time)\b|(?:之前|先前|剛剛|上次|剛才|前面)", re.IGNORECASE)
 _NO_WEB_RE = re.compile(r"\b(?:do not|don't|dont|without|no)\b[^.。]*\b(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|sources?)\b|(?:不要|不用|不需要|別)(?:上網|搜尋|查網路)", re.IGNORECASE)
 _NO_WORKSPACE_RE = re.compile(r"\b(?:do not|don't|dont|without|no)\s+(?:read\s+)?(?:files?|workspace|repo)\b|(?:不要|不用|不需要|別)(?:讀檔|看檔|改檔|看程式碼)", re.IGNORECASE)

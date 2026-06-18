@@ -703,7 +703,7 @@ async def _run_web_source_static_dir_serves_dist(tmp_path: Path):
     dist_dir.mkdir(parents=True)
     (source_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
     (source_dir / "index.html").write_text(
-        '<!doctype html><html><body><script type="module" src="/src/main.js"></script></body></html>',
+        '<!doctype html><html><body><script type="module" src="/src/main.tsx"></script></body></html>',
         encoding="utf-8",
     )
     (dist_dir / "index.html").write_text(
@@ -738,7 +738,7 @@ async def _run_web_source_static_dir_serves_dist(tmp_path: Path):
                 assert resp.status == 200
                 html = await resp.text()
                 assert "OpenSprite built shell" in html
-                assert "/src/main.js" not in html
+                assert "/src/main.tsx" not in html
     finally:
         adapter_task.cancel()
         try:
@@ -2010,7 +2010,7 @@ async def _run_web_sessions_api():
             next_step="verify",
             pending_steps=("build", "verify"),
             file_change_count=2,
-            touched_paths=("frontend/src/App.vue",),
+            touched_paths=("frontend/src/App.tsx",),
             verification_attempted=True,
             verification_passed=False,
             delegated_tasks=(
@@ -2052,7 +2052,7 @@ async def _run_web_sessions_api():
         "web:browser-new",
         "run-new-latest",
         "apply_patch",
-        "frontend/src/App.vue",
+        "frontend/src/App.tsx",
         "modify",
         diff="@@ -1 +1 @@\n-old\n+new\n",
         created_at=203.0,
@@ -2278,7 +2278,7 @@ async def _run_web_sessions_api():
             "resume_hint": "Continue with frontend validation.",
             "last_progress_signals": [],
             "file_change_count": 2,
-            "touched_paths": ["frontend/src/App.vue"],
+            "touched_paths": ["frontend/src/App.tsx"],
             "verification_attempted": True,
             "verification_passed": False,
             "follow_up_workflow": "implement_then_review",
@@ -2366,7 +2366,7 @@ async def _run_web_sessions_api():
             "change_count": 1,
             "additions": 1,
             "deletions": 1,
-            "paths": ["frontend/src/App.vue"],
+            "paths": ["frontend/src/App.tsx"],
             "actions": {"modify": 1},
         }
 

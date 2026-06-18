@@ -1100,7 +1100,7 @@ def test_completion_gate_prefers_web_build_for_web_changes():
         execution_result=ExecutionResult(
             content="Updated the web UI.",
             file_change_count=1,
-            touched_paths=("frontend/src/App.vue",),
+            touched_paths=("frontend/src/App.tsx",),
             task_contract=contract,
         ),
     )

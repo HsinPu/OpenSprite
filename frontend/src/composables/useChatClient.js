@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, silentRef, watch } from "../lib/reactiveCompat";
 import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
@@ -1012,9 +1012,9 @@ export function useChatClient() {
   const prompts = computed(() => copy.value.prompts);
 
   const messageText = ref("");
-  const messageInput = ref(null);
-  const messageStage = ref(null);
-  const messageStagePinnedToBottom = ref(true);
+  const messageInput = silentRef(null);
+  const messageStage = silentRef(null);
+  const messageStagePinnedToBottom = silentRef(true);
   const toasts = ref([]);
   const sidebarOpen = ref(false);
   const sidebarCollapsed = ref(readStoredBoolean(STORAGE_KEYS.sidebarCollapsed, false));
