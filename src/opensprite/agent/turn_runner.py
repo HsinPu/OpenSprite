@@ -223,6 +223,26 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
 
+    async def _emit_auto_continue_event(
+        self,
+        *,
+        turn: PreparedTurnInput,
+        run_id: str,
+        event_type: str,
+        decision: Any,
+        completion_result: CompletionGateResult,
+    ) -> None:
+        await self._emit_turn_event(
+            turn,
+            run_id,
+            event_type,
+            {
+                **decision.to_metadata(),
+                TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
+                TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
+            },
+        )
+
     @staticmethod
     def is_media_only_message(user_message: UserMessage) -> bool:
         """Return whether a turn only carries media without user instructions."""
@@ -895,15 +915,12 @@ class AgentTurnRunner:
                 compaction_handoff=aggregate_result.compaction_handoff,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
-                await self._emit_turn_event(
-                    turn,
-                    run_id,
-                    AUTO_CONTINUE_SCHEDULED_EVENT,
-                    {
-                        **decision.to_metadata(),
-                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-                    },
+                await self._emit_auto_continue_event(
+                    turn=turn,
+                    run_id=run_id,
+                    event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
+                    decision=decision,
+                    completion_result=completion_result,
                 )
                 auto_continue_attempts += 1
                 direct_actions_used += 1
@@ -919,15 +936,12 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.direct_verify_action:
-                await self._emit_turn_event(
-                    turn,
-                    run_id,
-                    AUTO_CONTINUE_SCHEDULED_EVENT,
-                    {
-                        **decision.to_metadata(),
-                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-                    },
+                await self._emit_auto_continue_event(
+                    turn=turn,
+                    run_id=run_id,
+                    event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
+                    decision=decision,
+                    completion_result=completion_result,
                 )
                 auto_continue_attempts += 1
                 direct_actions_used += 1
@@ -949,15 +963,12 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.prompt:
-                await self._emit_turn_event(
-                    turn,
-                    run_id,
-                    AUTO_CONTINUE_SCHEDULED_EVENT,
-                    {
-                        **decision.to_metadata(),
-                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-                    },
+                await self._emit_auto_continue_event(
+                    turn=turn,
+                    run_id=run_id,
+                    event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
+                    decision=decision,
+                    completion_result=completion_result,
                 )
                 auto_continue_attempts += 1
                 if direct_resume_context is not None:
@@ -973,15 +984,12 @@ class AgentTurnRunner:
                 continue
 
             if decision.emit_skipped_event:
-                await self._emit_turn_event(
-                    turn,
-                    run_id,
-                    AUTO_CONTINUE_SKIPPED_EVENT,
-                    {
-                        **decision.to_metadata(),
-                        TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                        TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-                    },
+                await self._emit_auto_continue_event(
+                    turn=turn,
+                    run_id=run_id,
+                    event_type=AUTO_CONTINUE_SKIPPED_EVENT,
+                    decision=decision,
+                    completion_result=completion_result,
                 )
             break
 
