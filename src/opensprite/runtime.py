@@ -19,11 +19,11 @@ from .media import (
     OpenAICompatibleVideoProvider,
     create_image_analysis_provider,
 )
+from .search.embedding_factory import create_search_embedding_provider
 from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
 from .bus.dispatcher import MessageQueue
 from .config import Config
-from .llms.provider_specs import find_provider, provider_spec_default_base_url
 from .llms import UnconfiguredLLM
 from .utils.log import logger
 
@@ -91,35 +91,6 @@ def create_search_store(config: Config) -> SearchStore | None:
         )
 
     raise ValueError(f"Unsupported search backend: {search_backend}")
-
-
-def create_search_embedding_provider(config: Config):
-    """Create the optional embedding provider for hybrid search."""
-    embedding_config = getattr(config.search, "embedding", None)
-    if not embedding_config or not embedding_config.enabled:
-        return None
-
-    active_llm = config.llm.get_active()
-    api_key = embedding_config.api_key or active_llm.api_key
-    base_url = embedding_config.base_url or active_llm.base_url
-    if not api_key:
-        raise ValueError("search.embedding.api_key is required when enabled=true")
-
-    from .search.embeddings import OpenAIEmbeddingProvider
-
-    provider_spec = find_provider(
-        api_key=api_key,
-        base_url=base_url or "",
-        model=embedding_config.model,
-        provider_name=embedding_config.provider,
-    )
-    return OpenAIEmbeddingProvider(
-        api_key=api_key,
-        model=embedding_config.model,
-        provider_name=provider_spec.name,
-        base_url=base_url or provider_spec_default_base_url(provider_spec),
-        batch_size=embedding_config.batch_size,
-    )
 
 
 def should_start_search_queue_worker(search_store: SearchStore | None) -> bool:
