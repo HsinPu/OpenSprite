@@ -16,6 +16,7 @@ from .web_search_freshness import (
     effective_freshness as _effective_freshness,
     freshness_params as _freshness_params,
     normalize_freshness as _normalize_freshness,
+    web_search_request as _web_search_request,
 )
 from .web_search_duckduckgo import search_duckduckgo
 from .web_search_payloads import (
@@ -86,8 +87,13 @@ class WebSearchTool(Tool):
         return _clean_text_values(self.config.searxng_categories)
 
     async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
-        n = min(max(count or self.max_results, 1), self.max_results)
-        freshness = _effective_freshness(kwargs.get("freshness"), self.config.freshness, query=query)
+        n, freshness = _web_search_request(
+            query=query,
+            count=count,
+            max_results=self.max_results,
+            freshness=kwargs.get("freshness"),
+            default_freshness=self.config.freshness,
+        )
 
         provider = self.provider
 

@@ -50,6 +50,20 @@ def effective_freshness(value: Any, default: str = "year", *, query: Any = None)
     return AUTO_FRESHNESS
 
 
+def web_search_request(
+    *,
+    query: str,
+    count: Any,
+    max_results: int,
+    freshness: Any,
+    default_freshness: str,
+) -> tuple[int, str]:
+    return (
+        min(max(count or max_results, 1), max_results),
+        effective_freshness(freshness, default_freshness, query=query),
+    )
+
+
 def freshness_params(provider: str, freshness: str) -> dict[str, str]:
     """Return provider-specific recency parameters for supported engines."""
     normalized = normalize_freshness(freshness, default="none")
