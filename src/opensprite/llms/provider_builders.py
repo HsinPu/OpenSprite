@@ -26,6 +26,21 @@ def create_responses_llm(
     )
 
 
+def _openai_compatible_kwargs(
+    spec: ProviderSpec,
+    *,
+    api_key: str,
+    model: str,
+    base_url: str,
+    api_mode: str | None,
+) -> dict[str, object]:
+    return {
+        "api_key": api_key,
+        "base_url": base_url or provider_spec_default_base_url(spec, api_mode=api_mode),
+        "default_model": model,
+    }
+
+
 def create_llm_for_spec(
     spec: ProviderSpec,
     *,
@@ -53,24 +68,9 @@ def create_llm_for_spec(
             reasoning_effort=reasoning_effort,
         )
 
-    if spec.name == "minimax":
-        return OpenAILLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec, api_mode=api_mode),
-            default_model=model,
-        )
-
+    kwargs = _openai_compatible_kwargs(spec, api_key=api_key, model=model, base_url=base_url, api_mode=api_mode)
     if spec.name == "copilot":
-        return OpenAILLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec),
-            default_model=model,
-            default_headers=copilot_request_headers(),
-        )
-
-    return OpenAILLM(
-        api_key=api_key,
-        base_url=base_url or provider_spec_default_base_url(spec),
-        default_model=model,
-        reasoning_effort=reasoning_effort,
-    )
+        kwargs["default_headers"] = copilot_request_headers()
+    if spec.name not in {"minimax", "copilot"}:
+        kwargs["reasoning_effort"] = reasoning_effort
+    return OpenAILLM(**kwargs)
