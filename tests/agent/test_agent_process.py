@@ -30,6 +30,7 @@ from opensprite.agent.task.contract import (
     TaskContract,
 )
 from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.agent.turn_result_updates import merge_workflow_outcomes
 from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
@@ -591,7 +592,7 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
 
 
 def test_merge_workflow_outcomes_normalizes_workflow_run_ids():
-    merged = AgentTurnRunner._merge_workflow_outcomes(
+    merged = merge_workflow_outcomes(
         (
             {"workflow_run_id": " workflow_review ", "status": "initial"},
             {"workflow_run_id": "", "status": "ignored"},

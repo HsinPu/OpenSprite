@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -74,6 +74,12 @@ from .turn_input import (
     PreparedTurnInput,
     message_with_runtime_context,
 )
+from .turn_result_updates import (
+    merge_delegated_task_updates,
+    merge_workflow_outcomes,
+    with_delegated_tasks,
+    with_workflow_outcomes,
+)
 from .turn_outcome import (
     LLM_NOT_CONFIGURED_LOG_REASON,
     LLM_NOT_CONFIGURED_TURN_REASON,
@@ -94,11 +100,9 @@ from .turn_outcome import (
     final_response_after_exhausted_continuation,
     is_tool_backed_task_contract,
     task_checkpoint_metadata,
-    workflow_run_id,
 )
 from .run_lifecycle import RunLifecycleService
 from .response_finalizer import AgentResponseFinalizer
-from .workflow import is_workflow_failed_status
 
 
 @dataclass(frozen=True)
@@ -524,20 +528,20 @@ class AgentTurnRunner:
         aggregate_result = self._aggregate_execution_results(execution_results, content=response)
         delegated_task_updates = self._consume_delegated_task_updates(run_id)
         if delegated_task_updates:
-            collected_delegated_tasks = self._merge_delegated_task_updates(
+            collected_delegated_tasks = merge_delegated_task_updates(
                 collected_delegated_tasks,
                 delegated_task_updates,
             )
         workflow_outcomes = self._consume_workflow_outcomes(run_id)
         if workflow_outcomes:
-            collected_workflow_outcomes = self._merge_workflow_outcomes(
+            collected_workflow_outcomes = merge_workflow_outcomes(
                 collected_workflow_outcomes,
                 workflow_outcomes,
             )
         if collected_delegated_tasks:
-            aggregate_result = self._with_delegated_tasks(aggregate_result, collected_delegated_tasks)
+            aggregate_result = with_delegated_tasks(aggregate_result, collected_delegated_tasks)
         if collected_workflow_outcomes:
-            aggregate_result = self._with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
+            aggregate_result = with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
 
         completion_result = await self._evaluate_completion(
             task_intent=task_intent,
@@ -1152,20 +1156,20 @@ class AgentTurnRunner:
         direct_result = ExecutionResult(content=workflow_result, executed_tool_calls=1)
         delegated_task_updates = self._consume_delegated_task_updates(run_id)
         if delegated_task_updates:
-            collected_delegated_tasks = self._merge_delegated_task_updates(
+            collected_delegated_tasks = merge_delegated_task_updates(
                 collected_delegated_tasks,
                 delegated_task_updates,
             )
         workflow_outcomes = self._consume_workflow_outcomes(run_id)
         if workflow_outcomes:
-            collected_workflow_outcomes = self._merge_workflow_outcomes(
+            collected_workflow_outcomes = merge_workflow_outcomes(
                 collected_workflow_outcomes,
                 workflow_outcomes,
             )
         if collected_delegated_tasks:
-            direct_result = self._with_delegated_tasks(direct_result, collected_delegated_tasks)
+            direct_result = with_delegated_tasks(direct_result, collected_delegated_tasks)
         if collected_workflow_outcomes:
-            direct_result = self._with_workflow_outcomes(direct_result, collected_workflow_outcomes)
+            direct_result = with_workflow_outcomes(direct_result, collected_workflow_outcomes)
         return workflow_result, direct_result, collected_delegated_tasks, collected_workflow_outcomes
 
     async def _run_direct_verification(
@@ -1179,98 +1183,6 @@ class AgentTurnRunner:
             tuple(str(item or "").strip() for item in (direct_verify.get("pytest_args") or ()) if str(item or "").strip()),
         )
         return result.content, result
-
-    @staticmethod
-    def _with_delegated_tasks(
-        result: ExecutionResult,
-        delegated_tasks: tuple[StoredDelegatedTask, ...],
-    ) -> ExecutionResult:
-        selected_task = selected_delegated_task(delegated_tasks)
-        return replace(
-            result,
-            delegated_tasks=delegated_tasks,
-            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
-            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
-        )
-
-    @staticmethod
-    def _with_workflow_outcomes(
-        result: ExecutionResult,
-        workflow_outcomes: tuple[dict[str, Any], ...],
-    ) -> ExecutionResult:
-        return replace(result, workflow_outcomes=workflow_outcomes)
-
-    @staticmethod
-    def _merge_delegated_task_updates(
-        existing: tuple[StoredDelegatedTask, ...],
-        updates: tuple[StoredDelegatedTask, ...],
-    ) -> tuple[StoredDelegatedTask, ...]:
-        if not updates:
-            return existing
-        by_id = {task.task_id: task for task in existing if task.task_id}
-        order = [task.task_id for task in existing if task.task_id]
-        for update in updates:
-            if not update.task_id:
-                continue
-            previous = by_id.pop(update.task_id, None)
-            if update.task_id in order:
-                order.remove(update.task_id)
-            order.append(update.task_id)
-            by_id[update.task_id] = StoredDelegatedTask(
-                task_id=update.task_id,
-                prompt_type=update.prompt_type or (previous.prompt_type if previous is not None else None),
-                status=update.status or (previous.status if previous is not None else "unknown"),
-                selected=bool(update.selected),
-                summary=update.summary or (previous.summary if previous is not None else ""),
-                error=(
-                    update.error
-                    if update.error
-                    else ""
-                    if update.status and not is_workflow_failed_status(update.status)
-                    else previous.error if previous is not None else ""
-                ),
-                child_session_id=update.child_session_id or (previous.child_session_id if previous is not None else None),
-                last_child_run_id=update.last_child_run_id or (previous.last_child_run_id if previous is not None else None),
-                metadata={**(previous.metadata if previous is not None else {}), **dict(update.metadata or {})},
-                created_at=(
-                    previous.created_at
-                    if previous is not None and previous.created_at
-                    else update.created_at
-                ),
-                updated_at=update.updated_at or (previous.updated_at if previous is not None else 0.0),
-            )
-        tasks = tuple(by_id[task_id] for task_id in order if task_id in by_id)
-        selected_task = selected_delegated_task(tuple(task for task in reversed(tasks)))
-        if selected_task is None:
-            return tasks
-        return tuple(replace(task, selected=task.task_id == selected_task.task_id) for task in tasks)
-
-    @staticmethod
-    def _merge_workflow_outcomes(
-        existing: tuple[dict[str, Any], ...],
-        updates: tuple[dict[str, Any], ...],
-    ) -> tuple[dict[str, Any], ...]:
-        by_id = {
-            workflow_run_id(item): dict(item)
-            for item in existing
-            if isinstance(item, dict) and workflow_run_id(item)
-        }
-        order = [
-            workflow_run_id(item)
-            for item in existing
-            if isinstance(item, dict) and workflow_run_id(item)
-        ]
-        for update in updates:
-            if not isinstance(update, dict):
-                continue
-            workflow_run_id_value = workflow_run_id(update)
-            if not workflow_run_id_value:
-                continue
-            if workflow_run_id_value in order:
-                order.remove(workflow_run_id_value)
-            order.append(workflow_run_id_value)
-            by_id[workflow_run_id_value] = dict(update)
-        return tuple(by_id[workflow_run_id_value] for workflow_run_id_value in order if workflow_run_id_value in by_id)
 
     @staticmethod
     def _aggregate_execution_results(results: list[ExecutionResult], *, content: str) -> ExecutionResult:
