@@ -8,7 +8,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
@@ -16,6 +15,18 @@ from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_blocking import looks_blocked_or_challenge
 from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
+from .web_research_urls import (
+    candidate_domain as _candidate_domain,
+    candidate_query as _candidate_query,
+    candidate_query_label as _candidate_query_label,
+    candidate_url_key as _candidate_url_key,
+    canonicalize_url as _canonicalize_url,
+    clean_text as _clean_text,
+    coerce_int as _coerce_int,
+    domain_from_url as _domain_from_url,
+    domain_matches_any as _domain_matches_any,
+    is_fetchable_url as _is_fetchable_url,
+)
 from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 
 _WEB_RESEARCH_FETCH_CONCURRENCY = 4
@@ -992,10 +1003,6 @@ def _market_quote_candidate_kind(*, domain: str, text: str) -> str:
     return "other"
 
 
-def _domain_matches_any(domain: str, suffixes: tuple[str, ...]) -> bool:
-    return any(domain == suffix or domain.endswith(f".{suffix}") for suffix in suffixes)
-
-
 def _market_quote_entity_terms(query: str) -> set[str]:
     text = _clean_text(query).lower()
     terms: set[str] = set()
@@ -1155,27 +1162,6 @@ def _candidate_staleness_penalty(item: dict[str, Any], freshness: str) -> int:
     return 0
 
 
-def _is_fetchable_url(url: Any) -> bool:
-    parsed = urlsplit(_clean_text(url))
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-
-
-def _candidate_url_key(item: dict[str, Any]) -> str:
-    return str(item.get("canonical_url") or _canonicalize_url(str(item.get("url") or "")))
-
-
-def _candidate_domain(item: dict[str, Any]) -> str:
-    return _clean_text(item.get("domain") or _domain_from_url(str(item.get("url") or ""))).lower()
-
-
-def _candidate_query(item: dict[str, Any]) -> str:
-    return _clean_text(item.get("source_query") or item.get("query")).lower()
-
-
-def _candidate_query_label(item: dict[str, Any]) -> str:
-    return _clean_text(item.get("source_query") or item.get("query"))
-
-
 def _merge_fetch_source(
     item: dict[str, Any],
     fetch_payload: dict[str, Any],
@@ -1266,26 +1252,3 @@ def _quality_score(
     if blocked_or_challenge:
         score = min(score, 0.35)
     return round(min(max(score, 0.0), 1.0), 3)
-
-
-def _canonicalize_url(url: str) -> str:
-    parsed = urlsplit(str(url or "").strip())
-    if not parsed.netloc:
-        return str(url or "").strip().rstrip("/")
-    path = parsed.path.rstrip("/") or "/"
-    return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), path, parsed.query, ""))
-
-
-def _domain_from_url(url: str) -> str:
-    return urlsplit(str(url or "").strip()).netloc.lower()
-
-
-def _clean_text(value: Any) -> str:
-    return " ".join(str(value or "").split())
-
-
-def _coerce_int(value: Any, *, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
