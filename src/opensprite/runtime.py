@@ -23,7 +23,7 @@ from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
 from .bus.dispatcher import MessageQueue
 from .config import Config
-from .llms.registry import find_provider, provider_spec_default_base_url
+from .llms.provider_specs import find_provider, provider_spec_default_base_url
 from .llms import UnconfiguredLLM
 from .utils.log import logger
 
