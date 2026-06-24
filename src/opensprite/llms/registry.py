@@ -5,11 +5,8 @@
 
 from dataclasses import dataclass
 from .base import LLMProvider
-from .openai import OpenAILLM, OpenAIResponsesLLM
-from .openrouter import OpenRouterLLM
-from .minimax import MiniMaxLLM
-from ..auth.copilot import COPILOT_BASE_URL, copilot_request_headers
-from ..config.llm_presets import provider_default_base_url as profile_default_base_url
+from .provider_builders import create_llm_for_spec, create_responses_llm, provider_spec_default_base_url
+from ..auth.copilot import COPILOT_BASE_URL
 
 
 @dataclass(frozen=True)
@@ -28,14 +25,6 @@ PROVIDERS = (
     ProviderSpec("minimax", ("minimax",), "", "minimax", "https://api.minimax.io/v1"),
     ProviderSpec("copilot", ("copilot",), "", "githubcopilot", COPILOT_BASE_URL),
 )
-
-
-def provider_spec_default_base_url(spec: ProviderSpec, *, api_mode: str | None = None) -> str:
-    """Return the runtime default URL for a provider spec."""
-    profile_url = profile_default_base_url(spec.name)
-    if spec.name == "minimax" and api_mode != "anthropic_messages":
-        return spec.default_base_url
-    return profile_url or spec.default_base_url
 
 
 def find_provider(api_key: str = "", base_url: str = "", model: str = "", provider_name: str = "") -> ProviderSpec:
@@ -78,50 +67,19 @@ def create_llm(
         raise ValueError(f"Provider {provider_name} is disabled")
 
     if api_mode == "responses" or auth_type == "openai_codex_oauth":
-        return OpenAIResponsesLLM(
+        return create_responses_llm(
             api_key=api_key,
-            base_url=base_url or profile_default_base_url(provider_name),
-            default_model=model,
+            model=model,
+            base_url=base_url,
+            provider_name=provider_name,
             reasoning_effort=reasoning_effort,
         )
     spec = find_provider(api_key, base_url, model, provider_name)
-
-    if api_mode == "anthropic_messages":
-        if spec.name != "minimax":
-            raise ValueError("api_mode='anthropic_messages' is only supported by the MiniMax provider")
-        return MiniMaxLLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec, api_mode=api_mode),
-            default_model=model,
-            reasoning_effort=reasoning_effort,
-        )
-
-    if spec.name == "openrouter":
-        return OpenRouterLLM(
-            api_key=api_key,
-            default_model=model,
-            base_url=base_url or provider_spec_default_base_url(spec),
-            reasoning_effort=reasoning_effort,
-        )
-
-    if spec.name == "minimax":
-        return OpenAILLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec, api_mode=api_mode),
-            default_model=model,
-        )
-
-    if spec.name == "copilot":
-        return OpenAILLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec),
-            default_model=model,
-            default_headers=copilot_request_headers(),
-        )
-
-    return OpenAILLM(
+    return create_llm_for_spec(
+        spec,
         api_key=api_key,
-        base_url=base_url or provider_spec_default_base_url(spec),
-        default_model=model,
+        model=model,
+        base_url=base_url,
+        api_mode=api_mode,
         reasoning_effort=reasoning_effort,
     )
