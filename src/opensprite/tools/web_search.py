@@ -10,7 +10,6 @@ import httpx
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from .base import Tool
-from .validation import NON_EMPTY_STRING_PATTERN
 from .web_search_freshness import (
     AUTO_FRESHNESS,
     FRESHNESS_VALUES,
@@ -26,6 +25,7 @@ from .web_search_payloads import (
     strip_tags as _strip_tags,
 )
 from .web_search_jina import search_jina
+from .web_search_parameters import web_search_parameters as _web_search_parameters
 from .web_search_searxng import (
     clean_text_values as _clean_text_values,
     search_searxng,
@@ -55,26 +55,7 @@ class WebSearchTool(Tool):
 
     @property
     def parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query", "pattern": NON_EMPTY_STRING_PATTERN},
-                "count": {
-                    "type": "integer",
-                    "description": f"Results (1-{self.max_results})",
-                    "default": self.max_results,
-                    "minimum": 1,
-                    "maximum": self.max_results,
-                },
-                "freshness": {
-                    "type": "string",
-                    "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter. auto uses the configured default recent window; none searches all time; fixed windows are respected.",
-                    "default": self.config.freshness,
-                }
-            },
-            "required": ["query"]
-        }
+        return _web_search_parameters(max_results=self.max_results, freshness=self.config.freshness)
 
     @property
     def provider(self) -> str:

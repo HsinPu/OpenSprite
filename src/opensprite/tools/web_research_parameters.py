@@ -6,7 +6,7 @@ from typing import Any
 
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
 from .validation import NON_EMPTY_STRING_PATTERN
-from .web_search import FRESHNESS_VALUES
+from .web_search_freshness import FRESHNESS_VALUES
 
 
 def web_research_parameters(
