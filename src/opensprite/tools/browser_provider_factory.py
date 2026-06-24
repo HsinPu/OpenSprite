@@ -8,6 +8,7 @@ import httpx
 
 from ..config.defaults import DEFAULT_BROWSER_BACKEND
 from .browser_provider_base import CloudBrowserProvider
+from .browser_providers import BrowserUseCloudProvider, BrowserbaseCloudProvider, FirecrawlCloudProvider
 
 
 def cloud_provider_from_config(
@@ -16,9 +17,8 @@ def cloud_provider_from_config(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> CloudBrowserProvider | None:
     backend = str(getattr(browser_config, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND).strip()
-    browserbase_cls, browser_use_cls, firecrawl_cls = _provider_classes()
     if backend == "browserbase":
-        return browserbase_cls(
+        return BrowserbaseCloudProvider(
             api_key=getattr(browser_config, "browserbase_api_key", ""),
             project_id=getattr(browser_config, "browserbase_project_id", ""),
             base_url=getattr(browser_config, "browserbase_base_url", ""),
@@ -28,13 +28,13 @@ def cloud_provider_from_config(
             transport=transport,
         )
     if backend == "browser-use":
-        return browser_use_cls(
+        return BrowserUseCloudProvider(
             api_key=getattr(browser_config, "browser_use_api_key", ""),
             base_url=getattr(browser_config, "browser_use_base_url", ""),
             transport=transport,
         )
     if backend == "firecrawl":
-        return firecrawl_cls(
+        return FirecrawlCloudProvider(
             api_key=getattr(browser_config, "firecrawl_api_key", ""),
             base_url=getattr(browser_config, "firecrawl_base_url", ""),
             transport=transport,
@@ -43,9 +43,8 @@ def cloud_provider_from_config(
 
 
 def browser_cloud_status(browser_config: Any) -> dict[str, dict[str, Any]]:
-    browserbase_cls, browser_use_cls, firecrawl_cls = _provider_classes()
     return {
-        "browserbase": browserbase_cls(
+        "browserbase": BrowserbaseCloudProvider(
             api_key=getattr(browser_config, "browserbase_api_key", ""),
             project_id=getattr(browser_config, "browserbase_project_id", ""),
             base_url=getattr(browser_config, "browserbase_base_url", ""),
@@ -53,18 +52,12 @@ def browser_cloud_status(browser_config: Any) -> dict[str, dict[str, Any]]:
             advanced_stealth=getattr(browser_config, "browserbase_advanced_stealth", False),
             keep_alive=getattr(browser_config, "browserbase_keep_alive", True),
         ).status(),
-        "browser-use": browser_use_cls(
+        "browser-use": BrowserUseCloudProvider(
             api_key=getattr(browser_config, "browser_use_api_key", ""),
             base_url=getattr(browser_config, "browser_use_base_url", ""),
         ).status(),
-        "firecrawl": firecrawl_cls(
+        "firecrawl": FirecrawlCloudProvider(
             api_key=getattr(browser_config, "firecrawl_api_key", ""),
             base_url=getattr(browser_config, "firecrawl_base_url", ""),
         ).status(),
     }
-
-
-def _provider_classes():
-    from .browser_runtime import BrowserUseCloudProvider, BrowserbaseCloudProvider, FirecrawlCloudProvider
-
-    return BrowserbaseCloudProvider, BrowserUseCloudProvider, FirecrawlCloudProvider
