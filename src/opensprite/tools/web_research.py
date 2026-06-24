@@ -6,7 +6,6 @@ from typing import Any
 
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
 from .base import Tool
-from .validation import NON_EMPTY_STRING_PATTERN
 from .web_fetch import WebFetchTool
 from .web_research_candidates import (
     expand_llms_full_candidates as _expand_llms_full_candidates,
@@ -21,13 +20,14 @@ from .web_research_queries import (
     normalize_research_params as _normalize_research_params,
     research_queries as _research_queries,
 )
+from .web_research_parameters import web_research_parameters as _web_research_parameters
 from .web_research_records import source_records_for_search_items as _source_records_for_search_items
 from .web_research_search import (
     apply_official_site_search as _apply_official_site_search,
     search_queries_with_fallback as _search_queries_with_fallback_batch,
     search_with_fallback as _search_with_fallback_helper,
 )
-from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
+from .web_search import WebSearchTool, _effective_freshness
 
 _WEB_RESEARCH_FETCH_CONCURRENCY = 4
 _WEB_RESEARCH_SEARCH_CONCURRENCY = 3
@@ -65,45 +65,7 @@ class WebResearchTool(Tool):
 
     @property
     def parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Research query", "pattern": NON_EMPTY_STRING_PATTERN},
-                "queries": {
-                    "type": "array",
-                    "description": "Optional additional search queries to run and merge for broader research coverage",
-                    "items": {"type": "string", "pattern": NON_EMPTY_STRING_PATTERN},
-                    "maxItems": 5,
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "Search candidates to inspect before dedupe; defaults to the configured max_results",
-                    "default": self.search_config.max_results,
-                    "minimum": 1,
-                    "maximum": self.search_config.max_results,
-                },
-                "fetch_count": {
-                    "type": "integer",
-                    "description": "Number of substantive pages to fetch",
-                    "default": 2,
-                    "minimum": 1,
-                    "maximum": 5,
-                },
-                "freshness": {
-                    "type": "string",
-                    "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter passed through to web_search; auto uses the configured default recent window",
-                    "default": self.search_config.freshness,
-                },
-                "max_chars": {
-                    "type": "integer",
-                    "description": "Max characters per fetched page",
-                    "default": self.fetch_config.max_chars,
-                    "minimum": 1,
-                },
-            },
-            "required": ["query"],
-        }
+        return _web_research_parameters(self.search_config, self.fetch_config)
 
     async def execute_validated(self, params: Any) -> str:
         """Normalize common LLM query-object shapes before schema validation."""
