@@ -73,6 +73,7 @@ from .task.progress import (
 from .task.scorecard import task_scorecard_metadata
 from .task.decision import TurnTaskPlanningService
 from .turn_context import TurnContextService
+from .turn_events import TurnEventEmitter
 from .turn_input import (
     PreparedTurnInput,
     message_with_runtime_context,
@@ -184,7 +185,7 @@ class AgentTurnRunner:
         )
         self._connect_mcp = connect_mcp
         self._save_user_message = save_user_message
-        self._emit_run_event = emit_run_event
+        self._turn_events = TurnEventEmitter(emit_run_event)
         self._call_llm = call_llm
         self.audio_input = AudioInputPreprocessor(transcribe_audio)
         self._run_workflow = run_workflow
@@ -206,42 +207,6 @@ class AgentTurnRunner:
         self._consume_workflow_outcomes = consume_workflow_outcomes
         self._worktree_sandbox_enabled = worktree_sandbox_enabled
         self._workspace_root = workspace_root
-
-    async def _emit_turn_event(
-        self,
-        turn: PreparedTurnInput,
-        run_id: str,
-        event_type: str,
-        payload: dict[str, Any],
-    ) -> None:
-        await self._emit_run_event(
-            turn.session_id,
-            run_id,
-            event_type,
-            payload,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-        )
-
-    async def _emit_auto_continue_event(
-        self,
-        *,
-        turn: PreparedTurnInput,
-        run_id: str,
-        event_type: str,
-        decision: Any,
-        completion_result: CompletionGateResult,
-    ) -> None:
-        await self._emit_turn_event(
-            turn,
-            run_id,
-            event_type,
-            {
-                **decision.to_metadata(),
-                TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-            },
-        )
 
     @staticmethod
     def is_media_only_message(user_message: UserMessage) -> bool:
@@ -265,7 +230,7 @@ class AgentTurnRunner:
         result = await self.audio_input.preprocess(user_message, turn)
         if not result.transcribed:
             return
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             AUDIO_INPUT_TRANSCRIBED_EVENT,
@@ -329,7 +294,7 @@ class AgentTurnRunner:
                     task_kind=task_intent.kind,
                     expects_code_change=False,
                 )
-            await self._emit_turn_event(
+            await self._turn_events.emit(
                 turn,
                 run_id,
                 TASK_INTENT_DETECTED_EVENT,
@@ -507,7 +472,7 @@ class AgentTurnRunner:
             "task_context": task_context_decision.to_metadata(),
         }
         await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             TASK_CLARIFICATION_REQUESTED_EVENT,
@@ -552,7 +517,7 @@ class AgentTurnRunner:
             exec_result.llm_step_events,
         )
         if exec_result.stop_reason:
-            await self._emit_turn_event(
+            await self._turn_events.emit(
                 turn,
                 run_id,
                 EXECUTION_STOPPED_EVENT,
@@ -591,7 +556,7 @@ class AgentTurnRunner:
             completion_result,
             auto_continue_attempts=auto_continue_attempts,
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             COMPLETION_GATE_EVALUATED_EVENT,
@@ -604,7 +569,7 @@ class AgentTurnRunner:
             auto_continue_attempts=auto_continue_attempts,
             pass_index=len(execution_results),
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             WORK_PROGRESS_UPDATED_EVENT,
@@ -617,7 +582,7 @@ class AgentTurnRunner:
             pass_index=len(execution_results),
             auto_continue_attempts=auto_continue_attempts,
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             TASK_CHECKPOINT_RECORDED_EVENT,
@@ -628,7 +593,7 @@ class AgentTurnRunner:
             aggregate_result=aggregate_result,
             completion_result=completion_result,
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             TASK_SCORECARD_RECORDED_EVENT,
@@ -636,7 +601,7 @@ class AgentTurnRunner:
         )
         await self.run_trace.record_task_scorecard_part(turn.session_id, run_id, task_scorecard)
         if auto_continue_attempts > 0:
-            await self._emit_turn_event(
+            await self._turn_events.emit(
                 turn,
                 run_id,
                 AUTO_CONTINUE_COMPLETED_EVENT,
@@ -712,7 +677,7 @@ class AgentTurnRunner:
             completion_result,
             auto_continue_attempts=auto_continue_attempts,
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             COMPLETION_GATE_EVALUATED_EVENT,
@@ -725,7 +690,7 @@ class AgentTurnRunner:
             auto_continue_attempts=auto_continue_attempts,
             pass_index=len(execution_results),
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             WORK_PROGRESS_UPDATED_EVENT,
@@ -735,7 +700,7 @@ class AgentTurnRunner:
             aggregate_result=aggregate_result,
             completion_result=completion_result,
         )
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             TASK_SCORECARD_RECORDED_EVENT,
@@ -767,7 +732,7 @@ class AgentTurnRunner:
         await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
 
         logger.info(f"[{turn.session_id}] agent.run | status=processing")
-        await self._emit_turn_event(
+        await self._turn_events.emit(
             turn,
             run_id,
             LLM_STATUS_EVENT,
@@ -797,7 +762,7 @@ class AgentTurnRunner:
             direct_resume_context: dict[str, str] | None = None
             if pending_direct_resume is not None:
                 direct_resume_context = dict(pending_direct_resume)
-                await self._emit_turn_event(
+                await self._turn_events.emit(
                     turn,
                     run_id,
                     DIRECT_WORKFLOW_RESUME_STARTED_EVENT,
@@ -813,7 +778,7 @@ class AgentTurnRunner:
                 )
                 pending_direct_resume = None
             elif pending_direct_verify is not None:
-                await self._emit_turn_event(
+                await self._turn_events.emit(
                     turn,
                     run_id,
                     DIRECT_VERIFICATION_STARTED_EVENT,
@@ -854,7 +819,7 @@ class AgentTurnRunner:
                     else:
                         work_plan = contract_work_plan
                         if not work_plan_recorded:
-                            await self._emit_turn_event(
+                            await self._turn_events.emit(
                                 turn,
                                 run_id,
                                 WORK_PLAN_CREATED_EVENT,
@@ -915,7 +880,7 @@ class AgentTurnRunner:
                 compaction_handoff=aggregate_result.compaction_handoff,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
-                await self._emit_auto_continue_event(
+                await self._turn_events.emit_auto_continue(
                     turn=turn,
                     run_id=run_id,
                     event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
@@ -936,7 +901,7 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.direct_verify_action:
-                await self._emit_auto_continue_event(
+                await self._turn_events.emit_auto_continue(
                     turn=turn,
                     run_id=run_id,
                     event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
@@ -963,7 +928,7 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.prompt:
-                await self._emit_auto_continue_event(
+                await self._turn_events.emit_auto_continue(
                     turn=turn,
                     run_id=run_id,
                     event_type=AUTO_CONTINUE_SCHEDULED_EVENT,
@@ -984,7 +949,7 @@ class AgentTurnRunner:
                 continue
 
             if decision.emit_skipped_event:
-                await self._emit_auto_continue_event(
+                await self._turn_events.emit_auto_continue(
                     turn=turn,
                     run_id=run_id,
                     event_type=AUTO_CONTINUE_SKIPPED_EVENT,
@@ -1120,7 +1085,7 @@ class AgentTurnRunner:
             await self._save_work_state(updated_work_state)
             if updated_work_state is not None:
                 todos = await self.run_trace.record_task_checklist_part(turn.session_id, run_id, updated_work_state)
-                await self._emit_turn_event(
+                await self._turn_events.emit(
                     turn,
                     run_id,
                     TASK_CHECKLIST_UPDATED_EVENT,
@@ -1133,7 +1098,7 @@ class AgentTurnRunner:
             await self._apply_work_progress(turn.session_id, work_progress, updated_work_state)
             await self._apply_completion_gate_result(turn.session_id, completion_result)
             if aggregate_result.task_artifacts:
-                await self._emit_turn_event(
+                await self._turn_events.emit(
                     turn,
                     run_id,
                     TASK_ARTIFACTS_RECORDED_EVENT,
