@@ -1,13 +1,12 @@
 """Media analysis providers and routers."""
 
 from .audio import OpenAICompatibleSpeechProvider
+from .audio_input import AudioInputPreprocessResult, AudioInputPreprocessor
 from .base import ImageAnalysisProvider, SpeechToTextProvider, VideoAnalysisProvider
 from .image import MiniMaxImageProvider, OpenAICompatibleImageProvider, create_image_analysis_provider
 from .video import OpenAICompatibleVideoProvider
 from .router import (
     AgentMediaService,
-    AudioInputPreprocessResult,
-    AudioInputPreprocessor,
     INBOUND_AUDIO_EXTENSIONS,
     INBOUND_IMAGE_EXTENSIONS,
     INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON,
