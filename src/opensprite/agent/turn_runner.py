@@ -34,14 +34,6 @@ from .completion.auto_continue import AutoContinueService
 from .completion.source_finalization import source_finalization_sources
 from .completion.source_material import format_web_source_context
 from .completion_gate import (
-    COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
-    COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD,
-    COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD,
-    COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD,
-    COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD,
-    COMPLETION_RESULT_VERIFICATION_ACTION_FIELD,
-    COMPLETION_RESULT_VERIFICATION_PATH_FIELD,
-    COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD,
     CompletionBlockerMessages,
     CompletionGateResult,
     CompletionGateService,
@@ -73,13 +65,14 @@ from .task.progress import (
 from .task.scorecard import task_scorecard_metadata
 from .task.decision import TurnTaskPlanningService
 from .turn_context import TurnContextService
+from .turn_directives import (
+    extract_direct_verify_request,
+    extract_follow_up_resume_request,
+)
 from .turn_events import TurnEventEmitter
 from .turn_input import (
     PreparedTurnInput,
     message_with_runtime_context,
-    metadata_requests_direct_verification,
-    metadata_requests_follow_up_resume,
-    metadata_text,
 )
 from .turn_outcome import (
     LLM_NOT_CONFIGURED_LOG_REASON,
@@ -750,12 +743,12 @@ class AgentTurnRunner:
         last_direct_verify_pytest_args: tuple[str, ...] = ()
         same_target_verify_attempts = 0
         work_plan_recorded = False
-        pending_direct_verify: dict[str, Any] | None = self._extract_direct_verify_request(user_message.metadata)
+        pending_direct_verify: dict[str, Any] | None = extract_direct_verify_request(user_message.metadata)
         current_message = message_with_runtime_context(user_message.text, turn.user_metadata)
         current_allow_tools = True
         current_task_contract_override = None
 
-        pending_direct_resume = self._extract_follow_up_resume_request(user_message.metadata)
+        pending_direct_resume = extract_follow_up_resume_request(user_message.metadata)
 
         while True:
             self.turn_context.reset_work_progress()
@@ -1135,44 +1128,6 @@ class AgentTurnRunner:
             aggregate_result,
         )
         return assistant_message
-
-    @staticmethod
-    def _extract_follow_up_resume_request(metadata: dict[str, Any] | None) -> dict[str, str] | None:
-        payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
-        if not metadata_requests_follow_up_resume(payload):
-            return None
-        workflow = metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD)
-        start_step = metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD)
-        if not workflow or not start_step:
-            return None
-        return {
-            "workflow": workflow,
-            "start_step": start_step,
-            "step_label": metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD, start_step) or start_step,
-            "prompt_type": metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD),
-            "detail": metadata_text(payload, COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD),
-            "previous_response": "continue",
-        }
-
-    @staticmethod
-    def _extract_direct_verify_request(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
-        payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
-        if not metadata_requests_direct_verification(payload):
-            return None
-        action = metadata_text(payload, COMPLETION_RESULT_VERIFICATION_ACTION_FIELD)
-        if not action:
-            return None
-        path = metadata_text(payload, COMPLETION_RESULT_VERIFICATION_PATH_FIELD, ".") or "."
-        pytest_args = tuple(
-            str(item or "").strip()
-            for item in (payload.get(COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD) or payload.get("verificationPytestArgs") or ())
-            if str(item or "").strip()
-        )
-        return {
-            "action": action,
-            "path": path,
-            "pytest_args": pytest_args,
-        }
 
     async def _run_direct_workflow_resume(
         self,
