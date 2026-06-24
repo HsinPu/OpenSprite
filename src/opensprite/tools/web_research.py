@@ -18,7 +18,7 @@ from .web_research_fetch import (
 )
 from .web_research_queries import (
     normalize_research_params as _normalize_research_params,
-    research_queries as _research_queries,
+    prepare_research_request as _prepare_research_request,
 )
 from .web_research_parameters import web_research_parameters as _web_research_parameters
 from .web_research_records import source_records_for_search_items as _source_records_for_search_items
@@ -27,7 +27,7 @@ from .web_research_search import (
     search_queries_with_fallback as _search_queries_with_fallback_batch,
     search_with_fallback as _search_with_fallback_helper,
 )
-from .web_search import WebSearchTool, _effective_freshness
+from .web_search import WebSearchTool
 
 _WEB_RESEARCH_FETCH_CONCURRENCY = 4
 _WEB_RESEARCH_SEARCH_CONCURRENCY = 3
@@ -81,16 +81,23 @@ class WebResearchTool(Tool):
         queries: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        search_count = min(max(int(count or self.search_config.max_results), 1), self.search_config.max_results)
-        target_fetches = min(max(int(fetch_count or 2), 1), 5)
-        research_queries = _research_queries(query, queries)
-        effective_freshness = _effective_freshness(
-            freshness,
-            self.search_config.freshness,
-            query=" ".join(research_queries),
+        (
+            research_queries,
+            effective_freshness,
+            search_count,
+            target_fetches,
+            effective_max_chars,
+        ) = _prepare_research_request(
+            query=query,
+            queries=queries,
+            count=count,
+            fetch_count=fetch_count,
+            freshness=freshness,
+            max_chars=max_chars,
+            max_results=self.search_config.max_results,
+            default_freshness=self.search_config.freshness,
+            default_max_chars=self.fetch_config.max_chars,
         )
-        research_queries = _research_queries(query, queries, freshness=effective_freshness)
-        effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
         fetched_sources: list[dict[str, Any]] = []
         failed_sources: list[dict[str, Any]] = []
         source_records: list[dict[str, Any]] = []

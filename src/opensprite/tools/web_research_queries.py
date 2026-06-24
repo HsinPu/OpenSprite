@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Any
+from typing import Any, NamedTuple
 
+from .web_search_freshness import effective_freshness
 from .web_research_urls import clean_text
 
 RECENT_FRESHNESS_VALUES = {"day", "week", "month"}
@@ -36,6 +37,44 @@ MARKET_QUOTE_QUERY_STOPWORDS = {
     "\u5831\u50f9",
     "\u884c\u60c5\u5831\u50f9",
 }
+
+
+class ResearchRequest(NamedTuple):
+    queries: list[str]
+    freshness: str
+    search_count: int
+    target_fetches: int
+    max_chars: int
+
+
+def prepare_research_request(
+    *,
+    query: str,
+    queries: list[str] | None,
+    count: Any,
+    fetch_count: Any,
+    freshness: Any,
+    max_chars: int | None,
+    max_results: int,
+    default_freshness: str,
+    default_max_chars: int,
+) -> ResearchRequest:
+    search_count = min(max(int(count or max_results), 1), max_results)
+    target_fetches = min(max(int(fetch_count or 2), 1), 5)
+    planned_queries = research_queries(query, queries)
+    resolved_freshness = effective_freshness(
+        freshness,
+        default_freshness,
+        query=" ".join(planned_queries),
+    )
+    planned_queries = research_queries(query, queries, freshness=resolved_freshness)
+    return ResearchRequest(
+        queries=planned_queries,
+        freshness=resolved_freshness,
+        search_count=search_count,
+        target_fetches=target_fetches,
+        max_chars=max_chars if max_chars is not None else default_max_chars,
+    )
 
 
 def research_queries(query: str, queries: list[str] | None, *, freshness: str | None = None) -> list[str]:
