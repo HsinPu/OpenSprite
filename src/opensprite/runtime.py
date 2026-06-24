@@ -13,12 +13,7 @@ from .config import AgentConfig
 from .context.paths import split_session_id
 from .cron import CronManager, CronJob
 from .llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
-from .media import (
-    MediaRouter,
-    OpenAICompatibleSpeechProvider,
-    OpenAICompatibleVideoProvider,
-    create_image_analysis_provider,
-)
+from .media.factory import create_media_router
 from .search.embedding_factory import create_search_embedding_provider
 from .search.base import SearchStore
 from .search.store_factory import create_search_store
@@ -111,55 +106,6 @@ def install_shutdown_signal_handlers(shutdown_event: asyncio.Event) -> None:
     for signum in (signal.SIGINT, signal.SIGTERM):
         with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
             loop.add_signal_handler(signum, request_shutdown, signum)
-
-
-def create_media_router(config: Config) -> MediaRouter:
-    """Create the media router with optional image analysis support."""
-    vision = getattr(config, "vision", None)
-    ocr = getattr(config, "ocr", None)
-    speech = getattr(config, "speech", None)
-    video = getattr(config, "video", None)
-
-    image_provider = None
-    if vision and vision.enabled:
-        image_provider = create_image_analysis_provider(
-            provider=vision.provider,
-            api_key=vision.api_key,
-            default_model=vision.model,
-            base_url=vision.base_url,
-        )
-
-    ocr_provider = None
-    if ocr and ocr.enabled:
-        ocr_provider = create_image_analysis_provider(
-            provider=ocr.provider,
-            api_key=ocr.api_key,
-            default_model=ocr.model,
-            base_url=ocr.base_url,
-        )
-
-    speech_provider = None
-    if speech and speech.enabled:
-        speech_provider = OpenAICompatibleSpeechProvider(
-            api_key=speech.api_key,
-            default_model=speech.model,
-            base_url=speech.base_url,
-        )
-
-    video_provider = None
-    if video and video.enabled:
-        video_provider = OpenAICompatibleVideoProvider(
-            api_key=video.api_key,
-            default_model=video.model,
-            base_url=video.base_url,
-        )
-
-    return MediaRouter(
-        image_provider=image_provider,
-        ocr_provider=ocr_provider,
-        speech_provider=speech_provider,
-        video_provider=video_provider,
-    )
 
 
 async def create_agent(config: Config):
