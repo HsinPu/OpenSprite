@@ -22,7 +22,7 @@ from .media import (
 from .search.embedding_factory import create_search_embedding_provider
 from .search.base import SearchStore
 from .search.store_factory import create_search_store
-from .storage import MemoryStorage, StorageProvider
+from .storage.factory import create_storage
 from .bus.dispatcher import MessageQueue
 from .config import Config
 from .llms import UnconfiguredLLM
@@ -52,19 +52,6 @@ def apply_network_environment(config: Config) -> None:
 
     if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
         logger.info("Applied network proxy settings for outbound API requests")
-
-
-def create_storage(config: Config) -> StorageProvider:
-    """根據設定建立 Storage"""
-    storage_type = config.storage.type
-
-    if storage_type == "memory":
-        return MemoryStorage()
-    if storage_type == "sqlite":
-        from .storage import SQLiteStorage
-        return SQLiteStorage(db_path=config.storage.path)
-
-    raise ValueError(f"Unsupported storage provider: {storage_type}")
 
 
 def should_start_search_queue_worker(search_store: SearchStore | None) -> bool:
