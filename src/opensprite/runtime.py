@@ -15,7 +15,7 @@ from .cron import CronManager, CronJob
 from .llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from .media.factory import create_media_router
 from .search.embedding_factory import create_search_embedding_provider
-from .search.base import SearchStore
+from .search.queue_worker import should_start_search_queue_worker, start_search_queue_worker
 from .search.store_factory import create_search_store
 from .storage.factory import create_storage
 from .bus.dispatcher import MessageQueue
@@ -47,23 +47,6 @@ def apply_network_environment(config: Config) -> None:
 
     if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
         logger.info("Applied network proxy settings for outbound API requests")
-
-
-def should_start_search_queue_worker(search_store: SearchStore | None) -> bool:
-    """Return whether the runtime should start the persistent embedding queue worker."""
-    return bool(
-        search_store is not None
-        and getattr(search_store, "embedding_provider", None) is not None
-        and hasattr(search_store, "run_queue")
-    )
-
-
-def start_search_queue_worker(search_store: SearchStore | None) -> asyncio.Task | None:
-    """Start the long-running embedding queue worker when embeddings are enabled."""
-    if not should_start_search_queue_worker(search_store):
-        return None
-    logger.info("Starting search embedding queue worker")
-    return asyncio.create_task(search_store.run_queue(once=False))
 
 
 _SHUTDOWN_STEP_TIMEOUT_SECONDS = 5.0
