@@ -1,29 +1,42 @@
 # OpenSprite
 
-輕量、可自架設的個人 AI assistant。OpenSprite 以 Python CLI 執行，支援多 LLM provider、Telegram channel、SQLite storage/search、內建 tools、cron、skills、subagents 與 MCP tools。
+OpenSprite 是一個本機優先的個人 AI assistant gateway。它提供 Python CLI / service runtime、Web chat 介面、Telegram channel、SQLite storage/search、排程、MCP tools、記憶整理與 trace 檢視能力。
 
-## Requirements
+目前 Web UI 已改為 React + Vite + TypeScript + Ant Design，前端原始碼位於 `frontend`。
+
+## 功能
+
+- 本機 gateway：以前景或背景服務方式執行。
+- Web chat：瀏覽器聊天、設定、Trace、run history 與測試檢視。
+- LLM provider 管理：可在 Web 設定頁連接 provider、選模型與設定 credential。
+- Channel：內建 Web channel，並支援 Telegram bot channel。
+- 記憶與歷史：SQLite storage/search、recent summary、long-term memory、active task context。
+- 工具與排程：MCP servers、內建工具、cron-style scheduled jobs。
+- 跨平台安裝：Linux shell installer、Windows PowerShell/CMD installer，也可手動開發安裝。
+
+## 需求
 
 - Python 3.11+
 - Git
-- Telegram Bot Token（使用 Telegram 時需要）
-- LLM provider API key（代理處理訊息前需要）
+- Node.js 20.19+ 或 22.12+，含 npm。Web UI build 需要。
+- 至少一個 LLM provider API key 或 OAuth provider。
+- Telegram bot token 只有在使用 Telegram channel 時需要。
 
-## Linux Install
+## 快速安裝
 
-一鍵安裝會把程式碼與資料分開，Python dependencies 會裝在專屬 venv，不污染 system Python。安裝完成後預設會啟動或重啟背景 gateway。
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash
-```
-
-如果只想安裝、不啟動 gateway：
+### Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash -s -- --no-start
+curl -fsSL https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/install.sh | bash
 ```
 
-預設路徑：
+只安裝不啟動 gateway：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/install.sh | bash -s -- --no-start
+```
+
+安裝位置：
 
 ```text
 ~/.local/share/opensprite/opensprite   # code checkout + .venv
@@ -31,35 +44,25 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/inst
 ~/.opensprite                          # config, data, logs, memory
 ```
 
-如果不想讓 installer 安裝 apt packages：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash -s -- --no-system
-```
-
-Web UI 需要 Node.js 20.19+ 或 22.12+。Installer 會在 apt-based Linux 上自動安裝或升級到可用的 Node.js 22。
-
-## Windows Install
-
-Windows installer 會把程式碼與資料分開，Python dependencies 會裝在專屬 venv，並建立 `opensprite.cmd` command shim。安裝完成後預設會啟動或重啟背景 gateway。
+### Windows
 
 ```powershell
-powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.ps1)"
+powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/install.ps1)"
 ```
 
-如果只想安裝、不啟動 gateway：
+只安裝不啟動 gateway：
 
 ```powershell
-powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.ps1; & ([scriptblock]::Create($script)) -NoStart'
+powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/install.ps1; & ([scriptblock]::Create($script)) -NoStart'
 ```
 
-也可以從 `cmd.exe` 啟動安裝：
+也可以從 `cmd.exe` 安裝：
 
 ```cmd
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.cmd -o install.cmd && install.cmd && del install.cmd
+curl -fsSL https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/install.cmd -o install.cmd && install.cmd && del install.cmd
 ```
 
-預設路徑：
+安裝位置：
 
 ```text
 %LOCALAPPDATA%\OpenSprite\opensprite                 # code checkout + .venv
@@ -67,7 +70,7 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/inst
 %USERPROFILE%\.opensprite                            # config, data, logs, memory
 ```
 
-Windows Web UI build 需要 Node.js 20.19+ 或 22.12+ 與 npm。Installer 會檢查版本但不會自動安裝 system packages；缺少時可先執行：
+Windows 若缺少基本工具，可先安裝：
 
 ```powershell
 winget install Git.Git
@@ -75,9 +78,7 @@ winget install Python.Python.3.11
 winget install OpenJS.NodeJS.LTS
 ```
 
-## Manual Install
-
-Windows / macOS / development 可以手動建立 venv：
+## 手動開發安裝
 
 ```bash
 python -m venv .venv
@@ -86,13 +87,21 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Windows PowerShell activation：
+Windows PowerShell：
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
-## Common Commands
+若要測 optional vector search backend：
+
+```bash
+python -m pip install -e ".[dev,vector]"
+```
+
+## 常用命令
 
 ```bash
 opensprite --version
@@ -105,72 +114,20 @@ opensprite update
 opensprite update --check
 opensprite update --restart
 opensprite config validate
+opensprite config validate --json
 ```
 
-`opensprite gateway` 是前景程序；背景執行請用 `opensprite service start`。
+`opensprite gateway` 會以前景模式執行。要背景常駐請使用 `opensprite service start`。
 
-## Update
+Web gateway 啟動後，預設可從本機瀏覽器開啟：
 
-```bash
-opensprite update
+```text
+http://127.0.0.1:8765/
 ```
 
-Update 會：
+## 設定
 
-- `git fetch origin`
-- fast-forward 到 `origin/main`
-- 重新安裝 package/dependencies 到既有 venv
-- 保留 `~/.opensprite`
-
-如果 checkout 有本地修改，update 會停止，不會自動 stash 或 reset。
-
-更新後要重啟 gateway：
-
-```bash
-opensprite update --restart
-```
-
-## Uninstall
-
-移除 command 與 code，但保留 `~/.opensprite`：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.sh | bash
-```
-
-完整移除 code、config、data、logs、memory：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.sh | bash -s -- --full
-```
-
-非互動環境可加 `--yes` 跳過確認：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.sh | bash -s -- --full --yes
-```
-
-`--full` 會刪除 `~/.opensprite`，不可復原。
-
-Windows 移除 command 與 code，但保留 `%USERPROFILE%\.opensprite`：
-
-```powershell
-powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.ps1)"
-```
-
-Windows 完整移除 code、config、data、logs、memory：
-
-```powershell
-powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.ps1; & ([scriptblock]::Create($script)) -Full'
-```
-
-Windows 非互動環境可加 `-Yes` 跳過確認；`-Full` 會刪除 `%USERPROFILE%\.opensprite`，不可復原。
-
-## Configuration
-
-第一次啟動 gateway 會建立預設設定到 `~/.opensprite`。
-
-主要設定檔：
+第一次啟動會在 `~/.opensprite` 建立設定與資料檔。主要設定檔包含：
 
 ```text
 ~/.opensprite/opensprite.json
@@ -182,9 +139,9 @@ Windows 非互動環境可加 `-Yes` 跳過確認；`-Full` 會刪除 `%USERPROF
 ~/.opensprite/mcp_servers.json
 ```
 
-目前使用者可連接的 channel 主要是 `telegram`。`web` 是內建 Web UI channel。
+Channel 設定來源是 `channels.json` 的 `instances`。`web` 是內建 channel；Telegram 需要在設定中加入 bot token。
 
-如果 gateway 需要透過 proxy 連外，例如 GitHub Copilot API，可在 `~/.opensprite/opensprite.json` 加上：
+如果 gateway 需要 proxy，可以在 `~/.opensprite/opensprite.json` 設定：
 
 ```json
 {
@@ -196,88 +153,159 @@ Windows 非互動環境可加 `-Yes` 跳過確認；`-Full` 會刪除 `%USERPROF
 }
 ```
 
-修改後重啟 gateway：`opensprite service restart`。
-
-設定檢查：
+修改設定後重新啟動 gateway：
 
 ```bash
-opensprite config validate
-opensprite config validate --json
+opensprite service restart
 ```
 
 ## Credential Vault
 
-OpenSprite 會把 LLM provider API key 存在本機 credential vault，而不是寫回 `llm.providers.json`。預設位置是 `~/.opensprite/auth.json`；不要把這個檔案 commit 到 repository。
-
-可用 Web UI 或明確的 chat 指令管理 credentials；CLI 只保留唯讀列表方便 debug：
-
-- Web UI：開啟 Settings，連接 provider 或切換 provider credential。
-- CLI：使用 `opensprite auth credentials list` 檢視本機 credentials，不顯示 secret。
-- Chat：只有在你明確要求儲存、列出、刪除或設定預設 credential 時，agent 才能使用 `credential_store` tool。
-
-CLI 範例：
+OpenSprite 會把 LLM provider API key 存在本機 credential vault，而不是直接提交到 repository。Credential 狀態可透過 Web 設定頁或 CLI 查詢：
 
 ```bash
+opensprite auth status
 opensprite auth credentials list openrouter
 ```
 
-Chat 範例：
+Web UI 的 Provider 設定頁可連接 provider、管理 credential、選擇 text/media model。Runtime trace 和 tool result 只應顯示 redacted preview，不應輸出完整 secret。
 
-```text
-幫我把這個 OpenRouter API key 存起來：sk-or-...
-列出目前 openrouter credentials
-把 <credential_id> 設成 llm.chat 預設 credential
-```
+## 搜尋與排程
 
-安全行為：
-
-- Agent 不會只因為訊息中出現 API key 就自動保存；你必須明確要求或確認保存。
-- Tool result、run trace、persisted tool args 和後續 LLM context 只會顯示 redacted preview，不會回顯完整 secret。
-- Runtime 會從 vault 解析 `credential_id`、provider default，或 `llm.chat` capability default。
-
-## History Search And Cron
-
-搜尋維護：
+檢查聊天歷史搜尋狀態：
 
 ```bash
 opensprite search status
 ```
 
-Cron jobs 需要 gateway 正在執行。CLI 只保留檢視與刪除；新增、暫停、啟用與立即執行請使用聊天中的 `/cron` 指令：
+Cron jobs 需要 gateway 執行時才會觸發。CLI 可檢視或移除 session 綁定的 job：
 
 ```bash
 opensprite cron list --session telegram:<chat_id>
 opensprite cron remove --session telegram:<chat_id> --job-id <job_id>
 ```
 
-## Project Layout
+Web UI 的排程設定頁也可以建立、暫停、啟用、立即執行或移除排程。
+
+## Web UI 開發
+
+前端在 `frontend`，使用 React + Vite + TypeScript + Ant Design。
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Vite dev server 綁定 `127.0.0.1`，並將 `/api`、`/ws`、`/healthz` proxy 到 gateway `127.0.0.1:8765`。通常需要先啟動 gateway：
+
+```bash
+opensprite gateway
+```
+
+前端驗證：
+
+```bash
+cd frontend
+npm run test:smoke
+npm run build
+```
+
+`npm run test:smoke` 是零依賴 UI contract 檢查，不等同完整瀏覽器或 component 測試。
+
+## 專案結構
 
 ```text
 src/opensprite/
-├── cli/              # Typer CLI
-├── agent/            # Agent loop and execution
-├── channels/         # Telegram and Web channel wiring
-├── config/           # Config schema and templates
-├── llms/             # LLM providers
-├── search/           # SQLite search and embeddings
-├── storage/          # Storage backends
-├── tools/            # Built-in tools and MCP
-└── runtime.py        # Gateway wiring
+  cli/              # Typer CLI
+  agent/            # Agent loop, execution, completion gates
+  channels/         # Web and Telegram channel wiring
+  config/           # Config schema and templates
+  context/          # Memory/history/task context resolution
+  cron/             # Scheduled jobs
+  llms/             # LLM providers
+  media/            # Media routing
+  search/           # SQLite search and embeddings
+  storage/          # Storage backends
+  tools/            # Built-in tools and MCP integration
+  runtime.py        # Gateway wiring
+
+frontend/
+  src/App.tsx       # React + Ant Design shell
+  src/composables/  # Shared Web client state and normalization helpers
+  scripts/smoke.mjs # UI contract smoke checks
 ```
 
-## Development
+## 測試
+
+Python baseline：
 
 ```bash
-python -m pip install -e ".[dev,vector]"
 python -m pytest
 ```
 
-Web app checks live in `frontend`:
+Focused test example：
 
 ```bash
-npm ci
+python -m pytest tests/channels/test_web.py::test_web_adapter_roundtrip
+```
+
+Frontend baseline：
+
+```bash
+cd frontend
 npm run test:smoke
 npm run build
+```
+
+目前沒有 repo-configured lint/typecheck/pre-commit/CI workflow；Python 基線是 `python -m pytest`，前端基線是 smoke + build。
+
+## 更新
+
+```bash
+opensprite update
+```
+
+更新流程會：
+
+- `git fetch origin`
+- fast-forward 到 `origin/main`
+- 視需要更新 Python package/dependencies
+- build Web frontend
+- 保留 `~/.opensprite` 使用者資料
+
+如果本機 checkout 有未提交變更，`opensprite update` 會停止，避免覆蓋工作區。
+
+重新啟動背景 gateway：
+
+```bash
+opensprite update --restart
+```
+
+## 解除安裝
+
+Linux 解除 command 與 code，保留 `~/.opensprite`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/uninstall.sh | bash
+```
+
+Linux 完整移除 code、config、data、logs、memory：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/uninstall.sh | bash -s -- --full --yes
+```
+
+Windows 解除 command 與 code，保留 `%USERPROFILE%\.opensprite`：
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/uninstall.ps1)"
+```
+
+Windows 完整移除 code、config、data、logs、memory：
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/OpenSprite/main/scripts/uninstall.ps1; & ([scriptblock]::Create($script)) -Full -Yes'
 ```
 
 ## License
