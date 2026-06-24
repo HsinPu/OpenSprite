@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import re
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -25,24 +23,17 @@ from .web_search_freshness import (
     freshness_params as _freshness_params,
     normalize_freshness as _normalize_freshness,
 )
+from .web_search_payloads import (
+    format_error as _format_error,
+    format_results as _format_results,
+    normalize_text as _normalize,
+    strip_tags as _strip_tags,
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
-def _strip_tags(text: str) -> str:
-    """Remove HTML tags and decode entities."""
-    text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.I)
-    text = re.sub(r'<style[\s\S]*?</style>', '', text, flags=re.I)
-    text = re.sub(r'<[^>]+>', '', text)
-    return text
-
-
-def _normalize(text: str) -> str:
-    """Normalize whitespace."""
-    return re.sub(r'\s+', ' ', text).strip()
-
-
 def _normalize_proxy(proxy: Any) -> str | None:
     """Normalize optional proxy config for httpx."""
     if proxy is None:
@@ -77,61 +68,6 @@ def _searxng_scope_params(engines: Any, categories: Any) -> dict[str, str]:
     if category_values:
         params["categories"] = ",".join(category_values)
     return params
-
-
-def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str, **metadata: Any) -> str:
-    """Format search results into the shared web payload schema."""
-    normalized_items: list[dict[str, str]] = []
-    for item in items[:n]:
-        normalized_items.append(
-            {
-                "title": _normalize(_strip_tags(str(item.get("title", "") or ""))),
-                "url": str(item.get("url", "") or ""),
-                "content": _normalize(_strip_tags(str(item.get("content", "") or ""))),
-            }
-        )
-    payload = {
-            "type": "web_search",
-            "query": query,
-            "url": "",
-            "final_url": "",
-            "title": "",
-            "content": "",
-            "summary": f"Search results for: {query}",
-            "provider": provider,
-            "extractor": "search",
-            "status": None,
-            "truncated": False,
-            "content_type": "application/json",
-            "items": normalized_items,
-    }
-    payload.update({key: value for key, value in metadata.items() if value is not None})
-    return json.dumps(payload, ensure_ascii=False)
-
-
-def _format_error(query: str, provider: str, error: str, **metadata: Any) -> str:
-    """Format provider failures into the shared web payload schema."""
-    payload = {
-        "type": "web_search",
-        "ok": False,
-        "query": query,
-        "url": "",
-        "final_url": "",
-        "title": "",
-        "content": "",
-        "summary": f"Search failed for: {query}",
-        "provider": provider,
-        "extractor": "search",
-        "status": metadata.pop("status", None),
-        "truncated": False,
-        "content_type": "application/json",
-        "items": [],
-        "error": str(error or "").strip(),
-        "error_type": "WebSearchError",
-        "category": "web_search_error",
-    }
-    payload.update({key: value for key, value in metadata.items() if value is not None})
-    return json.dumps(payload, ensure_ascii=False)
 
 
 class WebSearchTool(Tool):
