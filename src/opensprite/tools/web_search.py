@@ -12,21 +12,24 @@ from urllib.parse import quote_plus
 import httpx
 from loguru import logger
 
-from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER, WEB_SEARCH_FRESHNESS_OPTIONS
+from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from ..utils.url import join_url_path
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
+from .web_search_freshness import (
+    AUTO_FRESHNESS,
+    DUCKDUCKGO_FRESHNESS,
+    FRESHNESS_VALUES,
+    effective_freshness as _effective_freshness,
+    freshness_params as _freshness_params,
+    normalize_freshness as _normalize_freshness,
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
-FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
-DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
-AUTO_FRESHNESS = "month"
-
-
 def _strip_tags(text: str) -> str:
     """Remove HTML tags and decode entities."""
     text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.I)
@@ -48,58 +51,6 @@ def _normalize_proxy(proxy: Any) -> str | None:
         proxy = proxy.strip()
         return proxy or None
     return str(proxy)
-
-
-def _normalize_freshness(value: Any, default: str = "year") -> str:
-    """Normalize tool/config freshness into a provider-agnostic value."""
-    raw = str(value if value is not None else default).strip().lower()
-    aliases = {
-        "": default,
-        "all": "none",
-        "any": "none",
-        "off": "none",
-        "false": "none",
-        "today": "day",
-        "d": "day",
-        "daily": "day",
-        "w": "week",
-        "weekly": "week",
-        "m": "month",
-        "monthly": "month",
-        "recent": "month",
-        "latest": "month",
-        "current": "month",
-        "y": "year",
-        "yearly": "year",
-        "past_year": "year",
-    }
-    normalized = aliases.get(raw, raw)
-    return normalized if normalized in FRESHNESS_VALUES else default
-
-
-def _effective_freshness(value: Any, default: str = "year", *, query: Any = None) -> str:
-    """Resolve auto freshness while respecting explicit tool/config settings."""
-    normalized = _normalize_freshness(value, default)
-    default_normalized = _normalize_freshness(default, "year")
-    if value is not None and normalized != "auto":
-        return normalized
-    if default_normalized != "auto":
-        return normalized
-    return AUTO_FRESHNESS
-
-
-def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
-    """Return provider-specific recency parameters for supported engines."""
-    normalized = _normalize_freshness(freshness, default="none")
-    if normalized in {"auto", "none"}:
-        return {}
-    if provider == "duckduckgo":
-        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    if provider == "searxng":
-        return {"time_range": normalized}
-    if provider == "jina":
-        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    return {}
 
 
 def _clean_text_values(values: Any) -> list[str]:
