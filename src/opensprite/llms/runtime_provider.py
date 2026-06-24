@@ -7,15 +7,12 @@ from pathlib import Path
 
 from ..auth.credentials import CredentialNotFoundError
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
-from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_token, load_copilot_token
+from ..auth.copilot import CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
 from ..config.llm_presets import provider_profile_defaults
 from .reasoning import normalize_reasoning_effort
+from .runtime_auth import resolve_runtime_provider_auth
 from .runtime_credentials import resolve_runtime_credentials
-
-
-OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
-GITHUB_COPILOT_BASE_URL = COPILOT_BASE_URL
 
 
 class ProviderRuntimeError(RuntimeError):
@@ -63,29 +60,25 @@ def resolve_provider_runtime(
     credential_id = str(provider.credential_id or "").strip()
     app_home_path = Path(app_home) if app_home is not None else default_app_home()
 
-    if auth_type == "openai_codex_oauth":
-        configured_provider = configured_provider or "openai-codex"
-        api_mode = api_mode or "responses"
-        base_url = base_url or profile_base_url or OPENAI_CODEX_BASE_URL
-        if not api_key:
-            try:
-                api_key = load_or_refresh_codex_token(
-                    app_home_path
-                ).access_token
-            except CodexAuthError as exc:
-                raise ProviderRuntimeError(str(exc)) from exc
-    elif configured_provider == "copilot" or auth_type == "github_copilot_oauth":
-        configured_provider = "copilot"
-        base_url = base_url or profile_base_url or GITHUB_COPILOT_BASE_URL
-        api_mode = api_mode or "chat_completions"
-        if not api_key and auth_type == "github_copilot_oauth":
-            try:
-                api_key = load_copilot_token(app_home_path).access_token
-            except CopilotAuthError as exc:
-                raise ProviderRuntimeError(str(exc)) from exc
-        api_key = get_copilot_api_token(api_key)
-    elif api_mode is None:
-        api_mode = "chat_completions"
+    try:
+        provider_auth = resolve_runtime_provider_auth(
+            provider_name=configured_provider,
+            auth_type=auth_type,
+            api_key=api_key,
+            base_url=base_url,
+            api_mode=api_mode,
+            profile_base_url=profile_base_url,
+            app_home=app_home_path,
+            codex_token_loader=load_or_refresh_codex_token,
+            copilot_token_loader=load_copilot_token,
+            copilot_api_token_resolver=get_copilot_api_token,
+        )
+    except (CodexAuthError, CopilotAuthError) as exc:
+        raise ProviderRuntimeError(str(exc)) from exc
+    configured_provider = provider_auth.provider_name
+    api_key = provider_auth.api_key
+    base_url = provider_auth.base_url
+    api_mode = provider_auth.api_mode
 
     try:
         runtime_credentials = resolve_runtime_credentials(
