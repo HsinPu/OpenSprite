@@ -30,8 +30,8 @@ from opensprite.agent.task.contract import (
     TaskContract,
 )
 from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.agent.turn_result_aggregation import aggregate_execution_results
 from opensprite.agent.turn_result_updates import merge_workflow_outcomes
-from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
@@ -450,7 +450,7 @@ class FakeSpeechProvider:
 
 
 def test_aggregate_execution_results_keeps_only_latest_stop_reason():
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [
             ExecutionResult(
                 content="stopped",
@@ -487,7 +487,7 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         },
     )
 
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [
             ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
             ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error),
@@ -518,7 +518,7 @@ def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_er
         },
     )
 
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [
             ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
             ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error_contract),
@@ -546,7 +546,7 @@ def test_aggregate_execution_results_keeps_tool_contract_over_auto_continue_pure
         planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
     )
 
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [
             ExecutionResult(content="", executed_tool_calls=1, task_contract=web_contract),
             ExecutionResult(content="final answer", executed_tool_calls=0, task_contract=final_answer_contract),
@@ -560,7 +560,7 @@ def test_aggregate_execution_results_keeps_tool_contract_over_auto_continue_pure
 
 
 def test_aggregate_execution_results_does_not_mark_visible_final_as_internal_only():
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [
             ExecutionResult(content="first pass", assistant_internal_only_response=False),
             ExecutionResult(content="", assistant_internal_only_response=True),
@@ -583,7 +583,7 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
         },
     )
 
-    aggregate = AgentTurnRunner._aggregate_execution_results(
+    aggregate = aggregate_execution_results(
         [ExecutionResult(content="blocked", executed_tool_calls=0, task_contract=planning_error)],
         content="blocked",
     )
