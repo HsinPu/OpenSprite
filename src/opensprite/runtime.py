@@ -1,11 +1,8 @@
 """Service runtime for starting the OpenSprite gateway process."""
 
 import asyncio
-import contextlib
 import os
-import signal
 from pathlib import Path
-from typing import Any
 
 from .agent import AgentLoop
 from .config import AgentConfig
@@ -19,6 +16,11 @@ from .storage.factory import create_storage
 from .bus.dispatcher import MessageQueue
 from .config import Config
 from .llms import UnconfiguredLLM
+from .runtime_lifecycle import (
+    await_shutdown_step,
+    install_shutdown_signal_handlers,
+    stop_background_task,
+)
 from .utils.log import logger
 
 
@@ -45,48 +47,6 @@ def apply_network_environment(config: Config) -> None:
 
     if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
         logger.info("Applied network proxy settings for outbound API requests")
-
-
-_SHUTDOWN_STEP_TIMEOUT_SECONDS = 5.0
-
-
-async def await_shutdown_step(
-    awaitable: Any,
-    *,
-    name: str,
-    timeout: float = _SHUTDOWN_STEP_TIMEOUT_SECONDS,
-) -> None:
-    """Await one shutdown step without letting it block gateway exit forever."""
-    try:
-        await asyncio.wait_for(awaitable, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.warning("Timed out stopping {}", name)
-
-
-async def stop_background_task(task: asyncio.Task | None, *, name: str) -> None:
-    """Cancel and await one runtime background task."""
-    if task is None:
-        return
-    task.cancel()
-    try:
-        await asyncio.wait_for(task, timeout=_SHUTDOWN_STEP_TIMEOUT_SECONDS)
-    except asyncio.TimeoutError:
-        logger.warning("Timed out stopping {}", name)
-    except asyncio.CancelledError:
-        logger.info("Stopped {}", name)
-
-
-def install_shutdown_signal_handlers(shutdown_event: asyncio.Event) -> None:
-    """Wire process signals to the runtime shutdown event when supported."""
-    loop = asyncio.get_running_loop()
-
-    def request_shutdown(signum: int) -> None:
-        logger.info("Received shutdown signal {}; stopping gateway...", signum)
-        shutdown_event.set()
-
-    for signum in (signal.SIGINT, signal.SIGTERM):
-        with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
-            loop.add_signal_handler(signum, request_shutdown, signum)
 
 
 async def create_agent(config: Config):
