@@ -10,7 +10,6 @@ import httpx
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
-from ..utils.url import join_url_path
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_search_freshness import (
@@ -27,6 +26,11 @@ from .web_search_payloads import (
     normalize_text as _normalize,
     strip_tags as _strip_tags,
 )
+from .web_search_searxng import (
+    clean_text_values as _clean_text_values,
+    search_searxng,
+    searxng_scope_params as _searxng_scope_params,
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -40,32 +44,6 @@ def _normalize_proxy(proxy: Any) -> str | None:
         proxy = proxy.strip()
         return proxy or None
     return str(proxy)
-
-
-def _clean_text_values(values: Any) -> list[str]:
-    out: list[str] = []
-    if isinstance(values, str):
-        candidates = values.replace("\n", ",").split(",")
-    elif isinstance(values, (list, tuple, set)):
-        candidates = values
-    else:
-        candidates = []
-    for value in candidates:
-        text = str(value or "").strip()
-        if text and text not in out:
-            out.append(text)
-    return out
-
-
-def _searxng_scope_params(engines: Any, categories: Any) -> dict[str, str]:
-    params: dict[str, str] = {}
-    engine_values = _clean_text_values(engines)
-    category_values = _clean_text_values(categories)
-    if engine_values:
-        params["engines"] = ",".join(engine_values)
-    if category_values:
-        params["categories"] = ",".join(category_values)
-    return params
 
 
 class WebSearchTool(Tool):
@@ -154,46 +132,17 @@ class WebSearchTool(Tool):
         return await search_duckduckgo(query, n, freshness)
 
     async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
-        base_url = self.config.searxng_url
-        try:
-            seen_results = set()
-            items: list[dict[str, str]] = []
-            scope_params = _searxng_scope_params(self.searxng_engines, self.searxng_categories)
-            async with httpx.AsyncClient(proxy=self.proxy) as client:
-                for page in range(1, self.searxng_max_pages + 1):
-                    r = await client.get(
-                        join_url_path(base_url, "/search"),
-                        params={
-                            "q": query,
-                            "format": "json",
-                            "pageno": page,
-                            **scope_params,
-                            **_freshness_params("searxng", freshness),
-                        },
-                        timeout=10.0
-                    )
-                    r.raise_for_status()
-                    page_results = r.json().get("results", [])
-                    if not page_results:
-                        break
-                    for item in page_results:
-                        normalized = {
-                            "title": item.get("title", ""),
-                            "url": item.get("url", ""),
-                            "content": item.get("content", ""),
-                        }
-                        dedupe_key = normalized.get("url") or normalized.get("title")
-                        if dedupe_key in seen_results:
-                            continue
-                        seen_results.add(dedupe_key)
-                        items.append(normalized)
-                        if len(items) >= n:
-                            break
-                    if len(items) >= n:
-                        break
-            return _format_results(query, items, n, provider="searxng", freshness=freshness)
-        except Exception as e:
-            return _format_error(query, "searxng", str(e), freshness=freshness)
+        return await search_searxng(
+            query,
+            n,
+            freshness,
+            base_url=self.config.searxng_url,
+            max_pages=self.searxng_max_pages,
+            engines=self.searxng_engines,
+            categories=self.searxng_categories,
+            proxy=self.proxy,
+            client_factory=httpx.AsyncClient,
+        )
 
     async def _search_jina(self, query: str, n: int, freshness: str) -> str:
         try:
