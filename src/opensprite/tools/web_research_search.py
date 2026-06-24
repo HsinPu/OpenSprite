@@ -10,15 +10,16 @@ from typing import Any
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from .web_research_candidates import dedupe_search_items, official_domain_hints
-from .web_research_payloads import query_attempt_payload
+from .web_research_payloads import query_attempt_payload, search_attempt_payload
 from .web_research_queries import dedupe_query_strings, official_site_queries, site_domain_hints
-from .web_research_urls import canonicalize_url, clean_text, domain_from_url
+from .web_research_urls import canonicalize_url, clean_text, domain_from_url, is_fetchable_url
 from .web_search import WebSearchTool
 
 SearchQuery = Callable[
     ...,
     Awaitable[tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]],
 ]
+SearchToolProvider = Callable[[str], Any]
 
 
 async def search_queries_with_fallback(
@@ -133,6 +134,67 @@ async def apply_official_site_search(
         query_attempts,
         official_domains,
     )
+
+
+async def search_with_fallback(
+    *,
+    query: str,
+    count: int,
+    freshness: str,
+    search_config: WebSearchToolConfig,
+    search_tool: Any,
+    custom_search_tool: bool,
+    tool_for_provider: SearchToolProvider,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]:
+    attempts: list[dict[str, Any]] = []
+    last_provider = getattr(search_tool, "provider", search_config.provider)
+    last_backend = ""
+    if custom_search_tool:
+        providers = [str(last_provider or search_config.provider or DEFAULT_WEB_SEARCH_PROVIDER)]
+    else:
+        providers = search_provider_order(
+            search_config,
+            configured_provider=str(last_provider or ""),
+        )
+    for provider in providers:
+        tool = tool_for_provider(provider)
+        result = await tool._execute(query=query, count=count, freshness=freshness)
+        payload = parse_json_object(result)
+        provider_name = str((payload or {}).get("provider") or getattr(tool, "provider", provider) or provider)
+        backend_name = str((payload or {}).get("backend") or "")
+        last_provider = provider_name
+        last_backend = backend_name
+        items = dedupe_search_items(coerce_search_items(payload or {}), limit=count) if payload else []
+        fetchable_count = sum(1 for item in items if is_fetchable_url(item.get("url")))
+        attempts.append(
+            search_attempt_payload(
+                configured_provider=provider,
+                provider=provider_name,
+                backend=backend_name,
+                payload=payload,
+                items=items,
+                raw_result=result,
+                fetchable_count=fetchable_count,
+            )
+        )
+        if payload is not None and fetchable_count > 0:
+            return (
+                payload,
+                [
+                    {
+                        **item,
+                        "search_provider": provider_name,
+                        "search_backend": backend_name,
+                        "search_freshness": str((payload or {}).get("freshness") or freshness),
+                        "source_query": query,
+                    }
+                    for item in items
+                ],
+                provider_name,
+                backend_name,
+                attempts,
+            )
+    return None, [], str(last_provider or ""), str(last_backend or ""), attempts
 
 
 def search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:

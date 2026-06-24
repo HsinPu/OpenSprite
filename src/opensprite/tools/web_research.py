@@ -70,6 +70,7 @@ from .web_research_search import (
     apply_official_site_search as _apply_official_site_search,
     search_queries_with_fallback as _search_queries_with_fallback_batch,
     search_provider_order as _search_provider_order,
+    search_with_fallback as _search_with_fallback_helper,
 )
 from .web_research_sources import (
     merge_fetch_source as _merge_fetch_source,
@@ -332,55 +333,15 @@ class WebResearchTool(Tool):
         count: int,
         freshness: str,
     ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]:
-        attempts: list[dict[str, Any]] = []
-        last_provider = getattr(self.search_tool, "provider", self.search_config.provider)
-        last_backend = ""
-        if self._custom_search_tool:
-            providers = [str(last_provider or self.search_config.provider or DEFAULT_WEB_SEARCH_PROVIDER)]
-        else:
-            providers = _search_provider_order(
-                self.search_config,
-                configured_provider=str(last_provider or ""),
-            )
-        for provider in providers:
-            tool = self._search_tool_for_provider(provider)
-            result = await tool._execute(query=query, count=count, freshness=freshness)
-            payload = _parse_json_object(result)
-            provider_name = str((payload or {}).get("provider") or getattr(tool, "provider", provider) or provider)
-            backend_name = str((payload or {}).get("backend") or "")
-            last_provider = provider_name
-            last_backend = backend_name
-            items = _dedupe_search_items(_coerce_search_items(payload or {}), limit=count) if payload else []
-            fetchable_count = sum(1 for item in items if _is_fetchable_url(item.get("url")))
-            attempts.append(
-                _search_attempt_payload(
-                    configured_provider=provider,
-                    provider=provider_name,
-                    backend=backend_name,
-                    payload=payload,
-                    items=items,
-                    raw_result=result,
-                    fetchable_count=fetchable_count,
-                )
-            )
-            if payload is not None and fetchable_count > 0:
-                return (
-                    payload,
-                    [
-                        {
-                            **item,
-                            "search_provider": provider_name,
-                            "search_backend": backend_name,
-                            "search_freshness": str((payload or {}).get("freshness") or freshness),
-                            "source_query": query,
-                        }
-                        for item in items
-                    ],
-                    provider_name,
-                    backend_name,
-                    attempts,
-                )
-        return None, [], str(last_provider or ""), str(last_backend or ""), attempts
+        return await _search_with_fallback_helper(
+            query=query,
+            count=count,
+            freshness=freshness,
+            search_config=self.search_config,
+            search_tool=self.search_tool,
+            custom_search_tool=self._custom_search_tool,
+            tool_for_provider=self._search_tool_for_provider,
+        )
 
     def _search_tool_for_provider(self, provider: str) -> WebSearchTool:
         if self._custom_search_tool:
