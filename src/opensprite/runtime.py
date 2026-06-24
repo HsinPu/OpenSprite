@@ -16,37 +16,13 @@ from .storage.factory import create_storage
 from .bus.dispatcher import MessageQueue
 from .config import Config
 from .llms import UnconfiguredLLM
+from .network_environment import apply_network_environment
 from .runtime_lifecycle import (
     await_shutdown_step,
     install_shutdown_signal_handlers,
     stop_background_task,
 )
 from .utils.log import logger
-
-
-# ============================================
-# 共用設定
-# ============================================
-
-def apply_network_environment(config: Config) -> None:
-    """Apply configured proxy settings for urllib/httpx/OpenAI clients in this process."""
-    network = getattr(config, "network", None)
-    if network is None:
-        return
-
-    values = {
-        "HTTP_PROXY": getattr(network, "http_proxy", "") or "",
-        "HTTPS_PROXY": getattr(network, "https_proxy", "") or "",
-        "NO_PROXY": getattr(network, "no_proxy", "") or "",
-    }
-    for key, value in values.items():
-        normalized = str(value or "").strip()
-        if normalized:
-            os.environ[key] = normalized
-            os.environ[key.lower()] = normalized
-
-    if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
-        logger.info("Applied network proxy settings for outbound API requests")
 
 
 async def create_agent(config: Config):
