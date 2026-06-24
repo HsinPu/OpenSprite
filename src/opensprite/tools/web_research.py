@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
@@ -41,7 +40,6 @@ from .web_research_urls import (
 )
 from .web_research_payloads import (
     ordered_clean_values as _ordered_clean_values,
-    query_attempt_payload as _query_attempt_payload,
     research_coverage as _research_coverage,
     research_payload as _research_payload,
     search_attempt_payload as _search_attempt_payload,
@@ -69,6 +67,7 @@ from .web_research_search import (
     coerce_search_items as _coerce_search_items,
     dedupe_strings as _dedupe_strings,
     parse_json_object as _parse_json_object,
+    search_queries_with_fallback as _search_queries_with_fallback_batch,
     search_provider_order as _search_provider_order,
 )
 from .web_research_sources import (
@@ -319,46 +318,12 @@ class WebResearchTool(Tool):
         count: int,
         freshness: str,
     ) -> tuple[list[dict[str, Any]], str, str, list[dict[str, Any]], list[dict[str, Any]]]:
-        all_items: list[dict[str, Any]] = []
-        all_attempts: list[dict[str, Any]] = []
-        query_attempts: list[dict[str, Any]] = []
-        selected_provider = ""
-        selected_backend = ""
-        fallback_provider = ""
-        fallback_backend = ""
-        semaphore = asyncio.Semaphore(_WEB_RESEARCH_SEARCH_CONCURRENCY)
-
-        async def run_query(current_query: str):
-            async with semaphore:
-                return await self._search_with_fallback(
-                    query=current_query,
-                    count=count,
-                    freshness=freshness,
-                )
-
-        results = await asyncio.gather(
-            *(run_query(current_query) for current_query in queries)
-        )
-        for current_query, result in zip(queries, results):
-            payload, items, provider, backend, attempts = result
-            all_attempts.extend(attempts)
-            query_attempts.append(_query_attempt_payload(current_query, provider, backend, payload, items, attempts))
-            if not fallback_provider and provider:
-                fallback_provider = provider
-            if not fallback_backend and backend:
-                fallback_backend = backend
-            if items and not selected_provider and provider:
-                selected_provider = provider
-            if items and not selected_backend and backend:
-                selected_backend = backend
-            all_items.extend({**item, "source_query": current_query} for item in items)
-
-        return (
-            _dedupe_search_items(all_items, limit=max(count * max(len(queries), 1), count)),
-            selected_provider or fallback_provider,
-            selected_backend or fallback_backend,
-            all_attempts,
-            query_attempts,
+        return await _search_queries_with_fallback_batch(
+            queries=queries,
+            count=count,
+            freshness=freshness,
+            search_query=self._search_with_fallback,
+            search_concurrency=_WEB_RESEARCH_SEARCH_CONCURRENCY,
         )
 
     async def _search_with_fallback(
