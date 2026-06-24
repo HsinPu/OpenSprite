@@ -669,6 +669,65 @@ class AgentTurnRunner:
             verifier.setdefault("model", model or "")
         return metadata
 
+    async def _refresh_completion_after_response_change(
+        self,
+        *,
+        turn: PreparedTurnInput,
+        run_id: str,
+        task_intent: TaskIntent,
+        user_message_text: str,
+        aggregate_result: ExecutionResult,
+        response: str,
+        execution_results: list[ExecutionResult],
+        auto_continue_attempts: int,
+    ) -> tuple[CompletionGateResult, WorkProgressUpdate]:
+        aggregate_result.content = response
+        completion_result = await self._evaluate_completion(
+            task_intent=task_intent,
+            response_text=response,
+            execution_result=aggregate_result,
+            user_message_text=user_message_text,
+        )
+        completion_metadata = self._completion_metadata(
+            completion_result,
+            auto_continue_attempts=auto_continue_attempts,
+        )
+        await self._emit_turn_event(
+            turn,
+            run_id,
+            COMPLETION_GATE_EVALUATED_EVENT,
+            completion_metadata,
+        )
+        work_progress = self.work_progress.evaluate(
+            task_intent=task_intent,
+            completion_result=completion_result,
+            execution_result=aggregate_result,
+            auto_continue_attempts=auto_continue_attempts,
+            pass_index=len(execution_results),
+        )
+        await self._emit_turn_event(
+            turn,
+            run_id,
+            WORK_PROGRESS_UPDATED_EVENT,
+            work_progress.to_metadata(),
+        )
+        final_task_scorecard = task_scorecard_metadata(
+            aggregate_result=aggregate_result,
+            completion_result=completion_result,
+        )
+        await self._emit_turn_event(
+            turn,
+            run_id,
+            TASK_SCORECARD_RECORDED_EVENT,
+            final_task_scorecard,
+        )
+        await self.run_trace.record_task_scorecard_part(
+            turn.session_id,
+            run_id,
+            final_task_scorecard,
+        )
+        return completion_result, work_progress
+
     async def run_normal_turn(
         self,
         *,
@@ -961,50 +1020,15 @@ class AgentTurnRunner:
             aggregate_result = self._aggregate_execution_results(execution_results, content=response)
             ran_source_finalization = True
         if ran_source_finalization or response != aggregate_result.content:
-            aggregate_result.content = response
-            completion_result = await self._evaluate_completion(
+            completion_result, work_progress = await self._refresh_completion_after_response_change(
+                turn=turn,
+                run_id=run_id,
                 task_intent=task_intent,
-                response_text=response,
-                execution_result=aggregate_result,
                 user_message_text=user_message.text,
-            )
-            completion_metadata = self._completion_metadata(
-                completion_result,
-                auto_continue_attempts=auto_continue_attempts,
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                COMPLETION_GATE_EVALUATED_EVENT,
-                completion_metadata,
-            )
-            work_progress = self.work_progress.evaluate(
-                task_intent=task_intent,
-                completion_result=completion_result,
-                execution_result=aggregate_result,
-                auto_continue_attempts=auto_continue_attempts,
-                pass_index=len(execution_results),
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                WORK_PROGRESS_UPDATED_EVENT,
-                work_progress.to_metadata(),
-            )
-            final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
-                completion_result=completion_result,
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                TASK_SCORECARD_RECORDED_EVENT,
-                final_task_scorecard,
-            )
-            await self.run_trace.record_task_scorecard_part(
-                turn.session_id,
-                run_id,
-                final_task_scorecard,
+                response=response,
+                execution_results=execution_results,
+                auto_continue_attempts=auto_continue_attempts,
             )
 
         response = final_response_after_exhausted_continuation(
@@ -1014,50 +1038,15 @@ class AgentTurnRunner:
             completion_blocker_messages=self._completion_blocker_messages(),
         )
         if response != aggregate_result.content:
-            aggregate_result.content = response
-            completion_result = await self._evaluate_completion(
+            completion_result, work_progress = await self._refresh_completion_after_response_change(
+                turn=turn,
+                run_id=run_id,
                 task_intent=task_intent,
-                response_text=response,
-                execution_result=aggregate_result,
                 user_message_text=user_message.text,
-            )
-            completion_metadata = self._completion_metadata(
-                completion_result,
-                auto_continue_attempts=auto_continue_attempts,
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                COMPLETION_GATE_EVALUATED_EVENT,
-                completion_metadata,
-            )
-            work_progress = self.work_progress.evaluate(
-                task_intent=task_intent,
-                completion_result=completion_result,
-                execution_result=aggregate_result,
-                auto_continue_attempts=auto_continue_attempts,
-                pass_index=len(execution_results),
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                WORK_PROGRESS_UPDATED_EVENT,
-                work_progress.to_metadata(),
-            )
-            final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
-                completion_result=completion_result,
-            )
-            await self._emit_turn_event(
-                turn,
-                run_id,
-                TASK_SCORECARD_RECORDED_EVENT,
-                final_task_scorecard,
-            )
-            await self.run_trace.record_task_scorecard_part(
-                turn.session_id,
-                run_id,
-                final_task_scorecard,
+                response=response,
+                execution_results=execution_results,
+                auto_continue_attempts=auto_continue_attempts,
             )
 
         outbound_media = self._get_queued_outbound_media()
