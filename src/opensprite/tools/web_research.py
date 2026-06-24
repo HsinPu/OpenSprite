@@ -18,7 +18,6 @@ from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
 from .web_research_urls import (
     candidate_domain as _candidate_domain,
     candidate_query as _candidate_query,
-    candidate_query_label as _candidate_query_label,
     candidate_url_key as _candidate_url_key,
     canonicalize_url as _canonicalize_url,
     clean_text as _clean_text,
@@ -26,6 +25,13 @@ from .web_research_urls import (
     domain_from_url as _domain_from_url,
     domain_matches_any as _domain_matches_any,
     is_fetchable_url as _is_fetchable_url,
+)
+from .web_research_payloads import (
+    ordered_clean_values as _ordered_clean_values,
+    query_attempt_payload as _query_attempt_payload,
+    research_coverage as _research_coverage,
+    research_payload as _research_payload,
+    search_attempt_payload as _search_attempt_payload,
 )
 from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 
@@ -571,60 +577,6 @@ class WebResearchTool(Tool):
         return WebSearchTool(config=self.search_config.model_copy(update={"provider": provider}))
 
 
-def _research_payload(
-    *,
-    query: str,
-    freshness: str,
-    search_provider: str,
-    search_backend: str,
-    search_items: list[dict[str, Any]],
-    fetched_sources: list[dict[str, Any]],
-    failed_sources: list[dict[str, Any]],
-    sources: list[dict[str, Any]] | None = None,
-    queries: list[str] | None = None,
-    target_fetch_count: int | None = None,
-    search_attempts: list[dict[str, Any]] | None = None,
-    query_attempts: list[dict[str, Any]] | None = None,
-) -> str:
-    research_queries = queries or [query]
-    coverage = _research_coverage(
-        queries=research_queries,
-        target_fetch_count=target_fetch_count or len(fetched_sources),
-        search_items=search_items,
-        fetched_sources=fetched_sources,
-        failed_sources=failed_sources,
-    )
-    return json.dumps(
-        {
-            "type": "web_research",
-            "query": query,
-            "queries": research_queries,
-            "url": "",
-            "final_url": "",
-            "title": "",
-            "content": "\n\n".join(str(item.get("content") or "") for item in fetched_sources if item.get("content")),
-            "summary": f"Web research for: {query}",
-            "provider": search_provider,
-            "backend": search_backend,
-            "extractor": "web_research",
-            "status": None,
-            "truncated": any(bool(item.get("truncated")) for item in fetched_sources),
-            "content_type": "application/json",
-            "freshness": freshness,
-            "items": search_items,
-            "fetched_sources": fetched_sources,
-            "failed_sources": failed_sources,
-            "sources": sources if sources is not None else fetched_sources,
-            "source_count": len(sources if sources is not None else fetched_sources),
-            "fetched_count": len(fetched_sources),
-            "search_attempts": search_attempts or [],
-            "query_attempts": query_attempts or [],
-            "coverage": coverage,
-        },
-        ensure_ascii=False,
-    )
-
-
 def _research_queries(query: str, queries: list[str] | None, *, freshness: str | None = None) -> list[str]:
     values = [_clean_text(query)]
     if isinstance(queries, list):
@@ -677,105 +629,6 @@ def _prefer_current_year_queries(queries: list[str], *, freshness: str | None) -
         seen.add(key)
         out.append(value)
     return out
-
-def _query_attempt_payload(
-    query: str,
-    provider: str,
-    backend: str,
-    payload: dict[str, Any] | None,
-    items: list[dict[str, Any]],
-    attempts: list[dict[str, Any]],
-) -> dict[str, Any]:
-    return {
-        "query": query,
-        "provider": provider,
-        "backend": backend,
-        "ok": payload is not None and bool(items),
-        "result_count": len(items),
-        "search_attempts": attempts,
-    }
-
-
-def _search_attempt_payload(
-    *,
-    configured_provider: str,
-    provider: str,
-    backend: str,
-    payload: dict[str, Any] | None,
-    items: list[dict[str, Any]],
-    raw_result: str,
-    fetchable_count: int,
-) -> dict[str, Any]:
-    return {
-        "provider": provider,
-        "configured_provider": configured_provider,
-        "backend": backend,
-        "ok": payload is not None and fetchable_count > 0,
-        "result_count": len(items),
-        "fetchable_count": fetchable_count,
-        "error": str((payload or {}).get("error") or ("" if payload is not None else raw_result or ""))[:500],
-    }
-
-
-def _research_coverage(
-    *,
-    queries: list[str],
-    target_fetch_count: int,
-    search_items: list[dict[str, Any]],
-    fetched_sources: list[dict[str, Any]],
-    failed_sources: list[dict[str, Any]],
-) -> dict[str, Any]:
-    fetched_queries = _ordered_clean_values(_candidate_query_label(source) for source in fetched_sources)
-    fetched_domains = _ordered_clean_values(_candidate_domain(source) for source in fetched_sources)
-    queries_with_search_results = _ordered_clean_values(_candidate_query_label(item) for item in search_items)
-    fetched_query_keys = {query.lower() for query in fetched_queries}
-    queries_without_successful_fetch = [
-        query
-        for query in queries_with_search_results
-        if query.lower() not in fetched_query_keys
-    ]
-    too_short_count = sum(
-        1
-        for source in failed_sources
-        if bool(source.get("is_too_short")) or str(source.get("reason") or "") == "fetched content was too short"
-    )
-    blocked_count = sum(
-        1
-        for source in failed_sources
-        if bool(source.get("blocked_or_challenge"))
-        or str(source.get("reason") or "") == "fetched content looked blocked or challenged"
-    )
-    missing_url_count = sum(1 for source in failed_sources if str(source.get("reason") or "") == "missing url")
-    return {
-        "target_fetch_count": max(int(target_fetch_count or 0), 0),
-        "target_met": len(fetched_sources) >= max(int(target_fetch_count or 0), 0),
-        "search_result_count": len(search_items),
-        "fetched_count": len(fetched_sources),
-        "failed_count": len(failed_sources),
-        "too_short_count": too_short_count,
-        "blocked_count": blocked_count,
-        "missing_url_count": missing_url_count,
-        "fetched_domains": fetched_domains,
-        "fetched_domain_count": len(fetched_domains),
-        "fetched_queries": fetched_queries,
-        "fetched_query_count": len(fetched_queries),
-        "queries_with_search_results": queries_with_search_results,
-        "queries_without_successful_fetch": queries_without_successful_fetch,
-    }
-
-
-def _ordered_clean_values(values: Any) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        text = _clean_text(value)
-        key = text.lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        out.append(text)
-    return out
-
 
 def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
     configured = (configured_provider or config.provider or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
