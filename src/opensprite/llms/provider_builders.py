@@ -2,22 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ..auth.copilot import copilot_request_headers
-from ..config.llm_presets import provider_default_base_url as profile_default_base_url
 from .base import LLMProvider
 from .minimax import MiniMaxLLM
 from .openai import OpenAILLM, OpenAIResponsesLLM
 from .openrouter import OpenRouterLLM
-
-
-def provider_spec_default_base_url(spec: Any, *, api_mode: str | None = None) -> str:
-    """Return the runtime default URL for a provider spec."""
-    profile_url = profile_default_base_url(spec.name)
-    if spec.name == "minimax" and api_mode != "anthropic_messages":
-        return spec.default_base_url
-    return profile_url or spec.default_base_url
+from .provider_specs import ProviderSpec, provider_name_default_base_url, provider_spec_default_base_url
 
 
 def create_responses_llm(
@@ -30,14 +20,14 @@ def create_responses_llm(
 ) -> LLMProvider:
     return OpenAIResponsesLLM(
         api_key=api_key,
-        base_url=base_url or profile_default_base_url(provider_name),
+        base_url=base_url or provider_name_default_base_url(provider_name),
         default_model=model,
         reasoning_effort=reasoning_effort,
     )
 
 
 def create_llm_for_spec(
-    spec: Any,
+    spec: ProviderSpec,
     *,
     api_key: str,
     model: str,

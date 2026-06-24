@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..auth.copilot import COPILOT_BASE_URL
+from ..config.llm_presets import provider_default_base_url as profile_default_base_url
 
 
 @dataclass(frozen=True)
@@ -72,3 +73,18 @@ def find_provider(api_key: str = "", base_url: str = "", model: str = "", provid
         )
     )
     return provider or OPENAI_PROVIDER
+
+
+def provider_name_default_base_url(provider_name: str) -> str:
+    """Return the configured default URL for a provider name."""
+
+    return profile_default_base_url(provider_name)
+
+
+def provider_spec_default_base_url(spec: ProviderSpec, *, api_mode: str | None = None) -> str:
+    """Return the runtime default URL for a provider spec."""
+
+    profile_url = provider_name_default_base_url(spec.name)
+    if spec.name == "minimax" and api_mode != "anthropic_messages":
+        return spec.default_base_url
+    return profile_url or spec.default_base_url
