@@ -9,10 +9,10 @@ from ..auth.credentials import CredentialNotFoundError
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
-from ..config.llm_presets import provider_profile_defaults
 from .reasoning import normalize_reasoning_effort
 from .runtime_auth import resolve_runtime_provider_auth
 from .runtime_credentials import resolve_runtime_credentials
+from .runtime_profile import resolve_runtime_provider_profile
 
 
 class ProviderRuntimeError(RuntimeError):
@@ -45,16 +45,11 @@ def resolve_provider_runtime(
     app_home: str | Path | None = None,
 ) -> ResolvedProviderRuntime:
     """Resolve a ProviderConfig into the arguments needed by create_llm()."""
-    configured_provider = str(provider.provider or provider_name or "").strip()
-    defaults = provider_profile_defaults(
-        configured_provider,
-        auth_type=provider.auth_type,
-        api_mode=provider.api_mode,
-    )
-    configured_provider = defaults.provider_id
-    auth_type = defaults.auth_type
-    api_mode = defaults.api_mode
-    profile_base_url = defaults.default_base_url
+    profile = resolve_runtime_provider_profile(provider, provider_name=provider_name)
+    configured_provider = profile.provider_name
+    auth_type = profile.auth_type
+    api_mode = profile.api_mode
+    profile_base_url = profile.profile_base_url
     base_url = str(provider.base_url or "").strip()
     api_key = str(provider.api_key or "").strip()
     credential_id = str(provider.credential_id or "").strip()
