@@ -71,6 +71,7 @@ from .turn_input import (
 )
 from .turn_result_aggregation import aggregate_execution_results
 from .turn_result_updates import (
+    apply_runtime_progress,
     merge_delegated_task_updates,
     merge_workflow_outcomes,
     with_delegated_tasks,
@@ -799,7 +800,7 @@ class AgentTurnRunner:
                         current_task_contract_override if auto_continue_attempts > 0 else None
                     ),
                 )
-                exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
+                exec_result = apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
                 if exec_result.task_contract is not None:
                     contract_work_plan = self.work_progress.create_plan(
                         task_intent,
@@ -977,7 +978,7 @@ class AgentTurnRunner:
                 allow_tools=False,
                 task_contract_override=aggregate_result.task_contract,
             )
-            finalization_result = self._apply_runtime_progress(
+            finalization_result = apply_runtime_progress(
                 finalization_result,
                 self.turn_context.snapshot_work_progress(),
             )
@@ -1179,22 +1180,3 @@ class AgentTurnRunner:
             tuple(str(item or "").strip() for item in (direct_verify.get("pytest_args") or ()) if str(item or "").strip()),
         )
         return result.content, result
-
-    @staticmethod
-    def _apply_runtime_progress(exec_result: ExecutionResult, work_progress: dict[str, object]) -> ExecutionResult:
-        exec_result.file_change_count = max(
-            int(getattr(exec_result, "file_change_count", 0) or 0),
-            int(work_progress.get("file_change_count", 0) or 0),
-        )
-        touched_paths = tuple(
-            dict.fromkeys(
-                str(path)
-                for path in (
-                    *getattr(exec_result, "touched_paths", ()),
-                    *(work_progress.get("touched_paths", ()) or ()),
-                )
-                if str(path).strip()
-            )
-        )
-        exec_result.touched_paths = touched_paths
-        return exec_result

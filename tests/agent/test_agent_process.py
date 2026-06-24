@@ -31,7 +31,7 @@ from opensprite.agent.task.contract import (
 )
 from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.turn_result_aggregation import aggregate_execution_results
-from opensprite.agent.turn_result_updates import merge_workflow_outcomes
+from opensprite.agent.turn_result_updates import apply_runtime_progress, merge_workflow_outcomes
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
@@ -467,6 +467,16 @@ def test_aggregate_execution_results_keeps_only_latest_stop_reason():
     assert aggregate.executed_tool_calls == 1
     assert aggregate.stop_reason is None
     assert aggregate.stop_metadata == {}
+
+
+def test_apply_runtime_progress_merges_counts_and_paths():
+    result = apply_runtime_progress(
+        ExecutionResult(content="ok", file_change_count=1, touched_paths=("a.py",)),
+        {"file_change_count": 3, "touched_paths": ("a.py", "b.py", " ")},
+    )
+
+    assert result.file_change_count == 3
+    assert result.touched_paths == ("a.py", "b.py")
 
 
 def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error():

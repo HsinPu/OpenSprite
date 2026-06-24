@@ -32,6 +32,25 @@ def with_workflow_outcomes(
     return replace(result, workflow_outcomes=workflow_outcomes)
 
 
+def apply_runtime_progress(exec_result: ExecutionResult, work_progress: dict[str, object]) -> ExecutionResult:
+    exec_result.file_change_count = max(
+        int(getattr(exec_result, "file_change_count", 0) or 0),
+        int(work_progress.get("file_change_count", 0) or 0),
+    )
+    touched_paths = tuple(
+        dict.fromkeys(
+            str(path)
+            for path in (
+                *getattr(exec_result, "touched_paths", ()),
+                *(work_progress.get("touched_paths", ()) or ()),
+            )
+            if str(path).strip()
+        )
+    )
+    exec_result.touched_paths = touched_paths
+    return exec_result
+
+
 def merge_delegated_task_updates(
     existing: tuple[StoredDelegatedTask, ...],
     updates: tuple[StoredDelegatedTask, ...],
