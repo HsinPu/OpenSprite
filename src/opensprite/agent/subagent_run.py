@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from ..config.llm_presets import provider_profile_defaults
 from ..llms import ChatMessage
-from ..llms.registry import create_llm
+from ..llms.provider_factory import create_llm
 from ..llms.routed import ModelRoutedProvider
 from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..runs.events import (

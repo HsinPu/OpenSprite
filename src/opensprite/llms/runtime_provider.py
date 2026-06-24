@@ -105,7 +105,7 @@ def resolve_provider_runtime(
 
 
 def create_llm_from_runtime(runtime: ResolvedProviderRuntime):
-    from .registry import create_llm
+    from .provider_factory import create_llm
 
     return create_llm(
         api_key=runtime.api_key,
