@@ -260,12 +260,4 @@ class WebResearchTool(Tool):
             search_config=self.search_config,
             search_tool=self.search_tool,
             custom_search_tool=self._custom_search_tool,
-            tool_for_provider=self._search_tool_for_provider,
         )
-
-    def _search_tool_for_provider(self, provider: str) -> WebSearchTool:
-        if self._custom_search_tool:
-            return self.search_tool
-        if provider == self.search_tool.provider:
-            return self.search_tool
-        return WebSearchTool(config=self.search_config.model_copy(update={"provider": provider}))

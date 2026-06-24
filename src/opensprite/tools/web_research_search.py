@@ -19,7 +19,6 @@ SearchQuery = Callable[
     ...,
     Awaitable[tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]],
 ]
-SearchToolProvider = Callable[[str], Any]
 
 
 async def search_queries_with_fallback(
@@ -144,7 +143,6 @@ async def search_with_fallback(
     search_config: WebSearchToolConfig,
     search_tool: Any,
     custom_search_tool: bool,
-    tool_for_provider: SearchToolProvider,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str, str, list[dict[str, Any]]]:
     attempts: list[dict[str, Any]] = []
     last_provider = getattr(search_tool, "provider", search_config.provider)
@@ -157,7 +155,12 @@ async def search_with_fallback(
             configured_provider=str(last_provider or ""),
         )
     for provider in providers:
-        tool = tool_for_provider(provider)
+        tool = search_tool_for_provider(
+            provider,
+            search_config=search_config,
+            search_tool=search_tool,
+            custom_search_tool=custom_search_tool,
+        )
         result = await tool._execute(query=query, count=count, freshness=freshness)
         payload = parse_json_object(result)
         provider_name = str((payload or {}).get("provider") or getattr(tool, "provider", provider) or provider)
@@ -195,6 +198,20 @@ async def search_with_fallback(
                 attempts,
             )
     return None, [], str(last_provider or ""), str(last_backend or ""), attempts
+
+
+def search_tool_for_provider(
+    provider: str,
+    *,
+    search_config: WebSearchToolConfig,
+    search_tool: Any,
+    custom_search_tool: bool,
+) -> Any:
+    if custom_search_tool:
+        return search_tool
+    if provider == getattr(search_tool, "provider", ""):
+        return search_tool
+    return WebSearchTool(config=search_config.model_copy(update={"provider": provider}))
 
 
 def search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
