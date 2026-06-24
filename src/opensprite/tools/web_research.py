@@ -46,7 +46,10 @@ from .web_research_payloads import (
     research_payload as _research_payload,
     search_attempt_payload as _search_attempt_payload,
 )
-from .web_research_fetch import fetch_single_candidate as _fetch_single_research_candidate
+from .web_research_fetch import (
+    fetch_research_candidates as _fetch_research_candidates_batch,
+    fetch_single_candidate as _fetch_single_research_candidate,
+)
 from .web_research_queries import (
     MARKET_QUOTE_QUERY_RE as _MARKET_QUOTE_QUERY_RE,
     RECENT_FRESHNESS_VALUES as _RECENT_FRESHNESS_VALUES,
@@ -277,68 +280,19 @@ class WebResearchTool(Tool):
         search_provider: str,
         search_backend: str,
     ) -> dict[str, dict[str, Any]]:
-        fetched_by_candidate_url: dict[str, dict[str, Any]] = {}
-        cursor = 0
-        while len(fetched_sources) < target_fetches and cursor < len(candidates):
-            remaining_needed = max(target_fetches - len(fetched_sources), 1)
-            batch_size = min(
-                len(candidates) - cursor,
-                max(remaining_needed, min(_WEB_RESEARCH_FETCH_CONCURRENCY, max(target_fetches, 1))),
-            )
-            batch = candidates[cursor : cursor + batch_size]
-            cursor += batch_size
-
-            tasks: list[Any] = []
-            for item in batch:
-                url = _clean_text(item.get("url"))
-                if not url:
-                    failed_sources.append({**item, "reason": "missing url"})
-                    continue
-                if not _is_fetchable_url(url):
-                    failed_sources.append({**item, "reason": "unsupported url"})
-                    continue
-                canonical_url = _candidate_url_key(item)
-                if canonical_url in fetched_urls:
-                    continue
-                tasks.append(
-                    self._fetch_single_candidate(
-                        item,
-                        max_chars=max_chars,
-                        query=query,
-                        search_provider=search_provider,
-                        search_backend=search_backend,
-                    )
-                )
-
-            if not tasks:
-                continue
-
-            for canonical_url, fetched, failed in await asyncio.gather(*tasks):
-                if failed is not None:
-                    failed_sources.append(failed)
-                    continue
-                if fetched is None:
-                    continue
-                final_url_key = str(fetched.get("canonical_url") or fetched.get("url") or "")
-                if final_url_key and final_url_key in fetched_urls and final_url_key != canonical_url:
-                    failed_sources.append({**fetched, "reason": "duplicate final url"})
-                    continue
-                if fetched.get("blocked_or_challenge"):
-                    failed_sources.append({**fetched, "reason": "fetched content looked blocked or challenged"})
-                    continue
-                if fetched.get("is_too_short") or not fetched.get("has_main_content"):
-                    failed_sources.append({**fetched, "reason": "fetched content was too short"})
-                    continue
-
-                fetched_sources.append(fetched)
-                fetched_by_candidate_url[canonical_url] = fetched
-                fetched_urls.add(canonical_url)
-                if final_url_key:
-                    fetched_urls.add(final_url_key)
-                if len(fetched_sources) >= target_fetches:
-                    break
-
-        return fetched_by_candidate_url
+        return await _fetch_research_candidates_batch(
+            candidates=candidates,
+            fetched_sources=fetched_sources,
+            failed_sources=failed_sources,
+            fetched_urls=fetched_urls,
+            target_fetches=target_fetches,
+            max_chars=max_chars,
+            query=query,
+            search_provider=search_provider,
+            search_backend=search_backend,
+            fetch_candidate=self._fetch_single_candidate,
+            fetch_concurrency=_WEB_RESEARCH_FETCH_CONCURRENCY,
+        )
 
     async def _fetch_single_candidate(
         self,
