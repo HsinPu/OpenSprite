@@ -207,6 +207,22 @@ class AgentTurnRunner:
         self._worktree_sandbox_enabled = worktree_sandbox_enabled
         self._workspace_root = workspace_root
 
+    async def _emit_turn_event(
+        self,
+        turn: PreparedTurnInput,
+        run_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            event_type,
+            payload,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+
     @staticmethod
     def is_media_only_message(user_message: UserMessage) -> bool:
         """Return whether a turn only carries media without user instructions."""
@@ -229,8 +245,8 @@ class AgentTurnRunner:
         result = await self.audio_input.preprocess(user_message, turn)
         if not result.transcribed:
             return
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             AUDIO_INPUT_TRANSCRIBED_EVENT,
             {
@@ -238,8 +254,6 @@ class AgentTurnRunner:
                 "audio_files": list(result.audio_files),
                 "transcript_len": result.transcript_len,
             },
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
 
     async def _maybe_record_worktree_sandbox(
@@ -295,8 +309,8 @@ class AgentTurnRunner:
                     task_kind=task_intent.kind,
                     expects_code_change=False,
                 )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 TASK_INTENT_DETECTED_EVENT,
                 {
@@ -308,8 +322,6 @@ class AgentTurnRunner:
                     },
                     "task_context": task_plan.task_context_decision.to_metadata(),
                 },
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             work_plan = task_plan.work_plan
             current_work_state = task_plan.current_work_state
@@ -475,13 +487,11 @@ class AgentTurnRunner:
             "task_context": task_context_decision.to_metadata(),
         }
         await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             TASK_CLARIFICATION_REQUESTED_EVENT,
             metadata,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         return await self.response_finalizer.finalize(
             session_id=turn.session_id,
@@ -522,8 +532,8 @@ class AgentTurnRunner:
             exec_result.llm_step_events,
         )
         if exec_result.stop_reason:
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 EXECUTION_STOPPED_EVENT,
                 {
@@ -532,8 +542,6 @@ class AgentTurnRunner:
                     "stop_reason": exec_result.stop_reason,
                     **dict(exec_result.stop_metadata or {}),
                 },
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
         aggregate_result = self._aggregate_execution_results(execution_results, content=response)
         delegated_task_updates = self._consume_delegated_task_updates(run_id)
@@ -563,13 +571,11 @@ class AgentTurnRunner:
             completion_result,
             auto_continue_attempts=auto_continue_attempts,
         )
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             COMPLETION_GATE_EVALUATED_EVENT,
             completion_metadata,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         work_progress = self.work_progress.evaluate(
             task_intent=task_intent,
@@ -578,13 +584,11 @@ class AgentTurnRunner:
             auto_continue_attempts=auto_continue_attempts,
             pass_index=len(execution_results),
         )
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             WORK_PROGRESS_UPDATED_EVENT,
             work_progress.to_metadata(),
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         task_checkpoint = task_checkpoint_metadata(
             aggregate_result=aggregate_result,
@@ -593,31 +597,27 @@ class AgentTurnRunner:
             pass_index=len(execution_results),
             auto_continue_attempts=auto_continue_attempts,
         )
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             TASK_CHECKPOINT_RECORDED_EVENT,
             task_checkpoint,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         await self.run_trace.record_task_checkpoint_part(turn.session_id, run_id, task_checkpoint)
         task_scorecard = task_scorecard_metadata(
             aggregate_result=aggregate_result,
             completion_result=completion_result,
         )
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             TASK_SCORECARD_RECORDED_EVENT,
             task_scorecard,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         await self.run_trace.record_task_scorecard_part(turn.session_id, run_id, task_scorecard)
         if auto_continue_attempts > 0:
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 AUTO_CONTINUE_COMPLETED_EVENT,
                 {
@@ -625,8 +625,6 @@ class AgentTurnRunner:
                     TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
                     TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                 },
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
         return TurnPassEvaluation(
             aggregate_result=aggregate_result,
@@ -690,13 +688,11 @@ class AgentTurnRunner:
         await self._save_user_message(turn.session_id, user_message.text, metadata=turn.user_metadata)
 
         logger.info(f"[{turn.session_id}] agent.run | status=processing")
-        await self._emit_run_event(
-            turn.session_id,
+        await self._emit_turn_event(
+            turn,
             run_id,
             LLM_STATUS_EVENT,
             {"message": "processing"},
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
         )
         execution_results: list[ExecutionResult] = []
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
@@ -722,13 +718,11 @@ class AgentTurnRunner:
             direct_resume_context: dict[str, str] | None = None
             if pending_direct_resume is not None:
                 direct_resume_context = dict(pending_direct_resume)
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     DIRECT_WORKFLOW_RESUME_STARTED_EVENT,
                     {"schema_version": 1, **direct_resume_context},
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
                 response, exec_result, collected_delegated_tasks, collected_workflow_outcomes = await self._run_direct_workflow_resume(
                     run_id=run_id,
@@ -740,13 +734,11 @@ class AgentTurnRunner:
                 )
                 pending_direct_resume = None
             elif pending_direct_verify is not None:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     DIRECT_VERIFICATION_STARTED_EVENT,
                     {"schema_version": 1, **dict(pending_direct_verify)},
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
                 response, exec_result = await self._run_direct_verification(
                     direct_verify=pending_direct_verify,
@@ -783,13 +775,11 @@ class AgentTurnRunner:
                     else:
                         work_plan = contract_work_plan
                         if not work_plan_recorded:
-                            await self._emit_run_event(
-                                turn.session_id,
+                            await self._emit_turn_event(
+                                turn,
                                 run_id,
                                 WORK_PLAN_CREATED_EVENT,
                                 work_plan.to_metadata(),
-                                channel=turn.channel,
-                                external_chat_id=turn.external_chat_id,
                             )
                             work_plan_recorded = True
                         if not worktree_sandbox_recorded and work_plan.expects_code_change:
@@ -846,8 +836,8 @@ class AgentTurnRunner:
                 compaction_handoff=aggregate_result.compaction_handoff,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
@@ -855,8 +845,6 @@ class AgentTurnRunner:
                         TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
                         TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
                 auto_continue_attempts += 1
                 direct_actions_used += 1
@@ -872,8 +860,8 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.direct_verify_action:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
@@ -881,8 +869,6 @@ class AgentTurnRunner:
                         TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
                         TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
                 auto_continue_attempts += 1
                 direct_actions_used += 1
@@ -904,8 +890,8 @@ class AgentTurnRunner:
                 }
                 continue
             if decision.should_continue and decision.prompt:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     AUTO_CONTINUE_SCHEDULED_EVENT,
                     {
@@ -913,8 +899,6 @@ class AgentTurnRunner:
                         TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
                         TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
                 auto_continue_attempts += 1
                 if direct_resume_context is not None:
@@ -930,8 +914,8 @@ class AgentTurnRunner:
                 continue
 
             if decision.emit_skipped_event:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     AUTO_CONTINUE_SKIPPED_EVENT,
                     {
@@ -939,8 +923,6 @@ class AgentTurnRunner:
                         TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
                         TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
             break
 
@@ -990,13 +972,11 @@ class AgentTurnRunner:
                 completion_result,
                 auto_continue_attempts=auto_continue_attempts,
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 COMPLETION_GATE_EVALUATED_EVENT,
                 completion_metadata,
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             work_progress = self.work_progress.evaluate(
                 task_intent=task_intent,
@@ -1005,25 +985,21 @@ class AgentTurnRunner:
                 auto_continue_attempts=auto_continue_attempts,
                 pass_index=len(execution_results),
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 WORK_PROGRESS_UPDATED_EVENT,
                 work_progress.to_metadata(),
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 TASK_SCORECARD_RECORDED_EVENT,
                 final_task_scorecard,
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             await self.run_trace.record_task_scorecard_part(
                 turn.session_id,
@@ -1049,13 +1025,11 @@ class AgentTurnRunner:
                 completion_result,
                 auto_continue_attempts=auto_continue_attempts,
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 COMPLETION_GATE_EVALUATED_EVENT,
                 completion_metadata,
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             work_progress = self.work_progress.evaluate(
                 task_intent=task_intent,
@@ -1064,25 +1038,21 @@ class AgentTurnRunner:
                 auto_continue_attempts=auto_continue_attempts,
                 pass_index=len(execution_results),
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 WORK_PROGRESS_UPDATED_EVENT,
                 work_progress.to_metadata(),
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
-            await self._emit_run_event(
-                turn.session_id,
+            await self._emit_turn_event(
+                turn,
                 run_id,
                 TASK_SCORECARD_RECORDED_EVENT,
                 final_task_scorecard,
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
             )
             await self.run_trace.record_task_scorecard_part(
                 turn.session_id,
@@ -1153,8 +1123,8 @@ class AgentTurnRunner:
             await self._save_work_state(updated_work_state)
             if updated_work_state is not None:
                 todos = await self.run_trace.record_task_checklist_part(turn.session_id, run_id, updated_work_state)
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     TASK_CHECKLIST_UPDATED_EVENT,
                     {
@@ -1162,14 +1132,12 @@ class AgentTurnRunner:
                         "objective": updated_work_state.objective,
                         "todos": todos,
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
             await self._apply_work_progress(turn.session_id, work_progress, updated_work_state)
             await self._apply_completion_gate_result(turn.session_id, completion_result)
             if aggregate_result.task_artifacts:
-                await self._emit_run_event(
-                    turn.session_id,
+                await self._emit_turn_event(
+                    turn,
                     run_id,
                     TASK_ARTIFACTS_RECORDED_EVENT,
                     {
@@ -1177,8 +1145,6 @@ class AgentTurnRunner:
                         "count": len(aggregate_result.task_artifacts),
                         "artifacts": [item.to_metadata() for item in aggregate_result.task_artifacts],
                     },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
                 )
             self._finalize_learning_reuse(turn.session_id, run_id, True)
 
