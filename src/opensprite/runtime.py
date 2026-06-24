@@ -8,10 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from .agent import AgentLoop
-from .bus.message import UserMessage
 from .config import AgentConfig
-from .context.paths import split_session_id
-from .cron import CronManager, CronJob
+from .cron.factory import create_cron_manager
 from .llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from .media.factory import create_media_router
 from .search.embedding_factory import create_search_embedding_provider
@@ -151,34 +149,6 @@ async def create_agent(config: Config):
         cron_tool.set_cron_manager(cron_manager)
     
     return agent, mq, cron_manager
-
-
-def create_cron_manager(config: Config, agent: AgentLoop, mq: MessageQueue) -> CronManager:
-    """Create the per-session cron manager bound to the running agent."""
-
-    async def on_job(session_id: str, job: CronJob) -> str | None:
-        channel, raw_external_chat_id = split_session_id(session_id)
-        user_message = UserMessage(
-            text=job.payload.message,
-            channel=job.payload.channel or channel,
-            external_chat_id=job.payload.external_chat_id or raw_external_chat_id,
-            session_id=session_id,
-            sender_id="system:cron",
-            sender_name="cron",
-            metadata={
-                "source": "cron",
-                "job_id": job.id,
-                "_bypass_commands": True,
-                "_suppress_outbound": not job.payload.deliver,
-            },
-        )
-        await mq.enqueue(user_message)
-        return None
-
-    return CronManager(
-        workspace_root=Path(agent.tool_workspace or Path.home() / ".opensprite" / "workspace"),
-        on_job=on_job,
-    )
 
 
 # ============================================
