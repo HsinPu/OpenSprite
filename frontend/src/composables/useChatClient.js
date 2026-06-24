@@ -2006,9 +2006,31 @@ export function useChatClient() {
     }
   }
 
+  function normalizeSettingsSection(sectionName) {
+    return Object.prototype.hasOwnProperty.call(copy.value.settingsTitles, sectionName) ? sectionName : "general";
+  }
+
+  function deferSettingsWork(callback) {
+    const run = () => {
+      if (!clientDisposed) {
+        callback();
+      }
+    };
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(() => window.setTimeout(run, 0));
+      return;
+    }
+    setTimeout(run, 0);
+  }
+
   function selectSettingsSection(sectionName) {
-    settingsSection.value = Object.prototype.hasOwnProperty.call(copy.value.settingsTitles, sectionName) ? sectionName : "general";
-    loadSettingsSection(settingsSection.value);
+    const nextSection = normalizeSettingsSection(sectionName);
+    settingsSection.value = nextSection;
+    deferSettingsWork(() => {
+      if (settingsOpen.value && settingsSection.value === nextSection) {
+        loadSettingsSection(nextSection);
+      }
+    });
   }
 
   function syncSettingsForm() {
@@ -2025,9 +2047,16 @@ export function useChatClient() {
   }
 
   function openSettings(sectionName = "general") {
+    const nextSection = normalizeSettingsSection(sectionName);
     settingsOpen.value = true;
-    selectSettingsSection(sectionName);
-    syncSettingsForm();
+    settingsSection.value = nextSection;
+    deferSettingsWork(() => {
+      if (!settingsOpen.value || settingsSection.value !== nextSection) {
+        return;
+      }
+      syncSettingsForm();
+      loadSettingsSection(nextSection);
+    });
   }
 
   function closeSettings() {

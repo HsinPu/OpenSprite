@@ -40,6 +40,7 @@ const [
   indexHtml,
   app,
   main,
+  styles,
   reactiveCompat,
   chatClient,
 ] = await Promise.all([
@@ -49,6 +50,7 @@ const [
   read("index.html"),
   read("src/App.tsx"),
   read("src/main.tsx"),
+  read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
 ]);
@@ -87,6 +89,7 @@ assertIncludes(main, "createRoot", "React root mount");
 assertIncludes(main, "antd/dist/reset.css", "Ant Design reset stylesheet");
 assertIncludes(app, "ConfigProvider", "Ant Design provider");
 assertIncludes(app, "useReactiveStore", "React subscription bridge");
+assertIncludes(app, "useTransition", "settings modal uses transition for deferred content");
 assertIncludes(app, "useChatClient", "existing chat client flow reused");
 assertIncludes(app, "SidebarNav", "React sidebar shell");
 assertIncludes(app, "ChatPanel", "React chat panel");
@@ -131,12 +134,28 @@ assertIncludes(app, "form.sessionTimeout", "browser settings keeps session timeo
 assertIncludes(app, "form.allowPrivateUrls", "browser settings keeps private URL toggle");
 assertNotIncludes(app, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
 assertIncludes(app, "shortcut-keys", "shortcut settings uses parity layout");
-assertIncludes(app, "settings-card settings-card--form", "settings pages use parity form card layout");
+assertIncludes(app, "function SettingsCard", "settings pages use Ant card helper");
+assertIncludes(app, "<SettingsCard className=\"settings-card--form\"", "settings form cards use Ant card helper");
+assertIncludes(app, "<Select", "settings pages use Ant Select controls");
+assertIncludes(app, "<Switch", "settings pages use Ant Switch controls");
+assertIncludes(app, "<Input", "settings pages use Ant Input controls");
+assertIncludes(app, "<Checkbox", "sidebar selection uses Ant Checkbox controls");
+assertIncludes(app, "<Segmented", "sidebar filters use Ant Segmented controls");
+assertNotIncludes(app, "<button", "app shell avoids raw button elements");
+assertNotIncludes(app, "<input", "app shell avoids raw input elements");
+assertNotIncludes(app, "<select", "app shell avoids raw select elements");
+assertNotIncludes(app, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(app, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(app, "SettingsNav", "settings modal uses the parity sidebar nav");
-assertIncludes(app, "settings-nav__item--active", "settings nav marks active section");
-assertIncludes(app, "selectSection(item.section)", "settings nav changes active section");
-assertRegex(app, /className=\"run-history__select\"[\s\S]+client\.selectRun\(event\.target\.value\)/, "run history selector changes active run");
+assertIncludes(app, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
+assertIncludes(app, "selectedKeys={[section]}", "settings nav marks active section");
+assertIncludes(app, "selectSection(String(key))", "settings nav changes active section");
+assertIncludes(app, "renderSettingsSection", "settings modal renders only the active section");
+assertIncludes(app, "settings-page--loading", "settings modal defers heavy section content");
+assertNotIncludes(app, "const contentBySection", "settings modal should not build a section map during render");
+assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
+assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
+assertRegex(app, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
 assertNotIncludes(app, "BackgroundProcessSidebar", "background process sidebar stays removed");
 assertNotIncludes(app, "CuratorSettingsPage", "curator settings page stays removed");
 
@@ -153,6 +172,8 @@ assertIncludes(chatClient, "loadCurrentSessionRuns", "run history loading retain
 assertIncludes(chatClient, "maybeLoadRunTraceForSession", "trace loading retained");
 assertIncludes(chatClient, "STORAGE_KEYS.showRunHistory", "run history preference retained");
 assertIncludes(chatClient, "STORAGE_KEYS.showWorkState", "work state preference retained");
+assertIncludes(chatClient, "deferSettingsWork", "settings loads are deferred after opening");
+assertIncludes(chatClient, "window.requestAnimationFrame", "settings deferred work yields after user interaction");
 assertNotIncludes(chatClient, "/api/background-processes", "background process polling remains removed");
 assertNotIncludes(chatClient, "/api/curator/", "curator action fetch remains removed");
 

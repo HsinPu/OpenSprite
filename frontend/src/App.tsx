@@ -1,35 +1,35 @@
-import React, { CSSProperties, useMemo, useState } from "react";
+import React, { CSSProperties, useEffect, useMemo, useState, useTransition } from "react";
 import {
   Alert,
   App as AntdApp,
-  Avatar,
-  Badge,
   Button,
   Card,
+  Checkbox,
   Collapse,
   ConfigProvider,
-  Divider,
+  Descriptions,
   Empty,
   Flex,
   Form,
   Input,
   InputNumber,
+  Layout,
   List,
+  Menu,
   Modal,
   Segmented,
   Select,
   Space,
   Spin,
   Switch,
-  Tabs,
   Tag,
   Timeline,
-  Tooltip,
   Typography,
   theme,
 } from "antd";
 import {
   ApiOutlined,
+  ArrowLeftOutlined,
   BranchesOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -270,7 +270,7 @@ function OpenSpriteShell() {
           {client.sidebarOpen.value ? copy.timeline.collapse : copy.app.menu}
         </Button>
         {client.sidebarOpen.value ? (
-          <button className="mobile-nav-backdrop" type="button" aria-label="Close menu" onClick={client.toggleSidebar} />
+          <Button className="mobile-nav-backdrop" type="text" aria-label="Close menu" onClick={client.toggleSidebar} />
         ) : null}
 
         <SidebarNav
@@ -284,9 +284,9 @@ function OpenSpriteShell() {
         <aside className="trace-sidebar" data-collapsed={client.traceInspectorCollapsed.value} aria-label="Run trace inspector">
           {!client.traceInspectorCollapsed.value ? (
             <>
-              <button
+              <Button
                 className="trace-sidebar__resize"
-                type="button"
+                type="text"
                 aria-label="Resize trace inspector"
                 title="Drag to resize trace inspector"
                 onPointerDown={beginTraceResize}
@@ -387,9 +387,9 @@ function SidebarNav({
     <aside id="sidebar" className="sidebar" aria-label={copy.sidebar.ariaLabel}>
       <div className="sidebar__top">
         <div className="brand-row">
-          <button
+          <Button
             className="brand-mark brand-mark--button"
-            type="button"
+            type="text"
             aria-label={client.sidebarCollapsed.value ? copy.sidebar.expand : "OpenSprite"}
             title={client.sidebarCollapsed.value ? copy.sidebar.expand : "OpenSprite"}
             disabled={!client.sidebarCollapsed.value}
@@ -401,32 +401,31 @@ function SidebarNav({
           >
             <span className="brand-mark__initial" aria-hidden="true">OS</span>
             <span className="brand-mark__expand" aria-hidden="true" />
-          </button>
+          </Button>
           <div className="brand-row__copy">
             <strong>OpenSprite</strong>
             <span>{copy.sidebar.brandSubtitle}</span>
           </div>
-          <button
+          <Button
             className="sidebar-collapse-button"
-            type="button"
+            type="text"
             aria-label={client.sidebarCollapsed.value ? copy.sidebar.expand : copy.sidebar.collapse}
             title={client.sidebarCollapsed.value ? copy.sidebar.expand : copy.sidebar.collapse}
             aria-pressed={client.sidebarCollapsed.value}
+            icon={client.sidebarCollapsed.value ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={client.toggleSidebarCollapsed}
-          >
-            <span className="sidebar-collapse-button__icon" aria-hidden="true" />
-          </button>
+          />
         </div>
 
-        <button
+        <Button
           className="new-chat-button"
-          type="button"
+          type="primary"
           title={copy.sidebar.newChat}
+          icon={<PlusOutlined />}
           onClick={client.createNewChat}
         >
-          <span aria-hidden="true">+</span>
           <span className="new-chat-button__label">{copy.sidebar.newChat}</span>
-        </button>
+        </Button>
 
         <section className="sidebar__section">
           <div className="sidebar__section-head">
@@ -435,58 +434,54 @@ function SidebarNav({
               <small>{sessions.length}/{client.sidebarSessionTotal.value}</small>
               <span className="sidebar__section-actions">
                 {!deleteMode ? (
-                  <button
+                  <Button
                     className="sidebar__manage-button"
-                    type="button"
+                    type="text"
+                    size="small"
                     disabled={!sessions.length}
                     title={copy.sidebar.deleteChat}
                     onClick={beginDeleteMode}
                   >
                     {copy.sidebar.deleteChat}
-                  </button>
+                  </Button>
                 ) : (
                   <>
-                    <button className="sidebar__manage-button" type="button" onClick={cancelDeleteMode}>
+                    <Button className="sidebar__manage-button" type="text" size="small" onClick={cancelDeleteMode}>
                       {copy.sidebar.cancelDelete}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       className="sidebar__manage-button sidebar__manage-button--danger"
-                      type="button"
+                      type="text"
+                      size="small"
+                      danger
                       disabled={!selectedSessions.length}
                       onClick={deleteSelectedSessions}
                     >
                       {copy.sidebar.deleteSelectedChats(selectedSessions.length)}
-                    </button>
+                    </Button>
                   </>
                 )}
               </span>
             </span>
           </div>
 
-          <div className="session-filter" role="group" aria-label={copy.sidebar.chats}>
-            <button
-              type="button"
-              aria-pressed={client.sessionChannelFilter.value === "all"}
-              onClick={() => client.setSessionChannelFilter("all")}
-            >
-              {copy.sidebar.filters.all}
-            </button>
-            <button
-              type="button"
-              aria-pressed={client.sessionChannelFilter.value === "web"}
-              onClick={() => client.setSessionChannelFilter("web")}
-            >
-              {copy.sidebar.filters.web}
-            </button>
-          </div>
+          <Segmented
+            className="session-filter"
+            aria-label={copy.sidebar.chats}
+            value={client.sessionChannelFilter.value}
+            options={[
+              { value: "all", label: copy.sidebar.filters.all },
+              { value: "web", label: copy.sidebar.filters.web },
+            ]}
+            onChange={(value) => client.setSessionChannelFilter(String(value))}
+          />
 
           <label className="session-history-toggle" title={copy.sidebar.showHiddenSessionsTitle}>
-            <input
-              type="checkbox"
+            <Switch
+              size="small"
               checked={client.showHiddenSessions.value}
-              onChange={(event) => client.setShowHiddenSessions(event.target.checked)}
+              onChange={(checked) => client.setShowHiddenSessions(checked)}
             />
-            <span aria-hidden="true" />
             <strong>{copy.sidebar.showHiddenSessions}</strong>
           </label>
 
@@ -504,19 +499,17 @@ function SidebarNav({
                   ].filter(Boolean).join(" ")}
                 >
                   {deleteMode ? (
-                    <label className="session-tile__select" onClick={(event) => event.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        aria-label={copy.sidebar.selectChat(client.getSessionTitle(session))}
-                        checked={selectedIds.includes(key)}
-                        onChange={(event) => toggleSelected(session, event.target.checked)}
-                      />
-                      <span aria-hidden="true" />
-                    </label>
+                    <Checkbox
+                      className="session-tile__select"
+                      aria-label={copy.sidebar.selectChat(client.getSessionTitle(session))}
+                      checked={selectedIds.includes(key)}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) => toggleSelected(session, event.target.checked)}
+                    />
                   ) : null}
-                  <button
+                  <Button
                     className="session-tile"
-                    type="button"
+                    type="text"
                     title={`${client.getSessionTitle(session)} · ${client.getSessionDisplayId(session)}`}
                     onClick={() => client.setActiveSession(session.externalChatId)}
                   >
@@ -530,7 +523,7 @@ function SidebarNav({
                       ) : null}
                     </span>
                     <span className="session-tile__id">{client.getSessionDisplayId(session)}</span>
-                  </button>
+                  </Button>
                 </div>
               );
             })}
@@ -539,18 +532,18 @@ function SidebarNav({
       </div>
 
       <div className="sidebar__bottom">
-        <button className="settings-button" type="button" title={copy.sidebar.settings} onClick={() => client.openSettings("general")}>
+        <Button className="settings-button" type="text" title={copy.sidebar.settings} onClick={() => client.openSettings("general")}>
           <span className="settings-button__avatar" aria-hidden="true">OS</span>
           <span className="settings-button__copy">
             <strong>{copy.sidebar.settings}</strong>
             <small>{copy.sidebar.settingsSubtitle}</small>
           </span>
-        </button>
+        </Button>
       </div>
       {!client.sidebarCollapsed.value ? (
-        <button
+        <Button
           className="sidebar__resize"
-          type="button"
+          type="text"
           aria-label={copy.sidebar.resizeSidebar}
           title={copy.sidebar.resizeSidebar}
           onPointerDown={beginSidebarResize}
@@ -575,9 +568,7 @@ function ChatPanel({ client, viewTraceForRun }: { client: Client; viewTraceForRu
       </header>
 
       {notice?.text ? (
-        <div className="notice-banner" role="status" data-tone={notice.tone || "info"}>
-          {notice.text}
-        </div>
+        <Alert className="notice-banner" role="status" type={noticeTone(notice.tone || "info")} showIcon message={notice.text} data-tone={notice.tone || "info"} />
       ) : null}
 
       <section ref={client.setMessageStageRef} className="message-stage" aria-live="polite">
@@ -600,36 +591,45 @@ function ChatPanel({ client, viewTraceForRun }: { client: Client; viewTraceForRu
         {client.commandHints.value?.length ? (
           <div className="composer__commands" aria-label={copy.composer.commandSuggestions}>
             {client.commandHints.value.map((command: AnyRecord) => (
-              <button
+              <Button
                 key={command.name || command.command || command.usage}
-                type="button"
+                type="text"
                 className="composer__command"
                 onClick={() => client.applyCommandHint(command)}
               >
                 <code>{command.usage || command.command}</code>
                 <span>{command.description}</span>
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
         <div className="composer__box">
-          <textarea
+          <Input.TextArea
+            className="composer__input"
             id="messageInput"
-            ref={client.setMessageInputRef}
+            ref={(input) => client.setMessageInputRef(input?.resizableTextArea?.textArea || null)}
             value={client.messageText.value}
             rows={1}
             placeholder={copy.composer.placeholder}
             readOnly={client.currentSessionReadOnly.value}
             autoComplete="off"
+            autoSize={false}
             onChange={(event) => {
               client.setMessageText(event.target.value);
               client.resizeComposer();
             }}
             onKeyDown={client.handleComposerKeydown}
           />
-          <button className="send-button" type="submit" aria-label={copy.composer.sendAria} disabled={client.sendDisabled.value}>
+          <Button
+            className="send-button"
+            type="primary"
+            htmlType="submit"
+            aria-label={copy.composer.sendAria}
+            disabled={client.sendDisabled.value}
+            icon={<SendOutlined />}
+          >
             {copy.composer.send}
-          </button>
+          </Button>
         </div>
         <div className="composer__footer">
           <span>{copy.composer.disclaimer}</span>
@@ -648,10 +648,10 @@ function EmptyState({ copy, prompts, applyPrompt }: { copy: AnyRecord; prompts: 
       <p>{copy.empty.description}</p>
       <div className="prompt-grid">
         {prompts.map((prompt) => (
-          <button key={prompt.title} className="prompt-card" type="button" onClick={() => applyPrompt(prompt.text)}>
+          <Button key={prompt.title} className="prompt-card" type="text" onClick={() => applyPrompt(prompt.text)}>
             <strong>{prompt.title}</strong>
             <span>{prompt.description}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </section>
@@ -692,7 +692,12 @@ function MessageList({
                 </time>
               ) : null}
               {message.traceRunId ? (
-                <Button size="small" icon={<EyeOutlined />} onClick={() => viewTraceForRun(message.traceRunId)}>
+                <Button
+                  className="message__trace-button"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  onClick={() => viewTraceForRun(message.traceRunId)}
+                >
                   {copy.message.viewTrace}
                 </Button>
               ) : null}
@@ -823,13 +828,14 @@ function RunInspector({ client }: { client: Client }) {
           {runs.length ? (
             <label className="run-history__select">
               <span className="sr-only">{copy.runHistory.select}</span>
-              <select value={run?.runId || ""} onChange={(event) => client.selectRun(event.target.value)}>
-                {runs.map((item: AnyRecord, index: number) => (
-                  <option key={item.runId} value={item.runId}>
-                    {runOptionLabel(copy, item, index)}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={run?.runId || ""}
+                options={runs.map((item: AnyRecord, index: number) => ({
+                  value: item.runId,
+                  label: runOptionLabel(copy, item, index),
+                }))}
+                onChange={(value) => client.selectRun(value)}
+              />
             </label>
           ) : null}
         </section>
@@ -907,6 +913,32 @@ function RunSummaryCard({
   cleanupWorktreeSandbox: (run: AnyRecord) => void;
 }) {
   const summary = run.summary || {};
+  const metricItems = [
+    {
+      key: "status",
+      label: copy.runSummary.status,
+      children: summary.status || run.status,
+    },
+    ...(summary.duration
+      ? [
+          {
+            key: "duration",
+            label: copy.runSummary.duration,
+            children: summary.duration,
+          },
+        ]
+      : []),
+    ...(Array.isArray(summary.tools)
+      ? [
+          {
+            key: "tools",
+            label: copy.runSummary.tools,
+            children: summary.tools.length,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <section className="run-summary-card" data-status={run.status || "unknown"}>
       <header className="run-summary-card__header">
@@ -915,37 +947,20 @@ function RunSummaryCard({
           <strong>{summary.objective || summary.title || copy.runSummary.fallbackObjective}</strong>
         </div>
         <div className="run-summary-card__actions">
-          <span className="run-summary-card__status" data-status={run.status || "unknown"}>
+          <Tag className="run-summary-card__status" color={runStatusColor(run.status)} data-status={run.status || "unknown"}>
             {copy.run.statusLabels?.[run.status] || run.status}
-          </span>
+          </Tag>
           {run.worktreeSandbox?.cleanupSupported ? (
-            <button className="run-summary-card__copy" type="button" onClick={() => cleanupWorktreeSandbox(run)}>
+            <Button className="run-summary-card__copy" size="small" onClick={() => cleanupWorktreeSandbox(run)}>
               {copy.runSummary.cleanupSandbox || "Cleanup sandbox"}
-            </button>
+            </Button>
           ) : null}
         </div>
       </header>
       <div className="run-summary-card__body">
         {run.summaryLoading ? <div className="run-summary-card__message">{copy.runSummary.loading || "Loading..."}</div> : null}
         {run.summaryError ? <div className="run-summary-card__message" data-tone="error">{run.summaryError}</div> : null}
-        <dl className="run-summary-card__metrics">
-          <div>
-            <dt>{copy.runSummary.status}</dt>
-            <dd>{summary.status || run.status}</dd>
-          </div>
-          {summary.duration ? (
-            <div>
-              <dt>{copy.runSummary.duration}</dt>
-              <dd>{summary.duration}</dd>
-            </div>
-          ) : null}
-          {Array.isArray(summary.tools) ? (
-            <div>
-              <dt>{copy.runSummary.tools}</dt>
-              <dd>{summary.tools.length}</dd>
-            </div>
-          ) : null}
-        </dl>
+        <Descriptions className="run-summary-card__metrics" size="small" column={1} items={metricItems} />
         {summary.result || summary.final_answer ? (
           <p className="run-summary-card__note">{summary.result || summary.final_answer}</p>
         ) : null}
@@ -1033,10 +1048,18 @@ function RunTraceViewer({
           items={events.slice(-120).map((event: AnyRecord) => ({
             color: event.status === "failed" || event.tone === "error" ? "red" : "blue",
             children: (
-              <details>
-                <summary>{event.label || event.eventType || event.type}</summary>
-                <pre>{JSON.stringify(event.payload || event, null, 2)}</pre>
-              </details>
+              <Collapse
+                className="run-trace__event-collapse"
+                size="small"
+                ghost
+                items={[
+                  {
+                    key: event.id || event.eventType || event.type || "event",
+                    label: event.label || event.eventType || event.type,
+                    children: <pre>{JSON.stringify(event.payload || event, null, 2)}</pre>,
+                  },
+                ]}
+              />
             ),
           }))}
         />
@@ -1093,14 +1116,14 @@ function RunTraceViewer({
           <strong>{run.runId}</strong>
         </div>
         <div className="run-trace__actions">
-          <span className="run-trace__status" data-status={run.status || "unknown"}>{run.status}</span>
-          <button className="run-summary-card__copy" type="button" onClick={exportDebugJson}>
+          <Tag className="run-trace__status" color={runStatusColor(run.status)} data-status={run.status || "unknown"}>{run.status}</Tag>
+          <Button className="run-summary-card__copy" size="small" onClick={exportDebugJson}>
             {copy.trace.exportDebug}
-          </button>
+          </Button>
           {run.status === "running" ? (
-            <button className="run-trace__cancel" type="button" disabled={run.cancelPending} onClick={() => cancelRun(run)}>
+            <Button className="run-trace__cancel" size="small" danger disabled={run.cancelPending} onClick={() => cancelRun(run)}>
               {copy.trace.cancelRun}
-            </button>
+            </Button>
           ) : null}
         </div>
       </header>
@@ -1108,108 +1131,12 @@ function RunTraceViewer({
         {run.traceError ? <div className="run-summary-card__message" data-tone="error">{run.traceError}</div> : null}
         {run.traceLoading ? <div className="run-summary-card__message">{copy.trace.loading || "Loading..."}</div> : null}
         <div className="run-trace__summary">
-          <span>{events.length} {copy.trace.events || "events"}</span>
-          <span>{artifacts.length} {copy.trace.artifacts}</span>
-          <span>{parts.length} {copy.trace.parts}</span>
-          <span>{fileChanges.length} {copy.runSummary.diffSummary || "files"}</span>
+          <Tag>{events.length} {copy.trace.events || "events"}</Tag>
+          <Tag>{artifacts.length} {copy.trace.artifacts}</Tag>
+          <Tag>{parts.length} {copy.trace.parts}</Tag>
+          <Tag>{fileChanges.length} {copy.runSummary.diffSummary || "files"}</Tag>
         </div>
-        <details className="run-trace__artifacts" open>
-          <summary className="run-trace__section-head">
-            <strong>{copy.trace.artifactHeading || copy.trace.artifacts}</strong>
-            <small>{artifacts.length}</small>
-          </summary>
-          <div className="run-trace__section-body">
-            {artifacts.length ? (
-              <div className="run-trace__artifact-grid">
-                {artifacts.map((artifact: AnyRecord, index: number) => (
-                  <div
-                    key={artifact.id || artifact.name || index}
-                    className="run-trace__artifact-card"
-                    data-kind={artifact.kind || artifact.type || "artifact"}
-                    data-status={artifact.status || ""}
-                  >
-                    <strong>{artifact.title || artifact.name || artifact.toolName || artifact.kind || artifact.type}</strong>
-                    <small className="run-trace__artifact-status">{artifact.status || artifact.kind || artifact.type}</small>
-                    {artifact.detail || artifact.summary || artifact.path || artifact.message ? (
-                      <p className="run-trace__artifact-detail">{artifact.detail || artifact.summary || artifact.path || artifact.message}</p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="run-trace__empty">{copy.trace.noArtifacts || copy.trace.empty || ""}</p>
-            )}
-          </div>
-        </details>
-        <details className="run-trace__parts">
-          <summary className="run-trace__section-head">
-            <strong>{copy.trace.parts}</strong>
-            <small>{parts.length}</small>
-          </summary>
-          <div className="run-trace__section-body">
-            {parts.length ? (
-              <div className="run-trace__part-list">
-                {parts.map((part: AnyRecord, index: number) => (
-                  <details key={part.id || index} className="run-trace__part" data-kind={part.type || "part"}>
-                    <summary>
-                      <span className="run-trace__part-type">{part.type || `${copy.trace.parts} ${index + 1}`}</span>
-                      <span className="run-trace__part-summary">{part.title || part.summary || ""}</span>
-                    </summary>
-                    <div className="run-trace__part-body">
-                      <pre>{part.text || part.content || JSON.stringify(part, null, 2)}</pre>
-                    </div>
-                  </details>
-                ))}
-              </div>
-            ) : (
-              <p className="run-trace__empty">{copy.trace.empty || ""}</p>
-            )}
-          </div>
-        </details>
-        <details className="run-trace__events">
-          <summary className="run-trace__section-head">
-            <strong>{copy.trace.events || "Events"}</strong>
-            <small>{events.length}</small>
-          </summary>
-          <div className="run-trace__section-body">
-            {events.length ? (
-              events.slice(-120).map((event: AnyRecord, index: number) => (
-                <details key={event.id || index} className="run-trace__event" data-category={event.category || event.type || "event"}>
-                  <summary>
-                    <span className="run-trace__event-type">{event.label || event.eventType || event.type}</span>
-                    <span className="run-trace__event-summary">{event.detail || event.summary || ""}</span>
-                  </summary>
-                  <pre>{JSON.stringify(event.payload || event, null, 2)}</pre>
-                </details>
-              ))
-            ) : (
-              <p className="run-trace__empty">{copy.trace.empty || ""}</p>
-            )}
-          </div>
-        </details>
-        {fileChanges.length ? (
-          <details className="run-trace__code-nav">
-            <summary className="run-trace__section-head">
-              <strong>{copy.runSummary.diffSummary || "Files"}</strong>
-              <small>{fileChanges.length}</small>
-            </summary>
-            <div className="run-trace__code-nav-list">
-              {fileChanges.map((change: AnyRecord, index: number) => (
-                <div key={change.path || index} className="run-trace__code-nav-card">
-                  <div className="run-trace__code-nav-head">
-                    <strong>{change.path || change.label}</strong>
-                    <span>{change.status || change.kind}</span>
-                  </div>
-                  {change.revertSupported ? (
-                    <button type="button" onClick={() => revertFileChange(run, change)}>
-                      {copy.runFileInspector?.revert || "Revert"}
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </details>
-        ) : null}
+        <Collapse className="run-trace__sections" size="small" defaultActiveKey={["artifacts"]} items={items} />
       </div>
     </section>
   );
@@ -1249,50 +1176,124 @@ function AuthGate({ client }: { client: Client }) {
 
 function SettingsModal({ client, clearWebSessions }: { client: Client; clearWebSessions: () => void }) {
   const copy = client.copy.value;
-  const state = client.settingsState;
-  const form = client.settingsForm;
+  const isOpen = client.settingsOpen.value;
   const section = client.settingsSection.value;
-  const contentBySection: AnyRecord = {
-    general: <GeneralSettings client={client} clearWebSessions={clearWebSessions} />,
-    providers: <ProviderSettings client={client} />,
-    models: <ModelSettings client={client} />,
-    channels: <ChannelSettings client={client} />,
-    mcp: <McpSettings client={client} />,
-    schedule: <ScheduleSettings client={client} />,
-    network: <NetworkSettings client={client} />,
-    search: <SearchSettings client={client} />,
-    browser: <BrowserSettings client={client} />,
-    log: <LogSettings client={client} />,
-    shortcuts: <ShortcutSettings copy={copy} />,
-  };
+  const [renderedSection, setRenderedSection] = useState(section);
+  const [contentReady, setContentReady] = useState(false);
+  const [contentPending, startSettingsTransition] = useTransition();
 
-  if (!client.settingsOpen.value) {
+  useEffect(() => {
+    if (!isOpen) {
+      setContentReady(false);
+      setRenderedSection(section);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let frameId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const renderContent = () => {
+      if (cancelled) {
+        return;
+      }
+      startSettingsTransition(() => {
+        setRenderedSection(section);
+        setContentReady(true);
+      });
+    };
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      frameId = window.requestAnimationFrame(() => {
+        timeoutId = window.setTimeout(renderContent, 0);
+      });
+    } else {
+      timeoutId = setTimeout(renderContent, 0);
+    }
+
+    return () => {
+      cancelled = true;
+      if (frameId !== null && typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isOpen, section, startSettingsTransition]);
+
+  if (!isOpen) {
     return null;
   }
 
+  const showDeferredLoading = !contentReady || contentPending || renderedSection !== section;
+
   return (
-    <div className="settings-modal">
-      <button
-        className="settings-modal__backdrop"
-        type="button"
-        aria-label={copy.settings.closeAria}
-        onClick={client.closeSettings}
-      />
-      <section className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-        <SettingsNav copy={copy} section={section} selectSection={client.selectSettingsSection} />
-        <div className="settings-content">
+    <Modal
+      className="settings-modal settings-modal--ant"
+      open={isOpen}
+      centered
+      width="min(960px, calc(100vw - 36px))"
+      footer={null}
+      closable={false}
+      onCancel={client.closeSettings}
+      styles={{ body: { padding: 0 } }}
+    >
+      <Layout className="settings-panel settings-panel--ant" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <Layout.Sider width={200} className="settings-nav" theme="light">
+          <SettingsNav copy={copy} section={section} selectSection={client.selectSettingsSection} />
+        </Layout.Sider>
+        <Layout.Content className="settings-content">
           <header className="settings-content__header">
-            <h2 id="settingsTitle">{client.settingsTitle.value}</h2>
-            <button className="settings-panel__close" type="button" aria-label={copy.settings.closeAria} onClick={client.closeSettings}>
+            <Typography.Title id="settingsTitle" level={4}>
+              {client.settingsTitle.value}
+            </Typography.Title>
+            <Button className="settings-panel__close" type="text" aria-label={copy.settings.closeAria} icon={<CloseOutlined />} onClick={client.closeSettings}>
               {copy.settings.close}
-            </button>
+            </Button>
           </header>
-          {contentBySection[section] || contentBySection.general}
-        </div>
-      </section>
-      <span hidden>{state.channelsLoading ? "loading" : ""}{form.wsUrl}</span>
-    </div>
+          {showDeferredLoading ? (
+            <section className="settings-page settings-page--loading" aria-live="polite">
+              <Spin />
+              <span>{copy.settings?.loading || "Loading settings..."}</span>
+            </section>
+          ) : renderSettingsSection(renderedSection, client, clearWebSessions, copy)}
+        </Layout.Content>
+      </Layout>
+    </Modal>
   );
+}
+
+function renderSettingsSection(
+  section: string,
+  client: Client,
+  clearWebSessions: () => void,
+  copy: AnyRecord,
+) {
+  switch (section) {
+    case "providers":
+      return <ProviderSettings client={client} />;
+    case "models":
+      return <ModelSettings client={client} />;
+    case "channels":
+      return <ChannelSettings client={client} />;
+    case "mcp":
+      return <McpSettings client={client} />;
+    case "schedule":
+      return <ScheduleSettings client={client} />;
+    case "network":
+      return <NetworkSettings client={client} />;
+    case "search":
+      return <SearchSettings client={client} />;
+    case "browser":
+      return <BrowserSettings client={client} />;
+    case "log":
+      return <LogSettings client={client} />;
+    case "shortcuts":
+      return <ShortcutSettings copy={copy} />;
+    case "general":
+    default:
+      return <GeneralSettings client={client} clearWebSessions={clearWebSessions} />;
+  }
 }
 
 function SettingsNav({
@@ -1308,49 +1309,85 @@ function SettingsNav({
     {
       label: copy.settings.web,
       items: [
-        { section: "general", icon: "#", title: copy.settingsTitles.general },
-        { section: "shortcuts", icon: "⌗", title: copy.settingsTitles.shortcuts },
+        { section: "general", icon: <SettingOutlined />, title: copy.settingsTitles.general },
+        { section: "shortcuts", icon: <BranchesOutlined />, title: copy.settingsTitles.shortcuts },
       ],
     },
     {
       label: copy.settings.server,
       items: [
-        { section: "providers", icon: "⚙", title: copy.settingsTitles.providers },
-        { section: "models", icon: "✦", title: copy.settingsTitles.models },
-        { section: "channels", icon: "☷", title: copy.settingsTitles.channels },
-        { section: "mcp", icon: "◇", title: copy.settingsTitles.mcp },
-        { section: "schedule", icon: "◷", title: copy.settingsTitles.schedule },
-        { section: "network", icon: "⇄", title: copy.settingsTitles.network },
-        { section: "search", icon: "⌕", title: copy.settingsTitles.search },
-        { section: "browser", icon: "◉", title: copy.settingsTitles.browser },
-        { section: "log", icon: "≋", title: copy.settingsTitles.log },
+        { section: "providers", icon: <ApiOutlined />, title: copy.settingsTitles.providers },
+        { section: "models", icon: <BranchesOutlined />, title: copy.settingsTitles.models },
+        { section: "channels", icon: <SendOutlined />, title: copy.settingsTitles.channels },
+        { section: "mcp", icon: <ToolOutlined />, title: copy.settingsTitles.mcp },
+        { section: "schedule", icon: <HistoryOutlined />, title: copy.settingsTitles.schedule },
+        { section: "network", icon: <BranchesOutlined />, title: copy.settingsTitles.network },
+        { section: "search", icon: <EyeOutlined />, title: copy.settingsTitles.search },
+        { section: "browser", icon: <EyeOutlined />, title: copy.settingsTitles.browser },
+        { section: "log", icon: <HistoryOutlined />, title: copy.settingsTitles.log },
       ],
     },
   ];
 
+  const menuItems = groups.map((group) => ({
+    key: group.label,
+    label: group.label,
+    type: "group" as const,
+    children: group.items.map((item) => ({
+      key: item.section,
+      icon: <span className="settings-nav__icon" aria-hidden="true">{item.icon}</span>,
+      label: item.title,
+    })),
+  }));
+
   return (
-    <aside className="settings-nav" aria-label="Settings sections">
-      {groups.map((group) => (
-        <div key={group.label} className="settings-nav__group">
-          <p>{group.label}</p>
-          {group.items.map((item) => (
-            <button
-              key={item.section}
-              className={`settings-nav__item ${section === item.section ? "settings-nav__item--active" : ""}`}
-              type="button"
-              onClick={() => selectSection(item.section)}
-            >
-              <span aria-hidden="true">{item.icon}</span>
-              {item.title}
-            </button>
-          ))}
-        </div>
-      ))}
+    <div className="settings-nav__inner" aria-label="Settings sections">
+      <Menu
+        className="settings-nav__menu"
+        mode="inline"
+        selectedKeys={[section]}
+        items={menuItems}
+        onClick={({ key }) => selectSection(String(key))}
+      />
       <div className="settings-nav__footer">
         <strong>OpenSprite Web</strong>
         <span>{copy.settings.version}</span>
       </div>
-    </aside>
+    </div>
+  );
+}
+
+function SettingsSectionTitle({ children }: { children: React.ReactNode }) {
+  return <Typography.Title className="settings-section-title" level={5}>{children}</Typography.Title>;
+}
+
+function SettingsCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <Card size="small" className={["settings-card", className].filter(Boolean).join(" ")}>{children}</Card>;
+}
+
+function SettingsStatus({ message, type = "info" }: { message?: string; type?: "info" | "success" | "warning" | "error" }) {
+  return message ? <Alert className="settings-inline-status" type={type} showIcon message={message} /> : null;
+}
+
+function SettingsRow({
+  title,
+  description,
+  children,
+  className = "",
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={["settings-row", className].filter(Boolean).join(" ")}>
+      <div className="settings-row__copy">
+        <Typography.Text strong>{title}</Typography.Text>
+        {description ? <Typography.Text type="secondary">{description}</Typography.Text> : null}
+      </div>
+      {children ? <div className="settings-row__control">{children}</div> : null}
+    </div>
   );
 }
 
@@ -1398,149 +1435,106 @@ function GeneralSettings({ client, clearWebSessions }: { client: Client; clearWe
 
   return (
     <section className="settings-page">
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{general.language?.title || "Language"}</strong>
-            <span>{general.language?.description || "Display language."}</span>
-          </div>
-          <select value={form.language} aria-label={general.language?.title || "Language"} onChange={(event) => (form.language = event.target.value)}>
-            <option value="zh-TW">{general.language?.options?.zhTW || "Traditional Chinese"}</option>
-            <option value="en">{general.language?.options?.en || "English"}</option>
-          </select>
-        </div>
+      <SettingsCard>
+        <SettingsRow title={general.language?.title || "Language"} description={general.language?.description || "Display language."}>
+          <Select
+            className="settings-control"
+            value={form.language}
+            aria-label={general.language?.title || "Language"}
+            options={[
+              { value: "zh-TW", label: general.language?.options?.zhTW || "Traditional Chinese" },
+              { value: "en", label: general.language?.options?.en || "English" },
+            ]}
+            onChange={(value) => (form.language = value)}
+          />
+        </SettingsRow>
 
         {runPanelRows.map(([key, item, checked]: any[]) => (
-          <div key={key} className="settings-row">
-            <div>
-              <strong>{item?.title || key}</strong>
-              <span>{item?.description || ""}</span>
-            </div>
-            <input
-              className="switch"
-              type="checkbox"
-              aria-label={item?.title || key}
-              checked={Boolean(checked)}
-              onChange={(event) => {
-                form[key] = event.target.checked;
-              }}
-            />
-          </div>
+          <SettingsRow key={key} title={item?.title || key} description={item?.description || ""}>
+            <Switch aria-label={item?.title || key} checked={Boolean(checked)} onChange={(checkedValue) => (form[key] = checkedValue)} />
+          </SettingsRow>
         ))}
-      </div>
+      </SettingsCard>
 
-      <h3>{general.connectionTitle || "Connection"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{general.wsUrl?.title || "WebSocket URL"}</strong>
-            <span>{general.wsUrl?.description || "Local gateway WebSocket endpoint."}</span>
-          </div>
-          <input value={form.wsUrl} type="text" spellCheck={false} onChange={(event) => (form.wsUrl = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{general.accessToken?.title || copy.auth.tokenLabel || "Access token"}</strong>
-            <span>{general.accessToken?.description || ""}</span>
-          </div>
-          <input value={form.accessToken} type="password" autoComplete="current-password" spellCheck={false} onChange={(event) => (form.accessToken = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{general.displayName?.title || "Display name"}</strong>
-            <span>{general.displayName?.description || ""}</span>
-          </div>
-          <input value={form.displayName} type="text" maxLength={60} onChange={(event) => (form.displayName = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{general.externalChatId?.title || "External chat ID"}</strong>
-            <span>{general.externalChatId?.description || ""}</span>
-          </div>
-          <input value={form.externalChatId} type="text" spellCheck={false} onChange={(event) => (form.externalChatId = event.target.value)} />
-        </label>
-        <div className="settings-row">
-          <div>
-            <strong>{general.gateway?.title || "Gateway"}</strong>
-            <span>{connectionSwitchLabel}</span>
-          </div>
-          <input
-            className="switch"
-            type="checkbox"
+      <SettingsSectionTitle>{general.connectionTitle || "Connection"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={general.wsUrl?.title || "WebSocket URL"} description={general.wsUrl?.description || "Local gateway WebSocket endpoint."} className="settings-row--field">
+          <Input value={form.wsUrl} spellCheck={false} onChange={(event) => (form.wsUrl = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={general.accessToken?.title || copy.auth.tokenLabel || "Access token"} description={general.accessToken?.description || ""} className="settings-row--field">
+          <Input.Password value={form.accessToken} autoComplete="current-password" spellCheck={false} onChange={(event) => (form.accessToken = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={general.displayName?.title || "Display name"} description={general.displayName?.description || ""} className="settings-row--field">
+          <Input value={form.displayName} maxLength={60} onChange={(event) => (form.displayName = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={general.externalChatId?.title || "External chat ID"} description={general.externalChatId?.description || ""} className="settings-row--field">
+          <Input value={form.externalChatId} spellCheck={false} onChange={(event) => (form.externalChatId = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={general.gateway?.title || "Gateway"} description={connectionSwitchLabel}>
+          <Switch
             aria-label={general.gateway?.title || "Gateway"}
             checked={connectionSwitchChecked}
             disabled={client.state.connectionState === "connecting"}
-            onChange={(event) => client.toggleSettingsConnection(event.target.checked)}
+            onChange={client.toggleSettingsConnection}
           />
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>{general.connectionTitle || "Current connection"}</strong>
-            <span>{connectionLabel(copy, client.state.connectionState)}</span>
-          </div>
-          <button className="secondary-button" type="button" onClick={client.saveConnectionSettings}>
+        </SettingsRow>
+        <SettingsRow title={general.connectionTitle || "Current connection"} description={connectionLabel(copy, client.state.connectionState)}>
+          <Button icon={<SaveOutlined />} onClick={client.saveConnectionSettings}>
             {general.saveConnection || copy.settings.save || "Save"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
-      <h3>{general.appearanceTitle || "Appearance"}</h3>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{general.colorScheme?.title || "Theme"}</strong>
-            <span>{general.colorScheme?.description || ""}</span>
-          </div>
-          <select value={form.colorScheme} aria-label={general.colorScheme?.title || "Theme"} onChange={(event) => (form.colorScheme = event.target.value)}>
-            <option value="system">{general.colorScheme?.options?.system || "System"}</option>
-            <option value="light">{general.colorScheme?.options?.light || "Light"}</option>
-            <option value="dark">{general.colorScheme?.options?.dark || "Dark"}</option>
-          </select>
-        </div>
-      </div>
+      <SettingsSectionTitle>{general.appearanceTitle || "Appearance"}</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow title={general.colorScheme?.title || "Theme"} description={general.colorScheme?.description || ""}>
+          <Segmented
+            value={form.colorScheme}
+            options={[
+              { value: "system", label: general.colorScheme?.options?.system || "System" },
+              { value: "light", label: general.colorScheme?.options?.light || "Light" },
+              { value: "dark", label: general.colorScheme?.options?.dark || "Dark" },
+            ]}
+            onChange={(value) => (form.colorScheme = String(value))}
+          />
+        </SettingsRow>
+      </SettingsCard>
 
-      <h3>{general.conversationsTitle || "Conversations"}</h3>
-      <div className="settings-card">
-        <div className="settings-row settings-row--update">
-          <div>
-            <strong>{general.clearWebChats?.title || "Clear Web chats"}</strong>
-            <span>
-              {typeof general.clearWebChats?.description === "function"
-                ? general.clearWebChats.description(webSessionCount)
-                : `${webSessionCount} Web conversations`}
-            </span>
-          </div>
-          <div className="settings-row__actions">
-            <button className="secondary-button secondary-button--danger" type="button" disabled={webSessionCount === 0} onClick={clearWebSessions}>
+      <SettingsSectionTitle>{general.conversationsTitle || "Conversations"}</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow
+          title={general.clearWebChats?.title || "Clear Web chats"}
+          description={typeof general.clearWebChats?.description === "function" ? general.clearWebChats.description(webSessionCount) : `${webSessionCount} Web conversations`}
+          className="settings-row--update"
+        >
+          <Space>
+            <Button danger disabled={webSessionCount === 0} icon={<DeleteOutlined />} onClick={clearWebSessions}>
               {general.clearWebChats?.action || "Clear Web chats"}
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </Space>
+        </SettingsRow>
+      </SettingsCard>
 
-      <h3>{general.update?.title || "Update"}</h3>
-      {state.updateNotice ? <p className="settings-inline-status">{state.updateNotice}</p> : null}
-      {state.updateError ? <p className="settings-inline-status settings-inline-status--error">{state.updateError}</p> : null}
-      <div className="settings-card">
-        <div className="settings-row settings-row--update">
-          <div>
-            <strong>{updateStatusLabel}</strong>
-          </div>
-          <div className="settings-row__actions">
-            <button className="secondary-button" type="button" disabled={state.updateLoading} onClick={client.loadUpdateStatus}>
+      <SettingsSectionTitle>{general.update?.title || "Update"}</SettingsSectionTitle>
+      <SettingsStatus message={state.updateNotice} />
+      <SettingsStatus message={state.updateError} type="error" />
+      <SettingsCard>
+        <SettingsRow title={updateStatusLabel} className="settings-row--update">
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} loading={state.updateLoading} disabled={state.updateLoading} onClick={client.loadUpdateStatus}>
               {general.update?.check || "Check"}
-            </button>
-            <button
-              className="secondary-button"
-              type="button"
+            </Button>
+            <Button
+              type="primary"
               disabled={state.updateLoading || !updateStatus.supported || updateStatus.dirty}
+              loading={state.updateLoading}
               onClick={client.runUpdate}
             >
               {general.update?.apply || "Apply"}
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </Space>
+        </SettingsRow>
+      </SettingsCard>
     </section>
   );
 }
@@ -1570,15 +1564,15 @@ function ProviderSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.providersLoading ? <p className="settings-inline-status">{providerCopy.loading || "Loading providers..."}</p> : null}
-      {state.providersNotice ? <p className="settings-inline-status">{state.providersNotice}</p> : null}
-      {state.providersError ? <p className="settings-inline-status settings-inline-status--error">{state.providersError}</p> : null}
+      <SettingsStatus message={state.providersLoading ? providerCopy.loading || "Loading providers..." : ""} />
+      <SettingsStatus message={state.providersNotice} />
+      <SettingsStatus message={state.providersError} type="error" />
 
       {showCodexAuthCard ? (
         <>
-          <h3>{providerCopy.codexAuth?.title || "OpenAI Codex auth"}</h3>
-          {state.codexAuthNotice ? <p className="settings-inline-status">{state.codexAuthNotice}</p> : null}
-          {state.codexAuthError ? <p className="settings-inline-status settings-inline-status--error">{state.codexAuthError}</p> : null}
+          <SettingsSectionTitle>{providerCopy.codexAuth?.title || "OpenAI Codex auth"}</SettingsSectionTitle>
+          <SettingsStatus message={state.codexAuthNotice} />
+          <SettingsStatus message={state.codexAuthError} type="error" />
           <AuthProviderCard
             mark="Cx"
             name={providerCopy.codexAuth?.name || "OpenAI Codex"}
@@ -1597,9 +1591,9 @@ function ProviderSettings({ client }: { client: Client }) {
 
       {showCopilotAuthCard ? (
         <>
-          <h3>{providerCopy.copilotAuth?.title || "GitHub Copilot auth"}</h3>
-          {state.copilotAuthNotice ? <p className="settings-inline-status">{state.copilotAuthNotice}</p> : null}
-          {state.copilotAuthError ? <p className="settings-inline-status settings-inline-status--error">{state.copilotAuthError}</p> : null}
+          <SettingsSectionTitle>{providerCopy.copilotAuth?.title || "GitHub Copilot auth"}</SettingsSectionTitle>
+          <SettingsStatus message={state.copilotAuthNotice} />
+          <SettingsStatus message={state.copilotAuthError} type="error" />
           <AuthProviderCard
             mark="Gh"
             name={providerCopy.copilotAuth?.name || "GitHub Copilot"}
@@ -1616,141 +1610,150 @@ function ProviderSettings({ client }: { client: Client }) {
         </>
       ) : null}
 
-      <h3>{providerCopy.connectedTitle || "Connected providers"}</h3>
-      <div className="settings-card provider-card">
-        {(providers.connected || []).length === 0 ? (
-          <div className="provider-row provider-row--empty">
-            <div>
-              <strong>{providerCopy.noConnectedTitle || "No connected providers"}</strong>
-              <span>{providerCopy.noConnectedDescription || ""}</span>
-            </div>
-          </div>
-        ) : null}
-
-        {(providers.connected || []).map((provider: AnyRecord) => {
-          const credentials = providerCredentials(state, provider);
-          const effectiveCredentialId = providerEffectiveCredentialId(provider);
-          return (
-            <div key={provider.id} className="provider-row">
-              <div className="provider-row__main">
-                <span className="provider-row__mark" aria-hidden="true">{providerMark(provider)}</span>
+      <SettingsSectionTitle>{providerCopy.connectedTitle || "Connected providers"}</SettingsSectionTitle>
+      <SettingsCard className="provider-card">
+        <List
+          className="provider-row-list"
+          dataSource={providers.connected || []}
+          locale={{
+            emptyText: (
+              <div className="provider-row provider-row--empty">
                 <div>
-                  <div className="provider-row__title">
-                    <strong>{provider.name || provider.id}</strong>
-                    {provider.is_default ? <span className="provider-row__badge">{providerCopy.currentBadge || "Current"}</span> : null}
-                    {provider.preset_name && provider.preset_name !== provider.name ? <span className="provider-row__badge">{provider.preset_name}</span> : null}
-                    {provider.provider === "openai-codex" && !state.codexAuth?.configured ? <span className="provider-row__badge">{providerCopy.codexAuth?.notConfigured || "Not configured"}</span> : null}
-                    {provider.provider === "copilot" && !state.copilotAuth?.configured ? <span className="provider-row__badge">{providerCopy.copilotAuth?.notConfigured || "Not configured"}</span> : null}
-                  </div>
-                  <span>{providerDescription(copy, state, provider)}</span>
-                  {provider.credential_preview ? (
-                    <span className="provider-row__credential">
-                      {typeof providerCopy.credentialLabel === "function"
-                        ? providerCopy.credentialLabel(provider.credential_label || provider.name, provider.credential_preview, credentialSourceLabel(copy, provider))
-                        : provider.credential_preview}
-                    </span>
-                  ) : provider.requires_api_key ? (
-                    <span className="provider-row__credential provider-row__credential--missing">{providerCopy.missingCredential || "Missing credential"}</span>
-                  ) : null}
-                  {credentials.length > 1 ? (
-                    <label className="provider-row__select">
-                      <span>{providerCopy.credentialSelect || "Credential"}</span>
-                      <select value={effectiveCredentialId} disabled={state.providersLoading} onChange={(event) => client.setProviderCredential(provider, event.target.value)}>
-                        {credentials.map((credential: AnyRecord) => (
-                          <option key={credential.id} value={credential.id}>
-                            {credential.label || credential.name || credential.id} {credential.secret_preview ? `- ${credential.secret_preview}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
+                  <strong>{providerCopy.noConnectedTitle || "No connected providers"}</strong>
+                  <span>{providerCopy.noConnectedDescription || ""}</span>
                 </div>
               </div>
-              <div className="provider-row__actions provider-row__actions--connected">
-                {effectiveCredentialId ? (
-                  <button className="provider-row__action provider-row__action--quiet" type="button" disabled={state.providersLoading} onClick={() => client.deleteCredential(provider, effectiveCredentialId)}>
-                    {providerCopy.deleteCredential || "Delete credential"}
-                  </button>
-                ) : null}
-                <button className="provider-row__action provider-row__action--quiet" type="button" disabled={state.providersLoading} onClick={() => client.disconnectProvider(provider)}>
-                  {providerCopy.disconnect || "Disconnect"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <h3>{providerCopy.popularTitle || "Available providers"}</h3>
-      <div className="settings-card provider-card">
-        {(providers.available || []).length === 0 ? (
-          <div className="provider-row provider-row--empty">
-            <div>
-              <strong>{providerCopy.noAvailableTitle || "No available providers"}</strong>
-              <span>{providerCopy.noAvailableDescription || ""}</span>
-            </div>
-          </div>
-        ) : null}
-        {(providers.available || []).map((provider: AnyRecord) => {
-          const oauth = provider.auth_type === "openai_codex_oauth" || provider.auth_type === "github_copilot_oauth";
-          return (
-            <div key={provider.id} className="provider-row provider-row--stacked">
-              <div className="provider-row__content">
+            ),
+          }}
+          renderItem={(provider: AnyRecord) => {
+            const credentials = providerCredentials(state, provider);
+            const effectiveCredentialId = providerEffectiveCredentialId(provider);
+            return (
+              <List.Item key={provider.id} className="provider-row">
                 <div className="provider-row__main">
                   <span className="provider-row__mark" aria-hidden="true">{providerMark(provider)}</span>
                   <div>
                     <div className="provider-row__title">
                       <strong>{provider.name || provider.id}</strong>
-                      <span className="provider-row__badge">{providerCopy.builtInBadge || "Built-in"}</span>
-                      {provider.connected_count ? <span className="provider-row__badge">{typeof providerCopy.connectedCount === "function" ? providerCopy.connectedCount(provider.connected_count) : provider.connected_count}</span> : null}
+                      {provider.is_default ? <Tag className="provider-row__badge">{providerCopy.currentBadge || "Current"}</Tag> : null}
+                      {provider.preset_name && provider.preset_name !== provider.name ? <Tag className="provider-row__badge">{provider.preset_name}</Tag> : null}
+                      {provider.provider === "openai-codex" && !state.codexAuth?.configured ? <Tag className="provider-row__badge">{providerCopy.codexAuth?.notConfigured || "Not configured"}</Tag> : null}
+                      {provider.provider === "copilot" && !state.copilotAuth?.configured ? <Tag className="provider-row__badge">{providerCopy.copilotAuth?.notConfigured || "Not configured"}</Tag> : null}
                     </div>
-                    <span>{provider.default_base_url || provider.description || provider.id}</span>
+                    <span>{providerDescription(copy, state, provider)}</span>
+                    {provider.credential_preview ? (
+                      <span className="provider-row__credential">
+                        {typeof providerCopy.credentialLabel === "function"
+                          ? providerCopy.credentialLabel(provider.credential_label || provider.name, provider.credential_preview, credentialSourceLabel(copy, provider))
+                          : provider.credential_preview}
+                      </span>
+                    ) : provider.requires_api_key ? (
+                      <span className="provider-row__credential provider-row__credential--missing">{providerCopy.missingCredential || "Missing credential"}</span>
+                    ) : null}
+                    {credentials.length > 1 ? (
+                      <Form.Item className="provider-row__select" label={providerCopy.credentialSelect || "Credential"}>
+                        <Select
+                          value={effectiveCredentialId}
+                          disabled={state.providersLoading}
+                          options={credentials.map((credential: AnyRecord) => ({
+                            value: credential.id,
+                            label: `${credential.label || credential.name || credential.id}${credential.secret_preview ? ` - ${credential.secret_preview}` : ""}`,
+                          }))}
+                          onChange={(value) => client.setProviderCredential(provider, value)}
+                        />
+                      </Form.Item>
+                    ) : null}
                   </div>
                 </div>
-                <button className="provider-row__action" type="button" disabled={state.providersLoading} onClick={() => (oauth ? client.connectOAuthProvider(provider) : client.beginProviderConnect(provider))}>
-                  {oauth ? providerCopy.connectOAuth || "Connect OAuth" : providerCopy.connect || "Connect"}
-                </button>
+                <div className="provider-row__actions provider-row__actions--connected">
+                  {effectiveCredentialId ? (
+                    <Button size="small" danger disabled={state.providersLoading} onClick={() => client.deleteCredential(provider, effectiveCredentialId)}>
+                      {providerCopy.deleteCredential || "Delete credential"}
+                    </Button>
+                  ) : null}
+                  <Button size="small" disabled={state.providersLoading} onClick={() => client.disconnectProvider(provider)}>
+                    {providerCopy.disconnect || "Disconnect"}
+                  </Button>
+                </div>
+              </List.Item>
+            );
+          }}
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>{providerCopy.popularTitle || "Available providers"}</SettingsSectionTitle>
+      <SettingsCard className="provider-card">
+        <List
+          className="provider-row-list"
+          dataSource={providers.available || []}
+          locale={{
+            emptyText: (
+              <div className="provider-row provider-row--empty">
+                <div>
+                  <strong>{providerCopy.noAvailableTitle || "No available providers"}</strong>
+                  <span>{providerCopy.noAvailableDescription || ""}</span>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ),
+          }}
+          renderItem={(provider: AnyRecord) => {
+            const oauth = provider.auth_type === "openai_codex_oauth" || provider.auth_type === "github_copilot_oauth";
+            return (
+              <List.Item key={provider.id} className="provider-row provider-row--stacked">
+                <div className="provider-row__content">
+                  <div className="provider-row__main">
+                    <span className="provider-row__mark" aria-hidden="true">{providerMark(provider)}</span>
+                    <div>
+                      <div className="provider-row__title">
+                        <strong>{provider.name || provider.id}</strong>
+                        <Tag className="provider-row__badge">{providerCopy.builtInBadge || "Built-in"}</Tag>
+                        {provider.connected_count ? <Tag className="provider-row__badge">{typeof providerCopy.connectedCount === "function" ? providerCopy.connectedCount(provider.connected_count) : provider.connected_count}</Tag> : null}
+                      </div>
+                      <span>{provider.default_base_url || provider.description || provider.id}</span>
+                    </div>
+                  </div>
+                  <Button type="primary" disabled={state.providersLoading} onClick={() => (oauth ? client.connectOAuthProvider(provider) : client.beginProviderConnect(provider))}>
+                    {oauth ? providerCopy.connectOAuth || "Connect OAuth" : providerCopy.connect || "Connect"}
+                  </Button>
+                </div>
+              </List.Item>
+            );
+          }}
+        />
+      </SettingsCard>
 
       {selectedConnectProvider ? (
         <div className="provider-connect-dialog" role="dialog" aria-modal="true">
           <header className="provider-connect-dialog__top">
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={providerCopy.backAria || "Back"} onClick={client.cancelProviderConnect}>{"<"}</button>
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={providerCopy.closeAria || "Close"} onClick={client.cancelProviderConnect}>x</button>
+            <Button type="text" aria-label={providerCopy.backAria || "Back"} icon={<ArrowLeftOutlined />} onClick={client.cancelProviderConnect} />
+            <Button type="text" aria-label={providerCopy.closeAria || "Close"} icon={<CloseOutlined />} onClick={client.cancelProviderConnect} />
           </header>
-          <form className="provider-connect-dialog__body" onSubmit={(event) => { event.preventDefault(); client.saveProviderConnection(); }}>
+          <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveProviderConnection()}>
             <div className="provider-connect-dialog__title">
               <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedConnectProvider)}</span>
               <h3>{typeof providerCopy.dialogTitle === "function" ? providerCopy.dialogTitle(selectedConnectProvider.name) : `Connect ${selectedConnectProvider.name}`}</h3>
             </div>
             <p>{typeof providerCopy.dialogDescription === "function" ? providerCopy.dialogDescription(selectedConnectProvider.name) : ""}</p>
-            <label className="provider-connect-field">
-              <span>{providerCopy.nameLabel || "Name"}</span>
-              <input value={state.connectForm.name} type="text" placeholder={selectedConnectProvider.name} autoComplete="off" onChange={(event) => (state.connectForm.name = event.target.value)} />
-            </label>
+            <Form.Item className="provider-connect-field" label={providerCopy.nameLabel || "Name"}>
+              <Input value={state.connectForm.name} placeholder={selectedConnectProvider.name} autoComplete="off" onChange={(event) => (state.connectForm.name = event.target.value)} />
+            </Form.Item>
             {selectedConnectProviderRequiresApiKey ? (
-              <label className="provider-connect-field">
-                <span>{typeof providerCopy.apiKeyLabel === "function" ? providerCopy.apiKeyLabel(selectedConnectProvider.name) : "API key"}</span>
-                <input value={state.connectForm.apiKey} type="password" placeholder="API key" autoComplete="off" onChange={(event) => (state.connectForm.apiKey = event.target.value)} />
-              </label>
+              <Form.Item className="provider-connect-field" label={typeof providerCopy.apiKeyLabel === "function" ? providerCopy.apiKeyLabel(selectedConnectProvider.name) : "API key"}>
+                <Input.Password value={state.connectForm.apiKey} placeholder="API key" autoComplete="off" onChange={(event) => (state.connectForm.apiKey = event.target.value)} />
+              </Form.Item>
             ) : null}
-            <button className="provider-connect-dialog__advanced" type="button" onClick={() => (state.connectForm.showAdvanced = !state.connectForm.showAdvanced)}>
+            <Button type="link" className="provider-connect-dialog__advanced" onClick={() => (state.connectForm.showAdvanced = !state.connectForm.showAdvanced)}>
               {state.connectForm.showAdvanced ? providerCopy.advancedHide || "Hide advanced" : providerCopy.advancedShow || "Advanced"}
-            </button>
+            </Button>
             {state.connectForm.showAdvanced ? (
-              <label className="provider-connect-field">
-                <span>Base URL</span>
-                <input value={state.connectForm.baseUrl} type="text" spellCheck={false} onChange={(event) => (state.connectForm.baseUrl = event.target.value)} />
-              </label>
+              <Form.Item className="provider-connect-field" label="Base URL">
+                <Input value={state.connectForm.baseUrl} spellCheck={false} onChange={(event) => (state.connectForm.baseUrl = event.target.value)} />
+              </Form.Item>
             ) : null}
-            <button className="primary-button provider-connect-dialog__submit" type="submit" disabled={state.providersLoading}>
+            <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.providersLoading} disabled={state.providersLoading}>
               {providerCopy.submit || "Save"}
-            </button>
-          </form>
+            </Button>
+          </Form>
         </div>
       ) : null}
     </section>
@@ -1769,33 +1772,29 @@ function ModelSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.modelsLoading ? <p className="settings-inline-status">{modelCopy.loading || "Loading models..."}</p> : null}
-      {state.modelsNotice ? <p className="settings-inline-status">{state.modelsNotice}</p> : null}
-      {state.modelsError ? <p className="settings-inline-status settings-inline-status--error">{state.modelsError}</p> : null}
-      {state.mediaError ? <p className="settings-inline-status settings-inline-status--error">{state.mediaError}</p> : null}
+      <SettingsStatus message={state.modelsLoading ? modelCopy.loading || "Loading models..." : ""} />
+      <SettingsStatus message={state.modelsNotice} />
+      <SettingsStatus message={state.modelsError} type="error" />
+      <SettingsStatus message={state.mediaError} type="error" />
 
-      <h3>{modelCopy.textTitle || "Text model"}</h3>
+      <SettingsSectionTitle>{modelCopy.textTitle || "Text model"}</SettingsSectionTitle>
       {providers.length === 0 ? (
-        <div className="settings-card">
-          <div className="settings-row">
-            <div>
-              <strong>{modelCopy.noProvidersTitle || "No providers"}</strong>
-              <span>{modelCopy.noProvidersDescription || ""}</span>
-            </div>
-            <span className="settings-muted">{modelCopy.noProvidersBadge || ""}</span>
-          </div>
-        </div>
+        <SettingsCard>
+          <SettingsRow title={modelCopy.noProvidersTitle || "No providers"} description={modelCopy.noProvidersDescription || ""}>
+            <Tag>{modelCopy.noProvidersBadge || ""}</Tag>
+          </SettingsRow>
+        </SettingsCard>
       ) : null}
 
       {selectedProvider ? (
-        <div className="settings-card model-provider-card">
+        <SettingsCard className="model-provider-card">
           <div className="model-provider-card__header">
             <div className="provider-row__main">
               <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedProvider)}</span>
               <div>
                 <div className="provider-row__title">
                   <strong>{selectedProvider.name || selectedProvider.id}</strong>
-                  {selectedProvider.is_default ? <span className="provider-row__badge">{modelCopy.currentBadge || "Current"}</span> : null}
+                  {selectedProvider.is_default ? <Tag className="provider-row__badge">{modelCopy.currentBadge || "Current"}</Tag> : null}
                 </div>
                 <span>{selectedProvider.selected_model || modelCopy.noModel || "No model selected"}</span>
               </div>
@@ -1803,105 +1802,98 @@ function ModelSettings({ client }: { client: Client }) {
           </div>
 
           <div className="model-select-row">
-            <label>
-              <span>{modelCopy.providerChoice || "Provider"}</span>
-              <select
+            <Form.Item className="ant-field-label" label={modelCopy.providerChoice || "Provider"}>
+              <Select
                 value={selectedProviderId}
                 disabled={state.modelsLoading}
-                onChange={(event) => {
-                  state.selectedTextProviderId = event.target.value;
-                  state.modelSelections[event.target.value] = "";
+                options={providers.map((provider: AnyRecord) => ({
+                  value: provider.id,
+                  label: `${provider.name || provider.id}${provider.is_default ? ` (${modelCopy.active || "active"})` : ""}`,
+                }))}
+                onChange={(value) => {
+                  state.selectedTextProviderId = value;
+                  state.modelSelections[value] = "";
                 }}
-              >
-                {providers.map((provider: AnyRecord) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name || provider.id}{provider.is_default ? ` (${modelCopy.active || "active"})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>{modelCopy.modelChoice || "Model"}</span>
-              <select value={selectedModel} disabled={state.modelsLoading} onChange={(event) => (state.modelSelections[selectedProvider.id] = event.target.value)}>
-                <option value="">{modelCopy.noModel || "No model"}</option>
-                {modelOptionsForProvider(selectedProvider, selectedModel).map((model: string) => (
-                  <option key={`${selectedProvider.id}:${model}`} value={model}>
-                    {textModelOptionLabel(copy, selectedProvider, model)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>{modelCopy.reasoningChoice || "Reasoning"}</span>
-              <select value={selectedReasoning} disabled={state.modelsLoading} onChange={(event) => (state.reasoningSelections[selectedProvider.id] = event.target.value)}>
-                <option value="">{modelCopy.reasoningDefault || "Default"}</option>
-                <option value="none">{modelCopy.reasoningNone || "None"}</option>
-                <option value="minimal">{modelCopy.reasoningMinimal || "Minimal"}</option>
-                <option value="low">{modelCopy.reasoningLow || "Low"}</option>
-                <option value="medium">{modelCopy.reasoningMedium || "Medium"}</option>
-                <option value="high">{modelCopy.reasoningHigh || "High"}</option>
-                <option value="xhigh">{modelCopy.reasoningXhigh || "XHigh"}</option>
-              </select>
-            </label>
-            <button className="secondary-button" type="button" disabled={state.modelsLoading || !selectedModel} onClick={() => client.selectModel(selectedProvider.id, selectedModel, selectedReasoning)}>
+              />
+            </Form.Item>
+            <Form.Item className="ant-field-label" label={modelCopy.modelChoice || "Model"}>
+              <Select
+                value={selectedModel}
+                disabled={state.modelsLoading}
+                options={[
+                  { value: "", label: modelCopy.noModel || "No model" },
+                  ...modelOptionsForProvider(selectedProvider, selectedModel).map((model: string) => ({
+                    value: model,
+                    label: textModelOptionLabel(copy, selectedProvider, model),
+                  })),
+                ]}
+                onChange={(value) => (state.modelSelections[selectedProvider.id] = value)}
+              />
+            </Form.Item>
+            <Form.Item className="ant-field-label" label={modelCopy.reasoningChoice || "Reasoning"}>
+              <Select
+                value={selectedReasoning}
+                disabled={state.modelsLoading}
+                options={[
+                  { value: "", label: modelCopy.reasoningDefault || "Default" },
+                  { value: "none", label: modelCopy.reasoningNone || "None" },
+                  { value: "minimal", label: modelCopy.reasoningMinimal || "Minimal" },
+                  { value: "low", label: modelCopy.reasoningLow || "Low" },
+                  { value: "medium", label: modelCopy.reasoningMedium || "Medium" },
+                  { value: "high", label: modelCopy.reasoningHigh || "High" },
+                  { value: "xhigh", label: modelCopy.reasoningXhigh || "XHigh" },
+                ]}
+                onChange={(value) => (state.reasoningSelections[selectedProvider.id] = value)}
+              />
+            </Form.Item>
+            <Button type="primary" disabled={state.modelsLoading || !selectedModel} loading={state.modelsLoading} onClick={() => client.selectModel(selectedProvider.id, selectedModel, selectedReasoning)}>
               {modelCopy.select || modelCopy.apply || "Apply"}
-            </button>
+            </Button>
           </div>
 
           <div className="custom-model-row">
-            <label>
-              <span>{modelCopy.customModel || "Custom model"}</span>
-              <input value={state.customModels[selectedProvider.id] || ""} type="text" placeholder={modelCopy.customPlaceholder || ""} spellCheck={false} onChange={(event) => (state.customModels[selectedProvider.id] = event.target.value)} />
-            </label>
-            <button className="secondary-button" type="button" disabled={state.modelsLoading || !state.customModels[selectedProvider.id]} onClick={() => client.selectModel(selectedProvider.id, state.customModels[selectedProvider.id], selectedReasoning)}>
+            <Form.Item className="ant-field-label" label={modelCopy.customModel || "Custom model"}>
+              <Input value={state.customModels[selectedProvider.id] || ""} placeholder={modelCopy.customPlaceholder || ""} spellCheck={false} onChange={(event) => (state.customModels[selectedProvider.id] = event.target.value)} />
+            </Form.Item>
+            <Button disabled={state.modelsLoading || !state.customModels[selectedProvider.id]} onClick={() => client.selectModel(selectedProvider.id, state.customModels[selectedProvider.id], selectedReasoning)}>
               {modelCopy.useCustom || "Use custom"}
-            </button>
+            </Button>
           </div>
-        </div>
+        </SettingsCard>
       ) : null}
 
-      <h3>{modelCopy.mediaTitle || "Media models"}</h3>
+      <SettingsSectionTitle>{modelCopy.mediaTitle || "Media models"}</SettingsSectionTitle>
       {(state.media.providers || []).length === 0 ? (
-        <div className="settings-card">
-          <div className="settings-row">
-            <div>
-              <strong>{modelCopy.noProvidersTitle || "No providers"}</strong>
-              <span>{modelCopy.mediaNoProvidersDescription || ""}</span>
-            </div>
-            <span className="settings-muted">{modelCopy.noProvidersBadge || ""}</span>
-          </div>
-        </div>
+        <SettingsCard>
+          <SettingsRow title={modelCopy.noProvidersTitle || "No providers"} description={modelCopy.mediaNoProvidersDescription || ""}>
+            <Tag>{modelCopy.noProvidersBadge || ""}</Tag>
+          </SettingsRow>
+        </SettingsCard>
       ) : null}
 
       {mediaModelCategories(copy).map((category) => {
         const selection = state.mediaSelections[category.key] || {};
         const providerModels = mediaModelsForProvider(state, category.key, selection.providerId, selection.model);
         return (
-          <div key={category.key} className="settings-card model-provider-card">
+          <SettingsCard key={category.key} className="model-provider-card">
             <div className="model-provider-card__header">
               <div className="provider-row__main">
                 <span className="provider-row__mark" aria-hidden="true">{category.mark}</span>
                 <div>
                   <div className="provider-row__title">
                     <strong>{category.title}</strong>
-                    {state.media.sections?.[category.key]?.enabled ? <span className="provider-row__badge">{modelCopy.enabledBadge || "Enabled"}</span> : null}
+                    {state.media.sections?.[category.key]?.enabled ? <Tag className="provider-row__badge">{modelCopy.enabledBadge || "Enabled"}</Tag> : null}
                   </div>
                   <span>{state.media.sections?.[category.key]?.model || modelCopy.noModel || "No model"}</span>
                 </div>
               </div>
             </div>
-            <div className="settings-row">
-              <div>
-                <strong>{modelCopy.enableMediaModel || "Enable media model"}</strong>
-                <span>{category.description}</span>
-              </div>
-              <input
-                className="switch"
-                type="checkbox"
+            <SettingsRow title={modelCopy.enableMediaModel || "Enable media model"} description={category.description}>
+              <Switch
                 aria-label={modelCopy.enableMediaModel || "Enable media model"}
                 checked={Boolean(selection.enabled)}
-                onChange={(event) => {
-                  selection.enabled = event.target.checked;
+                onChange={(checkedValue) => {
+                  selection.enabled = checkedValue;
                   if (selection.enabled && !selection.providerId) {
                     selection.providerId = state.media.providers?.[0]?.id || "";
                   }
@@ -1910,51 +1902,49 @@ function ModelSettings({ client }: { client: Client }) {
                   }
                 }}
               />
-            </div>
+            </SettingsRow>
             <div className="model-select-row">
               {selection.enabled ? (
-                <label>
-                  <span>{modelCopy.providerChoice || "Provider"}</span>
-                  <select
+                <Form.Item className="ant-field-label" label={modelCopy.providerChoice || "Provider"}>
+                  <Select
                     value={selection.providerId || ""}
                     disabled={state.mediaLoading}
-                    onChange={(event) => {
-                      selection.providerId = event.target.value;
+                    options={(state.media.providers || []).map((provider: AnyRecord) => ({
+                      value: provider.id,
+                      label: provider.name || provider.id,
+                    }))}
+                    onChange={(value) => {
+                      selection.providerId = value;
                       selection.model = "";
                     }}
-                  >
-                    {(state.media.providers || []).map((provider: AnyRecord) => (
-                      <option key={`${category.key}:${provider.id}`} value={provider.id}>{provider.name || provider.id}</option>
-                    ))}
-                  </select>
-                </label>
+                  />
+                </Form.Item>
               ) : null}
               {selection.enabled ? (
-                <label>
-                  <span>{modelCopy.modelChoice || "Model"}</span>
-                  <select value={selection.model || ""} disabled={state.mediaLoading} onChange={(event) => (selection.model = event.target.value)}>
-                    {providerModels.map((model: string) => (
-                      <option key={`${category.key}:${model}`} value={model}>{model}</option>
-                    ))}
-                  </select>
-                </label>
+                <Form.Item className="ant-field-label" label={modelCopy.modelChoice || "Model"}>
+                  <Select
+                    value={selection.model || ""}
+                    disabled={state.mediaLoading}
+                    options={providerModels.map((model: string) => ({ value: model, label: model }))}
+                    onChange={(value) => (selection.model = value)}
+                  />
+                </Form.Item>
               ) : null}
-              <button className="secondary-button" type="button" disabled={state.mediaLoading || (selection.enabled && !selection.providerId)} onClick={() => client.saveMediaModel(category.key)}>
+              <Button disabled={state.mediaLoading || (selection.enabled && !selection.providerId)} loading={state.mediaLoading} onClick={() => client.saveMediaModel(category.key)}>
                 {modelCopy.saveMediaModel || modelCopy.apply || "Save"}
-              </button>
+              </Button>
             </div>
             {selection.enabled ? (
               <div className="custom-model-row">
-                <label>
-                  <span>{modelCopy.customModel || "Custom model"}</span>
-                  <input value={state.mediaCustomModels[category.key] || ""} type="text" placeholder={modelCopy.customPlaceholder || ""} disabled={state.mediaLoading} spellCheck={false} onChange={(event) => (state.mediaCustomModels[category.key] = event.target.value)} />
-                </label>
-                <button className="secondary-button" type="button" disabled={state.mediaLoading || !state.mediaCustomModels[category.key]} onClick={() => client.saveMediaModel(category.key, state.mediaCustomModels[category.key])}>
+                <Form.Item className="ant-field-label" label={modelCopy.customModel || "Custom model"}>
+                  <Input value={state.mediaCustomModels[category.key] || ""} placeholder={modelCopy.customPlaceholder || ""} disabled={state.mediaLoading} spellCheck={false} onChange={(event) => (state.mediaCustomModels[category.key] = event.target.value)} />
+                </Form.Item>
+                <Button disabled={state.mediaLoading || !state.mediaCustomModels[category.key]} onClick={() => client.saveMediaModel(category.key, state.mediaCustomModels[category.key])}>
                   {modelCopy.useCustom || "Use custom"}
-                </button>
+                </Button>
               </div>
             ) : null}
-          </div>
+          </SettingsCard>
         );
       })}
     </section>
@@ -1971,95 +1961,105 @@ function ChannelSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.channelsLoading ? <p className="settings-inline-status">{channelCopy.loading || "Loading channels..."}</p> : null}
-      {state.channelsNotice ? <p className="settings-inline-status">{state.channelsNotice}</p> : null}
-      {state.channelsError ? <p className="settings-inline-status settings-inline-status--error">{state.channelsError}</p> : null}
+      <SettingsStatus message={state.channelsLoading ? channelCopy.loading || "Loading channels..." : ""} />
+      <SettingsStatus message={state.channelsNotice} />
+      <SettingsStatus message={state.channelsError} type="error" />
 
-      <h3>{channelCopy.connectedTitle || "Connected channels"}</h3>
-      <div className="settings-card provider-card">
-        {(channels.connected || []).length === 0 ? (
-          <div className="provider-row provider-row--empty">
-            <div>
-              <strong>{channelCopy.noConnectedTitle || "No connected channels"}</strong>
-              <span>{channelCopy.noConnectedDescription || ""}</span>
-            </div>
-          </div>
-        ) : null}
-        {(channels.connected || []).map((channel: AnyRecord) => (
-          <div key={channel.id || channel.type} className="provider-row">
-            <div className="provider-row__main">
-              <span className="provider-row__mark" aria-hidden="true">{providerMark(channel)}</span>
-              <div>
-                <div className="provider-row__title">
-                  <strong>{channel.name || channel.type || channel.id}</strong>
-                  <span className="provider-row__badge">{channelCopy.connectedBadge || "Connected"}</span>
-                  {channel.enabled ? <span className="provider-row__badge">{channelCopy.enabledBadge || "Enabled"}</span> : null}
+      <SettingsSectionTitle>{channelCopy.connectedTitle || "Connected channels"}</SettingsSectionTitle>
+      <SettingsCard className="provider-card">
+        <List
+          className="provider-row-list"
+          dataSource={channels.connected || []}
+          locale={{
+            emptyText: (
+              <div className="provider-row provider-row--empty">
+                <div>
+                  <strong>{channelCopy.noConnectedTitle || "No connected channels"}</strong>
+                  <span>{channelCopy.noConnectedDescription || ""}</span>
                 </div>
-                <span>{channel.description || channel.status || channel.id}</span>
               </div>
-            </div>
-            <button className="provider-row__action" type="button" disabled={state.channelsLoading} onClick={() => client.disconnectChannel(channel)}>
-              {channelCopy.disconnect || "Disconnect"}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <h3>{channelCopy.availableTitle || "Available channels"}</h3>
-      <div className="settings-card provider-card">
-        {(channels.available || []).length === 0 ? (
-          <div className="provider-row provider-row--empty">
-            <div>
-              <strong>{channelCopy.noAvailableTitle || "No available channels"}</strong>
-              <span>{channelCopy.noAvailableDescription || ""}</span>
-            </div>
-          </div>
-        ) : null}
-        {(channels.available || []).map((channel: AnyRecord) => (
-          <div key={channel.id || channel.type} className="provider-row provider-row--stacked">
-            <div className="provider-row__content">
+            ),
+          }}
+          renderItem={(channel: AnyRecord) => (
+            <List.Item key={channel.id || channel.type} className="provider-row">
               <div className="provider-row__main">
                 <span className="provider-row__mark" aria-hidden="true">{providerMark(channel)}</span>
                 <div>
                   <div className="provider-row__title">
                     <strong>{channel.name || channel.type || channel.id}</strong>
-                    <span className="provider-row__badge">{channelCopy.builtInBadge || "Built-in"}</span>
+                    <Tag className="provider-row__badge">{channelCopy.connectedBadge || "Connected"}</Tag>
+                    {channel.enabled ? <Tag className="provider-row__badge">{channelCopy.enabledBadge || "Enabled"}</Tag> : null}
                   </div>
-                  <span>{channel.description || channel.id}</span>
+                  <span>{channel.description || channel.status || channel.id}</span>
                 </div>
               </div>
-              <button className="provider-row__action" type="button" disabled={state.channelsLoading} onClick={() => client.beginChannelConnect(channel)}>
-                {channelCopy.add || channelCopy.connect || "Add"}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+              <Button disabled={state.channelsLoading} onClick={() => client.disconnectChannel(channel)}>
+                {channelCopy.disconnect || "Disconnect"}
+              </Button>
+            </List.Item>
+          )}
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>{channelCopy.availableTitle || "Available channels"}</SettingsSectionTitle>
+      <SettingsCard className="provider-card">
+        <List
+          className="provider-row-list"
+          dataSource={channels.available || []}
+          locale={{
+            emptyText: (
+              <div className="provider-row provider-row--empty">
+                <div>
+                  <strong>{channelCopy.noAvailableTitle || "No available channels"}</strong>
+                  <span>{channelCopy.noAvailableDescription || ""}</span>
+                </div>
+              </div>
+            ),
+          }}
+          renderItem={(channel: AnyRecord) => (
+            <List.Item key={channel.id || channel.type} className="provider-row provider-row--stacked">
+              <div className="provider-row__content">
+                <div className="provider-row__main">
+                  <span className="provider-row__mark" aria-hidden="true">{providerMark(channel)}</span>
+                  <div>
+                    <div className="provider-row__title">
+                      <strong>{channel.name || channel.type || channel.id}</strong>
+                      <Tag className="provider-row__badge">{channelCopy.builtInBadge || "Built-in"}</Tag>
+                    </div>
+                    <span>{channel.description || channel.id}</span>
+                  </div>
+                </div>
+                <Button type="primary" disabled={state.channelsLoading} onClick={() => client.beginChannelConnect(channel)}>
+                  {channelCopy.add || channelCopy.connect || "Add"}
+                </Button>
+              </div>
+            </List.Item>
+          )}
+        />
+      </SettingsCard>
 
       {selectedConnectChannel ? (
         <div className="provider-connect-dialog" role="dialog" aria-modal="true">
           <header className="provider-connect-dialog__top">
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={channelCopy.backAria || "Back"} onClick={client.cancelChannelConnect}>{"<"}</button>
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={channelCopy.closeAria || "Close"} onClick={client.cancelChannelConnect}>x</button>
+            <Button type="text" aria-label={channelCopy.backAria || "Back"} icon={<ArrowLeftOutlined />} onClick={client.cancelChannelConnect} />
+            <Button type="text" aria-label={channelCopy.closeAria || "Close"} icon={<CloseOutlined />} onClick={client.cancelChannelConnect} />
           </header>
-          <form className="provider-connect-dialog__body" onSubmit={(event) => { event.preventDefault(); client.saveChannelConnection(); }}>
+          <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveChannelConnection()}>
             <div className="provider-connect-dialog__title">
               <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedConnectChannel)}</span>
               <h3>{typeof channelCopy.dialogTitle === "function" ? channelCopy.dialogTitle(selectedConnectChannel.name) : `Connect ${selectedConnectChannel.name}`}</h3>
             </div>
             <p>{typeof channelCopy.dialogDescription === "function" ? channelCopy.dialogDescription(selectedConnectChannel.name) : ""}</p>
-            <label className="provider-connect-field">
-              <span>{channelCopy.nameLabel || "Name"}</span>
-              <input value={state.channelConnectForm.name} type="text" placeholder={channelCopy.namePlaceholder || ""} autoComplete="off" onChange={(event) => (state.channelConnectForm.name = event.target.value)} />
-            </label>
-            <label className="provider-connect-field">
-              <span>{typeof channelCopy.tokenLabel === "function" ? channelCopy.tokenLabel(selectedConnectChannel.name) : "Token"}</span>
-              <input value={state.channelConnectForm.token} type="password" placeholder="Token" autoComplete="off" onChange={(event) => (state.channelConnectForm.token = event.target.value)} />
-            </label>
-            <button className="primary-button provider-connect-dialog__submit" type="submit" disabled={state.channelsLoading}>
+            <Form.Item className="provider-connect-field" label={channelCopy.nameLabel || "Name"}>
+              <Input value={state.channelConnectForm.name} placeholder={channelCopy.namePlaceholder || ""} autoComplete="off" onChange={(event) => (state.channelConnectForm.name = event.target.value)} />
+            </Form.Item>
+            <Form.Item className="provider-connect-field" label={typeof channelCopy.tokenLabel === "function" ? channelCopy.tokenLabel(selectedConnectChannel.name) : "Token"}>
+              <Input.Password value={state.channelConnectForm.token} placeholder="Token" autoComplete="off" onChange={(event) => (state.channelConnectForm.token = event.target.value)} />
+            </Form.Item>
+            <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.channelsLoading} disabled={state.channelsLoading}>
               {channelCopy.submit || "Save"}
-            </button>
-          </form>
+            </Button>
+          </Form>
         </div>
       ) : null}
     </section>
@@ -2076,55 +2076,46 @@ function McpSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.mcpLoading ? <p className="settings-inline-status">{mcpCopy.loading || "Loading MCP..."}</p> : null}
-      {state.mcpNotice ? <p className="settings-inline-status">{state.mcpNotice}</p> : null}
-      {state.mcpError ? <p className="settings-inline-status settings-inline-status--error">{state.mcpError}</p> : null}
+      <SettingsStatus message={state.mcpLoading ? mcpCopy.loading || "Loading MCP..." : ""} />
+      <SettingsStatus message={state.mcpNotice} />
+      <SettingsStatus message={state.mcpError} type="error" />
 
-      <h3>{mcpCopy.runtimeTitle || "MCP runtime"}</h3>
-      <div className="settings-card settings-card--form">
-        <div className="settings-row">
-          <div>
-            <strong>{mcpCopy.runtimeStatus || "Runtime status"}</strong>
-            <span>{runtimeStatus}</span>
-          </div>
-          <button className="secondary-button" type="button" disabled={state.mcpLoading} onClick={client.reloadMcpSettings}>
+      <SettingsSectionTitle>{mcpCopy.runtimeTitle || "MCP runtime"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={mcpCopy.runtimeStatus || "Runtime status"} description={runtimeStatus}>
+          <Button icon={<ReloadOutlined />} loading={state.mcpLoading} disabled={state.mcpLoading} onClick={client.reloadMcpSettings}>
             {mcpCopy.reload || "Reload"}
-          </button>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>{mcpCopy.connectedTools || "Connected tools"}</strong>
-            <span>{toolGroups.length === 0 ? mcpCopy.noTools || "No tools" : ""}</span>
-          </div>
-        </div>
+          </Button>
+        </SettingsRow>
+        <SettingsRow title={mcpCopy.connectedTools || "Connected tools"} description={toolGroups.length === 0 ? mcpCopy.noTools || "No tools" : ""} />
         {toolGroups.length ? (
           <div className="mcp-tool-groups">
             {toolGroups.map((group) => (
               <div key={group.serverId} className="mcp-tool-group">
-                <button className="mcp-tool-group__header" type="button" onClick={() => client.toggleMcpToolGroup(group.serverId)}>
+                <Button className="mcp-tool-group__header" type="text" onClick={() => client.toggleMcpToolGroup(group.serverId)}>
                   <span aria-hidden="true">{group.expanded ? "v" : ">"}</span>
                   <strong>{group.serverName}</strong>
                   <small>{typeof mcpCopy.toolCount === "function" ? mcpCopy.toolCount(group.tools.length) : `${group.tools.length} tools`}</small>
-                </button>
+                </Button>
                 {group.expanded ? (
                   <div className="mcp-tool-group__tools">
-                    {group.tools.map((tool: AnyRecord) => <span key={tool.fullName} className="mcp-tool-chip">{tool.name}</span>)}
+                    {group.tools.map((tool: AnyRecord) => <Tag key={tool.fullName} className="mcp-tool-chip">{tool.name}</Tag>)}
                   </div>
                 ) : null}
               </div>
             ))}
           </div>
         ) : null}
-      </div>
+      </SettingsCard>
 
       <div className="mcp-server-list-screen">
         <div className="mcp-server-list-screen__header">
-          <h3>{mcpCopy.serversTitle || "MCP servers"}</h3>
-          <button className="provider-row__action" type="button" onClick={client.beginMcpCreate}>
+          <SettingsSectionTitle>{mcpCopy.serversTitle || "MCP servers"}</SettingsSectionTitle>
+          <Button type="primary" onClick={client.beginMcpCreate}>
             {mcpCopy.openAdd || mcpCopy.addServer || "Add server"}
-          </button>
+          </Button>
         </div>
-        <div className="settings-card provider-card">
+        <SettingsCard className="provider-card">
           {(state.mcp.servers || []).length === 0 ? (
             <div className="provider-row provider-row--empty">
               <div>
@@ -2138,7 +2129,7 @@ function McpSettings({ client }: { client: Client }) {
               <div className="schedule-job-row__main">
                 <div className="provider-row__title">
                   <strong>{server.name || server.id}</strong>
-                  <span className="provider-row__badge">{server.type || mcpCopy.autoTransport || "auto"}</span>
+                  <Tag className="provider-row__badge">{server.type || mcpCopy.autoTransport || "auto"}</Tag>
                 </div>
                 <span>{server.command || server.url || mcpCopy.noEndpoint || ""}</span>
                 <span>{typeof mcpCopy.toolsLabel === "function" ? mcpCopy.toolsLabel((server.enabled_tools || []).join(", ")) : (server.enabled_tools || []).join(", ")}</span>
@@ -2146,72 +2137,70 @@ function McpSettings({ client }: { client: Client }) {
                 {server.headers_configured ? <span>{typeof mcpCopy.headerKeys === "function" ? mcpCopy.headerKeys((server.headers_keys || []).join(", ")) : (server.headers_keys || []).join(", ")}</span> : null}
               </div>
               <div className="schedule-job-row__actions">
-                <button className="secondary-button" type="button" onClick={() => client.beginMcpEdit(server)}>{mcpCopy.edit || "Edit"}</button>
-                <button className="secondary-button" type="button" disabled={state.mcpLoading} onClick={() => client.removeMcpServer(server)}>{mcpCopy.remove || "Remove"}</button>
+                <Button onClick={() => client.beginMcpEdit(server)}>{mcpCopy.edit || "Edit"}</Button>
+                <Button danger disabled={state.mcpLoading} onClick={() => client.removeMcpServer(server)}>{mcpCopy.remove || "Remove"}</Button>
               </div>
             </div>
           ))}
-        </div>
+        </SettingsCard>
       </div>
 
       {form.showEditor ? (
         <div className="provider-connect-dialog" role="dialog" aria-modal="true">
           <header className="provider-connect-dialog__top">
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={mcpCopy.backToList || "Back"} onClick={client.cancelMcpEdit}>{"<"}</button>
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={copy.settings.closeAria || "Close"} onClick={client.cancelMcpEdit}>x</button>
+            <Button type="text" aria-label={mcpCopy.backToList || "Back"} icon={<ArrowLeftOutlined />} onClick={client.cancelMcpEdit} />
+            <Button type="text" aria-label={copy.settings.closeAria || "Close"} icon={<CloseOutlined />} onClick={client.cancelMcpEdit} />
           </header>
-          <form className="provider-connect-dialog__body" onSubmit={(event) => { event.preventDefault(); client.saveMcpServer(); }}>
+          <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveMcpServer()}>
             <div className="provider-connect-dialog__title">
               <span className="provider-row__mark" aria-hidden="true">MC</span>
               <h3>{form.editingId ? mcpCopy.editTitle || "Edit MCP server" : mcpCopy.addTitle || "Add MCP server"}</h3>
             </div>
             <p>{mcpCopy.simpleHint || ""}</p>
-            <label className="provider-connect-field">
-              <span>{mcpCopy.serverId || "Server ID"}</span>
-              <input value={form.serverId} type="text" disabled={Boolean(form.editingId)} spellCheck={false} autoComplete="off" onChange={(event) => (form.serverId = event.target.value)} />
-            </label>
-            <label className="provider-connect-field">
-              <span>{mcpCopy.transport || "Transport"}</span>
-              <select value={form.type} onChange={(event) => (form.type = event.target.value)}>
-                <option value="stdio">stdio</option>
-                <option value="sse">sse</option>
-                <option value="streamableHttp">streamableHttp</option>
-              </select>
-            </label>
+            <Form.Item className="provider-connect-field" label={mcpCopy.serverId || "Server ID"}>
+              <Input value={form.serverId} disabled={Boolean(form.editingId)} spellCheck={false} autoComplete="off" onChange={(event) => (form.serverId = event.target.value)} />
+            </Form.Item>
+            <Form.Item className="provider-connect-field" label={mcpCopy.transport || "Transport"}>
+              <Select
+                value={form.type}
+                options={[
+                  { value: "stdio", label: "stdio" },
+                  { value: "sse", label: "sse" },
+                  { value: "streamableHttp", label: "streamableHttp" },
+                ]}
+                onChange={(value) => (form.type = value)}
+              />
+            </Form.Item>
             {form.type === "stdio" ? (
               <>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.command || "Command"}</span>
-                  <input value={form.command} type="text" spellCheck={false} autoComplete="off" onChange={(event) => (form.command = event.target.value)} />
-                </label>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.args || "Args"}</span>
-                  <textarea value={form.argsText} rows={3} spellCheck={false} onChange={(event) => (form.argsText = event.target.value)} />
-                </label>
+                <Form.Item className="provider-connect-field" label={mcpCopy.command || "Command"}>
+                  <Input value={form.command} spellCheck={false} autoComplete="off" onChange={(event) => (form.command = event.target.value)} />
+                </Form.Item>
+                <Form.Item className="provider-connect-field" label={mcpCopy.args || "Args"}>
+                  <Input.TextArea value={form.argsText} rows={3} spellCheck={false} onChange={(event) => (form.argsText = event.target.value)} />
+                </Form.Item>
               </>
             ) : (
-              <label className="provider-connect-field">
-                <span>{mcpCopy.url || "URL"}</span>
-                <input value={form.url} type="text" spellCheck={false} autoComplete="off" onChange={(event) => (form.url = event.target.value)} />
-              </label>
+              <Form.Item className="provider-connect-field" label={mcpCopy.url || "URL"}>
+                <Input value={form.url} spellCheck={false} autoComplete="off" onChange={(event) => (form.url = event.target.value)} />
+              </Form.Item>
             )}
 
             <div className="mcp-editor__toolbar">
-              <button className="provider-connect-dialog__advanced" type="button" onClick={client.toggleMcpAdvanced}>
+              <Button type="link" className="provider-connect-dialog__advanced" onClick={client.toggleMcpAdvanced}>
                 {form.showAdvanced ? mcpCopy.hideAdvanced || "Hide advanced" : mcpCopy.showAdvanced || "Advanced"}
-              </button>
-              <button className="provider-connect-dialog__advanced" type="button" onClick={client.toggleMcpJsonInput}>
+              </Button>
+              <Button type="link" className="provider-connect-dialog__advanced" onClick={client.toggleMcpJsonInput}>
                 {form.showJsonInput ? mcpCopy.hideJson || "Hide JSON" : mcpCopy.showJson || "Paste JSON"}
-              </button>
+              </Button>
             </div>
 
             {form.showJsonInput ? (
               <div className="mcp-editor__json">
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.configJson || "Config JSON"}</span>
-                  <textarea value={form.jsonText} rows={7} spellCheck={false} placeholder={mcpCopy.configJsonPlaceholder || ""} onChange={(event) => (form.jsonText = event.target.value)} />
-                </label>
-                <button className="secondary-button" type="button" onClick={client.applyMcpJson}>{mcpCopy.applyJson || "Apply JSON"}</button>
+                <Form.Item className="provider-connect-field" label={mcpCopy.configJson || "Config JSON"}>
+                  <Input.TextArea value={form.jsonText} rows={7} spellCheck={false} placeholder={mcpCopy.configJsonPlaceholder || ""} onChange={(event) => (form.jsonText = event.target.value)} />
+                </Form.Item>
+                <Button onClick={client.applyMcpJson}>{mcpCopy.applyJson || "Apply JSON"}</Button>
               </div>
             ) : null}
 
@@ -2221,29 +2210,25 @@ function McpSettings({ client }: { client: Client }) {
                   <strong>{mcpCopy.advancedTitle || "Advanced"}</strong>
                   <span>{mcpCopy.advancedHint || ""}</span>
                 </div>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.toolTimeout || "Tool timeout"}</span>
-                  <input value={form.toolTimeout} type="number" min={1} step={1} onChange={(event) => (form.toolTimeout = event.target.value)} />
-                </label>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.enabledTools || "Enabled tools"}</span>
-                  <textarea value={form.enabledToolsText} rows={2} spellCheck={false} onChange={(event) => (form.enabledToolsText = event.target.value)} />
-                </label>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.env || "Environment JSON"}</span>
-                  <textarea value={form.envJson} rows={3} spellCheck={false} placeholder={mcpCopy.jsonPlaceholder || "{}"} onChange={(event) => (form.envJson = event.target.value)} />
-                </label>
-                <label className="provider-connect-field">
-                  <span>{mcpCopy.headers || "Headers JSON"}</span>
-                  <textarea value={form.headersJson} rows={3} spellCheck={false} placeholder={mcpCopy.jsonPlaceholder || "{}"} onChange={(event) => (form.headersJson = event.target.value)} />
-                </label>
+                <Form.Item className="provider-connect-field" label={mcpCopy.toolTimeout || "Tool timeout"}>
+                  <InputNumber className="settings-control" value={Number(form.toolTimeout || 30)} min={1} step={1} onChange={(value) => (form.toolTimeout = String(value || 30))} />
+                </Form.Item>
+                <Form.Item className="provider-connect-field" label={mcpCopy.enabledTools || "Enabled tools"}>
+                  <Input.TextArea value={form.enabledToolsText} rows={2} spellCheck={false} onChange={(event) => (form.enabledToolsText = event.target.value)} />
+                </Form.Item>
+                <Form.Item className="provider-connect-field" label={mcpCopy.env || "Environment JSON"}>
+                  <Input.TextArea value={form.envJson} rows={3} spellCheck={false} placeholder={mcpCopy.jsonPlaceholder || "{}"} onChange={(event) => (form.envJson = event.target.value)} />
+                </Form.Item>
+                <Form.Item className="provider-connect-field" label={mcpCopy.headers || "Headers JSON"}>
+                  <Input.TextArea value={form.headersJson} rows={3} spellCheck={false} placeholder={mcpCopy.jsonPlaceholder || "{}"} onChange={(event) => (form.headersJson = event.target.value)} />
+                </Form.Item>
               </div>
             ) : null}
 
-            <button className="primary-button provider-connect-dialog__submit" type="submit" disabled={state.mcpLoading}>
+            <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.mcpLoading} disabled={state.mcpLoading}>
               {form.editingId ? mcpCopy.update || "Update" : mcpCopy.add || "Add"}
-            </button>
-          </form>
+            </Button>
+          </Form>
         </div>
       ) : null}
     </section>
@@ -2259,162 +2244,139 @@ function ScheduleSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.scheduleLoading ? <p className="settings-inline-status">{scheduleCopy.loading || "Loading schedule settings..."}</p> : null}
-      {state.scheduleNotice ? <p className="settings-inline-status">{state.scheduleNotice}</p> : null}
-      {state.scheduleError ? <p className="settings-inline-status settings-inline-status--error">{state.scheduleError}</p> : null}
+      <SettingsStatus message={state.scheduleLoading ? scheduleCopy.loading || "Loading schedule settings..." : ""} />
+      <SettingsStatus message={state.scheduleNotice} />
+      <SettingsStatus message={state.scheduleError} type="error" />
 
-      <h3>{scheduleCopy.defaultsTitle || "Schedule defaults"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{scheduleCopy.defaultTimezone?.title || "Default timezone"}</strong>
-            <span>{scheduleCopy.defaultTimezone?.description || ""}</span>
-          </div>
-          <select
+      <SettingsSectionTitle>{scheduleCopy.defaultsTitle || "Schedule defaults"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={scheduleCopy.defaultTimezone?.title || "Default timezone"} description={scheduleCopy.defaultTimezone?.description || ""} className="settings-row--field">
+          <Select
             value={state.scheduleForm.defaultTimezone}
             aria-label={scheduleCopy.defaultTimezone?.title || "Default timezone"}
             disabled={state.scheduleLoading}
-            onChange={(event) => (state.scheduleForm.defaultTimezone = event.target.value)}
-          >
-            {timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
-          </select>
-        </label>
-        <div className="settings-row">
-          <div>
-            <strong>{scheduleCopy.currentTitle || "Currently active"}</strong>
-            <span>{state.schedule.default_timezone || "UTC"}</span>
-          </div>
-          <button className="secondary-button" type="button" disabled={state.scheduleLoading} onClick={client.saveScheduleSettings}>
+            options={timezones.map((timezone) => ({ value: timezone, label: timezone }))}
+            onChange={(value) => (state.scheduleForm.defaultTimezone = value)}
+          />
+        </SettingsRow>
+        <SettingsRow title={scheduleCopy.currentTitle || "Currently active"} description={state.schedule.default_timezone || "UTC"}>
+          <Button icon={<SaveOutlined />} loading={state.scheduleLoading} disabled={state.scheduleLoading} onClick={client.saveScheduleSettings}>
             {scheduleCopy.save || "Save"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
       <div className="schedule-list-screen__header">
-        <h3>{scheduleCopy.manageTitle || "Manage schedules"}</h3>
-        <button className="provider-row__action" type="button" onClick={client.beginCronJobCreate}>
+        <SettingsSectionTitle>{scheduleCopy.manageTitle || "Manage schedules"}</SettingsSectionTitle>
+        <Button type="primary" icon={<PlusOutlined />} onClick={client.beginCronJobCreate}>
           {scheduleCopy.openAdd || "Create schedule"}
-        </button>
+        </Button>
       </div>
-      {state.cronJobsError ? <p className="settings-inline-status settings-inline-status--error">{state.cronJobsError}</p> : null}
+      <SettingsStatus message={state.cronJobsError} type="error" />
 
-      <h3>{scheduleCopy.jobsTitle || "Schedules"}</h3>
-      {state.cronJobsLoading ? <p className="settings-inline-status">{scheduleCopy.jobsLoading || "Loading schedules..."}</p> : null}
-      <div className="settings-card provider-card">
-        {!state.cronJobsLoading && (state.cronJobs || []).length === 0 ? (
-          <div className="provider-row provider-row--empty">
-            <div>
-              <strong>{scheduleCopy.noJobsTitle || "No schedules yet"}</strong>
-              <span>{scheduleCopy.noJobsDescription || ""}</span>
-            </div>
-          </div>
-        ) : null}
-
-        {(state.cronJobs || []).map((job: AnyRecord) => (
-          <div key={job.id} className="schedule-job-row">
-            <div className="schedule-job-row__main">
-              <div className="provider-row__title">
-                <strong>{job.name || job.id}</strong>
-                <span className="provider-row__badge">{job.enabled ? scheduleCopy.enabled || "Enabled" : scheduleCopy.paused || "Paused"}</span>
+      <SettingsSectionTitle>{scheduleCopy.jobsTitle || "Schedules"}</SettingsSectionTitle>
+      <SettingsStatus message={state.cronJobsLoading ? scheduleCopy.jobsLoading || "Loading schedules..." : ""} />
+      <SettingsCard className="provider-card">
+        <List
+          className="provider-row-list schedule-job-list"
+          dataSource={state.cronJobs || []}
+          locale={{
+            emptyText: (
+              <div className="provider-row provider-row--empty">
+                <div>
+                  <strong>{scheduleCopy.noJobsTitle || "No schedules yet"}</strong>
+                  <span>{scheduleCopy.noJobsDescription || ""}</span>
+                </div>
               </div>
-              <span>{job.schedule?.display || job.cron_expr || job.every_seconds || ""}</span>
-              {job.session_id ? <span>{typeof scheduleCopy.sessionLabel === "function" ? scheduleCopy.sessionLabel(job.session_id) : job.session_id}</span> : null}
-              {job.state?.next_run_display ? <span>{typeof scheduleCopy.nextRun === "function" ? scheduleCopy.nextRun(job.state.next_run_display) : job.state.next_run_display}</span> : null}
-              <p>{job.payload?.message || job.message || ""}</p>
-            </div>
-            <div className="schedule-job-row__actions">
-              <button className="secondary-button" type="button" onClick={() => client.beginCronJobEdit(job)}>{scheduleCopy.edit || "Edit"}</button>
-              <button className="secondary-button" type="button" disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, job.enabled ? "pause" : "enable")}>
-                {job.enabled ? scheduleCopy.pause || "Pause" : scheduleCopy.enable || "Enable"}
-              </button>
-              <button className="secondary-button" type="button" disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "run")}>{scheduleCopy.runNow || "Run now"}</button>
-              <button className="secondary-button" type="button" disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "remove")}>{scheduleCopy.remove || "Remove"}</button>
-            </div>
-          </div>
-        ))}
-      </div>
+            ),
+          }}
+          renderItem={(job: AnyRecord) => (
+            <List.Item key={job.id} className="schedule-job-row">
+              <div className="schedule-job-row__main">
+                <div className="provider-row__title">
+                  <strong>{job.name || job.id}</strong>
+                  <Tag className="provider-row__badge">{job.enabled ? scheduleCopy.enabled || "Enabled" : scheduleCopy.paused || "Paused"}</Tag>
+                </div>
+                <span>{job.schedule?.display || job.cron_expr || job.every_seconds || ""}</span>
+                {job.session_id ? <span>{typeof scheduleCopy.sessionLabel === "function" ? scheduleCopy.sessionLabel(job.session_id) : job.session_id}</span> : null}
+                {job.state?.next_run_display ? <span>{typeof scheduleCopy.nextRun === "function" ? scheduleCopy.nextRun(job.state.next_run_display) : job.state.next_run_display}</span> : null}
+                <p>{job.payload?.message || job.message || ""}</p>
+              </div>
+              <Space className="schedule-job-row__actions" wrap>
+                <Button onClick={() => client.beginCronJobEdit(job)}>{scheduleCopy.edit || "Edit"}</Button>
+                <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, job.enabled ? "pause" : "enable")}>
+                  {job.enabled ? scheduleCopy.pause || "Pause" : scheduleCopy.enable || "Enable"}
+                </Button>
+                <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "run")}>{scheduleCopy.runNow || "Run now"}</Button>
+                <Button danger disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "remove")}>{scheduleCopy.remove || "Remove"}</Button>
+              </Space>
+            </List.Item>
+          )}
+        />
+      </SettingsCard>
 
-      <h3>{scheduleCopy.usageTitle || "Usage"}</h3>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{scheduleCopy.usageCron?.title || "Create scheduled jobs"}</strong>
-            <span>{scheduleCopy.usageCron?.description || ""}</span>
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>{scheduleCopy.usageExisting?.title || "Existing jobs"}</strong>
-            <span>{scheduleCopy.usageExisting?.description || ""}</span>
-          </div>
-        </div>
-      </div>
+      <SettingsSectionTitle>{scheduleCopy.usageTitle || "Usage"}</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow title={scheduleCopy.usageCron?.title || "Create scheduled jobs"} description={scheduleCopy.usageCron?.description || ""} />
+        <SettingsRow title={scheduleCopy.usageExisting?.title || "Existing jobs"} description={scheduleCopy.usageExisting?.description || ""} />
+      </SettingsCard>
 
       {form.showEditor ? (
         <div className="provider-connect-dialog" role="dialog" aria-modal="true">
           <header className="provider-connect-dialog__top">
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={scheduleCopy.backToList || "Back"} onClick={client.cancelCronJobEdit}>{"<"}</button>
-            <button className="provider-connect-dialog__icon-button" type="button" aria-label={copy.settings.closeAria || "Close"} onClick={client.cancelCronJobEdit}>x</button>
+            <Button type="text" aria-label={scheduleCopy.backToList || "Back"} icon={<ArrowLeftOutlined />} onClick={client.cancelCronJobEdit} />
+            <Button type="text" aria-label={copy.settings.closeAria || "Close"} icon={<CloseOutlined />} onClick={client.cancelCronJobEdit} />
           </header>
-          <form className="provider-connect-dialog__body" onSubmit={(event) => { event.preventDefault(); client.saveCronJob(); }}>
+          <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveCronJob()}>
             <div className="provider-connect-dialog__title">
               <span className="provider-row__mark" aria-hidden="true">SC</span>
               <h3>{form.jobId ? scheduleCopy.editJobTitle || "Edit schedule" : scheduleCopy.newJobTitle || "Create schedule"}</h3>
             </div>
             <p>{scheduleCopy.newJobDescription || ""}</p>
-            <label className="provider-connect-field">
-              <span>{scheduleCopy.jobName || "Name"}</span>
-              <input value={form.name} type="text" autoComplete="off" onChange={(event) => (form.name = event.target.value)} />
-            </label>
-            <label className="provider-connect-field">
-              <span>{scheduleCopy.jobType || "Type"}</span>
-              <select value={form.mode} onChange={(event) => (form.mode = event.target.value)}>
-                <option value="cron">{scheduleCopy.jobTypes?.cron || "Cron expression"}</option>
-                <option value="every">{scheduleCopy.jobTypes?.every || "Fixed interval"}</option>
-                <option value="at">{scheduleCopy.jobTypes?.at || "Run once"}</option>
-              </select>
-            </label>
+            <Form.Item className="provider-connect-field" label={scheduleCopy.jobName || "Name"}>
+              <Input value={form.name} autoComplete="off" onChange={(event) => (form.name = event.target.value)} />
+            </Form.Item>
+            <Form.Item className="provider-connect-field" label={scheduleCopy.jobType || "Type"}>
+              <Select
+                value={form.mode}
+                options={[
+                  { value: "cron", label: scheduleCopy.jobTypes?.cron || "Cron expression" },
+                  { value: "every", label: scheduleCopy.jobTypes?.every || "Fixed interval" },
+                  { value: "at", label: scheduleCopy.jobTypes?.at || "Run once" },
+                ]}
+                onChange={(value) => (form.mode = value)}
+              />
+            </Form.Item>
             {form.mode === "every" ? (
-              <label className="provider-connect-field">
-                <span>{scheduleCopy.everySeconds || "Interval seconds"}</span>
-                <input value={form.everySeconds} type="number" min={1} step={1} onChange={(event) => (form.everySeconds = event.target.value)} />
-              </label>
+              <Form.Item className="provider-connect-field" label={scheduleCopy.everySeconds || "Interval seconds"}>
+                <InputNumber className="settings-control" value={Number(form.everySeconds || 3600)} min={1} step={1} onChange={(value) => (form.everySeconds = String(value || 3600))} />
+              </Form.Item>
             ) : null}
             {form.mode === "cron" ? (
               <>
-                <label className="provider-connect-field">
-                  <span>{scheduleCopy.cronExpression || "Cron expression"}</span>
-                  <input value={form.cronExpr} type="text" spellCheck={false} autoComplete="off" onChange={(event) => (form.cronExpr = event.target.value)} />
-                </label>
-                <label className="provider-connect-field">
-                  <span>{scheduleCopy.timezone || "Timezone"}</span>
-                  <select value={form.timezone} onChange={(event) => (form.timezone = event.target.value)}>
-                    {timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
-                  </select>
-                </label>
+                <Form.Item className="provider-connect-field" label={scheduleCopy.cronExpression || "Cron expression"}>
+                  <Input value={form.cronExpr} spellCheck={false} autoComplete="off" onChange={(event) => (form.cronExpr = event.target.value)} />
+                </Form.Item>
+                <Form.Item className="provider-connect-field" label={scheduleCopy.timezone || "Timezone"}>
+                  <Select value={form.timezone} options={timezones.map((timezone) => ({ value: timezone, label: timezone }))} onChange={(value) => (form.timezone = value)} />
+                </Form.Item>
               </>
             ) : null}
             {form.mode === "at" ? (
-              <label className="provider-connect-field">
-                <span>{scheduleCopy.runAt || "Run at"}</span>
-                <input value={form.at} type="datetime-local" onChange={(event) => (form.at = event.target.value)} />
-              </label>
+              <Form.Item className="provider-connect-field" label={scheduleCopy.runAt || "Run at"}>
+                <Input value={form.at} type="datetime-local" onChange={(event) => (form.at = event.target.value)} />
+              </Form.Item>
             ) : null}
-            <label className="provider-connect-field">
-              <span>{scheduleCopy.message || "Message"}</span>
-              <textarea value={form.message} rows={3} spellCheck={false} onChange={(event) => (form.message = event.target.value)} />
-            </label>
-            <div className="settings-row schedule-editor__deliver">
-              <div>
-                <strong>{scheduleCopy.deliver?.title || "Send back to chat"}</strong>
-                <span>{scheduleCopy.deliver?.description || ""}</span>
-              </div>
-              <input className="switch" type="checkbox" aria-label={scheduleCopy.deliver?.title || "Deliver"} checked={Boolean(form.deliver)} onChange={(event) => (form.deliver = event.target.checked)} />
-            </div>
-            <button className="primary-button provider-connect-dialog__submit" type="submit" disabled={state.cronJobsLoading}>
+            <Form.Item className="provider-connect-field" label={scheduleCopy.message || "Message"}>
+              <Input.TextArea value={form.message} rows={3} spellCheck={false} onChange={(event) => (form.message = event.target.value)} />
+            </Form.Item>
+            <SettingsRow title={scheduleCopy.deliver?.title || "Send back to chat"} description={scheduleCopy.deliver?.description || ""} className="schedule-editor__deliver">
+              <Switch aria-label={scheduleCopy.deliver?.title || "Deliver"} checked={Boolean(form.deliver)} onChange={(checked) => (form.deliver = checked)} />
+            </SettingsRow>
+            <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.cronJobsLoading} disabled={state.cronJobsLoading}>
               {form.jobId ? scheduleCopy.updateJob || "Update schedule" : scheduleCopy.createJob || "Create schedule"}
-            </button>
-          </form>
+            </Button>
+          </Form>
         </div>
       ) : null}
     </section>
@@ -2430,52 +2392,31 @@ function NetworkSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.networkLoading ? <p className="settings-inline-status">{networkCopy.loading || "Loading network settings..."}</p> : null}
-      {state.networkNotice ? <p className="settings-inline-status">{state.networkNotice}</p> : null}
-      {state.networkError ? <p className="settings-inline-status settings-inline-status--error">{state.networkError}</p> : null}
+      <SettingsStatus message={state.networkLoading ? networkCopy.loading || "Loading network settings..." : ""} />
+      <SettingsStatus message={state.networkNotice} />
+      <SettingsStatus message={state.networkError} type="error" />
 
-      <h3>{networkCopy.title || "Network"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{networkCopy.httpProxy?.title || "HTTP proxy"}</strong>
-            <span>{networkCopy.httpProxy?.description || ""}</span>
-          </div>
-          <input value={form.httpProxy} type="text" placeholder={networkCopy.proxyPlaceholder || "http://proxy-host:port"} disabled={state.networkLoading} onChange={(event) => (form.httpProxy = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{networkCopy.httpsProxy?.title || "HTTPS proxy"}</strong>
-            <span>{networkCopy.httpsProxy?.description || ""}</span>
-          </div>
-          <input value={form.httpsProxy} type="text" placeholder={networkCopy.proxyPlaceholder || "http://proxy-host:port"} disabled={state.networkLoading} onChange={(event) => (form.httpsProxy = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{networkCopy.noProxy?.title || "No proxy"}</strong>
-            <span>{networkCopy.noProxy?.description || ""}</span>
-          </div>
-          <input value={form.noProxy} type="text" placeholder={networkCopy.noProxy?.placeholder || "127.0.0.1,localhost"} disabled={state.networkLoading} onChange={(event) => (form.noProxy = event.target.value)} />
-        </label>
-        <div className="settings-row">
-          <div>
-            <strong>{networkCopy.currentTitle || "Current setting"}</strong>
-            <span>{summary}</span>
-          </div>
-          <button className="secondary-button" type="button" disabled={state.networkLoading} onClick={client.saveNetworkSettings}>
+      <SettingsSectionTitle>{networkCopy.title || "Network"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={networkCopy.httpProxy?.title || "HTTP proxy"} description={networkCopy.httpProxy?.description || ""} className="settings-row--field">
+          <Input value={form.httpProxy} placeholder={networkCopy.proxyPlaceholder || "http://proxy-host:port"} disabled={state.networkLoading} onChange={(event) => (form.httpProxy = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={networkCopy.httpsProxy?.title || "HTTPS proxy"} description={networkCopy.httpsProxy?.description || ""} className="settings-row--field">
+          <Input value={form.httpsProxy} placeholder={networkCopy.proxyPlaceholder || "http://proxy-host:port"} disabled={state.networkLoading} onChange={(event) => (form.httpsProxy = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={networkCopy.noProxy?.title || "No proxy"} description={networkCopy.noProxy?.description || ""} className="settings-row--field">
+          <Input value={form.noProxy} placeholder={networkCopy.noProxy?.placeholder || "127.0.0.1,localhost"} disabled={state.networkLoading} onChange={(event) => (form.noProxy = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={networkCopy.currentTitle || "Current setting"} description={summary}>
+          <Button icon={<SaveOutlined />} loading={state.networkLoading} disabled={state.networkLoading} onClick={client.saveNetworkSettings}>
             {networkCopy.save || "Save network settings"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{networkCopy.scopeTitle || "Scope"}</strong>
-            <span>{networkCopy.scopeDescription || ""}</span>
-          </div>
-        </div>
-      </div>
+      <SettingsCard>
+        <SettingsRow title={networkCopy.scopeTitle || "Scope"} description={networkCopy.scopeDescription || ""} />
+      </SettingsCard>
     </section>
   );
 }
@@ -2498,67 +2439,33 @@ function SearchSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.searchLoading ? <p className="settings-inline-status">{searchCopy.loading || "Loading search settings..."}</p> : null}
-      {state.searchNotice ? <p className="settings-inline-status">{state.searchNotice}</p> : null}
-      {state.searchError ? <p className="settings-inline-status settings-inline-status--error">{state.searchError}</p> : null}
+      <SettingsStatus message={state.searchLoading ? searchCopy.loading || "Loading search settings..." : ""} />
+      <SettingsStatus message={state.searchNotice} />
+      <SettingsStatus message={state.searchError} type="error" />
 
-      <h3>{searchCopy.title || "Web search"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.provider?.title || "Provider"}</strong>
-            <span>{searchCopy.provider?.description || ""}</span>
-          </div>
-          <select value={form.provider} disabled={state.searchLoading} onChange={(event) => (form.provider = event.target.value)}>
-            {providerOptions.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
-          </select>
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.freshness?.title || "Freshness"}</strong>
-            <span>{searchCopy.freshness?.description || ""}</span>
-          </div>
-          <select value={form.freshness} disabled={state.searchLoading} onChange={(event) => (form.freshness = event.target.value)}>
-            {freshnessOptions.map((freshness) => <option key={freshness.id} value={freshness.id}>{freshness.label}</option>)}
-          </select>
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.maxResults?.title || "Max results"}</strong>
-            <span>{searchCopy.maxResults?.description || ""}</span>
-          </div>
-          <input value={Number(form.maxResults || 25)} type="number" min={1} max={100} disabled={state.searchLoading} onChange={(event) => (form.maxResults = Number(event.target.value || 25))} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.duckduckgoMaxPages?.title || "DuckDuckGo max pages"}</strong>
-            <span>{searchCopy.duckduckgoMaxPages?.description || ""}</span>
-          </div>
-          <input value={Number(form.duckduckgoMaxPages || 10)} type="number" min={1} max={50} disabled={state.searchLoading} onChange={(event) => (form.duckduckgoMaxPages = Number(event.target.value || 10))} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.searxngMaxPages?.title || "SearXNG max pages"}</strong>
-            <span>{searchCopy.searxngMaxPages?.description || ""}</span>
-          </div>
-          <input value={Number(form.searxngMaxPages || 5)} type="number" min={1} max={50} disabled={state.searchLoading} onChange={(event) => (form.searxngMaxPages = Number(event.target.value || 5))} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.searxngUrl?.title || "SearXNG URL"}</strong>
-            <span>{searchCopy.searxngUrl?.description || ""}</span>
-          </div>
-          <input value={form.searxngUrl} type="text" placeholder={searchCopy.searxngUrl?.placeholder || "https://searx.be"} disabled={state.searchLoading} onChange={(event) => (form.searxngUrl = event.target.value)} />
-        </label>
+      <SettingsSectionTitle>{searchCopy.title || "Web search"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={searchCopy.provider?.title || "Provider"} description={searchCopy.provider?.description || ""} className="settings-row--field">
+          <Select value={form.provider} disabled={state.searchLoading} options={providerOptions.map((provider) => ({ value: provider.id, label: provider.label }))} onChange={(value) => (form.provider = value)} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.freshness?.title || "Freshness"} description={searchCopy.freshness?.description || ""} className="settings-row--field">
+          <Select value={form.freshness} disabled={state.searchLoading} options={freshnessOptions.map((freshness) => ({ value: freshness.id, label: freshness.label }))} onChange={(value) => (form.freshness = value)} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.maxResults?.title || "Max results"} description={searchCopy.maxResults?.description || ""} className="settings-row--field">
+          <InputNumber className="settings-control" value={Number(form.maxResults || 25)} min={1} max={100} disabled={state.searchLoading} onChange={(value) => (form.maxResults = Number(value || 25))} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.duckduckgoMaxPages?.title || "DuckDuckGo max pages"} description={searchCopy.duckduckgoMaxPages?.description || ""} className="settings-row--field">
+          <InputNumber className="settings-control" value={Number(form.duckduckgoMaxPages || 10)} min={1} max={50} disabled={state.searchLoading} onChange={(value) => (form.duckduckgoMaxPages = Number(value || 10))} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.searxngMaxPages?.title || "SearXNG max pages"} description={searchCopy.searxngMaxPages?.description || ""} className="settings-row--field">
+          <InputNumber className="settings-control" value={Number(form.searxngMaxPages || 5)} min={1} max={50} disabled={state.searchLoading} onChange={(value) => (form.searxngMaxPages = Number(value || 5))} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.searxngUrl?.title || "SearXNG URL"} description={searchCopy.searxngUrl?.description || ""} className="settings-row--field">
+          <Input value={form.searxngUrl} placeholder={searchCopy.searxngUrl?.placeholder || "https://searx.be"} disabled={state.searchLoading} onChange={(event) => (form.searxngUrl = event.target.value)} />
+        </SettingsRow>
 
-        <div className="settings-row">
-          <div>
-            <strong>{searchCopy.searxngOptions?.title || "SearXNG options"}</strong>
-            <span>{searchCopy.searxngOptions?.description || ""}</span>
-          </div>
-          <button
-            className="secondary-button"
-            type="button"
+        <SettingsRow title={searchCopy.searxngOptions?.title || "SearXNG options"} description={searchCopy.searxngOptions?.description || ""}>
+          <Button
             aria-expanded={searxngOptionsExpanded}
             onClick={() => {
               const next = !searxngOptionsExpanded;
@@ -2570,8 +2477,8 @@ function SearchSettings({ client }: { client: Client }) {
             }}
           >
             {searxngOptionsExpanded ? searchCopy.searxngOptions?.collapse || "Collapse" : searchCopy.searxngOptions?.expand || "Expand"}
-          </button>
-        </div>
+          </Button>
+        </SettingsRow>
 
         {searxngOptionsExpanded ? (
           <div className="settings-collapsible-section">
@@ -2582,95 +2489,59 @@ function SearchSettings({ client }: { client: Client }) {
                 {state.searchOptionsNotice ? <span>{state.searchOptionsNotice}</span> : null}
                 {state.searchOptionsError ? <span className="settings-row__error">{state.searchOptionsError}</span> : null}
               </div>
-              <button className="secondary-button" type="button" disabled={state.searchLoading || state.searchOptionsLoading} onClick={client.loadSearxngOptions}>
+              <Button loading={state.searchOptionsLoading} disabled={state.searchLoading || state.searchOptionsLoading} onClick={client.loadSearxngOptions}>
                 {state.searchOptionsLoading ? searchCopy.searxngOptions?.loading || "Loading..." : searchCopy.searxngOptions?.load || "Load options"}
-              </button>
+              </Button>
             </div>
-            <div className="settings-row settings-row--field settings-row--choice-list">
-              <div>
-                <strong>{searchCopy.searxngEngines?.title || "SearXNG engines"}</strong>
-                <span>{searchCopy.searxngEngines?.description || ""}</span>
-              </div>
+            <SettingsRow title={searchCopy.searxngEngines?.title || "SearXNG engines"} description={searchCopy.searxngEngines?.description || ""} className="settings-row--field settings-row--choice-list">
               {engineOptions.length ? (
-                <div className="settings-choice-grid">
-                  {engineOptions.map((option: AnyRecord) => (
-                    <label key={option.id} className="settings-choice">
-                      <input
-                        type="checkbox"
-                        value={option.id}
-                        checked={(form.searxngEngines || []).includes(option.id)}
-                        disabled={state.searchLoading}
-                        onChange={(event) => toggleSearchSelection("searxngEngines", option.id, event.target.checked)}
-                      />
-                      <span>
-                        <strong>{option.label}</strong>
-                        <small>{searxngEngineMeta(copy, option)}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <Select
+                  mode="multiple"
+                  className="settings-control"
+                  value={form.searxngEngines || []}
+                  disabled={state.searchLoading}
+                  options={engineOptions.map((option: AnyRecord) => ({ value: option.id, label: `${option.label}${searxngEngineMeta(copy, option) ? ` - ${searxngEngineMeta(copy, option)}` : ""}` }))}
+                  onChange={(values) => (form.searxngEngines = values)}
+                />
               ) : <p className="settings-empty-inline">{searchCopy.searxngOptions?.emptyEngines || "No engines loaded."}</p>}
-            </div>
-            <div className="settings-row settings-row--field settings-row--choice-list">
-              <div>
-                <strong>{searchCopy.searxngCategories?.title || "SearXNG categories"}</strong>
-                <span>{searchCopy.searxngCategories?.description || ""}</span>
-              </div>
+            </SettingsRow>
+            <SettingsRow title={searchCopy.searxngCategories?.title || "SearXNG categories"} description={searchCopy.searxngCategories?.description || ""} className="settings-row--field settings-row--choice-list">
               {categoryOptions.length ? (
-                <div className="settings-choice-grid">
-                  {categoryOptions.map((option: AnyRecord) => (
-                    <label key={option.id} className="settings-choice">
-                      <input
-                        type="checkbox"
-                        value={option.id}
-                        checked={(form.searxngCategories || []).includes(option.id)}
-                        disabled={state.searchLoading}
-                        onChange={(event) => toggleSearchSelection("searxngCategories", option.id, event.target.checked)}
-                      />
-                      <span>
-                        <strong>{option.label}</strong>
-                        {option.configuredOnly ? <small>{searchCopy.searxngOptions?.configuredOnly || "Configured but not listed"}</small> : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <Select
+                  mode="multiple"
+                  className="settings-control"
+                  value={form.searxngCategories || []}
+                  disabled={state.searchLoading}
+                  options={categoryOptions.map((option: AnyRecord) => ({ value: option.id, label: `${option.label}${option.configuredOnly ? ` - ${searchCopy.searxngOptions?.configuredOnly || "Configured but not listed"}` : ""}` }))}
+                  onChange={(values) => (form.searxngCategories = values)}
+                />
               ) : <p className="settings-empty-inline">{searchCopy.searxngOptions?.emptyCategories || "No categories loaded."}</p>}
-            </div>
+            </SettingsRow>
           </div>
         ) : null}
 
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.proxy?.title || "Search proxy"}</strong>
-            <span>{searchCopy.proxy?.description || ""}</span>
-          </div>
-          <input value={form.proxy} type="text" placeholder={searchCopy.proxy?.placeholder || "http://proxy-host:port"} disabled={state.searchLoading} onChange={(event) => (form.proxy = event.target.value)} />
-        </label>
-        <div className="settings-row">
-          <div>
-            <strong>{searchCopy.currentTitle || "Current setting"}</strong>
-            <span>{summary}</span>
-          </div>
-          <button className="secondary-button" type="button" disabled={state.searchLoading} onClick={client.saveSearchSettings}>
+        <SettingsRow title={searchCopy.proxy?.title || "Search proxy"} description={searchCopy.proxy?.description || ""} className="settings-row--field">
+          <Input value={form.proxy} placeholder={searchCopy.proxy?.placeholder || "http://proxy-host:port"} disabled={state.searchLoading} onChange={(event) => (form.proxy = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={searchCopy.currentTitle || "Current setting"} description={summary}>
+          <Button icon={<SaveOutlined />} loading={state.searchLoading} disabled={state.searchLoading} onClick={client.saveSearchSettings}>
             {searchCopy.save || "Save search settings"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
-      <h3>{searchCopy.credentialsTitle || "Provider API keys"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{searchCopy.credentials?.jina?.title || "Jina API key"}</strong>
-            <span>
-              {typeof searchCopy.credentials?.description === "function"
-                ? searchCopy.credentials.description(webSearchCredentialStatus(copy, state, "jina"))
-                : webSearchCredentialStatus(copy, state, "jina")}
-            </span>
-          </div>
-          <input value={form.jinaApiKey} type="password" autoComplete="new-password" placeholder={searchCopy.credentials?.placeholder || "Leave blank to keep existing key"} disabled={state.searchLoading} onChange={(event) => (form.jinaApiKey = event.target.value)} />
-        </label>
-      </div>
+      <SettingsSectionTitle>{searchCopy.credentialsTitle || "Provider API keys"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow
+          title={searchCopy.credentials?.jina?.title || "Jina API key"}
+          description={typeof searchCopy.credentials?.description === "function"
+            ? searchCopy.credentials.description(webSearchCredentialStatus(copy, state, "jina"))
+            : webSearchCredentialStatus(copy, state, "jina")}
+          className="settings-row--field"
+        >
+          <Input.Password value={form.jinaApiKey} autoComplete="new-password" placeholder={searchCopy.credentials?.placeholder || "Leave blank to keep existing key"} disabled={state.searchLoading} onChange={(event) => (form.jinaApiKey = event.target.value)} />
+        </SettingsRow>
+      </SettingsCard>
     </section>
   );
 }
@@ -2688,135 +2559,78 @@ function BrowserSettings({ client }: { client: Client }) {
 
   return (
     <section className="settings-page">
-      {state.browserLoading ? <p className="settings-inline-status">{browserCopy.loading || "Loading browser settings..."}</p> : null}
-      {state.browserNotice ? <p className="settings-inline-status">{state.browserNotice}</p> : null}
-      {state.browserError ? <p className="settings-inline-status settings-inline-status--error">{state.browserError}</p> : null}
+      <SettingsStatus message={state.browserLoading ? browserCopy.loading || "Loading browser settings..." : ""} />
+      <SettingsStatus message={state.browserNotice} />
+      <SettingsStatus message={state.browserError} type="error" />
 
-      <h3>{browserCopy.title || "Browser automation"}</h3>
-      <div className="settings-card settings-card--form">
-        <div className="settings-row">
-          <div>
-            <strong>{browserCopy.enabled?.title || "Enable browser tools"}</strong>
-            <span>{browserCopy.enabled?.description || ""}</span>
-          </div>
-          <input className="switch" type="checkbox" aria-label={browserCopy.enabled?.title || "Enable browser tools"} checked={Boolean(form.enabled)} disabled={state.browserLoading} onChange={(event) => (form.enabled = event.target.checked)} />
-        </div>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.backend?.title || "Backend"}</strong>
-            <span>{browserCopy.backend?.description || ""}</span>
-          </div>
-          <select value={form.backend} disabled={state.browserLoading} onChange={(event) => (form.backend = event.target.value)}>
-            {backendOptions.map((backend) => <option key={backend.id} value={backend.id}>{backend.label}</option>)}
-          </select>
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.cdpUrl?.title || "Chrome CDP URL"}</strong>
-            <span>{browserCopy.cdpUrl?.description || ""}</span>
-          </div>
-          <input value={form.cdpUrl} type="text" placeholder={browserCopy.cdpUrl?.placeholder || "http://127.0.0.1:9222"} disabled={state.browserLoading} onChange={(event) => (form.cdpUrl = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.launchArgs?.title || "Browser launch args"}</strong>
-            <span>{browserCopy.launchArgs?.description || ""}</span>
-          </div>
-          <input value={form.launchArgs} type="text" spellCheck={false} placeholder={browserCopy.launchArgs?.placeholder || "--no-sandbox"} disabled={state.browserLoading} onChange={(event) => (form.launchArgs = event.target.value)} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.commandTimeout?.title || "Command timeout"}</strong>
-            <span>{browserCopy.commandTimeout?.description || ""}</span>
-          </div>
-          <input value={Number(form.commandTimeout || 30)} type="number" min={1} max={600} disabled={state.browserLoading} onChange={(event) => (form.commandTimeout = Number(event.target.value || 30))} />
-        </label>
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.sessionTimeout?.title || "Session timeout"}</strong>
-            <span>{browserCopy.sessionTimeout?.description || ""}</span>
-          </div>
-          <input value={Number(form.sessionTimeout || 1800)} type="number" min={1} max={86400} disabled={state.browserLoading} onChange={(event) => (form.sessionTimeout = Number(event.target.value || 1800))} />
-        </label>
-        <div className="settings-row">
-          <div>
-            <strong>{browserCopy.allowPrivateUrls?.title || "Allow private URLs"}</strong>
-            <span>{browserCopy.allowPrivateUrls?.description || ""}</span>
-          </div>
-          <input className="switch" type="checkbox" aria-label={browserCopy.allowPrivateUrls?.title || "Allow private URLs"} checked={Boolean(form.allowPrivateUrls)} disabled={state.browserLoading} onChange={(event) => (form.allowPrivateUrls = event.target.checked)} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>{browserCopy.currentTitle || "Current setting"}</strong>
-            <span>{summary}</span>
-          </div>
-          <button className="secondary-button" type="button" disabled={state.browserLoading} onClick={client.saveBrowserSettings}>
+      <SettingsSectionTitle>{browserCopy.title || "Browser automation"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={browserCopy.enabled?.title || "Enable browser tools"} description={browserCopy.enabled?.description || ""}>
+          <Switch aria-label={browserCopy.enabled?.title || "Enable browser tools"} checked={Boolean(form.enabled)} disabled={state.browserLoading} onChange={(checked) => (form.enabled = checked)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.backend?.title || "Backend"} description={browserCopy.backend?.description || ""} className="settings-row--field">
+          <Select value={form.backend} disabled={state.browserLoading} options={backendOptions.map((backend) => ({ value: backend.id, label: backend.label }))} onChange={(value) => (form.backend = value)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.cdpUrl?.title || "Chrome CDP URL"} description={browserCopy.cdpUrl?.description || ""} className="settings-row--field">
+          <Input value={form.cdpUrl} placeholder={browserCopy.cdpUrl?.placeholder || "http://127.0.0.1:9222"} disabled={state.browserLoading} onChange={(event) => (form.cdpUrl = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.launchArgs?.title || "Browser launch args"} description={browserCopy.launchArgs?.description || ""} className="settings-row--field">
+          <Input value={form.launchArgs} spellCheck={false} placeholder={browserCopy.launchArgs?.placeholder || "--no-sandbox"} disabled={state.browserLoading} onChange={(event) => (form.launchArgs = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.commandTimeout?.title || "Command timeout"} description={browserCopy.commandTimeout?.description || ""} className="settings-row--field">
+          <InputNumber className="settings-control" value={Number(form.commandTimeout || 30)} min={1} max={600} disabled={state.browserLoading} onChange={(value) => (form.commandTimeout = Number(value || 30))} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.sessionTimeout?.title || "Session timeout"} description={browserCopy.sessionTimeout?.description || ""} className="settings-row--field">
+          <InputNumber className="settings-control" value={Number(form.sessionTimeout || 1800)} min={1} max={86400} disabled={state.browserLoading} onChange={(value) => (form.sessionTimeout = Number(value || 1800))} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.allowPrivateUrls?.title || "Allow private URLs"} description={browserCopy.allowPrivateUrls?.description || ""}>
+          <Switch aria-label={browserCopy.allowPrivateUrls?.title || "Allow private URLs"} checked={Boolean(form.allowPrivateUrls)} disabled={state.browserLoading} onChange={(checked) => (form.allowPrivateUrls = checked)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.currentTitle || "Current setting"} description={summary}>
+          <Button icon={<SaveOutlined />} loading={state.browserLoading} disabled={state.browserLoading} onClick={client.saveBrowserSettings}>
             {browserCopy.save || "Save browser settings"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
-      <h3>{browserCopy.test?.title || "Manual browser test"}</h3>
-      <div className="settings-card settings-card--form">
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{browserCopy.test?.urlTitle || "Test URL"}</strong>
-            <span>{browserCopy.test?.description || ""}</span>
-          </div>
-          <input value={form.testUrl} type="url" spellCheck={false} placeholder={browserCopy.test?.placeholder || "https://quotes.toscrape.com/js/"} disabled={state.browserTestLoading} onChange={(event) => (form.testUrl = event.target.value)} />
-        </label>
-        <div className="settings-row settings-row--update">
-          <div>
-            <strong>{browserCopy.test?.currentTitle || "Test status"}</strong>
-            <span>{testSummary}</span>
-          </div>
-          <div className="settings-row__actions">
-            <button className="secondary-button" type="button" disabled={state.browserTestLoading || state.browserLoading} onClick={client.runBrowserTest}>
+      <SettingsSectionTitle>{browserCopy.test?.title || "Manual browser test"}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={browserCopy.test?.urlTitle || "Test URL"} description={browserCopy.test?.description || ""} className="settings-row--field">
+          <Input value={form.testUrl} type="url" spellCheck={false} placeholder={browserCopy.test?.placeholder || "https://quotes.toscrape.com/js/"} disabled={state.browserTestLoading} onChange={(event) => (form.testUrl = event.target.value)} />
+        </SettingsRow>
+        <SettingsRow title={browserCopy.test?.currentTitle || "Test status"} description={testSummary} className="settings-row--update">
+          <Space>
+            <Button loading={state.browserTestLoading} disabled={state.browserTestLoading || state.browserLoading} onClick={client.runBrowserTest}>
               {state.browserTestLoading ? browserCopy.test?.running || "Testing..." : browserCopy.test?.run || "Run browser test"}
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </Space>
+        </SettingsRow>
+      </SettingsCard>
 
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{browserCopy.runtimeTitle || "Runtime status"}</strong>
-            <span>{runtime}</span>
-            {state.browser.runtime?.install_hint ? <span>{state.browser.runtime.install_hint}</span> : null}
-          </div>
-        </div>
-      </div>
+      <SettingsCard>
+        <SettingsRow title={browserCopy.runtimeTitle || "Runtime status"} description={<>{runtime}{state.browser.runtime?.install_hint ? <><br />{state.browser.runtime.install_hint}</> : null}</>} />
+      </SettingsCard>
 
-      <h3>{browserCopy.doctor?.title || "Browser install check"}</h3>
-      <div className="settings-card">
-        <div className="settings-row settings-row--update">
-          <div>
-            <strong>{browserCopy.doctor?.currentTitle || "Install status"}</strong>
-            <span>{doctorSummary}</span>
-          </div>
-          <div className="settings-row__actions">
-            <button className="secondary-button" type="button" disabled={state.browserDoctorLoading || state.browserLoading} onClick={client.runBrowserDoctor}>
+      <SettingsSectionTitle>{browserCopy.doctor?.title || "Browser install check"}</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow title={browserCopy.doctor?.currentTitle || "Install status"} description={doctorSummary} className="settings-row--update">
+          <Space wrap>
+            <Button loading={state.browserDoctorLoading} disabled={state.browserDoctorLoading || state.browserLoading} onClick={client.runBrowserDoctor}>
               {state.browserDoctorLoading ? browserCopy.doctor?.running || "Checking..." : browserCopy.doctor?.run || "Check browser install"}
-            </button>
-            <button className="secondary-button" type="button" disabled={state.browserInstallLoading || state.browserDoctorLoading || state.browserLoading} onClick={client.runBrowserInstall}>
+            </Button>
+            <Button loading={state.browserInstallLoading} disabled={state.browserInstallLoading || state.browserDoctorLoading || state.browserLoading} onClick={client.runBrowserInstall}>
               {state.browserInstallLoading ? browserCopy.install?.running || "Installing..." : browserCopy.install?.run || "Install browser"}
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Space>
+        </SettingsRow>
         {state.browserDoctorResult?.checks?.length ? (
           <div className="settings-stack">
             {state.browserDoctorResult.checks.map((check: AnyRecord) => (
-              <div key={check.name || check.command} className="settings-row">
-                <div>
-                  <strong>{check.command || check.name}</strong>
-                  <span>{browserDoctorCheckSummary(copy, check)}</span>
-                </div>
-              </div>
+              <SettingsRow key={check.name || check.command} title={check.command || check.name} description={browserDoctorCheckSummary(copy, check)} />
             ))}
           </div>
         ) : null}
-      </div>
+      </SettingsCard>
     </section>
   );
 }
@@ -2834,127 +2648,45 @@ function LogSettings({ client }: { client: Client }) {
     : logCopy.disabled;
   return (
     <section className="settings-page">
-      {state.logLoading ? <p className="settings-inline-status">{logCopy.loading}</p> : null}
-      {state.logNotice ? <p className="settings-inline-status">{state.logNotice}</p> : null}
-      {state.logError ? <p className="settings-inline-status settings-inline-status--error">{state.logError}</p> : null}
+      <SettingsStatus message={state.logLoading ? logCopy.loading : ""} />
+      <SettingsStatus message={state.logNotice} />
+      <SettingsStatus message={state.logError} type="error" />
 
-      <h3>{logCopy.title}</h3>
-      <div className="settings-card settings-card--form">
-        <div className="settings-row">
-          <div>
-            <strong>{logCopy.enabled.title}</strong>
-            <span>{logCopy.enabled.description}</span>
-          </div>
-          <input
-            className="switch"
-            type="checkbox"
-            aria-label={logCopy.enabled.title}
-            checked={Boolean(form.enabled)}
-            disabled={state.logLoading}
-            onChange={(event) => (form.enabled = event.target.checked)}
-          />
-        </div>
-
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{logCopy.level.title}</strong>
-            <span>{logCopy.level.description}</span>
-          </div>
-          <select
+      <SettingsSectionTitle>{logCopy.title}</SettingsSectionTitle>
+      <SettingsCard className="settings-card--form">
+        <SettingsRow title={logCopy.enabled.title} description={logCopy.enabled.description}>
+          <Switch aria-label={logCopy.enabled.title} checked={Boolean(form.enabled)} disabled={state.logLoading} onChange={(checked) => (form.enabled = checked)} />
+        </SettingsRow>
+        <SettingsRow title={logCopy.level.title} description={logCopy.level.description} className="settings-row--field">
+          <Select
             value={form.level}
             disabled={state.logLoading || !form.enabled}
-            onChange={(event) => (form.level = event.target.value)}
-          >
-            {logLevelOptions.map((level: string) => (
-              <option key={level} value={level}>{level}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{logCopy.retention.title}</strong>
-            <span>{logCopy.retention.description}</span>
-          </div>
-          <input
-            type="number"
-            min={1}
-            max={3650}
-            value={Number(form.retentionDays || 365)}
-            disabled={state.logLoading || !form.enabled}
-            onChange={(event) => (form.retentionDays = Number(event.target.value || 365))}
+            options={logLevelOptions.map((level: string) => ({ value: level, label: level }))}
+            onChange={(value) => (form.level = value)}
           />
-        </label>
-
-        <div className="settings-row">
-          <div>
-            <strong>{logCopy.systemPrompt.title}</strong>
-            <span>{logCopy.systemPrompt.description}</span>
-          </div>
-          <input
-            className="switch"
-            type="checkbox"
-            aria-label={logCopy.systemPrompt.title}
-            checked={Boolean(form.logSystemPrompt)}
-            disabled={state.logLoading || !form.enabled}
-            onChange={(event) => (form.logSystemPrompt = event.target.checked)}
-          />
-        </div>
-
-        <label className="settings-row settings-row--field">
-          <div>
-            <strong>{logCopy.systemPromptLines.title}</strong>
-            <span>{logCopy.systemPromptLines.description}</span>
-          </div>
-          <input
-            type="number"
-            min={0}
-            max={3650}
-            value={Number(form.logSystemPromptLines || 0)}
-            disabled={state.logLoading || !form.enabled || !form.logSystemPrompt}
-            onChange={(event) => (form.logSystemPromptLines = Number(event.target.value || 0))}
-          />
-        </label>
-
-        <div className="settings-row">
-          <div>
-            <strong>{logCopy.reasoningDetails.title}</strong>
-            <span>{logCopy.reasoningDetails.description}</span>
-          </div>
-          <input
-            className="switch"
-            type="checkbox"
-            aria-label={logCopy.reasoningDetails.title}
-            checked={Boolean(form.logReasoningDetails)}
-            disabled={state.logLoading || !form.enabled}
-            onChange={(event) => (form.logReasoningDetails = event.target.checked)}
-          />
-        </div>
-
-        <div className="settings-row">
-          <div>
-            <strong>{logCopy.currentTitle}</strong>
-            <span>{logSummary}</span>
-          </div>
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={state.logLoading}
-            onClick={client.saveLogSettings}
-          >
+        </SettingsRow>
+        <SettingsRow title={logCopy.retention.title} description={logCopy.retention.description} className="settings-row--field">
+          <InputNumber className="settings-control" min={1} max={3650} value={Number(form.retentionDays || 365)} disabled={state.logLoading || !form.enabled} onChange={(value) => (form.retentionDays = Number(value || 365))} />
+        </SettingsRow>
+        <SettingsRow title={logCopy.systemPrompt.title} description={logCopy.systemPrompt.description}>
+          <Switch aria-label={logCopy.systemPrompt.title} checked={Boolean(form.logSystemPrompt)} disabled={state.logLoading || !form.enabled} onChange={(checked) => (form.logSystemPrompt = checked)} />
+        </SettingsRow>
+        <SettingsRow title={logCopy.systemPromptLines.title} description={logCopy.systemPromptLines.description} className="settings-row--field">
+          <InputNumber className="settings-control" min={0} max={3650} value={Number(form.logSystemPromptLines || 0)} disabled={state.logLoading || !form.enabled || !form.logSystemPrompt} onChange={(value) => (form.logSystemPromptLines = Number(value || 0))} />
+        </SettingsRow>
+        <SettingsRow title={logCopy.reasoningDetails.title} description={logCopy.reasoningDetails.description}>
+          <Switch aria-label={logCopy.reasoningDetails.title} checked={Boolean(form.logReasoningDetails)} disabled={state.logLoading || !form.enabled} onChange={(checked) => (form.logReasoningDetails = checked)} />
+        </SettingsRow>
+        <SettingsRow title={logCopy.currentTitle} description={logSummary}>
+          <Button icon={<SaveOutlined />} loading={state.logLoading} disabled={state.logLoading} onClick={client.saveLogSettings}>
             {logCopy.save}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SettingsRow>
+      </SettingsCard>
 
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{logCopy.rawResponseTitle}</strong>
-            <span>{logCopy.rawResponseDescription}</span>
-          </div>
-        </div>
-      </div>
+      <SettingsCard>
+        <SettingsRow title={logCopy.rawResponseTitle} description={logCopy.rawResponseDescription} />
+      </SettingsCard>
     </section>
   );
 }
@@ -2962,22 +2694,14 @@ function LogSettings({ client }: { client: Client }) {
 function ShortcutSettings({ copy }: { copy: AnyRecord }) {
   return (
     <section className="settings-page">
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <strong>{copy.settings.shortcuts?.openSettings || "Open settings"}</strong>
-            <span>{copy.settings.shortcuts?.openSettingsDescription || ""}</span>
-          </div>
+      <SettingsCard>
+        <SettingsRow title={copy.settings.shortcuts?.openSettings || "Open settings"} description={copy.settings.shortcuts?.openSettingsDescription || ""}>
           <div className="shortcut-keys"><kbd>Ctrl</kbd><kbd>,</kbd></div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <strong>{copy.settings.shortcuts?.sendMessage || "Send message"}</strong>
-            <span>{copy.settings.shortcuts?.sendMessageDescription || ""}</span>
-          </div>
+        </SettingsRow>
+        <SettingsRow title={copy.settings.shortcuts?.sendMessage || "Send message"} description={copy.settings.shortcuts?.sendMessageDescription || ""}>
           <div className="shortcut-keys"><kbd>Enter</kbd></div>
-        </div>
-      </div>
+        </SettingsRow>
+      </SettingsCard>
     </section>
   );
 }
@@ -2996,7 +2720,7 @@ function AuthProviderCard({
   onLogout,
 }: AnyRecord) {
   return (
-    <div className="settings-card provider-card">
+    <SettingsCard className="provider-card">
       <div className="provider-row provider-row--stacked codex-auth-row">
         <div className="provider-row__content">
           <div className="provider-row__main">
@@ -3004,16 +2728,16 @@ function AuthProviderCard({
             <div>
               <div className="provider-row__title">
                 <strong>{name}</strong>
-                <span className="provider-row__badge">{status}</span>
+                <Tag className="provider-row__badge">{status}</Tag>
               </div>
               <span>{description}</span>
             </div>
           </div>
-          <div className="provider-row__actions">
-            <button className="provider-row__action" type="button" disabled={loading} onClick={onRefresh}>{copy.refresh || "Refresh"}</button>
-            <button className="provider-row__action" type="button" disabled={loading} onClick={onLogin}>{copy.login || "Login"}</button>
-            <button className="provider-row__action" type="button" disabled={loading || !configured} onClick={onLogout}>{copy.logout || "Logout"}</button>
-          </div>
+          <Space className="provider-row__actions" wrap>
+            <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={onRefresh}>{copy.refresh || "Refresh"}</Button>
+            <Button type="primary" loading={loading} disabled={loading} onClick={onLogin}>{copy.login || "Login"}</Button>
+            <Button disabled={loading || !configured} onClick={onLogout}>{copy.logout || "Logout"}</Button>
+          </Space>
         </div>
         {auth.userCode ? (
           <div className="codex-auth-command">
@@ -3023,7 +2747,7 @@ function AuthProviderCard({
           </div>
         ) : null}
       </div>
-    </div>
+    </SettingsCard>
   );
 }
 
