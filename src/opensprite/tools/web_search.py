@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import quote_plus
 
 import httpx
 
@@ -26,16 +25,13 @@ from .web_search_payloads import (
     normalize_text as _normalize,
     strip_tags as _strip_tags,
 )
+from .web_search_jina import search_jina
 from .web_search_searxng import (
     clean_text_values as _clean_text_values,
     search_searxng,
     searxng_scope_params as _searxng_scope_params,
 )
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-)
 def _normalize_proxy(proxy: Any) -> str | None:
     """Normalize optional proxy config for httpx."""
     if proxy is None:
@@ -145,31 +141,11 @@ class WebSearchTool(Tool):
         )
 
     async def _search_jina(self, query: str, n: int, freshness: str) -> str:
-        try:
-            headers = {"User-Agent": USER_AGENT}
-            if self.jina_api_key:
-                headers["Authorization"] = f"Bearer {self.jina_api_key}"
-            params = _freshness_params("jina", freshness)
-            query_string = f"q={quote_plus(query)}&format=json"
-            if params:
-                query_string += "&" + "&".join(f"{key}={quote_plus(value)}" for key, value in params.items())
-            async with httpx.AsyncClient(proxy=self.proxy) as client:
-                r = await client.get(
-                    f"https://s.jina.ai/http://duckduckgo.com/?{query_string}",
-                    headers=headers,
-                    timeout=10.0
-                )
-                r.raise_for_status()
-            return _format_results(
-                query,
-                [{
-                    "title": f"Jina summary for {query}",
-                    "url": "",
-                    "content": r.text,
-                }],
-                n,
-                provider="jina",
-                freshness=freshness,
-            )
-        except Exception as e:
-            return _format_error(query, "jina", str(e), freshness=freshness)
+        return await search_jina(
+            query,
+            n,
+            freshness,
+            api_key=self.jina_api_key,
+            proxy=self.proxy,
+            client_factory=httpx.AsyncClient,
+        )
