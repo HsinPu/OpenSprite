@@ -5,17 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..auth.credentials import (
-    DEFAULT_LLM_CAPABILITY,
-    CredentialNotFoundError,
-    mark_credential_used,
-    resolve_credential,
-)
+from ..auth.credentials import CredentialNotFoundError
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
 from ..config.llm_presets import provider_profile_defaults
 from .reasoning import normalize_reasoning_effort
+from .runtime_credentials import resolve_runtime_credentials
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -91,23 +87,19 @@ def resolve_provider_runtime(
     elif api_mode is None:
         api_mode = "chat_completions"
 
-    if not api_key and auth_type == "api_key":
-        try:
-            credential = resolve_credential(
-                provider=configured_provider,
-                credential_id=credential_id or None,
-                capability=DEFAULT_LLM_CAPABILITY,
-                app_home=app_home_path,
-            )
-            api_key = credential.secret
-            if not base_url and credential.base_url:
-                base_url = credential.base_url
-            mark_credential_used(credential.provider, credential.id, app_home=app_home_path)
-        except CredentialNotFoundError as exc:
-            if credential_id:
-                raise ProviderRuntimeError(str(exc)) from exc
-    elif not api_key and auth_type == "optional_api_key":
-        api_key = "no-key-required"
+    try:
+        runtime_credentials = resolve_runtime_credentials(
+            provider_name=configured_provider,
+            auth_type=auth_type,
+            api_key=api_key,
+            base_url=base_url,
+            credential_id=credential_id,
+            app_home=app_home_path,
+        )
+    except CredentialNotFoundError as exc:
+        raise ProviderRuntimeError(str(exc)) from exc
+    api_key = runtime_credentials.api_key
+    base_url = runtime_credentials.base_url
     if not base_url:
         base_url = profile_base_url
 
