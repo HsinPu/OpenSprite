@@ -29,8 +29,21 @@ from opensprite.agent.task.contract import (
     PLANNER_VALIDATED_STATUS,
     TaskContract,
 )
+from opensprite.agent.task.progress import WorkProgressUpdate
 from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.turn_result_aggregation import aggregate_execution_results
+from opensprite.agent.turn_response_metadata import build_turn_response_metadata
+from opensprite.agent.turn_outcome import (
+    TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD,
+    TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD,
+    TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD,
+    TURN_METADATA_COMPLETION_GATE_FIELD,
+    TURN_METADATA_COMPLETION_STATUS_FIELD,
+    TURN_METADATA_DELEGATED_TASKS_FIELD,
+    TURN_METADATA_TASK_ARTIFACTS_FIELD,
+    TURN_METADATA_TASK_CONTRACT_FIELD,
+    TURN_METADATA_WORK_PROGRESS_FIELD,
+)
 from opensprite.agent.turn_result_updates import apply_runtime_progress, merge_workflow_outcomes
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
@@ -477,6 +490,86 @@ def test_apply_runtime_progress_merges_counts_and_paths():
 
     assert result.file_change_count == 3
     assert result.touched_paths == ("a.py", "b.py")
+
+
+def test_build_turn_response_metadata_collects_turn_fields():
+    task_contract = TaskContract(
+        objective="Finish the task",
+        task_type="code_change",
+        requirements=(EvidenceRequirement(kind="file_change"),),
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
+        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
+    )
+    delegated_task = StoredDelegatedTask(
+        task_id="task-1",
+        prompt_type="implementation",
+        status="running",
+        selected=True,
+        summary="continue implementation",
+    )
+    artifact = TaskArtifact(
+        kind="command_result",
+        source_tool="exec",
+        resource_ids=("cmd-1",),
+        content_preview="pytest passed",
+    )
+    work_progress = WorkProgressUpdate(
+        status="in_progress",
+        pass_index=2,
+        auto_continue_attempts=1,
+        progress_signals=("files_changed",),
+        has_progress=True,
+        file_change_count=1,
+        touched_paths=("src/file.py",),
+        verification_required=True,
+        verification_attempted=True,
+        verification_passed=True,
+        completion_status="incomplete",
+        completion_reason="needs final response",
+        next_action="continue",
+        continuation_budget=1,
+    )
+
+    response_metadata, status_metadata, persisted_metadata = build_turn_response_metadata(
+        response="done",
+        aggregate_result=ExecutionResult(
+            content="done",
+            executed_tool_calls=2,
+            file_change_count=1,
+            delegated_tasks=(delegated_task,),
+            active_delegate_task_id="task-1",
+            active_delegate_prompt_type="implementation",
+            verification_attempted=True,
+            verification_passed=True,
+            stop_reason="max_tool_iterations",
+            stop_metadata={"iteration_limit": 3},
+            context_compactions=1,
+            reasoning_details=[{"summary": "reasoning"}],
+            task_contract=task_contract,
+            task_artifacts=(artifact,),
+        ),
+        completion_result=CompletionGateResult(status="incomplete", reason="needs final response", confidence=0.6),
+        work_progress=work_progress,
+        auto_continue_attempts=1,
+        assistant_metadata={"existing": "value"},
+    )
+
+    assert response_metadata["response_len"] == 4
+    assert response_metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] == 1
+    assert response_metadata[TURN_METADATA_COMPLETION_GATE_FIELD]["status"] == "incomplete"
+    assert response_metadata[TURN_METADATA_WORK_PROGRESS_FIELD]["touched_paths"] == ["src/file.py"]
+    assert response_metadata[TURN_METADATA_TASK_CONTRACT_FIELD]["task_type"] == "code_change"
+    assert response_metadata[TURN_METADATA_DELEGATED_TASKS_FIELD][0]["task_id"] == "task-1"
+    assert response_metadata[TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD] == "task-1"
+    assert response_metadata[TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD] == "implementation"
+    assert response_metadata[TURN_METADATA_TASK_ARTIFACTS_FIELD][0]["kind"] == "command_result"
+    assert response_metadata["stop_metadata"] == {"iteration_limit": 3}
+    assert status_metadata[TURN_METADATA_COMPLETION_STATUS_FIELD] == "incomplete"
+    assert status_metadata["stop_reason"] == "max_tool_iterations"
+    assert persisted_metadata == {
+        "existing": "value",
+        "llm_reasoning_details": [{"summary": "reasoning"}],
+    }
 
 
 def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error():

@@ -77,22 +77,15 @@ from .turn_result_updates import (
     with_delegated_tasks,
     with_workflow_outcomes,
 )
+from .turn_response_metadata import build_turn_response_metadata
 from .turn_outcome import (
     LLM_NOT_CONFIGURED_LOG_REASON,
     LLM_NOT_CONFIGURED_TURN_REASON,
     MEDIA_ONLY_TURN_REASON,
     TASK_CLARIFICATION_TURN_REASON,
-    TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD,
-    TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD,
     TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD,
-    TURN_METADATA_COMPLETION_GATE_FIELD,
     TURN_METADATA_COMPLETION_REASON_FIELD,
     TURN_METADATA_COMPLETION_STATUS_FIELD,
-    TURN_METADATA_DELEGATED_TASKS_FIELD,
-    TURN_METADATA_TASK_ARTIFACTS_FIELD,
-    TURN_METADATA_TASK_CONTRACT_FIELD,
-    TURN_METADATA_TOOL_EVIDENCE_FIELD,
-    TURN_METADATA_WORK_PROGRESS_FIELD,
     can_replace_initial_work_state,
     final_response_after_exhausted_continuation,
     is_tool_backed_task_contract,
@@ -1018,46 +1011,14 @@ class AgentTurnRunner:
 
         outbound_media = self._get_queued_outbound_media()
 
-        response_metadata = {
-            "response_len": len(response or ""),
-            "executed_tool_calls": aggregate_result.executed_tool_calls,
-            "had_tool_error": aggregate_result.had_tool_error,
-            "verification_attempted": aggregate_result.verification_attempted,
-            "verification_passed": aggregate_result.verification_passed,
-            "context_compactions": aggregate_result.context_compactions,
-            TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: auto_continue_attempts,
-            TURN_METADATA_WORK_PROGRESS_FIELD: work_progress.to_metadata(),
-        }
-        status_metadata = {
-            "executed_tool_calls": aggregate_result.executed_tool_calls,
-            "had_tool_error": aggregate_result.had_tool_error,
-            "verification_attempted": aggregate_result.verification_attempted,
-            "verification_passed": aggregate_result.verification_passed,
-            "context_compactions": aggregate_result.context_compactions,
-            TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: auto_continue_attempts,
-        }
-        completion_metadata = completion_result.to_metadata()
-        completion_metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] = auto_continue_attempts
-        response_metadata[TURN_METADATA_COMPLETION_GATE_FIELD] = completion_metadata
-        if aggregate_result.task_contract is not None:
-            response_metadata[TURN_METADATA_TASK_CONTRACT_FIELD] = aggregate_result.task_contract.to_metadata()
-        if aggregate_result.tool_evidence:
-            response_metadata[TURN_METADATA_TOOL_EVIDENCE_FIELD] = [item.to_metadata() for item in aggregate_result.tool_evidence]
-        if aggregate_result.task_artifacts:
-            response_metadata[TURN_METADATA_TASK_ARTIFACTS_FIELD] = [item.to_metadata() for item in aggregate_result.task_artifacts]
-        status_metadata[TURN_METADATA_COMPLETION_STATUS_FIELD] = completion_result.status
-        response_metadata[TURN_METADATA_DELEGATED_TASKS_FIELD] = [task.to_payload() for task in aggregate_result.delegated_tasks]
-        response_metadata[TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD] = aggregate_result.active_delegate_task_id
-        response_metadata[TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD] = aggregate_result.active_delegate_prompt_type
-        if aggregate_result.stop_reason:
-            response_metadata["stop_reason"] = aggregate_result.stop_reason
-            status_metadata["stop_reason"] = aggregate_result.stop_reason
-            if aggregate_result.stop_metadata:
-                response_metadata["stop_metadata"] = dict(aggregate_result.stop_metadata)
-                status_metadata["stop_metadata"] = dict(aggregate_result.stop_metadata)
-        persisted_assistant_metadata = dict(turn.assistant_metadata)
-        if aggregate_result.reasoning_details:
-            persisted_assistant_metadata["llm_reasoning_details"] = aggregate_result.reasoning_details
+        response_metadata, status_metadata, persisted_assistant_metadata = build_turn_response_metadata(
+            response=response,
+            aggregate_result=aggregate_result,
+            completion_result=completion_result,
+            work_progress=work_progress,
+            auto_continue_attempts=auto_continue_attempts,
+            assistant_metadata=turn.assistant_metadata,
+        )
 
         updated_work_state = self.work_progress.update_state(
             session_id=turn.session_id,
