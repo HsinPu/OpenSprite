@@ -19,6 +19,7 @@ from .web_search_freshness import (
     web_search_request as _web_search_request,
 )
 from .web_search_duckduckgo import search_duckduckgo
+from .web_search_dispatch import web_search_provider as _web_search_provider
 from .web_search_payloads import (
     format_error as _format_error,
     format_results as _format_results,
@@ -103,12 +104,12 @@ class WebSearchTool(Tool):
         return await searcher(query, n, freshness)
 
     def _provider_searcher(self, provider: str):
-        searchers = {
-            "duckduckgo": self._search_duckduckgo,
-            "searxng": self._search_searxng,
-            "jina": self._search_jina,
-        }
-        return searchers.get(provider)
+        return _web_search_provider(
+            provider,
+            duckduckgo=self._search_duckduckgo,
+            searxng=self._search_searxng,
+            jina=self._search_jina,
+        )
 
     async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
         """Search DuckDuckGo through the ddgs package."""
