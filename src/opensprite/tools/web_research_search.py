@@ -9,8 +9,9 @@ from typing import Any
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
-from .web_research_candidates import dedupe_search_items
+from .web_research_candidates import dedupe_search_items, official_domain_hints
 from .web_research_payloads import query_attempt_payload
+from .web_research_queries import dedupe_query_strings, official_site_queries, site_domain_hints
 from .web_research_urls import canonicalize_url, clean_text, domain_from_url
 from .web_search import WebSearchTool
 
@@ -66,6 +67,71 @@ async def search_queries_with_fallback(
         selected_backend or fallback_backend,
         all_attempts,
         query_attempts,
+    )
+
+
+async def apply_official_site_search(
+    *,
+    query: str,
+    research_queries: list[str],
+    search_items: list[dict[str, Any]],
+    search_provider: str,
+    search_backend: str,
+    search_attempts: list[dict[str, Any]],
+    query_attempts: list[dict[str, Any]],
+    count: int,
+    freshness: str,
+    search_queries: SearchQuery,
+) -> tuple[
+    list[str],
+    list[dict[str, Any]],
+    str,
+    str,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    set[str],
+]:
+    official_domains = official_domain_hints(" ".join(research_queries), search_items) | site_domain_hints(
+        research_queries
+    )
+    site_queries = official_site_queries(query, official_domains, existing_queries=research_queries)
+    if not site_queries:
+        return (
+            research_queries,
+            search_items,
+            search_provider,
+            search_backend,
+            search_attempts,
+            query_attempts,
+            official_domains,
+        )
+
+    site_items, site_provider, site_backend, site_attempts, site_query_attempts = await search_queries(
+        queries=site_queries,
+        count=count,
+        freshness=freshness,
+    )
+    search_attempts.extend(site_attempts)
+    query_attempts.extend(site_query_attempts)
+    research_queries = dedupe_query_strings([*research_queries, *site_queries])
+    if site_items:
+        search_items = dedupe_search_items(
+            [*site_items, *search_items],
+            limit=max(count * max(len(research_queries), 1), count),
+        )
+        official_domains.update(official_domain_hints(" ".join(research_queries), search_items))
+        official_domains.update(site_domain_hints(research_queries))
+        search_provider = site_provider or search_provider
+        search_backend = site_backend or search_backend
+
+    return (
+        research_queries,
+        search_items,
+        search_provider,
+        search_backend,
+        search_attempts,
+        query_attempts,
+        official_domains,
     )
 
 

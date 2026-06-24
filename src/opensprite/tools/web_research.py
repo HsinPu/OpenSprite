@@ -67,6 +67,7 @@ from .web_research_search import (
     coerce_search_items as _coerce_search_items,
     dedupe_strings as _dedupe_strings,
     parse_json_object as _parse_json_object,
+    apply_official_site_search as _apply_official_site_search,
     search_queries_with_fallback as _search_queries_with_fallback_batch,
     search_provider_order as _search_provider_order,
 )
@@ -186,28 +187,26 @@ class WebResearchTool(Tool):
             count=search_count,
             freshness=effective_freshness,
         )
-        official_domains = _official_domain_hints(" ".join(research_queries), search_items) | _site_domain_hints(
-            research_queries
+        (
+            research_queries,
+            search_items,
+            search_provider,
+            search_backend,
+            search_attempts,
+            query_attempts,
+            official_domains,
+        ) = await _apply_official_site_search(
+            query=query,
+            research_queries=research_queries,
+            search_items=search_items,
+            search_provider=search_provider,
+            search_backend=search_backend,
+            search_attempts=search_attempts,
+            query_attempts=query_attempts,
+            count=search_count,
+            freshness=effective_freshness,
+            search_queries=self._search_queries_with_fallback,
         )
-        official_site_queries = _official_site_queries(query, official_domains, existing_queries=research_queries)
-        if official_site_queries:
-            site_items, site_provider, site_backend, site_attempts, site_query_attempts = await self._search_queries_with_fallback(
-                queries=official_site_queries,
-                count=search_count,
-                freshness=effective_freshness,
-            )
-            search_attempts.extend(site_attempts)
-            query_attempts.extend(site_query_attempts)
-            research_queries = _dedupe_query_strings([*research_queries, *official_site_queries])
-            if site_items:
-                search_items = _dedupe_search_items(
-                    [*site_items, *search_items],
-                    limit=max(search_count * max(len(research_queries), 1), search_count),
-                )
-                official_domains.update(_official_domain_hints(" ".join(research_queries), search_items))
-                official_domains.update(_site_domain_hints(research_queries))
-                search_provider = site_provider or search_provider
-                search_backend = site_backend or search_backend
         if not search_items:
             return _research_payload(
                 query=query,
