@@ -121,21 +121,21 @@ function Ensure-Git {
 }
 
 function Resolve-Python {
-    Write-Info "Checking Python 3.11+"
+    Write-Info "Checking Python 3.12+"
     $candidates = @("py", "python")
     foreach ($candidate in $candidates) {
         $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
         if (-not $cmd) { continue }
 
-        $args = if ($candidate -eq "py") { @("-3.11", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)") } else { @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)") }
+        $args = if ($candidate -eq "py") { @("-3", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") } else { @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") }
         & $cmd.Source @args 2>$null
         if ($LASTEXITCODE -eq 0) {
-            Write-Success "$candidate provides Python 3.11+"
-            return @{ FilePath = $cmd.Source; PrefixArgs = if ($candidate -eq "py") { @("-3.11") } else { @() } }
+            Write-Success "$candidate provides Python 3.12+"
+            return @{ FilePath = $cmd.Source; PrefixArgs = if ($candidate -eq "py") { @("-3") } else { @() } }
         }
     }
 
-    throw "Python 3.11+ was not found. Install it from https://www.python.org/downloads/ or run: winget install Python.Python.3.11"
+    throw "Python 3.12+ was not found. Install it from https://www.python.org/downloads/ or run: winget install Python.Python.3.12"
 }
 
 function Ensure-Node {

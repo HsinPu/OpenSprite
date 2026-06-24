@@ -16,7 +16,7 @@ OpenSprite 是一個本機優先的個人 AI assistant gateway。它提供 Pytho
 
 ## 需求
 
-- Python 3.11+
+- Python 3.12+
 - Git
 - Node.js 20.19+ 或 22.12+，含 npm。Web UI build 需要。
 - 至少一個 LLM provider API key 或 OAuth provider。
@@ -74,7 +74,7 @@ Windows 若缺少基本工具，可先安裝：
 
 ```powershell
 winget install Git.Git
-winget install Python.Python.3.11
+winget install Python.Python.3.12
 winget install OpenJS.NodeJS.LTS
 ```
 

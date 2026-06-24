@@ -15,7 +15,7 @@ REPO_URL="${OPENSPRITE_REPO_URL:-https://github.com/HsinPu/opensprite.git}"
 BRANCH="${OPENSPRITE_BRANCH:-main}"
 INSTALL_DIR="${OPENSPRITE_INSTALL_DIR:-$HOME/.local/share/opensprite/opensprite}"
 APP_HOME="${OPENSPRITE_HOME:-$HOME/.opensprite}"
-PYTHON_VERSION_MIN="3.11"
+PYTHON_VERSION_MIN="3.12"
 NODE_MAJOR=22
 NODE_VERSION="${OPENSPRITE_NODE_VERSION:-22.12.0}"
 NODE_INSTALL_DIR="${OPENSPRITE_NODE_INSTALL_DIR:-$HOME/.local/share/opensprite/node}"
@@ -471,11 +471,11 @@ ensure_browser_runtime() {
 
 find_python() {
   local candidate
-  for candidate in python3.13 python3.12 python3.11 python3; do
+  for candidate in python3.13 python3.12 python3; do
     if command -v "$candidate" >/dev/null 2>&1; then
       if "$candidate" - <<'PY'
 import sys
-raise SystemExit(0 if sys.version_info >= (3, 11) else 1)
+raise SystemExit(0 if sys.version_info >= (3, 12) else 1)
 PY
       then
         printf '%s' "$candidate"
@@ -759,7 +759,7 @@ main() {
 
   local python_bin
   if ! python_bin="$(find_python)"; then
-    log_error "Python $PYTHON_VERSION_MIN+ is required. Install Python 3.11+ and re-run this installer."
+    log_error "Python $PYTHON_VERSION_MIN+ is required. Install Python 3.12+ and re-run this installer."
     exit 1
   fi
   log_success "Using $($python_bin --version)"
