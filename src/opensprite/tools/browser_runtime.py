@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -27,65 +26,10 @@ from ..config.defaults import (
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
 )
 from ..utils.url import join_url_path
+from .browser_provider_base import BrowserRuntimeError, CloudBrowserProvider, CloudBrowserSession
 
 
 SUPPORTED_BROWSER_BACKENDS = BROWSER_BACKENDS
-
-
-class BrowserRuntimeError(RuntimeError):
-    """Raised when browser automation cannot run."""
-
-
-@dataclass
-class CloudBrowserSession:
-    provider_session_id: str
-    cdp_url: str
-    expires_at: float
-
-
-class CloudBrowserProvider:
-    """Creates browser CDP sessions for cloud browser backends."""
-
-    backend = ""
-    display_name = "Cloud browser"
-
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
-        self.transport = transport
-
-    def is_configured(self) -> bool:
-        return False
-
-    def status(self) -> dict[str, Any]:
-        return {"configured": self.is_configured()}
-
-    async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
-        raise NotImplementedError
-
-    async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
-        return False
-
-    async def _request(
-        self,
-        method: str,
-        url: str,
-        *,
-        headers: dict[str, str],
-        json_body: dict[str, Any] | None = None,
-        timeout: int = 30,
-        error_prefix: str,
-    ) -> httpx.Response:
-        try:
-            async with httpx.AsyncClient(
-                timeout=max(1, int(timeout or 30)),
-                follow_redirects=True,
-                transport=self.transport,
-            ) as client:
-                response = await client.request(method, url, headers=headers, json=json_body)
-        except httpx.HTTPError as exc:
-            raise BrowserRuntimeError(f"{error_prefix}: {exc}") from exc
-        if response.status_code >= 400:
-            raise BrowserRuntimeError(f"{error_prefix}: HTTP {response.status_code} {response.text[:500]}")
-        return response
 
 
 class BrowserbaseCloudProvider(CloudBrowserProvider):
