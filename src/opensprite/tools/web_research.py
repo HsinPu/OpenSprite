@@ -10,8 +10,7 @@ from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebFetchToolConfig, WebSearchToolConfig
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
-from .web_blocking import looks_blocked_or_challenge
-from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
+from .web_fetch import WebFetchTool
 from .web_research_candidates import (
     LOW_SIGNAL_DOMAIN_SUFFIXES as _LOW_SIGNAL_DOMAIN_SUFFIXES,
     MARKET_QUOTE_RULES as _MARKET_QUOTE_RULES,
@@ -37,7 +36,6 @@ from .web_research_urls import (
     candidate_url_key as _candidate_url_key,
     canonicalize_url as _canonicalize_url,
     clean_text as _clean_text,
-    coerce_int as _coerce_int,
     domain_from_url as _domain_from_url,
     domain_matches_any as _domain_matches_any,
     is_fetchable_url as _is_fetchable_url,
@@ -62,6 +60,10 @@ from .web_research_queries import (
     prefer_current_year_queries as _prefer_current_year_queries,
     research_queries as _research_queries,
     site_domain_hints as _site_domain_hints,
+)
+from .web_research_sources import (
+    merge_fetch_source as _merge_fetch_source,
+    quality_score as _quality_score,
 )
 from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness
 
@@ -541,95 +543,3 @@ def _coerce_search_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return out
-
-
-def _merge_fetch_source(
-    item: dict[str, Any],
-    fetch_payload: dict[str, Any],
-    *,
-    query: str,
-    search_provider: str,
-    search_backend: str,
-) -> dict[str, Any]:
-    url = _clean_text(fetch_payload.get("final_url") or fetch_payload.get("finalUrl") or fetch_payload.get("url") or item.get("url"))
-    content = str(fetch_payload.get("content") or fetch_payload.get("text") or "")
-    content_chars = _coerce_int(fetch_payload.get("content_chars"), default=len(content.strip()))
-    min_content_chars = _coerce_int(fetch_payload.get("min_content_chars"), default=WEB_FETCH_MIN_CONTENT_CHARS)
-    title = _clean_text(fetch_payload.get("title") or item.get("title"))
-    status = fetch_payload.get("status")
-    extractor = _clean_text(fetch_payload.get("extractor"))
-    truncated = bool(fetch_payload.get("truncated"))
-    blocked_or_challenge = looks_blocked_or_challenge(title=title, content=content, status=status)
-    is_too_short = bool(fetch_payload.get("is_too_short")) or content_chars < min_content_chars
-    has_main_content = bool(content.strip()) and not is_too_short and not blocked_or_challenge
-    quality_score = _quality_score(
-        content_chars=content_chars,
-        min_content_chars=min_content_chars,
-        has_title=bool(title),
-        blocked_or_challenge=blocked_or_challenge,
-        truncated=truncated,
-        extractor=extractor,
-    )
-    source = {
-        "rank": item.get("rank"),
-        "title": title,
-        "url": url,
-        "canonical_url": _canonicalize_url(url),
-        "domain": _domain_from_url(url),
-        "snippet": _clean_text(item.get("content")),
-        "content": content,
-        "content_chars": content_chars,
-        "has_title": bool(title),
-        "has_main_content": has_main_content,
-        "is_too_short": is_too_short,
-        "blocked_or_challenge": blocked_or_challenge,
-        "quality_score": quality_score,
-        "min_content_chars": min_content_chars,
-        "truncated": truncated,
-        "extractor": extractor,
-        "status": status,
-        "content_type": _clean_text(fetch_payload.get("content_type") or fetch_payload.get("contentType")),
-        "fetch_attempts": [
-            {
-                "tool": "web_fetch",
-                "extractor": extractor,
-                "status": status,
-                "content_chars": content_chars,
-                "is_too_short": is_too_short,
-                "blocked_or_challenge": blocked_or_challenge,
-                "quality_score": quality_score,
-            }
-        ],
-        "source_query": query,
-        "search_provider": search_provider,
-        "search_backend": search_backend,
-        "search_freshness": _clean_text(item.get("search_freshness")),
-        "search_rank": item.get("rank"),
-    }
-    derived_from = _clean_text(item.get("llms_full_derived_from"))
-    if derived_from:
-        source["llms_full_derived_from"] = derived_from
-    return source
-
-
-def _quality_score(
-    *,
-    content_chars: int,
-    min_content_chars: int,
-    has_title: bool,
-    blocked_or_challenge: bool,
-    truncated: bool,
-    extractor: str,
-) -> float:
-    score = min(content_chars / max(min_content_chars, 1), 1.0) * 0.55
-    if has_title:
-        score += 0.15
-    if not blocked_or_challenge:
-        score += 0.15
-    if extractor in {"trafilatura", "readability", "turndown", "jina", "firecrawl", "json"}:
-        score += 0.10
-    if not truncated:
-        score += 0.05
-    if blocked_or_challenge:
-        score = min(score, 0.35)
-    return round(min(max(score, 0.0), 1.0), 3)
