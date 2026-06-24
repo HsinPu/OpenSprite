@@ -19,7 +19,8 @@ from .routed import ModelRoutedProvider
 from .openai import OpenAILLM, OpenAIResponsesLLM
 from .openrouter import OpenRouterLLM
 from .minimax import MiniMaxLLM
-from .registry import create_llm, find_provider, PROVIDERS
+from .provider_factory import create_llm
+from .provider_specs import PROVIDERS, find_provider
 
 __all__ = [
     "CHAT_CONTENT_TYPE_IMAGE_URL",
