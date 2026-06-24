@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
@@ -60,6 +59,12 @@ from .web_research_queries import (
     prefer_current_year_queries as _prefer_current_year_queries,
     research_queries as _research_queries,
     site_domain_hints as _site_domain_hints,
+)
+from .web_research_search import (
+    coerce_search_items as _coerce_search_items,
+    dedupe_strings as _dedupe_strings,
+    parse_json_object as _parse_json_object,
+    search_provider_order as _search_provider_order,
 )
 from .web_research_sources import (
     merge_fetch_source as _merge_fetch_source,
@@ -486,60 +491,3 @@ class WebResearchTool(Tool):
         if provider == self.search_tool.provider:
             return self.search_tool
         return WebSearchTool(config=self.search_config.model_copy(update={"provider": provider}))
-
-
-def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
-    configured = (configured_provider or config.provider or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
-    candidates = [configured]
-    probe_tool = WebSearchTool(config=config)
-    if str(config.searxng_url or "").strip():
-        candidates.append("searxng")
-    candidates.append("duckduckgo")
-    if configured == "jina" or probe_tool.jina_api_key:
-        candidates.append("jina")
-    return _dedupe_strings(candidates)
-
-
-def _dedupe_strings(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        normalized = str(value or "").strip().lower()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        out.append(normalized)
-    return out
-
-
-def _parse_json_object(value: str) -> dict[str, Any] | None:
-    try:
-        payload = json.loads(str(value or ""))
-    except Exception:
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def _coerce_search_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_items = payload.get("items", payload.get("results", []))
-    if not isinstance(raw_items, list):
-        return []
-    out: list[dict[str, Any]] = []
-    for index, raw_item in enumerate(raw_items, 1):
-        if not isinstance(raw_item, dict):
-            continue
-        url = _clean_text(raw_item.get("url"))
-        title = _clean_text(raw_item.get("title"))
-        snippet = _clean_text(raw_item.get("content") or raw_item.get("snippet") or raw_item.get("summary"))
-        canonical_url = _canonicalize_url(url)
-        out.append(
-            {
-                "rank": index,
-                "title": title,
-                "url": url,
-                "canonical_url": canonical_url,
-                "domain": _domain_from_url(url),
-                "content": snippet,
-            }
-        )
-    return out
