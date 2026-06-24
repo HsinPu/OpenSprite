@@ -61,6 +61,7 @@ from .web_research_queries import (
     research_queries as _research_queries,
     site_domain_hints as _site_domain_hints,
 )
+from .web_research_records import source_records_for_search_items as _source_records_for_search_items
 from .web_research_search import (
     coerce_search_items as _coerce_search_items,
     dedupe_strings as _dedupe_strings,
@@ -241,21 +242,12 @@ class WebResearchTool(Tool):
             search_backend=search_backend,
         )
 
-        for item in search_items:
-            item_search_provider = str(item.get("search_provider") or search_provider)
-            item_search_backend = str(item.get("search_backend") or search_backend)
-            source_records.append(
-                {
-                    **item,
-                    "tool_name": "web_search",
-                    "fetched": False,
-                    "search_provider": item_search_provider,
-                    "search_backend": item_search_backend,
-                }
-            )
-            fetched = fetched_by_candidate_url.get(_candidate_url_key(item))
-            if fetched is not None:
-                source_records.append({**fetched, "tool_name": "web_fetch", "fetched": True})
+        source_records = _source_records_for_search_items(
+            search_items,
+            fetched_by_candidate_url=fetched_by_candidate_url,
+            search_provider=search_provider,
+            search_backend=search_backend,
+        )
 
         return _research_payload(
             query=query,
