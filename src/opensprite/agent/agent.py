@@ -324,7 +324,7 @@ class AgentLoop:
         )
         self.search_store = search_store
         self.cron_manager = cron_manager
-        self.media_router = media_router
+        self.media_router = media_router or MediaRouter()
         self.provider = provider
         self._current_session_id: ContextVar[str | None] = ContextVar("current_session_id", default=None)
         self._current_channel: ContextVar[str | None] = ContextVar("current_channel", default=None)

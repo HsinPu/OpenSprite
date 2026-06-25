@@ -1,6 +1,7 @@
 from agent_test_helpers import make_agent_loop
 
 from opensprite.config.schema import Config
+from opensprite.tools.audio import TranscribeAudioTool
 from opensprite.tools.browser import BrowserNavigateTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.web_research import WebResearchTool
@@ -51,6 +52,34 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
     assert web_research_tool.search_config.provider == "jina"
     assert web_research_tool.search_tool.provider == "jina"
     assert web_research_tool.search_tool.max_results == 7
+
+
+def test_agent_reload_media_from_config_updates_registered_media_router(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = make_agent_loop(tmp_path / "workspace", tools=ToolRegistry(), config_path=config_path)
+
+    transcribe_tool = agent.tools.get("transcribe_audio")
+    assert isinstance(transcribe_tool, TranscribeAudioTool)
+    assert transcribe_tool._media_router is agent.media_router
+    assert transcribe_tool._media_router.speech_provider is None
+
+    config = Config.from_json(config_path)
+    config.speech.enabled = True
+    config.speech.api_key = "speech-secret"
+    config.speech.model = "whisper-1"
+
+    payload = agent.reload_media_from_config(config)
+
+    assert payload == {
+        "vision_enabled": False,
+        "ocr_enabled": False,
+        "speech_enabled": True,
+        "video_enabled": False,
+    }
+    assert transcribe_tool._media_router is agent.media_router
+    assert transcribe_tool._media_router.speech_provider is agent.media_router.speech_provider
+    assert transcribe_tool._media_router.speech_provider is not None
 
 
 def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
