@@ -49,21 +49,15 @@ def _first_detected_provider(
 def find_provider(api_key: str = "", base_url: str = "", model: str = "", provider_name: str = "") -> ProviderSpec:
     """Detect the provider from explicit config and runtime hints."""
 
-    provider = _first_detected_provider(lambda spec: provider_name == spec.name)
-    if provider:
-        return provider
-
-    provider = _first_detected_provider(
-        lambda spec: bool(spec.detect_by_key_prefix and api_key.startswith(spec.detect_by_key_prefix))
+    detectors = (
+        lambda spec: provider_name == spec.name,
+        lambda spec: bool(spec.detect_by_key_prefix and api_key.startswith(spec.detect_by_key_prefix)),
+        lambda spec: bool(spec.detect_by_base_keyword and spec.detect_by_base_keyword in base_url),
     )
-    if provider:
-        return provider
-
-    provider = _first_detected_provider(
-        lambda spec: bool(spec.detect_by_base_keyword and spec.detect_by_base_keyword in base_url)
-    )
-    if provider:
-        return provider
+    for detector in detectors:
+        provider = _first_detected_provider(detector)
+        if provider:
+            return provider
 
     model_name = model.lower()
     provider = _first_detected_provider(
