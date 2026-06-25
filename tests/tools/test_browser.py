@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -20,6 +21,7 @@ from opensprite.tools.browser_runtime import (
     BrowserbaseCloudProvider,
     CloudBrowserSession,
     FirecrawlCloudProvider,
+    browser_cloud_status,
     cloud_provider_from_config,
 )
 from opensprite.tools.evidence import build_tool_evidence
@@ -87,6 +89,15 @@ def test_browser_snapshot_uses_compact_mode_by_default():
 
     assert result["type"] == "browser_snapshot"
     assert runtime.calls[0] == {"session_key": "default", "command": "snapshot", "args": ["-c"], "timeout": None}
+
+
+def test_browser_cloud_status_reports_registered_cloud_backends():
+    status = browser_cloud_status(SimpleNamespace())
+
+    assert set(status) == {"browserbase", "browser-use", "firecrawl"}
+    assert status["browserbase"]["configured"] is False
+    assert status["browser-use"]["configured"] is False
+    assert status["firecrawl"]["configured"] is False
 
 
 def test_browser_click_and_type_normalize_refs():

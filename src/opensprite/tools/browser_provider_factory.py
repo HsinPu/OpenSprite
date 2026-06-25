@@ -17,20 +17,14 @@ def cloud_provider_from_config(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> CloudBrowserProvider | None:
     backend = str(getattr(browser_config, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND).strip()
-    factories = {
-        "browserbase": _browserbase_provider,
-        "browser-use": _browser_use_provider,
-        "firecrawl": _firecrawl_provider,
-    }
-    factory = factories.get(backend)
+    factory = BROWSER_CLOUD_PROVIDER_FACTORIES.get(backend)
     return factory(browser_config, transport=transport) if factory is not None else None
 
 
 def browser_cloud_status(browser_config: Any) -> dict[str, dict[str, Any]]:
     return {
-        "browserbase": _browserbase_provider(browser_config).status(),
-        "browser-use": _browser_use_provider(browser_config).status(),
-        "firecrawl": _firecrawl_provider(browser_config).status(),
+        backend: factory(browser_config).status()
+        for backend, factory in BROWSER_CLOUD_PROVIDER_FACTORIES.items()
     }
 
 
@@ -72,3 +66,10 @@ def _firecrawl_provider(
         base_url=getattr(browser_config, "firecrawl_base_url", ""),
         transport=transport,
     )
+
+
+BROWSER_CLOUD_PROVIDER_FACTORIES = {
+    "browserbase": _browserbase_provider,
+    "browser-use": _browser_use_provider,
+    "firecrawl": _firecrawl_provider,
+}
