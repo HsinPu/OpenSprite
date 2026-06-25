@@ -1,6 +1,4 @@
-function randomToken() {
-  return Math.random().toString(36).slice(2, 8);
-}
+import { randomToken } from "./chatClientTokens";
 
 export function generateExternalChatId() {
   return `browser-${Date.now().toString(36)}-${randomToken()}`;

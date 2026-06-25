@@ -1,11 +1,9 @@
+import { randomToken } from "./chatClientTokens";
+
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
 
 const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "work", "completion", "file", "process", "text", "system", "other"]);
-
-function randomToken() {
-  return Math.random().toString(36).slice(2, 8);
-}
 
 function previewText(value) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();

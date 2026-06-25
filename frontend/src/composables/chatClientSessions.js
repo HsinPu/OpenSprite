@@ -2,10 +2,7 @@ import {
   generateExternalChatId,
   isExternalChannelSessionId,
 } from "./chatClientSessionIds";
-
-function randomToken() {
-  return Math.random().toString(36).slice(2, 8);
-}
+import { randomToken } from "./chatClientTokens";
 
 export function makeMessage(role, text, meta) {
   return {

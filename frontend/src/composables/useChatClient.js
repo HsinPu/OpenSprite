@@ -44,6 +44,7 @@ import {
   summarizeTitle,
   writeStoredDraftSessions,
 } from "./chatClientSessions";
+import { randomToken } from "./chatClientTokens";
 import {
   createRunViewState,
   formatAutoContinueDetail,
@@ -180,10 +181,6 @@ function previewText(value) {
     return "";
   }
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
-
-function randomToken() {
-  return Math.random().toString(36).slice(2, 8);
 }
 
 function coerceStringList(value) {
