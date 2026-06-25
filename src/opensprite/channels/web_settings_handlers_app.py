@@ -12,8 +12,9 @@ from aiohttp import web
 
 from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
+from ..network_environment import apply_network_environment
 from ..utils.log import logger
-from . import web_settings_support
+from . import web_settings_payloads, web_settings_support
 
 
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
@@ -175,7 +176,7 @@ async def handle_settings_schedule_update(adapter: Any, request: web.Request) ->
 
 async def handle_settings_network(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"network": adapter._network_payload(config)})
+    return web.json_response({"network": web_settings_payloads.network_payload(config)})
 
 
 async def handle_settings_network_update(adapter: Any, request: web.Request) -> web.Response:
@@ -186,5 +187,5 @@ async def handle_settings_network_update(adapter: Any, request: web.Request) -> 
     config.network.https_proxy = adapter._coerce_optional_text(body.get("https_proxy"), default="") or ""
     config.network.no_proxy = adapter._coerce_optional_text(body.get("no_proxy"), default="") or ""
     config.save(config_path)
-    adapter._apply_network_environment(config)
-    return web.json_response({"network": adapter._network_payload(config), "restart_required": False})
+    apply_network_environment(config, clear_blank=True)
+    return web.json_response({"network": web_settings_payloads.network_payload(config), "restart_required": False})

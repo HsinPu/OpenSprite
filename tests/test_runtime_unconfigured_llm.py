@@ -64,3 +64,18 @@ def test_apply_network_environment_preserves_blank_proxy_variables(monkeypatch, 
 
     assert os.environ["HTTPS_PROXY"] == "http://old-proxy.local:8443"
     assert os.environ["https_proxy"] == "http://old-proxy.local:8443"
+
+
+def test_apply_network_environment_can_clear_blank_proxy_variables(monkeypatch, tmp_path):
+    monkeypatch.setenv("HTTPS_PROXY", "http://old-proxy.local:8443")
+    monkeypatch.setenv("https_proxy", "http://old-proxy.local:8443")
+
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+    config.network = NetworkConfig(https_proxy="")
+
+    apply_network_environment(config, clear_blank=True)
+
+    assert "HTTPS_PROXY" not in os.environ
+    assert "https_proxy" not in os.environ

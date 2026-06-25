@@ -8,7 +8,7 @@ from .config import Config
 from .utils.log import logger
 
 
-def apply_network_environment(config: Config) -> None:
+def apply_network_environment(config: Config, *, clear_blank: bool = False) -> None:
     """Apply configured proxy settings for urllib/httpx/OpenAI clients in this process."""
 
     network = getattr(config, "network", None)
@@ -25,6 +25,9 @@ def apply_network_environment(config: Config) -> None:
         if normalized:
             os.environ[key] = normalized
             os.environ[key.lower()] = normalized
+        elif clear_blank:
+            os.environ.pop(key, None)
+            os.environ.pop(key.lower(), None)
 
     if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
         logger.info("Applied network proxy settings for outbound API requests")

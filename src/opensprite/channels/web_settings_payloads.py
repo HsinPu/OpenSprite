@@ -6,10 +6,25 @@ import os
 from typing import Any, Callable
 
 from ..config import Config
-from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
+from ..config.defaults import (
+    DEFAULT_HTTP_PROXY,
+    DEFAULT_HTTPS_PROXY,
+    DEFAULT_LOG_ENABLED,
+    DEFAULT_LOG_REASONING_DETAILS,
+    DEFAULT_LOG_RETENTION_DAYS,
+    DEFAULT_LOG_SYSTEM_PROMPT,
+    DEFAULT_LOG_SYSTEM_PROMPT_LINES,
+    DEFAULT_NO_PROXY,
+)
 
 
-def network_payload(config: Config, *, default_http_proxy: str, default_https_proxy: str, default_no_proxy: str) -> dict[str, Any]:
+def network_payload(
+    config: Config,
+    *,
+    default_http_proxy: str = DEFAULT_HTTP_PROXY,
+    default_https_proxy: str = DEFAULT_HTTPS_PROXY,
+    default_no_proxy: str = DEFAULT_NO_PROXY,
+) -> dict[str, Any]:
     network = getattr(config, "network", None)
     return {
         "http_proxy": str(getattr(network, "http_proxy", default_http_proxy) or default_http_proxy),

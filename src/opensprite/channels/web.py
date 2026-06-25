@@ -40,9 +40,6 @@ from ..config.defaults import (
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
-    DEFAULT_HTTP_PROXY,
-    DEFAULT_HTTPS_PROXY,
-    DEFAULT_NO_PROXY,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_FRESHNESS,
@@ -340,33 +337,6 @@ class WebAdapter(MessageAdapter):
 
     def _get_media_settings(self) -> MediaSettingsService:
         return web_settings_support.get_media_settings(self)
-
-    @staticmethod
-    def _apply_network_environment(config: Config) -> None:
-        network = getattr(config, "network", None)
-        if network is None:
-            return
-        for env_key, value in {
-            "HTTP_PROXY": getattr(network, "http_proxy", "") or "",
-            "HTTPS_PROXY": getattr(network, "https_proxy", "") or "",
-            "NO_PROXY": getattr(network, "no_proxy", "") or "",
-        }.items():
-            normalized = str(value or "").strip()
-            if normalized:
-                os.environ[env_key] = normalized
-                os.environ[env_key.lower()] = normalized
-            else:
-                os.environ.pop(env_key, None)
-                os.environ.pop(env_key.lower(), None)
-
-    @staticmethod
-    def _network_payload(config: Config) -> dict[str, Any]:
-        return web_settings_payloads.network_payload(
-            config,
-            default_http_proxy=DEFAULT_HTTP_PROXY,
-            default_https_proxy=DEFAULT_HTTPS_PROXY,
-            default_no_proxy=DEFAULT_NO_PROXY,
-        )
 
     @staticmethod
     def _browser_runtime_status() -> dict[str, Any]:
