@@ -327,7 +327,7 @@ def test_create_llm_uses_minimax_profile_base_url_for_anthropic_mode():
 
 def test_resolve_copilot_runtime_exchanges_github_token(monkeypatch):
     monkeypatch.setattr(
-        "opensprite.llms.runtime_provider.get_copilot_api_token",
+        "opensprite.llms.runtime_auth.get_copilot_api_token",
         lambda api_key: "copilot-api-token",
     )
 
@@ -348,7 +348,7 @@ def test_resolve_copilot_oauth_runtime_reads_auth_store(tmp_path, monkeypatch):
     token_path.parent.mkdir()
     token_path.write_text(json.dumps({"access_token": "gho_raw"}), encoding="utf-8")
     monkeypatch.setattr(
-        "opensprite.llms.runtime_provider.get_copilot_api_token",
+        "opensprite.llms.runtime_auth.get_copilot_api_token",
         lambda api_key: "copilot-api-token",
     )
 
@@ -367,7 +367,7 @@ def test_resolve_copilot_runtime_applies_profile_defaults_from_auth_store(tmp_pa
     token_path.parent.mkdir()
     token_path.write_text(json.dumps({"access_token": "gho_raw"}), encoding="utf-8")
     monkeypatch.setattr(
-        "opensprite.llms.runtime_provider.get_copilot_api_token",
+        "opensprite.llms.runtime_auth.get_copilot_api_token",
         lambda api_key: "copilot-api-token",
     )
 

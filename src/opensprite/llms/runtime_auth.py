@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..auth.copilot import COPILOT_BASE_URL
+from ..auth.codex import load_or_refresh_codex_token
+from ..auth.copilot import COPILOT_BASE_URL, get_copilot_api_token, load_copilot_token
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -35,11 +36,15 @@ def resolve_runtime_provider_auth(
     api_mode: str | None,
     profile_base_url: str,
     app_home: Path,
-    codex_token_loader: TokenLoader,
-    copilot_token_loader: TokenLoader,
-    copilot_api_token_resolver: CopilotApiTokenResolver,
+    codex_token_loader: TokenLoader | None = None,
+    copilot_token_loader: TokenLoader | None = None,
+    copilot_api_token_resolver: CopilotApiTokenResolver | None = None,
 ) -> RuntimeProviderAuth:
     """Apply provider-specific OAuth and API-mode runtime defaults."""
+    codex_token_loader = codex_token_loader or load_or_refresh_codex_token
+    copilot_token_loader = copilot_token_loader or load_copilot_token
+    copilot_api_token_resolver = copilot_api_token_resolver or get_copilot_api_token
+
     if auth_type == "openai_codex_oauth":
         provider_name = provider_name or "openai-codex"
         api_mode = api_mode or "responses"

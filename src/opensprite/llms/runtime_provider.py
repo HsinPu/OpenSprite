@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..auth.credentials import CredentialNotFoundError
-from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
-from ..auth.copilot import CopilotAuthError, get_copilot_api_token, load_copilot_token
+from ..auth.codex import CodexAuthError
+from ..auth.copilot import CopilotAuthError
 from ..config import Config, ProviderConfig
 from .reasoning import normalize_reasoning_effort
 from .runtime_auth import resolve_runtime_provider_auth
@@ -64,9 +64,6 @@ def resolve_provider_runtime(
             api_mode=api_mode,
             profile_base_url=profile_base_url,
             app_home=app_home_path,
-            codex_token_loader=load_or_refresh_codex_token,
-            copilot_token_loader=load_copilot_token,
-            copilot_api_token_resolver=get_copilot_api_token,
         )
     except (CodexAuthError, CopilotAuthError) as exc:
         raise ProviderRuntimeError(str(exc)) from exc
