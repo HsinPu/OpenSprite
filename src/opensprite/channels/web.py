@@ -28,11 +28,6 @@ from .identity import build_session_id, normalize_identifier
 from ..auth.credentials import (
     CredentialNotFoundError,
     CredentialStoreError,
-    add_credential,
-    list_credentials,
-    remove_credential,
-    set_capability_default,
-    set_provider_default,
 )
 from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
@@ -105,6 +100,7 @@ from .web_api import WebApiHandlers
 from . import web_cron_api
 from . import web_frontend_runtime
 from . import web_settings_handlers_core
+from . import web_settings_handlers_provider
 from . import web_settings_handlers_app
 from . import web_settings_handlers_tools
 from . import web_settings_coercion, web_settings_reload
@@ -983,7 +979,7 @@ class WebAdapter(MessageAdapter):
         return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
 
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_providers(self, request)
+        return await web_settings_handlers_provider.handle_settings_providers(self, request)
 
     async def _handle_settings_codex_auth_status(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_core.handle_settings_codex_auth_status(self, request)
@@ -1025,28 +1021,28 @@ class WebAdapter(MessageAdapter):
         return await web_settings_handlers_core.handle_settings_channel_disconnect(self, request)
 
     async def _handle_settings_provider_connect(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_provider_connect(self, request)
+        return await web_settings_handlers_provider.handle_settings_provider_connect(self, request)
 
     async def _handle_settings_provider_disconnect(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_provider_disconnect(self, request)
+        return await web_settings_handlers_provider.handle_settings_provider_disconnect(self, request)
 
     async def _handle_settings_credentials(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_credentials(self, request)
+        return await web_settings_handlers_provider.handle_settings_credentials(self, request)
 
     async def _handle_settings_credential_create(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_credential_create(self, request)
+        return await web_settings_handlers_provider.handle_settings_credential_create(self, request)
 
     async def _handle_settings_credential_delete(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_credential_delete(self, request)
+        return await web_settings_handlers_provider.handle_settings_credential_delete(self, request)
 
     async def _handle_settings_credential_default(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_credential_default(self, request)
+        return await web_settings_handlers_provider.handle_settings_credential_default(self, request)
 
     async def _handle_settings_provider_credential(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_provider_credential(self, request)
+        return await web_settings_handlers_provider.handle_settings_provider_credential(self, request)
 
     async def _handle_settings_models(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_models(self, request)
+        return await web_settings_handlers_provider.handle_settings_models(self, request)
 
     async def _handle_settings_media(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_media(self, request)
