@@ -5,7 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.log import logger
-from . import web_cron_api, web_settings_handlers_app, web_settings_handlers_core, web_settings_handlers_provider
+from . import (
+    web_cron_api,
+    web_settings_handlers_app,
+    web_settings_handlers_core,
+    web_settings_handlers_provider,
+    web_settings_handlers_tools,
+)
 
 
 def _bind_adapter(adapter: Any, handler: Any) -> Any:
@@ -117,21 +123,24 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_put("/api/settings/schedule", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_schedule_update))
     router.add_get("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network))
     router.add_put("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network_update))
-    router.add_get("/api/settings/search", adapter._handle_settings_search)
-    router.add_get("/api/settings/search/searxng-options", adapter._handle_settings_search_searxng_options)
-    router.add_put("/api/settings/search", adapter._handle_settings_search_update)
-    router.add_get("/api/settings/browser", adapter._handle_settings_browser)
-    router.add_put("/api/settings/browser", adapter._handle_settings_browser_update)
-    router.add_post("/api/settings/browser/test", adapter._handle_settings_browser_test)
-    router.add_post("/api/settings/browser/doctor", adapter._handle_settings_browser_doctor)
-    router.add_post("/api/settings/browser/install", adapter._handle_settings_browser_install)
-    router.add_get("/api/settings/log", adapter._handle_settings_log)
-    router.add_put("/api/settings/log", adapter._handle_settings_log_update)
-    router.add_get("/api/settings/mcp", adapter._handle_settings_mcp)
-    router.add_post("/api/settings/mcp", adapter._handle_settings_mcp_create)
-    router.add_post("/api/settings/mcp/reload", adapter._handle_settings_mcp_reload)
-    router.add_put("/api/settings/mcp/{server_id}", adapter._handle_settings_mcp_update)
-    router.add_delete("/api/settings/mcp/{server_id}", adapter._handle_settings_mcp_delete)
+    router.add_get("/api/settings/search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search))
+    router.add_get(
+        "/api/settings/search/searxng-options",
+        _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search_searxng_options),
+    )
+    router.add_put("/api/settings/search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search_update))
+    router.add_get("/api/settings/browser", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser))
+    router.add_put("/api/settings/browser", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_update))
+    router.add_post("/api/settings/browser/test", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_test))
+    router.add_post("/api/settings/browser/doctor", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_doctor))
+    router.add_post("/api/settings/browser/install", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_install))
+    router.add_get("/api/settings/log", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_log))
+    router.add_put("/api/settings/log", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_log_update))
+    router.add_get("/api/settings/mcp", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_mcp))
+    router.add_post("/api/settings/mcp", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_mcp_create))
+    router.add_post("/api/settings/mcp/reload", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_mcp_reload))
+    router.add_put("/api/settings/mcp/{server_id}", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_mcp_update))
+    router.add_delete("/api/settings/mcp/{server_id}", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_mcp_delete))
     router.add_get("/api/cron/jobs", _bind_adapter(adapter, web_cron_api.handle_cron_jobs))
     router.add_post("/api/cron/jobs", _bind_adapter(adapter, web_cron_api.handle_cron_job_create))
     router.add_put("/api/cron/jobs/{job_id}", _bind_adapter(adapter, web_cron_api.handle_cron_job_update))

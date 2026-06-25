@@ -47,7 +47,6 @@ from ..utils.log import logger
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
-from . import web_settings_handlers_tools
 from . import web_settings_support
 from .web_routes import register_web_routes
 
@@ -651,51 +650,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
-
-    async def _handle_settings_search(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_search(self, request)
-
-    async def _handle_settings_search_searxng_options(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_search_searxng_options(self, request)
-
-    async def _handle_settings_search_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_search_update(self, request)
-
-    async def _handle_settings_browser(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_browser(self, request)
-
-    async def _handle_settings_browser_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_browser_update(self, request)
-
-    async def _handle_settings_browser_test(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_browser_test(self, request)
-
-    async def _handle_settings_browser_doctor(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_browser_doctor(self, request)
-
-    async def _handle_settings_browser_install(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_browser_install(self, request)
-
-    async def _handle_settings_log(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_log(self, request)
-
-    async def _handle_settings_log_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_log_update(self, request)
-
-    async def _handle_settings_mcp(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_mcp(self, request)
-
-    async def _handle_settings_mcp_create(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_mcp_create(self, request)
-
-    async def _handle_settings_mcp_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_mcp_update(self, request)
-
-    async def _handle_settings_mcp_delete(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_mcp_delete(self, request)
-
-    async def _handle_settings_mcp_reload(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_tools.handle_settings_mcp_reload(self, request)
 
     async def _handle_frontend_index(self, request: web.Request) -> web.FileResponse:
         if self._frontend_dir is None:
