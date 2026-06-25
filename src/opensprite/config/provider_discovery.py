@@ -7,9 +7,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from ..auth.credentials import CredentialNotFoundError, resolve_credential
 from ..utils.url import join_url_path
 from .llm_presets import ProviderPreset
+from .provider_credentials import resolve_provider_api_key
 
 
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
@@ -215,22 +215,12 @@ def discover_provider_models(
     discovery_type = _discovery_type(preset, "model_discovery")
     if not discovery_type and provider.get("api_mode") != "anthropic_messages" and str(provider.get("base_url") or "").strip():
         discovery_type = "openai_compatible"
-    credential_api_key = ""
-    if not str(provider.get("api_key") or "").strip() and preset_id:
-        try:
-            credential_api_key = resolve_credential(
-                provider=preset_id,
-                credential_id=str(provider.get("credential_id") or "").strip() or None,
-                app_home=app_home,
-            ).secret
-        except CredentialNotFoundError:
-            credential_api_key = ""
+    api_key = resolve_provider_api_key(preset_id, provider, app_home=app_home, allow_default=True) if preset_id else ""
     live: list[str] = []
     model_metadata: dict[str, dict[str, Any]] = {}
     if discovery_type == "codex":
         live = fetch_codex_models(app_home)
     elif discovery_type == "copilot":
-        api_key = str(provider.get("api_key") or "").strip() or credential_api_key
         if not api_key:
             try:
                 from ..auth.copilot import load_copilot_token
@@ -244,7 +234,7 @@ def discover_provider_models(
         model_metadata = cached_openrouter_model_metadata(live)
     elif discovery_type == "openai_compatible" and provider.get("api_mode") != "anthropic_messages":
         live = fetch_openai_compatible_models(
-            str(provider.get("api_key") or "").strip() or credential_api_key,
+            api_key,
             str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
         )
     if live:

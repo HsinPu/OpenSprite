@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..auth.credentials import CredentialNotFoundError, resolve_credential
 from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
 from .provider_choices import (
@@ -17,6 +16,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
+from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
@@ -68,23 +68,6 @@ class MediaSettingsService:
         providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
         return main_data, providers, loaded
 
-    @staticmethod
-    def _provider_api_key(provider_id: str, provider: dict[str, Any], *, app_home: Path) -> str:
-        api_key = str(provider.get("api_key", "") or "").strip()
-        if api_key:
-            return api_key
-        credential_id = str(provider.get("credential_id", "") or "").strip()
-        if not credential_id:
-            return ""
-        try:
-            return resolve_credential(
-                provider=str(provider.get("provider") or provider_id).strip() or provider_id,
-                credential_id=credential_id,
-                app_home=app_home,
-            ).secret
-        except CredentialNotFoundError:
-            return ""
-
     def _section_payload(self, category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
         provider_id = self._section_provider_id(config, providers)
         return {
@@ -105,7 +88,7 @@ class MediaSettingsService:
                 continue
             provider_name = provider.get("provider") or candidate_id
             if (
-                self._provider_api_key(
+                resolve_provider_api_key(
                     candidate_id,
                     provider,
                     app_home=self.config_path.parent,
@@ -129,7 +112,7 @@ class MediaSettingsService:
         provider: dict[str, Any],
         presets: Any,
     ) -> dict[str, Any] | None:
-        if not self._provider_api_key(provider_id, provider, app_home=self.config_path.parent):
+        if not resolve_provider_api_key(provider_id, provider, app_home=self.config_path.parent):
             return None
         preset_id = get_provider_preset_id(provider_id, provider, presets)
         preset = presets.providers.get(preset_id) if preset_id else None
@@ -170,7 +153,7 @@ class MediaSettingsService:
             raise ProviderSettingsNotFound(
                 f"Provider is not connected: {normalized_provider_id}"
             )
-        api_key = self._provider_api_key(
+        api_key = resolve_provider_api_key(
             normalized_provider_id,
             provider,
             app_home=self.config_path.parent,
