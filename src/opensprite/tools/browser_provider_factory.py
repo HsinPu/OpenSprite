@@ -17,59 +17,19 @@ def cloud_provider_from_config(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> CloudBrowserProvider | None:
     backend = str(getattr(browser_config, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND).strip()
-    factory = BROWSER_CLOUD_PROVIDER_FACTORIES.get(backend)
-    return factory(browser_config, transport=transport) if factory is not None else None
+    provider_cls = BROWSER_CLOUD_PROVIDER_TYPES.get(backend)
+    return provider_cls.from_config(browser_config, transport=transport) if provider_cls is not None else None
 
 
 def browser_cloud_status(browser_config: Any) -> dict[str, dict[str, Any]]:
     return {
-        backend: factory(browser_config).status()
-        for backend, factory in BROWSER_CLOUD_PROVIDER_FACTORIES.items()
+        backend: provider_cls.from_config(browser_config).status()
+        for backend, provider_cls in BROWSER_CLOUD_PROVIDER_TYPES.items()
     }
 
 
-def _browserbase_provider(
-    browser_config: Any,
-    *,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> BrowserbaseCloudProvider:
-    return BrowserbaseCloudProvider(
-        api_key=getattr(browser_config, "browserbase_api_key", ""),
-        project_id=getattr(browser_config, "browserbase_project_id", ""),
-        base_url=getattr(browser_config, "browserbase_base_url", ""),
-        proxies=getattr(browser_config, "browserbase_proxies", True),
-        advanced_stealth=getattr(browser_config, "browserbase_advanced_stealth", False),
-        keep_alive=getattr(browser_config, "browserbase_keep_alive", True),
-        transport=transport,
-    )
-
-
-def _browser_use_provider(
-    browser_config: Any,
-    *,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> BrowserUseCloudProvider:
-    return BrowserUseCloudProvider(
-        api_key=getattr(browser_config, "browser_use_api_key", ""),
-        base_url=getattr(browser_config, "browser_use_base_url", ""),
-        transport=transport,
-    )
-
-
-def _firecrawl_provider(
-    browser_config: Any,
-    *,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> FirecrawlCloudProvider:
-    return FirecrawlCloudProvider(
-        api_key=getattr(browser_config, "firecrawl_api_key", ""),
-        base_url=getattr(browser_config, "firecrawl_base_url", ""),
-        transport=transport,
-    )
-
-
-BROWSER_CLOUD_PROVIDER_FACTORIES = {
-    "browserbase": _browserbase_provider,
-    "browser-use": _browser_use_provider,
-    "firecrawl": _firecrawl_provider,
+BROWSER_CLOUD_PROVIDER_TYPES = {
+    BrowserbaseCloudProvider.backend: BrowserbaseCloudProvider,
+    BrowserUseCloudProvider.backend: BrowserUseCloudProvider,
+    FirecrawlCloudProvider.backend: FirecrawlCloudProvider,
 }

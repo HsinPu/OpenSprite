@@ -33,9 +33,28 @@ class CloudBrowserProvider:
     api_key_env_var = ""
     base_url_env_var = ""
     default_base_url = ""
+    api_key_config_field = ""
+    base_url_config_field = ""
 
     def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
         self.transport = transport
+
+    @classmethod
+    def config_value(cls, browser_config: Any, field: str, default: Any = "") -> Any:
+        return getattr(browser_config, field, default) if field else default
+
+    @classmethod
+    def from_config(
+        cls,
+        browser_config: Any,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> "CloudBrowserProvider":
+        return cls(
+            api_key=cls.config_value(browser_config, cls.api_key_config_field),
+            base_url=cls.config_value(browser_config, cls.base_url_config_field),
+            transport=transport,
+        )
 
     def is_configured(self) -> bool:
         return bool(getattr(self, "api_key", ""))

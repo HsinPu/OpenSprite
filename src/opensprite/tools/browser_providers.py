@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 
 from ..config.defaults import (
@@ -21,6 +23,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
     project_id_env_var = "BROWSERBASE_PROJECT_ID"
     base_url_env_var = "BROWSERBASE_BASE_URL"
     default_base_url = DEFAULT_BROWSERBASE_BASE_URL
+    api_key_config_field = "browserbase_api_key"
+    project_id_config_field = "browserbase_project_id"
+    base_url_config_field = "browserbase_base_url"
 
     def __init__(
         self,
@@ -40,6 +45,23 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         self.proxies = bool(proxies)
         self.advanced_stealth = bool(advanced_stealth)
         self.keep_alive = bool(keep_alive)
+
+    @classmethod
+    def from_config(
+        cls,
+        browser_config: Any,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> "BrowserbaseCloudProvider":
+        return cls(
+            api_key=cls.config_value(browser_config, cls.api_key_config_field),
+            project_id=cls.config_value(browser_config, cls.project_id_config_field),
+            base_url=cls.config_value(browser_config, cls.base_url_config_field),
+            proxies=cls.config_value(browser_config, "browserbase_proxies", True),
+            advanced_stealth=cls.config_value(browser_config, "browserbase_advanced_stealth", False),
+            keep_alive=cls.config_value(browser_config, "browserbase_keep_alive", True),
+            transport=transport,
+        )
 
     def is_configured(self) -> bool:
         return bool(self.api_key and self.project_id)
@@ -96,6 +118,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     api_key_env_var = "BROWSER_USE_API_KEY"
     base_url_env_var = "BROWSER_USE_BASE_URL"
     default_base_url = DEFAULT_BROWSER_USE_BASE_URL
+    api_key_config_field = "browser_use_api_key"
+    base_url_config_field = "browser_use_base_url"
 
     def __init__(
         self,
@@ -148,6 +172,8 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     api_key_env_var = "FIRECRAWL_API_KEY"
     base_url_env_var = "FIRECRAWL_API_URL"
     default_base_url = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
+    api_key_config_field = "firecrawl_api_key"
+    base_url_config_field = "firecrawl_base_url"
 
     def __init__(
         self,
