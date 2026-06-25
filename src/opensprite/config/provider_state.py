@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential
+from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential, set_provider_default
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from .json_files import load_json_dict
 from .llm_presets import ProviderPreset, load_llm_presets
@@ -163,6 +163,30 @@ def disconnect_provider_in_config(
     if restart_required:
         clear_default_provider(main_data, providers)
     return restart_required
+
+
+def set_provider_credential_in_config(
+    providers: dict[str, Any],
+    provider_id: str,
+    credential_id: str,
+    default_provider: str | None,
+    *,
+    app_home: Any = None,
+) -> tuple[dict[str, Any], bool]:
+    """Select the stored credential used by a connected provider."""
+    provider, preset_id, _preset = connected_provider_or_raise(
+        provider_id,
+        providers,
+        load_llm_presets(),
+    )
+    credential = set_provider_default(
+        preset_id or provider_id,
+        credential_id,
+        app_home=app_home,
+    )
+    provider["credential_id"] = credential_id
+    provider["api_key"] = ""
+    return credential, provider_id == default_provider
 
 
 def select_model_in_config(

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..auth.credentials import set_provider_default
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     make_provider_instance_id,
@@ -18,11 +17,11 @@ from .provider_public import (
 )
 from .provider_state import (
     connect_provider_in_config,
-    connected_provider_or_raise,
     disconnect_provider_in_config,
     load_provider_config_state,
     provider_mutation_data,
     remove_provider_credential_references,
+    set_provider_credential_in_config,
     select_model_in_config,
 )
 
@@ -96,25 +95,19 @@ class ProviderSettingsService:
     def set_provider_credential(self, provider_id: str, credential_id: str) -> dict[str, Any]:
         """Select which stored credential a connected provider instance should use."""
         main_data, providers, loaded = self._load_state()
-        presets = load_llm_presets()
-        provider, preset_id, _preset = connected_provider_or_raise(
-            provider_id,
+        credential, restart_required = set_provider_credential_in_config(
             providers,
-            presets,
-        )
-        credential = set_provider_default(
-            preset_id or provider_id,
+            provider_id,
             credential_id,
+            loaded.llm.default,
             app_home=self.config_path.parent,
         )
-        provider["credential_id"] = credential_id
-        provider["api_key"] = ""
         persist_llm_provider_state(self.config_path, main_data, providers)
         return {
             "ok": True,
             "provider_id": provider_id,
             "credential": credential,
-            "restart_required": provider_id == loaded.llm.default,
+            "restart_required": restart_required,
         }
 
     def remove_credential_references(self, provider: str, credential_id: str) -> dict[str, Any]:
