@@ -167,24 +167,24 @@ export function useProviderSettingsActions({
     }
   }
 
-  async function connectCodexProvider(provider) {
-    const providerId = provider?.id || "openai-codex";
+  async function connectOAuthBackedProvider(provider, options) {
+    const providerId = provider?.id || options.providerId;
     settingsState.providersLoading = true;
     settingsState.providersError = "";
     settingsState.providersNotice = "";
-    settingsState.codexAuthNotice = "";
+    settingsState[options.authNoticeKey] = "";
     try {
       await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
         method: "PUT",
         body: JSON.stringify({
-          name: provider?.name || "OpenAI Codex",
+          name: provider?.name || options.providerName,
           base_url: provider?.default_base_url || "",
         }),
       });
-      setSettingsSuccess("providersNotice", copy.value.notices.codexProviderConnected);
+      setSettingsSuccess("providersNotice", options.connectedNotice);
       await loadProviderSettings();
       await loadModelSettings();
-      await startCodexAuthLogin();
+      await options.startAuthLogin();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
     } finally {
@@ -192,26 +192,24 @@ export function useProviderSettingsActions({
     }
   }
 
+  async function connectCodexProvider(provider) {
+    return connectOAuthBackedProvider(provider, {
+      providerId: "openai-codex",
+      providerName: "OpenAI Codex",
+      authNoticeKey: "codexAuthNotice",
+      connectedNotice: copy.value.notices.codexProviderConnected,
+      startAuthLogin: startCodexAuthLogin,
+    });
+  }
+
   async function connectCopilotProvider(provider) {
-    const providerId = provider?.id || "copilot";
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    settingsState.copilotAuthNotice = "";
-    try {
-      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
-        method: "PUT",
-        body: JSON.stringify({ name: provider?.name || "GitHub Copilot", base_url: provider?.default_base_url || "" }),
-      });
-      setSettingsSuccess("providersNotice", copy.value.notices.copilotProviderConnected);
-      await loadProviderSettings();
-      await loadModelSettings();
-      await startCopilotAuthLogin();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    return connectOAuthBackedProvider(provider, {
+      providerId: "copilot",
+      providerName: "GitHub Copilot",
+      authNoticeKey: "copilotAuthNotice",
+      connectedNotice: copy.value.notices.copilotProviderConnected,
+      startAuthLogin: startCopilotAuthLogin,
+    });
   }
 
   async function connectOAuthProvider(provider) {
