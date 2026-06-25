@@ -1147,18 +1147,17 @@ class Config:
         merged_search.update(external_search)
         media_path = cls._resolve_media_file(path, data.get("media_file"))
         external_media = cls._load_media_data(media_path) if media_path is not None else {}
-        merged_vision = dict(data.get("vision", {})) if isinstance(data.get("vision", {}), dict) else {}
-        merged_ocr = dict(data.get("ocr", {})) if isinstance(data.get("ocr", {}), dict) else {}
-        merged_speech = dict(data.get("speech", {})) if isinstance(data.get("speech", {}), dict) else {}
-        merged_video = dict(data.get("video", {})) if isinstance(data.get("video", {}), dict) else {}
-        if isinstance(external_media.get("vision"), dict):
-            merged_vision.update(external_media["vision"])
-        if isinstance(external_media.get("ocr"), dict):
-            merged_ocr.update(external_media["ocr"])
-        if isinstance(external_media.get("speech"), dict):
-            merged_speech.update(external_media["speech"])
-        if isinstance(external_media.get("video"), dict):
-            merged_video.update(external_media["video"])
+        media_categories = ("vision", "ocr", "speech", "video")
+        merged_media = {
+            category: dict(data.get(category, {})) if isinstance(data.get(category, {}), dict) else {}
+            for category in media_categories
+        }
+        for category in media_categories:
+            if isinstance(external_media.get(category), dict):
+                merged_media[category].update(external_media[category])
+        def media_config(category, section_type):
+            section = merged_media[category]
+            return section_type(**section) if (section or category in data or media_path is not None) else None
         tools_data = dict(data.get("tools", {})) if "tools" in data else {}
         inline_mcp_servers = tools_data.get("mcp_servers", {})
         mcp_servers_path = cls._resolve_mcp_servers_file(path, tools_data.get("mcp_servers_file"))
@@ -1202,10 +1201,10 @@ class Config:
                 )
             ),
             messages=MessagesConfig(**merged_messages) if (merged_messages or "messages" in data or messages_path is not None) else None,
-            vision=VisionConfig(**merged_vision) if (merged_vision or "vision" in data or media_path is not None) else None,
-            ocr=OcrConfig(**merged_ocr) if (merged_ocr or "ocr" in data or media_path is not None) else None,
-            speech=SpeechConfig(**merged_speech) if (merged_speech or "speech" in data or media_path is not None) else None,
-            video=VideoConfig(**merged_video) if (merged_video or "video" in data or media_path is not None) else None,
+            vision=media_config("vision", VisionConfig),
+            ocr=media_config("ocr", OcrConfig),
+            speech=media_config("speech", SpeechConfig),
+            video=media_config("video", VideoConfig),
             source_path=path,
             channels_file=data.get("channels_file") or DEFAULT_CHANNELS_FILE,
             search_file=data.get("search_file") or DEFAULT_SEARCH_FILE,
