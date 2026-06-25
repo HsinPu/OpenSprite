@@ -23,7 +23,11 @@ from opensprite.tools.browser_runtime import (
     cloud_provider_from_config,
 )
 from opensprite.tools.evidence import build_tool_evidence
-from opensprite.tools.registration import register_browser_tools
+from opensprite.tools.registration import (
+    registered_browser_tool_names,
+    register_browser_tools,
+    unregister_browser_tools,
+)
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -112,6 +116,17 @@ def test_register_browser_tools_adds_mvp_tools():
         "browser_back",
         "browser_console",
     }.issubset(set(registry.tool_names))
+
+
+def test_browser_tool_lifecycle_helpers_report_and_remove_tools():
+    registry = ToolRegistry()
+    register_browser_tools(registry, get_session_id=lambda: "session")
+
+    registered = registered_browser_tool_names(registry)
+    removed = unregister_browser_tools(registry)
+
+    assert set(registered) == set(removed)
+    assert registered_browser_tool_names(registry) == []
 
 
 def test_register_browser_tools_skips_when_disabled():

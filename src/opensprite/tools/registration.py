@@ -68,6 +68,16 @@ BROWSER_TOOL_NAMES = (
 )
 
 
+def registered_browser_tool_names(registry: ToolRegistry) -> list[str]:
+    """Return the registered browser automation tool names."""
+    return [name for name in BROWSER_TOOL_NAMES if registry.get(name) is not None]
+
+
+def unregister_browser_tools(registry: ToolRegistry) -> list[str]:
+    """Remove registered browser automation tools and return removed names."""
+    return [name for name in BROWSER_TOOL_NAMES if registry.unregister(name) is not None]
+
+
 def register_memory_tool(
     registry: ToolRegistry,
     memory_store: MemoryStore,

@@ -9,7 +9,11 @@ from ..llms import LLMProvider
 from ..llms.runtime_provider import create_configured_llm
 from ..media.factory import create_media_router
 from ..tool_names import WEB_RESEARCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME
-from ..tools.registration import BROWSER_TOOL_NAMES, register_browser_tools
+from ..tools.registration import (
+    registered_browser_tool_names,
+    register_browser_tools,
+    unregister_browser_tools,
+)
 from ..tools.web_research import WebResearchTool
 from ..tools.web_search import WebSearchTool
 from ..utils.log import logger
@@ -124,14 +128,14 @@ def reload_agent_browser_from_config(agent: Any, config: Config) -> dict[str, An
     browser_config = config.tools.browser
     agent.tools_config.browser = browser_config
 
-    removed_tools = [name for name in BROWSER_TOOL_NAMES if agent.tools.unregister(name) is not None]
+    removed_tools = unregister_browser_tools(agent.tools)
     if browser_config.enabled:
         register_browser_tools(
             agent.tools,
             get_session_id=agent._get_current_session_id,
             tools_config=agent.tools_config,
         )
-    registered_tools = [name for name in BROWSER_TOOL_NAMES if agent.tools.get(name) is not None]
+    registered_tools = registered_browser_tool_names(agent.tools)
 
     logger.info(
         "Browser tools reloaded | enabled={} backend={} registered={} removed={}",
