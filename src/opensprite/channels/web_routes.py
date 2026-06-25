@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.log import logger
-from . import web_cron_api
+from . import web_cron_api, web_settings_handlers_provider
 
 
 def _bind_adapter(adapter: Any, handler: Any) -> Any:
@@ -46,7 +46,7 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_put("/api/settings/channels/{channel_id}", adapter._handle_settings_channel_update)
     router.add_put("/api/settings/channels/{channel_id}/connect", adapter._handle_settings_channel_connect)
     router.add_post("/api/settings/channels/{channel_id}/disconnect", adapter._handle_settings_channel_disconnect)
-    router.add_get("/api/settings/providers", adapter._handle_settings_providers)
+    router.add_get("/api/settings/providers", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_providers))
     router.add_get("/api/settings/auth/openai-codex", adapter._handle_settings_codex_auth_status)
     router.add_post("/api/settings/auth/openai-codex/login", adapter._handle_settings_codex_auth_login)
     router.add_post("/api/settings/auth/openai-codex/poll", adapter._handle_settings_codex_auth_poll)
@@ -55,14 +55,29 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_post("/api/settings/auth/copilot/login", adapter._handle_settings_copilot_auth_login)
     router.add_post("/api/settings/auth/copilot/poll", adapter._handle_settings_copilot_auth_poll)
     router.add_post("/api/settings/auth/copilot/logout", adapter._handle_settings_copilot_auth_logout)
-    router.add_get("/api/settings/credentials", adapter._handle_settings_credentials)
-    router.add_post("/api/settings/credentials", adapter._handle_settings_credential_create)
-    router.add_delete("/api/settings/credentials/{provider}/{credential_id}", adapter._handle_settings_credential_delete)
-    router.add_post("/api/settings/credentials/default", adapter._handle_settings_credential_default)
-    router.add_put("/api/settings/providers/{provider_id}/connect", adapter._handle_settings_provider_connect)
-    router.add_post("/api/settings/providers/{provider_id}/credential", adapter._handle_settings_provider_credential)
-    router.add_post("/api/settings/providers/{provider_id}/disconnect", adapter._handle_settings_provider_disconnect)
-    router.add_get("/api/settings/models", adapter._handle_settings_models)
+    router.add_get("/api/settings/credentials", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credentials))
+    router.add_post("/api/settings/credentials", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credential_create))
+    router.add_delete(
+        "/api/settings/credentials/{provider}/{credential_id}",
+        _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credential_delete),
+    )
+    router.add_post(
+        "/api/settings/credentials/default",
+        _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credential_default),
+    )
+    router.add_put(
+        "/api/settings/providers/{provider_id}/connect",
+        _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_provider_connect),
+    )
+    router.add_post(
+        "/api/settings/providers/{provider_id}/credential",
+        _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_provider_credential),
+    )
+    router.add_post(
+        "/api/settings/providers/{provider_id}/disconnect",
+        _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_provider_disconnect),
+    )
+    router.add_get("/api/settings/models", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_models))
     router.add_post("/api/settings/models/select", adapter._handle_settings_model_select)
     router.add_get("/api/settings/update", adapter._handle_settings_update_status)
     router.add_post("/api/settings/update", adapter._handle_settings_update_apply)
