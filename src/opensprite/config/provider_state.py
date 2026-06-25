@@ -206,14 +206,19 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
     return has_provider_secret(provider)
 
 
+def provider_preset_entry(provider_id: str, provider: Any, presets: Any) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
+    provider_data = provider if isinstance(provider, dict) else {}
+    preset_id = get_provider_preset_id(provider_id, provider_data, presets)
+    preset = presets.providers.get(preset_id) if preset_id else None
+    return provider_data, preset_id, preset
+
+
 def connected_provider_entries(providers: dict[str, Any], presets: Any):
     for provider_id in get_provider_choices(
         {"llm": {"providers": providers}},
         provider_order=presets.provider_order,
     ):
-        provider = providers.get(provider_id, {})
-        preset_id = get_provider_preset_id(provider_id, provider, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
+        provider, preset_id, preset = provider_preset_entry(provider_id, providers.get(provider_id, {}), presets)
         if is_provider_connected(provider, preset):
             yield provider_id, provider, preset_id, preset
 
@@ -224,15 +229,10 @@ def connected_provider_or_raise(
     presets: Any,
 ) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
     provider = providers.get(provider_id)
-    preset_id = get_provider_preset_id(
-        provider_id,
-        provider if isinstance(provider, dict) else {},
-        presets,
-    )
-    preset = presets.providers.get(preset_id) if preset_id else None
+    provider_data, preset_id, preset = provider_preset_entry(provider_id, provider, presets)
     if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
         raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
-    return provider, preset_id, preset
+    return provider_data, preset_id, preset
 
 
 def clear_default_provider(main_data: dict[str, Any], providers: dict[str, Any]) -> None:
