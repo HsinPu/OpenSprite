@@ -21,6 +21,14 @@ import {
   buildWorktreeCleanupPath,
 } from "./chatClientPaths";
 import {
+  getResolvedColorScheme,
+  normalizeChoice,
+  readStoredBoolean,
+  readStoredChoice,
+  readStoredValue,
+  writeStoredValue,
+} from "./chatClientPreferences";
+import {
   channelFromSessionId,
   externalChatIdFromSessionId,
   generateExternalChatId,
@@ -166,59 +174,12 @@ function resolveDefaultWsUrl() {
 
 const DEFAULT_WS_URL = resolveDefaultWsUrl();
 
-function readStoredValue(key, fallback) {
-  try {
-    return localStorage.getItem(key) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 function previewText(value) {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
   if (!normalized) {
     return "";
   }
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
-
-function normalizeChoice(value, fallback, allowedValues) {
-  const normalized = String(value || "").trim();
-  return allowedValues.has(normalized) ? normalized : fallback;
-}
-
-function readStoredChoice(key, fallback, allowedValues) {
-  return normalizeChoice(readStoredValue(key, fallback), fallback, allowedValues);
-}
-
-function getResolvedColorScheme(colorScheme) {
-  if (colorScheme !== "system") {
-    return colorScheme;
-  }
-  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
-  return "light";
-}
-
-function writeStoredValue(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    return;
-  }
-}
-
-function readStoredBoolean(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    if (value === null) {
-      return fallback;
-    }
-    return value === "true";
-  } catch {
-    return fallback;
-  }
 }
 
 function randomToken() {
