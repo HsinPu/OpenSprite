@@ -46,6 +46,13 @@ def load_provider_config_state(config_path: str | Path) -> tuple[dict[str, Any],
     return main_data, providers, loaded
 
 
+def provider_mutation_sections(config_data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the mutable llm/provider sections used by provider mutations."""
+    llm = config_data.setdefault("llm", {})
+    providers = llm.setdefault("providers", {})
+    return llm, providers
+
+
 def prune_llm_providers(llm: dict[str, Any]) -> None:
     """Keep the default provider and any configured providers; drop empty shells."""
     providers = llm.get("providers")
@@ -101,8 +108,7 @@ def connect_provider_in_config(
     if preset_id not in presets.providers:
         raise ProviderSettingsNotFound(f"Unknown provider: {preset_id}")
 
-    llm = config_data.setdefault("llm", {})
-    providers = llm.setdefault("providers", {})
+    _, providers = provider_mutation_sections(config_data)
     preset = presets.providers[preset_id]
     provider = ensure_provider_entry(providers, provider_id, preset)
     provider["provider"] = preset_id
@@ -153,8 +159,7 @@ def select_model_in_config(
     if not normalized_model:
         raise ProviderSettingsValidationError("model is required")
 
-    llm = config_data.setdefault("llm", {})
-    providers = llm.setdefault("providers", {})
+    llm, providers = provider_mutation_sections(config_data)
     provider = providers.get(provider_id)
     if not isinstance(provider, dict):
         raise ProviderSettingsConflict("Provider must be connected before selecting a model")
