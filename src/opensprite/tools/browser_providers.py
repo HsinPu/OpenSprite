@@ -45,10 +45,8 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
 
     def status(self) -> dict[str, Any]:
         return {
-            "configured": self.is_configured(),
-            "api_key_configured": bool(self.api_key),
+            **self.api_key_status(),
             "project_id": self.project_id,
-            "base_url": self.base_url,
         }
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
