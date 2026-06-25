@@ -26,6 +26,7 @@ from opensprite.tools.evidence import build_tool_evidence
 from opensprite.tools.registration import (
     registered_browser_tool_names,
     register_browser_tools,
+    reload_browser_tools,
     unregister_browser_tools,
 )
 from opensprite.tools.registry import ToolRegistry
@@ -126,6 +127,30 @@ def test_browser_tool_lifecycle_helpers_report_and_remove_tools():
     removed = unregister_browser_tools(registry)
 
     assert set(registered) == set(removed)
+    assert registered_browser_tool_names(registry) == []
+
+
+def test_reload_browser_tools_applies_enabled_and_disabled_config():
+    registry = ToolRegistry()
+
+    result = reload_browser_tools(
+        registry,
+        get_session_id=lambda: "session",
+        tools_config=ToolsConfig(browser={"enabled": True, "command_timeout": 45}),
+    )
+
+    browser_tool = registry.get("browser_navigate")
+    assert result == {"tool_updated": True, "tool_removed": False}
+    assert isinstance(browser_tool, BrowserNavigateTool)
+    assert browser_tool.runtime.command_timeout == 45
+
+    result = reload_browser_tools(
+        registry,
+        get_session_id=lambda: "session",
+        tools_config=ToolsConfig(browser={"enabled": False}),
+    )
+
+    assert result == {"tool_updated": False, "tool_removed": True}
     assert registered_browser_tool_names(registry) == []
 
 

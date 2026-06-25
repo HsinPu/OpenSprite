@@ -78,6 +78,23 @@ def unregister_browser_tools(registry: ToolRegistry) -> list[str]:
     return [name for name in BROWSER_TOOL_NAMES if registry.unregister(name) is not None]
 
 
+def reload_browser_tools(
+    registry: ToolRegistry,
+    *,
+    get_session_id: Callable[[], str | None],
+    tools_config: ToolsConfig | None = None,
+) -> dict[str, bool]:
+    """Reload browser automation tools from the current tools config."""
+    current_tools_config = tools_config or ToolsConfig()
+    removed_tools = unregister_browser_tools(registry)
+    if current_tools_config.browser.enabled:
+        register_browser_tools(registry, get_session_id=get_session_id, tools_config=current_tools_config)
+    return {
+        "tool_updated": bool(registered_browser_tool_names(registry)),
+        "tool_removed": bool(removed_tools),
+    }
+
+
 def register_memory_tool(
     registry: ToolRegistry,
     memory_store: MemoryStore,

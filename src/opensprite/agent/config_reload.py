@@ -9,10 +9,8 @@ from ..llms import LLMProvider
 from ..llms.runtime_provider import create_configured_llm
 from ..media.factory import create_media_router
 from ..tools.registration import (
-    registered_browser_tool_names,
-    register_browser_tools,
+    reload_browser_tools,
     reload_web_search_tools,
-    unregister_browser_tools,
 )
 from ..utils.log import logger
 
@@ -114,21 +112,18 @@ def reload_agent_browser_from_config(agent: Any, config: Config) -> dict[str, An
     browser_config = config.tools.browser
     agent.tools_config.browser = browser_config
 
-    removed_tools = unregister_browser_tools(agent.tools)
-    if browser_config.enabled:
-        register_browser_tools(
-            agent.tools,
-            get_session_id=agent._get_current_session_id,
-            tools_config=agent.tools_config,
-        )
-    registered_tools = registered_browser_tool_names(agent.tools)
+    tool_reload = reload_browser_tools(
+        agent.tools,
+        get_session_id=agent._get_current_session_id,
+        tools_config=agent.tools_config,
+    )
 
     logger.info(
-        "Browser tools reloaded | enabled={} backend={} registered={} removed={}",
+        "Browser tools reloaded | enabled={} backend={} updated={} removed={}",
         browser_config.enabled,
         browser_config.backend,
-        len(registered_tools),
-        len(removed_tools),
+        tool_reload["tool_updated"],
+        tool_reload["tool_removed"],
     )
     return {
         "enabled": browser_config.enabled,
@@ -136,6 +131,5 @@ def reload_agent_browser_from_config(agent: Any, config: Config) -> dict[str, An
         "command_timeout": browser_config.command_timeout,
         "session_timeout": browser_config.session_timeout,
         "launch_args": browser_config.launch_args,
-        "tool_updated": bool(registered_tools),
-        "tool_removed": bool(removed_tools),
+        **tool_reload,
     }
