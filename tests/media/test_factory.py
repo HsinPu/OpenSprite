@@ -1,5 +1,6 @@
+import opensprite.media.factory as media_factory
 from opensprite.config.schema import Config
-from opensprite.media.factory import media_router_status, reload_media_router
+from opensprite.media.factory import create_media_router, media_router_status, reload_media_router
 from opensprite.media.router import MediaRouter
 
 
@@ -12,6 +13,48 @@ def test_media_router_status_reports_provider_availability():
         "speech_enabled": False,
         "video_enabled": True,
     }
+
+
+def test_create_media_router_uses_image_factory_for_vision_and_ocr(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_create_image_analysis_provider(**kwargs):
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(media_factory, "create_image_analysis_provider", fake_create_image_analysis_provider)
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+    config.vision.enabled = True
+    config.vision.provider = "openrouter"
+    config.vision.api_key = "vision-key"
+    config.vision.model = "vision-model"
+    config.vision.base_url = "https://vision.example.test"
+    config.ocr.enabled = True
+    config.ocr.provider = "minimax"
+    config.ocr.api_key = "ocr-key"
+    config.ocr.model = "ocr-model"
+    config.ocr.base_url = "https://ocr.example.test"
+
+    router = create_media_router(config)
+
+    assert router.image_provider is not None
+    assert router.ocr_provider is not None
+    assert calls == [
+        {
+            "provider": "openrouter",
+            "api_key": "vision-key",
+            "default_model": "vision-model",
+            "base_url": "https://vision.example.test",
+        },
+        {
+            "provider": "minimax",
+            "api_key": "ocr-key",
+            "default_model": "ocr-model",
+            "base_url": "https://ocr.example.test",
+        },
+    ]
 
 
 def test_reload_media_router_reuses_existing_router_and_applies_config(tmp_path):

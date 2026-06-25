@@ -17,23 +17,8 @@ def create_media_router(config: Config) -> MediaRouter:
     speech = getattr(config, "speech", None)
     video = getattr(config, "video", None)
 
-    image_provider = None
-    if vision and vision.enabled:
-        image_provider = create_image_analysis_provider(
-            provider=vision.provider,
-            api_key=vision.api_key,
-            default_model=vision.model,
-            base_url=vision.base_url,
-        )
-
-    ocr_provider = None
-    if ocr and ocr.enabled:
-        ocr_provider = create_image_analysis_provider(
-            provider=ocr.provider,
-            api_key=ocr.api_key,
-            default_model=ocr.model,
-            base_url=ocr.base_url,
-        )
+    image_provider = _image_provider_from_config(vision)
+    ocr_provider = _image_provider_from_config(ocr)
 
     speech_provider = None
     if speech and speech.enabled:
@@ -56,6 +41,17 @@ def create_media_router(config: Config) -> MediaRouter:
         ocr_provider=ocr_provider,
         speech_provider=speech_provider,
         video_provider=video_provider,
+    )
+
+
+def _image_provider_from_config(config: object | None):
+    if config is None or not getattr(config, "enabled", False):
+        return None
+    return create_image_analysis_provider(
+        provider=getattr(config, "provider"),
+        api_key=getattr(config, "api_key"),
+        default_model=getattr(config, "model"),
+        base_url=getattr(config, "base_url"),
     )
 
 
