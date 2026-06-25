@@ -39,9 +39,11 @@ from .defaults import (
 )
 from .llm_presets import provider_profile_defaults
 from .provider_auth_types import (
+    API_KEY_AUTH_TYPE,
     GITHUB_COPILOT_OAUTH_AUTH_TYPE,
     OPENAI_CODEX_OAUTH_AUTH_TYPE,
     OPTIONAL_API_KEY_AUTH_TYPE,
+    ProviderAuthType,
 )
 
 
@@ -66,7 +68,7 @@ class ProviderConfig(BaseModel):
 
     provider: str | None = None
     name: str | None = None
-    auth_type: Literal["api_key", "optional_api_key", "openai_codex_oauth", "github_copilot_oauth"] = "api_key"
+    auth_type: ProviderAuthType = API_KEY_AUTH_TYPE
     api_mode: Literal["chat_completions", "responses", "anthropic_messages"] | None = None
     api_key: str = ""
     credential_id: str = ""
