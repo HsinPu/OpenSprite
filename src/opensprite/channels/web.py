@@ -336,14 +336,6 @@ class WebAdapter(MessageAdapter):
         return web_frontend_runtime.with_browser_diagnostic(result)
 
     @staticmethod
-    def _coerce_positive_int(value: Any, *, field: str, default: int, minimum: int = 0, maximum: int = 3650) -> int:
-        return web_settings_coercion.coerce_positive_int(value, field=field, default=default, minimum=minimum, maximum=maximum)
-
-    @staticmethod
-    def _coerce_float_range(value: Any, *, field: str, default: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
-        return web_settings_coercion.coerce_float_range(value, field=field, default=default, minimum=minimum, maximum=maximum)
-
-    @staticmethod
     def _coerce_bool(value: Any, *, field: str, default: bool) -> bool:
         return web_settings_coercion.coerce_bool(value, field=field, default=default)
 

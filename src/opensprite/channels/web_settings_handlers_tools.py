@@ -91,15 +91,15 @@ async def handle_settings_browser_update(adapter: Any, request: web.Request) -> 
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
     browser = config.tools.browser
-    browser.enabled = adapter._coerce_bool(body.get("enabled"), field="enabled", default=browser.enabled)
+    browser.enabled = web_settings_coercion.coerce_bool(body.get("enabled"), field="enabled", default=browser.enabled)
     browser.backend = web_settings_coercion.coerce_browser_backend(body.get("backend", browser.backend))
-    browser.command_timeout = adapter._coerce_positive_int(body.get("command_timeout"), field="command_timeout", default=browser.command_timeout, minimum=1, maximum=600)
-    browser.session_timeout = adapter._coerce_positive_int(body.get("session_timeout"), field="session_timeout", default=browser.session_timeout, minimum=1, maximum=86400)
+    browser.command_timeout = web_settings_coercion.coerce_positive_int(body.get("command_timeout"), field="command_timeout", default=browser.command_timeout, minimum=1, maximum=600)
+    browser.session_timeout = web_settings_coercion.coerce_positive_int(body.get("session_timeout"), field="session_timeout", default=browser.session_timeout, minimum=1, maximum=86400)
     if "cdp_url" in body:
         browser.cdp_url = adapter._coerce_optional_text(body.get("cdp_url"), default="") or ""
     if "launch_args" in body:
         browser.launch_args = adapter._coerce_optional_text(body.get("launch_args"), default="") or ""
-    browser.allow_private_urls = adapter._coerce_bool(body.get("allow_private_urls"), field="allow_private_urls", default=browser.allow_private_urls)
+    browser.allow_private_urls = web_settings_coercion.coerce_bool(body.get("allow_private_urls"), field="allow_private_urls", default=browser.allow_private_urls)
     for field in (
         "browserbase_api_key",
         "browserbase_project_id",
@@ -113,7 +113,7 @@ async def handle_settings_browser_update(adapter: Any, request: web.Request) -> 
             setattr(browser, field, adapter._coerce_optional_text(body.get(field), default="") or "")
     for field in ("browserbase_proxies", "browserbase_advanced_stealth", "browserbase_keep_alive"):
         if field in body:
-            setattr(browser, field, adapter._coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
+            setattr(browser, field, web_settings_coercion.coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
     config.save(config_path)
     payload = {"browser": _browser_payload(adapter, config), "restart_required": True}
     payload = adapter._reload_browser_from_config(payload)
