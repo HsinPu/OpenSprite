@@ -373,10 +373,6 @@ class WebAdapter(MessageAdapter):
         )
 
     @staticmethod
-    def _anthropic_reasoning_budget(effort: str | None) -> int:
-        return web_settings_payloads.anthropic_reasoning_budget(effort)
-
-    @staticmethod
     def _coerce_positive_int(value: Any, *, field: str, default: int, minimum: int = 0, maximum: int = 3650) -> int:
         return web_settings_coercion.coerce_positive_int(value, field=field, default=default, minimum=minimum, maximum=maximum)
 
