@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any
 
 from .provider_credentials import has_provider_secret
@@ -58,6 +59,18 @@ def get_model_choices(
         choices.append(custom_choice)
     default = current_model or (choices[0] if choices else None)
     return choices, default
+
+
+def get_provider_model_choices(
+    provider: dict[str, Any],
+    *,
+    model_choices: Iterable[str],
+) -> tuple[list[str], str | None]:
+    """Return model choices using the provider's configured model as selection."""
+    return get_model_choices(
+        str(provider.get("model") or "") or None,
+        model_choices=tuple(model_choices),
+    )
 
 
 def get_provider_preset_id(provider_id: str, provider: dict[str, Any], presets: Any) -> str | None:

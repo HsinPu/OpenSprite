@@ -7,7 +7,7 @@ from typing import Any
 
 from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
-from .provider_choices import get_configured_provider_id, get_model_choices, get_provider_media_base_url
+from .provider_choices import get_configured_provider_id, get_provider_media_base_url, get_provider_model_choices
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
@@ -75,8 +75,8 @@ class MediaSettingsService:
     ) -> dict[str, Any] | None:
         if not resolve_provider_api_key(provider_id, provider, app_home=self.config_path.parent):
             return None
-        choices, selected = get_model_choices(
-            str(provider.get("model") or "") or None,
+        choices, selected = get_provider_model_choices(
+            provider,
             model_choices=preset.model_choices if preset else (),
         )
         media_models, media_model_source = discover_media_model_choices(preset)

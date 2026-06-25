@@ -11,7 +11,7 @@ from .json_files import write_json_dict
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     get_configured_provider_id,
-    get_model_choices,
+    get_provider_model_choices,
     make_provider_instance_id,
 )
 from .provider_errors import (
@@ -197,10 +197,7 @@ class ProviderSettingsService:
                 preset,
                 app_home=self.config_path.parent,
             )
-            choices, _ = get_model_choices(
-                str(provider.get("model") or "") or None,
-                model_choices=tuple(discovered_models),
-            )
+            choices, _ = get_provider_model_choices(provider, model_choices=discovered_models)
             out.append(
                 public_model_provider(
                     provider_id,
