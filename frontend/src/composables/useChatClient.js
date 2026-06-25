@@ -28,6 +28,12 @@ import {
   isExternalChannelSessionId as isExternalChannelSessionIdBase,
 } from "./chatClientSessionIds";
 import {
+  createSession,
+  isLocalDraftSession,
+  makeMessage,
+  writeStoredDraftSessions,
+} from "./chatClientSessions";
+import {
   createRunViewState as createRunViewStateBase,
   formatAutoContinueDetail as formatAutoContinueDetailBase,
   formatRunFinishDetail as formatRunFinishDetailBase,
@@ -240,46 +246,6 @@ function summarizeTitle(text) {
   return singleLine.length > 30 ? `${singleLine.slice(0, 30)}...` : singleLine;
 }
 
-function makeMessage(role, text, meta) {
-  return {
-    id: `msg-${Date.now().toString(36)}-${randomToken()}`,
-    role,
-    text,
-    meta,
-    createdAt: Date.now(),
-  };
-}
-
-function createSession(externalChatId) {
-  return {
-    externalChatId: externalChatId || generateExternalChatId(),
-    transportExternalChatId: externalChatId || "",
-    channel: "web",
-    sessionId: null,
-    title: "New chat",
-    updatedAt: Date.now(),
-    messages: [],
-    entries: [],
-    hiddenFromBrowserHistory: false,
-    status: { status: "idle", updatedAt: Date.now(), metadata: {} },
-    workState: null,
-    activeRunId: null,
-    runs: [],
-    runsLoaded: false,
-    runsLoading: false,
-    runsError: "",
-  };
-}
-
-function isLocalDraftSession(session) {
-  return Boolean(session)
-    && (!session.channel || session.channel === "web")
-    && !session.sessionId
-    && !session.messages?.length
-    && !session.entries?.length
-    && !session.runs?.length;
-}
-
 function normalizeStoredDraftSession(payload) {
   const externalChatId = String(payload?.externalChatId || "").trim();
   if (!externalChatId || isExternalChannelSessionId(externalChatId)) {
@@ -305,23 +271,6 @@ function readStoredDraftSessions() {
       : [];
   } catch {
     return [];
-  }
-}
-
-function writeStoredDraftSessions(sessions) {
-  try {
-    const drafts = sessions
-      .filter(isLocalDraftSession)
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, LOCAL_DRAFT_SESSION_LIMIT)
-      .map((session) => ({
-        externalChatId: session.externalChatId,
-        title: session.title,
-        updatedAt: session.updatedAt,
-      }));
-    localStorage.setItem(STORAGE_KEYS.localDraftSessions, JSON.stringify(drafts));
-  } catch {
-    return;
   }
 }
 
@@ -1413,7 +1362,7 @@ export function useChatClient() {
   }
 
   function persistLocalDraftSessions() {
-    writeStoredDraftSessions(state.sessions);
+    writeStoredDraftSessions(state.sessions, STORAGE_KEYS.localDraftSessions, LOCAL_DRAFT_SESSION_LIMIT);
     localDraftExternalChatIds.clear();
     for (const session of state.sessions) {
       if (isLocalDraftSession(session)) {
