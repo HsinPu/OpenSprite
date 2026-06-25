@@ -9,13 +9,14 @@ from aiohttp import web
 
 from ..cli import update as update_cli
 from ..config import Config
+from . import web_settings_support
 
 
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
     try:
         payload = adapter._get_media_settings().list_media()
     except Exception as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)
 
 
@@ -32,7 +33,7 @@ async def handle_settings_media_update(adapter: Any, request: web.Request) -> we
             model=adapter._coerce_optional_text(body.get("model")),
         )
     except Exception as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     payload = adapter._reload_media_from_config(payload)
     return web.json_response(payload)
 
@@ -55,7 +56,7 @@ async def handle_settings_model_select(adapter: Any, request: web.Request) -> we
             reasoning_effort=reasoning_effort,
         )
     except Exception as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     payload = adapter._reload_agent_llm_from_config(payload)
     return web.json_response(payload)
 

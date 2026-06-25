@@ -69,12 +69,6 @@ from ..config.mcp_settings import (
     MCPSettingsValidationError,
 )
 from ..config.media_settings import MediaSettingsService
-from ..config.provider_errors import (
-    ProviderSettingsConflict,
-    ProviderSettingsError,
-    ProviderSettingsNotFound,
-    ProviderSettingsValidationError,
-)
 from ..config.provider_settings import ProviderSettingsService
 from ..config.schedule_settings import (
     ScheduleSettingsError,
@@ -573,10 +567,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)
-
-    @staticmethod
-    def _raise_provider_settings_error(exc: ProviderSettingsError) -> None:
-        web_settings_support.raise_provider_settings_error(exc)
 
     @staticmethod
     def _raise_channel_settings_error(exc: ChannelSettingsError) -> None:
