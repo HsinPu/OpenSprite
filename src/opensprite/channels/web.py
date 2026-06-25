@@ -1008,26 +1008,12 @@ class WebAdapter(MessageAdapter):
     async def _handle_settings_model_select(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_model_select(self, request)
 
-    @staticmethod
-    def _git_output(args: list[str], *, cwd: Path) -> str:
-        result = subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-            **windows_hidden_process_kwargs(),
-        )
-        if result.returncode != 0:
-            raise RuntimeError((result.stderr or result.stdout or "git command failed").strip())
-        return result.stdout.strip()
-
     def _build_update_status_payload(self) -> dict[str, Any]:
         try:
             root = update_cli.find_project_root()
-            current_rev = self._git_output(["rev-parse", "HEAD"], cwd=root)
-            branch = self._git_output(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root)
-            dirty = bool(self._git_output(["status", "--porcelain"], cwd=root))
+            current_rev = update_cli._git_output(["rev-parse", "HEAD"], cwd=root)
+            branch = update_cli._git_output(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root)
+            dirty = bool(update_cli._git_output(["status", "--porcelain"], cwd=root))
             commits_behind = update_cli.check_update_available(project_root=root, branch=branch)
             return {
                 "ok": True,
