@@ -7,21 +7,29 @@ from typing import Any
 from ..config import Config
 
 
-def reload_agent_llm_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
+def _reload_agent_runtime_from_config(
+    adapter: Any,
+    payload: dict[str, Any],
+    *,
+    force: bool,
+    logger,
+    reload_method: str,
+    runtime_label: str,
+) -> dict[str, Any]:
     if not force and not payload.get("restart_required"):
         return payload
 
     updated = dict(payload)
     agent = adapter._get_agent()
-    reload_llm = getattr(agent, "reload_llm_from_config", None) if agent is not None else None
-    if not callable(reload_llm):
+    reload_runtime = getattr(agent, reload_method, None) if agent is not None else None
+    if not callable(reload_runtime):
         updated["runtime_reloaded"] = False
         return updated
 
     try:
-        runtime = reload_llm(Config.load(adapter._get_config_path()))
+        runtime = reload_runtime(Config.load(adapter._get_config_path()))
     except Exception as exc:
-        logger.warning("LLM runtime reload failed after settings change: {}", exc)
+        logger.warning(f"{runtime_label} runtime reload failed after settings change: {{}}", exc)
         updated["runtime_reloaded"] = False
         updated["reload_error"] = str(exc)
         return updated
@@ -30,6 +38,17 @@ def reload_agent_llm_from_config(adapter: Any, payload: dict[str, Any], *, force
     updated["runtime_reloaded"] = True
     updated["runtime"] = adapter._json_safe(runtime)
     return updated
+
+
+def reload_agent_llm_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
+    return _reload_agent_runtime_from_config(
+        adapter,
+        payload,
+        force=force,
+        logger=logger,
+        reload_method="reload_llm_from_config",
+        runtime_label="LLM",
+    )
 
 
 async def reload_channels_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
@@ -92,78 +111,36 @@ def reload_schedule_from_config(adapter: Any, payload: dict[str, Any], *, force:
 
 
 def reload_media_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
-    if not force and not payload.get("restart_required"):
-        return payload
-
-    updated = dict(payload)
-    agent = adapter._get_agent()
-    reload_media = getattr(agent, "reload_media_from_config", None) if agent is not None else None
-    if not callable(reload_media):
-        updated["runtime_reloaded"] = False
-        return updated
-
-    try:
-        runtime = reload_media(Config.load(adapter._get_config_path()))
-    except Exception as exc:
-        logger.warning("Media runtime reload failed after settings change: {}", exc)
-        updated["runtime_reloaded"] = False
-        updated["reload_error"] = str(exc)
-        return updated
-
-    updated["restart_required"] = False
-    updated["runtime_reloaded"] = True
-    updated["runtime"] = adapter._json_safe(runtime)
-    return updated
+    return _reload_agent_runtime_from_config(
+        adapter,
+        payload,
+        force=force,
+        logger=logger,
+        reload_method="reload_media_from_config",
+        runtime_label="Media",
+    )
 
 
 def reload_web_search_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
-    if not force and not payload.get("restart_required"):
-        return payload
-
-    updated = dict(payload)
-    agent = adapter._get_agent()
-    reload_web_search = getattr(agent, "reload_web_search_from_config", None) if agent is not None else None
-    if not callable(reload_web_search):
-        updated["runtime_reloaded"] = False
-        return updated
-
-    try:
-        runtime = reload_web_search(Config.load(adapter._get_config_path()))
-    except Exception as exc:
-        logger.warning("Web search runtime reload failed after settings change: {}", exc)
-        updated["runtime_reloaded"] = False
-        updated["reload_error"] = str(exc)
-        return updated
-
-    updated["restart_required"] = False
-    updated["runtime_reloaded"] = True
-    updated["runtime"] = adapter._json_safe(runtime)
-    return updated
+    return _reload_agent_runtime_from_config(
+        adapter,
+        payload,
+        force=force,
+        logger=logger,
+        reload_method="reload_web_search_from_config",
+        runtime_label="Web search",
+    )
 
 
 def reload_browser_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
-    if not force and not payload.get("restart_required"):
-        return payload
-
-    updated = dict(payload)
-    agent = adapter._get_agent()
-    reload_browser = getattr(agent, "reload_browser_from_config", None) if agent is not None else None
-    if not callable(reload_browser):
-        updated["runtime_reloaded"] = False
-        return updated
-
-    try:
-        runtime = reload_browser(Config.load(adapter._get_config_path()))
-    except Exception as exc:
-        logger.warning("Browser runtime reload failed after settings change: {}", exc)
-        updated["runtime_reloaded"] = False
-        updated["reload_error"] = str(exc)
-        return updated
-
-    updated["restart_required"] = False
-    updated["runtime_reloaded"] = True
-    updated["runtime"] = adapter._json_safe(runtime)
-    return updated
+    return _reload_agent_runtime_from_config(
+        adapter,
+        payload,
+        force=force,
+        logger=logger,
+        reload_method="reload_browser_from_config",
+        runtime_label="Browser",
+    )
 
 
 async def reload_mcp_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
