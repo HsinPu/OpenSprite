@@ -65,12 +65,7 @@ from ..config.mcp_settings import (
 )
 from ..config.media_settings import MediaSettingsService
 from ..config.provider_settings import ProviderSettingsService
-from ..config.schedule_settings import (
-    ScheduleSettingsError,
-    ScheduleSettingsNotFound,
-    ScheduleSettingsService,
-    ScheduleSettingsValidationError,
-)
+from ..config.schedule_settings import ScheduleSettingsService
 from ..cron import CronJob, CronSchedule
 from ..ops import OperationAuditRecord
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
@@ -562,10 +557,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)
-
-    @staticmethod
-    def _raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:
-        web_settings_support.raise_schedule_settings_error(exc)
 
     @staticmethod
     def _raise_mcp_settings_error(exc: MCPSettingsError) -> None:

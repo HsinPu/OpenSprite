@@ -103,7 +103,7 @@ async def handle_settings_schedule(adapter: Any, request: web.Request) -> web.Re
     try:
         payload = adapter._get_schedule_settings().get_schedule()
     except Exception as exc:
-        adapter._raise_schedule_settings_error(exc)
+        web_settings_support.raise_schedule_settings_error(exc)
     return web.json_response(payload)
 
 
@@ -114,7 +114,7 @@ async def handle_settings_schedule_update(adapter: Any, request: web.Request) ->
             default_timezone=adapter._coerce_optional_text(body.get("default_timezone")),
         )
     except Exception as exc:
-        adapter._raise_schedule_settings_error(exc)
+        web_settings_support.raise_schedule_settings_error(exc)
     payload = adapter._reload_schedule_from_config(payload)
     return web.json_response(payload)
 
