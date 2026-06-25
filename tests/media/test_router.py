@@ -78,6 +78,21 @@ def test_media_router_reports_when_ocr_provider_is_unavailable():
     assert result == MediaRouter.OCR_PROVIDER_UNAVAILABLE
 
 
+def test_media_router_can_replace_configured_providers():
+    existing_image = FakeImageProvider()
+    new_ocr = FakeImageProvider()
+    new_video = FakeVideoProvider()
+    router = MediaRouter(image_provider=existing_image, speech_provider=EmptySpeechProvider())
+    next_router = MediaRouter(ocr_provider=new_ocr, video_provider=new_video)
+
+    router.replace_providers(next_router)
+
+    assert router.image_provider is None
+    assert router.ocr_provider is new_ocr
+    assert router.speech_provider is None
+    assert router.video_provider is new_video
+
+
 def test_media_router_uses_video_provider_for_selected_video():
     provider = FakeVideoProvider()
     router = MediaRouter(video_provider=provider)

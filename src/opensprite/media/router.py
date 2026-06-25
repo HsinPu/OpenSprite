@@ -59,6 +59,13 @@ class MediaRouter:
         self.speech_provider = speech_provider
         self.video_provider = video_provider
 
+    def replace_providers(self, router: "MediaRouter") -> None:
+        """Replace all configured providers from another router."""
+        self.image_provider = router.image_provider
+        self.ocr_provider = router.ocr_provider
+        self.speech_provider = router.speech_provider
+        self.video_provider = router.video_provider
+
     async def analyze_image(
         self,
         instruction: str,

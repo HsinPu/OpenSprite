@@ -69,10 +69,7 @@ def reload_agent_media_from_config(agent: Any, config: Config) -> dict[str, Any]
     if agent.media_router is None:
         agent.media_router = media_router
     else:
-        agent.media_router.image_provider = media_router.image_provider
-        agent.media_router.ocr_provider = media_router.ocr_provider
-        agent.media_router.speech_provider = media_router.speech_provider
-        agent.media_router.video_provider = media_router.video_provider
+        agent.media_router.replace_providers(media_router)
 
     logger.info(
         "Media runtime reloaded | vision={} ocr={} speech={} video={}",
