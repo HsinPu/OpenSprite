@@ -19,6 +19,24 @@ from ..config.defaults import (
 from ..utils.url import join_url_path
 
 
+SEARXNG_FALLBACK_ENGINES = (
+    "duckduckgo",
+    "google",
+    "bing",
+    "qwant",
+    "startpage",
+    "wikipedia",
+    "wikidata",
+    "github",
+    "stackoverflow",
+    "reddit",
+    "youtube",
+    "arxiv",
+    "semantic scholar",
+)
+SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
+
+
 def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
     if value is None or value == "":
         return list(default or [])
@@ -181,7 +199,13 @@ def searxng_options_payload(config_payload: dict[str, Any], *, url: str) -> dict
     return {"url": url, "engines": engines, "categories": categories, "fallback": False, "warning": ""}
 
 
-def fallback_searxng_options_payload(*, url: str, warning: str, fallback_engines: tuple[str, ...], fallback_categories: tuple[str, ...]) -> dict[str, Any]:
+def fallback_searxng_options_payload(
+    *,
+    url: str,
+    warning: str,
+    fallback_engines: tuple[str, ...] = SEARXNG_FALLBACK_ENGINES,
+    fallback_categories: tuple[str, ...] = SEARXNG_FALLBACK_CATEGORIES,
+) -> dict[str, Any]:
     return {
         "url": url,
         "engines": [{"id": engine, "label": engine, "shortcut": "", "categories": [], "enabled": None} for engine in fallback_engines],

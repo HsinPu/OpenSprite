@@ -18,6 +18,9 @@ from ..utils.log import logger, setup_log
 from . import web_settings_coercion, web_settings_payloads, web_settings_support
 
 
+SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
+
+
 def _browser_payload(adapter: Any, config: Config) -> dict[str, Any]:
     return web_settings_payloads.browser_payload(
         config,
@@ -38,18 +41,18 @@ async def handle_settings_search_searxng_options(adapter: Any, request: web.Requ
     try:
         async with httpx.AsyncClient(proxy=search.proxy) as client:
             response = await client.get(
-                adapter._searxng_config_url(searxng_url),
-                headers={"Accept": "application/json", "User-Agent": adapter.SEARXNG_OPTIONS_USER_AGENT},
+                web_settings_coercion.searxng_config_url(searxng_url),
+                headers={"Accept": "application/json", "User-Agent": SEARXNG_OPTIONS_USER_AGENT},
                 timeout=10.0,
             )
             response.raise_for_status()
             payload = response.json()
     except Exception as exc:
         logger.warning("SearXNG options metadata unavailable | url={} error={}", searxng_url, exc)
-        return web.json_response({"searxng": adapter._fallback_searxng_options_payload(url=searxng_url, warning=f"Unable to load SearXNG /config metadata: {exc}")})
+        return web.json_response({"searxng": web_settings_coercion.fallback_searxng_options_payload(url=searxng_url, warning=f"Unable to load SearXNG /config metadata: {exc}")})
     if not isinstance(payload, dict):
-        return web.json_response({"searxng": adapter._fallback_searxng_options_payload(url=searxng_url, warning="SearXNG /config response was not a JSON object.")})
-    return web.json_response({"searxng": adapter._searxng_options_payload(payload, url=searxng_url)})
+        return web.json_response({"searxng": web_settings_coercion.fallback_searxng_options_payload(url=searxng_url, warning="SearXNG /config response was not a JSON object.")})
+    return web.json_response({"searxng": web_settings_coercion.searxng_options_payload(payload, url=searxng_url)})
 
 
 async def handle_settings_search_update(adapter: Any, request: web.Request) -> web.Response:

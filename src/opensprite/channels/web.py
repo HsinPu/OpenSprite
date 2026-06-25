@@ -65,23 +65,6 @@ from .web_routes import register_web_routes
 class WebAdapter(MessageAdapter):
     """WebSocket adapter for browser-based chat clients."""
 
-    SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
-    SEARXNG_FALLBACK_ENGINES = (
-        "duckduckgo",
-        "google",
-        "bing",
-        "qwant",
-        "startpage",
-        "wikipedia",
-        "wikidata",
-        "github",
-        "stackoverflow",
-        "reddit",
-        "youtube",
-        "arxiv",
-        "semantic scholar",
-    )
-    SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
     DEFAULT_CONFIG = {
         "host": "127.0.0.1",
         "port": 8765,
@@ -367,31 +350,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
         return web_settings_coercion.coerce_text_list(value, field=field, default=default)
-
-    @classmethod
-    def _normalize_searxng_engine_options(cls, engines: Any) -> list[dict[str, Any]]:
-        return web_settings_coercion.normalize_searxng_engine_options(engines)
-
-    @classmethod
-    def _normalize_searxng_category_options(cls, categories: Any) -> list[dict[str, str]]:
-        return web_settings_coercion.normalize_searxng_category_options(categories)
-
-    @classmethod
-    def _searxng_options_payload(cls, config_payload: dict[str, Any], *, url: str) -> dict[str, Any]:
-        return web_settings_coercion.searxng_options_payload(config_payload, url=url)
-
-    @classmethod
-    def _fallback_searxng_options_payload(cls, *, url: str, warning: str) -> dict[str, Any]:
-        return web_settings_coercion.fallback_searxng_options_payload(
-            url=url,
-            warning=warning,
-            fallback_engines=cls.SEARXNG_FALLBACK_ENGINES,
-            fallback_categories=cls.SEARXNG_FALLBACK_CATEGORIES,
-        )
-
-    @staticmethod
-    def _searxng_config_url(searxng_url: str) -> str:
-        return web_settings_coercion.searxng_config_url(searxng_url)
 
     def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
         clear_field = f"clear_{field}"
