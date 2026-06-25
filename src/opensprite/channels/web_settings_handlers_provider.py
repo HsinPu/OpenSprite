@@ -19,6 +19,12 @@ from ..utils.log import logger
 from . import web_settings_reload, web_settings_support
 
 
+def _provider_id_from_request(adapter: Any, request: web.Request) -> str:
+    if (provider_id := adapter._coerce_optional_text(request.match_info.get("provider_id"))) is not None:
+        return provider_id
+    raise web.HTTPBadRequest(text="provider_id is required")
+
+
 async def handle_settings_providers(adapter: Any, request: web.Request) -> web.Response:
     try:
         payload = web_settings_support.get_provider_settings(adapter).list_providers()
@@ -28,9 +34,7 @@ async def handle_settings_providers(adapter: Any, request: web.Request) -> web.R
 
 
 async def handle_settings_provider_connect(adapter: Any, request: web.Request) -> web.Response:
-    provider_id = adapter._coerce_optional_text(request.match_info.get("provider_id"))
-    if provider_id is None:
-        raise web.HTTPBadRequest(text="provider_id is required")
+    provider_id = _provider_id_from_request(adapter, request)
     body = await adapter._read_json_body(request)
     try:
         payload = web_settings_support.get_provider_settings(adapter).connect_provider(
@@ -45,9 +49,7 @@ async def handle_settings_provider_connect(adapter: Any, request: web.Request) -
 
 
 async def handle_settings_provider_disconnect(adapter: Any, request: web.Request) -> web.Response:
-    provider_id = adapter._coerce_optional_text(request.match_info.get("provider_id"))
-    if provider_id is None:
-        raise web.HTTPBadRequest(text="provider_id is required")
+    provider_id = _provider_id_from_request(adapter, request)
     try:
         payload = web_settings_support.get_provider_settings(adapter).disconnect_provider(provider_id)
     except ProviderSettingsError as exc:
@@ -129,9 +131,7 @@ async def handle_settings_credential_default(adapter: Any, request: web.Request)
 
 
 async def handle_settings_provider_credential(adapter: Any, request: web.Request) -> web.Response:
-    provider_id = adapter._coerce_optional_text(request.match_info.get("provider_id"))
-    if provider_id is None:
-        raise web.HTTPBadRequest(text="provider_id is required")
+    provider_id = _provider_id_from_request(adapter, request)
     body = await adapter._read_json_body(request)
     credential_id = adapter._coerce_optional_text(body.get("credential_id"))
     if credential_id is None:
