@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -48,6 +49,13 @@ class CloudBrowserProvider:
 
     def json_auth_headers(self, header_name: str, header_value: str) -> dict[str, str]:
         return {"Content-Type": "application/json", header_name: header_value}
+
+    def cloud_session(self, provider_session_id: str, cdp_url: str, ttl: int) -> CloudBrowserSession:
+        return CloudBrowserSession(
+            provider_session_id=provider_session_id,
+            cdp_url=cdp_url,
+            expires_at=time.monotonic() + ttl,
+        )
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         raise NotImplementedError

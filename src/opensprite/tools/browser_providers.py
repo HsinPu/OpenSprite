@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import time
 from typing import Any
 
 import httpx
@@ -74,11 +73,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         payload = _json_object(response, "Browserbase session response")
         provider_session_id = _required_text(payload, "id", "Browserbase session id")
         cdp_url = _required_text(payload, "connectUrl", "Browserbase CDP URL")
-        return CloudBrowserSession(
-            provider_session_id=provider_session_id,
-            cdp_url=cdp_url,
-            expires_at=time.monotonic() + ttl,
-        )
+        return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
         return await self._close_with_request(
@@ -128,11 +123,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         cdp_url = str(payload.get("cdpUrl") or payload.get("connectUrl") or "").strip()
         if not cdp_url:
             raise BrowserRuntimeError("Browser Use session response did not include cdpUrl or connectUrl.")
-        return CloudBrowserSession(
-            provider_session_id=provider_session_id,
-            cdp_url=cdp_url,
-            expires_at=time.monotonic() + ttl,
-        )
+        return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
         return await self._close_with_request(
@@ -179,11 +170,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         payload = _json_object(response, "Firecrawl browser session response")
         provider_session_id = _required_text(payload, "id", "Firecrawl browser session id")
         cdp_url = _required_text(payload, "cdpUrl", "Firecrawl CDP URL")
-        return CloudBrowserSession(
-            provider_session_id=provider_session_id,
-            cdp_url=cdp_url,
-            expires_at=time.monotonic() + ttl,
-        )
+        return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
         return await self._close_with_request(
