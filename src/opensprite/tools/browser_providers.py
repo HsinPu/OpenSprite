@@ -19,6 +19,7 @@ from .browser_provider_base import BrowserRuntimeError, CloudBrowserProvider, Cl
 class BrowserbaseCloudProvider(CloudBrowserProvider):
     backend = "browserbase"
     display_name = "Browserbase"
+    auth_header_name = "X-BB-API-Key"
 
     def __init__(
         self,
@@ -65,7 +66,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         response = await self._request(
             "POST",
             join_url_path(self.base_url, "/v1/sessions"),
-            headers=self.json_auth_headers("X-BB-API-Key", self.api_key),
+            headers=self.json_api_key_headers(),
             json_body=body,
             timeout=timeout,
             error_prefix="Failed to create Browserbase session",
@@ -80,7 +81,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             provider_session_id,
             "POST",
             join_url_path(self.base_url, f"/v1/sessions/{provider_session_id}"),
-            headers=self.json_auth_headers("X-BB-API-Key", self.api_key),
+            headers=self.json_api_key_headers(),
             json_body={"projectId": self.project_id, "status": "REQUEST_RELEASE"},
             timeout=timeout,
             error_prefix="Failed to close Browserbase session",
@@ -90,6 +91,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
 class BrowserUseCloudProvider(CloudBrowserProvider):
     backend = "browser-use"
     display_name = "Browser Use"
+    auth_header_name = "X-Browser-Use-API-Key"
 
     def __init__(
         self,
@@ -102,9 +104,6 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         self.api_key = _first_text(api_key, os.getenv("BROWSER_USE_API_KEY"))
         self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSER_USE_BASE_URL")), DEFAULT_BROWSER_USE_BASE_URL)
 
-    def _headers(self) -> dict[str, str]:
-        return self.json_auth_headers("X-Browser-Use-API-Key", self.api_key)
-
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Browser Use requires browser_use_api_key or BROWSER_USE_API_KEY.")
@@ -113,7 +112,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         response = await self._request(
             "POST",
             join_url_path(self.base_url, "/browsers"),
-            headers=self._headers(),
+            headers=self.json_api_key_headers(),
             json_body={"timeout": timeout_minutes},
             timeout=timeout,
             error_prefix="Failed to create Browser Use session",
@@ -130,7 +129,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
             provider_session_id,
             "PATCH",
             join_url_path(self.base_url, f"/browsers/{provider_session_id}"),
-            headers=self._headers(),
+            headers=self.json_api_key_headers(),
             json_body={"action": "stop"},
             timeout=timeout,
             error_prefix="Failed to close Browser Use session",
@@ -140,6 +139,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
 class FirecrawlCloudProvider(CloudBrowserProvider):
     backend = "firecrawl"
     display_name = "Firecrawl"
+    auth_header_name = "Authorization"
+    auth_header_prefix = "Bearer "
 
     def __init__(
         self,
@@ -152,9 +153,6 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         self.api_key = _first_text(api_key, os.getenv("FIRECRAWL_API_KEY"))
         self.base_url = _clean_base_url(_first_text(base_url, os.getenv("FIRECRAWL_API_URL")), DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
 
-    def _headers(self) -> dict[str, str]:
-        return self.json_auth_headers("Authorization", f"Bearer {self.api_key}")
-
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Firecrawl browser sessions require firecrawl_api_key or FIRECRAWL_API_KEY.")
@@ -162,7 +160,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         response = await self._request(
             "POST",
             join_url_path(self.base_url, "/v2/browser"),
-            headers=self._headers(),
+            headers=self.json_api_key_headers(),
             json_body={"ttl": ttl},
             timeout=timeout,
             error_prefix="Failed to create Firecrawl browser session",
@@ -177,7 +175,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
             provider_session_id,
             "DELETE",
             join_url_path(self.base_url, f"/v2/browser/{provider_session_id}"),
-            headers=self._headers(),
+            headers=self.json_api_key_headers(),
             timeout=timeout,
             error_prefix="Failed to close Firecrawl browser session",
         )

@@ -27,6 +27,8 @@ class CloudBrowserProvider:
 
     backend = ""
     display_name = "Cloud browser"
+    auth_header_name = ""
+    auth_header_prefix = ""
 
     def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
         self.transport = transport
@@ -49,6 +51,12 @@ class CloudBrowserProvider:
 
     def json_auth_headers(self, header_name: str, header_value: str) -> dict[str, str]:
         return {"Content-Type": "application/json", header_name: header_value}
+
+    def json_api_key_headers(self) -> dict[str, str]:
+        return self.json_auth_headers(
+            self.auth_header_name,
+            f"{self.auth_header_prefix}{getattr(self, 'api_key', '')}",
+        )
 
     def cloud_session(self, provider_session_id: str, cdp_url: str, ttl: int) -> CloudBrowserSession:
         return CloudBrowserSession(
