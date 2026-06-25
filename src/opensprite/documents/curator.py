@@ -37,6 +37,12 @@ from .curator_jobs import (
     SessionRunner,
     SnapshotReader,
 )
+from .curator_scope import (
+    CURATOR_MAINTENANCE_JOB_KEYS,
+    CURATOR_SCOPE_CHOICES,
+    _ordered_maintenance_job_keys,
+    resolve_curator_scope,
+)
 from .document_fingerprints import fingerprint_text_directory
 from .memory import MemoryStore, consolidate
 from .skill_review_prompts import (
@@ -56,27 +62,9 @@ SkillReviewDecider = Callable[["ExecutionResult"], bool]
 LearningRecorder = Callable[[str, str, str, str, str | None, dict[str, Any] | None], None]
 CURATOR_STATE_SCHEMA_VERSION = 1
 CURATOR_HISTORY_LIMIT = 20
-CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile", "active_task")
-CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
 CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
 CURATOR_SLOW_JOB_SECONDS = 10.0
 CURATOR_VERY_SLOW_JOB_SECONDS = 30.0
-def _ordered_maintenance_job_keys(job_keys: tuple[str, ...] | list[str] | set[str]) -> tuple[str, ...]:
-    requested = {str(item or "").strip() for item in job_keys if str(item or "").strip()}
-    return tuple(job_key for job_key in CURATOR_MAINTENANCE_JOB_KEYS if job_key in requested)
-
-
-def resolve_curator_scope(scope: str | None) -> tuple[tuple[str, ...], bool]:
-    normalized = str(scope or "").strip().lower()
-    if not normalized:
-        return CURATOR_MAINTENANCE_JOB_KEYS, True
-    if normalized == "maintenance":
-        return CURATOR_MAINTENANCE_JOB_KEYS, False
-    if normalized == "skills":
-        return (), True
-    if normalized in CURATOR_MAINTENANCE_JOB_KEYS:
-        return (normalized,), False
-    raise ValueError(f"Unknown curator scope: {normalized}")
 
 
 class SkillReviewService:
