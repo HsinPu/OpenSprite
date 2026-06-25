@@ -126,6 +126,5 @@ def create_image_analysis_provider(
 ) -> ImageAnalysisProvider:
     """Create the correct image provider for one configured media provider."""
     provider_id = str(provider or "").strip().lower()
-    if provider_id == "minimax":
-        return MiniMaxImageProvider(api_key=api_key, default_model=default_model, base_url=base_url)
-    return OpenAICompatibleImageProvider(api_key=api_key, default_model=default_model, base_url=base_url)
+    provider_class = {"minimax": MiniMaxImageProvider}.get(provider_id, OpenAICompatibleImageProvider)
+    return provider_class(api_key=api_key, default_model=default_model, base_url=base_url)
