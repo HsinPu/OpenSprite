@@ -34,6 +34,25 @@ function summarizeBrowserInstall(payload, copy) {
 }
 
 export function useBrowserSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
+  async function runBrowserOperation(loadingKey, resultKey, endpoint, summarize, failedNotice, body = null, afterPayload = null) {
+    settingsState[loadingKey] = true;
+    settingsState.browserError = "";
+    settingsState.browserNotice = "";
+    settingsState[resultKey] = null;
+    try {
+      const requestOptions = body ? { method: "POST", body: JSON.stringify(body) } : { method: "POST" };
+      const payload = await requestSettingsJson(endpoint, requestOptions);
+      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
+      settingsState[resultKey] = payload;
+      afterPayload?.(payload);
+      settingsState.browserNotice = summarize(payload, copy);
+    } catch (error) {
+      settingsState.browserError = error?.message || failedNotice;
+    } finally {
+      settingsState[loadingKey] = false;
+    }
+  }
+
   async function loadBrowserSettings() {
     settingsState.browserLoading = true;
     settingsState.browserError = "";
@@ -79,60 +98,38 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
   }
 
   async function runBrowserTest() {
-    settingsState.browserTestLoading = true;
-    settingsState.browserError = "";
-    settingsState.browserNotice = "";
-    settingsState.browserTestResult = null;
-    try {
-      const payload = await requestSettingsJson("/api/settings/browser/test", {
-        method: "POST",
-        body: JSON.stringify({
-          url: settingsState.browserForm.testUrl,
-        }),
-      });
-      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
-      settingsState.browserTestResult = payload;
-      settingsState.browserNotice = summarizeBrowserTest(payload, copy);
-    } catch (error) {
-      settingsState.browserError = error?.message || copy.value.notices.browserTestFailed;
-    } finally {
-      settingsState.browserTestLoading = false;
-    }
+    await runBrowserOperation(
+      "browserTestLoading",
+      "browserTestResult",
+      "/api/settings/browser/test",
+      summarizeBrowserTest,
+      copy.value.notices.browserTestFailed,
+      { url: settingsState.browserForm.testUrl },
+    );
   }
 
   async function runBrowserDoctor() {
-    settingsState.browserDoctorLoading = true;
-    settingsState.browserError = "";
-    settingsState.browserNotice = "";
-    settingsState.browserDoctorResult = null;
-    try {
-      const payload = await requestSettingsJson("/api/settings/browser/doctor", { method: "POST" });
-      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
-      settingsState.browserDoctorResult = payload;
-      settingsState.browserNotice = summarizeBrowserDoctor(payload, copy);
-    } catch (error) {
-      settingsState.browserError = error?.message || copy.value.notices.browserDoctorFailed;
-    } finally {
-      settingsState.browserDoctorLoading = false;
-    }
+    await runBrowserOperation(
+      "browserDoctorLoading",
+      "browserDoctorResult",
+      "/api/settings/browser/doctor",
+      summarizeBrowserDoctor,
+      copy.value.notices.browserDoctorFailed,
+    );
   }
 
   async function runBrowserInstall() {
-    settingsState.browserInstallLoading = true;
-    settingsState.browserError = "";
-    settingsState.browserNotice = "";
-    settingsState.browserInstallResult = null;
-    try {
-      const payload = await requestSettingsJson("/api/settings/browser/install", { method: "POST" });
-      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
-      settingsState.browserInstallResult = payload;
-      settingsState.browserDoctorResult = payload.after ? { ok: payload.ok, browser: payload.browser, runtime: payload.runtime, checks: [payload.after] } : settingsState.browserDoctorResult;
-      settingsState.browserNotice = summarizeBrowserInstall(payload, copy);
-    } catch (error) {
-      settingsState.browserError = error?.message || copy.value.notices.browserInstallFailed;
-    } finally {
-      settingsState.browserInstallLoading = false;
-    }
+    await runBrowserOperation(
+      "browserInstallLoading",
+      "browserInstallResult",
+      "/api/settings/browser/install",
+      summarizeBrowserInstall,
+      copy.value.notices.browserInstallFailed,
+      null,
+      (payload) => {
+        settingsState.browserDoctorResult = payload.after ? { ok: payload.ok, browser: payload.browser, runtime: payload.runtime, checks: [payload.after] } : settingsState.browserDoctorResult;
+      },
+    );
   }
 
   return {
