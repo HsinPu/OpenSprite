@@ -413,14 +413,6 @@ class WebAdapter(MessageAdapter):
     def _coerce_bool(value: Any, *, field: str, default: bool) -> bool:
         return web_settings_coercion.coerce_bool(value, field=field, default=default)
 
-    @classmethod
-    def _coerce_browser_backend(cls, value: Any) -> str:
-        return web_settings_coercion.coerce_browser_backend(
-            value,
-            default_backend=DEFAULT_BROWSER_BACKEND,
-            backends=cls.BROWSER_BACKENDS,
-        )
-
     @staticmethod
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
         return web_settings_coercion.coerce_text_list(value, field=field, default=default)

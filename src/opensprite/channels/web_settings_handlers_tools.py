@@ -81,7 +81,7 @@ async def handle_settings_browser_update(adapter: Any, request: web.Request) -> 
     config = Config.load(config_path)
     browser = config.tools.browser
     browser.enabled = adapter._coerce_bool(body.get("enabled"), field="enabled", default=browser.enabled)
-    browser.backend = adapter._coerce_browser_backend(body.get("backend", browser.backend))
+    browser.backend = web_settings_coercion.coerce_browser_backend(body.get("backend", browser.backend))
     browser.command_timeout = adapter._coerce_positive_int(body.get("command_timeout"), field="command_timeout", default=browser.command_timeout, minimum=1, maximum=600)
     browser.session_timeout = adapter._coerce_positive_int(body.get("session_timeout"), field="session_timeout", default=browser.session_timeout, minimum=1, maximum=86400)
     if "cdp_url" in body:

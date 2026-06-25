@@ -7,6 +7,8 @@ from typing import Any, Callable
 from aiohttp import web
 
 from ..config.defaults import (
+    BROWSER_BACKENDS,
+    DEFAULT_BROWSER_BACKEND,
     DEFAULT_LOG_LEVEL,
     DEFAULT_WEB_SEARCH_FRESHNESS,
     DEFAULT_WEB_SEARCH_PROVIDER,
@@ -90,7 +92,12 @@ def coerce_bool(value: Any, *, field: str, default: bool) -> bool:
     raise web.HTTPBadRequest(text=f"{field} must be a boolean")
 
 
-def coerce_browser_backend(value: Any, *, default_backend: str, backends: tuple[str, ...] | list[str]) -> str:
+def coerce_browser_backend(
+    value: Any,
+    *,
+    default_backend: str = DEFAULT_BROWSER_BACKEND,
+    backends: tuple[str, ...] | list[str] = BROWSER_BACKENDS,
+) -> str:
     backend = str(value or default_backend).strip() or default_backend
     if backend not in backends:
         raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(backends)}")
