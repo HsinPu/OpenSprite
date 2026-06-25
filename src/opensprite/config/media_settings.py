@@ -7,9 +7,11 @@ from typing import Any
 
 from ..auth.credentials import CredentialNotFoundError, resolve_credential
 from .llm_presets import load_llm_presets
-from .provider_settings import (
+from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
+)
+from .provider_settings import (
     get_model_choices,
     get_provider_choices,
     get_provider_preset_id,

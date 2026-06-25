@@ -9,13 +9,13 @@ from aiohttp import web
 from ..auth.credentials import CredentialNotFoundError, CredentialStoreError
 from ..config.media_settings import MediaSettingsService
 from ..config.mcp_settings import MCPSettingsError, MCPSettingsNotFound, MCPSettingsService, MCPSettingsValidationError
-from ..config.provider_settings import (
+from ..config.provider_errors import (
     ProviderSettingsConflict,
     ProviderSettingsError,
     ProviderSettingsNotFound,
-    ProviderSettingsService,
     ProviderSettingsValidationError,
 )
+from ..config.provider_settings import ProviderSettingsService
 from ..config.channel_settings import (
     ChannelSettingsError,
     ChannelSettingsNotFound,

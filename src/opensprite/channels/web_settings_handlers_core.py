@@ -8,7 +8,7 @@ from aiohttp import web
 
 from ..auth.credentials import CredentialStoreError, add_credential, list_credentials, remove_credential, set_capability_default, set_provider_default
 from ..config.channel_settings import ChannelSettingsError
-from ..config.provider_settings import ProviderSettingsError
+from ..config.provider_errors import ProviderSettingsError
 
 
 async def handle_settings_providers(adapter: Any, request: web.Request) -> web.Response:

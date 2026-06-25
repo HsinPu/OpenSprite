@@ -19,6 +19,12 @@ from ..auth.credentials import (
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from ..utils.url import join_url_path
 from .defaults import DEFAULT_LLM_PROVIDERS_FILE
+from .provider_errors import (
+    ProviderSettingsConflict,
+    ProviderSettingsError,
+    ProviderSettingsNotFound,
+    ProviderSettingsValidationError,
+)
 from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
 from .provider_public import (
     public_provider_auth_flags,
@@ -31,22 +37,6 @@ from .schema import Config
 
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
 _OPENROUTER_MODEL_METADATA_CACHE: dict[str, dict[str, Any]] = {}
-
-
-class ProviderSettingsError(Exception):
-    """Base error for provider settings operations."""
-
-
-class ProviderSettingsValidationError(ProviderSettingsError):
-    """Raised when a request is malformed."""
-
-
-class ProviderSettingsNotFound(ProviderSettingsError):
-    """Raised when a provider cannot be found."""
-
-
-class ProviderSettingsConflict(ProviderSettingsError):
-    """Raised when an operation would leave settings inconsistent."""
 
 
 def load_json_dict(path: Path) -> dict[str, Any]:
