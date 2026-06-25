@@ -34,7 +34,7 @@ class CloudBrowserProvider:
         return bool(getattr(self, "api_key", ""))
 
     def status(self) -> dict[str, Any]:
-        return {"configured": self.is_configured()}
+        return self.api_key_status()
 
     def api_key_status(self) -> dict[str, Any]:
         return {
