@@ -10,13 +10,10 @@ from opensprite.config.schema import (
     SearchConfig,
     StorageConfig,
 )
-from opensprite.runtime import (
-    create_search_embedding_provider,
-    create_search_store,
-    should_start_search_queue_worker,
-    start_search_queue_worker,
-    stop_background_task,
-)
+from opensprite.runtime_lifecycle import stop_background_task
+from opensprite.search.embedding_factory import create_search_embedding_provider
+from opensprite.search.queue_worker import should_start_search_queue_worker, start_search_queue_worker
+from opensprite.search.store_factory import create_search_store
 
 
 class FakeSearchStore:

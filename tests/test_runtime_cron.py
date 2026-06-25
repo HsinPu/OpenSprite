@@ -1,6 +1,7 @@
 import asyncio
 
 from opensprite import runtime
+from opensprite.cron.factory import create_cron_manager
 from opensprite.cron.types import CronSchedule
 
 
@@ -103,7 +104,7 @@ def test_runtime_cron_jobs_are_enqueued_through_message_queue(tmp_path):
     async def scenario():
         agent = CronAgent()
         queue = CronQueue()
-        manager = runtime.create_cron_manager(object(), agent, queue)
+        manager = create_cron_manager(object(), agent, queue)
         service = await manager.get_or_create_service("telegram:same-chat")
         job = service.add_job(
             name="quoted-command",

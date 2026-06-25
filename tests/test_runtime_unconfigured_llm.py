@@ -1,8 +1,10 @@
 import asyncio
+import os
 
-from opensprite import runtime
+from opensprite.agent.factory import create_agent
 from opensprite.config import Config, NetworkConfig
 from opensprite.llms import UnconfiguredLLM
+from opensprite.network_environment import apply_network_environment
 
 
 def test_create_agent_uses_fallback_llm_when_unconfigured(tmp_path):
@@ -13,7 +15,7 @@ def test_create_agent_uses_fallback_llm_when_unconfigured(tmp_path):
 
     assert config.is_llm_configured is False
 
-    agent, mq, cron_manager = asyncio.run(runtime.create_agent(config))
+    agent, mq, cron_manager = asyncio.run(create_agent(config))
 
     try:
         assert isinstance(agent.provider, UnconfiguredLLM)
@@ -39,14 +41,14 @@ def test_apply_network_environment_sets_proxy_variables(monkeypatch, tmp_path):
         no_proxy="127.0.0.1,localhost,.internal",
     )
 
-    runtime.apply_network_environment(config)
+    apply_network_environment(config)
 
-    assert runtime.os.environ["HTTP_PROXY"] == "http://proxy.local:8080"
-    assert runtime.os.environ["http_proxy"] == "http://proxy.local:8080"
-    assert runtime.os.environ["HTTPS_PROXY"] == "http://proxy.local:8443"
-    assert runtime.os.environ["https_proxy"] == "http://proxy.local:8443"
-    assert runtime.os.environ["NO_PROXY"] == "127.0.0.1,localhost,.internal"
-    assert runtime.os.environ["no_proxy"] == "127.0.0.1,localhost,.internal"
+    assert os.environ["HTTP_PROXY"] == "http://proxy.local:8080"
+    assert os.environ["http_proxy"] == "http://proxy.local:8080"
+    assert os.environ["HTTPS_PROXY"] == "http://proxy.local:8443"
+    assert os.environ["https_proxy"] == "http://proxy.local:8443"
+    assert os.environ["NO_PROXY"] == "127.0.0.1,localhost,.internal"
+    assert os.environ["no_proxy"] == "127.0.0.1,localhost,.internal"
 
 
 def test_apply_network_environment_preserves_blank_proxy_variables(monkeypatch, tmp_path):
@@ -58,7 +60,7 @@ def test_apply_network_environment_preserves_blank_proxy_variables(monkeypatch, 
     config = Config.from_json(config_path)
     config.network = NetworkConfig(https_proxy="")
 
-    runtime.apply_network_environment(config)
+    apply_network_environment(config)
 
-    assert runtime.os.environ["HTTPS_PROXY"] == "http://old-proxy.local:8443"
-    assert runtime.os.environ["https_proxy"] == "http://old-proxy.local:8443"
+    assert os.environ["HTTPS_PROXY"] == "http://old-proxy.local:8443"
+    assert os.environ["https_proxy"] == "http://old-proxy.local:8443"

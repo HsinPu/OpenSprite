@@ -1,23 +1,12 @@
 """Service runtime for starting the OpenSprite gateway process."""
 
 import asyncio
-import os
 from pathlib import Path
 
-from .agent import AgentLoop
 from .agent.factory import create_agent
-from .config import AgentConfig
-from .cron.factory import create_cron_manager
-from .llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
-from .media.factory import create_media_router
-from .search.embedding_factory import create_search_embedding_provider
-from .search.queue_worker import should_start_search_queue_worker, start_search_queue_worker
-from .search.store_factory import create_search_store
-from .storage.factory import create_storage
-from .bus.dispatcher import MessageQueue
 from .config import Config
-from .llms import UnconfiguredLLM
 from .network_environment import apply_network_environment
+from .search.queue_worker import start_search_queue_worker
 from .runtime_lifecycle import (
     await_shutdown_step,
     install_shutdown_signal_handlers,
