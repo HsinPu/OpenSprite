@@ -124,6 +124,31 @@ class MediaSettingsService:
             return "https://api.minimax.io/v1"
         return base_url
 
+    def _provider_choice_payload(
+        self,
+        provider_id: str,
+        provider: dict[str, Any],
+        presets: Any,
+    ) -> dict[str, Any] | None:
+        if not self._provider_api_key(provider_id, provider, app_home=self.config_path.parent):
+            return None
+        preset_id = get_provider_preset_id(provider_id, provider, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        choices, selected = get_model_choices(
+            str(provider.get("model") or "") or None,
+            model_choices=preset.model_choices if preset else (),
+        )
+        media_models, media_model_source = discover_media_model_choices(preset_id, preset)
+        return {
+            "id": provider_id,
+            "provider": preset_id or provider_id,
+            "name": str(provider.get("name") or "").strip() or (preset.display_name if preset else provider_id),
+            "model": selected or "",
+            "models": choices,
+            "media_models": media_models,
+            "media_model_source": media_model_source,
+        }
+
     def list_media(self) -> dict[str, Any]:
         """Return media model settings without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -131,26 +156,11 @@ class MediaSettingsService:
         provider_choices = []
         for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
             provider = providers.get(provider_id, {})
-            if not isinstance(provider, dict) or not self._provider_api_key(provider_id, provider, app_home=self.config_path.parent):
+            if not isinstance(provider, dict):
                 continue
-            preset_id = get_provider_preset_id(provider_id, provider, presets)
-            preset = presets.providers.get(preset_id) if preset_id else None
-            choices, selected = get_model_choices(
-                str(provider.get("model") or "") or None,
-                model_choices=preset.model_choices if preset else (),
-            )
-            media_models, media_model_source = discover_media_model_choices(preset_id, preset)
-            provider_choices.append(
-                {
-                    "id": provider_id,
-                    "provider": preset_id or provider_id,
-                    "name": str(provider.get("name") or "").strip() or (preset.display_name if preset else provider_id),
-                    "model": selected or "",
-                    "models": choices,
-                    "media_models": media_models,
-                    "media_model_source": media_model_source,
-                }
-            )
+            payload = self._provider_choice_payload(provider_id, provider, presets)
+            if payload:
+                provider_choices.append(payload)
 
         return {
             "sections": {
