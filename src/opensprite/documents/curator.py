@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -39,6 +38,7 @@ from .curator_jobs import (
     SnapshotReader,
 )
 from .curator_prompts import curator_shared_rules
+from .document_fingerprints import fingerprint_text_directory
 from .memory import MemoryStore, consolidate
 from .user_profile import UserProfileConsolidator
 
@@ -89,22 +89,6 @@ def resolve_curator_scope(scope: str | None) -> tuple[tuple[str, ...], bool]:
     if normalized in CURATOR_MAINTENANCE_JOB_KEYS:
         return (normalized,), False
     raise ValueError(f"Unknown curator scope: {normalized}")
-
-
-def fingerprint_text_directory(root: Path | None) -> str:
-    """Return a stable content fingerprint for one directory tree."""
-    directory = Path(root).expanduser().resolve(strict=False) if root is not None else None
-    if directory is None or not directory.is_dir():
-        return ""
-
-    digest = hashlib.sha256()
-    for path in sorted(item for item in directory.rglob("*") if item.is_file()):
-        relative = path.relative_to(directory).as_posix()
-        digest.update(relative.encode("utf-8", errors="replace"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
 
 
 def format_stored_messages_for_transcript(

@@ -68,8 +68,8 @@ from ..documents.curator import (
     RecentSummaryUpdateService,
     SkillReviewService,
     UserProfileUpdateService,
-    fingerprint_text_directory,
 )
+from ..documents.document_fingerprints import fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
 from .execution_support.llm_calls import LlmCallService
 from .execution_support.prompt_budget import PromptBudgetService
