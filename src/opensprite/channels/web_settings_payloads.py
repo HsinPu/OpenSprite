@@ -7,6 +7,11 @@ from typing import Any, Callable
 
 from ..config import Config
 from ..config.defaults import (
+    BROWSER_BACKENDS,
+    DEFAULT_BROWSER_BACKEND,
+    DEFAULT_BROWSER_COMMAND_TIMEOUT,
+    DEFAULT_BROWSER_LAUNCH_ARGS,
+    DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
@@ -46,11 +51,11 @@ def network_payload(
 def browser_payload(
     config: Config,
     *,
-    default_backend: str,
-    default_command_timeout: int,
-    default_session_timeout: int,
-    default_launch_args: str,
-    backends: tuple[str, ...] | list[str],
+    default_backend: str = DEFAULT_BROWSER_BACKEND,
+    default_command_timeout: int = DEFAULT_BROWSER_COMMAND_TIMEOUT,
+    default_session_timeout: int = DEFAULT_BROWSER_SESSION_TIMEOUT,
+    default_launch_args: str = DEFAULT_BROWSER_LAUNCH_ARGS,
+    backends: tuple[str, ...] | list[str] = BROWSER_BACKENDS,
     browser_cloud_status_fn: Callable[[Any], dict[str, Any]],
     browser_runtime_status_fn: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:

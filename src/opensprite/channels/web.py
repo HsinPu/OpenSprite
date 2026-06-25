@@ -28,17 +28,12 @@ from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import Config, MessagesConfig
 from ..config.defaults import (
-    DEFAULT_BROWSER_BACKEND,
-    DEFAULT_BROWSER_COMMAND_TIMEOUT,
-    DEFAULT_BROWSER_LAUNCH_ARGS,
-    DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_CRON_TIMEZONE,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_REASONING_DETAILS,
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
-    BROWSER_BACKENDS as DEFAULT_BROWSER_BACKENDS,
 )
 from ..config.channel_settings import ChannelSettingsService
 from ..config.mcp_settings import MCPSettingsService
@@ -51,7 +46,7 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
 from ..tools.browser import _validate_navigation_url
-from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
+from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
 from ..utils.processes import windows_hidden_process_kwargs
 from ..utils.url import join_url_path
@@ -64,7 +59,6 @@ from . import web_settings_handlers_app
 from . import web_settings_handlers_tools
 from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
-from . import web_settings_payloads
 from .web_routes import register_web_routes
 
 
@@ -88,7 +82,6 @@ class WebAdapter(MessageAdapter):
         "semantic scholar",
     )
     SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
-    BROWSER_BACKENDS = DEFAULT_BROWSER_BACKENDS
     DEFAULT_CONFIG = {
         "host": "127.0.0.1",
         "port": 8765,
@@ -358,19 +351,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
         return web_frontend_runtime.with_browser_diagnostic(result)
-
-    @classmethod
-    def _browser_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.browser_payload(
-            config,
-            default_backend=DEFAULT_BROWSER_BACKEND,
-            default_command_timeout=DEFAULT_BROWSER_COMMAND_TIMEOUT,
-            default_session_timeout=DEFAULT_BROWSER_SESSION_TIMEOUT,
-            default_launch_args=DEFAULT_BROWSER_LAUNCH_ARGS,
-            backends=cls.BROWSER_BACKENDS,
-            browser_cloud_status_fn=browser_cloud_status,
-            browser_runtime_status_fn=cls._browser_runtime_status,
-        )
 
     @staticmethod
     def _coerce_positive_int(value: Any, *, field: str, default: int, minimum: int = 0, maximum: int = 3650) -> int:

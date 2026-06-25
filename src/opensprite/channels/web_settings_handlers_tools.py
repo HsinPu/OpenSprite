@@ -13,9 +13,17 @@ from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
 from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
-from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
+from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
 from . import web_settings_coercion, web_settings_payloads, web_settings_support
+
+
+def _browser_payload(adapter: Any, config: Config) -> dict[str, Any]:
+    return web_settings_payloads.browser_payload(
+        config,
+        browser_cloud_status_fn=browser_cloud_status,
+        browser_runtime_status_fn=adapter._browser_runtime_status,
+    )
 
 
 async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
@@ -72,7 +80,7 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
 
 async def handle_settings_browser(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"browser": adapter._browser_payload(config)})
+    return web.json_response({"browser": _browser_payload(adapter, config)})
 
 
 async def handle_settings_browser_update(adapter: Any, request: web.Request) -> web.Response:
@@ -104,7 +112,7 @@ async def handle_settings_browser_update(adapter: Any, request: web.Request) -> 
         if field in body:
             setattr(browser, field, adapter._coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
     config.save(config_path)
-    payload = {"browser": adapter._browser_payload(config), "restart_required": True}
+    payload = {"browser": _browser_payload(adapter, config), "restart_required": True}
     payload = adapter._reload_browser_from_config(payload)
     return web.json_response(payload)
 
@@ -119,7 +127,7 @@ async def handle_settings_browser_test(adapter: Any, request: web.Request) -> we
         raise web.HTTPBadRequest(text=blocked)
     if not browser.enabled:
         diagnostic = adapter._with_browser_diagnostic({"ok": False, "error": "Browser tools are disabled. Enable and save browser settings before running the manual test."})
-        return web.json_response({"ok": False, "url": url, "backend": browser.backend, "error": diagnostic["error"], "diagnostic_code": diagnostic["diagnostic_code"], "suggestion": diagnostic["suggestion"], "browser": adapter._browser_payload(config)})
+        return web.json_response({"ok": False, "url": url, "backend": browser.backend, "error": diagnostic["error"], "diagnostic_code": diagnostic["diagnostic_code"], "suggestion": diagnostic["suggestion"], "browser": _browser_payload(adapter, config)})
 
     runtime = AgentBrowserRuntime(
         command_timeout=browser.command_timeout,
@@ -144,7 +152,7 @@ async def handle_settings_browser_test(adapter: Any, request: web.Request) -> we
             "suggestion": "" if ok else diagnostic_source.get("suggestion", ""),
             "open": adapter._json_safe(open_result),
             "snapshot": adapter._json_safe(snapshot_result) if snapshot_result is not None else None,
-            "browser": adapter._browser_payload(config),
+            "browser": _browser_payload(adapter, config),
         }
     )
 
@@ -158,7 +166,7 @@ async def handle_settings_browser_doctor(adapter: Any, request: web.Request) -> 
         {"name": "version", "command": "agent-browser --version", **version_result},
         {"name": "doctor", "command": "agent-browser doctor", **doctor_result},
     ]
-    return web.json_response({"ok": all(bool(check.get("ok")) for check in checks), "browser": adapter._browser_payload(config), "runtime": adapter._browser_runtime_status(), "checks": checks})
+    return web.json_response({"ok": all(bool(check.get("ok")) for check in checks), "browser": _browser_payload(adapter, config), "runtime": adapter._browser_runtime_status(), "checks": checks})
 
 
 async def handle_settings_browser_install(adapter: Any, request: web.Request) -> web.Response:
@@ -166,7 +174,7 @@ async def handle_settings_browser_install(adapter: Any, request: web.Request) ->
     browser = config.tools.browser
     before = await adapter._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
     if bool(before.get("ok")):
-        return web.json_response({"ok": True, "installed": False, "already_installed": True, "browser": adapter._browser_payload(config), "runtime": adapter._browser_runtime_status(), "before": before, "install": None, "after": before})
+        return web.json_response({"ok": True, "installed": False, "already_installed": True, "browser": _browser_payload(adapter, config), "runtime": adapter._browser_runtime_status(), "before": before, "install": None, "after": before})
 
     install_result = await adapter._run_browser_install_command(timeout=300)
     after = await adapter._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
@@ -184,7 +192,7 @@ async def handle_settings_browser_install(adapter: Any, request: web.Request) ->
             "installed": install_ok,
             "doctor_warning": sandbox_only_after_install,
             "already_installed": False,
-            "browser": adapter._browser_payload(config),
+            "browser": _browser_payload(adapter, config),
             "runtime": adapter._browser_runtime_status(),
             "before": before,
             "install": install_result,
