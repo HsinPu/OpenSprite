@@ -12,7 +12,7 @@ from ..config.llm_presets import provider_profile_defaults
 from ..llms import ChatMessage
 from ..llms.provider_factory import create_llm
 from ..llms.routed import ModelRoutedProvider
-from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
+from ..llms.runtime_provider import create_provider_llm
 from ..runs.events import (
     SUBAGENT_CANCELLED_EVENT,
     SUBAGENT_COMPLETED_EVENT,
@@ -314,12 +314,10 @@ class SubagentRunService:
                     api_mode=getattr(provider_config, "api_mode", None),
                 )
                 if defaults.api_mode or defaults.auth_type != "api_key":
-                    provider_override = create_llm_from_runtime(
-                        resolve_provider_runtime(
-                            provider_config,
-                            provider_name=defaults.provider_id,
-                            app_home=self._app_home_getter(),
-                        )
+                    provider_override, _ = create_provider_llm(
+                        provider_config,
+                        provider_name=defaults.provider_id,
+                        app_home=self._app_home_getter(),
                     )
                 else:
                     provider_override = create_llm(

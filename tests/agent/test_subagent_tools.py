@@ -1230,7 +1230,7 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
         return routed_provider
 
     monkeypatch.setattr("opensprite.agent.subagent_run.create_llm", fail_create_llm)
-    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm_from_runtime", fake_create_llm_from_runtime)
+    monkeypatch.setattr("opensprite.llms.runtime_provider.create_llm_from_runtime", fake_create_llm_from_runtime)
 
     agent = AgentLoop(
         config=Config.load_agent_template_config(),

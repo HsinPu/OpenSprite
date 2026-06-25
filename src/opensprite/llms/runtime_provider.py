@@ -126,9 +126,23 @@ def create_configured_llm(
 ):
     """Create the active configured LLM and return it with its resolved runtime."""
     cfg = config.llm.get_active()
-    llm_runtime = resolve_provider_runtime(
+    return create_provider_llm(
         cfg,
         provider_name=cfg.provider or config.llm.default or "",
         app_home=config.source_path.parent if config.source_path is not None else fallback_app_home,
+    )
+
+
+def create_provider_llm(
+    provider: ProviderConfig,
+    *,
+    provider_name: str,
+    app_home: str | Path | None = None,
+):
+    """Create an LLM for one resolved provider config and return its runtime metadata."""
+    llm_runtime = resolve_provider_runtime(
+        provider,
+        provider_name=provider_name,
+        app_home=app_home,
     )
     return create_llm_from_runtime(llm_runtime), llm_runtime
