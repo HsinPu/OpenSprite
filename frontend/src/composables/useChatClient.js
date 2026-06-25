@@ -31,6 +31,7 @@ import {
   createSession,
   isLocalDraftSession,
   makeMessage,
+  readStoredDraftSessions,
   writeStoredDraftSessions,
 } from "./chatClientSessions";
 import {
@@ -244,34 +245,6 @@ function summarizeTitle(text) {
     return "New chat";
   }
   return singleLine.length > 30 ? `${singleLine.slice(0, 30)}...` : singleLine;
-}
-
-function normalizeStoredDraftSession(payload) {
-  const externalChatId = String(payload?.externalChatId || "").trim();
-  if (!externalChatId || isExternalChannelSessionId(externalChatId)) {
-    return null;
-  }
-  const session = createSession(externalChatId);
-  session.title = String(payload?.title || "").trim() || "New chat";
-  session.updatedAt = normalizeEventTimestamp(payload?.updatedAt);
-  session.status = {
-    status: "idle",
-    updatedAt: session.updatedAt,
-    metadata: {},
-  };
-  return session;
-}
-
-function readStoredDraftSessions() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.localDraftSessions);
-    const drafts = raw ? JSON.parse(raw) : [];
-    return Array.isArray(drafts)
-      ? drafts.map(normalizeStoredDraftSession).filter(Boolean)
-      : [];
-  } catch {
-    return [];
-  }
 }
 
 function makeLiveEntry(message) {
@@ -910,7 +883,10 @@ export function useChatClient() {
   const initialSession = createSession(
     isExternalChannelSessionId(storedExternalChatId) ? generateExternalChatId() : storedExternalChatId || generateExternalChatId(),
   );
-  const storedDraftSessions = readStoredDraftSessions();
+  const storedDraftSessions = readStoredDraftSessions(
+    STORAGE_KEYS.localDraftSessions,
+    normalizeEventTimestamp,
+  );
   const initialSessionMatchesStoredDraft = storedDraftSessions.some((session) => session.externalChatId === initialSession.externalChatId);
   const initialSessionFromStoredExternalChatId = Boolean(storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId))
     && !initialSessionMatchesStoredDraft;

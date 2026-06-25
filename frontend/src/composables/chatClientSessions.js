@@ -1,4 +1,7 @@
-import { generateExternalChatId } from "./chatClientSessionIds";
+import {
+  generateExternalChatId,
+  isExternalChannelSessionId,
+} from "./chatClientSessionIds";
 
 function randomToken() {
   return Math.random().toString(36).slice(2, 8);
@@ -42,6 +45,36 @@ export function isLocalDraftSession(session) {
     && !session.messages?.length
     && !session.entries?.length
     && !session.runs?.length;
+}
+
+export function normalizeStoredDraftSession(payload, normalizeEventTimestamp) {
+  const externalChatId = String(payload?.externalChatId || "").trim();
+  if (!externalChatId || isExternalChannelSessionId(externalChatId)) {
+    return null;
+  }
+  const session = createSession(externalChatId);
+  session.title = String(payload?.title || "").trim() || "New chat";
+  session.updatedAt = normalizeEventTimestamp(payload?.updatedAt);
+  session.status = {
+    status: "idle",
+    updatedAt: session.updatedAt,
+    metadata: {},
+  };
+  return session;
+}
+
+export function readStoredDraftSessions(storageKey, normalizeEventTimestamp) {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const drafts = raw ? JSON.parse(raw) : [];
+    return Array.isArray(drafts)
+      ? drafts
+          .map((draft) => normalizeStoredDraftSession(draft, normalizeEventTimestamp))
+          .filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function writeStoredDraftSessions(sessions, storageKey, limit) {
