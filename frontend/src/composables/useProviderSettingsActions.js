@@ -26,41 +26,34 @@ export function useProviderSettingsActions({
     }
   }
 
-  async function loadCodexAuthStatus() {
-    settingsState.codexAuthLoading = true;
-    settingsState.codexAuthError = "";
+  async function loadProviderAuthStatus(endpoint, loadingKey, errorKey, stateKey, loadFailedNotice, normalizePayload) {
+    settingsState[loadingKey] = true;
+    settingsState[errorKey] = "";
     try {
-      const payload = await requestSettingsJson("/api/settings/auth/openai-codex");
-      settingsState.codexAuth = {
-        ...settingsState.codexAuth,
-        configured: Boolean(payload.configured),
-        expired: Boolean(payload.expired),
-        expires_at: payload.expires_at || null,
-        account_id: payload.account_id || "",
-        path: payload.path || "",
-      };
+      const payload = await requestSettingsJson(endpoint);
+      settingsState[stateKey] = { ...settingsState[stateKey], ...normalizePayload(payload) };
     } catch (error) {
-      settingsState.codexAuthError = error?.message || copy.value.notices.codexAuthLoadFailed;
+      settingsState[errorKey] = error?.message || loadFailedNotice;
     } finally {
-      settingsState.codexAuthLoading = false;
+      settingsState[loadingKey] = false;
     }
   }
 
+  async function loadCodexAuthStatus() {
+    return loadProviderAuthStatus("/api/settings/auth/openai-codex", "codexAuthLoading", "codexAuthError", "codexAuth", copy.value.notices.codexAuthLoadFailed, (payload) => ({
+      configured: Boolean(payload.configured),
+      expired: Boolean(payload.expired),
+      expires_at: payload.expires_at || null,
+      account_id: payload.account_id || "",
+      path: payload.path || "",
+    }));
+  }
+
   async function loadCopilotAuthStatus() {
-    settingsState.copilotAuthLoading = true;
-    settingsState.copilotAuthError = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/auth/copilot");
-      settingsState.copilotAuth = {
-        ...settingsState.copilotAuth,
-        configured: Boolean(payload.configured),
-        path: payload.path || "",
-      };
-    } catch (error) {
-      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoadFailed;
-    } finally {
-      settingsState.copilotAuthLoading = false;
-    }
+    return loadProviderAuthStatus("/api/settings/auth/copilot", "copilotAuthLoading", "copilotAuthError", "copilotAuth", copy.value.notices.copilotAuthLoadFailed, (payload) => ({
+      configured: Boolean(payload.configured),
+      path: payload.path || "",
+    }));
   }
 
   function beginProviderConnect(provider) {
