@@ -5,6 +5,7 @@ import pytest
 
 from opensprite.config import Config
 from opensprite.config import provider_discovery
+from opensprite.config import provider_public
 from opensprite.config import provider_settings
 from opensprite.config.provider_settings import (
     ProviderSettingsConflict,
@@ -60,10 +61,10 @@ def test_provider_settings_connects_provider_without_leaking_api_key(tmp_path):
 
 
 def test_provider_settings_labels_credential_sources():
-    assert provider_settings.public_credential_source({"credential_id": "cred_1"}, {"id": "cred_1"}) == "explicit"
-    assert provider_settings.public_credential_source({}, {"id": "cred_1", "is_default": True}) == "provider_default"
-    assert provider_settings.public_credential_source({}, {"id": "cred_1", "is_default": False}) == "priority"
-    assert provider_settings.public_credential_source({}, None) == ""
+    assert provider_public.public_credential_source({"credential_id": "cred_1"}, {"id": "cred_1"}) == "explicit"
+    assert provider_public.public_credential_source({}, {"id": "cred_1", "is_default": True}) == "provider_default"
+    assert provider_public.public_credential_source({}, {"id": "cred_1", "is_default": False}) == "priority"
+    assert provider_public.public_credential_source({}, None) == ""
 
 
 def test_provider_settings_allows_multiple_connections_for_same_provider(tmp_path):

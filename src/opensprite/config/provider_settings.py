@@ -24,7 +24,6 @@ from .provider_discovery import discover_provider_models
 from .provider_public import (
     public_available_provider,
     public_connected_provider,
-    public_credential_source,
     public_model_provider,
 )
 from .provider_state import (
