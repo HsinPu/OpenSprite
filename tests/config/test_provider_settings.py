@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from opensprite.config import Config
+from opensprite.config import provider_discovery
 from opensprite.config import provider_settings
 from opensprite.config.provider_settings import (
     ProviderSettingsConflict,
@@ -266,7 +267,7 @@ def test_provider_settings_includes_openrouter_context_metadata(tmp_path, monkey
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
     monkeypatch.setattr(provider_settings, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     service.connect_provider("openrouter", api_key="router-key")
     models = service.list_models()
@@ -293,7 +294,7 @@ def test_provider_settings_select_model_persists_discovered_context_window(tmp_p
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
     monkeypatch.setattr(provider_settings, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     service.connect_provider("openrouter", api_key="router-key")
     service.list_models()
@@ -334,7 +335,7 @@ def test_fetch_openai_compatible_models_probes_v1_fallback(monkeypatch):
         return {"data": []}
 
     monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     models = provider_settings.fetch_openai_compatible_models("secret", "https://example.test")
 
@@ -355,7 +356,7 @@ def test_fetch_openai_compatible_models_accepts_models_endpoint(monkeypatch):
         return {"data": []}
 
     monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     models = provider_settings.fetch_openai_compatible_models("", "https://example.test/models")
 
@@ -379,7 +380,7 @@ def test_fetch_codex_models_filters_and_sorts(monkeypatch):
         }
 
     monkeypatch.setattr(provider_settings, "fetch_codex_models", _ORIGINAL_FETCH_CODEX_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
     monkeypatch.setattr(
         "opensprite.auth.codex.load_or_refresh_codex_token",
         lambda app_home=None: SimpleNamespace(access_token="codex-token"),
@@ -401,7 +402,7 @@ def test_fetch_openrouter_image_models_filters_by_modality(monkeypatch):
         }
 
     monkeypatch.setattr(provider_settings, "fetch_openrouter_image_models", _ORIGINAL_FETCH_OPENROUTER_IMAGE_MODELS)
-    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     assert provider_settings.fetch_openrouter_image_models() == ["vision-one", "vision-two"]
 

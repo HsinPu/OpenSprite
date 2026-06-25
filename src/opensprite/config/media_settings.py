@@ -17,7 +17,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_settings import fetch_openrouter_image_models
+from .provider_discovery import fetch_openrouter_image_models
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
 
