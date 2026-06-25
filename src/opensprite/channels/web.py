@@ -336,10 +336,6 @@ class WebAdapter(MessageAdapter):
         return web_frontend_runtime.with_browser_diagnostic(result)
 
     @staticmethod
-    def _coerce_bool(value: Any, *, field: str, default: bool) -> bool:
-        return web_settings_coercion.coerce_bool(value, field=field, default=default)
-
-    @staticmethod
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
         return web_settings_coercion.coerce_text_list(value, field=field, default=default)
 

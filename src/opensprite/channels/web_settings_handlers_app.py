@@ -14,7 +14,7 @@ from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
 from ..network_environment import apply_network_environment
 from ..utils.log import logger
-from . import web_settings_payloads, web_settings_support
+from . import web_settings_coercion, web_settings_payloads, web_settings_support
 
 
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
@@ -33,7 +33,7 @@ async def handle_settings_media_update(adapter: Any, request: web.Request) -> we
     try:
         payload = adapter._get_media_settings().update_media(
             category,
-            enabled=adapter._coerce_bool(body.get("enabled"), field="enabled", default=False),
+            enabled=web_settings_coercion.coerce_bool(body.get("enabled"), field="enabled", default=False),
             provider_id=adapter._coerce_optional_text(body.get("provider_id")),
             model=adapter._coerce_optional_text(body.get("model")),
         )
@@ -125,7 +125,7 @@ async def restart_gateway_after_response(config_path: Path | None = None) -> Non
 
 async def handle_settings_update_apply(adapter: Any, request: web.Request) -> web.Response:
     body = await adapter._read_json_body(request)
-    restart = adapter._coerce_bool(body.get("restart"), field="restart", default=True)
+    restart = web_settings_coercion.coerce_bool(body.get("restart"), field="restart", default=True)
     try:
         result = await asyncio.to_thread(update_cli.update_checkout, branch="main", install_dev=False)
     except update_cli.UpdateError as exc:
