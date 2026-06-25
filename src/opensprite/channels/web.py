@@ -1008,34 +1008,6 @@ class WebAdapter(MessageAdapter):
     async def _handle_settings_model_select(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_model_select(self, request)
 
-    def _build_update_status_payload(self) -> dict[str, Any]:
-        try:
-            root = update_cli.find_project_root()
-            current_rev = update_cli._git_output(["rev-parse", "HEAD"], cwd=root)
-            branch = update_cli._git_output(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root)
-            dirty = bool(update_cli._git_output(["status", "--porcelain"], cwd=root))
-            commits_behind = update_cli.check_update_available(project_root=root, branch=branch)
-            return {
-                "ok": True,
-                "supported": True,
-                "project_root": str(root),
-                "branch": branch,
-                "current_rev": current_rev,
-                "current_rev_short": current_rev[:7],
-                "dirty": dirty,
-                "commits_behind": commits_behind,
-                "update_available": commits_behind > 0,
-            }
-        except Exception as exc:
-            return {
-                "ok": False,
-                "supported": False,
-                "error": str(exc),
-                "dirty": False,
-                "commits_behind": 0,
-                "update_available": False,
-            }
-
     async def _handle_settings_update_status(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_update_status(self, request)
 

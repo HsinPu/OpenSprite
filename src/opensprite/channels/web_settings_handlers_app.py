@@ -61,8 +61,37 @@ async def handle_settings_model_select(adapter: Any, request: web.Request) -> we
     return web.json_response(payload)
 
 
+def build_update_status_payload() -> dict[str, Any]:
+    try:
+        root = update_cli.find_project_root()
+        current_rev = update_cli._git_output(["rev-parse", "HEAD"], cwd=root)
+        branch = update_cli._git_output(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root)
+        dirty = bool(update_cli._git_output(["status", "--porcelain"], cwd=root))
+        commits_behind = update_cli.check_update_available(project_root=root, branch=branch)
+        return {
+            "ok": True,
+            "supported": True,
+            "project_root": str(root),
+            "branch": branch,
+            "current_rev": current_rev,
+            "current_rev_short": current_rev[:7],
+            "dirty": dirty,
+            "commits_behind": commits_behind,
+            "update_available": commits_behind > 0,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "supported": False,
+            "error": str(exc),
+            "dirty": False,
+            "commits_behind": 0,
+            "update_available": False,
+        }
+
+
 async def handle_settings_update_status(adapter: Any, request: web.Request) -> web.Response:
-    payload = await asyncio.to_thread(adapter._build_update_status_payload)
+    payload = await asyncio.to_thread(build_update_status_payload)
     return web.json_response(payload)
 
 
