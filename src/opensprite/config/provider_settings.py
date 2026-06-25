@@ -6,17 +6,13 @@ from pathlib import Path
 from typing import Any
 
 from ..auth.credentials import set_provider_default
-from .defaults import DEFAULT_LLM_PROVIDERS_FILE
-from .json_files import write_json_dict
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     make_provider_instance_id,
 )
-from .provider_errors import (
-    ProviderSettingsNotFound,
-    ProviderSettingsValidationError,
-)
+from .provider_errors import ProviderSettingsNotFound
 from .provider_listing import build_model_listing, build_provider_listing
+from .provider_persistence import persist_llm_provider_state
 from .provider_public import (
     public_connected_provider,
 )
@@ -29,7 +25,6 @@ from .provider_state import (
     provider_mutation_data,
     select_model_in_config,
 )
-from .schema import Config
 
 
 class ProviderSettingsService:
@@ -40,16 +35,6 @@ class ProviderSettingsService:
 
     def _load_state(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
         return load_provider_config_state(self.config_path)
-
-    def _persist_llm_state(self, main_data: dict[str, Any], providers: dict[str, Any]) -> None:
-        llm_data = main_data.setdefault("llm", {})
-        if not isinstance(llm_data, dict):
-            raise ProviderSettingsValidationError("llm config must be an object")
-        llm_data.pop("providers", None)
-        llm_data.setdefault("providers_file", DEFAULT_LLM_PROVIDERS_FILE)
-        write_json_dict(self.config_path, main_data)
-        Config.ensure_llm_providers_file(self.config_path, main_data)
-        Config.write_llm_providers_file(self.config_path, providers, llm_data)
 
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
@@ -79,7 +64,7 @@ class ProviderSettingsService:
             base_provider_id=provider_id,
             display_name=name,
         )
-        self._persist_llm_state(main_data, providers)
+        persist_llm_provider_state(self.config_path, main_data, providers)
         preset = get_provider_profile(provider_id)
         if preset is None:
             raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
@@ -106,7 +91,7 @@ class ProviderSettingsService:
         providers.pop(provider_id, None)
         if was_default:
             clear_default_provider(main_data, providers)
-        self._persist_llm_state(main_data, providers)
+        persist_llm_provider_state(self.config_path, main_data, providers)
         return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
 
     def set_provider_credential(self, provider_id: str, credential_id: str) -> dict[str, Any]:
@@ -125,7 +110,7 @@ class ProviderSettingsService:
         )
         provider["credential_id"] = credential_id
         provider["api_key"] = ""
-        self._persist_llm_state(main_data, providers)
+        persist_llm_provider_state(self.config_path, main_data, providers)
         return {
             "ok": True,
             "provider_id": provider_id,
@@ -153,7 +138,7 @@ class ProviderSettingsService:
         if restart_required:
             clear_default_provider(main_data, providers)
         if removed_provider_ids:
-            self._persist_llm_state(main_data, providers)
+            persist_llm_provider_state(self.config_path, main_data, providers)
         return {
             "removed_provider_ids": removed_provider_ids,
             "restart_required": restart_required,
@@ -179,7 +164,7 @@ class ProviderSettingsService:
         provider = select_model_in_config(config_data, provider_id, model, reasoning_effort=reasoning_effort)
         llm_data = main_data.setdefault("llm", {})
         llm_data["default"] = provider_id
-        self._persist_llm_state(main_data, providers)
+        persist_llm_provider_state(self.config_path, main_data, providers)
         return {
             "ok": True,
             "provider_id": provider_id,
