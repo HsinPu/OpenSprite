@@ -11,8 +11,7 @@ from ..config.defaults import (
     DEFAULT_BROWSERBASE_BASE_URL,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
 )
-from ..utils.url import join_url_path
-from .browser_provider_base import BrowserRuntimeError, CloudBrowserProvider, CloudBrowserSession
+from .browser_provider_base import CloudBrowserProvider
 
 
 class BrowserbaseCloudProvider(CloudBrowserProvider):
@@ -26,6 +25,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
     api_key_config_field = "browserbase_api_key"
     project_id_config_field = "browserbase_project_id"
     base_url_config_field = "browserbase_base_url"
+    configured_error = "Browserbase requires browserbase_api_key and browserbase_project_id or BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID."
+    create_request = ("POST", "/v1/sessions", "Failed to create Browserbase session")
+    create_cdp_url_keys = ("connectUrl",)
     close_request = ("POST", "/v1/sessions/{provider_session_id}", "Failed to close Browserbase session")
 
     def __init__(
@@ -74,10 +76,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
     def close_session_json_body(self) -> dict[str, Any] | None:
         return {"projectId": self.project_id, "status": "REQUEST_RELEASE"}
 
-    async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
-        if not self.is_configured():
-            raise BrowserRuntimeError("Browserbase requires browserbase_api_key and browserbase_project_id or BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.")
-        ttl = self.session_timeout_seconds(session_timeout)
+    def create_session_json_body(self, ttl: int) -> dict[str, Any] | None:
         body: dict[str, Any] = {
             "projectId": self.project_id,
             "timeout": ttl * 1000,
@@ -88,18 +87,8 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             body["proxies"] = True
         if self.advanced_stealth:
             body["browserSettings"] = {"advancedStealth": True}
-        response = await self._request(
-            "POST",
-            join_url_path(self.base_url, "/v1/sessions"),
-            headers=self.json_api_key_headers(),
-            json_body=body,
-            timeout=timeout,
-            error_prefix="Failed to create Browserbase session",
-        )
-        payload = self._json_object(response, "Browserbase session response")
-        provider_session_id = self._required_text(payload, "id", "Browserbase session id")
-        cdp_url = self._required_text(payload, "connectUrl", "Browserbase CDP URL")
-        return self.cloud_session(provider_session_id, cdp_url, ttl)
+        return body
+
 
 class BrowserUseCloudProvider(CloudBrowserProvider):
     backend = "browser-use"
@@ -110,28 +99,17 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     default_base_url = DEFAULT_BROWSER_USE_BASE_URL
     api_key_config_field = "browser_use_api_key"
     base_url_config_field = "browser_use_base_url"
+    configured_error = "Browser Use requires browser_use_api_key or BROWSER_USE_API_KEY."
+    create_request = ("POST", "/browsers", "Failed to create Browser Use session")
+    create_cdp_url_keys = ("cdpUrl", "connectUrl")
+    create_cdp_url_missing_error = "Browser Use session response did not include cdpUrl or connectUrl."
     close_request = ("PATCH", "/browsers/{provider_session_id}", "Failed to close Browser Use session")
     close_json_body = {"action": "stop"}
 
-    async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
-        if not self.is_configured():
-            raise BrowserRuntimeError("Browser Use requires browser_use_api_key or BROWSER_USE_API_KEY.")
-        ttl = self.session_timeout_seconds(session_timeout)
+    def create_session_json_body(self, ttl: int) -> dict[str, Any] | None:
         timeout_minutes = max(1, (ttl + 59) // 60)
-        response = await self._request(
-            "POST",
-            join_url_path(self.base_url, "/browsers"),
-            headers=self.json_api_key_headers(),
-            json_body={"timeout": timeout_minutes},
-            timeout=timeout,
-            error_prefix="Failed to create Browser Use session",
-        )
-        payload = self._json_object(response, "Browser Use session response")
-        provider_session_id = self._required_text(payload, "id", "Browser Use session id")
-        cdp_url = str(payload.get("cdpUrl") or payload.get("connectUrl") or "").strip()
-        if not cdp_url:
-            raise BrowserRuntimeError("Browser Use session response did not include cdpUrl or connectUrl.")
-        return self.cloud_session(provider_session_id, cdp_url, ttl)
+        return {"timeout": timeout_minutes}
+
 
 class FirecrawlCloudProvider(CloudBrowserProvider):
     backend = "firecrawl"
@@ -143,21 +121,11 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     default_base_url = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
     api_key_config_field = "firecrawl_api_key"
     base_url_config_field = "firecrawl_base_url"
+    configured_error = "Firecrawl browser sessions require firecrawl_api_key or FIRECRAWL_API_KEY."
+    create_request = ("POST", "/v2/browser", "Failed to create Firecrawl browser session")
+    create_response_label = "Firecrawl browser session response"
+    create_session_id_label = "Firecrawl browser session id"
     close_request = ("DELETE", "/v2/browser/{provider_session_id}", "Failed to close Firecrawl browser session")
 
-    async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
-        if not self.is_configured():
-            raise BrowserRuntimeError("Firecrawl browser sessions require firecrawl_api_key or FIRECRAWL_API_KEY.")
-        ttl = self.session_timeout_seconds(session_timeout)
-        response = await self._request(
-            "POST",
-            join_url_path(self.base_url, "/v2/browser"),
-            headers=self.json_api_key_headers(),
-            json_body={"ttl": ttl},
-            timeout=timeout,
-            error_prefix="Failed to create Firecrawl browser session",
-        )
-        payload = self._json_object(response, "Firecrawl browser session response")
-        provider_session_id = self._required_text(payload, "id", "Firecrawl browser session id")
-        cdp_url = self._required_text(payload, "cdpUrl", "Firecrawl CDP URL")
-        return self.cloud_session(provider_session_id, cdp_url, ttl)
+    def create_session_json_body(self, ttl: int) -> dict[str, Any] | None:
+        return {"ttl": ttl}

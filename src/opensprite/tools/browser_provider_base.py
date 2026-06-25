@@ -131,8 +131,47 @@ class CloudBrowserProvider:
             raise BrowserRuntimeError(f"{label} was missing from provider response.")
         return value
 
+    def create_session_json_body(self, ttl: int) -> dict[str, Any] | None:
+        return None
+
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
-        raise NotImplementedError
+        del session_key
+        create_request = getattr(self, "create_request", None)
+        if create_request is None:
+            raise NotImplementedError
+        if not self.is_configured():
+            configured_error = getattr(self, "configured_error", "")
+            raise BrowserRuntimeError(configured_error or f"{self.display_name} is not configured.")
+        ttl = self.session_timeout_seconds(session_timeout)
+        method, path, error_prefix = create_request
+        response = await self._request(
+            method,
+            join_url_path(self.base_url, path),
+            headers=self.json_api_key_headers(),
+            json_body=self.create_session_json_body(ttl),
+            timeout=timeout,
+            error_prefix=error_prefix,
+        )
+        response_label = getattr(self, "create_response_label", "") or f"{self.display_name} session response"
+        provider_session_id_label = getattr(self, "create_session_id_label", "") or f"{self.display_name} session id"
+        cdp_url_label = f"{self.display_name} CDP URL"
+        payload = self._json_object(response, response_label)
+        provider_session_id = self._required_text(payload, "id", provider_session_id_label)
+        create_cdp_url_keys = getattr(self, "create_cdp_url_keys", ("cdpUrl",))
+        cdp_url = next(
+            (
+                value
+                for key in create_cdp_url_keys
+                if (value := str(payload.get(key) or "").strip())
+            ),
+            "",
+        )
+        if not cdp_url:
+            missing_error = getattr(self, "create_cdp_url_missing_error", "")
+            raise BrowserRuntimeError(
+                missing_error or f"{cdp_url_label} was missing from provider response."
+            )
+        return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     def close_session_json_body(self) -> dict[str, Any] | None:
         return self.close_json_body
