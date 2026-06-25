@@ -15,7 +15,7 @@ def public_provider_display_name(
     preset: ProviderPreset | None = None,
     provider: dict[str, Any] | None = None,
 ) -> str:
-    configured_name = str((provider or {}).get("name", "") or "").strip()
+    configured_name = str((provider or {}).get("name") or "").strip()
     if configured_name:
         return configured_name
     if preset and preset.display_name:
@@ -138,9 +138,7 @@ def public_available_provider(
         **public_provider_auth_flags(preset.auth_type),
         **public_provider_profile(preset),
         "model_choices": list(preset.model_choices),
-        "connected_count": sum(
-            1 for provider in connected if provider.get("provider") == provider_id
-        ),
+        "connected_count": sum(1 for provider in connected if provider.get("provider") == provider_id),
     }
 
 
