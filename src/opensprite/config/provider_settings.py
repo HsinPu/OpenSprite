@@ -20,14 +20,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_discovery import (
-    discover_provider_models,
-    fetch_codex_models,
-    fetch_copilot_provider_models,
-    fetch_openai_compatible_models,
-    fetch_openrouter_image_models,
-    fetch_openrouter_models,
-)
+from .provider_discovery import discover_provider_models
 from .provider_public import (
     public_available_provider,
     public_connected_provider,

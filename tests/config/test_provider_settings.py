@@ -12,11 +12,9 @@ from opensprite.config.provider_settings import (
     ProviderSettingsValidationError,
 )
 
-_ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_settings.fetch_openai_compatible_models
-_ORIGINAL_FETCH_CODEX_MODELS = provider_settings.fetch_codex_models
-_ORIGINAL_FETCH_OPENROUTER_MODELS = provider_settings.fetch_openrouter_models
-_ORIGINAL_FETCH_OPENROUTER_IMAGE_MODELS = provider_settings.fetch_openrouter_image_models
-_ORIGINAL_FETCH_COPILOT_PROVIDER_MODELS = provider_settings.fetch_copilot_provider_models
+_ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_discovery.fetch_openai_compatible_models
+_ORIGINAL_FETCH_CODEX_MODELS = provider_discovery.fetch_codex_models
+_ORIGINAL_FETCH_OPENROUTER_MODELS = provider_discovery.fetch_openrouter_models
 
 
 @pytest.fixture(autouse=True)
@@ -334,10 +332,10 @@ def test_fetch_openai_compatible_models_probes_v1_fallback(monkeypatch):
             return {"data": [{"id": "first-live"}, {"id": ""}, {"id": "first-live"}, {"id": "second-live"}]}
         return {"data": []}
 
-    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
-    models = provider_settings.fetch_openai_compatible_models("secret", "https://example.test")
+    models = provider_discovery.fetch_openai_compatible_models("secret", "https://example.test")
 
     assert models == ["first-live", "second-live"]
     assert seen_urls == [
@@ -355,10 +353,10 @@ def test_fetch_openai_compatible_models_accepts_models_endpoint(monkeypatch):
             return {"data": [{"id": "fallback-live"}]}
         return {"data": []}
 
-    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
-    models = provider_settings.fetch_openai_compatible_models("", "https://example.test/models")
+    models = provider_discovery.fetch_openai_compatible_models("", "https://example.test/models")
 
     assert models == ["fallback-live"]
     assert seen_urls == [
@@ -379,14 +377,14 @@ def test_fetch_codex_models_filters_and_sorts(monkeypatch):
             ]
         }
 
-    monkeypatch.setattr(provider_settings, "fetch_codex_models", _ORIGINAL_FETCH_CODEX_MODELS)
+    monkeypatch.setattr(provider_discovery, "fetch_codex_models", _ORIGINAL_FETCH_CODEX_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
     monkeypatch.setattr(
         "opensprite.auth.codex.load_or_refresh_codex_token",
         lambda app_home=None: SimpleNamespace(access_token="codex-token"),
     )
 
-    assert provider_settings.fetch_codex_models(object()) == ["earlier", "later"]
+    assert provider_discovery.fetch_codex_models(object()) == ["earlier", "later"]
 
 
 def test_fetch_openrouter_image_models_filters_by_modality(monkeypatch):
@@ -401,10 +399,9 @@ def test_fetch_openrouter_image_models_filters_by_modality(monkeypatch):
             ]
         }
 
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_image_models", _ORIGINAL_FETCH_OPENROUTER_IMAGE_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
-    assert provider_settings.fetch_openrouter_image_models() == ["vision-one", "vision-two"]
+    assert provider_discovery.fetch_openrouter_image_models() == ["vision-one", "vision-two"]
 
 
 def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_path):
