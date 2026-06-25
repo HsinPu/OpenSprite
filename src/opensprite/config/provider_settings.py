@@ -736,6 +736,13 @@ class ProviderSettingsService:
             raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
         return provider, preset_id, preset
 
+    @staticmethod
+    def _clear_default_provider(main_data: dict[str, Any], providers: dict[str, Any]) -> None:
+        main_data.setdefault("llm", {})["default"] = None
+        for item in providers.values():
+            if isinstance(item, dict):
+                item["enabled"] = False
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -810,11 +817,7 @@ class ProviderSettingsService:
         was_default = provider_id == loaded.llm.default
         providers.pop(provider_id, None)
         if was_default:
-            llm_data = main_data.setdefault("llm", {})
-            llm_data["default"] = None
-            for item in providers.values():
-                if isinstance(item, dict):
-                    item["enabled"] = False
+            self._clear_default_provider(main_data, providers)
         self._persist_llm_state(main_data, providers)
         return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
 
@@ -856,10 +859,7 @@ class ProviderSettingsService:
             removed_provider_ids.append(provider_id)
         restart_required = bool(loaded.llm.default in removed_provider_ids)
         if restart_required:
-            main_data.setdefault("llm", {})["default"] = None
-            for item in providers.values():
-                if isinstance(item, dict):
-                    item["enabled"] = False
+            self._clear_default_provider(main_data, providers)
         if removed_provider_ids:
             self._persist_llm_state(main_data, providers)
         return {
