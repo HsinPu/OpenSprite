@@ -21,8 +21,8 @@ from .provider_state import (
     connect_provider_in_config,
     connected_provider_or_raise,
     load_provider_config_state,
-    provider_references_credential,
     provider_mutation_data,
+    remove_provider_credential_references,
     select_model_in_config,
 )
 
@@ -121,22 +121,13 @@ class ProviderSettingsService:
     def remove_credential_references(self, provider: str, credential_id: str) -> dict[str, Any]:
         """Remove provider instances that reference a deleted credential."""
         main_data, providers, loaded = self._load_state()
-        removed_provider_ids: list[str] = []
-        for provider_id, item in list(providers.items()):
-            if not isinstance(item, dict):
-                continue
-            if not provider_references_credential(
-                provider_id,
-                item,
-                credential_provider=provider,
-                credential_id=credential_id,
-            ):
-                continue
-            providers.pop(provider_id, None)
-            removed_provider_ids.append(provider_id)
-        restart_required = bool(loaded.llm.default in removed_provider_ids)
-        if restart_required:
-            clear_default_provider(main_data, providers)
+        removed_provider_ids, restart_required = remove_provider_credential_references(
+            main_data,
+            providers,
+            loaded.llm.default,
+            credential_provider=provider,
+            credential_id=credential_id,
+        )
         if removed_provider_ids:
             persist_llm_provider_state(self.config_path, main_data, providers)
         return {

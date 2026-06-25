@@ -222,6 +222,35 @@ def provider_references_credential(
     )
 
 
+def remove_provider_credential_references(
+    main_data: dict[str, Any],
+    providers: dict[str, Any],
+    default_provider: str | None,
+    *,
+    credential_provider: str,
+    credential_id: str,
+) -> tuple[list[str], bool]:
+    """Remove provider entries that point at a deleted stored credential."""
+    removed_provider_ids: list[str] = []
+    for provider_id, item in list(providers.items()):
+        if not isinstance(item, dict):
+            continue
+        if not provider_references_credential(
+            provider_id,
+            item,
+            credential_provider=credential_provider,
+            credential_id=credential_id,
+        ):
+            continue
+        providers.pop(provider_id, None)
+        removed_provider_ids.append(provider_id)
+
+    restart_required = bool(default_provider in removed_provider_ids)
+    if restart_required:
+        clear_default_provider(main_data, providers)
+    return removed_provider_ids, restart_required
+
+
 def provider_preset_entry(provider_id: str, provider: Any, presets: Any) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
     provider_data = provider if isinstance(provider, dict) else {}
     preset_id = get_provider_preset_id(provider_id, provider_data, presets)
