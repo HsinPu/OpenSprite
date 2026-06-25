@@ -44,6 +44,11 @@ import {
   formatSubagentGroupDetail as formatSubagentGroupDetailBase,
   formatWorkflowDetail as formatWorkflowDetailBase,
   formatWorkflowStepDetail as formatWorkflowStepDetailBase,
+  isTerminalRunStatus,
+  runStatusLabel,
+  runTone,
+  sessionStatusLabel,
+  shortRunId,
   statusFromRunEvent as statusFromRunEventBase,
 } from "./chatClientRunHelpers";
 import { normalizeRunSummary } from "./runSummaryNormalizers";
@@ -106,7 +111,6 @@ const GATEWAY_RECONNECT_DELAY_MS = 30000;
 const SESSION_HISTORY_REFRESH_INTERVAL_MS = 30000;
 const LOCAL_DRAFT_SESSION_LIMIT = 10;
 const DELETED_SESSION_TOMBSTONE_MS = 5 * 60 * 1000;
-const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const TERMINAL_PART_STATES = new Set(["completed", "failed", "cancelled", "error"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
@@ -310,41 +314,10 @@ function normalizeEventTimestamp(value) {
   return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
 }
 
-function shortRunId(runId) {
-  const normalized = String(runId || "run").replace(/^run[_-]?/, "");
-  return normalized.length > 8 ? normalized.slice(0, 8) : normalized;
-}
-
-function runStatusLabel(status, copy) {
-  return copy.run.statusLabels[status] || copy.run.statusLabels.running;
-}
-
-function sessionStatusLabel(session, copy) {
-  const status = String(session?.status?.status || "idle").trim() || "idle";
-  return copy.run.statusLabels[status] || status;
-}
-
-function runTone(status, fallbackTone = "running") {
-  if (status === "completed") {
-    return fallbackTone === "warning" ? "warning" : "success";
-  }
-  if (status === "failed") {
-    return "error";
-  }
-  if (status === "cancelled") {
-    return "warning";
-  }
-  return fallbackTone || "running";
-}
-
 function buildRunCancelUrl(wsUrl, runId, sessionId) {
   const url = buildHttpApiUrl(wsUrl, `/api/runs/${encodeURIComponent(runId)}/cancel`);
   url.searchParams.set("session_id", sessionId);
   return url.toString();
-}
-
-function isTerminalRunStatus(status) {
-  return TERMINAL_RUN_STATUSES.has(status);
 }
 
 function getActiveRun(session) {

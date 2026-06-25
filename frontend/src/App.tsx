@@ -47,6 +47,7 @@ import {
 } from "@ant-design/icons";
 import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
+import { shortRunId } from "./composables/chatClientRunHelpers";
 
 type AnyRecord = Record<string, any>;
 type Client = ReturnType<typeof useChatClient>;
@@ -3271,11 +3272,6 @@ function runOptionLabel(copy: AnyRecord, run: AnyRecord, index: number) {
   const statusLabel = copy.run.statusLabels?.[run.status] || run.status;
   const prefix = index === 0 ? copy.runHistory.latest : `#${index + 1}`;
   return `${prefix} · Run ${shortRunId(run.runId)} · ${statusLabel}`;
-}
-
-function shortRunId(runId: string) {
-  const normalized = String(runId || "run").replace(/^run[_-]?/, "");
-  return normalized.length > 8 ? normalized.slice(0, 8) : normalized;
 }
 
 function normalizeMessages({

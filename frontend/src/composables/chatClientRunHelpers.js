@@ -1,5 +1,7 @@
 import { normalizeTraceEventCounts } from "./runTraceNormalizers";
 
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
 function coerceNonNegativeInteger(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) {
@@ -32,6 +34,37 @@ export function createRunViewState({ runId, sessionId, status = "running", creat
     traceLoading: false,
     traceError: "",
   };
+}
+
+export function shortRunId(runId) {
+  const normalized = String(runId || "run").replace(/^run[_-]?/, "");
+  return normalized.length > 8 ? normalized.slice(0, 8) : normalized;
+}
+
+export function runStatusLabel(status, copy) {
+  return copy.run.statusLabels[status] || copy.run.statusLabels.running;
+}
+
+export function sessionStatusLabel(session, copy) {
+  const status = String(session?.status?.status || "idle").trim() || "idle";
+  return copy.run.statusLabels[status] || status;
+}
+
+export function runTone(status, fallbackTone = "running") {
+  if (status === "completed") {
+    return fallbackTone === "warning" ? "warning" : "success";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "cancelled") {
+    return "warning";
+  }
+  return fallbackTone || "running";
+}
+
+export function isTerminalRunStatus(status) {
+  return TERMINAL_RUN_STATUSES.has(status);
 }
 
 export function statusFromRunEvent(eventType, payload, eventStatus = "") {
