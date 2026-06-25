@@ -103,6 +103,12 @@ def _filter_model_metadata_fields(
     return out
 
 
+def _openrouter_model_entries() -> list[dict[str, Any]]:
+    payload = _read_json_url("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"})
+    data = payload.get("data") if isinstance(payload, dict) else None
+    return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+
 def fetch_openai_compatible_models(api_key: str, base_url: str) -> list[str]:
     normalized = str(base_url or "").strip().rstrip("/")
     if not normalized:
@@ -127,15 +133,9 @@ def fetch_openai_compatible_models(api_key: str, base_url: str) -> list[str]:
 def fetch_openrouter_models() -> list[str]:
     global _OPENROUTER_MODEL_METADATA_CACHE
     _OPENROUTER_MODEL_METADATA_CACHE = {}
-    payload = _read_json_url("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"})
-    data = payload.get("data") if isinstance(payload, dict) else None
-    if not isinstance(data, list):
-        return []
     out: list[str] = []
     metadata_by_model: dict[str, dict[str, Any]] = {}
-    for item in data:
-        if not isinstance(item, dict):
-            continue
+    for item in _openrouter_model_entries():
         model_id = str(item.get("id") or "").strip()
         if not model_id:
             continue
@@ -151,14 +151,8 @@ def fetch_openrouter_models() -> list[str]:
 
 
 def fetch_openrouter_image_models() -> list[str]:
-    payload = _read_json_url("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"})
-    data = payload.get("data") if isinstance(payload, dict) else None
-    if not isinstance(data, list):
-        return []
     out: list[str] = []
-    for item in data:
-        if not isinstance(item, dict):
-            continue
+    for item in _openrouter_model_entries():
         model_id = str(item.get("id") or "").strip()
         architecture = item.get("architecture")
         modalities = architecture.get("input_modalities") if isinstance(architecture, dict) else None
