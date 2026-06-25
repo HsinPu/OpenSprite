@@ -343,10 +343,6 @@ class WebAdapter(MessageAdapter):
         """Hot-apply persisted channel settings to running adapters when possible."""
         return await web_settings_reload.reload_channels_from_config(self, payload, force=force, logger=logger)
 
-    async def _reload_mcp_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
-        """Hot-apply persisted MCP settings to the running agent when possible."""
-        return await web_settings_reload.reload_mcp_from_config(self, payload, force=force, logger=logger)
-
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)

@@ -245,7 +245,7 @@ async def handle_settings_mcp_create(adapter: Any, request: web.Request) -> web.
         payload = adapter._get_mcp_settings().upsert_server(server_id, body)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
-    payload = await adapter._reload_mcp_from_config(payload)
+    payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
@@ -256,7 +256,7 @@ async def handle_settings_mcp_update(adapter: Any, request: web.Request) -> web.
         payload = adapter._get_mcp_settings().upsert_server(server_id, body)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
-    payload = await adapter._reload_mcp_from_config(payload)
+    payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
@@ -266,7 +266,7 @@ async def handle_settings_mcp_delete(adapter: Any, request: web.Request) -> web.
         payload = adapter._get_mcp_settings().remove_server(server_id)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
-    payload = await adapter._reload_mcp_from_config(payload)
+    payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
@@ -275,5 +275,10 @@ async def handle_settings_mcp_reload(adapter: Any, request: web.Request) -> web.
         payload = adapter._get_mcp_settings().list_servers()
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
-    payload = await adapter._reload_mcp_from_config({**payload, "restart_required": True}, force=True)
+    payload = await web_settings_reload.reload_mcp_from_config(
+        adapter,
+        {**payload, "restart_required": True},
+        force=True,
+        logger=logger,
+    )
     return web.json_response(payload)
