@@ -57,7 +57,6 @@ from . import web_settings_handlers_core
 from . import web_settings_handlers_provider
 from . import web_settings_handlers_app
 from . import web_settings_handlers_tools
-from . import web_settings_reload
 from . import web_settings_support
 from .web_routes import register_web_routes
 
@@ -334,10 +333,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
         return web_frontend_runtime.with_browser_diagnostic(result)
-
-    def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
-        """Hot-apply persisted LLM settings to the running agent when possible."""
-        return web_settings_reload.reload_agent_llm_from_config(self, payload, force=force, logger=logger)
 
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:

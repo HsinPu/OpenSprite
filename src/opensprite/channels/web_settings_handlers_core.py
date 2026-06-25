@@ -74,7 +74,7 @@ async def handle_settings_codex_auth_poll(adapter: Any, request: web.Request) ->
             "expired": status.expired,
             "account_id": status.account_id,
         }
-        payload = adapter._reload_agent_llm_from_config(payload, force=True)
+        payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 
 
@@ -130,7 +130,7 @@ async def handle_settings_copilot_auth_poll(adapter: Any, request: web.Request) 
     payload: dict[str, Any] = {"ok": True, "provider": "copilot", "status": result.status}
     if status is not None:
         payload["auth"] = {"configured": status.configured, "path": str(status.path)}
-        payload = adapter._reload_agent_llm_from_config(payload, force=True)
+        payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 
 

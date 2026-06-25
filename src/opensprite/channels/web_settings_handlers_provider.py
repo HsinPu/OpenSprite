@@ -15,7 +15,8 @@ from ..auth.credentials import (
     set_provider_default,
 )
 from ..config.provider_errors import ProviderSettingsError
-from . import web_settings_support
+from ..utils.log import logger
+from . import web_settings_reload, web_settings_support
 
 
 async def handle_settings_providers(adapter: Any, request: web.Request) -> web.Response:
@@ -51,7 +52,7 @@ async def handle_settings_provider_disconnect(adapter: Any, request: web.Request
         payload = adapter._get_provider_settings().disconnect_provider(provider_id)
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
-    payload = adapter._reload_agent_llm_from_config(payload, force=True)
+    payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 
 
@@ -101,7 +102,12 @@ async def handle_settings_credential_delete(adapter: Any, request: web.Request) 
         web_settings_support.raise_credential_store_error(exc)
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
-    payload = adapter._reload_agent_llm_from_config(payload, force=bool(payload.get("restart_required")))
+    payload = web_settings_reload.reload_agent_llm_from_config(
+        adapter,
+        payload,
+        force=bool(payload.get("restart_required")),
+        logger=logger,
+    )
     return web.json_response(payload)
 
 
@@ -134,7 +140,7 @@ async def handle_settings_provider_credential(adapter: Any, request: web.Request
         payload = adapter._get_provider_settings().set_provider_credential(provider_id, credential_id)
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
-    payload = adapter._reload_agent_llm_from_config(payload, force=True)
+    payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 
 

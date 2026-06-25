@@ -62,7 +62,7 @@ async def handle_settings_model_select(adapter: Any, request: web.Request) -> we
         )
     except Exception as exc:
         web_settings_support.raise_provider_settings_error(exc)
-    payload = adapter._reload_agent_llm_from_config(payload)
+    payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
