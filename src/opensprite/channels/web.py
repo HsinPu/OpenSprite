@@ -57,12 +57,7 @@ from ..config.defaults import (
     WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
 from ..config.channel_settings import ChannelSettingsService
-from ..config.mcp_settings import (
-    MCPSettingsError,
-    MCPSettingsNotFound,
-    MCPSettingsService,
-    MCPSettingsValidationError,
-)
+from ..config.mcp_settings import MCPSettingsService
 from ..config.media_settings import MediaSettingsService
 from ..config.provider_settings import ProviderSettingsService
 from ..config.schedule_settings import ScheduleSettingsService
@@ -557,10 +552,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)
-
-    @staticmethod
-    def _raise_mcp_settings_error(exc: MCPSettingsError) -> None:
-        web_settings_support.raise_mcp_settings_error(exc)
 
     def _mcp_runtime_payload(self) -> dict[str, Any]:
         agent = self._get_agent()

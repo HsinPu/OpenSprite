@@ -16,6 +16,7 @@ from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
+from . import web_settings_support
 
 
 async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
@@ -224,7 +225,7 @@ async def handle_settings_mcp(adapter: Any, request: web.Request) -> web.Respons
     try:
         payload = adapter._get_mcp_settings().list_servers()
     except Exception as exc:
-        adapter._raise_mcp_settings_error(exc)
+        web_settings_support.raise_mcp_settings_error(exc)
     return web.json_response(adapter._with_mcp_runtime(payload))
 
 
@@ -234,7 +235,7 @@ async def handle_settings_mcp_create(adapter: Any, request: web.Request) -> web.
     try:
         payload = adapter._get_mcp_settings().upsert_server(server_id, body)
     except Exception as exc:
-        adapter._raise_mcp_settings_error(exc)
+        web_settings_support.raise_mcp_settings_error(exc)
     payload = await adapter._reload_mcp_from_config(payload)
     return web.json_response(payload)
 
@@ -245,7 +246,7 @@ async def handle_settings_mcp_update(adapter: Any, request: web.Request) -> web.
     try:
         payload = adapter._get_mcp_settings().upsert_server(server_id, body)
     except Exception as exc:
-        adapter._raise_mcp_settings_error(exc)
+        web_settings_support.raise_mcp_settings_error(exc)
     payload = await adapter._reload_mcp_from_config(payload)
     return web.json_response(payload)
 
@@ -255,7 +256,7 @@ async def handle_settings_mcp_delete(adapter: Any, request: web.Request) -> web.
     try:
         payload = adapter._get_mcp_settings().remove_server(server_id)
     except Exception as exc:
-        adapter._raise_mcp_settings_error(exc)
+        web_settings_support.raise_mcp_settings_error(exc)
     payload = await adapter._reload_mcp_from_config(payload)
     return web.json_response(payload)
 
@@ -264,6 +265,6 @@ async def handle_settings_mcp_reload(adapter: Any, request: web.Request) -> web.
     try:
         payload = adapter._get_mcp_settings().list_servers()
     except Exception as exc:
-        adapter._raise_mcp_settings_error(exc)
+        web_settings_support.raise_mcp_settings_error(exc)
     payload = await adapter._reload_mcp_from_config({**payload, "restart_required": True}, force=True)
     return web.json_response(payload)
