@@ -673,6 +673,41 @@ class ProviderSettingsService:
             ),
         }
 
+    def _public_model_provider(
+        self,
+        provider_id: str,
+        provider: dict[str, Any],
+        *,
+        preset_id: str | None,
+        preset: ProviderPreset | None,
+        default_provider: str | None,
+        choices: list[str],
+        model_source: str,
+        model_metadata: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "id": provider_id,
+            "provider": preset_id or provider_id,
+            "name": self._display_name(provider_id, preset, provider),
+            "preset_name": self._display_name(preset_id or provider_id, preset),
+            "is_connected": True,
+            "is_default": provider_id == default_provider,
+            "selected_model": provider.get("model") or "",
+            "reasoning_effort": provider.get("reasoning_effort") or "",
+            "models": choices,
+            "model_source": model_source,
+            "model_metadata": {
+                model: dict(metadata)
+                for model, metadata in model_metadata.items()
+                if model in choices and metadata
+            },
+            "model_capabilities": (
+                (preset.model_capabilities or {}) if preset else {}
+            ),
+            **public_provider_profile(preset),
+            "supports_custom_model": True,
+        }
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -828,26 +863,16 @@ class ProviderSettingsService:
                 model_choices=tuple(discovered_models),
             )
             out.append(
-                {
-                    "id": provider_id,
-                    "provider": preset_id or provider_id,
-                    "name": self._display_name(provider_id, preset, provider),
-                    "preset_name": self._display_name(preset_id or provider_id, preset),
-                    "is_connected": True,
-                    "is_default": provider_id == loaded.llm.default,
-                    "selected_model": provider.get("model") or "",
-                    "reasoning_effort": provider.get("reasoning_effort") or "",
-                    "models": choices,
-                    "model_source": model_source,
-                    "model_metadata": {
-                        model: dict(metadata)
-                        for model, metadata in model_metadata.items()
-                        if model in choices and metadata
-                    },
-                    "model_capabilities": (preset.model_capabilities or {}) if preset else {},
-                    **public_provider_profile(preset),
-                    "supports_custom_model": True,
-                }
+                self._public_model_provider(
+                    provider_id,
+                    provider,
+                    preset_id=preset_id,
+                    preset=preset,
+                    default_provider=loaded.llm.default,
+                    choices=choices,
+                    model_source=model_source,
+                    model_metadata=model_metadata,
+                )
             )
 
         active = providers.get(loaded.llm.default or "", {}) if loaded.llm.default else {}
