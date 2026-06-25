@@ -619,6 +619,39 @@ class ProviderSettingsService:
             return preset.display_name
         return provider_id.replace("_", " ").replace("-", " ").title()
 
+    def _public_connected_provider(
+        self,
+        provider_id: str,
+        provider: dict[str, Any],
+        *,
+        preset_id: str | None,
+        preset: ProviderPreset | None,
+        default_provider: str | None,
+    ) -> dict[str, Any]:
+        credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
+        auth_type = preset.auth_type if preset else "api_key"
+        return {
+            "id": provider_id,
+            "provider": preset_id or provider_id,
+            "name": self._display_name(provider_id, preset, provider),
+            "preset_name": self._display_name(preset_id or provider_id, preset),
+            "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
+            "model": provider.get("model") or "",
+            "reasoning_effort": provider.get("reasoning_effort") or "",
+            "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
+            "credential_id": provider.get("credential_id") or "",
+            "credential_effective_id": (credential or {}).get("id") or "",
+            "credential_source": public_credential_source(provider, credential),
+            "credential_label": (credential or {}).get("label") or "",
+            "credential_preview": (credential or {}).get("secret_preview") or "",
+            "auth_type": provider.get("auth_type") or auth_type,
+            "requires_api_key": auth_type == "api_key",
+            "api_key_optional": auth_type == "optional_api_key",
+            **public_provider_profile(preset),
+            "is_default": provider_id == default_provider,
+            "enabled": bool(provider.get("enabled")),
+        }
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -632,30 +665,14 @@ class ProviderSettingsService:
             preset = presets.providers.get(preset_id) if preset_id else None
             if not is_provider_connected(provider, preset):
                 continue
-            credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
-            credential_source = public_credential_source(provider, credential)
             connected.append(
-                {
-                    "id": provider_id,
-                    "provider": preset_id or provider_id,
-                    "name": self._display_name(provider_id, preset, provider),
-                    "preset_name": self._display_name(preset_id or provider_id, preset),
-                    "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
-                    "model": provider.get("model") or "",
-                    "reasoning_effort": provider.get("reasoning_effort") or "",
-                    "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
-                    "credential_id": provider.get("credential_id") or "",
-                    "credential_effective_id": (credential or {}).get("id") or "",
-                    "credential_source": credential_source,
-                    "credential_label": (credential or {}).get("label") or "",
-                    "credential_preview": (credential or {}).get("secret_preview") or "",
-                    "auth_type": provider.get("auth_type") or (preset.auth_type if preset else "api_key"),
-                    "requires_api_key": (preset.auth_type if preset else "api_key") == "api_key",
-                    "api_key_optional": (preset.auth_type if preset else "api_key") == "optional_api_key",
-                    **public_provider_profile(preset),
-                    "is_default": provider_id == default_provider,
-                    "enabled": bool(provider.get("enabled")),
-                }
+                self._public_connected_provider(
+                    provider_id,
+                    provider,
+                    preset_id=preset_id,
+                    preset=preset,
+                    default_provider=default_provider,
+                )
             )
 
         available = [
@@ -701,31 +718,15 @@ class ProviderSettingsService:
         preset = get_provider_profile(provider_id)
         if preset is None:
             raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
-        credential = public_credential_for_provider(instance_id, provider, provider_id, app_home=self.config_path.parent)
-        credential_source = public_credential_source(provider, credential)
         return {
             "ok": True,
-            "provider": {
-                "id": instance_id,
-                "provider": provider_id,
-                "name": self._display_name(instance_id, preset, provider),
-                "preset_name": self._display_name(provider_id, preset),
-                "base_url": provider.get("base_url") or preset.default_base_url,
-                "model": provider.get("model") or "",
-                "reasoning_effort": provider.get("reasoning_effort") or "",
-                "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
-                "credential_id": provider.get("credential_id") or "",
-                "credential_effective_id": (credential or {}).get("id") or "",
-                "credential_source": credential_source,
-                "credential_label": (credential or {}).get("label") or "",
-                "credential_preview": (credential or {}).get("secret_preview") or "",
-                "auth_type": provider.get("auth_type") or preset.auth_type,
-                "requires_api_key": preset.auth_type == "api_key",
-                "api_key_optional": preset.auth_type == "optional_api_key",
-                **public_provider_profile(preset),
-                "is_default": instance_id == loaded.llm.default,
-                "enabled": bool(provider.get("enabled")),
-            },
+            "provider": self._public_connected_provider(
+                instance_id,
+                provider,
+                preset_id=provider_id,
+                preset=preset,
+                default_provider=loaded.llm.default,
+            ),
             "restart_required": False,
         }
 

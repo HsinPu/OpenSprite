@@ -42,6 +42,7 @@ def test_provider_settings_connects_provider_without_leaking_api_key(tmp_path):
     listing = service.list_providers()
     connected = listing["connected"][0]
 
+    assert result["provider"] == connected
     assert result["provider"]["api_key_configured"] is True
     assert providers["openai"]["api_key"] == ""
     assert providers["openai"]["credential_id"].startswith("cred_")
