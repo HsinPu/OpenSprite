@@ -49,8 +49,8 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
     search = config.tools.web_search
-    search.provider = adapter._coerce_web_search_provider(body.get("provider", search.provider))
-    search.freshness = adapter._coerce_web_search_freshness(body.get("freshness", search.freshness))
+    search.provider = web_settings_coercion.coerce_web_search_provider(body.get("provider", search.provider))
+    search.freshness = web_settings_coercion.coerce_web_search_freshness(body.get("freshness", search.freshness))
     search.max_results = adapter._coerce_positive_int(body.get("max_results"), field="max_results", default=search.max_results, minimum=1, maximum=100)
     search.duckduckgo_max_pages = adapter._coerce_positive_int(body.get("duckduckgo_max_pages"), field="duckduckgo_max_pages", default=search.duckduckgo_max_pages, minimum=1, maximum=50)
     search.searxng_max_pages = adapter._coerce_positive_int(body.get("searxng_max_pages"), field="searxng_max_pages", default=search.searxng_max_pages, minimum=1, maximum=50)

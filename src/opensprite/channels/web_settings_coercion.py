@@ -6,7 +6,14 @@ from typing import Any, Callable
 
 from aiohttp import web
 
-from ..config.defaults import DEFAULT_LOG_LEVEL, LOG_LEVELS
+from ..config.defaults import (
+    DEFAULT_LOG_LEVEL,
+    DEFAULT_WEB_SEARCH_FRESHNESS,
+    DEFAULT_WEB_SEARCH_PROVIDER,
+    LOG_LEVELS,
+    WEB_SEARCH_FRESHNESS_OPTIONS,
+    WEB_SEARCH_PROVIDERS,
+)
 from ..utils.url import join_url_path
 
 
@@ -90,14 +97,24 @@ def coerce_browser_backend(value: Any, *, default_backend: str, backends: tuple[
     return backend
 
 
-def coerce_web_search_provider(value: Any, *, default_provider: str, providers: tuple[str, ...] | list[str]) -> str:
+def coerce_web_search_provider(
+    value: Any,
+    *,
+    default_provider: str = DEFAULT_WEB_SEARCH_PROVIDER,
+    providers: tuple[str, ...] | list[str] = WEB_SEARCH_PROVIDERS,
+) -> str:
     provider = str(value or default_provider).strip().lower() or default_provider
     if provider not in providers:
         raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(providers)}")
     return provider
 
 
-def coerce_web_search_freshness(value: Any, *, default_freshness: str, freshness_values: tuple[str, ...] | list[str]) -> str:
+def coerce_web_search_freshness(
+    value: Any,
+    *,
+    default_freshness: str = DEFAULT_WEB_SEARCH_FRESHNESS,
+    freshness_values: tuple[str, ...] | list[str] = WEB_SEARCH_FRESHNESS_OPTIONS,
+) -> str:
     freshness = str(value or default_freshness).strip().lower() or default_freshness
     if freshness not in freshness_values:
         raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(freshness_values)}")

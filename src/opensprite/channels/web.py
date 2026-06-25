@@ -421,22 +421,6 @@ class WebAdapter(MessageAdapter):
             backends=cls.BROWSER_BACKENDS,
         )
 
-    @classmethod
-    def _coerce_web_search_provider(cls, value: Any) -> str:
-        return web_settings_coercion.coerce_web_search_provider(
-            value,
-            default_provider=DEFAULT_WEB_SEARCH_PROVIDER,
-            providers=cls.WEB_SEARCH_PROVIDERS,
-        )
-
-    @classmethod
-    def _coerce_web_search_freshness(cls, value: Any) -> str:
-        return web_settings_coercion.coerce_web_search_freshness(
-            value,
-            default_freshness=DEFAULT_WEB_SEARCH_FRESHNESS,
-            freshness_values=cls.WEB_SEARCH_FRESHNESS,
-        )
-
     @staticmethod
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
         return web_settings_coercion.coerce_text_list(value, field=field, default=default)
