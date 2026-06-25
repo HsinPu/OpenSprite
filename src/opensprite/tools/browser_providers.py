@@ -17,6 +17,10 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
     backend = "browserbase"
     display_name = "Browserbase"
     auth_header_name = "X-BB-API-Key"
+    api_key_env_var = "BROWSERBASE_API_KEY"
+    project_id_env_var = "BROWSERBASE_PROJECT_ID"
+    base_url_env_var = "BROWSERBASE_BASE_URL"
+    default_base_url = DEFAULT_BROWSERBASE_BASE_URL
 
     def __init__(
         self,
@@ -30,9 +34,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = self.config_text(api_key, "BROWSERBASE_API_KEY")
-        self.project_id = self.config_text(project_id, "BROWSERBASE_PROJECT_ID")
-        self.base_url = self.config_base_url(base_url, "BROWSERBASE_BASE_URL", DEFAULT_BROWSERBASE_BASE_URL)
+        self.api_key = self.resolve_api_key(api_key)
+        self.project_id = self.config_text(project_id, self.project_id_env_var)
+        self.base_url = self.resolve_base_url(base_url)
         self.proxies = bool(proxies)
         self.advanced_stealth = bool(advanced_stealth)
         self.keep_alive = bool(keep_alive)
@@ -89,6 +93,9 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     backend = "browser-use"
     display_name = "Browser Use"
     auth_header_name = "X-Browser-Use-API-Key"
+    api_key_env_var = "BROWSER_USE_API_KEY"
+    base_url_env_var = "BROWSER_USE_BASE_URL"
+    default_base_url = DEFAULT_BROWSER_USE_BASE_URL
 
     def __init__(
         self,
@@ -98,8 +105,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = self.config_text(api_key, "BROWSER_USE_API_KEY")
-        self.base_url = self.config_base_url(base_url, "BROWSER_USE_BASE_URL", DEFAULT_BROWSER_USE_BASE_URL)
+        self.api_key = self.resolve_api_key(api_key)
+        self.base_url = self.resolve_base_url(base_url)
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
@@ -138,6 +145,9 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     display_name = "Firecrawl"
     auth_header_name = "Authorization"
     auth_header_prefix = "Bearer "
+    api_key_env_var = "FIRECRAWL_API_KEY"
+    base_url_env_var = "FIRECRAWL_API_URL"
+    default_base_url = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
 
     def __init__(
         self,
@@ -147,8 +157,8 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = self.config_text(api_key, "FIRECRAWL_API_KEY")
-        self.base_url = self.config_base_url(base_url, "FIRECRAWL_API_URL", DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
+        self.api_key = self.resolve_api_key(api_key)
+        self.base_url = self.resolve_base_url(base_url)
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():

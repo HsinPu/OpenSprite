@@ -30,6 +30,9 @@ class CloudBrowserProvider:
     display_name = "Cloud browser"
     auth_header_name = ""
     auth_header_prefix = ""
+    api_key_env_var = ""
+    base_url_env_var = ""
+    default_base_url = ""
 
     def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
         self.transport = transport
@@ -51,7 +54,10 @@ class CloudBrowserProvider:
         return max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
 
     def config_text(self, value: Any, env_var: str) -> str:
-        for candidate in (value, os.getenv(env_var)):
+        candidates = [value]
+        if env_var:
+            candidates.append(os.getenv(env_var))
+        for candidate in candidates:
             text = str(candidate or "").strip()
             if text:
                 return text
@@ -59,6 +65,12 @@ class CloudBrowserProvider:
 
     def config_base_url(self, value: Any, env_var: str, default: str) -> str:
         return (self.config_text(value, env_var) or default).rstrip("/")
+
+    def resolve_api_key(self, value: Any) -> str:
+        return self.config_text(value, self.api_key_env_var)
+
+    def resolve_base_url(self, value: Any) -> str:
+        return self.config_base_url(value, self.base_url_env_var, self.default_base_url)
 
     def json_api_key_headers(self) -> dict[str, str]:
         auth_header_value = f"{self.auth_header_prefix}{getattr(self, 'api_key', '')}"
