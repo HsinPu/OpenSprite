@@ -9,6 +9,7 @@ from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from .json_files import load_json_dict
 from .llm_presets import ProviderPreset, load_llm_presets
+from .provider_auth_types import API_KEY_AUTH_TYPE
 from .provider_choices import (
     get_configured_provider_id,
     get_provider_choices,
@@ -135,7 +136,7 @@ def connect_provider_in_config(
         )
         provider["credential_id"] = credential["id"]
         provider["api_key"] = ""
-    elif preset.auth_type == "api_key" and not has_provider_secret(provider):
+    elif preset.auth_type == API_KEY_AUTH_TYPE and not has_provider_secret(provider):
         raise ProviderSettingsValidationError("api_key is required when connecting a new provider")
 
     normalized_base_url = str(base_url or "").strip()
@@ -170,7 +171,7 @@ def select_model_in_config(
     provider, _, preset = provider_preset_entry(provider_id, provider, presets)
     if preset is None:
         raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
-    if require_api_key and preset.auth_type == "api_key" and not has_provider_secret(provider):
+    if require_api_key and preset.auth_type == API_KEY_AUTH_TYPE and not has_provider_secret(provider):
         raise ProviderSettingsConflict("Provider must be connected before selecting a model")
 
     if not str(provider.get("base_url", "") or "").strip():
@@ -202,7 +203,7 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
         return False
     if not provider:
         return False
-    if preset and preset.auth_type != "api_key":
+    if preset and preset.auth_type != API_KEY_AUTH_TYPE:
         return True
     return has_provider_secret(provider)
 

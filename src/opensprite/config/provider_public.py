@@ -7,6 +7,7 @@ from typing import Any
 
 from ..auth.credentials import CredentialNotFoundError, list_credentials, resolve_credential
 from .llm_presets import ProviderPreset
+from .provider_auth_types import API_KEY_AUTH_TYPE, OPTIONAL_API_KEY_AUTH_TYPE
 from .provider_credentials import has_provider_secret
 
 
@@ -34,8 +35,8 @@ def public_provider_profile(preset: ProviderPreset | None) -> dict[str, Any]:
 def public_provider_auth_flags(auth_type: str) -> dict[str, bool]:
     """Return auth requirement flags safe for settings APIs."""
     return {
-        "requires_api_key": auth_type == "api_key",
-        "api_key_optional": auth_type == "optional_api_key",
+        "requires_api_key": auth_type == API_KEY_AUTH_TYPE,
+        "api_key_optional": auth_type == OPTIONAL_API_KEY_AUTH_TYPE,
     }
 
 
@@ -100,7 +101,7 @@ def public_connected_provider(
     app_home: str | Path,
 ) -> dict[str, Any]:
     credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=app_home)
-    auth_type = preset.auth_type if preset else "api_key"
+    auth_type = preset.auth_type if preset else API_KEY_AUTH_TYPE
     return {
         **public_provider_identity(
             provider_id,

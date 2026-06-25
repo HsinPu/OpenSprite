@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from importlib import resources
 from typing import Any
 
+from .provider_auth_types import (
+    API_KEY_AUTH_TYPE,
+    GITHUB_COPILOT_OAUTH_AUTH_TYPE,
+    OPENAI_CODEX_OAUTH_AUTH_TYPE,
+)
+
 
 @dataclass(frozen=True)
 class ProviderPreset:
@@ -15,7 +21,7 @@ class ProviderPreset:
     default_base_url: str
     model_choices: tuple[str, ...]
     display_name: str | None = None
-    auth_type: str = "api_key"
+    auth_type: str = API_KEY_AUTH_TYPE
     api_mode: str | None = None
     capabilities: tuple[str, ...] = ()
     model_discovery: dict[str, Any] | None = None
@@ -57,7 +63,7 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
             raise ValueError(f'llm-presets: providers["{name}"].model_choices must be a string array')
         dn = entry.get("display_name")
         display = str(dn).strip() if isinstance(dn, str) and dn.strip() else None
-        auth_type = str(entry.get("auth_type") or "api_key").strip()
+        auth_type = str(entry.get("auth_type") or API_KEY_AUTH_TYPE).strip()
         api_mode_raw = entry.get("api_mode")
         api_mode = str(api_mode_raw).strip() if isinstance(api_mode_raw, str) and api_mode_raw.strip() else None
         capabilities = _parse_string_tuple(entry, name, "capabilities")
@@ -169,7 +175,7 @@ def provider_default_base_url(provider_id: str | None) -> str:
 def provider_auth_type(provider_id: str | None) -> str:
     """Return a provider profile auth type, defaulting to API key auth."""
     profile = get_provider_profile(provider_id)
-    return profile.auth_type if profile else "api_key"
+    return profile.auth_type if profile else API_KEY_AUTH_TYPE
 
 
 def provider_api_mode(provider_id: str | None) -> str | None:
@@ -181,22 +187,22 @@ def provider_api_mode(provider_id: str | None) -> str | None:
 def provider_profile_defaults(
     provider_id: str | None,
     *,
-    auth_type: str | None = "api_key",
+    auth_type: str | None = API_KEY_AUTH_TYPE,
     api_mode: str | None = None,
 ) -> ProviderProfileDefaults:
     """Return explicit values overlaid with bundled provider profile defaults."""
     normalized = str(provider_id or "").strip()
-    explicit_auth_type = str(auth_type or "api_key").strip() or "api_key"
+    explicit_auth_type = str(auth_type or API_KEY_AUTH_TYPE).strip() or API_KEY_AUTH_TYPE
     if not normalized:
-        if explicit_auth_type == "openai_codex_oauth":
+        if explicit_auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE:
             normalized = "openai-codex"
-        elif explicit_auth_type == "github_copilot_oauth":
+        elif explicit_auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
             normalized = "copilot"
 
     profile = get_provider_profile(normalized)
-    profile_auth_type = profile.auth_type if profile else "api_key"
+    profile_auth_type = profile.auth_type if profile else API_KEY_AUTH_TYPE
     effective_auth_type = explicit_auth_type
-    if effective_auth_type == "api_key" and profile_auth_type != "api_key":
+    if effective_auth_type == API_KEY_AUTH_TYPE and profile_auth_type != API_KEY_AUTH_TYPE:
         effective_auth_type = profile_auth_type
 
     profile_api_mode = profile.api_mode if profile else None
