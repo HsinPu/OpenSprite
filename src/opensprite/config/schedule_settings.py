@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .provider_settings import load_json_dict, write_json_dict
+from .json_files import load_json_dict, write_json_dict
 from .schema import Config
 
 

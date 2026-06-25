@@ -14,8 +14,8 @@ from ..channels.registry import (
     list_connectable_channel_types,
     make_unique_instance_id,
 )
-from .provider_settings import load_json_dict, write_json_dict
 from .defaults import DEFAULT_CHANNELS_FILE
+from .json_files import load_json_dict, write_json_dict
 from .schema import Config
 
 

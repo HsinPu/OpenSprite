@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ..auth.credentials import CredentialNotFoundError, resolve_credential
+from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
 from .provider_choices import (
     get_model_choices,
@@ -16,10 +17,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_settings import (
-    fetch_openrouter_image_models,
-    load_json_dict,
-)
+from .provider_settings import fetch_openrouter_image_models
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
 

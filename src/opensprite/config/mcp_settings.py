@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .provider_settings import load_json_dict, write_json_dict
 from .defaults import DEFAULT_MCP_SERVERS_FILE
+from .json_files import load_json_dict, write_json_dict
 from .schema import Config, MCPServerConfig
 
 
