@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
@@ -51,6 +48,12 @@ from .skill_review_prompts import (
     build_skill_review_user_content,
     format_stored_messages_for_transcript,
 )
+from .curator_state import (
+    CURATOR_HISTORY_LIMIT,
+    CURATOR_STATE_SCHEMA_VERSION,
+    CuratorStateStore,
+    safe_int,
+)
 from .user_profile import UserProfileConsolidator
 
 if TYPE_CHECKING:
@@ -60,8 +63,6 @@ if TYPE_CHECKING:
 RunEventEmitter = Callable[[str, str, str, dict[str, Any], str | None, str | None], Awaitable[None]]
 SkillReviewDecider = Callable[["ExecutionResult"], bool]
 LearningRecorder = Callable[[str, str, str, str, str | None, dict[str, Any] | None], None]
-CURATOR_STATE_SCHEMA_VERSION = 1
-CURATOR_HISTORY_LIMIT = 20
 CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
 CURATOR_SLOW_JOB_SECONDS = 10.0
 CURATOR_VERY_SLOW_JOB_SECONDS = 30.0
@@ -310,9 +311,10 @@ class CuratorService:
         self._should_run_skill_review = should_run_skill_review
         self._emit_run_event = emit_run_event
         self._record_learning = record_learning
-        self._state_path = Path(state_path).expanduser() if state_path is not None else None
-        self._state_path_for_session = state_path_for_session
-        self._memory_session_states: dict[str, dict[str, Any]] = {}
+        self._state_store = CuratorStateStore(
+            state_path=state_path,
+            state_path_for_session=state_path_for_session,
+        )
         self._requests: dict[str, CuratorRequest] = {}
         self._active_requests: dict[str, CuratorRequest] = {}
         self._runtime_state: dict[str, dict[str, Any]] = {}
@@ -330,121 +332,13 @@ class CuratorService:
         self._maintenance_jobs = self._maintenance_services.jobs()
         self._skill_job = CuratorJob("skills", "skills", read_skill_snapshot, self._skill_review_runner)
 
-    @staticmethod
-    def _default_state() -> dict[str, Any]:
-        return {
-            "schema_version": CURATOR_STATE_SCHEMA_VERSION,
-            "paused": False,
-            "run_count": 0,
-            "last_run_at": None,
-            "last_run_duration_seconds": None,
-            "last_run_summary": None,
-            "last_run_jobs": [],
-            "last_run_changed": [],
-            "last_run_failed": [],
-            "last_run_slow": [],
-            "last_run_job_results": [],
-            "last_run_status": None,
-            "last_error": None,
-            "history": [],
-        }
-
-    @staticmethod
-    def _safe_int(value: Any) -> int:
-        try:
-            return int(value or 0)
-        except (TypeError, ValueError):
-            return 0
-
-    @staticmethod
-    def _string_list(value: Any) -> list[str]:
-        return [str(item) for item in value if str(item).strip()] if isinstance(value, list) else []
-
-    @staticmethod
-    def _dict_list(value: Any) -> list[dict[str, Any]]:
-        return [dict(item) for item in value if isinstance(item, dict)] if isinstance(value, list) else []
-
-    def _state_file_for_session(self, session_id: str) -> Path | None:
-        if self._state_path_for_session is not None:
-            return Path(self._state_path_for_session(session_id)).expanduser()
-        return self._state_path
-
-    def _load_session_state(self, session_id: str) -> dict[str, Any]:
-        state_path = self._state_file_for_session(session_id)
-        if state_path is None:
-            state = self._memory_session_states.get(session_id)
-            return dict(state) if isinstance(state, dict) else self._default_state()
-        if not state_path.exists():
-            return self._default_state()
-        try:
-            raw = json.loads(state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("curator.state.load_failed | path=%s error=%s", state_path, exc)
-            return self._default_state()
-        if not isinstance(raw, dict):
-            return self._default_state()
-        state = self._default_state()
-        state["paused"] = bool(raw.get("paused"))
-        state["run_count"] = self._safe_int(raw.get("run_count"))
-        state["last_run_at"] = raw.get("last_run_at")
-        state["last_run_duration_seconds"] = raw.get("last_run_duration_seconds")
-        state["last_run_summary"] = raw.get("last_run_summary")
-        state["last_error"] = raw.get("last_error")
-        state["last_run_status"] = raw.get("last_run_status")
-        state["last_run_jobs"] = self._string_list(raw.get("last_run_jobs"))
-        state["last_run_changed"] = self._string_list(raw.get("last_run_changed"))
-        state["last_run_failed"] = self._string_list(raw.get("last_run_failed"))
-        state["last_run_slow"] = self._string_list(raw.get("last_run_slow"))
-        state["last_run_job_results"] = self._dict_list(raw.get("last_run_job_results"))
-        history = raw.get("history") if isinstance(raw.get("history"), list) else []
-        state["history"] = [dict(item) for item in history if isinstance(item, dict)][-CURATOR_HISTORY_LIMIT:]
-        return state
-
-    def _save_session_state(self, session_id: str, state: dict[str, Any]) -> None:
-        state_path = self._state_file_for_session(session_id)
-        normalized_state = self._default_state()
-        normalized_state.update(state)
-        normalized_state["run_count"] = self._safe_int(normalized_state.get("run_count"))
-        normalized_state["last_run_jobs"] = self._string_list(normalized_state.get("last_run_jobs"))
-        normalized_state["last_run_changed"] = self._string_list(normalized_state.get("last_run_changed"))
-        normalized_state["last_run_failed"] = self._string_list(normalized_state.get("last_run_failed"))
-        normalized_state["last_run_slow"] = self._string_list(normalized_state.get("last_run_slow"))
-        normalized_state["last_run_job_results"] = self._dict_list(normalized_state.get("last_run_job_results"))
-        history = normalized_state.get("history") if isinstance(normalized_state.get("history"), list) else []
-        normalized_state["history"] = [dict(item) for item in history if isinstance(item, dict)][-CURATOR_HISTORY_LIMIT:]
-        if state_path is None:
-            self._memory_session_states[session_id] = normalized_state
-            return
-        try:
-            state_path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_name = tempfile.mkstemp(
-                dir=str(state_path.parent),
-                prefix=f".{state_path.name}.",
-                suffix=".tmp",
-            )
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(normalized_state, handle, indent=2, sort_keys=True, ensure_ascii=False)
-                    handle.write("\n")
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(tmp_name, state_path)
-            except BaseException:
-                try:
-                    os.unlink(tmp_name)
-                except OSError:
-                    pass
-                raise
-        except OSError as exc:
-            logger.warning("curator.state.save_failed | path=%s error=%s", state_path, exc)
-
     def _session_state(self, session_id: str) -> dict[str, Any]:
-        return self._load_session_state(session_id)
+        return self._state_store.load(session_id)
 
     def _set_paused(self, session_id: str, paused: bool) -> None:
         state = self._session_state(session_id)
         state["paused"] = paused
-        self._save_session_state(session_id, state)
+        self._state_store.save(session_id, state)
 
     def _record_run(
         self,
@@ -477,7 +371,7 @@ class CuratorService:
         state["last_run_status"] = run_status
         state["last_run_summary"] = summary
         state["last_error"] = error
-        state["run_count"] = self._safe_int(state.get("run_count")) + 1
+        state["run_count"] = safe_int(state.get("run_count")) + 1
         history = self._history_entries(session_id)
         history.append(
             {
@@ -495,7 +389,7 @@ class CuratorService:
             }
         )
         state["history"] = history[-CURATOR_HISTORY_LIMIT:]
-        self._save_session_state(session_id, state)
+        self._state_store.save(session_id, state)
 
     def _history_entries(self, session_id: str) -> list[dict[str, Any]]:
         state = self._session_state(session_id)
@@ -513,15 +407,7 @@ class CuratorService:
         self._requests.pop(session_id, None)
         self._active_requests.pop(session_id, None)
         self._runtime_state.pop(session_id, None)
-        self._memory_session_states.pop(session_id, None)
-        state_path = self._state_file_for_session(session_id)
-        if state_path is None:
-            return
-        try:
-            if state_path.exists():
-                state_path.unlink()
-        except OSError as exc:
-            logger.warning("curator.state.delete_failed | path=%s error=%s", state_path, exc)
+        self._state_store.clear(session_id)
 
     @staticmethod
     def _merge_request(current: CuratorRequest | None, incoming: CuratorRequest) -> CuratorRequest:
@@ -671,7 +557,7 @@ class CuratorService:
             "current_job_label": runtime_state.get("current_job_label"),
             "active_jobs": list(runtime_state.get("active_jobs") or []),
             "completed_jobs": list(runtime_state.get("completed_jobs") or []),
-            "run_count": self._safe_int(session_state.get("run_count")),
+            "run_count": safe_int(session_state.get("run_count")),
             "last_run_at": session_state.get("last_run_at"),
             "last_run_duration_seconds": session_state.get("last_run_duration_seconds"),
             "last_run_summary": session_state.get("last_run_summary"),
