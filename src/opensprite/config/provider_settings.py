@@ -652,6 +652,27 @@ class ProviderSettingsService:
             "enabled": bool(provider.get("enabled")),
         }
 
+    def _public_available_provider(
+        self,
+        provider_id: str,
+        preset: ProviderPreset,
+        connected: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "id": provider_id,
+            "name": self._display_name(provider_id, preset),
+            "default_base_url": preset.default_base_url,
+            "auth_type": preset.auth_type,
+            "api_mode": preset.api_mode,
+            "requires_api_key": preset.auth_type == "api_key",
+            "api_key_optional": preset.auth_type == "optional_api_key",
+            **public_provider_profile(preset),
+            "model_choices": list(preset.model_choices),
+            "connected_count": sum(
+                1 for provider in connected if provider.get("provider") == provider_id
+            ),
+        }
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -676,18 +697,7 @@ class ProviderSettingsService:
             )
 
         available = [
-            {
-                "id": provider_id,
-                "name": self._display_name(provider_id, preset),
-                "default_base_url": preset.default_base_url,
-                "auth_type": preset.auth_type,
-                "api_mode": preset.api_mode,
-                "requires_api_key": preset.auth_type == "api_key",
-                "api_key_optional": preset.auth_type == "optional_api_key",
-                **public_provider_profile(preset),
-                "model_choices": list(preset.model_choices),
-                "connected_count": sum(1 for provider in connected if provider.get("provider") == provider_id),
-            }
+            self._public_available_provider(provider_id, preset, connected)
             for provider_id in presets.provider_order
             for preset in [presets.providers[provider_id]]
         ]
