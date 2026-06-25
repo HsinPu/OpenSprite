@@ -235,30 +235,6 @@ class WebAdapter(MessageAdapter):
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)
 
-    def _mcp_runtime_payload(self) -> dict[str, Any]:
-        agent = self._get_agent()
-        lifecycle = getattr(agent, "mcp_lifecycle", None) if agent is not None else None
-        if lifecycle is None:
-            return {
-                "connected": False,
-                "connecting": False,
-                "connect_failures": 0,
-                "retry_after": 0.0,
-                "tool_names": [],
-            }
-        return {
-            "connected": bool(getattr(lifecycle, "connected", False)),
-            "connecting": bool(getattr(lifecycle, "connecting", False)),
-            "connect_failures": int(getattr(lifecycle, "connect_failures", 0) or 0),
-            "retry_after": float(getattr(lifecycle, "retry_after", 0.0) or 0.0),
-            "tool_names": sorted(getattr(lifecycle, "tool_names", set()) or []),
-        }
-
-    def _with_mcp_runtime(self, payload: dict[str, Any]) -> dict[str, Any]:
-        updated = dict(payload)
-        updated["runtime"] = self._mcp_runtime_payload()
-        return updated
-
     def _serialize_run(self, run: Any) -> dict[str, Any]:
         return {
             "run_id": run.run_id,

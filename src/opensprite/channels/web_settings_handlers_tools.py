@@ -273,7 +273,7 @@ async def handle_settings_mcp(adapter: Any, request: web.Request) -> web.Respons
         payload = web_settings_support.get_mcp_settings(adapter).list_servers()
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
-    return web.json_response(adapter._with_mcp_runtime(payload))
+    return web.json_response(web_settings_support.with_mcp_runtime(adapter, payload))
 
 
 async def handle_settings_mcp_create(adapter: Any, request: web.Request) -> web.Response:

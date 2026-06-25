@@ -50,6 +50,32 @@ def get_media_settings(adapter: Any) -> MediaSettingsService:
     return MediaSettingsService(adapter._get_config_path())
 
 
+def mcp_runtime_payload(adapter: Any) -> dict[str, Any]:
+    agent = adapter._get_agent()
+    lifecycle = getattr(agent, "mcp_lifecycle", None) if agent is not None else None
+    if lifecycle is None:
+        return {
+            "connected": False,
+            "connecting": False,
+            "connect_failures": 0,
+            "retry_after": 0.0,
+            "tool_names": [],
+        }
+    return {
+        "connected": bool(getattr(lifecycle, "connected", False)),
+        "connecting": bool(getattr(lifecycle, "connecting", False)),
+        "connect_failures": int(getattr(lifecycle, "connect_failures", 0) or 0),
+        "retry_after": float(getattr(lifecycle, "retry_after", 0.0) or 0.0),
+        "tool_names": sorted(getattr(lifecycle, "tool_names", set()) or []),
+    }
+
+
+def with_mcp_runtime(adapter: Any, payload: dict[str, Any]) -> dict[str, Any]:
+    updated = dict(payload)
+    updated["runtime"] = mcp_runtime_payload(adapter)
+    return updated
+
+
 async def read_json_body(request: web.Request) -> dict[str, Any]:
     try:
         payload = await request.json()

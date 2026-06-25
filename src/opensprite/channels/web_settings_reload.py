@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import Config
+from . import web_settings_support
 
 
 def _reload_agent_runtime_from_config(
@@ -145,14 +146,14 @@ def reload_browser_from_config(adapter: Any, payload: dict[str, Any], *, force: 
 
 async def reload_mcp_from_config(adapter: Any, payload: dict[str, Any], *, force: bool = False, logger) -> dict[str, Any]:
     if not force and not payload.get("restart_required"):
-        return adapter._with_mcp_runtime(payload)
+        return web_settings_support.with_mcp_runtime(adapter, payload)
 
     updated = dict(payload)
     agent = adapter._get_agent()
     reload_mcp = getattr(agent, "reload_mcp_from_config", None) if agent is not None else None
     if not callable(reload_mcp):
         updated["runtime_reloaded"] = False
-        return adapter._with_mcp_runtime(updated)
+        return web_settings_support.with_mcp_runtime(adapter, updated)
 
     try:
         reload_message = await reload_mcp()
@@ -160,9 +161,9 @@ async def reload_mcp_from_config(adapter: Any, payload: dict[str, Any], *, force
         logger.warning("MCP runtime reload failed after settings change: {}", exc)
         updated["runtime_reloaded"] = False
         updated["reload_error"] = str(exc)
-        return adapter._with_mcp_runtime(updated)
+        return web_settings_support.with_mcp_runtime(adapter, updated)
 
     updated["restart_required"] = False
     updated["runtime_reloaded"] = True
     updated["reload_message"] = reload_message
-    return adapter._with_mcp_runtime(updated)
+    return web_settings_support.with_mcp_runtime(adapter, updated)
