@@ -94,9 +94,8 @@ class ProviderSettingsService:
             )
 
         available = [
-            public_available_provider(provider_id, preset, connected)
+            public_available_provider(provider_id, presets.providers[provider_id], connected)
             for provider_id in presets.provider_order
-            for preset in [presets.providers[provider_id]]
         ]
 
         return {
