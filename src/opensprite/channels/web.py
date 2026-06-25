@@ -47,7 +47,6 @@ from ..utils.log import logger
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
-from . import web_settings_handlers_core
 from . import web_settings_handlers_tools
 from . import web_settings_support
 from .web_routes import register_web_routes
@@ -652,45 +651,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
-
-    async def _handle_settings_codex_auth_status(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_codex_auth_status(self, request)
-
-    async def _handle_settings_codex_auth_login(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_codex_auth_login(self, request)
-
-    async def _handle_settings_codex_auth_poll(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_codex_auth_poll(self, request)
-
-    async def _handle_settings_codex_auth_logout(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_codex_auth_logout(self, request)
-
-    async def _handle_settings_copilot_auth_status(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_copilot_auth_status(self, request)
-
-    async def _handle_settings_copilot_auth_login(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_copilot_auth_login(self, request)
-
-    async def _handle_settings_copilot_auth_poll(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_copilot_auth_poll(self, request)
-
-    async def _handle_settings_copilot_auth_logout(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_copilot_auth_logout(self, request)
-
-    async def _handle_settings_channels(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_channels(self, request)
-
-    async def _handle_settings_channel_create(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_channel_create(self, request)
-
-    async def _handle_settings_channel_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_channel_update(self, request)
-
-    async def _handle_settings_channel_connect(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_channel_connect(self, request)
-
-    async def _handle_settings_channel_disconnect(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_channel_disconnect(self, request)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_tools.handle_settings_search(self, request)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.log import logger
-from . import web_cron_api, web_settings_handlers_app, web_settings_handlers_provider
+from . import web_cron_api, web_settings_handlers_app, web_settings_handlers_core, web_settings_handlers_provider
 
 
 def _bind_adapter(adapter: Any, handler: Any) -> Any:
@@ -41,20 +41,50 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_post("/api/runs/{run_id}/cancel", api.handle_run_cancel)
     router.add_post("/api/runs/{run_id}/file-changes/{change_id}/revert", api.handle_run_file_change_revert)
     router.add_post("/api/worktrees/cleanup", api.handle_worktree_cleanup)
-    router.add_get("/api/settings/channels", adapter._handle_settings_channels)
-    router.add_post("/api/settings/channels", adapter._handle_settings_channel_create)
-    router.add_put("/api/settings/channels/{channel_id}", adapter._handle_settings_channel_update)
-    router.add_put("/api/settings/channels/{channel_id}/connect", adapter._handle_settings_channel_connect)
-    router.add_post("/api/settings/channels/{channel_id}/disconnect", adapter._handle_settings_channel_disconnect)
+    router.add_get("/api/settings/channels", _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channels))
+    router.add_post("/api/settings/channels", _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channel_create))
+    router.add_put(
+        "/api/settings/channels/{channel_id}",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channel_update),
+    )
+    router.add_put(
+        "/api/settings/channels/{channel_id}/connect",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channel_connect),
+    )
+    router.add_post(
+        "/api/settings/channels/{channel_id}/disconnect",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channel_disconnect),
+    )
     router.add_get("/api/settings/providers", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_providers))
-    router.add_get("/api/settings/auth/openai-codex", adapter._handle_settings_codex_auth_status)
-    router.add_post("/api/settings/auth/openai-codex/login", adapter._handle_settings_codex_auth_login)
-    router.add_post("/api/settings/auth/openai-codex/poll", adapter._handle_settings_codex_auth_poll)
-    router.add_post("/api/settings/auth/openai-codex/logout", adapter._handle_settings_codex_auth_logout)
-    router.add_get("/api/settings/auth/copilot", adapter._handle_settings_copilot_auth_status)
-    router.add_post("/api/settings/auth/copilot/login", adapter._handle_settings_copilot_auth_login)
-    router.add_post("/api/settings/auth/copilot/poll", adapter._handle_settings_copilot_auth_poll)
-    router.add_post("/api/settings/auth/copilot/logout", adapter._handle_settings_copilot_auth_logout)
+    router.add_get(
+        "/api/settings/auth/openai-codex",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_codex_auth_status),
+    )
+    router.add_post(
+        "/api/settings/auth/openai-codex/login",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_codex_auth_login),
+    )
+    router.add_post(
+        "/api/settings/auth/openai-codex/poll",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_codex_auth_poll),
+    )
+    router.add_post(
+        "/api/settings/auth/openai-codex/logout",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_codex_auth_logout),
+    )
+    router.add_get("/api/settings/auth/copilot", _bind_adapter(adapter, web_settings_handlers_core.handle_settings_copilot_auth_status))
+    router.add_post(
+        "/api/settings/auth/copilot/login",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_copilot_auth_login),
+    )
+    router.add_post(
+        "/api/settings/auth/copilot/poll",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_copilot_auth_poll),
+    )
+    router.add_post(
+        "/api/settings/auth/copilot/logout",
+        _bind_adapter(adapter, web_settings_handlers_core.handle_settings_copilot_auth_logout),
+    )
     router.add_get("/api/settings/credentials", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credentials))
     router.add_post("/api/settings/credentials", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_credential_create))
     router.add_delete(
