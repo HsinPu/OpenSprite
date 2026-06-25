@@ -14,18 +14,16 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from aiohttp import ClientError, ClientSession, WSMsgType
 import typer
 
+from ..agent.factory import create_agent
 from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
 from ..context.paths import get_session_workspace, get_tool_workspace
 from ..agent.turn_input import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
+from ..network_environment import apply_network_environment
 from ..runs.events import TOOL_STARTED_EVENT
 from ..runs.lifecycle import RUN_CANCELLED_EVENT, RUN_FAILED_EVENT, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
-from ..runtime import (
-    apply_network_environment,
-    create_agent,
-    start_search_queue_worker,
-    stop_background_task,
-)
+from ..runtime_lifecycle import stop_background_task
+from ..search.queue_worker import start_search_queue_worker
 from ..utils.log import setup_log
 
 
