@@ -7,7 +7,7 @@ from typing import Any
 from ..config import Config
 from ..llms import LLMProvider
 from ..llms.runtime_provider import create_configured_llm
-from ..media.factory import create_media_router
+from ..media.factory import media_router_status, reload_media_router
 from ..tools.registration import (
     reload_browser_tools,
     reload_web_search_tools,
@@ -63,25 +63,17 @@ def reload_agent_llm_from_config(agent: Any, config: Config) -> dict[str, Any]:
 
 def reload_agent_media_from_config(agent: Any, config: Config) -> dict[str, Any]:
     """Reload media analysis providers from an already persisted Config."""
-    media_router = create_media_router(config)
-    if agent.media_router is None:
-        agent.media_router = media_router
-    else:
-        agent.media_router.replace_providers(media_router)
+    agent.media_router = reload_media_router(agent.media_router, config)
+    status = media_router_status(agent.media_router)
 
     logger.info(
         "Media runtime reloaded | vision={} ocr={} speech={} video={}",
-        bool(agent.media_router.image_provider),
-        bool(agent.media_router.ocr_provider),
-        bool(agent.media_router.speech_provider),
-        bool(agent.media_router.video_provider),
+        status["vision_enabled"],
+        status["ocr_enabled"],
+        status["speech_enabled"],
+        status["video_enabled"],
     )
-    return {
-        "vision_enabled": bool(agent.media_router.image_provider),
-        "ocr_enabled": bool(agent.media_router.ocr_provider),
-        "speech_enabled": bool(agent.media_router.speech_provider),
-        "video_enabled": bool(agent.media_router.video_provider),
-    }
+    return status
 
 
 def reload_agent_web_search_from_config(agent: Any, config: Config) -> dict[str, Any]:
