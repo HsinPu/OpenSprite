@@ -9,7 +9,11 @@ from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from .json_files import load_json_dict
 from .llm_presets import ProviderPreset, load_llm_presets
-from .provider_choices import get_provider_choices, get_provider_preset_id
+from .provider_choices import (
+    get_configured_provider_id,
+    get_provider_choices,
+    get_provider_preset_id,
+)
 from .provider_credentials import has_provider_secret
 from .provider_discovery import cached_openrouter_model_metadata, positive_int_or_none
 from .provider_errors import (
@@ -201,6 +205,20 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
     if preset and preset.auth_type != "api_key":
         return True
     return has_provider_secret(provider)
+
+
+def provider_references_credential(
+    provider_id: str,
+    provider: dict[str, Any],
+    *,
+    credential_provider: str,
+    credential_id: str,
+) -> bool:
+    """Return whether a provider instance references a stored credential."""
+    return (
+        get_configured_provider_id(provider_id, provider) == credential_provider
+        and provider.get("credential_id") == credential_id
+    )
 
 
 def provider_preset_entry(provider_id: str, provider: Any, presets: Any) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
