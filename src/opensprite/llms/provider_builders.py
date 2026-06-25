@@ -50,25 +50,22 @@ def create_llm_for_spec(
     api_mode: str | None,
     reasoning_effort: str,
 ) -> LLMProvider:
+    if api_mode == "anthropic_messages" and spec.name != "minimax":
+        raise ValueError("api_mode='anthropic_messages' is only supported by the MiniMax provider")
+
+    kwargs = _openai_compatible_kwargs(
+        spec,
+        api_key=api_key,
+        model=model,
+        base_url=base_url,
+        api_mode=api_mode,
+    )
     if api_mode == "anthropic_messages":
-        if spec.name != "minimax":
-            raise ValueError("api_mode='anthropic_messages' is only supported by the MiniMax provider")
-        return MiniMaxLLM(
-            api_key=api_key,
-            base_url=base_url or provider_spec_default_base_url(spec, api_mode=api_mode),
-            default_model=model,
-            reasoning_effort=reasoning_effort,
-        )
+        return MiniMaxLLM(**kwargs, reasoning_effort=reasoning_effort)
 
     if spec.name == "openrouter":
-        return OpenRouterLLM(
-            api_key=api_key,
-            default_model=model,
-            base_url=base_url or provider_spec_default_base_url(spec),
-            reasoning_effort=reasoning_effort,
-        )
+        return OpenRouterLLM(**kwargs, reasoning_effort=reasoning_effort)
 
-    kwargs = _openai_compatible_kwargs(spec, api_key=api_key, model=model, base_url=base_url, api_mode=api_mode)
     if spec.name == "copilot":
         kwargs["default_headers"] = copilot_request_headers()
     if spec.name not in {"minimax", "copilot"}:
