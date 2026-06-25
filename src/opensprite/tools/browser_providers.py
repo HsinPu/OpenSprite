@@ -71,9 +71,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             timeout=timeout,
             error_prefix="Failed to create Browserbase session",
         )
-        payload = _json_object(response, "Browserbase session response")
-        provider_session_id = _required_text(payload, "id", "Browserbase session id")
-        cdp_url = _required_text(payload, "connectUrl", "Browserbase CDP URL")
+        payload = self._json_object(response, "Browserbase session response")
+        provider_session_id = self._required_text(payload, "id", "Browserbase session id")
+        cdp_url = self._required_text(payload, "connectUrl", "Browserbase CDP URL")
         return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
@@ -117,8 +117,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
             timeout=timeout,
             error_prefix="Failed to create Browser Use session",
         )
-        payload = _json_object(response, "Browser Use session response")
-        provider_session_id = _required_text(payload, "id", "Browser Use session id")
+        payload = self._json_object(response, "Browser Use session response")
+        provider_session_id = self._required_text(payload, "id", "Browser Use session id")
         cdp_url = str(payload.get("cdpUrl") or payload.get("connectUrl") or "").strip()
         if not cdp_url:
             raise BrowserRuntimeError("Browser Use session response did not include cdpUrl or connectUrl.")
@@ -165,9 +165,9 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
             timeout=timeout,
             error_prefix="Failed to create Firecrawl browser session",
         )
-        payload = _json_object(response, "Firecrawl browser session response")
-        provider_session_id = _required_text(payload, "id", "Firecrawl browser session id")
-        cdp_url = _required_text(payload, "cdpUrl", "Firecrawl CDP URL")
+        payload = self._json_object(response, "Firecrawl browser session response")
+        provider_session_id = self._required_text(payload, "id", "Firecrawl browser session id")
+        cdp_url = self._required_text(payload, "cdpUrl", "Firecrawl CDP URL")
         return self.cloud_session(provider_session_id, cdp_url, ttl)
 
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
@@ -191,20 +191,3 @@ def _first_text(*values: Any) -> str:
 
 def _clean_base_url(value: str, default: str) -> str:
     return (str(value or "").strip() or default).rstrip("/")
-
-
-def _json_object(response: httpx.Response, label: str) -> dict[str, Any]:
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise BrowserRuntimeError(f"{label} was not valid JSON.") from exc
-    if not isinstance(payload, dict):
-        raise BrowserRuntimeError(f"{label} was not a JSON object.")
-    return payload
-
-
-def _required_text(payload: dict[str, Any], key: str, label: str) -> str:
-    value = str(payload.get(key) or "").strip()
-    if not value:
-        raise BrowserRuntimeError(f"{label} was missing from provider response.")
-    return value

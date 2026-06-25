@@ -63,6 +63,21 @@ class CloudBrowserProvider:
             expires_at=time.monotonic() + ttl,
         )
 
+    def _json_object(self, response: httpx.Response, label: str) -> dict[str, Any]:
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise BrowserRuntimeError(f"{label} was not valid JSON.") from exc
+        if not isinstance(payload, dict):
+            raise BrowserRuntimeError(f"{label} was not a JSON object.")
+        return payload
+
+    def _required_text(self, payload: dict[str, Any], key: str, label: str) -> str:
+        value = str(payload.get(key) or "").strip()
+        if not value:
+            raise BrowserRuntimeError(f"{label} was missing from provider response.")
+        return value
+
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         raise NotImplementedError
 
