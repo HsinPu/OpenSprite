@@ -15,7 +15,7 @@ from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
-from . import web_settings_coercion, web_settings_payloads, web_settings_support
+from . import web_settings_coercion, web_settings_payloads, web_settings_reload, web_settings_support
 
 
 SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
@@ -77,7 +77,7 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
         web_settings_coercion.apply_optional_secret_field(search, body, field)
     config.save(config_path)
     payload = {"search": web_settings_payloads.web_search_payload(config), "restart_required": True}
-    payload = adapter._reload_web_search_from_config(payload)
+    payload = web_settings_reload.reload_web_search_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
