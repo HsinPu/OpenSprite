@@ -12,7 +12,6 @@ from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     get_configured_provider_id,
     get_model_choices,
-    get_selected_provider,
     make_provider_instance_id,
 )
 from .provider_errors import (
