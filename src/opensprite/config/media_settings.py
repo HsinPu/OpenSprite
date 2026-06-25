@@ -96,17 +96,7 @@ class MediaSettingsService:
             return ""
 
     def _section_payload(self, category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
-        provider_id = ""
-        for candidate_id, provider in providers.items():
-            if not isinstance(provider, dict):
-                continue
-            if (
-                self._provider_api_key(candidate_id, provider, app_home=self.config_path.parent) == str(config.api_key or "")
-                and str(self._media_base_url(candidate_id, provider) or "") == str(config.base_url or "")
-                and (provider.get("provider") or candidate_id) == config.provider
-            ):
-                provider_id = candidate_id
-                break
+        provider_id = self._section_provider_id(config, providers)
         return {
             "category": category,
             "enabled": bool(config.enabled),
@@ -116,6 +106,25 @@ class MediaSettingsService:
             "base_url": config.base_url,
             "api_key_configured": bool(config.api_key),
         }
+
+    def _section_provider_id(self, config: Any, providers: dict[str, Any]) -> str:
+        expected_api_key = str(config.api_key or "")
+        expected_base_url = str(config.base_url or "")
+        for candidate_id, provider in providers.items():
+            if not isinstance(provider, dict):
+                continue
+            provider_name = provider.get("provider") or candidate_id
+            if (
+                self._provider_api_key(
+                    candidate_id,
+                    provider,
+                    app_home=self.config_path.parent,
+                ) == expected_api_key
+                and str(self._media_base_url(candidate_id, provider) or "") == expected_base_url
+                and provider_name == config.provider
+            ):
+                return candidate_id
+        return ""
 
     @staticmethod
     def _media_base_url(provider_id: str, provider: dict[str, Any]) -> str | None:
