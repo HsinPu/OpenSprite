@@ -7,11 +7,11 @@ from opensprite.config import Config
 from opensprite.config import provider_discovery
 from opensprite.config import provider_public
 from opensprite.config import provider_settings
-from opensprite.config.provider_errors import ProviderSettingsConflict
-from opensprite.config.provider_settings import (
-    ProviderSettingsService,
+from opensprite.config.provider_errors import (
+    ProviderSettingsConflict,
     ProviderSettingsValidationError,
 )
+from opensprite.config.provider_settings import ProviderSettingsService
 
 _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_discovery.fetch_openai_compatible_models
 _ORIGINAL_FETCH_CODEX_MODELS = provider_discovery.fetch_codex_models
