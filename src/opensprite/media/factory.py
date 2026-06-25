@@ -32,24 +32,24 @@ def create_media_router(config: Config) -> MediaRouter:
 
 
 def _image_provider_from_config(config: object | None):
-    if config is None or not getattr(config, "enabled", False):
-        return None
-    return create_image_analysis_provider(
-        provider=getattr(config, "provider"),
-        api_key=getattr(config, "api_key"),
-        default_model=getattr(config, "model"),
-        base_url=getattr(config, "base_url"),
-    )
+    kwargs = _provider_kwargs_from_config(config, include_provider=True)
+    return create_image_analysis_provider(**kwargs) if kwargs is not None else None
 
 
 def _openai_compatible_provider_from_config(config: object | None, provider_class):
+    kwargs = _provider_kwargs_from_config(config)
+    return provider_class(**kwargs) if kwargs is not None else None
+
+
+def _provider_kwargs_from_config(config: object | None, *, include_provider: bool = False):
     if config is None or not getattr(config, "enabled", False):
         return None
-    return provider_class(
-        api_key=getattr(config, "api_key"),
-        default_model=getattr(config, "model"),
-        base_url=getattr(config, "base_url"),
-    )
+    return {
+        **({"provider": getattr(config, "provider")} if include_provider else {}),
+        "api_key": getattr(config, "api_key"),
+        "default_model": getattr(config, "model"),
+        "base_url": getattr(config, "base_url"),
+    }
 
 
 def reload_media_router(current: MediaRouter | None, config: Config) -> MediaRouter:
