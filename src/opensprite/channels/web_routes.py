@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.log import logger
-from . import web_cron_api, web_settings_handlers_provider
+from . import web_cron_api, web_settings_handlers_app, web_settings_handlers_provider
 
 
 def _bind_adapter(adapter: Any, handler: Any) -> Any:
@@ -78,15 +78,15 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
         _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_provider_disconnect),
     )
     router.add_get("/api/settings/models", _bind_adapter(adapter, web_settings_handlers_provider.handle_settings_models))
-    router.add_post("/api/settings/models/select", adapter._handle_settings_model_select)
-    router.add_get("/api/settings/update", adapter._handle_settings_update_status)
-    router.add_post("/api/settings/update", adapter._handle_settings_update_apply)
-    router.add_get("/api/settings/media", adapter._handle_settings_media)
-    router.add_put("/api/settings/media", adapter._handle_settings_media_update)
-    router.add_get("/api/settings/schedule", adapter._handle_settings_schedule)
-    router.add_put("/api/settings/schedule", adapter._handle_settings_schedule_update)
-    router.add_get("/api/settings/network", adapter._handle_settings_network)
-    router.add_put("/api/settings/network", adapter._handle_settings_network_update)
+    router.add_post("/api/settings/models/select", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_model_select))
+    router.add_get("/api/settings/update", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_update_status))
+    router.add_post("/api/settings/update", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_update_apply))
+    router.add_get("/api/settings/media", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_media))
+    router.add_put("/api/settings/media", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_media_update))
+    router.add_get("/api/settings/schedule", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_schedule))
+    router.add_put("/api/settings/schedule", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_schedule_update))
+    router.add_get("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network))
+    router.add_put("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network_update))
     router.add_get("/api/settings/search", adapter._handle_settings_search)
     router.add_get("/api/settings/search/searxng-options", adapter._handle_settings_search_searxng_options)
     router.add_put("/api/settings/search", adapter._handle_settings_search_update)

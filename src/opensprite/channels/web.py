@@ -48,7 +48,6 @@ from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
 from . import web_settings_handlers_core
-from . import web_settings_handlers_app
 from . import web_settings_handlers_tools
 from . import web_settings_support
 from .web_routes import register_web_routes
@@ -692,33 +691,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_channel_disconnect(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_core.handle_settings_channel_disconnect(self, request)
-
-    async def _handle_settings_media(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_media(self, request)
-
-    async def _handle_settings_media_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_media_update(self, request)
-
-    async def _handle_settings_model_select(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_model_select(self, request)
-
-    async def _handle_settings_update_status(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_update_status(self, request)
-
-    async def _handle_settings_update_apply(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_update_apply(self, request)
-
-    async def _handle_settings_schedule(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_schedule(self, request)
-
-    async def _handle_settings_schedule_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_schedule_update(self, request)
-
-    async def _handle_settings_network(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_network(self, request)
-
-    async def _handle_settings_network_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_network_update(self, request)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_tools.handle_settings_search(self, request)
