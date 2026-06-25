@@ -49,14 +49,12 @@ class CloudBrowserProvider:
     def session_timeout_seconds(self, session_timeout: int) -> int:
         return max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
 
-    def json_auth_headers(self, header_name: str, header_value: str) -> dict[str, str]:
-        return {"Content-Type": "application/json", header_name: header_value}
-
     def json_api_key_headers(self) -> dict[str, str]:
-        return self.json_auth_headers(
-            self.auth_header_name,
-            f"{self.auth_header_prefix}{getattr(self, 'api_key', '')}",
-        )
+        auth_header_value = f"{self.auth_header_prefix}{getattr(self, 'api_key', '')}"
+        return {
+            "Content-Type": "application/json",
+            self.auth_header_name: auth_header_value,
+        }
 
     def cloud_session(self, provider_session_id: str, cdp_url: str, ttl: int) -> CloudBrowserSession:
         return CloudBrowserSession(
