@@ -34,6 +34,13 @@ class CloudBrowserProvider:
     def status(self) -> dict[str, Any]:
         return {"configured": self.is_configured()}
 
+    def api_key_status(self) -> dict[str, Any]:
+        return {
+            "configured": self.is_configured(),
+            "api_key_configured": bool(getattr(self, "api_key", "")),
+            "base_url": getattr(self, "base_url", ""),
+        }
+
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         raise NotImplementedError
 

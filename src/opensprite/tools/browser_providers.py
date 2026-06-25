@@ -118,11 +118,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         return bool(self.api_key)
 
     def status(self) -> dict[str, Any]:
-        return {
-            "configured": self.is_configured(),
-            "api_key_configured": bool(self.api_key),
-            "base_url": self.base_url,
-        }
+        return self.api_key_status()
 
     def _headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json", "X-Browser-Use-API-Key": self.api_key}
@@ -186,11 +182,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         return bool(self.api_key)
 
     def status(self) -> dict[str, Any]:
-        return {
-            "configured": self.is_configured(),
-            "api_key_configured": bool(self.api_key),
-            "base_url": self.base_url,
-        }
+        return self.api_key_status()
 
     def _headers(self) -> dict[str, str]:
         return {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
