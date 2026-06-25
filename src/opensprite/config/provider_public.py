@@ -178,3 +178,29 @@ def public_model_provider(
         ),
         "supports_custom_model": True,
     }
+
+
+def public_media_provider(
+    provider_id: str,
+    provider: dict[str, Any],
+    *,
+    preset_id: str | None,
+    preset: ProviderPreset | None,
+    choices: list[str],
+    selected: str,
+    media_models: dict[str, list[str]],
+    media_model_source: str,
+) -> dict[str, Any]:
+    return {
+        "id": provider_id,
+        "provider": preset_id or provider_id,
+        "name": (
+            public_provider_display_name(provider_id, preset, provider)
+            if preset
+            else str(provider.get("name") or "").strip() or provider_id
+        ),
+        "model": selected or "",
+        "models": choices,
+        "media_models": media_models,
+        "media_model_source": media_model_source,
+    }
