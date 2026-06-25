@@ -764,6 +764,18 @@ class ProviderSettingsService:
             if isinstance(item, dict):
                 item["enabled"] = False
 
+    def _provider_mutation_data(
+        self,
+        providers: dict[str, Any],
+        default_provider: str | None,
+        *,
+        include_app_home: bool = False,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"llm": {"providers": providers, "default": default_provider}}
+        if include_app_home:
+            data["app_home"] = self.config_path.parent
+        return data
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -804,7 +816,11 @@ class ProviderSettingsService:
         """Connect or update one provider without selecting a model."""
         main_data, providers, loaded = self._load_state()
         instance_id = make_provider_instance_id(provider_id, providers, name)
-        config_data = {"app_home": self.config_path.parent, "llm": {"providers": providers, "default": loaded.llm.default}}
+        config_data = self._provider_mutation_data(
+            providers,
+            loaded.llm.default,
+            include_app_home=True,
+        )
         provider = connect_provider_in_config(
             config_data,
             instance_id,
@@ -932,7 +948,10 @@ class ProviderSettingsService:
     def select_model(self, provider_id: str, model: str, *, reasoning_effort: str | None = None) -> dict[str, Any]:
         """Select the active provider/model and persist it."""
         main_data, providers, _loaded = self._load_state()
-        config_data = {"llm": {"providers": providers, "default": main_data.get("llm", {}).get("default")}}
+        config_data = self._provider_mutation_data(
+            providers,
+            main_data.get("llm", {}).get("default"),
+        )
         provider = select_model_in_config(config_data, provider_id, model, reasoning_effort=reasoning_effort)
         llm_data = main_data.setdefault("llm", {})
         llm_data["default"] = provider_id
