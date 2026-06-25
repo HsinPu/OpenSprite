@@ -55,6 +55,15 @@ class CloudBrowserProvider:
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
         return False
 
+    async def _close_with_request(self, provider_session_id: str, method: str, url: str, **request_kwargs: Any) -> bool:
+        if not self.is_configured() or not provider_session_id:
+            return False
+        try:
+            await self._request(method, url, **request_kwargs)
+            return True
+        except BrowserRuntimeError:
+            return False
+
     async def _request(
         self,
         method: str,
