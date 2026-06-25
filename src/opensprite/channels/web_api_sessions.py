@@ -8,6 +8,7 @@ from aiohttp import web
 
 from ..agent.turn_input import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
 from ..runs.schema import serialize_diff_summary
+from ..runs.session_entries import serialize_session_entries
 
 
 def _coerce_bool(value: str | None) -> bool:
@@ -102,7 +103,7 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
 
     sessions = []
     for session_id in filtered_session_ids[:session_limit]:
-        summary = await adapter._serialize_session_summary(storage, session_id, message_limit=message_limit)
+        summary = await serialize_session_summary(adapter, storage, session_id, message_limit=message_limit)
         summary["hidden_from_browser_history"] = hidden_by_session_id[session_id]
         sessions.append(summary)
     sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)

@@ -32,8 +32,7 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
 )
-from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
-from ..runs.session_entries import serialize_session_entries
+from ..runs.schema import serialize_run_event, serialize_work_state_todos
 from ..utils.log import logger
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
@@ -362,35 +361,6 @@ class WebAdapter(MessageAdapter):
         timestamps = [float(getattr(message, "timestamp", 0) or 0) for message in messages]
         timestamps.extend(float(getattr(run, "updated_at", 0) or 0) for run in runs)
         return max(timestamps, default=0.0)
-
-    async def _serialize_session_summary(self, storage: Any, session_id: str, *, message_limit: int) -> dict[str, Any]:
-        messages = await storage.get_messages(session_id, limit=message_limit)
-        display_messages = [message for message in messages if str(getattr(message, "role", "") or "") in {"user", "assistant"}]
-        latest_runs = await storage.get_runs(session_id, limit=1)
-        latest_traces = []
-        for run in latest_runs:
-            get_run_trace = getattr(storage, "get_run_trace", None)
-            trace = await get_run_trace(session_id, run.run_id) if callable(get_run_trace) else None
-            if trace is not None:
-                latest_traces.append(trace)
-        get_work_state = getattr(storage, "get_work_state", None)
-        work_state = await get_work_state(session_id) if callable(get_work_state) else None
-        external_chat_id = self._external_chat_id_from_session(session_id)
-        fallback_title = external_chat_id or session_id
-        return {
-            "session_id": session_id,
-            "channel": self._channel_from_session(session_id),
-            "external_chat_id": external_chat_id,
-            "title": self._session_title(display_messages, fallback_title),
-            "updated_at": self._session_updated_at(messages, latest_runs),
-            "status": self._serialize_session_status(session_id),
-            "message_count": await storage.get_message_count(session_id),
-            "messages": [self._serialize_message(message) for message in display_messages],
-            "runs": [self._serialize_run(run) for run in latest_runs],
-            "entries": serialize_session_entries(display_messages, latest_traces),
-            "diff_summary": serialize_diff_summary(latest_traces[0]) if latest_traces else None,
-            "work_state": self._serialize_work_state(work_state),
-        }
 
     def _serialize_session_status(self, session_id: str) -> dict[str, Any]:
         service = self._get_session_status_service()
