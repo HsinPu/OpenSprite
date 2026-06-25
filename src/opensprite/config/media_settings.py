@@ -14,6 +14,7 @@ from .provider_errors import (
 )
 from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
+from .provider_public import public_provider_display_name
 from .provider_state import connected_provider_entries, load_provider_config_state
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
@@ -109,10 +110,15 @@ class MediaSettingsService:
             model_choices=preset.model_choices if preset else (),
         )
         media_models, media_model_source = discover_media_model_choices(preset_id, preset)
+        display_name = (
+            public_provider_display_name(provider_id, preset, provider)
+            if preset
+            else str(provider.get("name") or "").strip() or provider_id
+        )
         return {
             "id": provider_id,
             "provider": preset_id or provider_id,
-            "name": str(provider.get("name") or "").strip() or (preset.display_name if preset else provider_id),
+            "name": display_name,
             "model": selected or "",
             "models": choices,
             "media_models": media_models,
