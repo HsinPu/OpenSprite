@@ -26,6 +26,8 @@ export function useProviderSettingsActions({
     }
   }
 
+  async function refreshProviderState() { await loadProviderSettings(); await loadModelSettings(); }
+
   async function loadProviderAuthStatus(endpoint, loadingKey, errorKey, stateKey, loadFailedNotice, normalizePayload) {
     settingsState[loadingKey] = true;
     settingsState[errorKey] = "";
@@ -88,8 +90,7 @@ export function useProviderSettingsActions({
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerConnected);
       cancelProviderConnect();
-      await loadProviderSettings();
-      await loadModelSettings();
+      await refreshProviderState();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
     } finally {
@@ -106,8 +107,7 @@ export function useProviderSettingsActions({
         method: "POST",
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerDisconnected(provider.name, payload.restart_required));
-      await loadProviderSettings();
-      await loadModelSettings();
+      await refreshProviderState();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerDisconnectFailed;
     } finally {
@@ -128,8 +128,7 @@ export function useProviderSettingsActions({
         body: JSON.stringify({ credential_id: credentialId }),
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
-      await loadProviderSettings();
-      await loadModelSettings();
+      await refreshProviderState();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerCredentialUpdateFailed;
     } finally {
@@ -151,8 +150,7 @@ export function useProviderSettingsActions({
         { method: "DELETE" },
       );
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);
-      await loadProviderSettings();
-      await loadModelSettings();
+      await refreshProviderState();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerCredentialDeleteFailed;
     } finally {
@@ -175,8 +173,7 @@ export function useProviderSettingsActions({
         }),
       });
       setSettingsSuccess("providersNotice", options.connectedNotice);
-      await loadProviderSettings();
-      await loadModelSettings();
+      await refreshProviderState();
       await options.startAuthLogin();
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
