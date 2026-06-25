@@ -619,6 +619,25 @@ class ProviderSettingsService:
             return preset.display_name
         return provider_id.replace("_", " ").replace("-", " ").title()
 
+    def _public_provider_identity(
+        self,
+        provider_id: str,
+        provider: dict[str, Any],
+        *,
+        preset_id: str | None,
+        preset: ProviderPreset | None,
+        default_provider: str | None,
+    ) -> dict[str, Any]:
+        public_provider_id = preset_id or provider_id
+        return {
+            "id": provider_id,
+            "provider": public_provider_id,
+            "name": self._display_name(provider_id, preset, provider),
+            "preset_name": self._display_name(public_provider_id, preset),
+            "is_default": provider_id == default_provider,
+            **public_provider_profile(preset),
+        }
+
     def _public_connected_provider(
         self,
         provider_id: str,
@@ -631,10 +650,13 @@ class ProviderSettingsService:
         credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
         auth_type = preset.auth_type if preset else "api_key"
         return {
-            "id": provider_id,
-            "provider": preset_id or provider_id,
-            "name": self._display_name(provider_id, preset, provider),
-            "preset_name": self._display_name(preset_id or provider_id, preset),
+            **self._public_provider_identity(
+                provider_id,
+                provider,
+                preset_id=preset_id,
+                preset=preset,
+                default_provider=default_provider,
+            ),
             "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
             "model": provider.get("model") or "",
             "reasoning_effort": provider.get("reasoning_effort") or "",
@@ -647,8 +669,6 @@ class ProviderSettingsService:
             "auth_type": provider.get("auth_type") or auth_type,
             "requires_api_key": auth_type == "api_key",
             "api_key_optional": auth_type == "optional_api_key",
-            **public_provider_profile(preset),
-            "is_default": provider_id == default_provider,
             "enabled": bool(provider.get("enabled")),
         }
 
@@ -686,12 +706,14 @@ class ProviderSettingsService:
         model_metadata: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
         return {
-            "id": provider_id,
-            "provider": preset_id or provider_id,
-            "name": self._display_name(provider_id, preset, provider),
-            "preset_name": self._display_name(preset_id or provider_id, preset),
+            **self._public_provider_identity(
+                provider_id,
+                provider,
+                preset_id=preset_id,
+                preset=preset,
+                default_provider=default_provider,
+            ),
             "is_connected": True,
-            "is_default": provider_id == default_provider,
             "selected_model": provider.get("model") or "",
             "reasoning_effort": provider.get("reasoning_effort") or "",
             "models": choices,
@@ -704,7 +726,6 @@ class ProviderSettingsService:
             "model_capabilities": (
                 (preset.model_capabilities or {}) if preset else {}
             ),
-            **public_provider_profile(preset),
             "supports_custom_model": True,
         }
 
