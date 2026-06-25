@@ -6,12 +6,14 @@ import types
 
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_search import (
-    _effective_freshness,
-    _format_error,
-    _format_results,
-    _freshness_params,
-    _normalize_freshness,
+from opensprite.tools.web_search_freshness import (
+    effective_freshness as _effective_freshness,
+    freshness_params as _freshness_params,
+    normalize_freshness as _normalize_freshness,
+)
+from opensprite.tools.web_search_payloads import (
+    format_error as _format_error,
+    format_results as _format_results,
 )
 
 

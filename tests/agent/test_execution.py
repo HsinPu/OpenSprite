@@ -25,7 +25,8 @@ from opensprite.tools.image import AnalyzeImageTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import tool_error_result
 from opensprite.tools.web_fetch import WebFetchTool
-from opensprite.tools.web_search import WebSearchTool, _format_results
+from opensprite.tools.web_search import WebSearchTool
+from opensprite.tools.web_search_payloads import format_results as _format_results
 
 
 def test_execution_extracts_delegate_task_info_from_shared_result_labels():

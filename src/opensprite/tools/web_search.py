@@ -10,28 +10,15 @@ import httpx
 from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from .base import Tool
-from .web_search_freshness import (
-    AUTO_FRESHNESS,
-    FRESHNESS_VALUES,
-    effective_freshness as _effective_freshness,
-    freshness_params as _freshness_params,
-    normalize_freshness as _normalize_freshness,
-    web_search_request as _web_search_request,
-)
+from .web_search_freshness import web_search_request as _web_search_request
 from .web_search_duckduckgo import search_duckduckgo
 from .web_search_dispatch import web_search_provider as _web_search_provider
-from .web_search_payloads import (
-    format_error as _format_error,
-    format_results as _format_results,
-    normalize_text as _normalize,
-    strip_tags as _strip_tags,
-)
+from .web_search_payloads import format_error as _format_error
 from .web_search_jina import search_jina
 from .web_search_parameters import web_search_parameters as _web_search_parameters
 from .web_search_searxng import (
     clean_text_values as _clean_text_values,
     search_searxng,
-    searxng_scope_params as _searxng_scope_params,
 )
 
 def _normalize_proxy(proxy: Any) -> str | None:

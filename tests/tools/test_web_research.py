@@ -5,7 +5,7 @@ from datetime import datetime
 from opensprite.agent.execution import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
 from opensprite.tools.evidence import ToolEvidence, build_tool_evidence
-from opensprite.tools.web_search import _format_results
+from opensprite.tools.web_search_payloads import format_results as _format_results
 from opensprite.tools.web_research import WebResearchTool
 
 
