@@ -121,16 +121,22 @@ def coerce_bool(value: Any, *, field: str, default: bool) -> bool:
     raise web.HTTPBadRequest(text=f"{field} must be a boolean")
 
 
+def _coerce_choice(value: Any, *, field: str, default: str, choices: Any, lowercase: bool = False) -> str:
+    choice = str(value or default).strip()
+    choice = choice.lower() if lowercase else choice
+    choice = choice or default
+    if choice not in choices:
+        raise web.HTTPBadRequest(text=f"{field} must be one of: {', '.join(choices)}")
+    return choice
+
+
 def coerce_browser_backend(
     value: Any,
     *,
     default_backend: str = DEFAULT_BROWSER_BACKEND,
     backends: tuple[str, ...] | list[str] = BROWSER_BACKENDS,
 ) -> str:
-    backend = str(value or default_backend).strip() or default_backend
-    if backend not in backends:
-        raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(backends)}")
-    return backend
+    return _coerce_choice(value, field="backend", default=default_backend, choices=backends)
 
 
 def coerce_web_search_provider(
@@ -139,10 +145,7 @@ def coerce_web_search_provider(
     default_provider: str = DEFAULT_WEB_SEARCH_PROVIDER,
     providers: tuple[str, ...] | list[str] = WEB_SEARCH_PROVIDERS,
 ) -> str:
-    provider = str(value or default_provider).strip().lower() or default_provider
-    if provider not in providers:
-        raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(providers)}")
-    return provider
+    return _coerce_choice(value, field="provider", default=default_provider, choices=providers, lowercase=True)
 
 
 def coerce_web_search_freshness(
@@ -151,10 +154,7 @@ def coerce_web_search_freshness(
     default_freshness: str = DEFAULT_WEB_SEARCH_FRESHNESS,
     freshness_values: tuple[str, ...] | list[str] = WEB_SEARCH_FRESHNESS_OPTIONS,
 ) -> str:
-    freshness = str(value or default_freshness).strip().lower() or default_freshness
-    if freshness not in freshness_values:
-        raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(freshness_values)}")
-    return freshness
+    return _coerce_choice(value, field="freshness", default=default_freshness, choices=freshness_values, lowercase=True)
 
 
 def normalize_searxng_engine_options(engines: Any) -> list[dict[str, Any]]:
