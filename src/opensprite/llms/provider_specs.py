@@ -10,6 +10,12 @@ from ..config.provider_api_modes import ANTHROPIC_MESSAGES_API_MODE
 from ..config.provider_ids import COPILOT_PROVIDER_ID, MINIMAX_PROVIDER_ID, OPENAI_PROVIDER_ID, OPENROUTER_PROVIDER_ID
 
 
+OPENAI_RUNTIME_KIND = "openai"
+OPENROUTER_RUNTIME_KIND = "openrouter"
+MINIMAX_RUNTIME_KIND = "minimax"
+COPILOT_RUNTIME_KIND = "copilot"
+
+
 @dataclass(frozen=True)
 class ProviderSpec:
     """Metadata for one LLM provider."""
@@ -20,6 +26,9 @@ class ProviderSpec:
     detect_by_base_keyword: str = ""
     default_base_url: str = ""
     detect_by_model_keywords: tuple[str, ...] = ()
+    runtime_kind: str = OPENAI_RUNTIME_KIND
+    supports_anthropic_messages: bool = False
+    passes_reasoning_effort: bool = True
 
 
 OPENAI_PROVIDER = ProviderSpec(
@@ -29,7 +38,14 @@ OPENAI_PROVIDER = ProviderSpec(
     detect_by_model_keywords=("gpt",),
 )
 PROVIDERS = (
-    ProviderSpec(OPENROUTER_PROVIDER_ID, ("openrouter",), "sk-or-", "openrouter", "https://openrouter.ai/api/v1"),
+    ProviderSpec(
+        OPENROUTER_PROVIDER_ID,
+        ("openrouter",),
+        "sk-or-",
+        "openrouter",
+        "https://openrouter.ai/api/v1",
+        runtime_kind=OPENROUTER_RUNTIME_KIND,
+    ),
     OPENAI_PROVIDER,
     ProviderSpec(
         MINIMAX_PROVIDER_ID,
@@ -37,8 +53,18 @@ PROVIDERS = (
         detect_by_base_keyword="minimax",
         default_base_url="https://api.minimax.io/v1",
         detect_by_model_keywords=("minimax",),
+        runtime_kind=MINIMAX_RUNTIME_KIND,
+        supports_anthropic_messages=True,
+        passes_reasoning_effort=False,
     ),
-    ProviderSpec(COPILOT_PROVIDER_ID, ("copilot",), detect_by_base_keyword="githubcopilot", default_base_url=COPILOT_BASE_URL),
+    ProviderSpec(
+        COPILOT_PROVIDER_ID,
+        ("copilot",),
+        detect_by_base_keyword="githubcopilot",
+        default_base_url=COPILOT_BASE_URL,
+        runtime_kind=COPILOT_RUNTIME_KIND,
+        passes_reasoning_effort=False,
+    ),
 )
 
 
