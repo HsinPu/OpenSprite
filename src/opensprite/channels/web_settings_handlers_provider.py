@@ -21,7 +21,7 @@ from . import web_settings_reload, web_settings_support
 
 async def handle_settings_providers(adapter: Any, request: web.Request) -> web.Response:
     try:
-        payload = adapter._get_provider_settings().list_providers()
+        payload = web_settings_support.get_provider_settings(adapter).list_providers()
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)
@@ -33,7 +33,7 @@ async def handle_settings_provider_connect(adapter: Any, request: web.Request) -
         raise web.HTTPBadRequest(text="provider_id is required")
     body = await adapter._read_json_body(request)
     try:
-        payload = adapter._get_provider_settings().connect_provider(
+        payload = web_settings_support.get_provider_settings(adapter).connect_provider(
             provider_id,
             api_key=adapter._coerce_optional_text(body.get("api_key")),
             base_url=adapter._coerce_optional_text(body.get("base_url")),
@@ -49,7 +49,7 @@ async def handle_settings_provider_disconnect(adapter: Any, request: web.Request
     if provider_id is None:
         raise web.HTTPBadRequest(text="provider_id is required")
     try:
-        payload = adapter._get_provider_settings().disconnect_provider(provider_id)
+        payload = web_settings_support.get_provider_settings(adapter).disconnect_provider(provider_id)
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
     payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
@@ -96,7 +96,7 @@ async def handle_settings_credential_delete(adapter: Any, request: web.Request) 
         raise web.HTTPBadRequest(text="provider and credential_id are required")
     try:
         payload = remove_credential(provider, credential_id, app_home=adapter._get_config_path().parent)
-        cleanup = adapter._get_provider_settings().remove_credential_references(provider, credential_id)
+        cleanup = web_settings_support.get_provider_settings(adapter).remove_credential_references(provider, credential_id)
         payload.update(cleanup)
     except CredentialStoreError as exc:
         web_settings_support.raise_credential_store_error(exc)
@@ -137,7 +137,7 @@ async def handle_settings_provider_credential(adapter: Any, request: web.Request
     if credential_id is None:
         raise web.HTTPBadRequest(text="credential_id is required")
     try:
-        payload = adapter._get_provider_settings().set_provider_credential(provider_id, credential_id)
+        payload = web_settings_support.get_provider_settings(adapter).set_provider_credential(provider_id, credential_id)
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
     payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
@@ -146,7 +146,7 @@ async def handle_settings_provider_credential(adapter: Any, request: web.Request
 
 async def handle_settings_models(adapter: Any, request: web.Request) -> web.Response:
     try:
-        payload = adapter._get_provider_settings().list_models()
+        payload = web_settings_support.get_provider_settings(adapter).list_models()
     except ProviderSettingsError as exc:
         web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)

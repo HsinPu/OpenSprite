@@ -33,11 +33,6 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
 )
-from ..config.channel_settings import ChannelSettingsService
-from ..config.mcp_settings import MCPSettingsService
-from ..config.media_settings import MediaSettingsService
-from ..config.provider_settings import ProviderSettingsService
-from ..config.schedule_settings import ScheduleSettingsService
 from ..ops import OperationAuditRecord
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
@@ -240,21 +235,6 @@ class WebAdapter(MessageAdapter):
 
     def _get_app_home(self) -> Path:
         return self._get_config_path().parent
-
-    def _get_provider_settings(self) -> ProviderSettingsService:
-        return web_settings_support.get_provider_settings(self)
-
-    def _get_channel_settings(self) -> ChannelSettingsService:
-        return web_settings_support.get_channel_settings(self)
-
-    def _get_schedule_settings(self) -> ScheduleSettingsService:
-        return web_settings_support.get_schedule_settings(self)
-
-    def _get_mcp_settings(self) -> MCPSettingsService:
-        return web_settings_support.get_mcp_settings(self)
-
-    def _get_media_settings(self) -> MediaSettingsService:
-        return web_settings_support.get_media_settings(self)
 
     @staticmethod
     def _browser_runtime_status() -> dict[str, Any]:

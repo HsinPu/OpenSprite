@@ -232,7 +232,7 @@ async def handle_settings_log_update(adapter: Any, request: web.Request) -> web.
 
 async def handle_settings_mcp(adapter: Any, request: web.Request) -> web.Response:
     try:
-        payload = adapter._get_mcp_settings().list_servers()
+        payload = web_settings_support.get_mcp_settings(adapter).list_servers()
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
     return web.json_response(adapter._with_mcp_runtime(payload))
@@ -242,7 +242,7 @@ async def handle_settings_mcp_create(adapter: Any, request: web.Request) -> web.
     body = await adapter._read_json_body(request)
     server_id = adapter._coerce_optional_text(body.get("server_id"), default="") or ""
     try:
-        payload = adapter._get_mcp_settings().upsert_server(server_id, body)
+        payload = web_settings_support.get_mcp_settings(adapter).upsert_server(server_id, body)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
     payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
@@ -253,7 +253,7 @@ async def handle_settings_mcp_update(adapter: Any, request: web.Request) -> web.
     server_id = adapter._coerce_optional_text(request.match_info.get("server_id"), default="") or ""
     body = await adapter._read_json_body(request)
     try:
-        payload = adapter._get_mcp_settings().upsert_server(server_id, body)
+        payload = web_settings_support.get_mcp_settings(adapter).upsert_server(server_id, body)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
     payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
@@ -263,7 +263,7 @@ async def handle_settings_mcp_update(adapter: Any, request: web.Request) -> web.
 async def handle_settings_mcp_delete(adapter: Any, request: web.Request) -> web.Response:
     server_id = adapter._coerce_optional_text(request.match_info.get("server_id"), default="") or ""
     try:
-        payload = adapter._get_mcp_settings().remove_server(server_id)
+        payload = web_settings_support.get_mcp_settings(adapter).remove_server(server_id)
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
     payload = await web_settings_reload.reload_mcp_from_config(adapter, payload, logger=logger)
@@ -272,7 +272,7 @@ async def handle_settings_mcp_delete(adapter: Any, request: web.Request) -> web.
 
 async def handle_settings_mcp_reload(adapter: Any, request: web.Request) -> web.Response:
     try:
-        payload = adapter._get_mcp_settings().list_servers()
+        payload = web_settings_support.get_mcp_settings(adapter).list_servers()
     except Exception as exc:
         web_settings_support.raise_mcp_settings_error(exc)
     payload = await web_settings_reload.reload_mcp_from_config(

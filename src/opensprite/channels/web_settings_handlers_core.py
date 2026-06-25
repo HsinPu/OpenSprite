@@ -145,7 +145,7 @@ async def handle_settings_copilot_auth_logout(adapter: Any, request: web.Request
 
 async def handle_settings_channels(adapter: Any, request: web.Request) -> web.Response:
     try:
-        payload = adapter._get_channel_settings().list_channels()
+        payload = web_settings_support.get_channel_settings(adapter).list_channels()
     except ChannelSettingsError as exc:
         web_settings_support.raise_channel_settings_error(exc)
     payload = await web_settings_reload.reload_channels_from_config(adapter, payload, logger=logger)
@@ -156,7 +156,7 @@ async def handle_settings_channel_create(adapter: Any, request: web.Request) -> 
     if channel_type is None:
         raise web.HTTPBadRequest(text="type is required")
     try:
-        payload = adapter._get_channel_settings().create_channel(
+        payload = web_settings_support.get_channel_settings(adapter).create_channel(
             channel_type,
             name=adapter._coerce_optional_text(body.get("name")),
             token=adapter._coerce_optional_text(body.get("token")),
@@ -172,7 +172,7 @@ async def handle_settings_channel_update(adapter: Any, request: web.Request) -> 
         raise web.HTTPBadRequest(text="channel_id is required")
     body = await adapter._read_json_body(request)
     try:
-        payload = adapter._get_channel_settings().update_channel(
+        payload = web_settings_support.get_channel_settings(adapter).update_channel(
             channel_id,
             enabled=body.get("enabled") if "enabled" in body else None,
             settings=body.get("settings", {}),
@@ -189,7 +189,7 @@ async def handle_settings_channel_connect(adapter: Any, request: web.Request) ->
         raise web.HTTPBadRequest(text="channel_id is required")
     body = await adapter._read_json_body(request)
     try:
-        payload = adapter._get_channel_settings().connect_channel(
+        payload = web_settings_support.get_channel_settings(adapter).connect_channel(
             channel_id,
             token=adapter._coerce_optional_text(body.get("token")),
             name=adapter._coerce_optional_text(body.get("name")),
@@ -205,7 +205,7 @@ async def handle_settings_channel_disconnect(adapter: Any, request: web.Request)
     if channel_id is None:
         raise web.HTTPBadRequest(text="channel_id is required")
     try:
-        payload = adapter._get_channel_settings().disconnect_channel(channel_id)
+        payload = web_settings_support.get_channel_settings(adapter).disconnect_channel(channel_id)
     except ChannelSettingsError as exc:
         web_settings_support.raise_channel_settings_error(exc)
     payload = await web_settings_reload.reload_channels_from_config(adapter, payload, logger=logger)
