@@ -37,6 +37,13 @@ def get_configured_provider_id(provider_id: str, provider: dict[str, Any]) -> st
     return str(provider.get("provider") or provider_id or "").strip()
 
 
+def get_provider_media_base_url(provider_id: str, provider: dict[str, Any]) -> str | None:
+    """Return the media API base URL for a configured provider instance."""
+    if get_configured_provider_id(provider_id, provider) == "minimax":
+        return "https://api.minimax.io/v1"
+    return provider.get("base_url")
+
+
 def get_model_choices(
     current_model: str | None,
     *,
