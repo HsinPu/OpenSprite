@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..auth.copilot import COPILOT_BASE_URL
 from ..config.llm_presets import provider_default_base_url as profile_default_base_url
 from ..config.provider_api_modes import ANTHROPIC_MESSAGES_API_MODE
+from ..config.provider_ids import COPILOT_PROVIDER_ID, MINIMAX_PROVIDER_ID, OPENAI_PROVIDER_ID, OPENROUTER_PROVIDER_ID
 
 
 @dataclass(frozen=True)
@@ -22,22 +23,22 @@ class ProviderSpec:
 
 
 OPENAI_PROVIDER = ProviderSpec(
-    "openai",
+    OPENAI_PROVIDER_ID,
     ("gpt", "openai"),
     default_base_url="https://api.openai.com/v1",
     detect_by_model_keywords=("gpt",),
 )
 PROVIDERS = (
-    ProviderSpec("openrouter", ("openrouter",), "sk-or-", "openrouter", "https://openrouter.ai/api/v1"),
+    ProviderSpec(OPENROUTER_PROVIDER_ID, ("openrouter",), "sk-or-", "openrouter", "https://openrouter.ai/api/v1"),
     OPENAI_PROVIDER,
     ProviderSpec(
-        "minimax",
+        MINIMAX_PROVIDER_ID,
         ("minimax",),
         detect_by_base_keyword="minimax",
         default_base_url="https://api.minimax.io/v1",
         detect_by_model_keywords=("minimax",),
     ),
-    ProviderSpec("copilot", ("copilot",), detect_by_base_keyword="githubcopilot", default_base_url=COPILOT_BASE_URL),
+    ProviderSpec(COPILOT_PROVIDER_ID, ("copilot",), detect_by_base_keyword="githubcopilot", default_base_url=COPILOT_BASE_URL),
 )
 
 
@@ -80,6 +81,6 @@ def provider_spec_default_base_url(spec: ProviderSpec, *, api_mode: str | None =
     """Return the runtime default URL for a provider spec."""
 
     profile_url = provider_name_default_base_url(spec.name)
-    if spec.name == "minimax" and api_mode != ANTHROPIC_MESSAGES_API_MODE:
+    if spec.name == MINIMAX_PROVIDER_ID and api_mode != ANTHROPIC_MESSAGES_API_MODE:
         return spec.default_base_url
     return profile_url or spec.default_base_url

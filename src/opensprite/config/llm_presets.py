@@ -12,6 +12,7 @@ from .provider_auth_types import (
     GITHUB_COPILOT_OAUTH_AUTH_TYPE,
     OPENAI_CODEX_OAUTH_AUTH_TYPE,
 )
+from .provider_ids import COPILOT_PROVIDER_ID, MINIMAX_PROVIDER_ID, OPENAI_CODEX_PROVIDER_ID
 
 
 @dataclass(frozen=True)
@@ -195,9 +196,9 @@ def provider_profile_defaults(
     explicit_auth_type = str(auth_type or API_KEY_AUTH_TYPE).strip() or API_KEY_AUTH_TYPE
     if not normalized:
         if explicit_auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE:
-            normalized = "openai-codex"
+            normalized = OPENAI_CODEX_PROVIDER_ID
         elif explicit_auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
-            normalized = "copilot"
+            normalized = COPILOT_PROVIDER_ID
 
     profile = get_provider_profile(normalized)
     profile_auth_type = profile.auth_type if profile else API_KEY_AUTH_TYPE
@@ -208,7 +209,7 @@ def provider_profile_defaults(
     profile_api_mode = profile.api_mode if profile else None
     effective_api_mode = api_mode or profile_api_mode
     default_base_url = profile.default_base_url if profile else ""
-    if normalized == "minimax" and effective_api_mode != profile_api_mode:
+    if normalized == MINIMAX_PROVIDER_ID and effective_api_mode != profile_api_mode:
         default_base_url = ""
 
     return ProviderProfileDefaults(
