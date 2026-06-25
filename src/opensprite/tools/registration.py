@@ -24,7 +24,8 @@ from .browser import (
     BrowserSnapshotTool,
     BrowserTypeTool,
 )
-from .browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
+from .browser_provider_factory import cloud_provider_from_config
+from .browser_runtime import AgentBrowserRuntime
 from .code_navigation import CodeNavigationTool
 from .credential_store import CredentialStoreTool
 from .cron import CronTool

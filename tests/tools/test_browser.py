@@ -17,12 +17,16 @@ from opensprite.tools.browser import (
 from opensprite.tools.browser_runtime import (
     AgentBrowserRuntime,
     BrowserRuntimeError,
-    BrowserUseCloudProvider,
-    BrowserbaseCloudProvider,
     CloudBrowserSession,
-    FirecrawlCloudProvider,
+)
+from opensprite.tools.browser_provider_factory import (
     browser_cloud_status,
     cloud_provider_from_config,
+)
+from opensprite.tools.browser_providers import (
+    BrowserUseCloudProvider,
+    BrowserbaseCloudProvider,
+    FirecrawlCloudProvider,
 )
 from opensprite.tools.evidence import build_tool_evidence
 from opensprite.tools.registration import (
