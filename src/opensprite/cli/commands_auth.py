@@ -35,7 +35,7 @@ def auth_status_command(
 
         try:
             status = get_copilot_status(app_home)
-            payload = {"provider": provider, "configured": status.configured, "path": str(status.path)}
+            payload = status.to_public_payload(provider)
         except CopilotAuthError as exc:
             payload = {"provider": provider, "configured": False, "error": str(exc)}
             if json_output:
@@ -55,14 +55,7 @@ def auth_status_command(
 
     try:
         status = get_codex_status(app_home)
-        payload = {
-            "provider": provider,
-            "configured": status.configured,
-            "path": str(status.path),
-            "expires_at": status.expires_at,
-            "expired": status.expired,
-            "account_id": status.account_id,
-        }
+        payload = status.to_public_payload(provider)
     except CodexAuthError as exc:
         payload = {"provider": provider, "configured": False, "error": str(exc)}
         if json_output:

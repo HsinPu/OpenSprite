@@ -18,16 +18,7 @@ async def handle_settings_codex_auth_status(adapter: Any, request: web.Request) 
         status = get_codex_status(adapter._get_app_home())
     except CodexAuthError as exc:
         return web.json_response({"provider": "openai-codex", "configured": False, "error": str(exc)}, status=400)
-    return web.json_response(
-        {
-            "provider": "openai-codex",
-            "configured": status.configured,
-            "path": str(status.path),
-            "expires_at": status.expires_at,
-            "expired": status.expired,
-            "account_id": status.account_id,
-        }
-    )
+    return web.json_response(status.to_public_payload())
 
 
 async def handle_settings_codex_auth_login(adapter: Any, request: web.Request) -> web.Response:
@@ -94,7 +85,7 @@ async def handle_settings_copilot_auth_status(adapter: Any, request: web.Request
         status = get_copilot_status(adapter._get_app_home())
     except CopilotAuthError as exc:
         return web.json_response({"provider": "copilot", "configured": False, "error": str(exc)}, status=400)
-    return web.json_response({"provider": "copilot", "configured": status.configured, "path": str(status.path)})
+    return web.json_response(status.to_public_payload())
 
 
 async def handle_settings_copilot_auth_login(adapter: Any, request: web.Request) -> web.Response:

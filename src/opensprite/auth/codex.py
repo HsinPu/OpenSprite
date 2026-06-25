@@ -32,6 +32,16 @@ class CodexAuthStatus:
     expired: bool | None = None
     account_id: str | None = None
 
+    def to_public_payload(self, provider: str = "openai-codex") -> dict[str, Any]:
+        return {
+            "provider": provider,
+            "configured": self.configured,
+            "path": str(self.path),
+            "expires_at": self.expires_at,
+            "expired": self.expired,
+            "account_id": self.account_id,
+        }
+
 
 @dataclass(frozen=True)
 class CodexToken:
