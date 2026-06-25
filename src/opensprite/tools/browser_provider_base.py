@@ -31,7 +31,7 @@ class CloudBrowserProvider:
         self.transport = transport
 
     def is_configured(self) -> bool:
-        return False
+        return bool(getattr(self, "api_key", ""))
 
     def status(self) -> dict[str, Any]:
         return {"configured": self.is_configured()}

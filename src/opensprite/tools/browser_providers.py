@@ -114,9 +114,6 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         self.api_key = _first_text(api_key, os.getenv("BROWSER_USE_API_KEY"))
         self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSER_USE_BASE_URL")), DEFAULT_BROWSER_USE_BASE_URL)
 
-    def is_configured(self) -> bool:
-        return bool(self.api_key)
-
     def status(self) -> dict[str, Any]:
         return self.api_key_status()
 
@@ -178,9 +175,6 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         super().__init__(transport=transport)
         self.api_key = _first_text(api_key, os.getenv("FIRECRAWL_API_KEY"))
         self.base_url = _clean_base_url(_first_text(base_url, os.getenv("FIRECRAWL_API_URL")), DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
-
-    def is_configured(self) -> bool:
-        return bool(self.api_key)
 
     def status(self) -> dict[str, Any]:
         return self.api_key_status()
