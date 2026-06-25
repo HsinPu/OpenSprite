@@ -89,6 +89,10 @@ def _discovery_type(preset: ProviderPreset | None, field_name: str) -> str:
     return str(discovery.get("type") or "").strip()
 
 
+def _can_probe_openai_compatible_models(provider: dict[str, Any]) -> bool:
+    return provider.get("api_mode") != "anthropic_messages"
+
+
 def _filter_model_metadata_fields(
     metadata_by_model: dict[str, dict[str, Any]],
     fields: tuple[str, ...],
@@ -232,7 +236,7 @@ def discover_provider_models(
     fallback = list(preset.model_choices if preset else ())
     preset_id = get_configured_provider_id(provider_id, provider)
     discovery_type = _discovery_type(preset, "model_discovery")
-    if not discovery_type and provider.get("api_mode") != "anthropic_messages" and str(provider.get("base_url") or "").strip():
+    if not discovery_type and _can_probe_openai_compatible_models(provider) and str(provider.get("base_url") or "").strip():
         discovery_type = "openai_compatible"
     api_key = resolve_provider_api_key(preset_id, provider, app_home=app_home, allow_default=True) if preset_id else ""
     live: list[str] = []
@@ -251,7 +255,7 @@ def discover_provider_models(
     elif discovery_type == "openrouter":
         live = fetch_openrouter_models()
         model_metadata = cached_openrouter_model_metadata(live)
-    elif discovery_type == "openai_compatible" and provider.get("api_mode") != "anthropic_messages":
+    elif discovery_type == "openai_compatible" and _can_probe_openai_compatible_models(provider):
         live = fetch_openai_compatible_models(
             api_key,
             str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
