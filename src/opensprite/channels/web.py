@@ -14,7 +14,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,8 +26,6 @@ from pydantic import ValidationError
 from .identity import build_session_id, normalize_identifier
 from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
-from ..cli import update as update_cli
-from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
@@ -1010,28 +1007,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_update_status(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_update_status(self, request)
-
-    async def _restart_gateway_after_response(self, config_path: Path | None = None) -> None:
-        await asyncio.sleep(1.0)
-        try:
-            try:
-                linux_status = service_linux.get_service_status()
-            except RuntimeError:
-                linux_status = None
-            if linux_status is not None and getattr(linux_status, "installed", False):
-                service_linux.restart_service()
-                return
-
-            pid_file = service_background.get_pid_file()
-            try:
-                pid_file.unlink()
-            except FileNotFoundError:
-                pass
-            service_background.start_service(config_path=config_path, python_executable=Path(sys.executable))
-        except Exception:
-            logger.exception("Failed to restart OpenSprite gateway after update")
-            return
-        os._exit(0)
 
     async def _handle_settings_update_apply(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_update_apply(self, request)

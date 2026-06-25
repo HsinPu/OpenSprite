@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 
-from ..cli import update as update_cli
+from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
+from ..utils.log import logger
 from . import web_settings_support
 
 
@@ -95,6 +99,29 @@ async def handle_settings_update_status(adapter: Any, request: web.Request) -> w
     return web.json_response(payload)
 
 
+async def restart_gateway_after_response(config_path: Path | None = None) -> None:
+    await asyncio.sleep(1.0)
+    try:
+        try:
+            linux_status = service_linux.get_service_status()
+        except RuntimeError:
+            linux_status = None
+        if linux_status is not None and getattr(linux_status, "installed", False):
+            service_linux.restart_service()
+            return
+
+        pid_file = service_background.get_pid_file()
+        try:
+            pid_file.unlink()
+        except FileNotFoundError:
+            pass
+        service_background.start_service(config_path=config_path, python_executable=Path(sys.executable))
+    except Exception:
+        logger.exception("Failed to restart OpenSprite gateway after update")
+        return
+    os._exit(0)
+
+
 async def handle_settings_update_apply(adapter: Any, request: web.Request) -> web.Response:
     body = await adapter._read_json_body(request)
     restart = adapter._coerce_bool(body.get("restart"), field="restart", default=True)
@@ -121,10 +148,8 @@ async def handle_settings_update_apply(adapter: Any, request: web.Request) -> we
         config_path = adapter._config.get("config_path") if hasattr(adapter, "_config") else adapter.config.get("config_path")
         resolved_config_path = None
         if config_path:
-            from pathlib import Path
-
             resolved_config_path = Path(config_path).expanduser()
-        asyncio.create_task(adapter._restart_gateway_after_response(config_path=resolved_config_path))
+        asyncio.create_task(restart_gateway_after_response(config_path=resolved_config_path))
     return web.json_response(payload)
 
 
