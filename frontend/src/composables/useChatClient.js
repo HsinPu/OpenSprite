@@ -37,19 +37,19 @@ import {
   writeStoredDraftSessions,
 } from "./chatClientSessions";
 import {
-  createRunViewState as createRunViewStateBase,
-  formatAutoContinueDetail as formatAutoContinueDetailBase,
-  formatRunFinishDetail as formatRunFinishDetailBase,
-  formatSubagentDetail as formatSubagentDetailBase,
-  formatSubagentGroupDetail as formatSubagentGroupDetailBase,
-  formatWorkflowDetail as formatWorkflowDetailBase,
-  formatWorkflowStepDetail as formatWorkflowStepDetailBase,
+  createRunViewState,
+  formatAutoContinueDetail,
+  formatRunFinishDetail,
+  formatSubagentDetail,
+  formatSubagentGroupDetail,
+  formatWorkflowDetail,
+  formatWorkflowStepDetail,
   isTerminalRunStatus,
   runStatusLabel,
   runTone,
   sessionStatusLabel,
   shortRunId,
-  statusFromRunEvent as statusFromRunEventBase,
+  statusFromRunEvent,
 } from "./chatClientRunHelpers";
 import { normalizeRunSummary } from "./runSummaryNormalizers";
 import {
@@ -342,38 +342,6 @@ function shouldLoadRunTrace(run) {
   }
   const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !(run.summary?.fileChanges || []).length;
   return !(run.traceLoaded && hasNeededFileChanges);
-}
-
-function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
-  return createRunViewStateBase({ runId, sessionId, status, createdAt, updatedAt, finishedAt });
-}
-
-function statusFromRunEvent(eventType, payload, eventStatus = "") {
-  return statusFromRunEventBase(eventType, payload, eventStatus);
-}
-
-function formatRunFinishDetail(payload, copy) {
-  return formatRunFinishDetailBase(payload, copy);
-}
-
-function formatSubagentDetail(payload) {
-  return formatSubagentDetailBase(payload);
-}
-
-function formatSubagentGroupDetail(payload) {
-  return formatSubagentGroupDetailBase(payload);
-}
-
-function formatWorkflowDetail(payload) {
-  return formatWorkflowDetailBase(payload);
-}
-
-function formatWorkflowStepDetail(payload) {
-  return formatWorkflowStepDetailBase(payload);
-}
-
-function formatAutoContinueDetail(payload) {
-  return formatAutoContinueDetailBase(payload);
 }
 
 function describeRunEvent(eventType, payload, copy) {
