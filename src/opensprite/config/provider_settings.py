@@ -31,8 +31,11 @@ from .provider_discovery import (
     fetch_openrouter_models,
 )
 from .provider_public import (
+    public_available_provider,
+    public_connected_provider,
     public_credential_for_provider,
     public_credential_source,
+    public_model_provider,
     public_provider_auth_flags,
     public_provider_display_name,
     public_provider_identity,
@@ -82,95 +85,6 @@ class ProviderSettingsService:
         write_json_dict(self.config_path, main_data)
         Config.ensure_llm_providers_file(self.config_path, main_data)
         Config.write_llm_providers_file(self.config_path, providers, llm_data)
-
-    def _public_connected_provider(
-        self,
-        provider_id: str,
-        provider: dict[str, Any],
-        *,
-        preset_id: str | None,
-        preset: ProviderPreset | None,
-        default_provider: str | None,
-    ) -> dict[str, Any]:
-        credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
-        auth_type = preset.auth_type if preset else "api_key"
-        return {
-            **public_provider_identity(
-                provider_id,
-                provider,
-                preset_id=preset_id,
-                preset=preset,
-                default_provider=default_provider,
-            ),
-            "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
-            "model": provider.get("model") or "",
-            "reasoning_effort": provider.get("reasoning_effort") or "",
-            "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
-            "credential_id": provider.get("credential_id") or "",
-            "credential_effective_id": (credential or {}).get("id") or "",
-            "credential_source": public_credential_source(provider, credential),
-            "credential_label": (credential or {}).get("label") or "",
-            "credential_preview": (credential or {}).get("secret_preview") or "",
-            "auth_type": provider.get("auth_type") or auth_type,
-            **public_provider_auth_flags(auth_type),
-            "enabled": bool(provider.get("enabled")),
-        }
-
-    def _public_available_provider(
-        self,
-        provider_id: str,
-        preset: ProviderPreset,
-        connected: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        return {
-            "id": provider_id,
-            "name": public_provider_display_name(provider_id, preset),
-            "default_base_url": preset.default_base_url,
-            "auth_type": preset.auth_type,
-            "api_mode": preset.api_mode,
-            **public_provider_auth_flags(preset.auth_type),
-            **public_provider_profile(preset),
-            "model_choices": list(preset.model_choices),
-            "connected_count": sum(
-                1 for provider in connected if provider.get("provider") == provider_id
-            ),
-        }
-
-    def _public_model_provider(
-        self,
-        provider_id: str,
-        provider: dict[str, Any],
-        *,
-        preset_id: str | None,
-        preset: ProviderPreset | None,
-        default_provider: str | None,
-        choices: list[str],
-        model_source: str,
-        model_metadata: dict[str, dict[str, Any]],
-    ) -> dict[str, Any]:
-        return {
-            **public_provider_identity(
-                provider_id,
-                provider,
-                preset_id=preset_id,
-                preset=preset,
-                default_provider=default_provider,
-            ),
-            "is_connected": True,
-            "selected_model": provider.get("model") or "",
-            "reasoning_effort": provider.get("reasoning_effort") or "",
-            "models": choices,
-            "model_source": model_source,
-            "model_metadata": {
-                model: dict(metadata)
-                for model, metadata in model_metadata.items()
-                if model in choices and metadata
-            },
-            "model_capabilities": (
-                (preset.model_capabilities or {}) if preset else {}
-            ),
-            "supports_custom_model": True,
-        }
 
     def _connected_provider_entries(self, providers: dict[str, Any], presets: Any):
         for provider_id in get_provider_choices(
@@ -231,17 +145,18 @@ class ProviderSettingsService:
             presets,
         ):
             connected.append(
-                self._public_connected_provider(
+                public_connected_provider(
                     provider_id,
                     provider,
                     preset_id=preset_id,
                     preset=preset,
                     default_provider=default_provider,
+                    app_home=self.config_path.parent,
                 )
             )
 
         available = [
-            self._public_available_provider(provider_id, preset, connected)
+            public_available_provider(provider_id, preset, connected)
             for provider_id in presets.provider_order
             for preset in [presets.providers[provider_id]]
         ]
@@ -278,12 +193,13 @@ class ProviderSettingsService:
             raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
         return {
             "ok": True,
-            "provider": self._public_connected_provider(
+            "provider": public_connected_provider(
                 instance_id,
                 provider,
                 preset_id=provider_id,
                 preset=preset,
                 default_provider=loaded.llm.default,
+                app_home=self.config_path.parent,
             ),
             "restart_required": False,
         }
@@ -367,7 +283,7 @@ class ProviderSettingsService:
                 model_choices=tuple(discovered_models),
             )
             out.append(
-                self._public_model_provider(
+                public_model_provider(
                     provider_id,
                     provider,
                     preset_id=preset_id,
