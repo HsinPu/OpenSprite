@@ -14,7 +14,7 @@ from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
 from ..network_environment import apply_network_environment
 from ..utils.log import logger
-from . import web_settings_coercion, web_settings_payloads, web_settings_support
+from . import web_settings_coercion, web_settings_payloads, web_settings_reload, web_settings_support
 
 
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
@@ -39,7 +39,7 @@ async def handle_settings_media_update(adapter: Any, request: web.Request) -> we
         )
     except Exception as exc:
         web_settings_support.raise_provider_settings_error(exc)
-    payload = adapter._reload_media_from_config(payload)
+    payload = web_settings_reload.reload_media_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
