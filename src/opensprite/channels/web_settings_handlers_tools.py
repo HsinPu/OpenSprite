@@ -20,7 +20,7 @@ from . import web_settings_coercion, web_settings_payloads, web_settings_support
 
 async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"search": adapter._web_search_payload(config)})
+    return web.json_response({"search": web_settings_payloads.web_search_payload(config)})
 
 
 async def handle_settings_search_searxng_options(adapter: Any, request: web.Request) -> web.Response:
@@ -65,7 +65,7 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
     for field in ("jina_api_key",):
         adapter._apply_optional_secret_field(search, body, field)
     config.save(config_path)
-    payload = {"search": adapter._web_search_payload(config), "restart_required": True}
+    payload = {"search": web_settings_payloads.web_search_payload(config), "restart_required": True}
     payload = adapter._reload_web_search_from_config(payload)
     return web.json_response(payload)
 

@@ -33,20 +33,12 @@ from ..config.defaults import (
     DEFAULT_BROWSER_LAUNCH_ARGS,
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_CRON_TIMEZONE,
-    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_REASONING_DETAILS,
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
-    DEFAULT_SEARXNG_URL,
-    DEFAULT_SEARXNG_MAX_PAGES,
-    DEFAULT_WEB_SEARCH_FRESHNESS,
-    DEFAULT_WEB_SEARCH_MAX_RESULTS,
-    DEFAULT_WEB_SEARCH_PROVIDER,
-    WEB_SEARCH_FRESHNESS_OPTIONS,
     BROWSER_BACKENDS as DEFAULT_BROWSER_BACKENDS,
-    WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
 from ..config.channel_settings import ChannelSettingsService
 from ..config.mcp_settings import MCPSettingsService
@@ -79,8 +71,6 @@ from .web_routes import register_web_routes
 class WebAdapter(MessageAdapter):
     """WebSocket adapter for browser-based chat clients."""
 
-    WEB_SEARCH_PROVIDERS = DEFAULT_WEB_SEARCH_PROVIDERS
-    WEB_SEARCH_FRESHNESS = WEB_SEARCH_FRESHNESS_OPTIONS
     SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
     SEARXNG_FALLBACK_ENGINES = (
         "duckduckgo",
@@ -380,21 +370,6 @@ class WebAdapter(MessageAdapter):
             backends=cls.BROWSER_BACKENDS,
             browser_cloud_status_fn=browser_cloud_status,
             browser_runtime_status_fn=cls._browser_runtime_status,
-        )
-
-    @classmethod
-    def _web_search_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.web_search_payload(
-            config,
-            default_provider=DEFAULT_WEB_SEARCH_PROVIDER,
-            providers=cls.WEB_SEARCH_PROVIDERS,
-            default_freshness=DEFAULT_WEB_SEARCH_FRESHNESS,
-            freshness_values=cls.WEB_SEARCH_FRESHNESS,
-            default_max_results=DEFAULT_WEB_SEARCH_MAX_RESULTS,
-            default_duckduckgo_max_pages=DEFAULT_DUCKDUCKGO_MAX_PAGES,
-            default_searxng_max_pages=DEFAULT_SEARXNG_MAX_PAGES,
-            default_searxng_url=DEFAULT_SEARXNG_URL,
-            coerce_text_list_fn=cls._coerce_text_list,
         )
 
     @staticmethod

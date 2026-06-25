@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from ..config import Config
 from ..config.defaults import (
+    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
     DEFAULT_LOG_ENABLED,
@@ -16,8 +17,16 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_NO_PROXY,
+    DEFAULT_SEARXNG_MAX_PAGES,
+    DEFAULT_SEARXNG_URL,
+    DEFAULT_WEB_SEARCH_FRESHNESS,
+    DEFAULT_WEB_SEARCH_MAX_RESULTS,
+    DEFAULT_WEB_SEARCH_PROVIDER,
     LOG_LEVELS,
+    WEB_SEARCH_FRESHNESS_OPTIONS,
+    WEB_SEARCH_PROVIDERS,
 )
+from .web_settings_coercion import coerce_text_list
 
 
 def network_payload(
@@ -63,15 +72,15 @@ def browser_payload(
 def web_search_payload(
     config: Config,
     *,
-    default_provider: str,
-    providers: tuple[str, ...] | list[str],
-    default_freshness: str,
-    freshness_values: tuple[str, ...] | list[str],
-    default_max_results: int,
-    default_duckduckgo_max_pages: int,
-    default_searxng_max_pages: int,
-    default_searxng_url: str,
-    coerce_text_list_fn: Callable[..., list[str]],
+    default_provider: str = DEFAULT_WEB_SEARCH_PROVIDER,
+    providers: tuple[str, ...] | list[str] = WEB_SEARCH_PROVIDERS,
+    default_freshness: str = DEFAULT_WEB_SEARCH_FRESHNESS,
+    freshness_values: tuple[str, ...] | list[str] = WEB_SEARCH_FRESHNESS_OPTIONS,
+    default_max_results: int = DEFAULT_WEB_SEARCH_MAX_RESULTS,
+    default_duckduckgo_max_pages: int = DEFAULT_DUCKDUCKGO_MAX_PAGES,
+    default_searxng_max_pages: int = DEFAULT_SEARXNG_MAX_PAGES,
+    default_searxng_url: str = DEFAULT_SEARXNG_URL,
+    coerce_text_list_fn: Callable[..., list[str]] = coerce_text_list,
 ) -> dict[str, Any]:
     search = getattr(getattr(config, "tools", None), "web_search", None)
     return {
