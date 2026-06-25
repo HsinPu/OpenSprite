@@ -302,30 +302,31 @@ def register_media_tools(
     queue_outbound_media: Callable[[str, str], str | None] | None = None,
 ) -> None:
     """Register media-analysis tools."""
+    router = media_router or MediaRouter()
     registry.register(
         AnalyzeImageTool(
-            media_router or MediaRouter(),
+            router,
             get_current_images=get_current_images,
             workspace_resolver=workspace_resolver,
         )
     )
     registry.register(
         OCRImageTool(
-            media_router or MediaRouter(),
+            router,
             get_current_images=get_current_images,
             workspace_resolver=workspace_resolver,
         )
     )
     registry.register(
         TranscribeAudioTool(
-            media_router or MediaRouter(),
+            router,
             get_current_audios=get_current_audios,
             workspace_resolver=workspace_resolver,
         )
     )
     registry.register(
         AnalyzeVideoTool(
-            media_router or MediaRouter(),
+            router,
             get_current_videos=get_current_videos,
             workspace_resolver=workspace_resolver,
         )
