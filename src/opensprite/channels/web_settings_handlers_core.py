@@ -58,13 +58,7 @@ async def handle_settings_codex_auth_poll(adapter: Any, request: web.Request) ->
         return web.json_response({"ok": False, "provider": "openai-codex", "error": str(exc)}, status=400)
     payload: dict[str, Any] = {"ok": True, "provider": "openai-codex", "status": result.status}
     if status is not None:
-        payload["auth"] = {
-            "configured": status.configured,
-            "path": str(status.path),
-            "expires_at": status.expires_at,
-            "expired": status.expired,
-            "account_id": status.account_id,
-        }
+        payload["auth"] = status.to_public_payload(include_provider=False)
         payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 
@@ -120,7 +114,7 @@ async def handle_settings_copilot_auth_poll(adapter: Any, request: web.Request) 
         return web.json_response({"ok": False, "provider": "copilot", "error": str(exc)}, status=400)
     payload: dict[str, Any] = {"ok": True, "provider": "copilot", "status": result.status}
     if status is not None:
-        payload["auth"] = {"configured": status.configured, "path": str(status.path)}
+        payload["auth"] = status.to_public_payload(include_provider=False)
         payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, force=True, logger=logger)
     return web.json_response(payload)
 

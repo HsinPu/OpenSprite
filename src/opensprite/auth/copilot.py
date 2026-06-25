@@ -52,8 +52,9 @@ class CopilotAuthStatus:
     configured: bool
     path: Path
 
-    def to_public_payload(self, provider: str = "copilot") -> dict[str, Any]:
-        return {"provider": provider, "configured": self.configured, "path": str(self.path)}
+    def to_public_payload(self, provider: str = "copilot", *, include_provider: bool = True) -> dict[str, Any]:
+        payload = {"configured": self.configured, "path": str(self.path)}
+        return {"provider": provider, **payload} if include_provider else payload
 
 
 @dataclass(frozen=True)

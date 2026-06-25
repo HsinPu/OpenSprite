@@ -32,15 +32,15 @@ class CodexAuthStatus:
     expired: bool | None = None
     account_id: str | None = None
 
-    def to_public_payload(self, provider: str = "openai-codex") -> dict[str, Any]:
-        return {
-            "provider": provider,
+    def to_public_payload(self, provider: str = "openai-codex", *, include_provider: bool = True) -> dict[str, Any]:
+        payload = {
             "configured": self.configured,
             "path": str(self.path),
             "expires_at": self.expires_at,
             "expired": self.expired,
             "account_id": self.account_id,
         }
+        return {"provider": provider, **payload} if include_provider else payload
 
 
 @dataclass(frozen=True)
