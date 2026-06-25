@@ -31,13 +31,8 @@ from .provider_discovery import (
 from .provider_public import (
     public_available_provider,
     public_connected_provider,
-    public_credential_for_provider,
     public_credential_source,
     public_model_provider,
-    public_provider_auth_flags,
-    public_provider_display_name,
-    public_provider_identity,
-    public_provider_profile,
 )
 from .provider_state import (
     clear_default_provider,
