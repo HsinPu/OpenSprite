@@ -49,14 +49,11 @@ def get_model_choices(
     current_model: str | None,
     *,
     model_choices: tuple[str, ...],
-    custom_choice: str | None = None,
 ) -> tuple[list[str], str | None]:
     """Return model choices and the default selection for a provider."""
     choices = list(model_choices)
     if current_model and current_model not in choices:
         choices.insert(0, current_model)
-    if custom_choice and custom_choice not in choices:
-        choices.append(custom_choice)
     default = current_model or (choices[0] if choices else None)
     return choices, default
 
