@@ -20,7 +20,7 @@ def format_search_timestamp(value: float | None) -> str:
 def load_sqlite_search_store(config: str | None, *, resolve_config_path: Callable[[str | None], Path]):
     """Load the configured SQLite search store or fail with a clear message."""
     from ..config import Config
-    from ..runtime import create_search_store
+    from ..search.store_factory import create_search_store
     from ..search.sqlite_store import SQLiteSearchStore
 
     loaded = Config.load(resolve_config_path(config))
