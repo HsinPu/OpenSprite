@@ -86,22 +86,29 @@ async def read_json_body(request: web.Request) -> dict[str, Any]:
     return payload
 
 
-def raise_provider_settings_error(exc: ProviderSettingsError) -> None:
-    if isinstance(exc, ProviderSettingsValidationError):
+def _raise_settings_error(
+    exc: Exception,
+    bad_request: type[Exception],
+    not_found: type[Exception] | None = None,
+    conflict: type[Exception] | None = None,
+) -> None:
+    if isinstance(exc, bad_request):
         raise web.HTTPBadRequest(text=str(exc)) from exc
-    if isinstance(exc, ProviderSettingsNotFound):
+    if not_found and isinstance(exc, not_found):
         raise web.HTTPNotFound(text=str(exc)) from exc
-    if isinstance(exc, ProviderSettingsConflict):
+    if conflict and isinstance(exc, conflict):
         raise web.HTTPConflict(text=str(exc)) from exc
     raise web.HTTPServiceUnavailable(text=str(exc)) from exc
 
 
+def raise_provider_settings_error(exc: ProviderSettingsError) -> None:
+    _raise_settings_error(
+        exc, ProviderSettingsValidationError, ProviderSettingsNotFound, ProviderSettingsConflict
+    )
+
+
 def raise_channel_settings_error(exc: ChannelSettingsError) -> None:
-    if isinstance(exc, ChannelSettingsValidationError):
-        raise web.HTTPBadRequest(text=str(exc)) from exc
-    if isinstance(exc, ChannelSettingsNotFound):
-        raise web.HTTPNotFound(text=str(exc)) from exc
-    raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+    _raise_settings_error(exc, ChannelSettingsValidationError, ChannelSettingsNotFound)
 
 
 def raise_credential_store_error(exc: CredentialStoreError) -> None:
@@ -111,16 +118,8 @@ def raise_credential_store_error(exc: CredentialStoreError) -> None:
 
 
 def raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:
-    if isinstance(exc, ScheduleSettingsValidationError):
-        raise web.HTTPBadRequest(text=str(exc)) from exc
-    if isinstance(exc, ScheduleSettingsNotFound):
-        raise web.HTTPNotFound(text=str(exc)) from exc
-    raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+    _raise_settings_error(exc, ScheduleSettingsValidationError, ScheduleSettingsNotFound)
 
 
 def raise_mcp_settings_error(exc: MCPSettingsError) -> None:
-    if isinstance(exc, MCPSettingsValidationError):
-        raise web.HTTPBadRequest(text=str(exc)) from exc
-    if isinstance(exc, MCPSettingsNotFound):
-        raise web.HTTPNotFound(text=str(exc)) from exc
-    raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+    _raise_settings_error(exc, MCPSettingsValidationError, MCPSettingsNotFound)
