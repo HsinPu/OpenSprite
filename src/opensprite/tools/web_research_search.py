@@ -7,13 +7,13 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from .web_research_candidates import dedupe_search_items, official_domain_hints
 from .web_research_payloads import query_attempt_payload, search_attempt_payload
 from .web_research_queries import dedupe_query_strings, official_site_queries, site_domain_hints
 from .web_research_urls import canonicalize_url, clean_text, domain_from_url, is_fetchable_url
 from .web_search import WebSearchTool
+from .web_search_dispatch import normalize_web_search_provider, web_search_provider_order
 
 SearchQuery = Callable[
     ...,
@@ -148,11 +148,13 @@ async def search_with_fallback(
     last_provider = getattr(search_tool, "provider", search_config.provider)
     last_backend = ""
     if custom_search_tool:
-        providers = [str(last_provider or search_config.provider or DEFAULT_WEB_SEARCH_PROVIDER)]
+        providers = [normalize_web_search_provider(str(last_provider or search_config.provider or ""))]
     else:
-        providers = search_provider_order(
-            search_config,
-            configured_provider=str(last_provider or ""),
+        probe_tool = WebSearchTool(config=search_config)
+        providers = web_search_provider_order(
+            str(last_provider or search_config.provider or ""),
+            searxng_available=bool(str(search_config.searxng_url or "").strip()),
+            jina_available=bool(probe_tool.jina_api_key),
         )
     for provider in providers:
         tool = search_tool_for_provider(
@@ -212,30 +214,6 @@ def search_tool_for_provider(
     if provider == getattr(search_tool, "provider", ""):
         return search_tool
     return WebSearchTool(config=search_config.model_copy(update={"provider": provider}))
-
-
-def search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
-    configured = (configured_provider or config.provider or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
-    candidates = [configured]
-    probe_tool = WebSearchTool(config=config)
-    if str(config.searxng_url or "").strip():
-        candidates.append("searxng")
-    candidates.append("duckduckgo")
-    if configured == "jina" or probe_tool.jina_api_key:
-        candidates.append("jina")
-    return dedupe_strings(candidates)
-
-
-def dedupe_strings(values: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        normalized = str(value or "").strip().lower()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        out.append(normalized)
-    return out
 
 
 def parse_json_object(value: str) -> dict[str, Any] | None:

@@ -7,12 +7,14 @@ from typing import Any
 
 import httpx
 
-from ..config.defaults import DEFAULT_WEB_SEARCH_PROVIDER
 from ..config.schema import WebSearchToolConfig
 from .base import Tool
 from .web_search_freshness import web_search_request as _web_search_request
 from .web_search_duckduckgo import search_duckduckgo
-from .web_search_dispatch import web_search_provider as _web_search_provider
+from .web_search_dispatch import (
+    normalize_web_search_provider as _normalize_web_search_provider,
+    web_search_provider as _web_search_provider,
+)
 from .web_search_payloads import format_error as _format_error
 from .web_search_jina import search_jina
 from .web_search_parameters import web_search_parameters as _web_search_parameters
@@ -48,7 +50,7 @@ class WebSearchTool(Tool):
 
     @property
     def provider(self) -> str:
-        return self.config.provider.strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
+        return _normalize_web_search_provider(self.config.provider)
 
     @property
     def jina_api_key(self) -> str:
