@@ -21,7 +21,7 @@ from uuid import uuid4
 from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
-from .identity import build_session_id, normalize_identifier
+from .identity import build_session_id, channel_from_session, normalize_identifier
 from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import Config, MessagesConfig
@@ -378,19 +378,6 @@ class WebAdapter(MessageAdapter):
         return min(limit, maximum)
 
     @staticmethod
-    def _external_chat_id_from_session(session_id: str) -> str | None:
-        parts = str(session_id or "").split(":", 1)
-        if len(parts) == 2 and parts[1].strip():
-            return parts[1].strip()
-        compact = str(session_id or "").strip()
-        return compact or None
-
-    @staticmethod
-    def _channel_from_session(session_id: str) -> str:
-        parts = str(session_id or "").split(":", 1)
-        return parts[0].strip() if len(parts) == 2 and parts[0].strip() else "unknown"
-
-    @staticmethod
     def _coerce_media_list(value: Any) -> list[str] | None:
         if not isinstance(value, list):
             return None
@@ -472,7 +459,7 @@ class WebAdapter(MessageAdapter):
             include_event_id=False,
             extra={
                 "type": "run_event",
-                "channel": event.channel or self._channel_from_session(event.session_id),
+                "channel": event.channel or channel_from_session(event.session_id),
                 "channel_type": self.channel_type,
                 "external_chat_id": event.external_chat_id,
             },
@@ -485,7 +472,7 @@ class WebAdapter(MessageAdapter):
             await session_ws.send_json(payload)
             sent.add(session_ws)
 
-        if self._channel_from_session(event.session_id) == self.channel_instance_id:
+        if channel_from_session(event.session_id) == self.channel_instance_id:
             return
 
         # Browser clients can inspect external-channel sessions, so broadcast
@@ -499,7 +486,7 @@ class WebAdapter(MessageAdapter):
         """Send one session status update to interested browser sockets."""
         payload = {
             "type": "session_status",
-            "channel": self._channel_from_session(event.session_id),
+            "channel": channel_from_session(event.session_id),
             "session_id": event.session_id,
             "status": event.status,
             "updated_at": event.updated_at,

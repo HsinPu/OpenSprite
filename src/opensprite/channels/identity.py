@@ -23,6 +23,21 @@ def build_session_id(channel_instance_id: str, external_chat_id: str | None) -> 
     return f"{instance_id}:{external_id}"
 
 
+def external_chat_id_from_session(session_id: str) -> str | None:
+    """Return the transport chat id portion from an internal session id."""
+    parts = str(session_id or "").split(":", 1)
+    if len(parts) == 2 and parts[1].strip():
+        return parts[1].strip()
+    compact = str(session_id or "").strip()
+    return compact or None
+
+
+def channel_from_session(session_id: str) -> str:
+    """Return the channel namespace from an internal session id."""
+    parts = str(session_id or "").split(":", 1)
+    return parts[0].strip() if len(parts) == 2 and parts[0].strip() else "unknown"
+
+
 @dataclass(frozen=True)
 class ChannelIdentity:
     """Resolved identity for one inbound or outbound channel conversation."""

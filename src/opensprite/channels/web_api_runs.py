@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from aiohttp import web
 
+from .identity import external_chat_id_from_session
 from ..runs.schema import (
     serialize_diff_summary,
     serialize_file_change,
@@ -111,7 +112,7 @@ async def handle_run_cancel(adapter: Any, request: web.Request) -> web.Response:
         session_id,
         run_id,
         channel=adapter.channel_instance_id,
-        external_chat_id=adapter._external_chat_id_from_session(session_id),
+        external_chat_id=external_chat_id_from_session(session_id),
     )
     if not accepted:
         raise web.HTTPConflict(text="Run is not active")

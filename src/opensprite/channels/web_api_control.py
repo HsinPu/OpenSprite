@@ -6,6 +6,7 @@ from typing import Any
 
 from aiohttp import web
 
+from .identity import external_chat_id_from_session
 from ..runs.events import (
     WORKTREE_CLEANUP_COMPLETED_EVENT,
     WORKTREE_CLEANUP_FAILED_EVENT,
@@ -35,7 +36,7 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
             WORKTREE_CLEANUP_STARTED_EVENT,
             {"sandbox_path": sandbox_path, "status": "running"},
             channel=adapter.channel_instance_id,
-            external_chat_id=adapter._external_chat_id_from_session(session_id),
+            external_chat_id=external_chat_id_from_session(session_id),
         )
     try:
         result = cleanup(sandbox_path)
@@ -52,7 +53,7 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
                     "reason": str(exc) or exc.__class__.__name__,
                 },
                 channel=adapter.channel_instance_id,
-                external_chat_id=adapter._external_chat_id_from_session(session_id),
+                external_chat_id=external_chat_id_from_session(session_id),
             )
         raise
     if can_trace:
@@ -68,6 +69,6 @@ async def handle_worktree_cleanup(adapter: Any, request: web.Request) -> web.Res
                 "reason": result.get("reason"),
             },
             channel=adapter.channel_instance_id,
-            external_chat_id=adapter._external_chat_id_from_session(session_id),
+            external_chat_id=external_chat_id_from_session(session_id),
         )
     return web.json_response({"ok": bool(result.get("ok")), "cleanup": adapter._json_safe(result)})

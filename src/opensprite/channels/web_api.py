@@ -7,6 +7,7 @@ from typing import Any
 from aiohttp import web
 
 from . import web_api_control, web_api_runs, web_api_sessions
+from .identity import channel_from_session, external_chat_id_from_session
 from ..bus.session_commands import session_command_catalog
 from ..runs.schema import (
     serialize_file_change,
@@ -72,7 +73,7 @@ class WebApiHandlers:
             method = getattr(agent, "run_curator_now", None) if agent is not None else None
             if not callable(method):
                 raise web.HTTPServiceUnavailable(text="Curator run is not available")
-            channel = adapter._channel_from_session(session_id)
+            channel = channel_from_session(session_id)
             if channel == "unknown":
                 raise web.HTTPBadRequest(text="session_id must include a channel prefix")
             scope = adapter._coerce_optional_text(request.query.get("scope"))
@@ -81,7 +82,7 @@ class WebApiHandlers:
                     session_id,
                     scope=scope,
                     channel=channel,
-                    external_chat_id=adapter._external_chat_id_from_session(session_id),
+                    external_chat_id=external_chat_id_from_session(session_id),
                 )
             except ValueError as exc:
                 raise web.HTTPBadRequest(text=str(exc)) from exc

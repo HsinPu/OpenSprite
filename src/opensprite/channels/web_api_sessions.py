@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from aiohttp import web
 
+from .identity import channel_from_session, external_chat_id_from_session
 from ..agent.turn_input import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
 from ..runs.schema import serialize_diff_summary
 from ..runs.session_entries import serialize_session_entries
@@ -110,7 +111,7 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
         hidden = await _should_hide_from_browser_history(storage, session_id)
         if hidden and not include_cli:
             continue
-        channel = adapter._channel_from_session(session_id)
+        channel = channel_from_session(session_id)
         filtered_session_ids.append(session_id)
         hidden_by_session_id[session_id] = hidden
         channel_totals["all"] += 1
@@ -178,11 +179,11 @@ async def serialize_session_summary(adapter: Any, storage: Any, session_id: str,
             latest_traces.append(trace)
     get_work_state = getattr(storage, "get_work_state", None)
     work_state = await get_work_state(session_id) if callable(get_work_state) else None
-    external_chat_id = adapter._external_chat_id_from_session(session_id)
+    external_chat_id = external_chat_id_from_session(session_id)
     fallback_title = external_chat_id or session_id
     return {
         "session_id": session_id,
-        "channel": adapter._channel_from_session(session_id),
+        "channel": channel_from_session(session_id),
         "external_chat_id": external_chat_id,
         "title": _session_title(display_messages, fallback_title),
         "updated_at": _session_updated_at(messages, latest_runs),
