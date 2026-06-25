@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from ..auth.credentials import CredentialNotFoundError, list_credentials, resolve_credential
 from .llm_presets import ProviderPreset
 
 
@@ -53,3 +55,35 @@ def public_provider_identity(
         "is_default": provider_id == default_provider,
         **public_provider_profile(preset),
     }
+
+
+def public_credential_for_provider(
+    provider_id: str,
+    provider: dict[str, Any],
+    preset_id: str | None,
+    *,
+    app_home: str | Path,
+) -> dict[str, Any] | None:
+    credential_id = str(provider.get("credential_id", "") or "").strip()
+    if not credential_id and not preset_id:
+        return None
+    try:
+        resolved = resolve_credential(
+            provider=preset_id or provider_id,
+            credential_id=credential_id or None,
+            app_home=app_home,
+        )
+    except CredentialNotFoundError:
+        return None
+    credentials = list_credentials(resolved.provider, app_home=app_home).get(resolved.provider, [])
+    return next((entry for entry in credentials if entry.get("id") == resolved.id), None)
+
+
+def public_credential_source(provider: dict[str, Any], credential: dict[str, Any] | None) -> str:
+    if not credential:
+        return ""
+    if str(provider.get("credential_id", "") or "").strip():
+        return "explicit"
+    if credential.get("is_default"):
+        return "provider_default"
+    return "priority"

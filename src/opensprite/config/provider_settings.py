@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..auth.credentials import CredentialNotFoundError, list_credentials, resolve_credential, set_provider_default
+from ..auth.credentials import set_provider_default
 from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .json_files import load_json_dict, write_json_dict
 from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
@@ -31,6 +31,8 @@ from .provider_discovery import (
     fetch_openrouter_models,
 )
 from .provider_public import (
+    public_credential_for_provider,
+    public_credential_source,
     public_provider_auth_flags,
     public_provider_display_name,
     public_provider_identity,
@@ -44,32 +46,6 @@ from .provider_state import (
     select_model_in_config,
 )
 from .schema import Config
-
-
-def public_credential_for_provider(provider_id: str, provider: dict[str, Any], preset_id: str | None, *, app_home: str | Path) -> dict[str, Any] | None:
-    credential_id = str(provider.get("credential_id", "") or "").strip()
-    if not credential_id and not preset_id:
-        return None
-    try:
-        resolved = resolve_credential(
-            provider=preset_id or provider_id,
-            credential_id=credential_id or None,
-            app_home=app_home,
-        )
-    except CredentialNotFoundError:
-        return None
-    credentials = list_credentials(resolved.provider, app_home=app_home).get(resolved.provider, [])
-    return next((entry for entry in credentials if entry.get("id") == resolved.id), None)
-
-
-def public_credential_source(provider: dict[str, Any], credential: dict[str, Any] | None) -> str:
-    if not credential:
-        return ""
-    if str(provider.get("credential_id", "") or "").strip():
-        return "explicit"
-    if credential.get("is_default"):
-        return "provider_default"
-    return "priority"
 
 
 def provider_config_to_settings_data(provider: Any) -> dict[str, Any]:
