@@ -24,6 +24,10 @@ def _validated_reasoning_effort(value: Any) -> str:
     return normalize_reasoning_effort(normalized)
 
 
+def _has_provider_secret(provider: dict[str, Any]) -> bool:
+    return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+
+
 def prune_llm_providers(llm: dict[str, Any]) -> None:
     """Keep the default provider and any configured providers; drop empty shells."""
     providers = llm.get("providers")
@@ -35,10 +39,7 @@ def prune_llm_providers(llm: dict[str, Any]) -> None:
     default = default.strip()
     keep: set[str] = {default}
     for name, provider in providers.items():
-        if isinstance(provider, dict) and (
-            str(provider.get("api_key", "") or "").strip()
-            or str(provider.get("credential_id", "") or "").strip()
-        ):
+        if isinstance(provider, dict) and _has_provider_secret(provider):
             keep.add(name)
     llm["providers"] = {name: dict(providers[name]) for name in sorted(keep) if name in providers}
 
@@ -106,10 +107,7 @@ def connect_provider_in_config(
         )
         provider["credential_id"] = credential["id"]
         provider["api_key"] = ""
-    elif preset.auth_type == "api_key" and not (
-        str(provider.get("api_key", "") or "").strip()
-        or str(provider.get("credential_id", "") or "").strip()
-    ):
+    elif preset.auth_type == "api_key" and not _has_provider_secret(provider):
         raise ProviderSettingsValidationError("api_key is required when connecting a new provider")
 
     normalized_base_url = str(base_url or "").strip()
@@ -147,10 +145,7 @@ def select_model_in_config(
         raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
     if require_api_key and preset_id:
         preset = presets.providers[preset_id]
-        if preset.auth_type == "api_key" and not (
-            str(provider.get("api_key", "") or "").strip()
-            or str(provider.get("credential_id", "") or "").strip()
-        ):
+        if preset.auth_type == "api_key" and not _has_provider_secret(provider):
             raise ProviderSettingsConflict("Provider must be connected before selecting a model")
 
     preset = presets.providers[preset_id]
@@ -185,7 +180,7 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
         return False
     if preset and preset.auth_type != "api_key":
         return True
-    return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+    return _has_provider_secret(provider)
 
 
 def connected_provider_entries(providers: dict[str, Any], presets: Any):
