@@ -7,7 +7,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
@@ -23,7 +23,7 @@ from ..runs.events import (
 )
 from ..storage import StorageProvider, StoredMessage
 from ..storage.base import get_storage_message_count, get_storage_messages_slice
-from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, READ_SKILL_TOOL_NAME, SKILL_REVIEW_TOOL_NAMES
+from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, SKILL_REVIEW_TOOL_NAMES
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
@@ -37,9 +37,14 @@ from .curator_jobs import (
     SessionRunner,
     SnapshotReader,
 )
-from .curator_prompts import curator_shared_rules
 from .document_fingerprints import fingerprint_text_directory
 from .memory import MemoryStore, consolidate
+from .skill_review_prompts import (
+    SKILL_REVIEW_SYSTEM,
+    SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON,
+    build_skill_review_user_content,
+    format_stored_messages_for_transcript,
+)
 from .user_profile import UserProfileConsolidator
 
 if TYPE_CHECKING:
@@ -56,23 +61,6 @@ CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
 CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
 CURATOR_SLOW_JOB_SECONDS = 10.0
 CURATOR_VERY_SLOW_JOB_SECONDS = 30.0
-SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON = "transcript-too-short"
-SKILL_REVIEW_SYSTEM = f"""You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
-
-You may ONLY use these tools: `{READ_SKILL_TOOL_NAME}`, `{CONFIGURE_SKILL_TOOL_NAME}`.
-
-Goal: decide whether the recent conversation contains a reusable procedural workflow worth saving as a skill (SKILL.md), or an update to an existing skill.
-
-{curator_shared_rules("session skills")}
-
-Rules:
-- Prefer `action=upsert` on an existing skill when refining; use `action=add` only for a genuinely new skill id. Use `{READ_SKILL_TOOL_NAME}` with `skill-creator-design` before authoring a new skill.
-- If nothing is worth persisting, reply with exactly this single line and stop (no tools): Nothing to save.
-- Do not narrate, apologize, or mention this background pass.
-- Use `{CONFIGURE_SKILL_TOOL_NAME}` for the session workspace `skills/` folder only. Bundled skills live read-only under `~/.opensprite/skills/<id>/`.
-"""
-
-
 def _ordered_maintenance_job_keys(job_keys: tuple[str, ...] | list[str] | set[str]) -> tuple[str, ...]:
     requested = {str(item or "").strip() for item in job_keys if str(item or "").strip()}
     return tuple(job_key for job_key in CURATOR_MAINTENANCE_JOB_KEYS if job_key in requested)
@@ -89,43 +77,6 @@ def resolve_curator_scope(scope: str | None) -> tuple[tuple[str, ...], bool]:
     if normalized in CURATOR_MAINTENANCE_JOB_KEYS:
         return (normalized,), False
     raise ValueError(f"Unknown curator scope: {normalized}")
-
-
-def format_stored_messages_for_transcript(
-    messages: Sequence[Any],
-    *,
-    per_message_max_chars: int = 6000,
-    transcript_max_chars: int = 100_000,
-) -> str:
-    """Turn stored session rows into a plain-text transcript for the review model."""
-    lines: list[str] = []
-    total = 0
-    for m in messages:
-        role = str(getattr(m, "role", "") or "?").strip()
-        tool_name = getattr(m, "tool_name", None)
-        prefix = role.upper()
-        if tool_name:
-            prefix = f"{prefix} [tool:{tool_name}]"
-        body = str(getattr(m, "content", "") or "").strip()
-        if len(body) > per_message_max_chars:
-            body = body[:per_message_max_chars] + "\n… (truncated)"
-        block = f"{prefix}\n{body}\n"
-        if total + len(block) > transcript_max_chars:
-            lines.append("… (transcript truncated)")
-            break
-        lines.append(block)
-        total += len(block)
-    return "\n".join(lines).strip()
-
-
-def build_skill_review_user_content(transcript: str) -> str:
-    """User turn for the review-only LLM run."""
-    return (
-        "Below is a plain-text transcript of recent messages in this session (including tools when logged).\n\n"
-        f"--- TRANSCRIPT ---\n{transcript}\n--- END TRANSCRIPT ---\n\n"
-        "Review the transcript. If a reusable how-to should be saved or updated as a skill, use the tools. "
-        "Otherwise reply with exactly: Nothing to save."
-    )
 
 
 class SkillReviewService:
