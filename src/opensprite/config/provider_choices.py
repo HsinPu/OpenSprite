@@ -32,6 +32,11 @@ def get_provider_choices(config_data: dict[str, Any], *, provider_order: tuple[s
     return ordered + extras
 
 
+def get_configured_provider_id(provider_id: str, provider: dict[str, Any]) -> str:
+    """Return the base provider id configured for one provider instance."""
+    return str(provider.get("provider") or provider_id or "").strip()
+
+
 def get_model_choices(
     current_model: str | None,
     *,
@@ -50,7 +55,7 @@ def get_model_choices(
 
 def get_provider_preset_id(provider_id: str, provider: dict[str, Any], presets: Any) -> str | None:
     """Return the base preset id for a configured provider instance."""
-    configured = str(provider.get("provider", "") or "").strip()
+    configured = get_configured_provider_id(provider_id, provider)
     if configured in presets.providers:
         return configured
     if provider_id in presets.providers:

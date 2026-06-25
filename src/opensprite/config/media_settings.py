@@ -7,7 +7,7 @@ from typing import Any
 
 from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
-from .provider_choices import get_model_choices
+from .provider_choices import get_configured_provider_id, get_model_choices
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
@@ -75,7 +75,7 @@ class MediaSettingsService:
         for candidate_id, provider in providers.items():
             if not isinstance(provider, dict):
                 continue
-            provider_name = provider.get("provider") or candidate_id
+            provider_name = get_configured_provider_id(candidate_id, provider)
             if (
                 resolve_provider_api_key(
                     candidate_id,
@@ -91,7 +91,7 @@ class MediaSettingsService:
     @staticmethod
     def _media_base_url(provider_id: str, provider: dict[str, Any]) -> str | None:
         base_url = provider.get("base_url")
-        if str(provider.get("provider") or provider_id).strip() == "minimax":
+        if get_configured_provider_id(provider_id, provider) == "minimax":
             return "https://api.minimax.io/v1"
         return base_url
 
@@ -149,7 +149,7 @@ class MediaSettingsService:
         if not api_key:
             raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
 
-        preset_id = str(provider.get("provider") or normalized_provider_id).strip()
+        preset_id = get_configured_provider_id(normalized_provider_id, provider)
         return {
             "provider": preset_id,
             "api_key": api_key,

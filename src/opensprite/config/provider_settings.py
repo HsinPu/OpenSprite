@@ -10,6 +10,7 @@ from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .json_files import write_json_dict
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
+    get_configured_provider_id,
     get_model_choices,
     get_selected_provider,
     make_provider_instance_id,
@@ -185,7 +186,7 @@ class ProviderSettingsService:
         for provider_id, item in list(providers.items()):
             if not isinstance(item, dict):
                 continue
-            preset_id = str(item.get("provider") or provider_id or "").strip()
+            preset_id = get_configured_provider_id(provider_id, item)
             if preset_id != provider or item.get("credential_id") != credential_id:
                 continue
             providers.pop(provider_id, None)

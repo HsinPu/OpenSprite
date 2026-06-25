@@ -10,6 +10,7 @@ from typing import Any
 from ..utils.url import join_url_path
 from .llm_presets import ProviderPreset
 from .provider_credentials import resolve_provider_api_key
+from .provider_choices import get_configured_provider_id
 
 
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
@@ -211,7 +212,7 @@ def discover_provider_models(
     app_home: str | Path | None = None,
 ) -> tuple[list[str], str, dict[str, dict[str, Any]]]:
     fallback = list(preset.model_choices if preset else ())
-    preset_id = str(provider.get("provider") or provider_id or "").strip()
+    preset_id = get_configured_provider_id(provider_id, provider)
     discovery_type = _discovery_type(preset, "model_discovery")
     if not discovery_type and provider.get("api_mode") != "anthropic_messages" and str(provider.get("base_url") or "").strip():
         discovery_type = "openai_compatible"
