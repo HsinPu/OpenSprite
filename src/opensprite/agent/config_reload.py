@@ -7,12 +7,7 @@ from typing import Any
 from ..config import Config
 from ..llms import LLMProvider
 from ..llms.runtime_provider import create_configured_llm
-from ..media import (
-    MediaRouter,
-    OpenAICompatibleSpeechProvider,
-    OpenAICompatibleVideoProvider,
-    create_image_analysis_provider,
-)
+from ..media.factory import create_media_router
 from ..tool_names import WEB_RESEARCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME
 from ..tools.registration import BROWSER_TOOL_NAMES, register_browser_tools
 from ..tools.web_research import WebResearchTool
@@ -68,52 +63,14 @@ def reload_agent_llm_from_config(agent: Any, config: Config) -> dict[str, Any]:
 
 def reload_agent_media_from_config(agent: Any, config: Config) -> dict[str, Any]:
     """Reload media analysis providers from an already persisted Config."""
-    vision = getattr(config, "vision", None)
-    ocr = getattr(config, "ocr", None)
-    speech = getattr(config, "speech", None)
-    video = getattr(config, "video", None)
-
+    media_router = create_media_router(config)
     if agent.media_router is None:
-        agent.media_router = MediaRouter()
-
-    agent.media_router.image_provider = (
-        create_image_analysis_provider(
-            provider=vision.provider,
-            api_key=vision.api_key,
-            default_model=vision.model,
-            base_url=vision.base_url,
-        )
-        if vision and vision.enabled
-        else None
-    )
-    agent.media_router.ocr_provider = (
-        create_image_analysis_provider(
-            provider=ocr.provider,
-            api_key=ocr.api_key,
-            default_model=ocr.model,
-            base_url=ocr.base_url,
-        )
-        if ocr and ocr.enabled
-        else None
-    )
-    agent.media_router.speech_provider = (
-        OpenAICompatibleSpeechProvider(
-            api_key=speech.api_key,
-            default_model=speech.model,
-            base_url=speech.base_url,
-        )
-        if speech and speech.enabled
-        else None
-    )
-    agent.media_router.video_provider = (
-        OpenAICompatibleVideoProvider(
-            api_key=video.api_key,
-            default_model=video.model,
-            base_url=video.base_url,
-        )
-        if video and video.enabled
-        else None
-    )
+        agent.media_router = media_router
+    else:
+        agent.media_router.image_provider = media_router.image_provider
+        agent.media_router.ocr_provider = media_router.ocr_provider
+        agent.media_router.speech_provider = media_router.speech_provider
+        agent.media_router.video_provider = media_router.video_provider
 
     logger.info(
         "Media runtime reloaded | vision={} ocr={} speech={} video={}",
