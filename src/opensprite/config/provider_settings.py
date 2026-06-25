@@ -60,22 +60,20 @@ class ProviderSettingsService:
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
         default_provider = loaded.llm.default
-        connected: list[dict[str, Any]] = []
-
-        for provider_id, provider, preset_id, preset in connected_provider_entries(
-            providers,
-            presets,
-        ):
-            connected.append(
-                public_connected_provider(
-                    provider_id,
-                    provider,
-                    preset_id=preset_id,
-                    preset=preset,
-                    default_provider=default_provider,
-                    app_home=self.config_path.parent,
-                )
+        connected = [
+            public_connected_provider(
+                provider_id,
+                provider,
+                preset_id=preset_id,
+                preset=preset,
+                default_provider=default_provider,
+                app_home=self.config_path.parent,
             )
+            for provider_id, provider, preset_id, preset in connected_provider_entries(
+                providers,
+                presets,
+            )
+        ]
 
         available = [
             public_available_provider(provider_id, presets.providers[provider_id], connected)
