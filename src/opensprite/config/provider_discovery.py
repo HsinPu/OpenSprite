@@ -16,7 +16,7 @@ MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
 _OPENROUTER_MODEL_METADATA_CACHE: dict[str, dict[str, Any]] = {}
 
 
-def _dedupe_models(models: list[str]) -> list[str]:
+def dedupe_model_ids(models: list[str]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for model in models:
@@ -42,7 +42,7 @@ def _models_from_openai_compatible_payload(payload: dict[str, Any] | None) -> li
     data = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(data, list):
         return []
-    return _dedupe_models([str(item.get("id") or "") for item in data if isinstance(item, dict)])
+    return dedupe_model_ids([str(item.get("id") or "") for item in data if isinstance(item, dict)])
 
 
 def _positive_int(value: Any) -> int | None:
@@ -123,7 +123,7 @@ def fetch_openai_compatible_models(api_key: str, base_url: str) -> list[str]:
     headers = {"Accept": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    for candidate in _dedupe_models(candidates):
+    for candidate in dedupe_model_ids(candidates):
         models = _models_from_openai_compatible_payload(_read_json_url(join_url_path(candidate, "/models"), headers=headers))
         if models:
             return models
@@ -147,7 +147,7 @@ def fetch_openrouter_models() -> list[str]:
         if metadata and model_id not in metadata_by_model:
             metadata_by_model[model_id] = metadata
     _OPENROUTER_MODEL_METADATA_CACHE = metadata_by_model
-    return _dedupe_models(out)
+    return dedupe_model_ids(out)
 
 
 def fetch_openrouter_image_models() -> list[str]:
@@ -160,7 +160,7 @@ def fetch_openrouter_image_models() -> list[str]:
             continue
         if "image" in {str(modality).strip().lower() for modality in modalities}:
             out.append(model_id)
-    return _dedupe_models(out)
+    return dedupe_model_ids(out)
 
 
 def fetch_copilot_provider_models(api_key: str) -> list[str]:
@@ -200,7 +200,7 @@ def fetch_codex_models(app_home: str | Path | None = None) -> list[str]:
         rank = int(priority) if isinstance(priority, (int, float)) else 10_000
         sortable.append((rank, slug))
     sortable.sort(key=lambda item: (item[0], item[1]))
-    return _dedupe_models([slug for _, slug in sortable])
+    return dedupe_model_ids([slug for _, slug in sortable])
 
 
 def discover_provider_models(
@@ -248,6 +248,6 @@ def discover_provider_models(
             str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
         )
     if live:
-        models = _dedupe_models(live + fallback)
+        models = dedupe_model_ids(live + fallback)
         return models, "live", _filter_model_metadata_fields(model_metadata, preset.model_metadata_fields if preset else ())
     return fallback, "preset", {}

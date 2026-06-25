@@ -17,7 +17,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_discovery import fetch_openrouter_image_models
+from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
 
@@ -27,18 +27,6 @@ MEDIA_SECTIONS = {
     "speech": SpeechConfig,
     "video": VideoConfig,
 }
-
-
-def _dedupe_media_models(models: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for model in models:
-        normalized = str(model or "").strip()
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        out.append(normalized)
-    return out
 
 
 def discover_media_model_choices(preset_id: str | None, preset: Any) -> tuple[dict[str, list[str]], str]:
@@ -55,8 +43,8 @@ def discover_media_model_choices(preset_id: str | None, preset: Any) -> tuple[di
     if not live_image_models:
         return fallback, "preset"
 
-    vision = _dedupe_media_models(live_image_models + fallback.get("vision", []))
-    ocr = _dedupe_media_models(fallback.get("ocr", []) + live_image_models)
+    vision = dedupe_model_ids(live_image_models + fallback.get("vision", []))
+    ocr = dedupe_model_ids(fallback.get("ocr", []) + live_image_models)
     media_models = dict(fallback)
     media_models["vision"] = vision
     media_models["ocr"] = ocr
