@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import httpx
-import importlib
 from typing import Any
 from uuid import uuid4
 
@@ -15,7 +14,7 @@ from ..config import Config
 from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
-from ..utils.log import logger
+from ..utils.log import logger, setup_log
 from . import web_settings_coercion, web_settings_payloads, web_settings_support
 
 
@@ -216,8 +215,7 @@ async def handle_settings_log_update(adapter: Any, request: web.Request) -> web.
     if "log_reasoning_details" in body:
         config.log.log_reasoning_details = web_settings_coercion.coerce_bool(body.get("log_reasoning_details"), field="log_reasoning_details", default=config.log.log_reasoning_details)
     config.save(config_path)
-    web_module = importlib.import_module(type(adapter).__module__)
-    web_module.setup_log(config.log)
+    setup_log(config.log)
     return web.json_response({"log": web_settings_payloads.log_payload(config), "restart_required": False, "runtime_reloaded": True})
 
 

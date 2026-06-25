@@ -2654,7 +2654,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
     applied_log_configs = []
-    monkeypatch.setattr("opensprite.channels.web.setup_log", lambda log_config: applied_log_configs.append(log_config))
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.setup_log", lambda log_config: applied_log_configs.append(log_config))
 
     class SettingsAgent(EchoAgent):
         def __init__(self):

@@ -60,7 +60,7 @@ from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize
 from ..runs.session_entries import serialize_session_entries
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
-from ..utils.log import logger, setup_log
+from ..utils.log import logger
 from ..utils.processes import windows_hidden_process_kwargs
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
