@@ -1,9 +1,4 @@
-function coerceStringList(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => String(item || "").trim()).filter(Boolean);
-}
+import { coerceStringList } from "./chatClientCoercion";
 
 function coerceBoolean(value) {
   return value === true || value === "true" || value === 1;

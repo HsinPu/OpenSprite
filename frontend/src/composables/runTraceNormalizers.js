@@ -1,4 +1,5 @@
 import { randomToken } from "./chatClientTokens";
+import { coerceStringList } from "./chatClientCoercion";
 
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
@@ -11,13 +12,6 @@ function previewText(value) {
     return "";
   }
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
-
-function coerceStringList(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
 function compactJoin(values, separator = " · ") {

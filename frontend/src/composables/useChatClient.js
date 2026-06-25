@@ -2,6 +2,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, silentRe
 import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
+import { coerceStringList } from "./chatClientCoercion";
 import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
@@ -181,13 +182,6 @@ function previewText(value) {
     return "";
   }
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
-
-function coerceStringList(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
 function normalizeCommandCatalog(payload) {
