@@ -12,13 +12,13 @@ import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
 import {
-  buildRunFileChangeRevertPath as buildRunFileChangeRevertPathBase,
-  buildRunSummaryPath as buildRunSummaryPathBase,
-  buildRunTracePath as buildRunTracePathBase,
-  buildRunsPath as buildRunsPathBase,
-  buildSessionDeletePath as buildSessionDeletePathBase,
-  buildSessionsClearPath as buildSessionsClearPathBase,
-  buildWorktreeCleanupPath as buildWorktreeCleanupPathBase,
+  buildRunFileChangeRevertPath,
+  buildRunSummaryPath,
+  buildRunTracePath,
+  buildRunsPath,
+  buildSessionDeletePath,
+  buildSessionsClearPath,
+  buildWorktreeCleanupPath,
 } from "./chatClientPaths";
 import {
   channelFromSessionId,
@@ -346,34 +346,6 @@ function shouldLoadRunTrace(run) {
 
 function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
   return createRunViewStateBase({ runId, sessionId, status, createdAt, updatedAt, finishedAt });
-}
-
-function buildRunSummaryPath(runId, sessionId) {
-  return buildRunSummaryPathBase(runId, sessionId);
-}
-
-function buildRunTracePath(runId, sessionId) {
-  return buildRunTracePathBase(runId, sessionId);
-}
-
-function buildRunFileChangeRevertPath(runId, sessionId, changeId) {
-  return buildRunFileChangeRevertPathBase(runId, sessionId, changeId);
-}
-
-function buildWorktreeCleanupPath() {
-  return buildWorktreeCleanupPathBase();
-}
-
-function buildRunsPath(sessionId) {
-  return buildRunsPathBase(sessionId, RUN_HISTORY_LIMIT);
-}
-
-function buildSessionDeletePath(sessionId) {
-  return buildSessionDeletePathBase(sessionId);
-}
-
-function buildSessionsClearPath(channel = "web") {
-  return buildSessionsClearPathBase(channel);
 }
 
 function statusFromRunEvent(eventType, payload, eventStatus = "") {
@@ -2413,7 +2385,7 @@ export function useChatClient() {
     session.runsLoading = true;
     session.runsError = "";
     try {
-      const payload = await requestSettingsJson(buildRunsPath(session.sessionId));
+      const payload = await requestSettingsJson(buildRunsPath(session.sessionId, RUN_HISTORY_LIMIT));
       const runs = Array.isArray(payload?.runs)
         ? payload.runs.map(normalizeHistoryRun).filter(Boolean)
         : [];
