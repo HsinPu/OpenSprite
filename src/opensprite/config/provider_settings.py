@@ -7,7 +7,7 @@ from typing import Any
 
 from ..auth.credentials import set_provider_default
 from .defaults import DEFAULT_LLM_PROVIDERS_FILE
-from .json_files import load_json_dict, write_json_dict
+from .json_files import write_json_dict
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     get_model_choices,
@@ -44,20 +44,11 @@ from .provider_state import (
     connect_provider_in_config,
     connected_provider_entries,
     connected_provider_or_raise,
-    ensure_provider_entry,
+    load_provider_config_state,
     provider_mutation_data,
-    prune_llm_providers,
     select_model_in_config,
 )
 from .schema import Config
-
-
-def provider_config_to_settings_data(provider: Any) -> dict[str, Any]:
-    """Dump provider config without persisting empty optional request settings."""
-    data = provider.model_dump()
-    if not data.get("reasoning_effort"):
-        data.pop("reasoning_effort", None)
-    return data
 
 
 class ProviderSettingsService:
@@ -66,16 +57,8 @@ class ProviderSettingsService:
     def __init__(self, config_path: str | Path):
         self.config_path = Path(config_path).expanduser().resolve()
 
-    def _load_main_data(self) -> dict[str, Any]:
-        if not self.config_path.exists():
-            raise ProviderSettingsNotFound(f"Config file not found: {self.config_path}")
-        return load_json_dict(self.config_path)
-
     def _load_state(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
-        main_data = self._load_main_data()
-        loaded = Config.from_json(self.config_path)
-        providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
-        return main_data, providers, loaded
+        return load_provider_config_state(self.config_path)
 
     def _persist_llm_state(self, main_data: dict[str, Any], providers: dict[str, Any]) -> None:
         llm_data = main_data.setdefault("llm", {})

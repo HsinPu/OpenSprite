@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
+from .json_files import load_json_dict
 from .llm_presets import ProviderPreset, load_llm_presets
 from .provider_choices import get_provider_choices, get_provider_preset_id
 from .provider_discovery import _positive_int, cached_openrouter_model_metadata
@@ -14,6 +16,7 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
+from .schema import Config
 
 
 def _validated_reasoning_effort(value: Any) -> str:
@@ -26,6 +29,24 @@ def _validated_reasoning_effort(value: Any) -> str:
 
 def _has_provider_secret(provider: dict[str, Any]) -> bool:
     return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+
+
+def provider_config_to_settings_data(provider: Any) -> dict[str, Any]:
+    """Dump provider config without persisting empty optional request settings."""
+    data = provider.model_dump()
+    if not data.get("reasoning_effort"):
+        data.pop("reasoning_effort", None)
+    return data
+
+
+def load_provider_config_state(config_path: str | Path) -> tuple[dict[str, Any], dict[str, Any], Config]:
+    path = Path(config_path).expanduser().resolve()
+    if not path.exists():
+        raise ProviderSettingsNotFound(f"Config file not found: {path}")
+    main_data = load_json_dict(path)
+    loaded = Config.from_json(path)
+    providers = {name: provider_config_to_settings_data(provider) for name, provider in loaded.llm.providers.items()}
+    return main_data, providers, loaded
 
 
 def prune_llm_providers(llm: dict[str, Any]) -> None:

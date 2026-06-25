@@ -18,6 +18,7 @@ from .provider_errors import (
 )
 from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
+from .provider_state import load_provider_config_state
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
 
@@ -57,16 +58,8 @@ class MediaSettingsService:
     def __init__(self, config_path: str | Path):
         self.config_path = Path(config_path).expanduser().resolve()
 
-    def _load_main_data(self) -> dict[str, Any]:
-        if not self.config_path.exists():
-            raise ProviderSettingsNotFound(f"Config file not found: {self.config_path}")
-        return load_json_dict(self.config_path)
-
     def _load_state(self) -> tuple[dict[str, Any], dict[str, Any], Config]:
-        main_data = self._load_main_data()
-        loaded = Config.from_json(self.config_path)
-        providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
-        return main_data, providers, loaded
+        return load_provider_config_state(self.config_path)
 
     def _section_payload(self, category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
         provider_id = self._section_provider_id(config, providers)
