@@ -351,10 +351,6 @@ class WebAdapter(MessageAdapter):
         """Hot-apply persisted media settings to the running agent when possible."""
         return web_settings_reload.reload_media_from_config(self, payload, force=force, logger=logger)
 
-    def _reload_browser_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
-        """Hot-apply persisted browser settings to running browser tools when possible."""
-        return web_settings_reload.reload_browser_from_config(self, payload, force=force, logger=logger)
-
     async def _reload_mcp_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted MCP settings to the running agent when possible."""
         return await web_settings_reload.reload_mcp_from_config(self, payload, force=force, logger=logger)

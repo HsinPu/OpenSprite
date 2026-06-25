@@ -116,7 +116,7 @@ async def handle_settings_browser_update(adapter: Any, request: web.Request) -> 
             setattr(browser, field, web_settings_coercion.coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
     config.save(config_path)
     payload = {"browser": _browser_payload(adapter, config), "restart_required": True}
-    payload = adapter._reload_browser_from_config(payload)
+    payload = web_settings_reload.reload_browser_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
