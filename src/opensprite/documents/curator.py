@@ -8,7 +8,6 @@ import json
 import os
 import tempfile
 from collections.abc import Hashable
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Sequence, TypeVar
@@ -33,6 +32,13 @@ from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
 from ..utils.log import logger
 from .active_task import ActiveTaskConsolidator
+from .curator_jobs import (
+    CuratorJob,
+    CuratorMaintenanceServices,
+    CuratorRequest,
+    SessionRunner,
+    SnapshotReader,
+)
 from .curator_prompts import curator_shared_rules
 from .memory import MemoryStore, consolidate
 from .user_profile import UserProfileConsolidator
@@ -42,8 +48,6 @@ if TYPE_CHECKING:
 
 
 K = TypeVar("K", bound=Hashable)
-SnapshotReader = Callable[[str], str]
-SessionRunner = Callable[[str], Awaitable[Any]]
 RunEventEmitter = Callable[[str, str, str, dict[str, Any], str | None, str | None], Awaitable[None]]
 SkillReviewDecider = Callable[["ExecutionResult"], bool]
 LearningRecorder = Callable[[str, str, str, str, str | None, dict[str, Any] | None], None]
@@ -174,67 +178,6 @@ def resolve_curator_scope(scope: str | None) -> tuple[tuple[str, ...], bool]:
     if normalized in CURATOR_MAINTENANCE_JOB_KEYS:
         return (normalized,), False
     raise ValueError(f"Unknown curator scope: {normalized}")
-
-
-@dataclass(frozen=True)
-class CuratorRequest:
-    """Latest pending background curation request for one session."""
-
-    session_id: str
-    run_id: str | None = None
-    channel: str | None = None
-    external_chat_id: str | None = None
-    result: ExecutionResult | None = None
-    maintenance_job_keys: tuple[str, ...] = ()
-    run_skill_review: bool = False
-
-
-@dataclass(frozen=True)
-class CuratorJob:
-    """One snapshot-backed background job."""
-
-    key: str
-    label: str
-    snapshot_reader: SnapshotReader
-    runner: SessionRunner
-
-
-@dataclass(frozen=True)
-class CuratorMaintenanceServices:
-    """Maintenance services that run after a visible assistant turn."""
-
-    maybe_consolidate_memory: SessionRunner
-    maybe_update_recent_summary: SessionRunner
-    maybe_update_user_profile: SessionRunner
-    maybe_update_active_task: SessionRunner
-    read_memory_snapshot: SnapshotReader
-    read_recent_summary_snapshot: SnapshotReader
-    read_user_profile_snapshot: SnapshotReader
-    read_active_task_snapshot: SnapshotReader
-
-    def jobs(self) -> tuple[CuratorJob, ...]:
-        """Return maintenance jobs in the canonical post-turn order."""
-        return (
-            CuratorJob("memory", "memory", self.read_memory_snapshot, self.maybe_consolidate_memory),
-            CuratorJob(
-                "recent_summary",
-                "recent summary",
-                self.read_recent_summary_snapshot,
-                self.maybe_update_recent_summary,
-            ),
-            CuratorJob(
-                "user_profile",
-                "user profile",
-                self.read_user_profile_snapshot,
-                self.maybe_update_user_profile,
-            ),
-            CuratorJob(
-                "active_task",
-                "active task",
-                self.read_active_task_snapshot,
-                self.maybe_update_active_task,
-            ),
-        )
 
 
 def fingerprint_text_directory(root: Path | None) -> str:
