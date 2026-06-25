@@ -31,13 +31,6 @@ def _session_updated_at(messages: list[Any], runs: list[Any]) -> float:
     return max(timestamps, default=0.0)
 
 
-def _message_source(message: Any) -> str:
-    metadata = getattr(message, "metadata", None)
-    if not isinstance(metadata, dict):
-        return ""
-    return str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip()
-
-
 def _is_browser_user_message(message: Any) -> bool:
     metadata = getattr(message, "metadata", None)
     metadata = metadata if isinstance(metadata, dict) else {}
