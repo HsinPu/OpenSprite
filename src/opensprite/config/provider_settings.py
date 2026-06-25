@@ -17,9 +17,9 @@ from .provider_public import (
     public_connected_provider,
 )
 from .provider_state import (
-    clear_default_provider,
     connect_provider_in_config,
     connected_provider_or_raise,
+    disconnect_provider_in_config,
     load_provider_config_state,
     provider_mutation_data,
     remove_provider_credential_references,
@@ -84,15 +84,14 @@ class ProviderSettingsService:
     def disconnect_provider(self, provider_id: str) -> dict[str, Any]:
         """Disconnect one provider, clearing the active model when needed."""
         main_data, providers, loaded = self._load_state()
-        presets = load_llm_presets()
-        connected_provider_or_raise(provider_id, providers, presets)
-
-        was_default = provider_id == loaded.llm.default
-        providers.pop(provider_id, None)
-        if was_default:
-            clear_default_provider(main_data, providers)
+        restart_required = disconnect_provider_in_config(
+            main_data,
+            providers,
+            provider_id,
+            loaded.llm.default,
+        )
         persist_llm_provider_state(self.config_path, main_data, providers)
-        return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
+        return {"ok": True, "provider_id": provider_id, "restart_required": restart_required}
 
     def set_provider_credential(self, provider_id: str, credential_id: str) -> dict[str, Any]:
         """Select which stored credential a connected provider instance should use."""

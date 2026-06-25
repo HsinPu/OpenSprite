@@ -150,6 +150,21 @@ def connect_provider_in_config(
     return provider
 
 
+def disconnect_provider_in_config(
+    main_data: dict[str, Any],
+    providers: dict[str, Any],
+    provider_id: str,
+    default_provider: str | None,
+) -> bool:
+    """Disconnect a provider and clear the active provider when needed."""
+    connected_provider_or_raise(provider_id, providers, load_llm_presets())
+    restart_required = provider_id == default_provider
+    providers.pop(provider_id, None)
+    if restart_required:
+        clear_default_provider(main_data, providers)
+    return restart_required
+
+
 def select_model_in_config(
     config_data: dict[str, Any],
     provider_id: str,
