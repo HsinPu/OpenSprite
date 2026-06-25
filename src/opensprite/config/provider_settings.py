@@ -15,8 +15,6 @@ from .provider_choices import (
     make_provider_instance_id,
 )
 from .provider_errors import (
-    ProviderSettingsConflict,
-    ProviderSettingsError,
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )

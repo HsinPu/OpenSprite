@@ -7,8 +7,8 @@ from opensprite.config import Config
 from opensprite.config import provider_discovery
 from opensprite.config import provider_public
 from opensprite.config import provider_settings
+from opensprite.config.provider_errors import ProviderSettingsConflict
 from opensprite.config.provider_settings import (
-    ProviderSettingsConflict,
     ProviderSettingsService,
     ProviderSettingsValidationError,
 )
