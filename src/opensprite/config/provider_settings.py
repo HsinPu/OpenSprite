@@ -22,7 +22,7 @@ from .provider_state import (
     provider_mutation_data,
     remove_provider_credential_references,
     set_provider_credential_in_config,
-    select_model_in_config,
+    select_provider_model_in_config,
 )
 
 
@@ -140,13 +140,13 @@ class ProviderSettingsService:
     def select_model(self, provider_id: str, model: str, *, reasoning_effort: str | None = None) -> dict[str, Any]:
         """Select the active provider/model and persist it."""
         main_data, providers, _loaded = self._load_state()
-        config_data = provider_mutation_data(
+        provider = select_provider_model_in_config(
+            main_data,
             providers,
-            main_data.get("llm", {}).get("default"),
+            provider_id,
+            model,
+            reasoning_effort=reasoning_effort,
         )
-        provider = select_model_in_config(config_data, provider_id, model, reasoning_effort=reasoning_effort)
-        llm_data = main_data.setdefault("llm", {})
-        llm_data["default"] = provider_id
         persist_llm_provider_state(self.config_path, main_data, providers)
         return {
             "ok": True,

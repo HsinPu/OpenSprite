@@ -189,6 +189,29 @@ def set_provider_credential_in_config(
     return credential, provider_id == default_provider
 
 
+def select_provider_model_in_config(
+    main_data: dict[str, Any],
+    providers: dict[str, Any],
+    provider_id: str,
+    model: str,
+    *,
+    reasoning_effort: str | None = None,
+) -> dict[str, Any]:
+    """Select the active provider/model across main and provider config."""
+    config_data = provider_mutation_data(
+        providers,
+        main_data.get("llm", {}).get("default"),
+    )
+    provider = select_model_in_config(
+        config_data,
+        provider_id,
+        model,
+        reasoning_effort=reasoning_effort,
+    )
+    main_data.setdefault("llm", {})["default"] = provider_id
+    return provider
+
+
 def select_model_in_config(
     config_data: dict[str, Any],
     provider_id: str,
