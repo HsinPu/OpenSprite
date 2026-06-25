@@ -7,10 +7,7 @@ from typing import Any
 
 from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
-from .provider_choices import (
-    get_model_choices,
-    get_provider_preset_id,
-)
+from .provider_choices import get_model_choices
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
@@ -102,12 +99,11 @@ class MediaSettingsService:
         self,
         provider_id: str,
         provider: dict[str, Any],
-        presets: Any,
+        preset_id: str | None,
+        preset: Any,
     ) -> dict[str, Any] | None:
         if not resolve_provider_api_key(provider_id, provider, app_home=self.config_path.parent):
             return None
-        preset_id = get_provider_preset_id(provider_id, provider, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
         choices, selected = get_model_choices(
             str(provider.get("model") or "") or None,
             model_choices=preset.model_choices if preset else (),
@@ -166,8 +162,8 @@ class MediaSettingsService:
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
         provider_choices = []
-        for provider_id, provider, _preset_id, _preset in connected_provider_entries(providers, presets):
-            payload = self._provider_choice_payload(provider_id, provider, presets)
+        for provider_id, provider, preset_id, preset in connected_provider_entries(providers, presets):
+            payload = self._provider_choice_payload(provider_id, provider, preset_id, preset)
             if payload:
                 provider_choices.append(payload)
 
