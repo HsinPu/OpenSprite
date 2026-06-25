@@ -26,6 +26,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
     api_key_config_field = "browserbase_api_key"
     project_id_config_field = "browserbase_project_id"
     base_url_config_field = "browserbase_base_url"
+    close_request = ("POST", "/v1/sessions/{provider_session_id}", "Failed to close Browserbase session")
 
     def __init__(
         self,
@@ -70,6 +71,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             "project_id": self.project_id,
         }
 
+    def close_session_json_body(self) -> dict[str, Any] | None:
+        return {"projectId": self.project_id, "status": "REQUEST_RELEASE"}
+
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Browserbase requires browserbase_api_key and browserbase_project_id or BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.")
@@ -97,18 +101,6 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         cdp_url = self._required_text(payload, "connectUrl", "Browserbase CDP URL")
         return self.cloud_session(provider_session_id, cdp_url, ttl)
 
-    async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
-        return await self._close_with_request(
-            provider_session_id,
-            "POST",
-            join_url_path(self.base_url, f"/v1/sessions/{provider_session_id}"),
-            headers=self.json_api_key_headers(),
-            json_body={"projectId": self.project_id, "status": "REQUEST_RELEASE"},
-            timeout=timeout,
-            error_prefix="Failed to close Browserbase session",
-        )
-
-
 class BrowserUseCloudProvider(CloudBrowserProvider):
     backend = "browser-use"
     display_name = "Browser Use"
@@ -118,6 +110,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     default_base_url = DEFAULT_BROWSER_USE_BASE_URL
     api_key_config_field = "browser_use_api_key"
     base_url_config_field = "browser_use_base_url"
+    close_request = ("PATCH", "/browsers/{provider_session_id}", "Failed to close Browser Use session")
+    close_json_body = {"action": "stop"}
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
@@ -139,18 +133,6 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
             raise BrowserRuntimeError("Browser Use session response did not include cdpUrl or connectUrl.")
         return self.cloud_session(provider_session_id, cdp_url, ttl)
 
-    async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
-        return await self._close_with_request(
-            provider_session_id,
-            "PATCH",
-            join_url_path(self.base_url, f"/browsers/{provider_session_id}"),
-            headers=self.json_api_key_headers(),
-            json_body={"action": "stop"},
-            timeout=timeout,
-            error_prefix="Failed to close Browser Use session",
-        )
-
-
 class FirecrawlCloudProvider(CloudBrowserProvider):
     backend = "firecrawl"
     display_name = "Firecrawl"
@@ -161,6 +143,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     default_base_url = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
     api_key_config_field = "firecrawl_api_key"
     base_url_config_field = "firecrawl_base_url"
+    close_request = ("DELETE", "/v2/browser/{provider_session_id}", "Failed to close Firecrawl browser session")
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
@@ -178,13 +161,3 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         provider_session_id = self._required_text(payload, "id", "Firecrawl browser session id")
         cdp_url = self._required_text(payload, "cdpUrl", "Firecrawl CDP URL")
         return self.cloud_session(provider_session_id, cdp_url, ttl)
-
-    async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
-        return await self._close_with_request(
-            provider_session_id,
-            "DELETE",
-            join_url_path(self.base_url, f"/v2/browser/{provider_session_id}"),
-            headers=self.json_api_key_headers(),
-            timeout=timeout,
-            error_prefix="Failed to close Firecrawl browser session",
-        )

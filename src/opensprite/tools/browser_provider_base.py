@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from ..config.defaults import DEFAULT_BROWSER_SESSION_TIMEOUT
+from ..utils.url import join_url_path
 
 
 class BrowserRuntimeError(RuntimeError):
@@ -35,6 +36,8 @@ class CloudBrowserProvider:
     default_base_url = ""
     api_key_config_field = ""
     base_url_config_field = ""
+    close_request: tuple[str, str, str] | None = None
+    close_json_body: dict[str, Any] | None = None
 
     def __init__(
         self,
@@ -131,8 +134,25 @@ class CloudBrowserProvider:
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         raise NotImplementedError
 
+    def close_session_json_body(self) -> dict[str, Any] | None:
+        return self.close_json_body
+
     async def close_session(self, provider_session_id: str, *, timeout: int) -> bool:
-        return False
+        if self.close_request is None:
+            return False
+        method, path_template, error_prefix = self.close_request
+        return await self._close_with_request(
+            provider_session_id,
+            method,
+            join_url_path(
+                self.base_url,
+                path_template.format(provider_session_id=provider_session_id),
+            ),
+            headers=self.json_api_key_headers(),
+            json_body=self.close_session_json_body(),
+            timeout=timeout,
+            error_prefix=error_prefix,
+        )
 
     async def _close_with_request(self, provider_session_id: str, method: str, url: str, **request_kwargs: Any) -> bool:
         if not self.is_configured() or not provider_session_id:
