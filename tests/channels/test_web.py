@@ -11,6 +11,7 @@ from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.events import RunEvent, SessionStatusEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
+import opensprite.channels.web_settings_handlers_tools as web_settings_handlers_tools
 from opensprite.channels.web_routes import register_web_routes
 from opensprite.config import Config, ProviderConfig
 from opensprite.auth.codex import CodexToken, delete_codex_token, save_codex_token
@@ -1037,7 +1038,7 @@ async def _run_web_browser_settings_manual_test(tmp_path: Path, monkeypatch):
             return {"success": True, "text": "Quotes to Scrape @e1"}
         return {"success": False, "error": "unexpected command"}
 
-    monkeypatch.setattr("opensprite.channels.web.AgentBrowserRuntime.run", fake_run)
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.AgentBrowserRuntime.run", fake_run)
 
     agent = EchoAgent()
     agent.config_path = config_path
@@ -1095,19 +1096,19 @@ def test_web_adapter_browser_settings_manual_test(tmp_path, monkeypatch):
 
 
 def test_browser_diagnostic_classifies_common_failures():
-    sandbox = WebAdapter._with_browser_diagnostic(
+    sandbox = web_settings_handlers_tools._with_browser_diagnostic(
         {
             "ok": False,
             "stderr": "FATAL: No usable sandbox! Hint: try --args \"--no-sandbox\"",
         }
     )
-    missing = WebAdapter._with_browser_diagnostic(
+    missing = web_settings_handlers_tools._with_browser_diagnostic(
         {
             "ok": False,
             "stderr": "Executable doesn't exist at /tmp/chromium",
         }
     )
-    deps = WebAdapter._with_browser_diagnostic(
+    deps = web_settings_handlers_tools._with_browser_diagnostic(
         {
             "ok": False,
             "stderr": "Missing dependencies. Please run install --with-deps.",
@@ -1136,8 +1137,8 @@ async def _run_web_browser_settings_doctor(tmp_path: Path, monkeypatch):
             return {"ok": True, "exit_code": 0, "stdout": "Browser install looks good", "stderr": ""}
         return {"ok": False, "exit_code": 2, "stdout": "", "stderr": "unexpected command"}
 
-    monkeypatch.setattr(WebAdapter, "_browser_command_prefix", staticmethod(lambda: ["agent-browser"]))
-    monkeypatch.setattr(WebAdapter, "_run_browser_doctor_command", staticmethod(fake_doctor_command))
+    monkeypatch.setattr(web_settings_handlers_tools, "_browser_command_prefix", lambda: ["agent-browser"])
+    monkeypatch.setattr(web_settings_handlers_tools, "_run_browser_doctor_command", fake_doctor_command)
 
     agent = EchoAgent()
     agent.config_path = config_path
@@ -1211,10 +1212,10 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
     async def fake_doctor_command(args, *, timeout=20, launch_args=""):
         doctor_calls.append({"args": list(args), "launch_args": launch_args})
         if len(doctor_calls) == 1:
-            return WebAdapter._with_browser_diagnostic(
+            return web_settings_handlers_tools._with_browser_diagnostic(
                 {"ok": False, "exit_code": 1, "stdout": "", "stderr": "Executable doesn't exist at /tmp/chromium"}
             )
-        return WebAdapter._with_browser_diagnostic(
+        return web_settings_handlers_tools._with_browser_diagnostic(
             {
                 "ok": False,
                 "exit_code": 1,
@@ -1224,13 +1225,13 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
         )
 
     async def fake_install_command(*, timeout=300):
-        return WebAdapter._with_browser_diagnostic(
+        return web_settings_handlers_tools._with_browser_diagnostic(
             {"ok": True, "exit_code": 0, "stdout": "Installed Chromium", "stderr": ""}
         )
 
-    monkeypatch.setattr(WebAdapter, "_browser_command_prefix", staticmethod(lambda: ["agent-browser"]))
-    monkeypatch.setattr(WebAdapter, "_run_browser_doctor_command", staticmethod(fake_doctor_command))
-    monkeypatch.setattr(WebAdapter, "_run_browser_install_command", staticmethod(fake_install_command))
+    monkeypatch.setattr(web_settings_handlers_tools, "_browser_command_prefix", lambda: ["agent-browser"])
+    monkeypatch.setattr(web_settings_handlers_tools, "_run_browser_doctor_command", fake_doctor_command)
+    monkeypatch.setattr(web_settings_handlers_tools, "_run_browser_install_command", fake_install_command)
 
     agent = EchoAgent()
     agent.config_path = config_path
@@ -1466,7 +1467,7 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
 
 def test_web_adapter_search_searxng_options(tmp_path, monkeypatch):
     fake_client = _FakeSearxngConfigClient()
-    monkeypatch.setattr("opensprite.channels.web.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
     asyncio.run(_run_web_search_searxng_options(tmp_path, fake_client))
 
 
@@ -1517,7 +1518,7 @@ async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: 
 
 def test_web_adapter_search_searxng_options_fallback(tmp_path, monkeypatch):
     fake_client = _FakeSearxngConfigClient(error=RuntimeError("403 Forbidden"))
-    monkeypatch.setattr("opensprite.channels.web.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
     asyncio.run(_run_web_search_searxng_options_fallback(tmp_path, fake_client))
 
 

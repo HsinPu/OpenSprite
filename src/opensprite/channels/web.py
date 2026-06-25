@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import httpx
 from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
@@ -33,13 +32,9 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
 )
-from ..ops import OperationAuditRecord
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
-from ..tools.browser import _validate_navigation_url
-from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
-from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
 from . import web_settings_support
@@ -235,40 +230,6 @@ class WebAdapter(MessageAdapter):
 
     def _get_app_home(self) -> Path:
         return self._get_config_path().parent
-
-    @staticmethod
-    def _browser_runtime_status() -> dict[str, Any]:
-        return web_frontend_runtime.browser_runtime_status(WebAdapter._browser_command_prefix())
-
-    @staticmethod
-    def _browser_command_prefix() -> list[str]:
-        return web_frontend_runtime.browser_command_prefix()
-
-    @classmethod
-    async def _run_browser_doctor_command(
-        cls,
-        args: list[str],
-        *,
-        timeout: int = 20,
-        launch_args: str = "",
-    ) -> dict[str, Any]:
-        return await web_frontend_runtime.run_browser_doctor_command(
-            args,
-            timeout=timeout,
-            launch_args=launch_args,
-            command_prefix=cls._browser_command_prefix(),
-        )
-
-    @classmethod
-    async def _run_browser_install_command(cls, *, timeout: int = 300) -> dict[str, Any]:
-        return await web_frontend_runtime.run_browser_install_command(
-            timeout=timeout,
-            command_prefix=cls._browser_command_prefix(),
-        )
-
-    @staticmethod
-    def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
-        return web_frontend_runtime.with_browser_diagnostic(result)
 
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:

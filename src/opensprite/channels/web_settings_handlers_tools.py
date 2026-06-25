@@ -11,21 +11,59 @@ from aiohttp import web
 
 from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
-from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
-from . import web_settings_coercion, web_settings_payloads, web_settings_reload, web_settings_support
+from . import (
+    web_frontend_runtime,
+    web_settings_coercion,
+    web_settings_payloads,
+    web_settings_reload,
+    web_settings_support,
+)
 
 
 SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
+
+
+def _browser_command_prefix() -> list[str]:
+    return web_frontend_runtime.browser_command_prefix()
+
+
+def _browser_runtime_status() -> dict[str, Any]:
+    return web_frontend_runtime.browser_runtime_status(_browser_command_prefix())
+
+
+async def _run_browser_doctor_command(
+    args: list[str],
+    *,
+    timeout: int = 20,
+    launch_args: str = "",
+) -> dict[str, Any]:
+    return await web_frontend_runtime.run_browser_doctor_command(
+        args,
+        timeout=timeout,
+        launch_args=launch_args,
+        command_prefix=_browser_command_prefix(),
+    )
+
+
+async def _run_browser_install_command(*, timeout: int = 300) -> dict[str, Any]:
+    return await web_frontend_runtime.run_browser_install_command(
+        timeout=timeout,
+        command_prefix=_browser_command_prefix(),
+    )
+
+
+def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
+    return web_frontend_runtime.with_browser_diagnostic(result)
 
 
 def _browser_payload(adapter: Any, config: Config) -> dict[str, Any]:
     return web_settings_payloads.browser_payload(
         config,
         browser_cloud_status_fn=browser_cloud_status,
-        browser_runtime_status_fn=adapter._browser_runtime_status,
+        browser_runtime_status_fn=_browser_runtime_status,
     )
 
 
@@ -129,7 +167,7 @@ async def handle_settings_browser_test(adapter: Any, request: web.Request) -> we
     if blocked:
         raise web.HTTPBadRequest(text=blocked)
     if not browser.enabled:
-        diagnostic = adapter._with_browser_diagnostic({"ok": False, "error": "Browser tools are disabled. Enable and save browser settings before running the manual test."})
+        diagnostic = _with_browser_diagnostic({"ok": False, "error": "Browser tools are disabled. Enable and save browser settings before running the manual test."})
         return web.json_response({"ok": False, "url": url, "backend": browser.backend, "error": diagnostic["error"], "diagnostic_code": diagnostic["diagnostic_code"], "suggestion": diagnostic["suggestion"], "browser": _browser_payload(adapter, config)})
 
     runtime = AgentBrowserRuntime(
@@ -140,10 +178,10 @@ async def handle_settings_browser_test(adapter: Any, request: web.Request) -> we
         cloud_provider=cloud_provider_from_config(browser),
     )
     session_key = f"settings-test-{uuid4().hex[:8]}"
-    open_result = adapter._with_browser_diagnostic(await runtime.run(session_key=session_key, command="open", args=[url], timeout=max(30, browser.command_timeout)))
+    open_result = _with_browser_diagnostic(await runtime.run(session_key=session_key, command="open", args=[url], timeout=max(30, browser.command_timeout)))
     snapshot_result: dict[str, Any] | None = None
     if bool(open_result.get("success")):
-        snapshot_result = adapter._with_browser_diagnostic(await runtime.run(session_key=session_key, command="snapshot", args=["-c"], timeout=browser.command_timeout))
+        snapshot_result = _with_browser_diagnostic(await runtime.run(session_key=session_key, command="snapshot", args=["-c"], timeout=browser.command_timeout))
     ok = bool(open_result.get("success")) and bool((snapshot_result or {}).get("success"))
     diagnostic_source = snapshot_result if snapshot_result is not None and not snapshot_result.get("success") else open_result
     return web.json_response(
@@ -163,24 +201,24 @@ async def handle_settings_browser_test(adapter: Any, request: web.Request) -> we
 async def handle_settings_browser_doctor(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
     browser = config.tools.browser
-    version_result = await adapter._run_browser_doctor_command(["--version"], timeout=10)
-    doctor_result = await adapter._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
+    version_result = await _run_browser_doctor_command(["--version"], timeout=10)
+    doctor_result = await _run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
     checks = [
         {"name": "version", "command": "agent-browser --version", **version_result},
         {"name": "doctor", "command": "agent-browser doctor", **doctor_result},
     ]
-    return web.json_response({"ok": all(bool(check.get("ok")) for check in checks), "browser": _browser_payload(adapter, config), "runtime": adapter._browser_runtime_status(), "checks": checks})
+    return web.json_response({"ok": all(bool(check.get("ok")) for check in checks), "browser": _browser_payload(adapter, config), "runtime": _browser_runtime_status(), "checks": checks})
 
 
 async def handle_settings_browser_install(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
     browser = config.tools.browser
-    before = await adapter._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
+    before = await _run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
     if bool(before.get("ok")):
-        return web.json_response({"ok": True, "installed": False, "already_installed": True, "browser": _browser_payload(adapter, config), "runtime": adapter._browser_runtime_status(), "before": before, "install": None, "after": before})
+        return web.json_response({"ok": True, "installed": False, "already_installed": True, "browser": _browser_payload(adapter, config), "runtime": _browser_runtime_status(), "before": before, "install": None, "after": before})
 
-    install_result = await adapter._run_browser_install_command(timeout=300)
-    after = await adapter._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
+    install_result = await _run_browser_install_command(timeout=300)
+    after = await _run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
     install_ok = bool(install_result.get("ok"))
     after_ok = bool(after.get("ok"))
     sandbox_only_after_install = (
@@ -196,7 +234,7 @@ async def handle_settings_browser_install(adapter: Any, request: web.Request) ->
             "doctor_warning": sandbox_only_after_install,
             "already_installed": False,
             "browser": _browser_payload(adapter, config),
-            "runtime": adapter._browser_runtime_status(),
+            "runtime": _browser_runtime_status(),
             "before": before,
             "install": install_result,
             "after": after,
