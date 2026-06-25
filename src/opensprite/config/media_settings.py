@@ -7,14 +7,16 @@ from typing import Any
 
 from ..auth.credentials import CredentialNotFoundError, resolve_credential
 from .llm_presets import load_llm_presets
+from .provider_choices import (
+    get_model_choices,
+    get_provider_choices,
+    get_provider_preset_id,
+)
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
 from .provider_settings import (
-    get_model_choices,
-    get_provider_choices,
-    get_provider_preset_id,
     fetch_openrouter_image_models,
     load_json_dict,
 )
