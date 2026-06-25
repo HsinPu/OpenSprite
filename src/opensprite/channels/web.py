@@ -27,7 +27,6 @@ from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import Config, MessagesConfig
 from ..config.defaults import (
-    DEFAULT_CRON_TIMEZONE,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_REASONING_DETAILS,
     DEFAULT_LOG_RETENTION_DAYS,
@@ -39,9 +38,7 @@ from ..config.mcp_settings import MCPSettingsService
 from ..config.media_settings import MediaSettingsService
 from ..config.provider_settings import ProviderSettingsService
 from ..config.schedule_settings import ScheduleSettingsService
-from ..cron import CronJob, CronSchedule
 from ..ops import OperationAuditRecord
-from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
 from ..tools.browser import _validate_navigation_url
@@ -49,7 +46,6 @@ from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_con
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
-from . import web_cron_api
 from . import web_frontend_runtime
 from . import web_settings_handlers_core
 from . import web_settings_handlers_provider
@@ -325,29 +321,6 @@ class WebAdapter(MessageAdapter):
         updated = dict(payload)
         updated["runtime"] = self._mcp_runtime_payload()
         return updated
-
-    def _cron_default_timezone(self) -> str:
-        return web_cron_api.cron_default_timezone(self)
-
-    def _require_cron_manager(self) -> Any:
-        return web_cron_api.require_cron_manager(self)
-
-    async def _get_cron_service(self, session_id: str):
-        return await web_cron_api.get_cron_service(self, session_id)
-
-    @staticmethod
-    def _require_session_id(value: Any) -> str:
-        return web_cron_api.require_session_id(value)
-
-    @staticmethod
-    def _split_session_for_cron(session_id: str) -> tuple[str, str]:
-        return web_cron_api.split_session_for_cron(session_id)
-
-    def _build_cron_schedule_from_payload(self, body: dict[str, Any]) -> tuple[CronSchedule, bool]:
-        return web_cron_api.build_cron_schedule_from_payload(self, body)
-
-    def _serialize_cron_job(self, job: CronJob, *, default_timezone: str, session_id: str | None = None) -> dict[str, Any]:
-        return web_cron_api.serialize_cron_job(job, default_timezone=default_timezone, session_id=session_id)
 
     def _serialize_run(self, run: Any) -> dict[str, Any]:
         return {
@@ -819,21 +792,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_mcp_reload(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_tools.handle_settings_mcp_reload(self, request)
-
-    async def _handle_cron_jobs(self, request: web.Request) -> web.Response:
-        return await web_cron_api.handle_cron_jobs(self, request)
-
-    async def _handle_cron_job_create(self, request: web.Request) -> web.Response:
-        return await web_cron_api.handle_cron_job_create(self, request)
-
-    async def _handle_cron_job_update(self, request: web.Request) -> web.Response:
-        return await web_cron_api.handle_cron_job_update(self, request)
-
-    async def _handle_cron_job_delete(self, request: web.Request) -> web.Response:
-        return await web_cron_api.handle_cron_job_delete(self, request)
-
-    async def _handle_cron_job_action(self, request: web.Request) -> web.Response:
-        return await web_cron_api.handle_cron_job_action(self, request)
 
     async def _handle_frontend_index(self, request: web.Request) -> web.FileResponse:
         if self._frontend_dir is None:

@@ -5,6 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from ..utils.log import logger
+from . import web_cron_api
+
+
+def _bind_adapter(adapter: Any, handler: Any) -> Any:
+    async def bound(request: Any) -> Any:
+        return await handler(adapter, request)
+
+    return bound
 
 
 def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None:
@@ -79,11 +87,11 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_post("/api/settings/mcp/reload", adapter._handle_settings_mcp_reload)
     router.add_put("/api/settings/mcp/{server_id}", adapter._handle_settings_mcp_update)
     router.add_delete("/api/settings/mcp/{server_id}", adapter._handle_settings_mcp_delete)
-    router.add_get("/api/cron/jobs", adapter._handle_cron_jobs)
-    router.add_post("/api/cron/jobs", adapter._handle_cron_job_create)
-    router.add_put("/api/cron/jobs/{job_id}", adapter._handle_cron_job_update)
-    router.add_delete("/api/cron/jobs/{job_id}", adapter._handle_cron_job_delete)
-    router.add_post("/api/cron/jobs/{job_id}/{action}", adapter._handle_cron_job_action)
+    router.add_get("/api/cron/jobs", _bind_adapter(adapter, web_cron_api.handle_cron_jobs))
+    router.add_post("/api/cron/jobs", _bind_adapter(adapter, web_cron_api.handle_cron_job_create))
+    router.add_put("/api/cron/jobs/{job_id}", _bind_adapter(adapter, web_cron_api.handle_cron_job_update))
+    router.add_delete("/api/cron/jobs/{job_id}", _bind_adapter(adapter, web_cron_api.handle_cron_job_delete))
+    router.add_post("/api/cron/jobs/{job_id}/{action}", _bind_adapter(adapter, web_cron_api.handle_cron_job_action))
     router.add_get("/", adapter._handle_frontend_index)
     router.add_get("/index.html", adapter._handle_frontend_index)
     if adapter._frontend_dir is not None:
