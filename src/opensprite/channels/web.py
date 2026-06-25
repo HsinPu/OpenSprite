@@ -12,7 +12,6 @@ import hmac
 import ipaddress
 import json
 import os
-import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -48,7 +47,6 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
-from ..utils.processes import windows_hidden_process_kwargs
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_cron_api
@@ -163,42 +161,8 @@ class WebAdapter(MessageAdapter):
         raw = str(self.config.get(key, self.DEFAULT_CONFIG[key]) or self.DEFAULT_CONFIG[key]).strip() or "/"
         return raw if raw.startswith("/") else f"/{raw}"
 
-    @staticmethod
-    def _is_frontend_source_dir(path: Path) -> bool:
-        return web_frontend_runtime.is_frontend_source_dir(path)
-
-    def _resolve_frontend_source_dir(self) -> Path | None:
-        return web_frontend_runtime.resolve_frontend_source_dir(self.config, module_path=Path(__file__).resolve())
-
-    @staticmethod
-    def _trim_process_output(value: str | None, limit: int = 2000) -> str:
-        return web_frontend_runtime.trim_process_output(value, limit=limit)
-
-    def _resolve_npm_executable(self) -> str | None:
-        return web_frontend_runtime.resolve_npm_executable()
-
-    def _is_frontend_auto_build_enabled(self) -> bool:
-        value = self.config.get("frontend_auto_build", self.DEFAULT_CONFIG["frontend_auto_build"])
-        return web_frontend_runtime.is_feature_enabled(value)
-
-    def _is_frontend_auto_install_enabled(self) -> bool:
-        value = self.config.get("frontend_auto_install", self.DEFAULT_CONFIG["frontend_auto_install"])
-        return web_frontend_runtime.is_feature_enabled(value)
-
-    def _frontend_dependencies_ready(self, source_dir: Path) -> bool:
-        return web_frontend_runtime.frontend_dependencies_ready(source_dir)
-
     def _run_frontend_command(self, source_dir: Path, args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
         return web_frontend_runtime.run_frontend_command(source_dir, args, timeout)
-
-    def _maybe_install_frontend_dependencies(self, source_dir: Path, npm: str) -> bool:
-        return web_frontend_runtime.maybe_install_frontend_dependencies(
-            source_dir,
-            npm,
-            auto_install_enabled=self._is_frontend_auto_install_enabled(),
-            install_timeout=self._get_frontend_install_timeout(),
-            logger=logger,
-        )
 
     def _maybe_build_frontend(self) -> None:
         web_frontend_runtime.maybe_build_frontend(
