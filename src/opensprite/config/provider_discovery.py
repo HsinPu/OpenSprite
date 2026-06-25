@@ -164,6 +164,24 @@ def fetch_openrouter_image_models() -> list[str]:
     return dedupe_model_ids(out)
 
 
+def discover_media_model_choices(preset: ProviderPreset | None) -> tuple[dict[str, list[str]], str]:
+    fallback = {
+        category: list(models)
+        for category, models in (preset.media_model_choices or {}).items()
+    } if preset else {}
+    if _discovery_type(preset, "media_discovery") != "openrouter_image":
+        return fallback, "preset"
+
+    live_image_models = fetch_openrouter_image_models()
+    if not live_image_models:
+        return fallback, "preset"
+
+    media_models = dict(fallback)
+    media_models["vision"] = dedupe_model_ids(live_image_models + fallback.get("vision", []))
+    media_models["ocr"] = dedupe_model_ids(fallback.get("ocr", []) + live_image_models)
+    return media_models, "live"
+
+
 def fetch_copilot_provider_models(api_key: str) -> list[str]:
     try:
         from ..auth.copilot import fetch_copilot_models

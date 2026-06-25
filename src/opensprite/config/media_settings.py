@@ -13,7 +13,7 @@ from .provider_errors import (
     ProviderSettingsValidationError,
 )
 from .provider_credentials import resolve_provider_api_key
-from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
+from .provider_discovery import discover_media_model_choices
 from .provider_public import public_media_provider
 from .provider_state import connected_provider_entries, load_provider_config_state
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
@@ -25,28 +25,6 @@ MEDIA_SECTIONS = {
     "speech": SpeechConfig,
     "video": VideoConfig,
 }
-
-
-def discover_media_model_choices(preset_id: str | None, preset: Any) -> tuple[dict[str, list[str]], str]:
-    fallback = {
-        category: list(models)
-        for category, models in (preset.media_model_choices or {}).items()
-    } if preset else {}
-    discovery = getattr(preset, "media_discovery", None) if preset else None
-    discovery_type = str(discovery.get("type") or "").strip() if isinstance(discovery, dict) else ""
-    if discovery_type != "openrouter_image":
-        return fallback, "preset"
-
-    live_image_models = fetch_openrouter_image_models()
-    if not live_image_models:
-        return fallback, "preset"
-
-    vision = dedupe_model_ids(live_image_models + fallback.get("vision", []))
-    ocr = dedupe_model_ids(fallback.get("ocr", []) + live_image_models)
-    media_models = dict(fallback)
-    media_models["vision"] = vision
-    media_models["ocr"] = ocr
-    return media_models, "live"
 
 
 class MediaSettingsService:
@@ -102,7 +80,7 @@ class MediaSettingsService:
             str(provider.get("model") or "") or None,
             model_choices=preset.model_choices if preset else (),
         )
-        media_models, media_model_source = discover_media_model_choices(preset_id, preset)
+        media_models, media_model_source = discover_media_model_choices(preset)
         return public_media_provider(
             provider_id,
             provider,

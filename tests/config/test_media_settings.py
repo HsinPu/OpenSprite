@@ -3,20 +3,20 @@ import json
 import pytest
 
 from opensprite.config import Config
-from opensprite.config import media_settings
+from opensprite.config import provider_discovery
 from opensprite.config.media_settings import MediaSettingsService
 from opensprite.config.provider_settings import ProviderSettingsService
 
 
 @pytest.fixture(autouse=True)
 def _disable_live_media_discovery(monkeypatch):
-    monkeypatch.setattr(media_settings, "fetch_openrouter_image_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_image_models", lambda: [])
 
 
 def test_media_settings_uses_discovered_openrouter_image_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
     monkeypatch.setattr(
-        media_settings,
+        provider_discovery,
         "fetch_openrouter_image_models",
         lambda: ["google/gemini-live-vision", "anthropic/claude-sonnet-4.6"],
     )
@@ -41,7 +41,7 @@ def test_media_settings_uses_discovered_openrouter_image_models(tmp_path, monkey
 
 def test_media_settings_falls_back_to_preset_image_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
-    monkeypatch.setattr(media_settings, "fetch_openrouter_image_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_image_models", lambda: [])
     ProviderSettingsService(config_path).connect_provider("openrouter", api_key="secret-key", name="OpenRouter")
 
     payload = MediaSettingsService(config_path).list_media()
