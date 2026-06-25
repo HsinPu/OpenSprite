@@ -56,12 +56,7 @@ from ..config.defaults import (
     LOG_LEVELS as DEFAULT_LOG_LEVELS,
     WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
-from ..config.channel_settings import (
-    ChannelSettingsError,
-    ChannelSettingsNotFound,
-    ChannelSettingsService,
-    ChannelSettingsValidationError,
-)
+from ..config.channel_settings import ChannelSettingsService
 from ..config.mcp_settings import (
     MCPSettingsError,
     MCPSettingsNotFound,
@@ -567,10 +562,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
         return await web_settings_support.read_json_body(request)
-
-    @staticmethod
-    def _raise_channel_settings_error(exc: ChannelSettingsError) -> None:
-        web_settings_support.raise_channel_settings_error(exc)
 
     @staticmethod
     def _raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:

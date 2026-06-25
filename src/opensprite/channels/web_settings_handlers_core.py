@@ -7,6 +7,7 @@ from typing import Any
 from aiohttp import web
 
 from ..config.channel_settings import ChannelSettingsError
+from . import web_settings_support
 
 
 async def handle_settings_codex_auth_status(adapter: Any, request: web.Request) -> web.Response:
@@ -145,7 +146,7 @@ async def handle_settings_channels(adapter: Any, request: web.Request) -> web.Re
     try:
         payload = adapter._get_channel_settings().list_channels()
     except ChannelSettingsError as exc:
-        adapter._raise_channel_settings_error(exc)
+        web_settings_support.raise_channel_settings_error(exc)
     payload = await adapter._reload_channels_from_config(payload)
     return web.json_response(payload)
 async def handle_settings_channel_create(adapter: Any, request: web.Request) -> web.Response:
@@ -160,7 +161,7 @@ async def handle_settings_channel_create(adapter: Any, request: web.Request) -> 
             token=adapter._coerce_optional_text(body.get("token")),
         )
     except ChannelSettingsError as exc:
-        adapter._raise_channel_settings_error(exc)
+        web_settings_support.raise_channel_settings_error(exc)
     payload = await adapter._reload_channels_from_config(payload)
     return web.json_response(payload)
 
@@ -176,7 +177,7 @@ async def handle_settings_channel_update(adapter: Any, request: web.Request) -> 
             settings=body.get("settings", {}),
         )
     except ChannelSettingsError as exc:
-        adapter._raise_channel_settings_error(exc)
+        web_settings_support.raise_channel_settings_error(exc)
     payload = await adapter._reload_channels_from_config(payload)
     return web.json_response(payload)
 
@@ -193,7 +194,7 @@ async def handle_settings_channel_connect(adapter: Any, request: web.Request) ->
             name=adapter._coerce_optional_text(body.get("name")),
         )
     except ChannelSettingsError as exc:
-        adapter._raise_channel_settings_error(exc)
+        web_settings_support.raise_channel_settings_error(exc)
     payload = await adapter._reload_channels_from_config(payload)
     return web.json_response(payload)
 
@@ -205,6 +206,6 @@ async def handle_settings_channel_disconnect(adapter: Any, request: web.Request)
     try:
         payload = adapter._get_channel_settings().disconnect_channel(channel_id)
     except ChannelSettingsError as exc:
-        adapter._raise_channel_settings_error(exc)
+        web_settings_support.raise_channel_settings_error(exc)
     payload = await adapter._reload_channels_from_config(payload)
     return web.json_response(payload)
