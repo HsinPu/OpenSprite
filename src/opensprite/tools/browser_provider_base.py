@@ -36,8 +36,16 @@ class CloudBrowserProvider:
     api_key_config_field = ""
     base_url_config_field = ""
 
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(
+        self,
+        *,
+        api_key: Any = "",
+        base_url: Any = "",
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self.transport = transport
+        self.api_key = self.resolve_api_key(api_key)
+        self.base_url = self.resolve_base_url(base_url)
 
     @classmethod
     def config_value(cls, browser_config: Any, field: str, default: Any = "") -> Any:

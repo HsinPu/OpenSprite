@@ -38,10 +38,8 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         keep_alive: bool = True,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
-        super().__init__(transport=transport)
-        self.api_key = self.resolve_api_key(api_key)
+        super().__init__(api_key=api_key, base_url=base_url, transport=transport)
         self.project_id = self.config_text(project_id, self.project_id_env_var)
-        self.base_url = self.resolve_base_url(base_url)
         self.proxies = bool(proxies)
         self.advanced_stealth = bool(advanced_stealth)
         self.keep_alive = bool(keep_alive)
@@ -121,17 +119,6 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
     api_key_config_field = "browser_use_api_key"
     base_url_config_field = "browser_use_base_url"
 
-    def __init__(
-        self,
-        *,
-        api_key: str = "",
-        base_url: str = DEFAULT_BROWSER_USE_BASE_URL,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ):
-        super().__init__(transport=transport)
-        self.api_key = self.resolve_api_key(api_key)
-        self.base_url = self.resolve_base_url(base_url)
-
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
             raise BrowserRuntimeError("Browser Use requires browser_use_api_key or BROWSER_USE_API_KEY.")
@@ -174,17 +161,6 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
     default_base_url = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
     api_key_config_field = "firecrawl_api_key"
     base_url_config_field = "firecrawl_base_url"
-
-    def __init__(
-        self,
-        *,
-        api_key: str = "",
-        base_url: str = DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ):
-        super().__init__(transport=transport)
-        self.api_key = self.resolve_api_key(api_key)
-        self.base_url = self.resolve_base_url(base_url)
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
