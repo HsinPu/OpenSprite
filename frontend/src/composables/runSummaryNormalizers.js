@@ -1,8 +1,4 @@
-import { coerceStringList } from "./chatClientCoercion";
-
-function coerceBoolean(value) {
-  return value === true || value === "true" || value === 1;
-}
+import { coerceBoolean, coerceStringList } from "./chatClientCoercion";
 
 function coerceNonNegativeInteger(value) {
   const number = Number(value);

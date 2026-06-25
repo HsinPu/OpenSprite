@@ -1,5 +1,5 @@
 import { randomToken } from "./chatClientTokens";
-import { coerceStringList } from "./chatClientCoercion";
+import { coerceBoolean, coerceStringList } from "./chatClientCoercion";
 
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
@@ -34,10 +34,6 @@ function formatShortList(value, maxItems = 3) {
   const visible = items.slice(0, maxItems).join(", ");
   const remaining = items.length - maxItems;
   return remaining > 0 ? `${visible} +${remaining}` : visible;
-}
-
-function coerceBoolean(value) {
-  return value === true || value === "true" || value === 1;
 }
 
 function coerceNonNegativeInteger(value) {

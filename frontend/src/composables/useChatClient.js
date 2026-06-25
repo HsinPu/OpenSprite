@@ -2,7 +2,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, silentRe
 import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
-import { coerceStringList } from "./chatClientCoercion";
+import { coerceBoolean, coerceStringList } from "./chatClientCoercion";
 import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
@@ -201,10 +201,6 @@ function normalizeCommandCatalog(payload) {
       subcommands: coerceStringList(item?.subcommands),
     };
   }).filter(Boolean);
-}
-
-function coerceBoolean(value) {
-  return value === true || value === "true" || value === 1;
 }
 
 function coerceNonNegativeInteger(value) {
