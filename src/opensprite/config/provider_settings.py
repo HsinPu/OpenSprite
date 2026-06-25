@@ -538,6 +538,14 @@ def public_provider_profile(preset: ProviderPreset | None) -> dict[str, Any]:
     }
 
 
+def public_provider_auth_flags(auth_type: str) -> dict[str, bool]:
+    """Return auth requirement flags safe for settings APIs."""
+    return {
+        "requires_api_key": auth_type == "api_key",
+        "api_key_optional": auth_type == "optional_api_key",
+    }
+
+
 def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | None) -> bool:
     """Return whether a provider instance is configured enough for model selection."""
     if not isinstance(provider, dict):
@@ -667,8 +675,7 @@ class ProviderSettingsService:
             "credential_label": (credential or {}).get("label") or "",
             "credential_preview": (credential or {}).get("secret_preview") or "",
             "auth_type": provider.get("auth_type") or auth_type,
-            "requires_api_key": auth_type == "api_key",
-            "api_key_optional": auth_type == "optional_api_key",
+            **public_provider_auth_flags(auth_type),
             "enabled": bool(provider.get("enabled")),
         }
 
@@ -684,8 +691,7 @@ class ProviderSettingsService:
             "default_base_url": preset.default_base_url,
             "auth_type": preset.auth_type,
             "api_mode": preset.api_mode,
-            "requires_api_key": preset.auth_type == "api_key",
-            "api_key_optional": preset.auth_type == "optional_api_key",
+            **public_provider_auth_flags(preset.auth_type),
             **public_provider_profile(preset),
             "model_choices": list(preset.model_choices),
             "connected_count": sum(
