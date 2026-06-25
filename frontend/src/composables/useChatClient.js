@@ -30,8 +30,10 @@ import {
 import {
   createSession,
   isLocalDraftSession,
+  makeLiveEntry,
   makeMessage,
   readStoredDraftSessions,
+  summarizeTitle,
   writeStoredDraftSessions,
 } from "./chatClientSessions";
 import {
@@ -237,33 +239,6 @@ function channelFromSessionId(sessionId) {
 
 function isExternalChannelSessionId(value) {
   return isExternalChannelSessionIdBase(value);
-}
-
-function summarizeTitle(text) {
-  const singleLine = text.trim().replace(/\s+/g, " ");
-  if (!singleLine) {
-    return "New chat";
-  }
-  return singleLine.length > 30 ? `${singleLine.slice(0, 30)}...` : singleLine;
-}
-
-function makeLiveEntry(message) {
-  const role = message?.role === "user" ? "user" : "assistant";
-  const createdAt = Number(message?.createdAt || Date.now());
-  const text = String(message?.text || "");
-  return {
-    id: `live-entry-${createdAt.toString(36)}-${randomToken()}`,
-    type: role,
-    role,
-    runId: "",
-    status: "",
-    text,
-    content: [],
-    meta: message?.meta || (role === "user" ? "You" : "OpenSprite"),
-    createdAt,
-    updatedAt: createdAt,
-    metadata: {},
-  };
 }
 
 function coerceStringList(value) {

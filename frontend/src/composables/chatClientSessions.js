@@ -17,6 +17,33 @@ export function makeMessage(role, text, meta) {
   };
 }
 
+export function makeLiveEntry(message) {
+  const role = message?.role === "user" ? "user" : "assistant";
+  const createdAt = Number(message?.createdAt || Date.now());
+  const text = String(message?.text || "");
+  return {
+    id: `live-entry-${createdAt.toString(36)}-${randomToken()}`,
+    type: role,
+    role,
+    runId: "",
+    status: "",
+    text,
+    content: [],
+    meta: message?.meta || (role === "user" ? "You" : "OpenSprite"),
+    createdAt,
+    updatedAt: createdAt,
+    metadata: {},
+  };
+}
+
+export function summarizeTitle(text) {
+  const singleLine = text.trim().replace(/\s+/g, " ");
+  if (!singleLine) {
+    return "New chat";
+  }
+  return singleLine.length > 30 ? `${singleLine.slice(0, 30)}...` : singleLine;
+}
+
 export function createSession(externalChatId) {
   return {
     externalChatId: externalChatId || generateExternalChatId(),
