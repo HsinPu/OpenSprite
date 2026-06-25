@@ -163,15 +163,12 @@ def select_model_in_config(
     provider = providers.get(provider_id)
     if not isinstance(provider, dict):
         raise ProviderSettingsConflict("Provider must be connected before selecting a model")
-    preset_id = get_provider_preset_id(provider_id, provider, presets)
-    if preset_id is None:
+    provider, _, preset = provider_preset_entry(provider_id, provider, presets)
+    if preset is None:
         raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
-    if require_api_key and preset_id:
-        preset = presets.providers[preset_id]
-        if preset.auth_type == "api_key" and not has_provider_secret(provider):
-            raise ProviderSettingsConflict("Provider must be connected before selecting a model")
+    if require_api_key and preset.auth_type == "api_key" and not has_provider_secret(provider):
+        raise ProviderSettingsConflict("Provider must be connected before selecting a model")
 
-    preset = presets.providers[preset_id]
     if not str(provider.get("base_url", "") or "").strip():
         provider["base_url"] = preset.default_base_url
     provider["model"] = normalized_model
