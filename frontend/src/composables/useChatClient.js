@@ -21,11 +21,11 @@ import {
   buildWorktreeCleanupPath as buildWorktreeCleanupPathBase,
 } from "./chatClientPaths";
 import {
-  channelFromSessionId as channelFromSessionIdBase,
-  externalChatIdFromSessionId as externalChatIdFromSessionIdBase,
-  generateExternalChatId as generateExternalChatIdBase,
-  generateOverlayProfileId as generateOverlayProfileIdBase,
-  isExternalChannelSessionId as isExternalChannelSessionIdBase,
+  channelFromSessionId,
+  externalChatIdFromSessionId,
+  generateExternalChatId,
+  generateOverlayProfileId,
+  isExternalChannelSessionId,
 } from "./chatClientSessionIds";
 import {
   createSession,
@@ -223,26 +223,6 @@ function readStoredBoolean(key, fallback) {
 
 function randomToken() {
   return Math.random().toString(36).slice(2, 8);
-}
-
-function generateExternalChatId() {
-  return generateExternalChatIdBase();
-}
-
-function generateOverlayProfileId() {
-  return generateOverlayProfileIdBase();
-}
-
-function externalChatIdFromSessionId(sessionId) {
-  return externalChatIdFromSessionIdBase(sessionId);
-}
-
-function channelFromSessionId(sessionId) {
-  return channelFromSessionIdBase(sessionId);
-}
-
-function isExternalChannelSessionId(value) {
-  return isExternalChannelSessionIdBase(value);
 }
 
 function coerceStringList(value) {
