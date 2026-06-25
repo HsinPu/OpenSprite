@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from typing import Any
-
 import httpx
 
 from ..config.defaults import (
@@ -33,9 +30,9 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = _first_text(api_key, os.getenv("BROWSERBASE_API_KEY"))
-        self.project_id = _first_text(project_id, os.getenv("BROWSERBASE_PROJECT_ID"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSERBASE_BASE_URL")), DEFAULT_BROWSERBASE_BASE_URL)
+        self.api_key = self.config_text(api_key, "BROWSERBASE_API_KEY")
+        self.project_id = self.config_text(project_id, "BROWSERBASE_PROJECT_ID")
+        self.base_url = self.config_base_url(base_url, "BROWSERBASE_BASE_URL", DEFAULT_BROWSERBASE_BASE_URL)
         self.proxies = bool(proxies)
         self.advanced_stealth = bool(advanced_stealth)
         self.keep_alive = bool(keep_alive)
@@ -101,8 +98,8 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = _first_text(api_key, os.getenv("BROWSER_USE_API_KEY"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSER_USE_BASE_URL")), DEFAULT_BROWSER_USE_BASE_URL)
+        self.api_key = self.config_text(api_key, "BROWSER_USE_API_KEY")
+        self.base_url = self.config_base_url(base_url, "BROWSER_USE_BASE_URL", DEFAULT_BROWSER_USE_BASE_URL)
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
@@ -150,8 +147,8 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
-        self.api_key = _first_text(api_key, os.getenv("FIRECRAWL_API_KEY"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("FIRECRAWL_API_URL")), DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
+        self.api_key = self.config_text(api_key, "FIRECRAWL_API_KEY")
+        self.base_url = self.config_base_url(base_url, "FIRECRAWL_API_URL", DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         if not self.is_configured():
@@ -179,15 +176,3 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
             timeout=timeout,
             error_prefix="Failed to close Firecrawl browser session",
         )
-
-
-def _first_text(*values: Any) -> str:
-    for value in values:
-        text = str(value or "").strip()
-        if text:
-            return text
-    return ""
-
-
-def _clean_base_url(value: str, default: str) -> str:
-    return (str(value or "").strip() or default).rstrip("/")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -48,6 +49,16 @@ class CloudBrowserProvider:
 
     def session_timeout_seconds(self, session_timeout: int) -> int:
         return max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
+
+    def config_text(self, value: Any, env_var: str) -> str:
+        for candidate in (value, os.getenv(env_var)):
+            text = str(candidate or "").strip()
+            if text:
+                return text
+        return ""
+
+    def config_base_url(self, value: Any, env_var: str, default: str) -> str:
+        return (self.config_text(value, env_var) or default).rstrip("/")
 
     def json_api_key_headers(self) -> dict[str, str]:
         auth_header_value = f"{self.auth_header_prefix}{getattr(self, 'api_key', '')}"
