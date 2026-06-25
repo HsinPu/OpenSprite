@@ -9,6 +9,7 @@ from typing import Any
 
 from ..auth.codex import load_or_refresh_codex_token
 from ..auth.copilot import COPILOT_BASE_URL, get_copilot_api_token, load_copilot_token
+from ..config.provider_auth_types import GITHUB_COPILOT_OAUTH_AUTH_TYPE, OPENAI_CODEX_OAUTH_AUTH_TYPE
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -45,17 +46,17 @@ def resolve_runtime_provider_auth(
     copilot_token_loader = copilot_token_loader or load_copilot_token
     copilot_api_token_resolver = copilot_api_token_resolver or get_copilot_api_token
 
-    if auth_type == "openai_codex_oauth":
+    if auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE:
         provider_name = provider_name or "openai-codex"
         api_mode = api_mode or "responses"
         base_url = base_url or profile_base_url or OPENAI_CODEX_BASE_URL
         if not api_key:
             api_key = codex_token_loader(app_home).access_token
-    elif provider_name == "copilot" or auth_type == "github_copilot_oauth":
+    elif provider_name == "copilot" or auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
         provider_name = "copilot"
         base_url = base_url or profile_base_url or GITHUB_COPILOT_BASE_URL
         api_mode = api_mode or "chat_completions"
-        if not api_key and auth_type == "github_copilot_oauth":
+        if not api_key and auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
             api_key = copilot_token_loader(app_home).access_token
         api_key = copilot_api_token_resolver(api_key)
     elif api_mode is None:

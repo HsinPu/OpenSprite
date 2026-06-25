@@ -9,6 +9,7 @@ from ..auth.credentials import CredentialNotFoundError
 from ..auth.codex import CodexAuthError
 from ..auth.copilot import CopilotAuthError
 from ..config import Config, ProviderConfig
+from ..config.provider_auth_types import API_KEY_AUTH_TYPE
 from .reasoning import normalize_reasoning_effort
 from .runtime_auth import resolve_runtime_provider_auth
 from .runtime_credentials import resolve_runtime_credentials
@@ -27,7 +28,7 @@ class ResolvedProviderRuntime:
     base_url: str
     enabled: bool
     api_mode: str | None = None
-    auth_type: str = "api_key"
+    auth_type: str = API_KEY_AUTH_TYPE
     reasoning_effort: str = ""
     context_window_tokens: int | None = None
 

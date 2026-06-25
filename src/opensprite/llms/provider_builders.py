@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..auth.copilot import copilot_request_headers
+from ..config.provider_auth_types import OPENAI_CODEX_OAUTH_AUTH_TYPE
 from .base import LLMProvider
 from .minimax import MiniMaxLLM
 from .openai import OpenAILLM, OpenAIResponsesLLM
@@ -11,7 +12,7 @@ from .provider_specs import ProviderSpec, provider_name_default_base_url, provid
 
 
 def should_use_responses_llm(*, api_mode: str | None, auth_type: str) -> bool:
-    return api_mode == "responses" or auth_type == "openai_codex_oauth"
+    return api_mode == "responses" or auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE
 
 
 def create_responses_llm(

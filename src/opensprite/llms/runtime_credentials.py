@@ -11,6 +11,7 @@ from ..auth.credentials import (
     mark_credential_used,
     resolve_credential,
 )
+from ..config.provider_auth_types import API_KEY_AUTH_TYPE, OPTIONAL_API_KEY_AUTH_TYPE
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ def resolve_runtime_credentials(
     app_home: Path,
 ) -> RuntimeCredentials:
     """Resolve API-key style runtime credentials without provider-specific OAuth."""
-    if not api_key and auth_type == "api_key":
+    if not api_key and auth_type == API_KEY_AUTH_TYPE:
         try:
             credential = resolve_credential(
                 provider=provider_name,
@@ -45,7 +46,7 @@ def resolve_runtime_credentials(
             if not base_url and credential.base_url:
                 base_url = credential.base_url
             mark_credential_used(credential.provider, credential.id, app_home=app_home)
-    elif not api_key and auth_type == "optional_api_key":
+    elif not api_key and auth_type == OPTIONAL_API_KEY_AUTH_TYPE:
         api_key = "no-key-required"
 
     return RuntimeCredentials(api_key=api_key, base_url=base_url)

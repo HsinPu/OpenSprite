@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..config.provider_auth_types import API_KEY_AUTH_TYPE
 from .base import LLMProvider
 from .provider_builders import create_llm_for_spec, create_responses_llm, should_use_responses_llm
 from .provider_specs import find_provider
@@ -14,7 +15,7 @@ def create_llm(
     provider_name: str = "",
     enabled: bool = True,
     api_mode: str | None = None,
-    auth_type: str = "api_key",
+    auth_type: str = API_KEY_AUTH_TYPE,
     reasoning_effort: str = "",
 ) -> LLMProvider:
     """Create an LLM provider from runtime config values."""
