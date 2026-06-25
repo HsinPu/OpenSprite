@@ -213,10 +213,8 @@ class MediaSettingsService:
 
         return {
             "sections": {
-                "vision": self._section_payload("vision", loaded.vision or VisionConfig(), providers),
-                "ocr": self._section_payload("ocr", loaded.ocr or OcrConfig(), providers),
-                "speech": self._section_payload("speech", loaded.speech or SpeechConfig(), providers),
-                "video": self._section_payload("video", loaded.video or VideoConfig(), providers),
+                category: self._section_payload(category, getattr(loaded, category) or section_type(), providers)
+                for category, section_type in MEDIA_SECTIONS.items()
             },
             "providers": provider_choices,
             "restart_required": False,
