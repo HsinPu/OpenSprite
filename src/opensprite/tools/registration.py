@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from ..config import CronMessagesConfig, SearchConfig, ToolsConfig
+from ..config import CronMessagesConfig, SearchConfig, ToolsConfig, WebSearchToolConfig
 from ..config.defaults import DEFAULT_BROWSER_COMMAND_TIMEOUT, DEFAULT_BROWSER_SESSION_TIMEOUT
 from ..cron import CronManager
 from ..documents.memory import MemoryStore
@@ -271,6 +271,27 @@ def register_web_tools(
             fetch_config=web_fetch_config,
         )
     )
+
+
+def reload_web_search_tools(
+    registry: ToolRegistry,
+    web_search_config: WebSearchToolConfig,
+) -> dict[str, bool]:
+    """Reload registered web search tools while preserving custom research wiring."""
+    registry.register(WebSearchTool(config=web_search_config))
+
+    research_tool_updated = False
+    web_research_tool = registry.get(WebResearchTool.name)
+    if isinstance(web_research_tool, WebResearchTool):
+        web_research_tool.search_config = web_search_config
+        if not web_research_tool._custom_search_tool:
+            web_research_tool.search_tool = WebSearchTool(config=web_search_config)
+        research_tool_updated = True
+
+    return {
+        "tool_updated": registry.get(WebSearchTool.name) is not None,
+        "research_tool_updated": research_tool_updated,
+    }
 
 
 def register_browser_tools(

@@ -8,14 +8,12 @@ from ..config import Config
 from ..llms import LLMProvider
 from ..llms.runtime_provider import create_configured_llm
 from ..media.factory import create_media_router
-from ..tool_names import WEB_RESEARCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME
 from ..tools.registration import (
     registered_browser_tool_names,
     register_browser_tools,
+    reload_web_search_tools,
     unregister_browser_tools,
 )
-from ..tools.web_research import WebResearchTool
-from ..tools.web_search import WebSearchTool
 from ..utils.log import logger
 
 
@@ -95,15 +93,7 @@ def reload_agent_web_search_from_config(agent: Any, config: Config) -> dict[str,
     """Reload web search settings and update registered web tools in-place."""
     web_search_config = config.tools.web_search
     agent.tools_config.web_search = web_search_config
-    agent.tools.register(WebSearchTool(config=web_search_config))
-
-    research_tool_updated = False
-    web_research_tool = agent.tools.get(WEB_RESEARCH_TOOL_NAME)
-    if isinstance(web_research_tool, WebResearchTool):
-        web_research_tool.search_config = web_search_config
-        if not web_research_tool._custom_search_tool:
-            web_research_tool.search_tool = WebSearchTool(config=web_search_config)
-        research_tool_updated = True
+    tool_reload = reload_web_search_tools(agent.tools, web_search_config)
 
     logger.info(
         "Web search tools reloaded | provider={} freshness={} max_results={}",
@@ -118,8 +108,7 @@ def reload_agent_web_search_from_config(agent: Any, config: Config) -> dict[str,
         "searxng_max_pages": web_search_config.searxng_max_pages,
         "searxng_engines": list(web_search_config.searxng_engines),
         "searxng_categories": list(web_search_config.searxng_categories),
-        "tool_updated": agent.tools.get(WEB_SEARCH_TOOL_NAME) is not None,
-        "research_tool_updated": research_tool_updated,
+        **tool_reload,
     }
 
 

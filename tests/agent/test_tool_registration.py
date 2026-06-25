@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from opensprite.config.schema import SearchConfig, ToolsConfig
+from opensprite.config.schema import SearchConfig, ToolsConfig, WebSearchToolConfig
 from opensprite.skills import SkillsLoader
 from opensprite.storage import MemoryStorage
 from opensprite.tools.cron import CronTool
@@ -19,7 +19,11 @@ from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.web_research import WebResearchTool
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.registration import register_default_tools
+from opensprite.tools.registration import (
+    register_default_tools,
+    register_web_tools,
+    reload_web_search_tools,
+)
 from opensprite.tools.run_trace import ListRunFileChangesTool, PreviewRunFileChangeRevertTool
 
 
@@ -212,6 +216,44 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
     assert web_research_tool.search_tool.provider == "jina"
     assert web_research_tool.fetch_tool.fetcher.max_chars == 1234
+
+
+def test_reload_web_search_tools_updates_default_research_tool():
+    registry = ToolRegistry()
+    register_web_tools(registry)
+
+    result = reload_web_search_tools(
+        registry,
+        WebSearchToolConfig(provider="jina", max_results=7),
+    )
+
+    web_search_tool = registry.get("web_search")
+    web_research_tool = registry.get("web_research")
+    assert result == {"tool_updated": True, "research_tool_updated": True}
+    assert isinstance(web_search_tool, WebSearchTool)
+    assert isinstance(web_research_tool, WebResearchTool)
+    assert web_search_tool.provider == "jina"
+    assert web_research_tool.search_config.provider == "jina"
+    assert web_research_tool.search_tool.provider == "jina"
+    assert web_research_tool.search_tool.max_results == 7
+
+
+def test_reload_web_search_tools_preserves_custom_research_search_tool():
+    registry = ToolRegistry()
+    custom_search_tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
+    registry.register(WebResearchTool(search_tool=custom_search_tool))
+
+    result = reload_web_search_tools(
+        registry,
+        WebSearchToolConfig(provider="jina", max_results=7),
+    )
+
+    web_research_tool = registry.get("web_research")
+    assert result == {"tool_updated": True, "research_tool_updated": True}
+    assert isinstance(web_research_tool, WebResearchTool)
+    assert web_research_tool.search_config.provider == "jina"
+    assert web_research_tool.search_tool is custom_search_tool
+    assert web_research_tool.search_tool.provider == "duckduckgo"
 
 
 async def _fake_preview_run_file_change_revert(session_id: str, run_id: str, change_id: int):
