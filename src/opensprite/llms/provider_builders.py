@@ -10,6 +10,10 @@ from .openrouter import OpenRouterLLM
 from .provider_specs import ProviderSpec, provider_name_default_base_url, provider_spec_default_base_url
 
 
+def should_use_responses_llm(*, api_mode: str | None, auth_type: str) -> bool:
+    return api_mode == "responses" or auth_type == "openai_codex_oauth"
+
+
 def create_responses_llm(
     *,
     api_key: str,

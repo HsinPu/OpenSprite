@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .base import LLMProvider
-from .provider_builders import create_llm_for_spec, create_responses_llm
+from .provider_builders import create_llm_for_spec, create_responses_llm, should_use_responses_llm
 from .provider_specs import find_provider
 
 
@@ -22,7 +22,7 @@ def create_llm(
     if not enabled:
         raise ValueError(f"Provider {provider_name} is disabled")
 
-    if api_mode == "responses" or auth_type == "openai_codex_oauth":
+    if should_use_responses_llm(api_mode=api_mode, auth_type=auth_type):
         return create_responses_llm(
             api_key=api_key,
             model=model,

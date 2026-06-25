@@ -120,13 +120,21 @@ def test_resolve_codex_profile_defaults_require_token(tmp_path):
         )
 
 
-def test_create_llm_uses_responses_provider_for_responses_mode():
+@pytest.mark.parametrize(
+    ("api_mode", "auth_type"),
+    [
+        ("responses", "api_key"),
+        (None, "openai_codex_oauth"),
+    ],
+)
+def test_create_llm_uses_responses_provider_for_responses_api(api_mode, auth_type):
     provider = create_llm(
         api_key="codex-token",
         model="gpt-5.1-codex",
         base_url="https://chatgpt.com/backend-api/codex",
         provider_name="openai-codex",
-        api_mode="responses",
+        api_mode=api_mode,
+        auth_type=auth_type,
     )
 
     assert isinstance(provider, OpenAIResponsesLLM)
