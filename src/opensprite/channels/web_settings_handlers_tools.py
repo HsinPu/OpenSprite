@@ -16,7 +16,7 @@ from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
-from . import web_settings_payloads, web_settings_support
+from . import web_settings_coercion, web_settings_payloads, web_settings_support
 
 
 async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
@@ -204,17 +204,17 @@ async def handle_settings_log_update(adapter: Any, request: web.Request) -> web.
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
     if "enabled" in body:
-        config.log.enabled = adapter._coerce_bool(body.get("enabled"), field="enabled", default=config.log.enabled)
+        config.log.enabled = web_settings_coercion.coerce_bool(body.get("enabled"), field="enabled", default=config.log.enabled)
     if "level" in body:
-        config.log.level = adapter._coerce_log_level(body.get("level"))
+        config.log.level = web_settings_coercion.coerce_log_level(body.get("level"))
     if "retention_days" in body:
-        config.log.retention_days = adapter._coerce_positive_int(body.get("retention_days"), field="retention_days", default=config.log.retention_days, minimum=1)
+        config.log.retention_days = web_settings_coercion.coerce_positive_int(body.get("retention_days"), field="retention_days", default=config.log.retention_days, minimum=1)
     if "log_system_prompt" in body:
-        config.log.log_system_prompt = adapter._coerce_bool(body.get("log_system_prompt"), field="log_system_prompt", default=config.log.log_system_prompt)
+        config.log.log_system_prompt = web_settings_coercion.coerce_bool(body.get("log_system_prompt"), field="log_system_prompt", default=config.log.log_system_prompt)
     if "log_system_prompt_lines" in body:
-        config.log.log_system_prompt_lines = adapter._coerce_positive_int(body.get("log_system_prompt_lines"), field="log_system_prompt_lines", default=config.log.log_system_prompt_lines, minimum=0)
+        config.log.log_system_prompt_lines = web_settings_coercion.coerce_positive_int(body.get("log_system_prompt_lines"), field="log_system_prompt_lines", default=config.log.log_system_prompt_lines, minimum=0)
     if "log_reasoning_details" in body:
-        config.log.log_reasoning_details = adapter._coerce_bool(body.get("log_reasoning_details"), field="log_reasoning_details", default=config.log.log_reasoning_details)
+        config.log.log_reasoning_details = web_settings_coercion.coerce_bool(body.get("log_reasoning_details"), field="log_reasoning_details", default=config.log.log_reasoning_details)
     config.save(config_path)
     web_module = importlib.import_module(type(adapter).__module__)
     web_module.setup_log(config.log)

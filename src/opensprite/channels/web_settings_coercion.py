@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from aiohttp import web
 
+from ..config.defaults import DEFAULT_LOG_LEVEL, LOG_LEVELS
 from ..utils.url import join_url_path
 
 
@@ -26,7 +27,12 @@ def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None
     return items
 
 
-def coerce_log_level(value: Any, *, default_log_level: str, log_levels: tuple[str, ...] | list[str]) -> str:
+def coerce_log_level(
+    value: Any,
+    *,
+    default_log_level: str = DEFAULT_LOG_LEVEL,
+    log_levels: tuple[str, ...] | list[str] = LOG_LEVELS,
+) -> str:
     level = str(value or default_log_level).strip().upper()
     if level not in log_levels:
         raise web.HTTPBadRequest(text=f"level must be one of: {', '.join(log_levels)}")

@@ -35,7 +35,6 @@ from ..config.defaults import (
     DEFAULT_CRON_TIMEZONE,
     DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_LOG_ENABLED,
-    DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_REASONING_DETAILS,
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
@@ -47,7 +46,6 @@ from ..config.defaults import (
     DEFAULT_WEB_SEARCH_PROVIDER,
     WEB_SEARCH_FRESHNESS_OPTIONS,
     BROWSER_BACKENDS as DEFAULT_BROWSER_BACKENDS,
-    LOG_LEVELS as DEFAULT_LOG_LEVELS,
     WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
 from ..config.channel_settings import ChannelSettingsService
@@ -81,7 +79,6 @@ from .web_routes import register_web_routes
 class WebAdapter(MessageAdapter):
     """WebSocket adapter for browser-based chat clients."""
 
-    LOG_LEVELS = DEFAULT_LOG_LEVELS
     WEB_SEARCH_PROVIDERS = DEFAULT_WEB_SEARCH_PROVIDERS
     WEB_SEARCH_FRESHNESS = WEB_SEARCH_FRESHNESS_OPTIONS
     SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
@@ -403,10 +400,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     def _anthropic_reasoning_budget(effort: str | None) -> int:
         return web_settings_payloads.anthropic_reasoning_budget(effort)
-
-    @classmethod
-    def _coerce_log_level(cls, value: Any) -> str:
-        return web_settings_coercion.coerce_log_level(value, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
     @staticmethod
     def _coerce_positive_int(value: Any, *, field: str, default: int, minimum: int = 0, maximum: int = 3650) -> int:
