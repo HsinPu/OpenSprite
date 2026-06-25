@@ -6,9 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from .llm_presets import get_provider_profile, load_llm_presets
-from .provider_choices import (
-    make_provider_instance_id,
-)
 from .provider_errors import ProviderSettingsNotFound
 from .provider_listing import build_model_listing, build_provider_listing
 from .provider_persistence import persist_llm_provider_state
@@ -16,10 +13,9 @@ from .provider_public import (
     public_connected_provider,
 )
 from .provider_state import (
-    connect_provider_in_config,
+    connect_provider_instance_in_config,
     disconnect_provider_in_config,
     load_provider_config_state,
-    provider_mutation_data,
     remove_provider_credential_references,
     set_provider_credential_in_config,
     select_provider_model_in_config,
@@ -49,19 +45,14 @@ class ProviderSettingsService:
     def connect_provider(self, provider_id: str, *, api_key: str | None, base_url: str | None = None, name: str | None = None) -> dict[str, Any]:
         """Connect or update one provider without selecting a model."""
         main_data, providers, loaded = self._load_state()
-        instance_id = make_provider_instance_id(provider_id, providers, name)
-        config_data = provider_mutation_data(
+        instance_id, provider = connect_provider_instance_in_config(
             providers,
             loaded.llm.default,
-            app_home=self.config_path.parent,
-        )
-        provider = connect_provider_in_config(
-            config_data,
-            instance_id,
+            provider_id,
             api_key=api_key,
             base_url=base_url,
-            base_provider_id=provider_id,
-            display_name=name,
+            name=name,
+            app_home=self.config_path.parent,
         )
         persist_llm_provider_state(self.config_path, main_data, providers)
         preset = get_provider_profile(provider_id)

@@ -14,6 +14,7 @@ from .provider_choices import (
     get_configured_provider_id,
     get_provider_choices,
     get_provider_preset_id,
+    make_provider_instance_id,
 )
 from .provider_credentials import has_provider_secret
 from .provider_discovery import cached_openrouter_model_metadata, positive_int_or_none
@@ -148,6 +149,34 @@ def connect_provider_in_config(
     provider.setdefault("model", "")
     provider["enabled"] = bool(provider.get("enabled", False))
     return provider
+
+
+def connect_provider_instance_in_config(
+    providers: dict[str, Any],
+    default_provider: str | None,
+    base_provider_id: str,
+    *,
+    api_key: str | None,
+    base_url: str | None = None,
+    name: str | None = None,
+    app_home: Any = None,
+) -> tuple[str, dict[str, Any]]:
+    """Connect or update one provider instance inside an in-memory config object."""
+    instance_id = make_provider_instance_id(base_provider_id, providers, name)
+    config_data = provider_mutation_data(
+        providers,
+        default_provider,
+        app_home=app_home,
+    )
+    provider = connect_provider_in_config(
+        config_data,
+        instance_id,
+        api_key=api_key,
+        base_url=base_url,
+        base_provider_id=base_provider_id,
+        display_name=name,
+    )
+    return instance_id, provider
 
 
 def disconnect_provider_in_config(
