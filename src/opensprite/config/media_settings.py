@@ -149,6 +149,44 @@ class MediaSettingsService:
             "media_model_source": media_model_source,
         }
 
+    def _enabled_section_update(
+        self,
+        provider_id: str | None,
+        model: str | None,
+        providers: dict[str, Any],
+    ) -> dict[str, Any]:
+        normalized_provider_id = str(provider_id or "").strip()
+        normalized_model = str(model or "").strip()
+        if not normalized_provider_id:
+            raise ProviderSettingsValidationError(
+                "provider_id is required when media model is enabled"
+            )
+        if not normalized_model:
+            raise ProviderSettingsValidationError(
+                "model is required when media model is enabled"
+            )
+
+        provider = providers.get(normalized_provider_id)
+        if not isinstance(provider, dict):
+            raise ProviderSettingsNotFound(
+                f"Provider is not connected: {normalized_provider_id}"
+            )
+        api_key = self._provider_api_key(
+            normalized_provider_id,
+            provider,
+            app_home=self.config_path.parent,
+        )
+        if not api_key:
+            raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
+
+        preset_id = str(provider.get("provider") or normalized_provider_id).strip()
+        return {
+            "provider": preset_id,
+            "api_key": api_key,
+            "model": normalized_model,
+            "base_url": self._media_base_url(normalized_provider_id, provider),
+        }
+
     def list_media(self) -> dict[str, Any]:
         """Return media model settings without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -187,27 +225,7 @@ class MediaSettingsService:
         next_section["enabled"] = bool(enabled)
 
         if enabled:
-            normalized_provider_id = str(provider_id or "").strip()
-            normalized_model = str(model or "").strip()
-            if not normalized_provider_id:
-                raise ProviderSettingsValidationError("provider_id is required when media model is enabled")
-            if not normalized_model:
-                raise ProviderSettingsValidationError("model is required when media model is enabled")
-            provider = providers.get(normalized_provider_id)
-            if not isinstance(provider, dict):
-                raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
-            api_key = self._provider_api_key(normalized_provider_id, provider, app_home=self.config_path.parent)
-            if not api_key:
-                raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
-            preset_id = str(provider.get("provider") or normalized_provider_id).strip()
-            next_section.update(
-                {
-                    "provider": preset_id,
-                    "api_key": api_key,
-                    "model": normalized_model,
-                    "base_url": self._media_base_url(normalized_provider_id, provider),
-                }
-            )
+            next_section.update(self._enabled_section_update(provider_id, model, providers))
         else:
             next_section.setdefault("provider", current.get("provider") or "minimax")
             next_section.setdefault("api_key", current.get("api_key") or "")
