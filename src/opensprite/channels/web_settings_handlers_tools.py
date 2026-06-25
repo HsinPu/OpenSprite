@@ -16,7 +16,7 @@ from ..ops import OperationAuditRecord
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..utils.log import logger
-from . import web_settings_support
+from . import web_settings_payloads, web_settings_support
 
 
 async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
@@ -196,7 +196,7 @@ async def handle_settings_browser_install(adapter: Any, request: web.Request) ->
 
 async def handle_settings_log(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"log": adapter._log_payload(config)})
+    return web.json_response({"log": web_settings_payloads.log_payload(config)})
 
 
 async def handle_settings_log_update(adapter: Any, request: web.Request) -> web.Response:
@@ -218,7 +218,7 @@ async def handle_settings_log_update(adapter: Any, request: web.Request) -> web.
     config.save(config_path)
     web_module = importlib.import_module(type(adapter).__module__)
     web_module.setup_log(config.log)
-    return web.json_response({"log": adapter._log_payload(config), "restart_required": False, "runtime_reloaded": True})
+    return web.json_response({"log": web_settings_payloads.log_payload(config), "restart_required": False, "runtime_reloaded": True})
 
 
 async def handle_settings_mcp(adapter: Any, request: web.Request) -> web.Response:

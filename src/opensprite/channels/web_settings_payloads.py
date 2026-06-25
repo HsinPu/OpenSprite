@@ -10,11 +10,13 @@ from ..config.defaults import (
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
     DEFAULT_LOG_ENABLED,
+    DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_REASONING_DETAILS,
     DEFAULT_LOG_RETENTION_DAYS,
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
     DEFAULT_NO_PROXY,
+    LOG_LEVELS,
 )
 
 
@@ -88,7 +90,12 @@ def web_search_payload(
     }
 
 
-def log_payload(config: Config, *, default_log_level: str, log_levels: tuple[str, ...] | list[str]) -> dict[str, Any]:
+def log_payload(
+    config: Config,
+    *,
+    default_log_level: str = DEFAULT_LOG_LEVEL,
+    log_levels: tuple[str, ...] | list[str] = LOG_LEVELS,
+) -> dict[str, Any]:
     log = getattr(config, "log", None)
     return {
         "enabled": bool(getattr(log, "enabled", DEFAULT_LOG_ENABLED)),

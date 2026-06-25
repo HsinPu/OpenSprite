@@ -405,10 +405,6 @@ class WebAdapter(MessageAdapter):
         return web_settings_payloads.anthropic_reasoning_budget(effort)
 
     @classmethod
-    def _log_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.log_payload(config, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
-
-    @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
         return web_settings_coercion.coerce_log_level(value, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
