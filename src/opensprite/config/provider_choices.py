@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .provider_credentials import has_provider_secret
+
 
 def get_selected_provider(config_data: dict[str, Any], *, provider_order: tuple[str, ...]) -> str | None:
     """Return the currently selected provider, if valid."""
@@ -16,7 +18,7 @@ def get_selected_provider(config_data: dict[str, Any], *, provider_order: tuple[
 
     for provider_name in provider_order:
         provider = providers.get(provider_name, {}) if isinstance(providers, dict) else {}
-        if isinstance(provider, dict) and (provider.get("enabled") or provider.get("api_key") or provider.get("credential_id")):
+        if isinstance(provider, dict) and (provider.get("enabled") or has_provider_secret(provider)):
             return provider_name
     return None
 

@@ -8,6 +8,10 @@ from typing import Any
 from ..auth.credentials import CredentialNotFoundError, resolve_credential
 
 
+def has_provider_secret(provider: dict[str, Any]) -> bool:
+    return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+
+
 def resolve_provider_api_key(
     provider_id: str,
     provider: dict[str, Any],

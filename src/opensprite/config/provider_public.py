@@ -7,6 +7,7 @@ from typing import Any
 
 from ..auth.credentials import CredentialNotFoundError, list_credentials, resolve_credential
 from .llm_presets import ProviderPreset
+from .provider_credentials import has_provider_secret
 
 
 def public_provider_display_name(
@@ -111,7 +112,7 @@ def public_connected_provider(
         "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
         "model": provider.get("model") or "",
         "reasoning_effort": provider.get("reasoning_effort") or "",
-        "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
+        "api_key_configured": has_provider_secret(provider),
         "credential_id": provider.get("credential_id") or "",
         "credential_effective_id": (credential or {}).get("id") or "",
         "credential_source": public_credential_source(provider, credential),
