@@ -7,7 +7,7 @@ from typing import Any
 from ..auth.credentials import DEFAULT_LLM_CAPABILITY, add_credential
 from ..llms.reasoning import REASONING_EFFORT_OPTIONS, is_valid_reasoning_effort, normalize_reasoning_effort
 from .llm_presets import ProviderPreset, load_llm_presets
-from .provider_choices import get_provider_preset_id
+from .provider_choices import get_provider_choices, get_provider_preset_id
 from .provider_discovery import _positive_int, cached_openrouter_model_metadata
 from .provider_errors import (
     ProviderSettingsConflict,
@@ -186,3 +186,51 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
     if preset and preset.auth_type != "api_key":
         return True
     return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+
+
+def connected_provider_entries(providers: dict[str, Any], presets: Any):
+    for provider_id in get_provider_choices(
+        {"llm": {"providers": providers}},
+        provider_order=presets.provider_order,
+    ):
+        provider = providers.get(provider_id, {})
+        preset_id = get_provider_preset_id(provider_id, provider, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if is_provider_connected(provider, preset):
+            yield provider_id, provider, preset_id, preset
+
+
+def connected_provider_or_raise(
+    provider_id: str,
+    providers: dict[str, Any],
+    presets: Any,
+) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
+    provider = providers.get(provider_id)
+    preset_id = get_provider_preset_id(
+        provider_id,
+        provider if isinstance(provider, dict) else {},
+        presets,
+    )
+    preset = presets.providers.get(preset_id) if preset_id else None
+    if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
+        raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+    return provider, preset_id, preset
+
+
+def clear_default_provider(main_data: dict[str, Any], providers: dict[str, Any]) -> None:
+    main_data.setdefault("llm", {})["default"] = None
+    for item in providers.values():
+        if isinstance(item, dict):
+            item["enabled"] = False
+
+
+def provider_mutation_data(
+    providers: dict[str, Any],
+    default_provider: str | None,
+    *,
+    app_home: Any = None,
+) -> dict[str, Any]:
+    data: dict[str, Any] = {"llm": {"providers": providers, "default": default_provider}}
+    if app_home is not None:
+        data["app_home"] = app_home
+    return data

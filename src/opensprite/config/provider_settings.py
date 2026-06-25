@@ -8,11 +8,9 @@ from typing import Any
 from ..auth.credentials import set_provider_default
 from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .json_files import load_json_dict, write_json_dict
-from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
+from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
     get_model_choices,
-    get_provider_choices,
-    get_provider_preset_id,
     get_selected_provider,
     make_provider_instance_id,
 )
@@ -42,9 +40,12 @@ from .provider_public import (
     public_provider_profile,
 )
 from .provider_state import (
+    clear_default_provider,
     connect_provider_in_config,
+    connected_provider_entries,
+    connected_provider_or_raise,
     ensure_provider_entry,
-    is_provider_connected,
+    provider_mutation_data,
     prune_llm_providers,
     select_model_in_config,
 )
@@ -86,53 +87,6 @@ class ProviderSettingsService:
         Config.ensure_llm_providers_file(self.config_path, main_data)
         Config.write_llm_providers_file(self.config_path, providers, llm_data)
 
-    def _connected_provider_entries(self, providers: dict[str, Any], presets: Any):
-        for provider_id in get_provider_choices(
-            {"llm": {"providers": providers}},
-            provider_order=presets.provider_order,
-        ):
-            provider = providers.get(provider_id, {})
-            preset_id = get_provider_preset_id(provider_id, provider, presets)
-            preset = presets.providers.get(preset_id) if preset_id else None
-            if is_provider_connected(provider, preset):
-                yield provider_id, provider, preset_id, preset
-
-    def _connected_provider_or_raise(
-        self,
-        provider_id: str,
-        providers: dict[str, Any],
-        presets: Any,
-    ) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
-        provider = providers.get(provider_id)
-        preset_id = get_provider_preset_id(
-            provider_id,
-            provider if isinstance(provider, dict) else {},
-            presets,
-        )
-        preset = presets.providers.get(preset_id) if preset_id else None
-        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
-            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
-        return provider, preset_id, preset
-
-    @staticmethod
-    def _clear_default_provider(main_data: dict[str, Any], providers: dict[str, Any]) -> None:
-        main_data.setdefault("llm", {})["default"] = None
-        for item in providers.values():
-            if isinstance(item, dict):
-                item["enabled"] = False
-
-    def _provider_mutation_data(
-        self,
-        providers: dict[str, Any],
-        default_provider: str | None,
-        *,
-        include_app_home: bool = False,
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {"llm": {"providers": providers, "default": default_provider}}
-        if include_app_home:
-            data["app_home"] = self.config_path.parent
-        return data
-
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -140,7 +94,7 @@ class ProviderSettingsService:
         default_provider = loaded.llm.default
         connected: list[dict[str, Any]] = []
 
-        for provider_id, provider, preset_id, preset in self._connected_provider_entries(
+        for provider_id, provider, preset_id, preset in connected_provider_entries(
             providers,
             presets,
         ):
@@ -174,10 +128,10 @@ class ProviderSettingsService:
         """Connect or update one provider without selecting a model."""
         main_data, providers, loaded = self._load_state()
         instance_id = make_provider_instance_id(provider_id, providers, name)
-        config_data = self._provider_mutation_data(
+        config_data = provider_mutation_data(
             providers,
             loaded.llm.default,
-            include_app_home=True,
+            app_home=self.config_path.parent,
         )
         provider = connect_provider_in_config(
             config_data,
@@ -208,12 +162,12 @@ class ProviderSettingsService:
         """Disconnect one provider, clearing the active model when needed."""
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
-        self._connected_provider_or_raise(provider_id, providers, presets)
+        connected_provider_or_raise(provider_id, providers, presets)
 
         was_default = provider_id == loaded.llm.default
         providers.pop(provider_id, None)
         if was_default:
-            self._clear_default_provider(main_data, providers)
+            clear_default_provider(main_data, providers)
         self._persist_llm_state(main_data, providers)
         return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
 
@@ -221,7 +175,7 @@ class ProviderSettingsService:
         """Select which stored credential a connected provider instance should use."""
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
-        provider, preset_id, _preset = self._connected_provider_or_raise(
+        provider, preset_id, _preset = connected_provider_or_raise(
             provider_id,
             providers,
             presets,
@@ -255,7 +209,7 @@ class ProviderSettingsService:
             removed_provider_ids.append(provider_id)
         restart_required = bool(loaded.llm.default in removed_provider_ids)
         if restart_required:
-            self._clear_default_provider(main_data, providers)
+            clear_default_provider(main_data, providers)
         if removed_provider_ids:
             self._persist_llm_state(main_data, providers)
         return {
@@ -268,7 +222,7 @@ class ProviderSettingsService:
         _, providers, loaded = self._load_state()
         presets = load_llm_presets()
         out: list[dict[str, Any]] = []
-        for provider_id, provider, preset_id, preset in self._connected_provider_entries(
+        for provider_id, provider, preset_id, preset in connected_provider_entries(
             providers,
             presets,
         ):
@@ -307,7 +261,7 @@ class ProviderSettingsService:
     def select_model(self, provider_id: str, model: str, *, reasoning_effort: str | None = None) -> dict[str, Any]:
         """Select the active provider/model and persist it."""
         main_data, providers, _loaded = self._load_state()
-        config_data = self._provider_mutation_data(
+        config_data = provider_mutation_data(
             providers,
             main_data.get("llm", {}).get("default"),
         )
