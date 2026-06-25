@@ -38,6 +38,11 @@ from .defaults import (
     DEFAULT_WEB_SEARCH_PROVIDER,
 )
 from .llm_presets import provider_profile_defaults
+from .provider_auth_types import (
+    GITHUB_COPILOT_OAUTH_AUTH_TYPE,
+    OPENAI_CODEX_OAUTH_AUTH_TYPE,
+    OPTIONAL_API_KEY_AUTH_TYPE,
+)
 
 
 DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS: tuple[str, ...] = (
@@ -1240,7 +1245,7 @@ class Config:
             provider_id = str(provider.provider or self.llm.default or "").strip()
             defaults = provider_profile_defaults(provider_id, auth_type=provider.auth_type, api_mode=provider.api_mode)
             auth_type = defaults.auth_type
-            if auth_type == "openai_codex_oauth":
+            if auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE:
                 if not provider.model:
                     return False
                 try:
@@ -1250,7 +1255,7 @@ class Config:
                 except Exception:
                     return False
                 return status.configured and status.expired is not True
-            if auth_type == "github_copilot_oauth":
+            if auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
                 if not provider.model:
                     return False
                 try:
@@ -1260,7 +1265,7 @@ class Config:
                 except Exception:
                     return False
                 return status.configured
-            if auth_type == "optional_api_key":
+            if auth_type == OPTIONAL_API_KEY_AUTH_TYPE:
                 return bool(provider.model)
             return bool((provider.api_key or provider.credential_id) and provider.model)
         return False
