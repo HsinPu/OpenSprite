@@ -15,6 +15,21 @@ def _coerce_bool(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _session_title(messages: list[Any], fallback: str) -> str:
+    for message in messages:
+        role = str(getattr(message, "role", "") or "")
+        content = " ".join(str(getattr(message, "content", "") or "").split())
+        if role == "user" and content:
+            return f"{content[:30]}..." if len(content) > 30 else content
+    return fallback
+
+
+def _session_updated_at(messages: list[Any], runs: list[Any]) -> float:
+    timestamps = [float(getattr(message, "timestamp", 0) or 0) for message in messages]
+    timestamps.extend(float(getattr(run, "updated_at", 0) or 0) for run in runs)
+    return max(timestamps, default=0.0)
+
+
 def _message_source(message: Any) -> str:
     metadata = getattr(message, "metadata", None)
     if not isinstance(metadata, dict):
@@ -169,8 +184,8 @@ async def serialize_session_summary(adapter: Any, storage: Any, session_id: str,
         "session_id": session_id,
         "channel": adapter._channel_from_session(session_id),
         "external_chat_id": external_chat_id,
-        "title": adapter._session_title(display_messages, fallback_title),
-        "updated_at": adapter._session_updated_at(messages, latest_runs),
+        "title": _session_title(display_messages, fallback_title),
+        "updated_at": _session_updated_at(messages, latest_runs),
         "status": adapter._serialize_session_status(session_id),
         "message_count": await storage.get_message_count(session_id),
         "messages": [adapter._serialize_message(message) for message in display_messages],

@@ -347,21 +347,6 @@ class WebAdapter(MessageAdapter):
             "updated_at": float(state.updated_at or 0),
         }
 
-    @staticmethod
-    def _session_title(messages: list[Any], fallback: str) -> str:
-        for message in messages:
-            role = str(getattr(message, "role", "") or "")
-            content = " ".join(str(getattr(message, "content", "") or "").split())
-            if role == "user" and content:
-                return f"{content[:30]}..." if len(content) > 30 else content
-        return fallback
-
-    @staticmethod
-    def _session_updated_at(messages: list[Any], runs: list[Any]) -> float:
-        timestamps = [float(getattr(message, "timestamp", 0) or 0) for message in messages]
-        timestamps.extend(float(getattr(run, "updated_at", 0) or 0) for run in runs)
-        return max(timestamps, default=0.0)
-
     def _serialize_session_status(self, session_id: str) -> dict[str, Any]:
         service = self._get_session_status_service()
         if service is None:
