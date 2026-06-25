@@ -719,6 +719,23 @@ class ProviderSettingsService:
             if is_provider_connected(provider, preset):
                 yield provider_id, provider, preset_id, preset
 
+    def _connected_provider_or_raise(
+        self,
+        provider_id: str,
+        providers: dict[str, Any],
+        presets: Any,
+    ) -> tuple[dict[str, Any], str | None, ProviderPreset | None]:
+        provider = providers.get(provider_id)
+        preset_id = get_provider_preset_id(
+            provider_id,
+            provider if isinstance(provider, dict) else {},
+            presets,
+        )
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
+            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+        return provider, preset_id, preset
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -787,12 +804,8 @@ class ProviderSettingsService:
     def disconnect_provider(self, provider_id: str) -> dict[str, Any]:
         """Disconnect one provider, clearing the active model when needed."""
         main_data, providers, loaded = self._load_state()
-        provider = providers.get(provider_id)
         presets = load_llm_presets()
-        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
-        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
-            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+        self._connected_provider_or_raise(provider_id, providers, presets)
 
         was_default = provider_id == loaded.llm.default
         providers.pop(provider_id, None)
@@ -808,13 +821,17 @@ class ProviderSettingsService:
     def set_provider_credential(self, provider_id: str, credential_id: str) -> dict[str, Any]:
         """Select which stored credential a connected provider instance should use."""
         main_data, providers, loaded = self._load_state()
-        provider = providers.get(provider_id)
         presets = load_llm_presets()
-        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
-        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
-            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
-        credential = set_provider_default(preset_id or provider_id, credential_id, app_home=self.config_path.parent)
+        provider, preset_id, _preset = self._connected_provider_or_raise(
+            provider_id,
+            providers,
+            presets,
+        )
+        credential = set_provider_default(
+            preset_id or provider_id,
+            credential_id,
+            app_home=self.config_path.parent,
+        )
         provider["credential_id"] = credential_id
         provider["api_key"] = ""
         self._persist_llm_state(main_data, providers)
