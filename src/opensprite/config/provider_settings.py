@@ -708,6 +708,17 @@ class ProviderSettingsService:
             "supports_custom_model": True,
         }
 
+    def _connected_provider_entries(self, providers: dict[str, Any], presets: Any):
+        for provider_id in get_provider_choices(
+            {"llm": {"providers": providers}},
+            provider_order=presets.provider_order,
+        ):
+            provider = providers.get(provider_id, {})
+            preset_id = get_provider_preset_id(provider_id, provider, presets)
+            preset = presets.providers.get(preset_id) if preset_id else None
+            if is_provider_connected(provider, preset):
+                yield provider_id, provider, preset_id, preset
+
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -715,12 +726,10 @@ class ProviderSettingsService:
         default_provider = loaded.llm.default
         connected: list[dict[str, Any]] = []
 
-        for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
-            provider = providers.get(provider_id, {})
-            preset_id = get_provider_preset_id(provider_id, provider, presets)
-            preset = presets.providers.get(preset_id) if preset_id else None
-            if not is_provider_connected(provider, preset):
-                continue
+        for provider_id, provider, preset_id, preset in self._connected_provider_entries(
+            providers,
+            presets,
+        ):
             connected.append(
                 self._public_connected_provider(
                     provider_id,
@@ -846,12 +855,10 @@ class ProviderSettingsService:
         _, providers, loaded = self._load_state()
         presets = load_llm_presets()
         out: list[dict[str, Any]] = []
-        for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
-            provider = providers.get(provider_id, {})
-            preset_id = get_provider_preset_id(provider_id, provider, presets)
-            preset = presets.providers.get(preset_id) if preset_id else None
-            if not is_provider_connected(provider, preset):
-                continue
+        for provider_id, provider, preset_id, preset in self._connected_provider_entries(
+            providers,
+            presets,
+        ):
             discovered_models, model_source, model_metadata = discover_provider_models(
                 provider_id,
                 provider,
