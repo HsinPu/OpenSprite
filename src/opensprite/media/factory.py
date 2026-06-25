@@ -20,21 +20,8 @@ def create_media_router(config: Config) -> MediaRouter:
     image_provider = _image_provider_from_config(vision)
     ocr_provider = _image_provider_from_config(ocr)
 
-    speech_provider = None
-    if speech and speech.enabled:
-        speech_provider = OpenAICompatibleSpeechProvider(
-            api_key=speech.api_key,
-            default_model=speech.model,
-            base_url=speech.base_url,
-        )
-
-    video_provider = None
-    if video and video.enabled:
-        video_provider = OpenAICompatibleVideoProvider(
-            api_key=video.api_key,
-            default_model=video.model,
-            base_url=video.base_url,
-        )
+    speech_provider = _openai_compatible_provider_from_config(speech, OpenAICompatibleSpeechProvider)
+    video_provider = _openai_compatible_provider_from_config(video, OpenAICompatibleVideoProvider)
 
     return MediaRouter(
         image_provider=image_provider,
@@ -49,6 +36,16 @@ def _image_provider_from_config(config: object | None):
         return None
     return create_image_analysis_provider(
         provider=getattr(config, "provider"),
+        api_key=getattr(config, "api_key"),
+        default_model=getattr(config, "model"),
+        base_url=getattr(config, "base_url"),
+    )
+
+
+def _openai_compatible_provider_from_config(config: object | None, provider_class):
+    if config is None or not getattr(config, "enabled", False):
+        return None
+    return provider_class(
         api_key=getattr(config, "api_key"),
         default_model=getattr(config, "model"),
         base_url=getattr(config, "base_url"),

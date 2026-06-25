@@ -57,6 +57,45 @@ def test_create_media_router_uses_image_factory_for_vision_and_ocr(monkeypatch, 
     ]
 
 
+def test_create_media_router_uses_openai_compatible_factory_for_speech_and_video(monkeypatch, tmp_path):
+    calls = []
+
+    class FakeProvider:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+
+    monkeypatch.setattr(media_factory, "OpenAICompatibleSpeechProvider", FakeProvider)
+    monkeypatch.setattr(media_factory, "OpenAICompatibleVideoProvider", FakeProvider)
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+    config.speech.enabled = True
+    config.speech.api_key = "speech-key"
+    config.speech.model = "speech-model"
+    config.speech.base_url = "https://speech.example.test"
+    config.video.enabled = True
+    config.video.api_key = "video-key"
+    config.video.model = "video-model"
+    config.video.base_url = "https://video.example.test"
+
+    router = create_media_router(config)
+
+    assert isinstance(router.speech_provider, FakeProvider)
+    assert isinstance(router.video_provider, FakeProvider)
+    assert calls == [
+        {
+            "api_key": "speech-key",
+            "default_model": "speech-model",
+            "base_url": "https://speech.example.test",
+        },
+        {
+            "api_key": "video-key",
+            "default_model": "video-model",
+            "base_url": "https://video.example.test",
+        },
+    ]
+
+
 def test_reload_media_router_reuses_existing_router_and_applies_config(tmp_path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
