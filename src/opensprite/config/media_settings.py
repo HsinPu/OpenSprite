@@ -37,12 +37,11 @@ class MediaSettingsService:
         return load_provider_config_state(self.config_path)
 
     def _section_payload(self, category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
-        provider_id = self._section_provider_id(config, providers)
         return {
             "category": category,
             "enabled": bool(config.enabled),
             "provider": config.provider,
-            "provider_id": provider_id,
+            "provider_id": self._section_provider_id(config, providers),
             "model": config.model,
             "base_url": config.base_url,
             "api_key_configured": bool(config.api_key),
@@ -134,11 +133,11 @@ class MediaSettingsService:
         """Return media model settings without leaking API keys."""
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
-        provider_choices = []
-        for provider_id, provider, preset_id, preset in connected_provider_entries(providers, presets):
-            payload = self._provider_choice_payload(provider_id, provider, preset_id, preset)
-            if payload:
-                provider_choices.append(payload)
+        provider_choices = [
+            payload
+            for provider_id, provider, preset_id, preset in connected_provider_entries(providers, presets)
+            if (payload := self._provider_choice_payload(provider_id, provider, preset_id, preset))
+        ]
 
         return {
             "sections": {
