@@ -7,13 +7,14 @@ from typing import Any
 
 from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
-from .provider_choices import get_configured_provider_id, get_provider_media_base_url, get_provider_model_choices
+from .provider_choices import get_provider_model_choices
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
 from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import discover_media_model_choices
+from .provider_media import get_provider_media_config
 from .provider_public import public_media_provider
 from .provider_state import connected_provider_entries, load_provider_config_state
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
@@ -53,15 +54,15 @@ class MediaSettingsService:
         for candidate_id, provider in providers.items():
             if not isinstance(provider, dict):
                 continue
-            provider_name = get_configured_provider_id(candidate_id, provider)
+            media_config = get_provider_media_config(
+                candidate_id,
+                provider,
+                app_home=self.config_path.parent,
+            )
             if (
-                resolve_provider_api_key(
-                    candidate_id,
-                    provider,
-                    app_home=self.config_path.parent,
-                ) == expected_api_key
-                and str(get_provider_media_base_url(candidate_id, provider) or "") == expected_base_url
-                and provider_name == config.provider
+                media_config["api_key"] == expected_api_key
+                and str(media_config["base_url"] or "") == expected_base_url
+                and media_config["provider"] == config.provider
             ):
                 return candidate_id
         return ""
@@ -113,20 +114,20 @@ class MediaSettingsService:
             raise ProviderSettingsNotFound(
                 f"Provider is not connected: {normalized_provider_id}"
             )
-        api_key = resolve_provider_api_key(
+        media_config = get_provider_media_config(
             normalized_provider_id,
             provider,
             app_home=self.config_path.parent,
         )
+        api_key = media_config["api_key"]
         if not api_key:
             raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
 
-        preset_id = get_configured_provider_id(normalized_provider_id, provider)
         return {
-            "provider": preset_id,
+            "provider": media_config["provider"],
             "api_key": api_key,
             "model": normalized_model,
-            "base_url": get_provider_media_base_url(normalized_provider_id, provider),
+            "base_url": media_config["base_url"],
         }
 
     def list_media(self) -> dict[str, Any]:
