@@ -6,7 +6,7 @@ from ..bus.dispatcher import MessageQueue
 from ..config import Config
 from ..cron.factory import create_cron_manager
 from ..llms import UnconfiguredLLM
-from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
+from ..llms.runtime_provider import create_configured_llm
 from ..media.factory import create_media_router
 from ..search.store_factory import create_search_store
 from ..storage.factory import create_storage
@@ -17,14 +17,8 @@ from .agent import AgentLoop
 async def create_agent(config: Config):
     """Create the agent, message queue, and cron manager."""
 
-    cfg = config.llm.get_active()
     if config.is_llm_configured:
-        llm_runtime = resolve_provider_runtime(
-            cfg,
-            provider_name=cfg.provider or config.llm.default or "",
-            app_home=config.source_path.parent if config.source_path is not None else None,
-        )
-        llm = create_llm_from_runtime(llm_runtime)
+        llm, llm_runtime = create_configured_llm(config)
     else:
         llm_runtime = None
         llm = UnconfiguredLLM()

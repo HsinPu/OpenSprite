@@ -6,7 +6,7 @@ from typing import Any
 
 from ..config import Config
 from ..llms import LLMProvider
-from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
+from ..llms.runtime_provider import create_configured_llm
 from ..media import (
     MediaRouter,
     OpenAICompatibleSpeechProvider,
@@ -32,13 +32,7 @@ def refresh_consolidator_llm(consolidator: Any | None, provider: LLMProvider) ->
 
 def reload_agent_llm_from_config(agent: Any, config: Config) -> dict[str, Any]:
     """Reload the active chat LLM from an already persisted Config."""
-    cfg = config.llm.get_active()
-    llm_runtime = resolve_provider_runtime(
-        cfg,
-        provider_name=cfg.provider or config.llm.default or "",
-        app_home=config.source_path.parent if config.source_path is not None else agent.app_home,
-    )
-    provider = create_llm_from_runtime(llm_runtime)
+    provider, llm_runtime = create_configured_llm(config, fallback_app_home=agent.app_home)
 
     agent.provider = provider
     agent.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens

@@ -8,7 +8,7 @@ from pathlib import Path
 from ..auth.credentials import CredentialNotFoundError
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import CopilotAuthError, get_copilot_api_token, load_copilot_token
-from ..config import ProviderConfig
+from ..config import Config, ProviderConfig
 from .reasoning import normalize_reasoning_effort
 from .runtime_auth import resolve_runtime_provider_auth
 from .runtime_credentials import resolve_runtime_credentials
@@ -117,3 +117,18 @@ def create_llm_from_runtime(runtime: ResolvedProviderRuntime):
         auth_type=runtime.auth_type,
         reasoning_effort=runtime.reasoning_effort,
     )
+
+
+def create_configured_llm(
+    config: Config,
+    *,
+    fallback_app_home: str | Path | None = None,
+):
+    """Create the active configured LLM and return it with its resolved runtime."""
+    cfg = config.llm.get_active()
+    llm_runtime = resolve_provider_runtime(
+        cfg,
+        provider_name=cfg.provider or config.llm.default or "",
+        app_home=config.source_path.parent if config.source_path is not None else fallback_app_home,
+    )
+    return create_llm_from_runtime(llm_runtime), llm_runtime
