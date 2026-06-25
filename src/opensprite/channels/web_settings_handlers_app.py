@@ -170,7 +170,7 @@ async def handle_settings_schedule_update(adapter: Any, request: web.Request) ->
         )
     except Exception as exc:
         web_settings_support.raise_schedule_settings_error(exc)
-    payload = adapter._reload_schedule_from_config(payload)
+    payload = web_settings_reload.reload_schedule_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
 
