@@ -1,5 +1,11 @@
 import { normalizeMediaSettings } from "./settingsNormalizers";
 
+const mediaSelectionFromSection = (section = {}, providerId = "", model = "") => ({
+  enabled: Boolean(section.enabled),
+  providerId: section.provider_id || providerId || "",
+  model: section.model || model || "",
+});
+
 export function useModelSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess, loadProviderSettings }) {
   async function loadModelSettings() {
     settingsState.modelsLoading = true;
@@ -23,11 +29,7 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       }
       for (const category of Object.keys(settingsState.media.sections || {})) {
         const section = settingsState.media.sections[category] || {};
-        settingsState.mediaSelections[category] = {
-          enabled: Boolean(section.enabled),
-          providerId: section.provider_id || settingsState.media.providers?.[0]?.id || "",
-          model: section.model || "",
-        };
+        settingsState.mediaSelections[category] = mediaSelectionFromSection(section, settingsState.media.providers?.[0]?.id);
         settingsState.mediaCustomModels[category] = "";
       }
     } catch (error) {
@@ -96,11 +98,7 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
         }),
       });
       settingsState.media = normalizeMediaSettings(payload.media);
-      settingsState.mediaSelections[category] = {
-        enabled: Boolean(settingsState.media.sections[category]?.enabled),
-        providerId: settingsState.media.sections[category]?.provider_id || selection.providerId || "",
-        model: settingsState.media.sections[category]?.model || normalizedModel,
-      };
+      settingsState.mediaSelections[category] = mediaSelectionFromSection(settingsState.media.sections[category], selection.providerId, normalizedModel);
       settingsState.mediaCustomModels[category] = "";
       setSettingsSuccess(
         "mediaNotice",
