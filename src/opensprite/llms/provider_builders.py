@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..auth.copilot import copilot_request_headers
+from ..config.provider_api_modes import ANTHROPIC_MESSAGES_API_MODE, RESPONSES_API_MODE
 from ..config.provider_auth_types import OPENAI_CODEX_OAUTH_AUTH_TYPE
 from .base import LLMProvider
 from .minimax import MiniMaxLLM
@@ -12,7 +13,7 @@ from .provider_specs import ProviderSpec, provider_name_default_base_url, provid
 
 
 def should_use_responses_llm(*, api_mode: str | None, auth_type: str) -> bool:
-    return api_mode == "responses" or auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE
+    return api_mode == RESPONSES_API_MODE or auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE
 
 
 def create_responses_llm(
@@ -55,7 +56,7 @@ def create_llm_for_spec(
     api_mode: str | None,
     reasoning_effort: str,
 ) -> LLMProvider:
-    if api_mode == "anthropic_messages" and spec.name != "minimax":
+    if api_mode == ANTHROPIC_MESSAGES_API_MODE and spec.name != "minimax":
         raise ValueError("api_mode='anthropic_messages' is only supported by the MiniMax provider")
 
     kwargs = _openai_compatible_kwargs(
@@ -65,7 +66,7 @@ def create_llm_for_spec(
         base_url=base_url,
         api_mode=api_mode,
     )
-    if api_mode == "anthropic_messages":
+    if api_mode == ANTHROPIC_MESSAGES_API_MODE:
         return MiniMaxLLM(**kwargs, reasoning_effort=reasoning_effort)
 
     if spec.name == "openrouter":

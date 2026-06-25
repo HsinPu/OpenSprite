@@ -9,6 +9,7 @@ from typing import Any
 
 from ..utils.url import join_url_path
 from .llm_presets import ProviderPreset
+from .provider_api_modes import ANTHROPIC_MESSAGES_API_MODE
 from .provider_credentials import resolve_provider_api_key
 from .provider_choices import get_configured_provider_id
 
@@ -90,7 +91,7 @@ def _discovery_type(preset: ProviderPreset | None, field_name: str) -> str:
 
 
 def _can_probe_openai_compatible_models(provider: dict[str, Any]) -> bool:
-    return provider.get("api_mode") != "anthropic_messages"
+    return provider.get("api_mode") != ANTHROPIC_MESSAGES_API_MODE
 
 
 def _filter_model_metadata_fields(

@@ -38,6 +38,7 @@ from .defaults import (
     DEFAULT_WEB_SEARCH_PROVIDER,
 )
 from .llm_presets import provider_profile_defaults
+from .provider_api_modes import ProviderApiMode
 from .provider_auth_types import (
     API_KEY_AUTH_TYPE,
     GITHUB_COPILOT_OAUTH_AUTH_TYPE,
@@ -69,7 +70,7 @@ class ProviderConfig(BaseModel):
     provider: str | None = None
     name: str | None = None
     auth_type: ProviderAuthType = API_KEY_AUTH_TYPE
-    api_mode: Literal["chat_completions", "responses", "anthropic_messages"] | None = None
+    api_mode: ProviderApiMode | None = None
     api_key: str = ""
     credential_id: str = ""
     model: str = ""
