@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from ..config.defaults import DEFAULT_BROWSER_SESSION_TIMEOUT
+
 
 class BrowserRuntimeError(RuntimeError):
     """Raised when browser automation cannot run."""
@@ -40,6 +42,9 @@ class CloudBrowserProvider:
             "api_key_configured": bool(getattr(self, "api_key", "")),
             "base_url": getattr(self, "base_url", ""),
         }
+
+    def session_timeout_seconds(self, session_timeout: int) -> int:
+        return max(1, int(session_timeout or DEFAULT_BROWSER_SESSION_TIMEOUT))
 
     async def create_session(self, *, session_key: str, session_timeout: int, timeout: int) -> CloudBrowserSession:
         raise NotImplementedError
