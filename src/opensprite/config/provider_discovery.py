@@ -12,6 +12,13 @@ from .llm_presets import ProviderPreset
 from .provider_api_modes import ANTHROPIC_MESSAGES_API_MODE
 from .provider_credentials import resolve_provider_api_key
 from .provider_choices import get_configured_provider_id
+from .provider_discovery_types import (
+    CODEX_DISCOVERY_TYPE,
+    COPILOT_DISCOVERY_TYPE,
+    OPENAI_COMPATIBLE_DISCOVERY_TYPE,
+    OPENROUTER_DISCOVERY_TYPE,
+    OPENROUTER_IMAGE_DISCOVERY_TYPE,
+)
 
 
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
@@ -174,7 +181,7 @@ def discover_media_model_choices(preset: ProviderPreset | None) -> tuple[dict[st
         category: list(models)
         for category, models in (preset.media_model_choices or {}).items()
     } if preset else {}
-    if _discovery_type(preset, "media_discovery") != "openrouter_image":
+    if _discovery_type(preset, "media_discovery") != OPENROUTER_IMAGE_DISCOVERY_TYPE:
         return fallback, "preset"
 
     live_image_models = fetch_openrouter_image_models()
@@ -238,13 +245,13 @@ def discover_provider_models(
     preset_id = get_configured_provider_id(provider_id, provider)
     discovery_type = _discovery_type(preset, "model_discovery")
     if not discovery_type and _can_probe_openai_compatible_models(provider) and str(provider.get("base_url") or "").strip():
-        discovery_type = "openai_compatible"
+        discovery_type = OPENAI_COMPATIBLE_DISCOVERY_TYPE
     api_key = resolve_provider_api_key(preset_id, provider, app_home=app_home, allow_default=True) if preset_id else ""
     live: list[str] = []
     model_metadata: dict[str, dict[str, Any]] = {}
-    if discovery_type == "codex":
+    if discovery_type == CODEX_DISCOVERY_TYPE:
         live = fetch_codex_models(app_home)
-    elif discovery_type == "copilot":
+    elif discovery_type == COPILOT_DISCOVERY_TYPE:
         if not api_key:
             try:
                 from ..auth.copilot import load_copilot_token
@@ -253,10 +260,10 @@ def discover_provider_models(
             except Exception:
                 api_key = ""
         live = fetch_copilot_provider_models(api_key) if api_key else []
-    elif discovery_type == "openrouter":
+    elif discovery_type == OPENROUTER_DISCOVERY_TYPE:
         live = fetch_openrouter_models()
         model_metadata = cached_openrouter_model_metadata(live)
-    elif discovery_type == "openai_compatible" and _can_probe_openai_compatible_models(provider):
+    elif discovery_type == OPENAI_COMPATIBLE_DISCOVERY_TYPE and _can_probe_openai_compatible_models(provider):
         live = fetch_openai_compatible_models(
             api_key,
             str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
