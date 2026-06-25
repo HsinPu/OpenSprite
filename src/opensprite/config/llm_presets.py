@@ -193,14 +193,15 @@ def provider_profile_defaults(
         elif explicit_auth_type == "github_copilot_oauth":
             normalized = "copilot"
 
-    profile_auth_type = provider_auth_type(normalized)
+    profile = get_provider_profile(normalized)
+    profile_auth_type = profile.auth_type if profile else "api_key"
     effective_auth_type = explicit_auth_type
     if effective_auth_type == "api_key" and profile_auth_type != "api_key":
         effective_auth_type = profile_auth_type
 
-    profile_api_mode = provider_api_mode(normalized)
+    profile_api_mode = profile.api_mode if profile else None
     effective_api_mode = api_mode or profile_api_mode
-    default_base_url = provider_default_base_url(normalized)
+    default_base_url = profile.default_base_url if profile else ""
     if normalized == "minimax" and effective_api_mode != profile_api_mode:
         default_base_url = ""
 
