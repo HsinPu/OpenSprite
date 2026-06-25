@@ -9,7 +9,6 @@ from .json_files import load_json_dict
 from .llm_presets import load_llm_presets
 from .provider_choices import (
     get_model_choices,
-    get_provider_choices,
     get_provider_preset_id,
 )
 from .provider_errors import (
@@ -18,7 +17,7 @@ from .provider_errors import (
 )
 from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import dedupe_model_ids, fetch_openrouter_image_models
-from .provider_state import load_provider_config_state
+from .provider_state import connected_provider_entries, load_provider_config_state
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
 
 
@@ -167,10 +166,7 @@ class MediaSettingsService:
         main_data, providers, loaded = self._load_state()
         presets = load_llm_presets()
         provider_choices = []
-        for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
-            provider = providers.get(provider_id, {})
-            if not isinstance(provider, dict):
-                continue
+        for provider_id, provider, _preset_id, _preset in connected_provider_entries(providers, presets):
             payload = self._provider_choice_payload(provider_id, provider, presets)
             if payload:
                 provider_choices.append(payload)
