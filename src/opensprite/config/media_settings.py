@@ -12,7 +12,6 @@ from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_credentials import resolve_provider_api_key
 from .provider_discovery import discover_media_model_choices
 from .provider_media import get_provider_media_config
 from .provider_public import public_media_provider
@@ -74,7 +73,12 @@ class MediaSettingsService:
         preset_id: str | None,
         preset: Any,
     ) -> dict[str, Any] | None:
-        if not resolve_provider_api_key(provider_id, provider, app_home=self.config_path.parent):
+        media_config = get_provider_media_config(
+            provider_id,
+            provider,
+            app_home=self.config_path.parent,
+        )
+        if not media_config["api_key"]:
             return None
         choices, selected = get_provider_model_choices(
             provider,
