@@ -15,13 +15,14 @@ from ..auth.credentials import (
     set_provider_default,
 )
 from ..config.provider_errors import ProviderSettingsError
+from . import web_settings_support
 
 
 async def handle_settings_providers(adapter: Any, request: web.Request) -> web.Response:
     try:
         payload = adapter._get_provider_settings().list_providers()
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)
 
 
@@ -38,7 +39,7 @@ async def handle_settings_provider_connect(adapter: Any, request: web.Request) -
             name=adapter._coerce_optional_text(body.get("name")),
         )
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)
 
 
@@ -49,7 +50,7 @@ async def handle_settings_provider_disconnect(adapter: Any, request: web.Request
     try:
         payload = adapter._get_provider_settings().disconnect_provider(provider_id)
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     payload = adapter._reload_agent_llm_from_config(payload, force=True)
     return web.json_response(payload)
 
@@ -59,7 +60,7 @@ async def handle_settings_credentials(adapter: Any, request: web.Request) -> web
     try:
         credentials = list_credentials(provider, app_home=adapter._get_config_path().parent)
     except CredentialStoreError as exc:
-        adapter._raise_credential_store_error(exc)
+        web_settings_support.raise_credential_store_error(exc)
     return web.json_response({"credentials": credentials})
 
 
@@ -83,7 +84,7 @@ async def handle_settings_credential_create(adapter: Any, request: web.Request) 
             app_home=adapter._get_config_path().parent,
         )
     except CredentialStoreError as exc:
-        adapter._raise_credential_store_error(exc)
+        web_settings_support.raise_credential_store_error(exc)
     return web.json_response({"ok": True, "credential": credential})
 
 
@@ -97,9 +98,9 @@ async def handle_settings_credential_delete(adapter: Any, request: web.Request) 
         cleanup = adapter._get_provider_settings().remove_credential_references(provider, credential_id)
         payload.update(cleanup)
     except CredentialStoreError as exc:
-        adapter._raise_credential_store_error(exc)
+        web_settings_support.raise_credential_store_error(exc)
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     payload = adapter._reload_agent_llm_from_config(payload, force=bool(payload.get("restart_required")))
     return web.json_response(payload)
 
@@ -117,7 +118,7 @@ async def handle_settings_credential_default(adapter: Any, request: web.Request)
         else:
             credential = set_capability_default(capability or "", credential_id, app_home=adapter._get_config_path().parent)
     except CredentialStoreError as exc:
-        adapter._raise_credential_store_error(exc)
+        web_settings_support.raise_credential_store_error(exc)
     return web.json_response({"ok": True, "credential": credential})
 
 
@@ -132,7 +133,7 @@ async def handle_settings_provider_credential(adapter: Any, request: web.Request
     try:
         payload = adapter._get_provider_settings().set_provider_credential(provider_id, credential_id)
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     payload = adapter._reload_agent_llm_from_config(payload, force=True)
     return web.json_response(payload)
 
@@ -141,5 +142,5 @@ async def handle_settings_models(adapter: Any, request: web.Request) -> web.Resp
     try:
         payload = adapter._get_provider_settings().list_models()
     except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
+        web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)

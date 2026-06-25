@@ -25,10 +25,6 @@ from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
 from .identity import build_session_id, normalize_identifier
-from ..auth.credentials import (
-    CredentialNotFoundError,
-    CredentialStoreError,
-)
 from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
@@ -585,10 +581,6 @@ class WebAdapter(MessageAdapter):
     @staticmethod
     def _raise_channel_settings_error(exc: ChannelSettingsError) -> None:
         web_settings_support.raise_channel_settings_error(exc)
-
-    @staticmethod
-    def _raise_credential_store_error(exc: CredentialStoreError) -> None:
-        web_settings_support.raise_credential_store_error(exc)
 
     @staticmethod
     def _raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:
