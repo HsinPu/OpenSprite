@@ -12,7 +12,8 @@ from .provider_auth_types import (
     GITHUB_COPILOT_OAUTH_AUTH_TYPE,
     OPENAI_CODEX_OAUTH_AUTH_TYPE,
 )
-from .provider_ids import COPILOT_PROVIDER_ID, MINIMAX_PROVIDER_ID, OPENAI_CODEX_PROVIDER_ID
+from .provider_ids import COPILOT_PROVIDER_ID, OPENAI_CODEX_PROVIDER_ID
+from .provider_profile_rules import provider_profile_base_url_applies
 
 
 @dataclass(frozen=True)
@@ -209,7 +210,7 @@ def provider_profile_defaults(
     profile_api_mode = profile.api_mode if profile else None
     effective_api_mode = api_mode or profile_api_mode
     default_base_url = profile.default_base_url if profile else ""
-    if normalized == MINIMAX_PROVIDER_ID and effective_api_mode != profile_api_mode:
+    if default_base_url and not provider_profile_base_url_applies(normalized, effective_api_mode):
         default_base_url = ""
 
     return ProviderProfileDefaults(

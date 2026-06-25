@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from ..auth.copilot import COPILOT_BASE_URL
 from ..config.llm_presets import provider_default_base_url as profile_default_base_url
-from ..config.provider_api_modes import ANTHROPIC_MESSAGES_API_MODE
 from ..config.provider_ids import COPILOT_PROVIDER_ID, MINIMAX_PROVIDER_ID, OPENAI_PROVIDER_ID, OPENROUTER_PROVIDER_ID
+from ..config.provider_profile_rules import provider_profile_base_url_applies
 
 
 OPENAI_RUNTIME_KIND = "openai"
@@ -107,6 +107,6 @@ def provider_spec_default_base_url(spec: ProviderSpec, *, api_mode: str | None =
     """Return the runtime default URL for a provider spec."""
 
     profile_url = provider_name_default_base_url(spec.name)
-    if spec.name == MINIMAX_PROVIDER_ID and api_mode != ANTHROPIC_MESSAGES_API_MODE:
-        return spec.default_base_url
-    return profile_url or spec.default_base_url
+    if profile_url and provider_profile_base_url_applies(spec.name, api_mode):
+        return profile_url
+    return spec.default_base_url
