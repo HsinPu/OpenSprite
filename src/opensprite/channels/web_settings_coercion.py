@@ -54,6 +54,17 @@ def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None
     return items
 
 
+def apply_optional_secret_field(target: Any, body: dict[str, Any], field: str) -> None:
+    clear_field = f"clear_{field}"
+    if coerce_bool(body.get(clear_field), field=clear_field, default=False):
+        setattr(target, field, "")
+        return
+    if field in body and (
+        value := ("" if body.get(field) is None else str(body.get(field)).strip())
+    ):
+        setattr(target, field, value)
+
+
 def coerce_log_level(
     value: Any,
     *,

@@ -62,19 +62,19 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
     search = config.tools.web_search
     search.provider = web_settings_coercion.coerce_web_search_provider(body.get("provider", search.provider))
     search.freshness = web_settings_coercion.coerce_web_search_freshness(body.get("freshness", search.freshness))
-    search.max_results = adapter._coerce_positive_int(body.get("max_results"), field="max_results", default=search.max_results, minimum=1, maximum=100)
-    search.duckduckgo_max_pages = adapter._coerce_positive_int(body.get("duckduckgo_max_pages"), field="duckduckgo_max_pages", default=search.duckduckgo_max_pages, minimum=1, maximum=50)
-    search.searxng_max_pages = adapter._coerce_positive_int(body.get("searxng_max_pages"), field="searxng_max_pages", default=search.searxng_max_pages, minimum=1, maximum=50)
+    search.max_results = web_settings_coercion.coerce_positive_int(body.get("max_results"), field="max_results", default=search.max_results, minimum=1, maximum=100)
+    search.duckduckgo_max_pages = web_settings_coercion.coerce_positive_int(body.get("duckduckgo_max_pages"), field="duckduckgo_max_pages", default=search.duckduckgo_max_pages, minimum=1, maximum=50)
+    search.searxng_max_pages = web_settings_coercion.coerce_positive_int(body.get("searxng_max_pages"), field="searxng_max_pages", default=search.searxng_max_pages, minimum=1, maximum=50)
     if "searxng_url" in body:
         search.searxng_url = adapter._coerce_optional_text(body.get("searxng_url"), default="") or adapter.DEFAULT_CONFIG.get("searxng_url", "")
     if "searxng_engines" in body:
-        search.searxng_engines = adapter._coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
+        search.searxng_engines = web_settings_coercion.coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
     if "searxng_categories" in body:
-        search.searxng_categories = adapter._coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
+        search.searxng_categories = web_settings_coercion.coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
     if "proxy" in body:
         search.proxy = adapter._coerce_optional_text(body.get("proxy"), default="") or None
     for field in ("jina_api_key",):
-        adapter._apply_optional_secret_field(search, body, field)
+        web_settings_coercion.apply_optional_secret_field(search, body, field)
     config.save(config_path)
     payload = {"search": web_settings_payloads.web_search_payload(config), "restart_required": True}
     payload = adapter._reload_web_search_from_config(payload)

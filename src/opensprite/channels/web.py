@@ -351,17 +351,6 @@ class WebAdapter(MessageAdapter):
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
         return web_settings_coercion.coerce_text_list(value, field=field, default=default)
 
-    def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
-        clear_field = f"clear_{field}"
-        if self._coerce_bool(body.get(clear_field), field=clear_field, default=False):
-            setattr(target, field, "")
-            return
-        if field not in body:
-            return
-        value = self._coerce_optional_text(body.get(field), default="") or ""
-        if value:
-            setattr(target, field, value)
-
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
         return web_settings_reload.reload_agent_llm_from_config(self, payload, force=force, logger=logger)
