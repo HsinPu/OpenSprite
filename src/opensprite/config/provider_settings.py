@@ -10,23 +10,19 @@ from .defaults import DEFAULT_LLM_PROVIDERS_FILE
 from .json_files import write_json_dict
 from .llm_presets import get_provider_profile, load_llm_presets
 from .provider_choices import (
-    get_provider_model_choices,
     make_provider_instance_id,
 )
 from .provider_errors import (
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
 )
-from .provider_discovery import discover_provider_models
+from .provider_listing import build_model_listing, build_provider_listing
 from .provider_public import (
-    public_available_provider,
     public_connected_provider,
-    public_model_provider,
 )
 from .provider_state import (
     clear_default_provider,
     connect_provider_in_config,
-    connected_provider_entries,
     connected_provider_or_raise,
     load_provider_config_state,
     provider_references_credential,
@@ -58,36 +54,13 @@ class ProviderSettingsService:
     def list_providers(self) -> dict[str, Any]:
         """Return configured and available providers without leaking API keys."""
         main_data, providers, loaded = self._load_state()
-        presets = load_llm_presets()
-        default_provider = loaded.llm.default
-        connected = [
-            public_connected_provider(
-                provider_id,
-                provider,
-                preset_id=preset_id,
-                preset=preset,
-                default_provider=default_provider,
-                app_home=self.config_path.parent,
-            )
-            for provider_id, provider, preset_id, preset in connected_provider_entries(
-                providers,
-                presets,
-            )
-        ]
-
-        available = [
-            public_available_provider(provider_id, presets.providers[provider_id], connected)
-            for provider_id in presets.provider_order
-        ]
-
-        return {
-            "default_provider": default_provider,
-            "connected": connected,
-            "available": available,
-            "restart_required": False,
-            "config_path": str(self.config_path),
-            "providers_file": str(Config.get_llm_providers_file_path(self.config_path, main_data.get("llm", {}))),
-        }
+        return build_provider_listing(
+            config_path=self.config_path,
+            main_data=main_data,
+            providers=providers,
+            loaded=loaded,
+            presets=load_llm_presets(),
+        )
 
     def connect_provider(self, provider_id: str, *, api_key: str | None, base_url: str | None = None, name: str | None = None) -> dict[str, Any]:
         """Connect or update one provider without selecting a model."""
@@ -189,40 +162,12 @@ class ProviderSettingsService:
     def list_models(self) -> dict[str, Any]:
         """Return selectable models for connected providers."""
         _, providers, loaded = self._load_state()
-        presets = load_llm_presets()
-        out: list[dict[str, Any]] = []
-        for provider_id, provider, preset_id, preset in connected_provider_entries(
-            providers,
-            presets,
-        ):
-            discovered_models, model_source, model_metadata = discover_provider_models(
-                provider_id,
-                provider,
-                preset,
-                app_home=self.config_path.parent,
-            )
-            choices, _ = get_provider_model_choices(provider, model_choices=discovered_models)
-            out.append(
-                public_model_provider(
-                    provider_id,
-                    provider,
-                    preset_id=preset_id,
-                    preset=preset,
-                    default_provider=loaded.llm.default,
-                    choices=choices,
-                    model_source=model_source,
-                    model_metadata=model_metadata,
-                )
-            )
-
-        active = providers.get(loaded.llm.default or "", {}) if loaded.llm.default else {}
-        active_model = active.get("model") if isinstance(active, dict) else None
-        return {
-            "default_provider": loaded.llm.default,
-            "active_model": active_model or "",
-            "providers": out,
-            "restart_required": False,
-        }
+        return build_model_listing(
+            config_path=self.config_path,
+            providers=providers,
+            loaded=loaded,
+            presets=load_llm_presets(),
+        )
 
     def select_model(self, provider_id: str, model: str, *, reasoning_effort: str | None = None) -> dict[str, Any]:
         """Select the active provider/model and persist it."""
