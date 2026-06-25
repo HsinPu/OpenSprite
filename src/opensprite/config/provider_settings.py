@@ -31,11 +31,9 @@ from .provider_errors import (
     ProviderSettingsValidationError,
 )
 from .provider_discovery import (
-    MODEL_DISCOVERY_TIMEOUT_SECONDS,
-    _dedupe_models,
     _positive_int,
-    _read_json_url,
     cached_openrouter_model_metadata,
+    discover_provider_models,
     fetch_codex_models,
     fetch_copilot_provider_models,
     fetch_openai_compatible_models,
@@ -57,78 +55,6 @@ def _validated_reasoning_effort(value: Any) -> str:
         allowed = ", ".join(option or "default" for option in REASONING_EFFORT_OPTIONS)
         raise ProviderSettingsValidationError(f"reasoning_effort must be one of: {allowed}")
     return normalize_reasoning_effort(normalized)
-
-
-def _discovery_type(preset: ProviderPreset | None, field_name: str) -> str:
-    discovery = getattr(preset, field_name, None) if preset else None
-    if not isinstance(discovery, dict):
-        return ""
-    return str(discovery.get("type") or "").strip()
-
-
-def _filter_model_metadata_fields(
-    metadata_by_model: dict[str, dict[str, Any]],
-    fields: tuple[str, ...],
-) -> dict[str, dict[str, Any]]:
-    if not fields:
-        return {}
-    allowed = set(fields)
-    out: dict[str, dict[str, Any]] = {}
-    for model, metadata in metadata_by_model.items():
-        filtered = {key: value for key, value in metadata.items() if key in allowed and value is not None}
-        if filtered:
-            out[model] = filtered
-    return out
-
-
-def discover_provider_models(
-    provider_id: str,
-    provider: dict[str, Any],
-    preset: ProviderPreset | None,
-    *,
-    app_home: str | Path | None = None,
-) -> tuple[list[str], str, dict[str, dict[str, Any]]]:
-    fallback = list(preset.model_choices if preset else ())
-    preset_id = str(provider.get("provider") or provider_id or "").strip()
-    discovery_type = _discovery_type(preset, "model_discovery")
-    if not discovery_type and provider.get("api_mode") != "anthropic_messages" and str(provider.get("base_url") or "").strip():
-        discovery_type = "openai_compatible"
-    credential_api_key = ""
-    if not str(provider.get("api_key") or "").strip() and preset_id:
-        try:
-            credential_api_key = resolve_credential(
-                provider=preset_id,
-                credential_id=str(provider.get("credential_id") or "").strip() or None,
-                app_home=app_home,
-            ).secret
-        except CredentialNotFoundError:
-            credential_api_key = ""
-    live: list[str] = []
-    model_metadata: dict[str, dict[str, Any]] = {}
-    if discovery_type == "codex":
-        live = fetch_codex_models(app_home)
-    elif discovery_type == "copilot":
-        api_key = str(provider.get("api_key") or "").strip() or credential_api_key
-        if not api_key:
-            try:
-                from ..auth.copilot import load_copilot_token
-
-                api_key = load_copilot_token(app_home).access_token
-            except Exception:
-                api_key = ""
-        live = fetch_copilot_provider_models(api_key) if api_key else []
-    elif discovery_type == "openrouter":
-        live = fetch_openrouter_models()
-        model_metadata = cached_openrouter_model_metadata(live)
-    elif discovery_type == "openai_compatible" and provider.get("api_mode") != "anthropic_messages":
-        live = fetch_openai_compatible_models(
-            str(provider.get("api_key") or "").strip() or credential_api_key,
-            str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
-        )
-    if live:
-        models = _dedupe_models(live + fallback)
-        return models, "live", _filter_model_metadata_fields(model_metadata, preset.model_metadata_fields if preset else ())
-    return fallback, "preset", {}
 
 
 def prune_llm_providers(llm: dict[str, Any]) -> None:

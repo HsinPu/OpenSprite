@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
 from opensprite.config import Config
-from opensprite.config import provider_settings
+from opensprite.config import provider_discovery
 from opensprite.config.provider_settings import ProviderSettingsService
 
 
@@ -12,7 +12,7 @@ runner = CliRunner()
 
 
 def test_status_json_reports_credential_backed_provider_key(tmp_path, monkeypatch):
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", lambda: [])
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
     service = ProviderSettingsService(config_path)
@@ -25,4 +25,3 @@ def test_status_json_reports_credential_backed_provider_key(tmp_path, monkeypatc
     payload = json.loads(result.stdout)
     assert payload["provider"]["name"] == "openrouter"
     assert payload["provider"]["api_key_configured"] is True
-

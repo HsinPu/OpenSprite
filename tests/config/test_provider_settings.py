@@ -21,10 +21,10 @@ _ORIGINAL_FETCH_COPILOT_PROVIDER_MODELS = provider_settings.fetch_copilot_provid
 
 @pytest.fixture(autouse=True)
 def _disable_live_model_discovery(monkeypatch):
-    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", lambda _api_key, _base_url: [])
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", lambda: [])
-    monkeypatch.setattr(provider_settings, "fetch_codex_models", lambda _app_home=None: [])
-    monkeypatch.setattr(provider_settings, "fetch_copilot_provider_models", lambda _api_key: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", lambda _api_key, _base_url: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_codex_models", lambda _app_home=None: [])
+    monkeypatch.setattr(provider_discovery, "fetch_copilot_provider_models", lambda _api_key: [])
 
 
 def _copy_config(tmp_path):
@@ -179,7 +179,7 @@ def test_provider_settings_connects_ollama_cloud_with_api_key(tmp_path):
 def test_provider_settings_uses_discovered_copilot_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
-    monkeypatch.setattr(provider_settings, "fetch_copilot_provider_models", lambda api_key: ["copilot-live", "gpt-5.4"])
+    monkeypatch.setattr(provider_discovery, "fetch_copilot_provider_models", lambda api_key: ["copilot-live", "gpt-5.4"])
 
     service.connect_provider("copilot", api_key="github-token")
     models = service.list_models()
@@ -193,7 +193,7 @@ def test_provider_settings_uses_discovered_provider_models(tmp_path, monkeypatch
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
     monkeypatch.setattr(
-        provider_settings,
+        provider_discovery,
         "fetch_openai_compatible_models",
         lambda api_key, base_url: ["live-model", "gpt-4.1-mini", "live-model"],
     )
@@ -229,7 +229,7 @@ def test_provider_settings_does_not_probe_anthropic_messages_minimax_models(tmp_
     def fail_fetch(api_key, base_url):
         raise AssertionError(f"unexpected model probe: {api_key} {base_url}")
 
-    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", fail_fetch)
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", fail_fetch)
 
     service.connect_provider("minimax", api_key="minimax-key")
     models = service.list_models()
@@ -242,7 +242,7 @@ def test_provider_settings_does_not_probe_anthropic_messages_minimax_models(tmp_
 def test_provider_settings_falls_back_to_preset_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", lambda: [])
 
     service.connect_provider("openrouter", api_key="router-key")
     models = service.list_models()
@@ -266,7 +266,7 @@ def test_provider_settings_includes_openrouter_context_metadata(tmp_path, monkey
 
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     service.connect_provider("openrouter", api_key="router-key")
@@ -293,7 +293,7 @@ def test_provider_settings_select_model_persists_discovered_context_window(tmp_p
 
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
-    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
     monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
 
     service.connect_provider("openrouter", api_key="router-key")
@@ -314,7 +314,7 @@ def test_provider_settings_uses_discovered_codex_models(tmp_path, monkeypatch):
         seen_app_homes.append(app_home)
         return ["gpt-5.1-codex-live", "gpt-5.1-codex"]
 
-    monkeypatch.setattr(provider_settings, "fetch_codex_models", fake_fetch_codex_models)
+    monkeypatch.setattr(provider_discovery, "fetch_codex_models", fake_fetch_codex_models)
 
     service.connect_provider("openai-codex", api_key=None)
     models = service.list_models()
