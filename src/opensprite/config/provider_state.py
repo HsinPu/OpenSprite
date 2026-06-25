@@ -11,7 +11,7 @@ from .json_files import load_json_dict
 from .llm_presets import ProviderPreset, load_llm_presets
 from .provider_choices import get_provider_choices, get_provider_preset_id
 from .provider_credentials import has_provider_secret
-from .provider_discovery import _positive_int, cached_openrouter_model_metadata
+from .provider_discovery import cached_openrouter_model_metadata, positive_int_or_none
 from .provider_errors import (
     ProviderSettingsConflict,
     ProviderSettingsNotFound,
@@ -180,7 +180,7 @@ def select_model_in_config(
             provider.pop("reasoning_effort", None)
     if "model_metadata" in preset.capabilities:
         metadata = cached_openrouter_model_metadata([normalized_model]).get(normalized_model, {})
-        context_length = _positive_int(metadata.get("context_length"))
+        context_length = positive_int_or_none(metadata.get("context_length"))
         if context_length is not None:
             provider["context_window_tokens"] = context_length
         else:

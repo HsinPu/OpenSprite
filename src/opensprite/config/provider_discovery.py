@@ -46,7 +46,7 @@ def _models_from_openai_compatible_payload(payload: dict[str, Any] | None) -> li
     return dedupe_model_ids([str(item.get("id") or "") for item in data if isinstance(item, dict)])
 
 
-def _positive_int(value: Any) -> int | None:
+def positive_int_or_none(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -62,11 +62,11 @@ def _positive_int(value: Any) -> int | None:
 
 
 def _openrouter_model_metadata(item: dict[str, Any]) -> dict[str, Any]:
-    context_length = _positive_int(item.get("context_length"))
+    context_length = positive_int_or_none(item.get("context_length"))
     if context_length is None:
         top_provider = item.get("top_provider")
         if isinstance(top_provider, dict):
-            context_length = _positive_int(top_provider.get("context_length"))
+            context_length = positive_int_or_none(top_provider.get("context_length"))
     return {"context_length": context_length} if context_length else {}
 
 
