@@ -9,6 +9,7 @@ from ..config.defaults import WEB_SEARCH_FRESHNESS_OPTIONS
 
 FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
+PROVIDER_FRESHNESS_PARAM_FIELDS = {"duckduckgo": "df", "jina": "df", "searxng": "time_range"}
 AUTO_FRESHNESS = "month"
 
 
@@ -69,10 +70,8 @@ def freshness_params(provider: str, freshness: str) -> dict[str, str]:
     normalized = normalize_freshness(freshness, default="none")
     if normalized in {"auto", "none"}:
         return {}
-    if provider == "duckduckgo":
-        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    if provider == "searxng":
-        return {"time_range": normalized}
-    if provider == "jina":
-        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    return {}
+    field = PROVIDER_FRESHNESS_PARAM_FIELDS.get(str(provider or "").strip().lower())
+    if not field:
+        return {}
+    value = DUCKDUCKGO_FRESHNESS[normalized] if field == "df" else normalized
+    return {field: value}
