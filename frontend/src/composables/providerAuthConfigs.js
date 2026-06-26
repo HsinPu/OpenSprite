@@ -83,7 +83,7 @@ export function createProviderAuthConfigs(runtimeConfigs = {}) {
   };
 }
 
-export function resolveProviderAuthConfigId(providerAuthConfigs, providerId) {
+function resolveProviderAuthConfigId(providerAuthConfigs, providerId) {
   return providerAuthConfigs[providerId] ? providerId : CODEX_PROVIDER_ID;
 }
 

@@ -325,7 +325,8 @@ assertNotIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provi
 assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({", "provider auth actions assemble auth provider configs");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthConfigs", "provider auth configs centralize provider-specific auth config");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthRuntimeConfigs", "provider auth configs centralize provider runtime metadata");
-assertIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs centralize provider id fallback");
+assertIncludes(providerAuthConfigs, "function resolveProviderAuthConfigId", "provider auth configs keep provider id fallback internal");
+assertNotIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs avoid exporting internal provider id fallback");
 assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById,", "provider auth actions expose provider-id auth status action");
