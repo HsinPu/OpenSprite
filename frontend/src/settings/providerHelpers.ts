@@ -6,12 +6,16 @@ import {
 
 export type AnyRecord = Record<string, any>;
 
+export function providerCatalogKey(provider: AnyRecord) {
+  return provider?.provider || provider?.id;
+}
+
 export function providerMark(value: AnyRecord) {
   return String(value?.name || value?.id || value?.type || "??").trim().slice(0, 2).toUpperCase();
 }
 
 export function hasConnectedProvider(state: AnyRecord, presetId: string) {
-  return (state.providers?.connected || []).some((provider: AnyRecord) => provider.provider === presetId || provider.id === presetId);
+  return (state.providers?.connected || []).some((provider: AnyRecord) => providerCatalogKey(provider) === presetId);
 }
 
 export function providerAuthVisible(state: AnyRecord, providerId: string, auth: AnyRecord = {}, loading = false, notice = "", error = "") {
@@ -66,7 +70,7 @@ export function copilotDescription(copy: AnyRecord, state: AnyRecord) {
 }
 
 export function providerCredentials(state: AnyRecord, provider: AnyRecord) {
-  const providerKey = provider?.provider || provider?.id;
+  const providerKey = providerCatalogKey(provider);
   return state.credentials?.[providerKey] || [];
 }
 

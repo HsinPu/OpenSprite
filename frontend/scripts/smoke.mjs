@@ -362,8 +362,12 @@ assertIncludes(providerConnectForm, "export function providerOAuthConnectPayload
 assertIncludes(providerAuthRequests, "providerOAuthConnectPayload(provider, options)", "provider auth requests reuse OAuth connect payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialPayload", "provider connect form centralizes credential payload shape");
 assertIncludes(providerSettingsRequests, "providerCredentialPayload(credentialId)", "provider settings requests reuse credential payload helper");
-assertIncludes(providerConnectForm, "export function providerCredentialKey", "provider connect form centralizes credential provider key resolution");
-assertIncludes(providerSettingsActions, "providerCredentialKey(provider)", "provider settings actions reuse credential key helper");
+assertIncludes(providerHelpers, "export function providerCatalogKey", "provider helpers centralize provider key resolution");
+assertIncludes(providerHelpers, "providerCatalogKey(provider) === presetId", "provider helpers reuse provider key resolution for connected providers");
+assertIncludes(providerHelpers, "const providerKey = providerCatalogKey(provider)", "provider helpers reuse provider key resolution for credentials");
+assertIncludes(providerSettingsActions, "providerCatalogKey(provider)", "provider settings actions reuse shared provider key helper");
+assertNotIncludes(providerConnectForm, "providerCredentialKey", "provider connect form no longer owns provider key resolution");
+assertNotIncludes(providerSettingsActions, "providerCredentialKey", "provider settings actions avoid form-owned provider key helper");
 assertIncludes(useSettingsState, "connectForm: createEmptyProviderConnectForm()", "settings state reuses provider connect form defaults");
 assertIncludes(chatClient, "resetProviderConnectForm(settingsState.connectForm)", "chat client reuses provider connect form reset helper");
 assertNotIncludes(chatClient, "Object.assign(settingsState.connectForm, createEmptyProviderConnectForm())", "chat client no longer owns provider connect form reset fields");

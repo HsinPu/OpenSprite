@@ -39,7 +39,3 @@ export function providerOAuthConnectPayload(provider, options) {
 export function providerCredentialPayload(credentialId) {
   return { credential_id: credentialId };
 }
-
-export function providerCredentialKey(provider) {
-  return provider?.provider || provider?.id;
-}

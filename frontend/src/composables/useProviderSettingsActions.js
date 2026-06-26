@@ -8,8 +8,8 @@ import {
 } from "./providerSettingsRequests";
 import {
   createProviderConnectForm,
-  providerCredentialKey,
 } from "./providerConnectForm";
+import { providerCatalogKey } from "../settings/providerHelpers";
 
 export function useProviderSettingsActions({
   settingsState,
@@ -67,7 +67,7 @@ export function useProviderSettingsActions({
   }
 
   async function deleteCredential(provider, credentialId) {
-    const providerKey = providerCredentialKey(provider);
+    const providerKey = providerCatalogKey(provider);
     if (!providerKey || !credentialId) {
       return;
     }
