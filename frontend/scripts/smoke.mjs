@@ -286,6 +286,8 @@ assertIncludes(connectedProvidersSection, "ConnectedProviderRow", "connected pro
 assertIncludes(connectedProvidersSection, "ProviderEmptyState", "connected providers delegates provider empty state");
 assertIncludes(connectedProviderRow, "providerCredentials(state, provider)", "connected provider row keeps credential lookup");
 assertIncludes(connectedProviderRow, "providerEffectiveCredentialId(provider)", "connected provider row keeps effective credential lookup");
+assertIncludes(connectedProviderRow, "providerAuthKey(provider)", "connected provider row keeps provider auth key lookup");
+assertIncludes(connectedProviderRow, "providerAuthConfigured(state, provider)", "connected provider row keeps auth configured badge rule");
 assertIncludes(connectedProviderRow, "onSetCredential(provider, value)", "connected provider row keeps credential switch action");
 assertIncludes(connectedProviderRow, "onDeleteCredential(provider, effectiveCredentialId)", "connected provider row keeps credential deletion action");
 assertIncludes(connectedProviderRow, "onDisconnect(provider)", "connected provider row keeps disconnect action");
@@ -296,6 +298,8 @@ assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.c
 assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
 assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
+assertIncludes(providerHelpers, "\"openai-codex\": \"codexAuth\"", "provider helpers map Codex auth key");
+assertIncludes(providerHelpers, "copilot: \"copilotAuth\"", "provider helpers map Copilot auth key");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");

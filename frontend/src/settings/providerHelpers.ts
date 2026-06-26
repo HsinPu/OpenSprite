@@ -1,5 +1,10 @@
 export type AnyRecord = Record<string, any>;
 
+const PROVIDER_AUTH_KEYS: Record<string, string> = {
+  "openai-codex": "codexAuth",
+  copilot: "copilotAuth",
+};
+
 export function providerMark(value: AnyRecord) {
   return String(value?.name || value?.id || value?.type || "??").trim().slice(0, 2).toUpperCase();
 }
@@ -10,6 +15,15 @@ export function hasConnectedProvider(state: AnyRecord, presetId: string) {
 
 export function providerAuthVisible(state: AnyRecord, providerId: string, auth: AnyRecord = {}, loading = false, notice = "", error = "") {
   return Boolean(hasConnectedProvider(state, providerId) || loading || auth?.configured || auth?.userCode || notice || error);
+}
+
+export function providerAuthKey(provider: AnyRecord) {
+  return PROVIDER_AUTH_KEYS[provider?.provider] || "";
+}
+
+export function providerAuthConfigured(state: AnyRecord, provider: AnyRecord) {
+  const authKey = providerAuthKey(provider);
+  return !authKey || Boolean(state[authKey]?.configured);
 }
 
 export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, loading = false) {
@@ -66,11 +80,9 @@ export function credentialSourceLabel(copy: AnyRecord, provider: AnyRecord) {
 
 export function providerDescription(copy: AnyRecord, state: AnyRecord, provider: AnyRecord) {
   const providerCopy = copy.settings.providers || {};
-  if (provider?.provider === "openai-codex" && !state.codexAuth?.configured) {
-    return providerCopy.codexAuth?.providerNeedsLogin || provider.base_url || "";
-  }
-  if (provider?.provider === "copilot" && !state.copilotAuth?.configured) {
-    return providerCopy.copilotAuth?.providerNeedsLogin || provider.base_url || "";
+  const authKey = providerAuthKey(provider);
+  if (authKey && !providerAuthConfigured(state, provider)) {
+    return providerCopy[authKey]?.providerNeedsLogin || provider.base_url || "";
   }
   return provider?.base_url || provider?.description || "";
 }
