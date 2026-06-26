@@ -39,6 +39,7 @@ const [
   tsconfigRaw,
   indexHtml,
   app,
+  appProviders,
   main,
   styles,
   reactiveCompat,
@@ -69,6 +70,7 @@ const [
   read("tsconfig.json"),
   read("index.html"),
   read("src/App.tsx"),
+  read("src/providers/appProviders.tsx"),
   read("src/main.tsx"),
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
@@ -127,7 +129,10 @@ assertNotIncludes(indexHtml, "/src/main.js", "legacy JS entry removed");
 
 assertIncludes(main, "createRoot", "React root mount");
 assertIncludes(main, "antd/dist/reset.css", "Ant Design reset stylesheet");
-assertIncludes(app, "ConfigProvider", "Ant Design provider");
+assertIncludes(app, "AppProviders", "React shell uses app providers");
+assertIncludes(appProviders, "ConfigProvider", "Ant Design provider");
+assertIncludes(appProviders, "<AntdApp>{children}</AntdApp>", "Ant Design app context provider");
+assertIncludes(appProviders, "colorPrimary: \"#2563eb\"", "Ant Design theme token retained");
 assertIncludes(app, "useReactiveStore", "React subscription bridge");
 assertIncludes(settingsModal, "useTransition", "settings modal uses transition for deferred content");
 assertIncludes(app, "useChatClient", "existing chat client flow reused");

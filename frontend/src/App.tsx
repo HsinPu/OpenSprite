@@ -1,10 +1,5 @@
 import React, { CSSProperties, useEffect, useState } from "react";
-import {
-  App as AntdApp,
-  Button,
-  ConfigProvider,
-  theme,
-} from "antd";
+import { Button } from "antd";
 import {
   CloseOutlined,
   MenuUnfoldOutlined,
@@ -17,6 +12,7 @@ import { ConfirmDialog } from "./components/confirmDialog";
 import { RunInspector } from "./components/runInspector";
 import { SidebarNav } from "./components/sidebarNav";
 import { ToastStack } from "./components/toastStack";
+import { AppProviders } from "./providers/appProviders";
 import { SettingsModal } from "./settings/settingsModal";
 
 type AnyRecord = Record<string, any>;
@@ -33,21 +29,9 @@ const TRACE_CHAT_MIN = 520;
 
 export default function App() {
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.defaultAlgorithm,
-        token: {
-          borderRadius: 8,
-          colorPrimary: "#2563eb",
-          fontFamily:
-            "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
-        },
-      }}
-    >
-      <AntdApp>
-        <OpenSpriteShell />
-      </AntdApp>
-    </ConfigProvider>
+    <AppProviders>
+      <OpenSpriteShell />
+    </AppProviders>
   );
 }
 
