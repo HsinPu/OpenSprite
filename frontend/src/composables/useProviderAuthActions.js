@@ -53,7 +53,7 @@ export function useProviderAuthActions({
     scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_STATE_KEYS.authKey], pollCopilotAuthLogin);
   }
 
-  const providerAuthFlowConfigs = {
+  const providerAuthConfigs = {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
       clearPoll: clearCodexAuthPollTimer,
@@ -61,6 +61,13 @@ export function useProviderAuthActions({
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
       buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
       loadStatus: loadCodexAuthStatus,
+      normalizeStatus: (payload) => ({
+        configured: Boolean(payload.configured),
+        expired: Boolean(payload.expired),
+        expires_at: payload.expires_at || null,
+        account_id: payload.account_id || "",
+        path: payload.path || "",
+      }),
       normalizeLogin: (payload) => ({
         command: "",
         verificationUri: payload.verification_uri || "",
@@ -97,6 +104,10 @@ export function useProviderAuthActions({
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
       buildPollBody: (auth) => ({ device_code: auth.deviceCode }),
       loadStatus: loadCopilotAuthStatus,
+      normalizeStatus: (payload) => ({
+        configured: Boolean(payload.configured),
+        path: payload.path || "",
+      }),
       normalizeLogin: (payload) => ({
         verificationUri: payload.verification_uri || "",
         userCode: payload.user_code || "",
@@ -114,28 +125,8 @@ export function useProviderAuthActions({
     },
   };
 
-  const providerAuthStatusConfigs = {
-    [CODEX_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
-      normalize: (payload) => ({
-        configured: Boolean(payload.configured),
-        expired: Boolean(payload.expired),
-        expires_at: payload.expires_at || null,
-        account_id: payload.account_id || "",
-        path: payload.path || "",
-      }),
-    },
-    [COPILOT_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
-      normalize: (payload) => ({
-        configured: Boolean(payload.configured),
-        path: payload.path || "",
-      }),
-    },
-  };
-
-  function providerAuthStatusConfig(providerId) {
-    return providerAuthStatusConfigs[providerId] || providerAuthStatusConfigs[CODEX_PROVIDER_ID];
+  function providerAuthConfig(providerId) {
+    return providerAuthConfigs[providerId] || providerAuthConfigs[CODEX_PROVIDER_ID];
   }
 
   async function loadProviderAuthStatus(config) {
@@ -143,7 +134,7 @@ export function useProviderAuthActions({
     settingsState[config.errorKey] = "";
     try {
       const payload = await requestSettingsJson(config.endpoint);
-      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalize(payload) };
+      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
     } catch (error) {
       settingsState[config.errorKey] = error?.message || copy.value.notices[config.loadFailedNoticeKey];
     } finally {
@@ -152,7 +143,7 @@ export function useProviderAuthActions({
   }
 
   async function loadProviderAuthStatusById(providerId) {
-    return loadProviderAuthStatus(providerAuthStatusConfig(providerId));
+    return loadProviderAuthStatus(providerAuthConfig(providerId));
   }
 
   async function loadCodexAuthStatus() {
@@ -252,27 +243,27 @@ export function useProviderAuthActions({
   }
 
   async function startCodexAuthLogin() {
-    return startProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
+    return startProviderAuthLogin(providerAuthConfig(CODEX_PROVIDER_ID));
   }
 
   async function pollCodexAuthLogin() {
-    return pollProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
+    return pollProviderAuthLogin(providerAuthConfig(CODEX_PROVIDER_ID));
   }
 
   async function logoutCodexAuth() {
-    return logoutProviderAuth(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
+    return logoutProviderAuth(providerAuthConfig(CODEX_PROVIDER_ID));
   }
 
   async function startCopilotAuthLogin() {
-    return startProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
+    return startProviderAuthLogin(providerAuthConfig(COPILOT_PROVIDER_ID));
   }
 
   async function pollCopilotAuthLogin() {
-    return pollProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
+    return pollProviderAuthLogin(providerAuthConfig(COPILOT_PROVIDER_ID));
   }
 
   async function logoutCopilotAuth() {
-    return logoutProviderAuth(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
+    return logoutProviderAuth(providerAuthConfig(COPILOT_PROVIDER_ID));
   }
 
   async function pollProviderAuthLogin(config) {
