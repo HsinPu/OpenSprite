@@ -86,19 +86,7 @@ export function useProviderAuthActions({
   }
 
   async function pollProviderAuthLoginById(providerId) {
-    return pollProviderAuthLogin(getProviderAuthConfig(providerAuthConfigs, providerId));
-  }
-
-  async function logoutProviderAuthById(providerId) {
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
-    await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey, async () => {
-      await requestProviderAuthLogout(requestSettingsJson, config);
-      settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
-      setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
-    }, { clearNotice: true, before: config.clearPoll, after: config.loadStatus });
-  }
-
-  async function pollProviderAuthLogin(config) {
     const pendingAuth = settingsState[config.authKey] || {};
     if (!config.hasPendingPoll(pendingAuth)) return;
     try {
@@ -119,6 +107,15 @@ export function useProviderAuthActions({
       setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error);
       config.clearPoll();
     }
+  }
+
+  async function logoutProviderAuthById(providerId) {
+    const config = getProviderAuthConfig(providerAuthConfigs, providerId);
+    await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey, async () => {
+      await requestProviderAuthLogout(requestSettingsJson, config);
+      settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
+      setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
+    }, { clearNotice: true, before: config.clearPoll, after: config.loadStatus });
   }
 
   function clearProviderAuthPollTimers() {

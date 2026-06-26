@@ -449,6 +449,7 @@ assertIncludes(providerAuthActions, "startProviderAuthLoginById,", "provider aut
 assertIncludes(providerAuthActions, "logoutProviderAuthById,", "provider auth actions expose provider-id auth logout action");
 assertNotIncludes(providerAuthActions, "async function startProviderAuthLogin(config)", "provider auth actions avoid login action wrapper");
 assertNotIncludes(providerAuthActions, "async function logoutProviderAuth(config)", "provider auth actions avoid logout action wrapper");
+assertNotIncludes(providerAuthActions, "async function pollProviderAuthLogin(config)", "provider auth actions avoid poll action wrapper");
 assertNotIncludes(providerAuthActions, "async function startCodexAuthLogin", "provider auth actions avoid Codex-specific login wrapper");
 assertNotIncludes(providerAuthActions, "async function startCopilotAuthLogin", "provider auth actions avoid Copilot-specific login wrapper");
 assertNotIncludes(providerAuthActions, "async function logoutCodexAuth", "provider auth actions avoid Codex-specific logout wrapper");
