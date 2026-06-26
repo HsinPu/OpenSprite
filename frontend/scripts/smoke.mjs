@@ -47,6 +47,7 @@ const [
   chatClient,
   providerSettingsActions,
   providerAuthActions,
+  providerAuthConfigs,
   providerAuthState,
   providerConnectForm,
   useSettingsState,
@@ -104,6 +105,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useProviderAuthActions.js"),
+  read("src/composables/providerAuthConfigs.js"),
   read("src/composables/providerAuthState.js"),
   read("src/composables/providerConnectForm.js"),
   read("src/composables/useSettingsState.js"),
@@ -301,10 +303,11 @@ assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "pr
 assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
 assertNotIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions no longer own auth status configs");
 assertNotIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provider auth actions no longer split auth status configs");
-assertIncludes(providerAuthActions, "const providerAuthConfigs", "provider auth actions centralize auth provider configs");
+assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs", "provider auth actions assemble auth provider configs");
+assertIncludes(providerAuthConfigs, "export function createProviderAuthConfigs", "provider auth configs centralize provider-specific auth config");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth status wrapper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth status wrapper");
-assertIncludes(providerAuthActions, "normalizeStatus: (payload) => ({", "provider auth actions keep status normalization inside provider config");
+assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
 assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "provider auth actions keep shared auth status request");
 assertNotIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions no longer own OAuth provider configs");
 assertNotIncludes(providerAuthActions, "const oauthProviderConfigs", "provider auth actions fold OAuth metadata into auth provider configs");
@@ -326,14 +329,14 @@ assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"conn
 assertIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions centralize runtime config fields");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth actions reuse Codex runtime config helper");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot runtime config helper");
-assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin", "provider auth actions import device login normalization");
+assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth configs reuse device login normalization");
 assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
-assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth actions keep Codex device auth id normalization");
-assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth actions keep Copilot device code normalization");
-assertIncludes(providerAuthActions, "clearedDeviceAuthState", "provider auth actions import cleared device auth state");
+assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth configs keep Codex device auth id normalization");
+assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth configs keep Copilot device code normalization");
+assertIncludes(providerAuthConfigs, "clearedDeviceAuthState", "provider auth configs reuse cleared device auth state");
 assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "provider auth state centralizes cleared device auth state");
-assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth actions keep Codex cleared device auth id state");
-assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceCode\")", "provider auth actions keep Copilot cleared device code state");
+assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth configs keep Codex cleared device auth id state");
+assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, providerAuthConfig(providerId))", "provider auth actions reuse auth provider config for OAuth connect");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");
@@ -353,10 +356,10 @@ assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(resolvedProviderId
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertNotIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions no longer split auth flow configs");
-assertIncludes(providerAuthActions, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "provider auth actions build Codex auth flow metadata through provider helper");
-assertIncludes(providerAuthActions, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "provider auth actions build Copilot auth flow metadata through provider helper");
-assertIncludes(providerAuthActions, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "provider auth actions keep Codex auth poll body");
-assertIncludes(providerAuthActions, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "provider auth actions keep Copilot auth poll body");
+assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "provider auth configs build Codex auth flow metadata through provider helper");
+assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "provider auth configs build Copilot auth flow metadata through provider helper");
+assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "provider auth configs keep Codex auth poll body");
+assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "provider auth configs keep Copilot auth poll body");
 assertIncludes(providerAuthActions, "startProviderAuthLoginById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth login wrapper");
 assertIncludes(providerAuthActions, "startProviderAuthLoginById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth login wrapper");
 assertIncludes(providerAuthActions, "logoutProviderAuthById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth logout wrapper");
