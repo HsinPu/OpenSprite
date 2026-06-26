@@ -2512,31 +2512,69 @@ export function useChatClient() {
     settingsState.connectForm.showAdvanced = false;
   }
 
-  async function startCodexAuthLogin() {
-    clearCodexAuthPollTimer();
-    settingsState.codexAuthLoading = true;
-    settingsState.codexAuthError = "";
-    settingsState.codexAuthNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/auth/openai-codex/login", { method: "POST" });
-      settingsState.codexAuth = {
-        ...settingsState.codexAuth,
+  const providerAuthLoginConfigs = {
+    "openai-codex": {
+      endpoint: "/api/settings/auth/openai-codex/login",
+      authKey: "codexAuth",
+      loadingKey: "codexAuthLoading",
+      errorKey: "codexAuthError",
+      noticeKey: "codexAuthNotice",
+      readyNoticeKey: "codexAuthLoginReady",
+      failedNoticeKey: "codexAuthLoginFailed",
+      clearPoll: clearCodexAuthPollTimer,
+      schedulePoll: scheduleCodexAuthPoll,
+      normalize: (payload) => ({
         command: "",
         verificationUri: payload.verification_uri || "",
         userCode: payload.user_code || "",
         deviceAuthId: payload.device_auth_id || "",
         pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+      }),
+    },
+    copilot: {
+      endpoint: "/api/settings/auth/copilot/login",
+      authKey: "copilotAuth",
+      loadingKey: "copilotAuthLoading",
+      errorKey: "copilotAuthError",
+      noticeKey: "copilotAuthNotice",
+      readyNoticeKey: "copilotAuthLoginReady",
+      failedNoticeKey: "copilotAuthLoginFailed",
+      clearPoll: clearCopilotAuthPollTimer,
+      schedulePoll: scheduleCopilotAuthPoll,
+      normalize: (payload) => ({
+        verificationUri: payload.verification_uri || "",
+        userCode: payload.user_code || "",
+        deviceCode: payload.device_code || "",
+        pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+      }),
+    },
+  };
+
+  async function startProviderAuthLogin(config) {
+    config.clearPoll();
+    settingsState[config.loadingKey] = true;
+    settingsState[config.errorKey] = "";
+    settingsState[config.noticeKey] = "";
+    try {
+      const payload = await requestSettingsJson(config.endpoint, { method: "POST" });
+      settingsState[config.authKey] = {
+        ...settingsState[config.authKey],
+        ...config.normalize(payload),
       };
-      if (settingsState.codexAuth.verificationUri) {
-        window.open(settingsState.codexAuth.verificationUri, "_blank", "noopener,noreferrer");
+      if (settingsState[config.authKey].verificationUri) {
+        window.open(settingsState[config.authKey].verificationUri, "_blank", "noopener,noreferrer");
       }
-      setSettingsSuccess("codexAuthNotice", copy.value.notices.codexAuthLoginReady);
-      scheduleCodexAuthPoll();
+      setSettingsSuccess(config.noticeKey, copy.value.notices[config.readyNoticeKey]);
+      config.schedulePoll();
     } catch (error) {
-      settingsState.codexAuthError = error?.message || copy.value.notices.codexAuthLoginFailed;
+      settingsState[config.errorKey] = error?.message || copy.value.notices[config.failedNoticeKey];
     } finally {
-      settingsState.codexAuthLoading = false;
+      settingsState[config.loadingKey] = false;
     }
+  }
+
+  async function startCodexAuthLogin() {
+    return startProviderAuthLogin(providerAuthLoginConfigs["openai-codex"]);
   }
 
   function clearProviderAuthPollTimer(providerId) {
@@ -2625,29 +2663,7 @@ export function useChatClient() {
   }
 
   async function startCopilotAuthLogin() {
-    clearCopilotAuthPollTimer();
-    settingsState.copilotAuthLoading = true;
-    settingsState.copilotAuthError = "";
-    settingsState.copilotAuthNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/auth/copilot/login", { method: "POST" });
-      settingsState.copilotAuth = {
-        ...settingsState.copilotAuth,
-        verificationUri: payload.verification_uri || "",
-        userCode: payload.user_code || "",
-        deviceCode: payload.device_code || "",
-        pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
-      };
-      if (settingsState.copilotAuth.verificationUri) {
-        window.open(settingsState.copilotAuth.verificationUri, "_blank", "noopener,noreferrer");
-      }
-      setSettingsSuccess("copilotAuthNotice", copy.value.notices.copilotAuthLoginReady);
-      scheduleCopilotAuthPoll();
-    } catch (error) {
-      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoginFailed;
-    } finally {
-      settingsState.copilotAuthLoading = false;
-    }
+    return startProviderAuthLogin(providerAuthLoginConfigs.copilot);
   }
 
   function clearCopilotAuthPollTimer() {

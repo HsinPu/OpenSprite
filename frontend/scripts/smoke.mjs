@@ -282,6 +282,12 @@ assertIncludes(chatClient, "scheduleProviderAuthPoll(\"openai-codex\", settingsS
 assertIncludes(chatClient, "scheduleProviderAuthPoll(\"copilot\", settingsState.copilotAuth, pollCopilotAuthLogin)", "chat client keeps Copilot auth poll scheduling");
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
+assertIncludes(chatClient, "const providerAuthLoginConfigs", "chat client centralizes provider auth login configs");
+assertIncludes(chatClient, "endpoint: \"/api/settings/auth/openai-codex/login\"", "chat client keeps Codex auth login endpoint");
+assertIncludes(chatClient, "endpoint: \"/api/settings/auth/copilot/login\"", "chat client keeps Copilot auth login endpoint");
+assertIncludes(chatClient, "startProviderAuthLogin(providerAuthLoginConfigs[\"openai-codex\"])", "chat client keeps Codex auth login wrapper");
+assertIncludes(chatClient, "startProviderAuthLogin(providerAuthLoginConfigs.copilot)", "chat client keeps Copilot auth login wrapper");
+assertIncludes(chatClient, "requestSettingsJson(config.endpoint, { method: \"POST\" })", "chat client keeps shared auth login request");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
