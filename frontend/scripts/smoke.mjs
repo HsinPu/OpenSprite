@@ -298,6 +298,7 @@ assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "pr
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
+assertIncludes(providerConstants, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId", "provider constants derive default auth provider from metadata");
 assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
@@ -345,6 +346,8 @@ assertNotIncludes(providerAuthConfigs, "createProviderAuthRuntimeConfigs", "prov
 assertIncludes(providerAuthConfigs, "function resolveProviderAuthConfigId", "provider auth configs keep provider id fallback internal");
 assertNotIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs avoid exporting internal provider id fallback");
 assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
+assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provider auth configs use metadata-derived default provider");
+assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById,", "provider auth actions expose provider-id auth status action");
 assertNotIncludes(providerAuthActions, "async function loadProviderAuthStatus(config)", "provider auth actions avoid status loader wrapper");

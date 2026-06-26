@@ -78,6 +78,8 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
   },
 ];
 
+export const DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId;
+
 export function createProviderAuthInitialStates() {
   return Object.assign(
     {},

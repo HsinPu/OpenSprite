@@ -1,6 +1,7 @@
 import {
   CODEX_PROVIDER_ID,
   COPILOT_PROVIDER_ID,
+  DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
   PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthRequestConfig,
 } from "../settings/providerConstants";
@@ -59,7 +60,7 @@ export function createProviderAuthConfigs() {
 }
 
 function resolveProviderAuthConfigId(providerAuthConfigs, providerId) {
-  return providerAuthConfigs[providerId] ? providerId : CODEX_PROVIDER_ID;
+  return providerAuthConfigs[providerId] ? providerId : DEFAULT_PROVIDER_AUTH_PROVIDER_ID;
 }
 
 export function getProviderAuthConfig(providerAuthConfigs, providerId) {
