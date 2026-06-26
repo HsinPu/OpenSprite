@@ -46,6 +46,7 @@ const [
   runInspector,
   providerSettings,
   modelSettings,
+  channelSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -60,6 +61,7 @@ const [
   read("src/components/runInspector.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
+  read("src/settings/channelSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -121,7 +123,7 @@ assertIncludes(providerSettings, "client.deleteCredential", "provider settings k
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
-assertIncludes(app, "client.beginChannelConnect", "channel settings keeps add channel flow");
+assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(app, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
 assertIncludes(app, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
 assertIncludes(app, "client.applyMcpJson", "MCP settings keeps JSON import action");
