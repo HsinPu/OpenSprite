@@ -45,6 +45,7 @@ const [
   chatClient,
   authGate,
   emptyState,
+  messageList,
   browserSettings,
   runInspector,
   logSettings,
@@ -71,6 +72,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/components/authGate.tsx"),
   read("src/components/emptyState.tsx"),
+  read("src/components/messageList.tsx"),
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/settings/logSettings.tsx"),
@@ -135,7 +137,11 @@ assertIncludes(emptyState, "empty-state", "empty state component keeps starter s
 assertIncludes(emptyState, "prompt-card", "empty state keeps prompt card layout");
 assertIncludes(emptyState, "applyPrompt(prompt.text)", "empty state keeps prompt application flow");
 assertIncludes(app, "MessageList", "React message list");
-assertIncludes(app, "MessageTextRenderer", "React message renderer");
+assertIncludes(messageList, "MessageTextRenderer", "React message renderer");
+assertIncludes(messageList, "message__trace-button", "message list keeps trace action button");
+assertIncludes(messageList, "viewTraceForRun(message.traceRunId)", "message list keeps trace run selection callback");
+assertIncludes(messageList, "normalizeMessages", "message list keeps message normalization");
+assertIncludes(messageList, "message__artifact", "message list keeps artifact cards");
 assertIncludes(app, "viewTraceForRun", "assistant message trace action");
 assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
