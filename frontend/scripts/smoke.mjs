@@ -47,6 +47,7 @@ const [
   providerSettings,
   modelSettings,
   channelSettings,
+  mcpSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -62,6 +63,7 @@ const [
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
   read("src/settings/channelSettings.tsx"),
+  read("src/settings/mcpSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -114,7 +116,7 @@ assertIncludes(app, "client.currentRuns.value", "run history uses active session
 assertIncludes(app, "client.settingsState", "settings API state remains wired");
 assertIncludes(app, "client.saveBrowserSettings", "browser settings save action");
 assertIncludes(app, "client.runBrowserTest", "browser manual test action");
-assertIncludes(app, "client.saveMcpServer", "MCP settings action");
+assertIncludes(mcpSettings, "client.saveMcpServer", "MCP settings action");
 assertIncludes(modelSettings, "client.selectModel", "model selection action");
 assertIncludes(app, "client.clearWebSessions()", "web history cleanup action");
 assertIncludes(app, "form.externalChatId", "general settings keeps external chat id control");
@@ -124,11 +126,11 @@ assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider setting
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
-assertIncludes(app, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
-assertIncludes(app, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
-assertIncludes(app, "client.applyMcpJson", "MCP settings keeps JSON import action");
-assertIncludes(app, "form.envJson", "MCP settings keeps environment JSON field");
-assertIncludes(app, "form.headersJson", "MCP settings keeps headers JSON field");
+assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
+assertIncludes(mcpSettings, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
+assertIncludes(mcpSettings, "client.applyMcpJson", "MCP settings keeps JSON import action");
+assertIncludes(mcpSettings, "form.envJson", "MCP settings keeps environment JSON field");
+assertIncludes(mcpSettings, "form.headersJson", "MCP settings keeps headers JSON field");
 assertIncludes(app, "state.scheduleForm.defaultTimezone", "schedule settings keeps default timezone field");
 assertIncludes(app, "client.saveCronJob", "schedule settings keeps cron editor save");
 assertIncludes(app, "client.runCronJobAction(job, job.enabled ? \"pause\" : \"enable\")", "schedule settings keeps pause/enable action");
