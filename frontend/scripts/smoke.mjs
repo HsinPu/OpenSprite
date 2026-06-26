@@ -515,7 +515,7 @@ assertIncludes(providerAuthPollTimers, "window.setTimeout", "provider auth poll 
 assertNotIncludes(providerAuthConfigs, "clearPoll", "provider auth configs avoid auth poll clearing closure");
 assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(config.providerId)", "provider auth actions clear polling through provider id");
 assertNotIncludes(providerAuthConfigs, "schedulePoll", "provider auth configs avoid auth poll scheduling closure");
-assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");
+assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(config.providerId, settingsState[config.stateKey]", "provider auth actions schedule polling through state key metadata");
 assertIncludes(providerAuthActions, "scheduleProviderAuthPollById(config.providerId)", "provider auth actions reschedule polling through provider id");
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");

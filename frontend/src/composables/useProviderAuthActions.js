@@ -32,7 +32,7 @@ export function useProviderAuthActions({
 
   function scheduleProviderAuthPollById(providerId) {
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
-    scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey], () => pollProviderAuthLoginById(config.providerId));
+    scheduleProviderAuthPoll(config.providerId, settingsState[config.stateKey], () => pollProviderAuthLoginById(config.providerId));
   }
 
   async function loadProviderAuthStatusById(providerId) {
@@ -63,12 +63,12 @@ export function useProviderAuthActions({
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
     await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey, async () => {
       const payload = await requestProviderAuthLogin(requestSettingsJson, config);
-      settingsState[config.authKey] = {
-        ...settingsState[config.authKey],
+      settingsState[config.stateKey] = {
+        ...settingsState[config.stateKey],
         ...config.normalizeLogin(payload),
       };
-      if (settingsState[config.authKey].verificationUri) {
-        window.open(settingsState[config.authKey].verificationUri, "_blank", "noopener,noreferrer");
+      if (settingsState[config.stateKey].verificationUri) {
+        window.open(settingsState[config.stateKey].verificationUri, "_blank", "noopener,noreferrer");
       }
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
       scheduleProviderAuthPollById(config.providerId);
@@ -77,14 +77,14 @@ export function useProviderAuthActions({
 
   async function pollProviderAuthLoginById(providerId) {
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
-    const pendingAuth = settingsState[config.authKey] || {};
+    const pendingAuth = settingsState[config.stateKey] || {};
     if (!config.hasPendingPoll(pendingAuth)) return;
     try {
       const payload = await requestProviderAuthPoll(requestSettingsJson, config, pendingAuth);
       if (payload.status === "authorized") {
         const auth = payload.auth || {};
-        const currentAuth = settingsState[config.authKey] || {};
-        settingsState[config.authKey] = {
+        const currentAuth = settingsState[config.stateKey] || {};
+        settingsState[config.stateKey] = {
           ...currentAuth,
           ...config.normalizeAuthorized(auth, currentAuth),
         };
@@ -103,7 +103,7 @@ export function useProviderAuthActions({
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
     await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey, async () => {
       await requestProviderAuthLogout(requestSettingsJson, config);
-      settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
+      settingsState[config.stateKey] = config.resetLogout(settingsState[config.stateKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
     }, {
       clearNotice: true,
