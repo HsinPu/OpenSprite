@@ -9,7 +9,6 @@ import {
   ConfigProvider,
   Descriptions,
   Empty,
-  Flex,
   Form,
   Input,
   InputNumber,
@@ -47,8 +46,9 @@ import {
 } from "@ant-design/icons";
 import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
-import { shortRunId } from "./composables/chatClientRunHelpers";
+import { connectionLabel, noticeTone, runOptionLabel, runStatusColor } from "./components/displayHelpers";
 import { buildMessageBlocks, MessageTextRenderer } from "./components/messageMarkdown";
+import { ToastStack } from "./components/toastStack";
 import { mcpRuntimeStatus, mcpToolGroups } from "./settings/mcpHelpers";
 import {
   authStatusLabel,
@@ -2676,52 +2676,6 @@ function AuthProviderCard({
   );
 }
 
-function ToastStack({ client }: { client: Client }) {
-  const toasts = client.toasts.value || [];
-  if (!toasts.length) {
-    return null;
-  }
-  return (
-    <div className="toast-stack">
-      {toasts.map((toast: AnyRecord) => (
-        <Alert
-          key={toast.id}
-          type={noticeTone(toast.tone)}
-          message={toast.text}
-          closable
-          onClose={() => client.dismissToast(toast.id)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Toolbar({ title, loading, onRefresh }: { title: string; loading?: boolean; onRefresh: () => void }) {
-  return (
-    <Flex justify="space-between" align="center">
-      <Typography.Title level={5}>{title}</Typography.Title>
-      <Button icon={<ReloadOutlined />} loading={loading} onClick={onRefresh}>Refresh</Button>
-    </Flex>
-  );
-}
-
-function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return (
-    <Flex align="center" gap={8}>
-      <Switch checked={Boolean(checked)} onChange={onChange} />
-      <Typography.Text>{label}</Typography.Text>
-    </Flex>
-  );
-}
-
-function JsonCard({ title, value }: { title: string; value: any }) {
-  return (
-    <Card size="small" title={title}>
-      <pre>{JSON.stringify(value, null, 2)}</pre>
-    </Card>
-  );
-}
-
 function credentialSelector(client: Client, provider: AnyRecord) {
   const credentials = client.settingsState.credentials?.[provider.provider || provider.id] || [];
   if (!credentials.length) {
@@ -2776,49 +2730,6 @@ function readStoredSidebarWidth() {
   } catch {
     return SIDEBAR_WIDTH_DEFAULT;
   }
-}
-
-function connectionLabel(copy: AnyRecord, state: string) {
-  return copy.connection?.[state] || state;
-}
-
-function connectionColor(state: string) {
-  if (state === "connected") {
-    return "green";
-  }
-  if (state === "connecting") {
-    return "blue";
-  }
-  return "default";
-}
-
-function noticeTone(tone: string): "success" | "info" | "warning" | "error" {
-  if (tone === "success" || tone === "warning" || tone === "error") {
-    return tone;
-  }
-  return "info";
-}
-
-function runStatusColor(status: string) {
-  if (["completed", "success", "done"].includes(status)) {
-    return "green";
-  }
-  if (["failed", "error"].includes(status)) {
-    return "red";
-  }
-  if (["running", "thinking", "tool_running", "streaming"].includes(status)) {
-    return "blue";
-  }
-  if (["cancelled", "cancelling"].includes(status)) {
-    return "orange";
-  }
-  return "default";
-}
-
-function runOptionLabel(copy: AnyRecord, run: AnyRecord, index: number) {
-  const statusLabel = copy.run.statusLabels?.[run.status] || run.status;
-  const prefix = index === 0 ? copy.runHistory.latest : `#${index + 1}`;
-  return `${prefix} · Run ${shortRunId(run.runId)} · ${statusLabel}`;
 }
 
 function normalizeMessages({
