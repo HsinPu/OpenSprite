@@ -1,4 +1,4 @@
-import { runProviderAuthAction } from "./providerAuthActionRunner";
+import { runProviderAuthAction, setProviderAuthError } from "./providerAuthActionRunner";
 import {
   createProviderAuthConfigs,
   createProviderAuthRuntimeConfigs,
@@ -165,7 +165,7 @@ export function useProviderAuthActions({
       }
       config.schedulePoll();
     } catch (error) {
-      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loginFailedNoticeKey];
+      setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error);
       config.clearPoll();
     }
   }

@@ -433,11 +433,14 @@ assertIncludes(providerAuthActions, "logoutProviderAuthById(CODEX_PROVIDER_ID)",
 assertIncludes(providerAuthActions, "logoutProviderAuthById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth logout wrapper");
 assertIncludes(providerAuthActions, "pollProviderAuthLoginById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth poll wrapper");
 assertIncludes(providerAuthActions, "pollProviderAuthLoginById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth poll wrapper");
+assertIncludes(providerAuthActionRunner, "export function setProviderAuthError", "provider auth action runner centralizes auth error state");
+assertIncludes(providerAuthActionRunner, "setProviderAuthError(settingsState, copy, config, fallbackNoticeKey, error)", "provider auth action lifecycle reuses auth error helper");
 assertIncludes(providerAuthActionRunner, "export async function runProviderAuthAction", "provider auth action runner centralizes auth action lifecycle");
-assertIncludes(providerAuthActions, "import { runProviderAuthAction } from \"./providerAuthActionRunner\"", "provider auth actions reuse auth action lifecycle helper");
+assertIncludes(providerAuthActions, "import { runProviderAuthAction, setProviderAuthError } from \"./providerAuthActionRunner\"", "provider auth actions reuse auth action lifecycle helpers");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
+assertIncludes(providerAuthActions, "setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error)", "provider auth polling reuses auth error helper");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthLogin", "provider auth requests centralize auth login request");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthPoll", "provider auth requests centralize auth poll request");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthLogout", "provider auth requests centralize auth logout request");
