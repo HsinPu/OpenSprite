@@ -30,26 +30,29 @@ function deviceAuthPollConfig(config) {
   };
 }
 
+function deviceAuthBaseConfig(config) {
+  return {
+    ...providerAuthRequestConfig(config),
+    ...deviceAuthPollConfig(config),
+    normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, config.deviceKey, config.payloadDeviceKey, config.loginExtra),
+    resetLogout: (auth) => resetDeviceAuthLogout(auth, config.deviceKey, config.logoutReset),
+  };
+}
+
 export function createProviderAuthConfigs() {
   const codexAuthConfig = providerAuthSectionForId(CODEX_PROVIDER_ID);
   const copilotAuthConfig = providerAuthSectionForId(COPILOT_PROVIDER_ID);
 
   return {
     [CODEX_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(codexAuthConfig),
-      ...deviceAuthPollConfig(codexAuthConfig),
+      ...deviceAuthBaseConfig(codexAuthConfig),
       normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(codexAuthConfig, payload)),
-      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, codexAuthConfig.deviceKey, codexAuthConfig.payloadDeviceKey, codexAuthConfig.loginExtra),
       normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey, normalizeProviderAccountStatus(codexAuthConfig, auth)),
-      resetLogout: (auth) => resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, codexAuthConfig.logoutReset),
     },
     [COPILOT_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(copilotAuthConfig),
-      ...deviceAuthPollConfig(copilotAuthConfig),
+      ...deviceAuthBaseConfig(copilotAuthConfig),
       normalizeStatus: normalizeConfiguredPathStatus,
-      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, copilotAuthConfig.deviceKey, copilotAuthConfig.payloadDeviceKey),
       normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey),
-      resetLogout: (auth) => resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, copilotAuthConfig.logoutReset),
     },
   };
 }
