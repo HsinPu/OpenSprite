@@ -334,6 +334,10 @@ assertIncludes(providerConstants, "PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key,
 assertIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE = \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type");
 assertIncludes(providerConstants, "GITHUB_COPILOT_OAUTH_AUTH_TYPE = \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type");
 assertIncludes(providerConstants, "function isOAuthProviderAuthType", "provider constants expose OAuth auth type helper");
+assertIncludes(providerConstants, "oauthAuthType: OPENAI_CODEX_OAUTH_AUTH_TYPE", "provider constants keep Codex OAuth auth type in provider metadata");
+assertIncludes(providerConstants, "oauthAuthType: GITHUB_COPILOT_OAUTH_AUTH_TYPE", "provider constants keep Copilot OAuth auth type in provider metadata");
+assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType)", "provider constants resolve OAuth auth types from provider metadata");
+assertNotIncludes(providerConstants, "authType === OPENAI_CODEX_OAUTH_AUTH_TYPE || authType === GITHUB_COPILOT_OAUTH_AUTH_TYPE", "provider constants avoid hardcoded OAuth auth type branch");
 assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
 assertIncludes(providerConstants, "providerId: CODEX_PROVIDER_ID", "provider constants keep Codex auth provider section");
 assertIncludes(providerConstants, "providerId: COPILOT_PROVIDER_ID", "provider constants keep Copilot auth provider section");

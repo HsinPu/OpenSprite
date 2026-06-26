@@ -52,12 +52,15 @@ export function providerAuthRequestConfig(config: ReturnType<typeof providerAuth
   };
 }
 
+export const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
+export const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
+
 const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
-    providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME,
+    providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME, oauthAuthType: OPENAI_CODEX_OAUTH_AUTH_TYPE,
     deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
     pollRequiresUserCode: true,
     includeAccountStatus: true,
@@ -66,7 +69,7 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
     initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
   },
   {
-    providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME,
+    providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME, oauthAuthType: GITHUB_COPILOT_OAUTH_AUTH_TYPE,
     deviceKey: "deviceCode", payloadDeviceKey: "device_code",
     logoutReset: { path: "" },
     initialAuth: providerDeviceAuthInitialState("deviceCode"),
@@ -94,9 +97,6 @@ export function providerAuthKeyForId(providerId: string) {
   return providerAuthSectionForId(providerId)?.authKey || "";
 }
 
-export const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
-export const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
-
 export function providerAuthEndpoint(providerId: string, action = "") {
   return `/api/settings/auth/${providerId}${action ? `/${action}` : ""}`;
 }
@@ -110,5 +110,5 @@ export function providerCredentialEndpoint(providerKey: string, credentialId: st
 }
 
 export function isOAuthProviderAuthType(authType: string) {
-  return authType === OPENAI_CODEX_OAUTH_AUTH_TYPE || authType === GITHUB_COPILOT_OAUTH_AUTH_TYPE;
+  return PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType);
 }
