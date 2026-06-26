@@ -403,10 +403,10 @@ assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.
 assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
 assertIncludes(providerAuthActions, "after: async () => {", "provider auth OAuth connect uses shared success follow-up");
 assertIncludes(providerAuthActions, "await refreshProviderState();", "provider auth OAuth connect refreshes provider state after connect");
-assertIncludes(providerAuthActions, "await options.startAuthLogin();", "provider auth OAuth connect starts login after refresh");
+assertIncludes(providerAuthActions, "await config.startAuthLogin();", "provider auth OAuth connect starts login after refresh");
 assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
 assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
-assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, options)", "provider auth actions delegate OAuth connect request");
+assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, config)", "provider auth actions delegate OAuth connect request");
 assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider auth actions no longer own provider endpoint assembly");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
 assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, \"codexProviderConnected\")", "provider auth configs reuse Codex runtime config helper");
@@ -421,8 +421,9 @@ assertIncludes(providerAuthConfigs, "clearedDeviceAuthState", "provider auth con
 assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "provider auth state centralizes cleared device auth state");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth configs keep Codex cleared device auth id state");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
-assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
-assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider)))", "provider auth actions reuse shared provider key helper for OAuth connect");
+assertIncludes(providerAuthActions, "settingsState[config.noticeKey]", "provider auth actions reuse provider auth notice state key");
+assertIncludes(providerAuthActions, "const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider))", "provider auth actions reuse shared provider key helper for OAuth connect");
+assertNotIncludes(providerAuthActions, "connectOAuthBackedProvider", "provider auth actions avoid OAuth connect wrapper");
 assertNotIncludes(providerAuthActions, "async function connectCodexProvider", "provider auth actions avoid unused Codex-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "async function connectCopilotProvider", "provider auth actions avoid unused Copilot-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions no longer own provider id fallback");

@@ -50,23 +50,20 @@ export function useProviderAuthActions({
     });
   }
 
-  async function connectOAuthBackedProvider(provider, options) {
+  async function connectOAuthProvider(provider) {
+    const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider));
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
-      await requestProviderOAuthConnect(requestSettingsJson, provider, options);
-      setSettingsSuccess("providersNotice", options.connectedNotice());
+      await requestProviderOAuthConnect(requestSettingsJson, provider, config);
+      setSettingsSuccess("providersNotice", config.connectedNotice());
     }, {
       before: () => {
-        settingsState[options.noticeKey] = "";
+        settingsState[config.noticeKey] = "";
       },
       after: async () => {
         await refreshProviderState();
-        await options.startAuthLogin();
+        await config.startAuthLogin();
       },
     });
-  }
-
-  async function connectOAuthProvider(provider) {
-    await connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider)));
   }
 
   async function startProviderAuthLoginById(providerId) {
