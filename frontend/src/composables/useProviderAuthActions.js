@@ -13,8 +13,6 @@ export function useProviderAuthActions({
   copy,
   setSettingsSuccess,
   loadModelSettings,
-  loadCodexAuthStatus,
-  loadCopilotAuthStatus,
 }) {
   const providerAuthPollTimers = {
     [CODEX_PROVIDER_ID]: null,
@@ -113,6 +111,55 @@ export function useProviderAuthActions({
     },
   };
 
+  const providerAuthStatusConfigs = {
+    [CODEX_PROVIDER_ID]: {
+      ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
+      normalize: (payload) => ({
+        configured: Boolean(payload.configured),
+        expired: Boolean(payload.expired),
+        expires_at: payload.expires_at || null,
+        account_id: payload.account_id || "",
+        path: payload.path || "",
+      }),
+    },
+    [COPILOT_PROVIDER_ID]: {
+      ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
+      normalize: (payload) => ({
+        configured: Boolean(payload.configured),
+        path: payload.path || "",
+      }),
+    },
+  };
+
+  function providerAuthStatusConfig(providerId) {
+    return providerAuthStatusConfigs[providerId] || providerAuthStatusConfigs[CODEX_PROVIDER_ID];
+  }
+
+  async function loadProviderAuthStatus(config) {
+    settingsState[config.loadingKey] = true;
+    settingsState[config.errorKey] = "";
+    try {
+      const payload = await requestSettingsJson(config.endpoint);
+      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalize(payload) };
+    } catch (error) {
+      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loadFailedNoticeKey];
+    } finally {
+      settingsState[config.loadingKey] = false;
+    }
+  }
+
+  async function loadProviderAuthStatusById(providerId) {
+    return loadProviderAuthStatus(providerAuthStatusConfig(providerId));
+  }
+
+  async function loadCodexAuthStatus() {
+    return loadProviderAuthStatusById(CODEX_PROVIDER_ID);
+  }
+
+  async function loadCopilotAuthStatus() {
+    return loadProviderAuthStatusById(COPILOT_PROVIDER_ID);
+  }
+
   async function startProviderAuthLogin(config) {
     config.clearPoll();
     settingsState[config.loadingKey] = true;
@@ -209,6 +256,8 @@ export function useProviderAuthActions({
   }
 
   return {
+    loadCodexAuthStatus,
+    loadCopilotAuthStatus,
     clearProviderAuthPollTimers,
     startCodexAuthLogin,
     logoutCodexAuth,

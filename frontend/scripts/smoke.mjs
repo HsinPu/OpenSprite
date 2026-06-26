@@ -293,11 +293,11 @@ assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "
 assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
 assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
-assertIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions centralize auth status configs");
-assertIncludes(providerSettingsActions, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "provider settings actions build Codex auth status metadata through provider helper");
-assertIncludes(providerSettingsActions, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "provider settings actions build Copilot auth status metadata through provider helper");
-assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider settings actions keep Codex auth status wrapper");
-assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider settings actions keep Copilot auth status wrapper");
+assertNotIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions no longer own auth status configs");
+assertIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provider auth actions centralize auth status configs");
+assertIncludes(providerAuthActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth status wrapper");
+assertIncludes(providerAuthActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth status wrapper");
+assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "provider auth actions keep shared auth status request");
 assertIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions centralize OAuth provider configs");
 assertIncludes(providerSettingsActions, "[CODEX_PROVIDER_ID]: {", "provider settings actions keep Codex OAuth config");
 assertIncludes(providerSettingsActions, "[COPILOT_PROVIDER_ID]: {", "provider settings actions keep Copilot OAuth config");

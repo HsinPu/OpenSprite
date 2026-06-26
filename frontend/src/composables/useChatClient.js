@@ -1542,6 +1542,8 @@ export function useChatClient() {
   });
 
   const {
+    loadCodexAuthStatus,
+    loadCopilotAuthStatus,
     clearProviderAuthPollTimers,
     startCodexAuthLogin,
     logoutCodexAuth,
@@ -1553,8 +1555,6 @@ export function useChatClient() {
     copy,
     setSettingsSuccess,
     loadModelSettings,
-    loadCodexAuthStatus: () => loadCodexAuthStatus(),
-    loadCopilotAuthStatus: () => loadCopilotAuthStatus(),
   });
 
   const {
@@ -1613,8 +1613,6 @@ export function useChatClient() {
 
   const {
     loadProviderSettings,
-    loadCodexAuthStatus,
-    loadCopilotAuthStatus,
     beginProviderConnect,
     saveProviderConnection,
     disconnectProvider,
