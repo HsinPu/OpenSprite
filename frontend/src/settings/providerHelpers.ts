@@ -15,7 +15,7 @@ export function hasConnectedProvider(state: AnyRecord, presetId: string) {
 }
 
 export function providerAuthVisible(state: AnyRecord, config: AnyRecord) {
-  const auth = state[config.authKey] || {};
+  const auth = state[config.stateKey] || {};
   return Boolean(hasConnectedProvider(state, config.providerId) || state[config.loadingKey] || auth?.configured || auth?.userCode || state[config.noticeKey] || state[config.errorKey]);
 }
 
@@ -42,7 +42,7 @@ export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, load
 }
 
 export function providerAuthDescription(copy: AnyRecord, state: AnyRecord, config: AnyRecord) {
-  const auth = state[config.authKey] || {};
+  const auth = state[config.stateKey] || {};
   const authCopy = copy.settings.providers?.[config.copyKey] || {};
   if (!auth.configured) {
     return authCopy.description || "";

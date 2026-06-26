@@ -10,7 +10,7 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
   const providerCopy = copy.settings.providers || {};
 
   return PROVIDER_AUTH_SECTION_CONFIGS.map((config) => {
-    const auth = state[config.copyKey] || {};
+    const auth = state[config.stateKey] || {};
     const loading = Boolean(state[config.loadingKey]);
     const authCopy = providerCopy[config.copyKey] || {};
 

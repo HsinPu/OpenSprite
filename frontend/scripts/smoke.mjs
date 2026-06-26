@@ -351,6 +351,8 @@ assertIncludes(providerAuthSections, "PROVIDER_AUTH_SECTION_CONFIGS.map", "provi
 assertIncludes(providerAuthSections, "key: config.providerId", "provider auth sections derive section key from provider id");
 assertNotIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex auth state key middle constant");
 assertNotIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot auth state key middle constant");
+assertIncludes(providerAuthSections, "const auth = state[config.stateKey] || {}", "provider auth sections read auth state through state key metadata");
+assertNotIncludes(providerAuthSections, "const auth = state[config.copyKey]", "provider auth sections keep copy key separate from state key");
 assertIncludes(providerConstants, "providerName: \"OpenAI Codex\"", "provider constants keep Codex provider name in section metadata");
 assertIncludes(providerConstants, "providerName: \"GitHub Copilot\"", "provider constants keep Copilot provider name in section metadata");
 assertNotIncludes(providerAuthSections, "CODEX_AUTH_STATE_KEYS", "provider auth sections avoid owning Codex auth state metadata");
@@ -606,7 +608,7 @@ assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect di
 assertNotIncludes(providerConstants, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Codex auth key map");
 assertNotIncludes(providerConstants, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Copilot auth key map");
 assertIncludes(providerHelpers, "export function providerAuthDescription", "provider helpers centralize provider auth descriptions");
-assertIncludes(providerHelpers, "state[config.authKey]", "provider helpers read auth state through section config");
+assertIncludes(providerHelpers, "state[config.stateKey]", "provider helpers read auth state through state key metadata");
 assertIncludes(providerHelpers, "copy.settings.providers?.[config.copyKey]", "provider helpers read auth copy through section config");
 assertIncludes(providerAuthSections, "providerAuthDescription(copy, state, config)", "provider auth sections delegate description to config-based helper");
 assertNotIncludes(providerAuthSections, "PROVIDER_AUTH_DESCRIPTIONS", "provider auth sections avoid per-provider description maps");
