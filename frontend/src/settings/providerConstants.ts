@@ -31,20 +31,6 @@ function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string,
   return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
 }
 
-const PROVIDER_AUTH_ACTION_KEYS = Object.keys(providerAuthStateKeys("")) as Array<keyof ReturnType<typeof providerAuthStateKeys>>;
-
-export function providerAuthActionConfig(config: ReturnType<typeof providerAuthStateKeys> & { providerId: string }) {
-  const { providerId } = config;
-  return {
-    providerId,
-    endpoint: providerAuthEndpoint(providerId),
-    loginEndpoint: providerAuthEndpoint(providerId, "login"),
-    logoutEndpoint: providerAuthEndpoint(providerId, "logout"),
-    pollEndpoint: providerAuthEndpoint(providerId, "poll"),
-    ...Object.fromEntries(PROVIDER_AUTH_ACTION_KEYS.map((key) => [key, config[key]])),
-  };
-}
-
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
     providerId: "openai-codex", ...providerAuthSectionKeys("codexAuth"), mark: "Cx", providerName: "OpenAI Codex", oauthAuthType: "openai_codex_oauth",

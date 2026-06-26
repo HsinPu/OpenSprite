@@ -1,9 +1,24 @@
 import {
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
   PROVIDER_AUTH_SECTION_CONFIGS,
-  providerAuthActionConfig,
+  providerAuthEndpoint,
+  providerAuthStateKeys,
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
+
+const PROVIDER_AUTH_ACTION_KEYS = Object.keys(providerAuthStateKeys(""));
+
+function providerAuthActionConfig(config) {
+  const { providerId } = config;
+  return {
+    providerId,
+    endpoint: providerAuthEndpoint(providerId),
+    loginEndpoint: providerAuthEndpoint(providerId, "login"),
+    logoutEndpoint: providerAuthEndpoint(providerId, "logout"),
+    pollEndpoint: providerAuthEndpoint(providerId, "poll"),
+    ...Object.fromEntries(PROVIDER_AUTH_ACTION_KEYS.map((key) => [key, config[key]])),
+  };
+}
 
 function normalizeAuthorizedDeviceAuth(auth, currentAuth, deviceKey, extraAuth = {}) {
   return { configured: Boolean(auth.configured), ...extraAuth, path: auth.path || currentAuth.path, ...clearedDeviceAuthState(deviceKey) };
