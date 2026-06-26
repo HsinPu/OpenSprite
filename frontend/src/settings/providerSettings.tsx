@@ -1,15 +1,13 @@
-import { ArrowLeftOutlined, CloseOutlined } from "@ant-design/icons";
-import { Button, Form, Input } from "antd";
 import {
   authStatusLabel,
   codexDescription,
   copilotDescription,
   hasConnectedProvider,
-  providerMark,
 } from "./providerHelpers";
 import { AuthProviderCard } from "./authProviderCard";
 import { AvailableProvidersSection } from "./availableProvidersSection";
 import { ConnectedProvidersSection } from "./connectedProvidersSection";
+import { ProviderConnectDialog } from "./providerConnectDialog";
 import { SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
 type AnyRecord = Record<string, any>;
@@ -54,7 +52,6 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
   const copilotAuthStatusLabel = authStatusLabel(providerCopy.copilotAuth, state.copilotAuth, state.copilotAuthLoading);
   const codexAuthDescription = codexDescription(copy, state);
   const copilotAuthDescription = copilotDescription(copy, state);
-  const selectedConnectProviderRequiresApiKey = selectedConnectProvider?.requires_api_key !== false || selectedConnectProvider?.api_key_optional === true;
 
   return (
     <section className="settings-page">
@@ -123,38 +120,13 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
       />
 
       {selectedConnectProvider ? (
-        <div className="provider-connect-dialog" role="dialog" aria-modal="true">
-          <header className="provider-connect-dialog__top">
-            <Button type="text" aria-label={providerCopy.backAria || "Back"} icon={<ArrowLeftOutlined />} onClick={client.cancelProviderConnect} />
-            <Button type="text" aria-label={providerCopy.closeAria || "Close"} icon={<CloseOutlined />} onClick={client.cancelProviderConnect} />
-          </header>
-          <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveProviderConnection()}>
-            <div className="provider-connect-dialog__title">
-              <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedConnectProvider)}</span>
-              <h3>{typeof providerCopy.dialogTitle === "function" ? providerCopy.dialogTitle(selectedConnectProvider.name) : `Connect ${selectedConnectProvider.name}`}</h3>
-            </div>
-            <p>{typeof providerCopy.dialogDescription === "function" ? providerCopy.dialogDescription(selectedConnectProvider.name) : ""}</p>
-            <Form.Item className="provider-connect-field" label={providerCopy.nameLabel || "Name"}>
-              <Input value={state.connectForm.name} placeholder={selectedConnectProvider.name} autoComplete="off" onChange={(event) => (state.connectForm.name = event.target.value)} />
-            </Form.Item>
-            {selectedConnectProviderRequiresApiKey ? (
-              <Form.Item className="provider-connect-field" label={typeof providerCopy.apiKeyLabel === "function" ? providerCopy.apiKeyLabel(selectedConnectProvider.name) : "API key"}>
-                <Input.Password value={state.connectForm.apiKey} placeholder="API key" autoComplete="off" onChange={(event) => (state.connectForm.apiKey = event.target.value)} />
-              </Form.Item>
-            ) : null}
-            <Button type="link" className="provider-connect-dialog__advanced" onClick={() => (state.connectForm.showAdvanced = !state.connectForm.showAdvanced)}>
-              {state.connectForm.showAdvanced ? providerCopy.advancedHide || "Hide advanced" : providerCopy.advancedShow || "Advanced"}
-            </Button>
-            {state.connectForm.showAdvanced ? (
-              <Form.Item className="provider-connect-field" label="Base URL">
-                <Input value={state.connectForm.baseUrl} spellCheck={false} onChange={(event) => (state.connectForm.baseUrl = event.target.value)} />
-              </Form.Item>
-            ) : null}
-            <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.providersLoading} disabled={state.providersLoading}>
-              {providerCopy.submit || "Save"}
-            </Button>
-          </Form>
-        </div>
+        <ProviderConnectDialog
+          provider={selectedConnectProvider}
+          state={state}
+          providerCopy={providerCopy}
+          onCancel={client.cancelProviderConnect}
+          onSave={client.saveProviderConnection}
+        />
       ) : null}
     </section>
   );

@@ -65,6 +65,7 @@ const [
   authProviderCard,
   availableProvidersSection,
   connectedProvidersSection,
+  providerConnectDialog,
   logSettings,
   providerSettings,
   modelSettings,
@@ -109,6 +110,7 @@ const [
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
   read("src/settings/connectedProvidersSection.tsx"),
+  read("src/settings/providerConnectDialog.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -244,6 +246,7 @@ assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider setti
 assertIncludes(providerSettings, "AuthProviderCard", "provider settings delegates auth provider card");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
+assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");
@@ -260,6 +263,12 @@ assertIncludes(connectedProvidersSection, "onSetCredential(provider, value)", "c
 assertIncludes(connectedProvidersSection, "onDeleteCredential(provider, effectiveCredentialId)", "connected providers keeps credential deletion action");
 assertIncludes(connectedProvidersSection, "onDisconnect(provider)", "connected providers keeps disconnect action");
 assertIncludes(connectedProvidersSection, "provider-row__credential--missing", "connected providers keeps missing credential state");
+assertIncludes(providerConnectDialog, "role=\"dialog\"", "provider connect dialog keeps dialog role");
+assertIncludes(providerConnectDialog, "provider.requires_api_key !== false || provider.api_key_optional === true", "provider connect dialog keeps API key requirement rule");
+assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.connectForm.showAdvanced", "provider connect dialog keeps advanced toggle");
+assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
+assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
+assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
