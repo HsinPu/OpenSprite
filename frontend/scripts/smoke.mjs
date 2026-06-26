@@ -320,7 +320,7 @@ assertIncludes(providerConstants, "logoutReset: { path: \"\" }", "provider const
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
 assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
 assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
-assertIncludes(providerHelpers, "providerAuthKeyForId(provider?.provider)", "provider helpers delegate provider auth key lookup");
+assertIncludes(providerHelpers, "providerAuthKeyForId(providerCatalogKey(provider))", "provider helpers delegate provider auth key lookup through shared provider key resolver");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");

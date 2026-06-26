@@ -19,7 +19,7 @@ export function providerAuthVisible(state: AnyRecord, providerId: string, auth: 
 }
 
 export function providerAuthKey(provider: AnyRecord) {
-  return providerAuthKeyForId(provider?.provider);
+  return providerAuthKeyForId(providerCatalogKey(provider));
 }
 
 export function providerAuthConfigured(state: AnyRecord, provider: AnyRecord) {
