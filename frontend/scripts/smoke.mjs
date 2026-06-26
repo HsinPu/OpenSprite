@@ -52,6 +52,7 @@ const [
   mcpSettings,
   networkSettings,
   scheduleSettings,
+  searchSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -72,6 +73,7 @@ const [
   read("src/settings/mcpSettings.tsx"),
   read("src/settings/networkSettings.tsx"),
   read("src/settings/scheduleSettings.tsx"),
+  read("src/settings/searchSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -150,9 +152,11 @@ assertIncludes(networkSettings, "form.httpProxy", "network settings keeps HTTP p
 assertIncludes(networkSettings, "form.httpsProxy", "network settings keeps HTTPS proxy field");
 assertIncludes(networkSettings, "form.noProxy", "network settings keeps no proxy field");
 assertNotIncludes(networkSettings, "state.networkForm.enabled", "network settings does not show unsupported enabled field");
-assertIncludes(app, "form.jinaApiKey", "search settings keeps Jina API key field");
-assertIncludes(app, "form.searxngEngines", "search settings keeps SearXNG engine selection");
-assertIncludes(app, "form.searxngCategories", "search settings keeps SearXNG category selection");
+assertIncludes(searchSettings, "client.saveSearchSettings", "search settings keeps save action");
+assertIncludes(searchSettings, "client.loadSearxngOptions", "search settings keeps SearXNG option load action");
+assertIncludes(searchSettings, "form.jinaApiKey", "search settings keeps Jina API key field");
+assertIncludes(searchSettings, "form.searxngEngines", "search settings keeps SearXNG engine selection");
+assertIncludes(searchSettings, "form.searxngCategories", "search settings keeps SearXNG category selection");
 assertIncludes(logSettings, "client.saveLogSettings", "log settings keeps save action");
 assertIncludes(logSettings, "form.retentionDays", "log settings keeps retention field");
 assertIncludes(logSettings, "form.logSystemPrompt", "log settings keeps system prompt toggle");
