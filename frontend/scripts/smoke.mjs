@@ -47,6 +47,7 @@ const [
   chatClient,
   providerSettingsActions,
   providerSettingsLoader,
+  providerSettingsRequests,
   providerAuthActions,
   providerAuthActionRunner,
   providerAuthConfigs,
@@ -110,6 +111,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/providerSettingsLoader.js"),
+  read("src/composables/providerSettingsRequests.js"),
   read("src/composables/useProviderAuthActions.js"),
   read("src/composables/providerAuthActionRunner.js"),
   read("src/composables/providerAuthConfigs.js"),
@@ -327,16 +329,19 @@ assertIncludes(providerSettingsActions, "loadProviderSettingsState(settingsState
 assertNotIncludes(providerSettingsActions, "requestSettingsJson(\"/api/settings/providers\")", "provider settings actions no longer own provider catalog request");
 assertNotIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions no longer own OAuth provider configs");
 assertNotIncludes(providerAuthActions, "const oauthProviderConfigs", "provider auth actions fold OAuth metadata into auth provider configs");
-assertIncludes(providerSettingsActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider settings actions reuse provider connect endpoint helper");
+assertIncludes(providerSettingsRequests, "export function requestProviderConnect", "provider settings requests centralize provider connect request");
+assertIncludes(providerSettingsRequests, "providerSettingsEndpoint(form.providerId, \"connect\")", "provider settings requests keep provider connect endpoint helper");
+assertIncludes(providerSettingsActions, "requestProviderConnect(requestSettingsJson, settingsState.connectForm)", "provider settings actions delegate provider connect request");
+assertNotIncludes(providerSettingsActions, "providerSettingsEndpoint(", "provider settings actions no longer own provider endpoint assembly");
 assertIncludes(providerSettingsActions, "createProviderConnectForm(provider)", "provider settings actions reuse provider connect form helper");
 assertIncludes(providerConnectForm, "export function createEmptyProviderConnectForm", "provider connect form centralizes empty form state");
 assertIncludes(providerConnectForm, "export function createProviderConnectForm", "provider connect form centralizes provider-derived form state");
 assertIncludes(providerConnectForm, "export function providerConnectPayloadFromForm", "provider connect form centralizes connect payload shape");
-assertIncludes(providerSettingsActions, "providerConnectPayloadFromForm(settingsState.connectForm)", "provider settings actions reuse connect payload helper");
+assertIncludes(providerSettingsRequests, "providerConnectPayloadFromForm(form)", "provider settings requests reuse connect payload helper");
 assertIncludes(providerConnectForm, "export function providerOAuthConnectPayload", "provider connect form centralizes OAuth connect payload shape");
 assertIncludes(providerAuthActions, "providerOAuthConnectPayload(provider, options)", "provider auth actions reuse OAuth connect payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialPayload", "provider connect form centralizes credential payload shape");
-assertIncludes(providerSettingsActions, "providerCredentialPayload(credentialId)", "provider settings actions reuse credential payload helper");
+assertIncludes(providerSettingsRequests, "providerCredentialPayload(credentialId)", "provider settings requests reuse credential payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialKey", "provider connect form centralizes credential provider key resolution");
 assertIncludes(providerSettingsActions, "providerCredentialKey(provider)", "provider settings actions reuse credential key helper");
 assertIncludes(useSettingsState, "connectForm: createEmptyProviderConnectForm()", "settings state reuses provider connect form defaults");
@@ -350,9 +355,15 @@ assertIncludes(settingsSectionLoaders, "loadCodexAuthStatus();", "settings secti
 assertIncludes(settingsSectionLoaders, "loadCopilotAuthStatus();", "settings section loaders keep Copilot auth refresh");
 assertIncludes(settingsSectionLoaders, "loadScheduleSettings();", "settings section loaders keep schedule settings refresh");
 assertIncludes(settingsSectionLoaders, "loadCronJobs();", "settings section loaders keep cron jobs refresh");
-assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
-assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
-assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");
+assertIncludes(providerSettingsRequests, "export function requestProviderDisconnect", "provider settings requests centralize provider disconnect request");
+assertIncludes(providerSettingsRequests, "export function requestProviderCredentialUpdate", "provider settings requests centralize provider credential update request");
+assertIncludes(providerSettingsRequests, "export function requestProviderCredentialDelete", "provider settings requests centralize provider credential delete request");
+assertIncludes(providerSettingsRequests, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings requests keep provider disconnect endpoint helper");
+assertIncludes(providerSettingsRequests, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings requests keep provider credential endpoint helper");
+assertIncludes(providerSettingsRequests, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings requests keep credential endpoint helper");
+assertIncludes(providerSettingsActions, "requestProviderDisconnect(requestSettingsJson, provider)", "provider settings actions delegate provider disconnect request");
+assertIncludes(providerSettingsActions, "requestProviderCredentialUpdate(requestSettingsJson, provider, credentialId)", "provider settings actions delegate provider credential update request");
+assertIncludes(providerSettingsActions, "requestProviderCredentialDelete(requestSettingsJson, providerKey, credentialId)", "provider settings actions delegate provider credential delete request");
 assertIncludes(providerMutationRunner, "export async function runProviderMutation", "provider mutation runner centralizes provider mutation lifecycle");
 assertIncludes(providerMutationRunner, "settingsState.providersLoading = true", "provider mutation runner sets provider loading");
 assertIncludes(providerMutationRunner, "settingsState.providersNotice = \"\"", "provider mutation runner clears provider notice");

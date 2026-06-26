@@ -1,11 +1,14 @@
-import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
 import { loadProviderSettingsState } from "./providerSettingsLoader";
 import { runProviderMutation } from "./providerMutationRunner";
 import {
+  requestProviderConnect,
+  requestProviderCredentialDelete,
+  requestProviderCredentialUpdate,
+  requestProviderDisconnect,
+} from "./providerSettingsRequests";
+import {
   createProviderConnectForm,
-  providerConnectPayloadFromForm,
   providerCredentialKey,
-  providerCredentialPayload,
 } from "./providerConnectForm";
 
 export function useProviderSettingsActions({
@@ -36,10 +39,7 @@ export function useProviderSettingsActions({
       return;
     }
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
-      await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
-        method: "PUT",
-        body: JSON.stringify(providerConnectPayloadFromForm(settingsState.connectForm)),
-      });
+      await requestProviderConnect(requestSettingsJson, settingsState.connectForm);
       setSettingsSuccess("providersNotice", copy.value.notices.providerConnected);
       cancelProviderConnect();
       await refreshProviderState();
@@ -48,9 +48,7 @@ export function useProviderSettingsActions({
 
   async function disconnectProvider(provider) {
     await runProviderMutation(settingsState, copy.value.notices.providerDisconnectFailed, async () => {
-      const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "disconnect"), {
-        method: "POST",
-      });
+      const payload = await requestProviderDisconnect(requestSettingsJson, provider);
       setSettingsSuccess("providersNotice", copy.value.notices.providerDisconnected(provider.name, payload.restart_required));
       await refreshProviderState();
     });
@@ -61,10 +59,7 @@ export function useProviderSettingsActions({
       return;
     }
     await runProviderMutation(settingsState, copy.value.notices.providerCredentialUpdateFailed, async () => {
-      const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "credential"), {
-        method: "POST",
-        body: JSON.stringify(providerCredentialPayload(credentialId)),
-      });
+      const payload = await requestProviderCredentialUpdate(requestSettingsJson, provider, credentialId);
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
       await refreshProviderState();
     });
@@ -76,10 +71,7 @@ export function useProviderSettingsActions({
       return;
     }
     await runProviderMutation(settingsState, copy.value.notices.providerCredentialDeleteFailed, async () => {
-      await requestSettingsJson(
-        providerCredentialEndpoint(providerKey, credentialId),
-        { method: "DELETE" },
-      );
+      await requestProviderCredentialDelete(requestSettingsJson, providerKey, credentialId);
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);
       await refreshProviderState();
     });
