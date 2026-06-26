@@ -33,6 +33,10 @@ export function providerAuthInitialState(keys: ReturnType<typeof providerAuthSta
   };
 }
 
+function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string, unknown> = {}) {
+  return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
+}
+
 export function providerAuthRequestConfig(providerId: string, keys: ReturnType<typeof providerAuthStateKeys>) {
   return {
     providerId,
@@ -46,6 +50,18 @@ export function providerAuthRequestConfig(providerId: string, keys: ReturnType<t
 
 export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
+
+export function createProviderAuthInitialStates() {
+  return {
+    ...providerAuthInitialState(CODEX_AUTH_STATE_KEYS, providerDeviceAuthInitialState("deviceAuthId", {
+      expired: false,
+      expires_at: null,
+      account_id: "",
+      command: "",
+    })),
+    ...providerAuthInitialState(COPILOT_AUTH_STATE_KEYS, providerDeviceAuthInitialState("deviceCode")),
+  };
+}
 
 const PROVIDER_AUTH_KEYS: Record<string, string> = {
   [CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey,

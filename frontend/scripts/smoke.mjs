@@ -292,6 +292,8 @@ assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider co
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
 assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
+assertIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants centralize provider auth initial states");
+assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "provider constants share device auth initial state defaults");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
 assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
@@ -434,8 +436,9 @@ assertNotIncludes(providerAuthActions, "async function connectCodexProvider", "p
 assertNotIncludes(providerAuthActions, "async function connectCopilotProvider", "provider auth actions avoid unused Copilot-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions no longer own provider id fallback");
 assertNotIncludes(providerAuthActions, "connectOAuthProviderById", "provider auth actions avoid OAuth provider id wrapper");
-assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");
-assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "settings state initializes Copilot auth through provider metadata");
+assertIncludes(useSettingsState, "createProviderAuthInitialStates()", "settings state initializes provider auth through provider metadata");
+assertNotIncludes(useSettingsState, "deviceAuthId", "settings state avoids Codex device auth field ownership");
+assertNotIncludes(useSettingsState, "deviceCode", "settings state avoids Copilot device auth field ownership");
 assertIncludes(chatClient, "useProviderAuthActions({", "chat client delegates provider auth actions");
 assertIncludes(chatClient, "clearProviderAuthPollTimers();", "chat client clears delegated provider auth poll timers");
 assertNotIncludes(chatClient, "const providerAuthPollTimers", "chat client no longer owns provider auth poll timers");

@@ -4,11 +4,7 @@ import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDe
 import { createEmptyProviderConnectForm } from "./providerConnectForm";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
-import {
-  CODEX_AUTH_STATE_KEYS,
-  COPILOT_AUTH_STATE_KEYS,
-  providerAuthInitialState,
-} from "../settings/providerConstants";
+import { createProviderAuthInitialStates } from "../settings/providerConstants";
 
 export function createSettingsForm(state) {
   return {
@@ -50,26 +46,7 @@ export function createSettingsState() {
       available: [],
     },
     credentials: {},
-    ...providerAuthInitialState(CODEX_AUTH_STATE_KEYS, {
-      configured: false,
-      expired: false,
-      expires_at: null,
-      account_id: "",
-      path: "",
-      command: "",
-      verificationUri: "",
-      userCode: "",
-      deviceAuthId: "",
-      pollIntervalSeconds: 5,
-    }),
-    ...providerAuthInitialState(COPILOT_AUTH_STATE_KEYS, {
-      configured: false,
-      path: "",
-      verificationUri: "",
-      userCode: "",
-      deviceCode: "",
-      pollIntervalSeconds: 5,
-    }),
+    ...createProviderAuthInitialStates(),
     connectForm: createEmptyProviderConnectForm(),
     updateLoading: false,
     updateError: "",
