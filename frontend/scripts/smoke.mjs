@@ -44,6 +44,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  shellLayout,
   authGate,
   chatPanel,
   confirmDialog,
@@ -77,6 +78,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/composables/useShellLayout.ts"),
   read("src/components/authGate.tsx"),
   read("src/components/chatPanel.tsx"),
   read("src/components/confirmDialog.tsx"),
@@ -138,6 +140,12 @@ assertIncludes(appProviders, "ConfigProvider", "Ant Design provider");
 assertIncludes(appProviders, "<AntdApp>{children}</AntdApp>", "Ant Design app context provider");
 assertIncludes(appProviders, "colorPrimary: \"#2563eb\"", "Ant Design theme token retained");
 assertIncludes(app, "useReactiveStore", "React subscription bridge");
+assertIncludes(app, "useShellLayout(client)", "app shell delegates resize layout logic");
+assertIncludes(shellLayout, "SIDEBAR_WIDTH_DEFAULT = 268", "shell layout keeps sidebar default width");
+assertIncludes(shellLayout, "TRACE_WIDTH_MIN = 440", "shell layout keeps trace minimum width");
+assertIncludes(shellLayout, "window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY", "shell layout persists sidebar width");
+assertIncludes(shellLayout, "setSidebarWidth(clampSidebarWidth(moveEvent.clientX))", "shell layout keeps sidebar drag math");
+assertIncludes(shellLayout, "setTraceInspectorWidth(clampTraceWidth(window.innerWidth - moveEvent.clientX))", "shell layout keeps trace drag math");
 assertIncludes(settingsModal, "useTransition", "settings modal uses transition for deferred content");
 assertIncludes(app, "useChatClient", "existing chat client flow reused");
 assertIncludes(app, "SidebarNav", "React sidebar shell");
