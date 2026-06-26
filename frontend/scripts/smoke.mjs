@@ -293,6 +293,8 @@ assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "pro
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
+assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider constants keep Codex auth key internal");
+assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider constants keep Copilot auth key internal");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
 assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
 assertIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants centralize provider auth initial states");
@@ -300,6 +302,8 @@ assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "pr
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
+assertNotIncludes(providerConstants, "export const CODEX_AUTH_STATE_KEYS", "provider constants keep Codex auth state keys internal");
+assertNotIncludes(providerConstants, "export const COPILOT_AUTH_STATE_KEYS", "provider constants keep Copilot auth state keys internal");
 assertIncludes(providerConstants, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId", "provider constants derive default auth provider from metadata");
 assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
