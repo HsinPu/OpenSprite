@@ -49,6 +49,7 @@ const [
   providerSettings,
   modelSettings,
   channelSettings,
+  generalSettings,
   mcpSettings,
   networkSettings,
   scheduleSettings,
@@ -70,6 +71,7 @@ const [
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
   read("src/settings/channelSettings.tsx"),
+  read("src/settings/generalSettings.tsx"),
   read("src/settings/mcpSettings.tsx"),
   read("src/settings/networkSettings.tsx"),
   read("src/settings/scheduleSettings.tsx"),
@@ -123,14 +125,20 @@ assertIncludes(app, "viewTraceForRun", "assistant message trace action");
 assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
 assertIncludes(app, "client.currentRuns.value", "run history uses active session runs");
-assertIncludes(app, "client.settingsState", "settings API state remains wired");
+assertIncludes(generalSettings, "client.settingsState", "settings API state remains wired through settings modules");
 assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings save action");
 assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");
 assertIncludes(mcpSettings, "client.saveMcpServer", "MCP settings action");
 assertIncludes(modelSettings, "client.selectModel", "model selection action");
-assertIncludes(app, "client.clearWebSessions()", "web history cleanup action");
-assertIncludes(app, "form.externalChatId", "general settings keeps external chat id control");
-assertIncludes(app, "client.runUpdate", "general settings keeps update apply action");
+assertIncludes(app, "client.clearWebSessions()", "web history cleanup action owner");
+assertIncludes(generalSettings, "onClick={clearWebSessions}", "general settings keeps web history cleanup button");
+assertIncludes(generalSettings, "form.externalChatId", "general settings keeps external chat id control");
+assertIncludes(generalSettings, "client.runUpdate", "general settings keeps update apply action");
+assertIncludes(generalSettings, "client.saveConnectionSettings", "general settings keeps connection save action");
+assertIncludes(generalSettings, "client.toggleSettingsConnection", "general settings keeps gateway toggle action");
+assertIncludes(generalSettings, "client.loadUpdateStatus", "general settings keeps update check action");
+assertIncludes(generalSettings, "form.showRunTrace", "general settings keeps run trace visibility toggle");
+assertIncludes(generalSettings, "form.colorScheme", "general settings keeps color scheme control");
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
@@ -170,10 +178,10 @@ assertIncludes(browserSettings, "client.runBrowserInstall", "browser settings ke
 assertNotIncludes(browserSettings, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
 assertIncludes(app, "shortcut-keys", "shortcut settings uses parity layout");
 assertIncludes(settingsPrimitives, "function SettingsCard", "settings pages use Ant card helper");
-assertIncludes(app, "<SettingsCard className=\"settings-card--form\"", "settings form cards use Ant card helper");
-assertIncludes(app, "<Select", "settings pages use Ant Select controls");
-assertIncludes(app, "<Switch", "settings pages use Ant Switch controls");
-assertIncludes(app, "<Input", "settings pages use Ant Input controls");
+assertIncludes(generalSettings, "<SettingsCard className=\"settings-card--form\"", "general settings form cards use Ant card helper");
+assertIncludes(generalSettings, "<Select", "general settings uses Ant Select controls");
+assertIncludes(generalSettings, "<Switch", "general settings uses Ant Switch controls");
+assertIncludes(generalSettings, "<Input", "general settings uses Ant Input controls");
 assertIncludes(app, "<Checkbox", "sidebar selection uses Ant Checkbox controls");
 assertIncludes(app, "<Segmented", "sidebar filters use Ant Segmented controls");
 assertNotIncludes(app, "<button", "app shell avoids raw button elements");
