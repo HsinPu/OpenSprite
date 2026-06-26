@@ -344,7 +344,9 @@ assertIncludes(providerAuthActions, "loadProviderAuthStatusById,", "provider aut
 assertNotIncludes(providerAuthActions, "async function loadProviderAuthStatus(config)", "provider auth actions avoid status loader wrapper");
 assertNotIncludes(providerAuthActions, "async function loadCodexAuthStatus", "provider auth actions avoid Codex-specific status wrapper");
 assertNotIncludes(providerAuthActions, "async function loadCopilotAuthStatus", "provider auth actions avoid Copilot-specific status wrapper");
-assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
+assertIncludes(providerAuthConfigs, "function normalizeConfiguredPathStatus", "provider auth configs share configured/path status normalization");
+assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload", "provider auth configs keep Codex status normalization inside provider config");
+assertIncludes(providerAuthConfigs, "normalizeStatus: normalizeConfiguredPathStatus", "provider auth configs reuse shared Copilot status normalization");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthStatus", "provider auth requests centralize auth status request");
 assertIncludes(providerAuthRequests, "requestSettingsJson(config.endpoint)", "provider auth requests keep shared auth status request");
 assertIncludes(providerAuthActions, "requestProviderAuthStatus(requestSettingsJson, config)", "provider auth actions delegate auth status request");
