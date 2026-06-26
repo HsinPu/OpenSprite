@@ -312,8 +312,10 @@ assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider 
 assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
 assertIncludes(providerAuthSections, "...CODEX_AUTH_STATE_KEYS", "provider auth sections reuse Codex auth state keys");
 assertIncludes(providerAuthSections, "...COPILOT_AUTH_STATE_KEYS", "provider auth sections reuse Copilot auth state keys");
-assertIncludes(providerAuthSections, "defaultName: CODEX_PROVIDER_NAME", "provider auth sections reuse Codex provider name");
-assertIncludes(providerAuthSections, "defaultName: COPILOT_PROVIDER_NAME", "provider auth sections reuse Copilot provider name");
+assertIncludes(providerAuthSections, "providerName: CODEX_PROVIDER_NAME", "provider auth sections reuse Codex provider name");
+assertIncludes(providerAuthSections, "providerName: COPILOT_PROVIDER_NAME", "provider auth sections reuse Copilot provider name");
+assertIncludes(providerAuthSections, "`${config.providerName} auth`", "provider auth sections derive default title from provider name");
+assertIncludes(providerAuthSections, "authCopy.name || config.providerName", "provider auth sections derive default name from provider name");
 assertIncludes(providerAuthSections, "client.loadProviderAuthStatusById(config.providerId)", "provider auth sections refresh through provider id");
 assertIncludes(providerAuthSections, "client.startProviderAuthLoginById(config.providerId)", "provider auth sections login through provider id");
 assertIncludes(providerAuthSections, "client.logoutProviderAuthById(config.providerId)", "provider auth sections logout through provider id");
