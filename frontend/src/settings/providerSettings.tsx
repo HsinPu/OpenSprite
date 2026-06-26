@@ -1,12 +1,7 @@
-import {
-  type AnyRecord,
-  authStatusLabel,
-  codexDescription,
-  copilotDescription,
-  providerAuthVisible,
-} from "./providerHelpers";
+import type { AnyRecord } from "./providerHelpers";
 import { AvailableProvidersSection } from "./availableProvidersSection";
 import { ConnectedProvidersSection } from "./connectedProvidersSection";
+import { providerAuthSections } from "./providerAuthSections";
 import { ProviderAuthSection } from "./providerAuthSection";
 import { ProviderConnectDialog } from "./providerConnectDialog";
 import { SettingsStatus } from "./settingsPrimitives";
@@ -38,44 +33,7 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
   const providerCopy = copy.settings.providers || {};
   const selectedConnectProvider =
     [...(providers.available || []), ...(providers.connected || [])].find((provider: AnyRecord) => provider.id === state.connectForm.providerId) || null;
-  const authSections = [
-    {
-      key: "codex",
-      visible: providerAuthVisible(state, "openai-codex", state.codexAuth, state.codexAuthLoading, state.codexAuthNotice, state.codexAuthError),
-      title: providerCopy.codexAuth?.title || "OpenAI Codex auth",
-      notice: state.codexAuthNotice,
-      error: state.codexAuthError,
-      mark: "Cx",
-      name: providerCopy.codexAuth?.name || "OpenAI Codex",
-      status: authStatusLabel(providerCopy.codexAuth, state.codexAuth, state.codexAuthLoading),
-      description: codexDescription(copy, state),
-      loading: state.codexAuthLoading,
-      configured: state.codexAuth?.configured,
-      copy: providerCopy.codexAuth || {},
-      auth: state.codexAuth || {},
-      onRefresh: client.loadCodexAuthStatus,
-      onLogin: client.startCodexAuthLogin,
-      onLogout: client.logoutCodexAuth,
-    },
-    {
-      key: "copilot",
-      visible: providerAuthVisible(state, "copilot", state.copilotAuth, state.copilotAuthLoading, state.copilotAuthNotice, state.copilotAuthError),
-      title: providerCopy.copilotAuth?.title || "GitHub Copilot auth",
-      notice: state.copilotAuthNotice,
-      error: state.copilotAuthError,
-      mark: "Gh",
-      name: providerCopy.copilotAuth?.name || "GitHub Copilot",
-      status: authStatusLabel(providerCopy.copilotAuth, state.copilotAuth, state.copilotAuthLoading),
-      description: copilotDescription(copy, state),
-      loading: state.copilotAuthLoading,
-      configured: state.copilotAuth?.configured,
-      copy: providerCopy.copilotAuth || {},
-      auth: state.copilotAuth || {},
-      onRefresh: client.loadCopilotAuthStatus,
-      onLogin: client.startCopilotAuthLogin,
-      onLogout: client.logoutCopilotAuth,
-    },
-  ];
+  const authSections = providerAuthSections(copy, state, client);
 
   return (
     <section className="settings-page">

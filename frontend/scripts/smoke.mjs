@@ -64,6 +64,7 @@ const [
   workStateCard,
   authProviderCard,
   providerAuthSection,
+  providerAuthSections,
   providerEmptyState,
   providerHelpers,
   availableProviderRow,
@@ -114,6 +115,7 @@ const [
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
+  read("src/settings/providerAuthSections.ts"),
   read("src/settings/providerEmptyState.tsx"),
   read("src/settings/providerHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
@@ -251,11 +253,15 @@ assertIncludes(generalSettings, "client.loadUpdateStatus", "general settings kee
 assertIncludes(generalSettings, "form.showRunTrace", "general settings keeps run trace visibility toggle");
 assertIncludes(generalSettings, "form.colorScheme", "general settings keeps color scheme control");
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
-assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
-assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(providerSettings, "ProviderAuthSection", "provider settings delegates auth provider section");
-assertIncludes(providerSettings, "providerAuthVisible(state, \"openai-codex\"", "provider settings keeps Codex auth visibility helper");
-assertIncludes(providerSettings, "providerAuthVisible(state, \"copilot\"", "provider settings keeps Copilot auth visibility helper");
+assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
+assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
+assertIncludes(providerAuthSections, "providerId: \"openai-codex\"", "provider auth sections keep Codex auth provider");
+assertIncludes(providerAuthSections, "providerId: \"copilot\"", "provider auth sections keep Copilot auth provider");
+assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "provider auth sections keep Codex refresh action");
+assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
+assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
+assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
