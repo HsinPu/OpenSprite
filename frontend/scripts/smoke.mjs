@@ -406,8 +406,8 @@ assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", 
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId))", "provider auth actions reuse auth provider config lookup for OAuth connect");
-assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");
-assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot OAuth wrapper");
+assertNotIncludes(providerAuthActions, "async function connectCodexProvider", "provider auth actions avoid unused Codex-specific OAuth wrapper");
+assertNotIncludes(providerAuthActions, "async function connectCopilotProvider", "provider auth actions avoid unused Copilot-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions no longer own provider id fallback");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, provider?.id)", "provider auth actions route OAuth connect through provider id resolver");
 assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");

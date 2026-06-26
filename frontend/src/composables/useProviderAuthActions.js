@@ -84,14 +84,6 @@ export function useProviderAuthActions({
     return connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
-  async function connectCodexProvider(provider) {
-    return connectOAuthProviderById(provider, CODEX_PROVIDER_ID);
-  }
-
-  async function connectCopilotProvider(provider) {
-    return connectOAuthProviderById(provider, COPILOT_PROVIDER_ID);
-  }
-
   async function connectOAuthProvider(provider) {
     await connectOAuthProviderById(provider, provider?.id);
   }
@@ -177,9 +169,7 @@ export function useProviderAuthActions({
   return {
     loadCodexAuthStatus,
     loadCopilotAuthStatus,
-    connectCodexProvider,
     connectOAuthProvider,
-    connectCopilotProvider,
     clearProviderAuthPollTimers,
     startCodexAuthLogin,
     logoutCodexAuth,
