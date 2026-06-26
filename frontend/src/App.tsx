@@ -1,4 +1,4 @@
-import React, { CSSProperties, useEffect, useMemo, useState, useTransition } from "react";
+import React, { CSSProperties, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   App as AntdApp,
@@ -9,30 +9,22 @@ import {
   Form,
   Input,
   InputNumber,
-  Layout,
-  Menu,
   Modal,
   Segmented,
   Space,
-  Spin,
   Switch,
   Tag,
   Typography,
   theme,
 } from "antd";
 import {
-  ApiOutlined,
-  BranchesOutlined,
   CloseOutlined,
   EyeOutlined,
-  HistoryOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
   SendOutlined,
-  SettingOutlined,
   StopOutlined,
-  ToolOutlined,
 } from "@ant-design/icons";
 import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
@@ -41,17 +33,7 @@ import { artifactStatusLabel, artifactTypeLabel, normalizeMessages } from "./com
 import { MessageTextRenderer } from "./components/messageMarkdown";
 import { RunInspector } from "./components/runInspector";
 import { ToastStack } from "./components/toastStack";
-import { BrowserSettings } from "./settings/browserSettings";
-import { ChannelSettings } from "./settings/channelSettings";
-import { GeneralSettings } from "./settings/generalSettings";
-import { LogSettings } from "./settings/logSettings";
-import { McpSettings } from "./settings/mcpSettings";
-import { ModelSettings } from "./settings/modelSettings";
-import { NetworkSettings } from "./settings/networkSettings";
-import { ProviderSettings } from "./settings/providerSettings";
-import { ScheduleSettings } from "./settings/scheduleSettings";
-import { SearchSettings } from "./settings/searchSettings";
-import { ShortcutSettings } from "./settings/shortcutSettings";
+import { SettingsModal } from "./settings/settingsModal";
 
 type AnyRecord = Record<string, any>;
 type Client = ReturnType<typeof useChatClient>;
@@ -769,190 +751,6 @@ function AuthGate({ client }: { client: Client }) {
     </section>
   );
 }
-
-function SettingsModal({ client, clearWebSessions }: { client: Client; clearWebSessions: () => void }) {
-  const copy = client.copy.value;
-  const isOpen = client.settingsOpen.value;
-  const section = client.settingsSection.value;
-  const [renderedSection, setRenderedSection] = useState(section);
-  const [contentReady, setContentReady] = useState(false);
-  const [contentPending, startSettingsTransition] = useTransition();
-
-  useEffect(() => {
-    if (!isOpen) {
-      setContentReady(false);
-      setRenderedSection(section);
-      return undefined;
-    }
-
-    let cancelled = false;
-    let frameId: number | null = null;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const renderContent = () => {
-      if (cancelled) {
-        return;
-      }
-      startSettingsTransition(() => {
-        setRenderedSection(section);
-        setContentReady(true);
-      });
-    };
-
-    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-      frameId = window.requestAnimationFrame(() => {
-        timeoutId = window.setTimeout(renderContent, 0);
-      });
-    } else {
-      timeoutId = setTimeout(renderContent, 0);
-    }
-
-    return () => {
-      cancelled = true;
-      if (frameId !== null && typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
-        window.cancelAnimationFrame(frameId);
-      }
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [isOpen, section, startSettingsTransition]);
-
-  if (!isOpen) {
-    return null;
-  }
-
-  const showDeferredLoading = !contentReady || contentPending || renderedSection !== section;
-
-  return (
-    <Modal
-      className="settings-modal settings-modal--ant"
-      open={isOpen}
-      centered
-      width="min(960px, calc(100vw - 36px))"
-      footer={null}
-      closable={false}
-      onCancel={client.closeSettings}
-      styles={{ body: { padding: 0 } }}
-    >
-      <Layout className="settings-panel settings-panel--ant" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-        <Layout.Sider width={200} className="settings-nav" theme="light">
-          <SettingsNav copy={copy} section={section} selectSection={client.selectSettingsSection} />
-        </Layout.Sider>
-        <Layout.Content className="settings-content">
-          <header className="settings-content__header">
-            <Typography.Title id="settingsTitle" level={4}>
-              {client.settingsTitle.value}
-            </Typography.Title>
-            <Button className="settings-panel__close" type="text" aria-label={copy.settings.closeAria} icon={<CloseOutlined />} onClick={client.closeSettings}>
-              {copy.settings.close}
-            </Button>
-          </header>
-          {showDeferredLoading ? (
-            <section className="settings-page settings-page--loading" aria-live="polite">
-              <Spin />
-              <span>{copy.settings?.loading || "Loading settings..."}</span>
-            </section>
-          ) : renderSettingsSection(renderedSection, client, clearWebSessions, copy)}
-        </Layout.Content>
-      </Layout>
-    </Modal>
-  );
-}
-
-function renderSettingsSection(
-  section: string,
-  client: Client,
-  clearWebSessions: () => void,
-  copy: AnyRecord,
-) {
-  switch (section) {
-    case "providers":
-      return <ProviderSettings client={client} />;
-    case "models":
-      return <ModelSettings client={client} />;
-    case "channels":
-      return <ChannelSettings client={client} />;
-    case "mcp":
-      return <McpSettings client={client} />;
-    case "schedule":
-      return <ScheduleSettings client={client} />;
-    case "network":
-      return <NetworkSettings client={client} />;
-    case "search":
-      return <SearchSettings client={client} />;
-    case "browser":
-      return <BrowserSettings client={client} />;
-    case "log":
-      return <LogSettings client={client} />;
-    case "shortcuts":
-      return <ShortcutSettings copy={copy} />;
-    case "general":
-    default:
-      return <GeneralSettings client={client} clearWebSessions={clearWebSessions} />;
-  }
-}
-
-function SettingsNav({
-  copy,
-  section,
-  selectSection,
-}: {
-  copy: AnyRecord;
-  section: string;
-  selectSection: (section: string) => void;
-}) {
-  const groups = [
-    {
-      label: copy.settings.web,
-      items: [
-        { section: "general", icon: <SettingOutlined />, title: copy.settingsTitles.general },
-        { section: "shortcuts", icon: <BranchesOutlined />, title: copy.settingsTitles.shortcuts },
-      ],
-    },
-    {
-      label: copy.settings.server,
-      items: [
-        { section: "providers", icon: <ApiOutlined />, title: copy.settingsTitles.providers },
-        { section: "models", icon: <BranchesOutlined />, title: copy.settingsTitles.models },
-        { section: "channels", icon: <SendOutlined />, title: copy.settingsTitles.channels },
-        { section: "mcp", icon: <ToolOutlined />, title: copy.settingsTitles.mcp },
-        { section: "schedule", icon: <HistoryOutlined />, title: copy.settingsTitles.schedule },
-        { section: "network", icon: <BranchesOutlined />, title: copy.settingsTitles.network },
-        { section: "search", icon: <EyeOutlined />, title: copy.settingsTitles.search },
-        { section: "browser", icon: <EyeOutlined />, title: copy.settingsTitles.browser },
-        { section: "log", icon: <HistoryOutlined />, title: copy.settingsTitles.log },
-      ],
-    },
-  ];
-
-  const menuItems = groups.map((group) => ({
-    key: group.label,
-    label: group.label,
-    type: "group" as const,
-    children: group.items.map((item) => ({
-      key: item.section,
-      icon: <span className="settings-nav__icon" aria-hidden="true">{item.icon}</span>,
-      label: item.title,
-    })),
-  }));
-
-  return (
-    <div className="settings-nav__inner" aria-label="Settings sections">
-      <Menu
-        className="settings-nav__menu"
-        mode="inline"
-        selectedKeys={[section]}
-        items={menuItems}
-        onClick={({ key }) => selectSection(String(key))}
-      />
-      <div className="settings-nav__footer">
-        <strong>OpenSprite Web</strong>
-        <span>{copy.settings.version}</span>
-      </div>
-    </div>
-  );
-}
-
 
 function copyText(value: any, fallback: string) {
   if (typeof value === "string" && value.trim()) {

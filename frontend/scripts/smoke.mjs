@@ -54,6 +54,7 @@ const [
   networkSettings,
   scheduleSettings,
   searchSettings,
+  settingsModal,
   shortcutSettings,
   settingsPrimitives,
 ] = await Promise.all([
@@ -77,6 +78,7 @@ const [
   read("src/settings/networkSettings.tsx"),
   read("src/settings/scheduleSettings.tsx"),
   read("src/settings/searchSettings.tsx"),
+  read("src/settings/settingsModal.tsx"),
   read("src/settings/shortcutSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
@@ -115,7 +117,7 @@ assertIncludes(main, "createRoot", "React root mount");
 assertIncludes(main, "antd/dist/reset.css", "Ant Design reset stylesheet");
 assertIncludes(app, "ConfigProvider", "Ant Design provider");
 assertIncludes(app, "useReactiveStore", "React subscription bridge");
-assertIncludes(app, "useTransition", "settings modal uses transition for deferred content");
+assertIncludes(settingsModal, "useTransition", "settings modal uses transition for deferred content");
 assertIncludes(app, "useChatClient", "existing chat client flow reused");
 assertIncludes(app, "SidebarNav", "React sidebar shell");
 assertIncludes(app, "ChatPanel", "React chat panel");
@@ -191,13 +193,15 @@ assertNotIncludes(app, "<input", "app shell avoids raw input elements");
 assertNotIncludes(app, "<select", "app shell avoids raw select elements");
 assertNotIncludes(app, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
-assertIncludes(app, "SettingsNav", "settings modal uses the parity sidebar nav");
-assertIncludes(app, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
-assertIncludes(app, "selectedKeys={[section]}", "settings nav marks active section");
-assertIncludes(app, "selectSection(String(key))", "settings nav changes active section");
-assertIncludes(app, "renderSettingsSection", "settings modal renders only the active section");
-assertIncludes(app, "settings-page--loading", "settings modal defers heavy section content");
-assertNotIncludes(app, "const contentBySection", "settings modal should not build a section map during render");
+assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
+assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
+assertIncludes(settingsModal, "selectedKeys={[section]}", "settings nav marks active section");
+assertIncludes(settingsModal, "selectSection(String(key))", "settings nav changes active section");
+assertIncludes(settingsModal, "renderSettingsSection", "settings modal renders only the active section");
+assertIncludes(settingsModal, "settings-page--loading", "settings modal defers heavy section content");
+assertIncludes(settingsModal, "<GeneralSettings client={pageClient} clearWebSessions={clearWebSessions}", "settings modal wires general settings cleanup prop");
+assertIncludes(settingsModal, "<ProviderSettings client={pageClient}", "settings modal wires provider settings");
+assertNotIncludes(settingsModal, "const contentBySection", "settings modal should not build a section map during render");
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
 assertRegex(runInspector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
