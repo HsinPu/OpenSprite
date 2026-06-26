@@ -421,10 +421,12 @@ assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth c
 assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth configs keep Codex device auth id normalization");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth configs keep Copilot device code normalization");
+assertIncludes(providerAuthConfigs, "function normalizeAuthorizedDeviceAuth", "provider auth configs share authorized device auth normalization");
+assertIncludes(providerAuthConfigs, "function resetDeviceAuthLogout", "provider auth configs share device auth logout reset");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState", "provider auth configs reuse cleared device auth state");
 assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "provider auth state centralizes cleared device auth state");
-assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth configs keep Codex cleared device auth id state");
-assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
+assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, \"deviceAuthId\"", "provider auth configs keep Codex cleared device auth id state");
+assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, \"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[config.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider))", "provider auth actions reuse shared provider key helper for OAuth connect");
 assertNotIncludes(providerAuthActions, "connectOAuthBackedProvider", "provider auth actions avoid OAuth connect wrapper");

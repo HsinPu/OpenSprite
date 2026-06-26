@@ -7,6 +7,14 @@ import {
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
+function normalizeAuthorizedDeviceAuth(auth, currentAuth, deviceKey, extraAuth = {}) {
+  return { configured: Boolean(auth.configured), ...extraAuth, path: auth.path || currentAuth.path, ...clearedDeviceAuthState(deviceKey) };
+}
+
+function resetDeviceAuthLogout(auth, deviceKey, resetState = {}) {
+  return { ...auth, configured: false, ...resetState, ...clearedDeviceAuthState(deviceKey) };
+}
+
 export function createProviderAuthConfigs() {
   return {
     [CODEX_PROVIDER_ID]: {
@@ -22,22 +30,16 @@ export function createProviderAuthConfigs() {
         path: payload.path || "",
       }),
       normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, "deviceAuthId", "device_auth_id", { command: "" }),
-      normalizeAuthorized: (auth, currentAuth) => ({
-        configured: Boolean(auth.configured),
+      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, "deviceAuthId", {
         expired: Boolean(auth.expired),
         expires_at: auth.expires_at || null,
         account_id: auth.account_id || "",
-        path: auth.path || currentAuth.path,
-        ...clearedDeviceAuthState("deviceAuthId"),
       }),
-      resetLogout: (auth) => ({
-        ...auth,
-        configured: false,
+      resetLogout: (auth) => resetDeviceAuthLogout(auth, "deviceAuthId", {
         expired: false,
         expires_at: null,
         account_id: "",
         command: "",
-        ...clearedDeviceAuthState("deviceAuthId"),
       }),
     },
     [COPILOT_PROVIDER_ID]: {
@@ -50,12 +52,8 @@ export function createProviderAuthConfigs() {
         path: payload.path || "",
       }),
       normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, "deviceCode", "device_code"),
-      normalizeAuthorized: (auth, currentAuth) => ({
-        configured: Boolean(auth.configured),
-        path: auth.path || currentAuth.path,
-        ...clearedDeviceAuthState("deviceCode"),
-      }),
-      resetLogout: (auth) => ({ ...auth, configured: false, path: "", ...clearedDeviceAuthState("deviceCode") }),
+      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, "deviceCode"),
+      resetLogout: (auth) => resetDeviceAuthLogout(auth, "deviceCode", { path: "" }),
     },
   };
 }
