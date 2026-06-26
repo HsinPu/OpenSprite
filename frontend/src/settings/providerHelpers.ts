@@ -76,6 +76,11 @@ export function providerCredentials(state: AnyRecord, provider: AnyRecord) {
   return state.credentials?.[providerKey] || [];
 }
 
+export function selectedConnectProvider(providers: AnyRecord, providerId: string) {
+  return [...(providers.available || []), ...(providers.connected || [])]
+    .find((provider: AnyRecord) => provider.id === providerId) || null;
+}
+
 export function providerEffectiveCredentialId(provider: AnyRecord) {
   return provider?.credential_effective_id || provider?.effective_credential_id || provider?.credential_id || "";
 }

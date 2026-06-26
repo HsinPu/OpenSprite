@@ -1,4 +1,4 @@
-import type { AnyRecord } from "./providerHelpers";
+import { type AnyRecord, selectedConnectProvider } from "./providerHelpers";
 import { AvailableProvidersSection } from "./availableProvidersSection";
 import { ConnectedProvidersSection } from "./connectedProvidersSection";
 import { providerAuthSections } from "./providerAuthSections";
@@ -31,8 +31,7 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
   const state = client.settingsState;
   const providers = (state.providers || {}) as AnyRecord;
   const providerCopy = copy.settings.providers || {};
-  const selectedConnectProvider =
-    [...(providers.available || []), ...(providers.connected || [])].find((provider: AnyRecord) => provider.id === state.connectForm.providerId) || null;
+  const connectProvider = selectedConnectProvider(providers, state.connectForm.providerId);
   const authSections = providerAuthSections(copy, state, client);
 
   return (
@@ -63,9 +62,9 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
         onBeginConnect={client.beginProviderConnect}
       />
 
-      {selectedConnectProvider ? (
+      {connectProvider ? (
         <ProviderConnectDialog
-          provider={selectedConnectProvider}
+          provider={connectProvider}
           state={state}
           providerCopy={providerCopy}
           onCancel={client.cancelProviderConnect}

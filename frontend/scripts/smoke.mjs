@@ -448,6 +448,9 @@ assertNotIncludes(providerAuthActions, "requestSettingsJson(config.logoutEndpoin
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
+assertIncludes(providerHelpers, "export function selectedConnectProvider", "provider helpers centralize connect dialog provider selection");
+assertIncludes(providerSettings, "selectedConnectProvider(providers, state.connectForm.providerId)", "provider settings delegates connect provider selection");
+assertNotIncludes(providerSettings, "...(providers.available || []), ...(providers.connected || [])", "provider settings no longer owns connect provider list merge");
 assertIncludes(providerAuthSection, "SettingsSectionTitle", "provider auth section keeps section title");
 assertIncludes(providerAuthSection, "SettingsStatus message={notice}", "provider auth section keeps notice status");
 assertIncludes(providerAuthSection, "SettingsStatus message={error} type=\"error\"", "provider auth section keeps error status");
