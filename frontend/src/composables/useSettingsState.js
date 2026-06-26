@@ -1,6 +1,7 @@
 import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
+import { createEmptyProviderConnectForm } from "./providerConnectForm";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 import {
@@ -69,13 +70,7 @@ export function createSettingsState() {
       deviceCode: "",
       pollIntervalSeconds: 5,
     }),
-    connectForm: {
-      providerId: "",
-      name: "",
-      apiKey: "",
-      baseUrl: "",
-      showAdvanced: false,
-    },
+    connectForm: createEmptyProviderConnectForm(),
     updateLoading: false,
     updateError: "",
     updateNotice: "",

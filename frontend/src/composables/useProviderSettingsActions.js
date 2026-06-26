@@ -1,4 +1,5 @@
 import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
+import { createProviderConnectForm } from "./providerConnectForm";
 
 export function useProviderSettingsActions({
   settingsState,
@@ -45,13 +46,7 @@ export function useProviderSettingsActions({
     settingsState.providersNotice = "";
     settingsState.providersError = "";
     cancelChannelConnect();
-    settingsState.connectForm.providerId = provider.id;
-    settingsState.connectForm.name = provider.connected_count
-      ? `${provider.name} ${provider.connected_count + 1}`
-      : provider.name;
-    settingsState.connectForm.apiKey = "";
-    settingsState.connectForm.baseUrl = provider.default_base_url || provider.base_url || "";
-    settingsState.connectForm.showAdvanced = false;
+    Object.assign(settingsState.connectForm, createProviderConnectForm(provider));
   }
 
   async function saveProviderConnection() {

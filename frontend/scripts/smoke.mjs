@@ -48,6 +48,7 @@ const [
   providerSettingsActions,
   providerAuthActions,
   providerAuthState,
+  providerConnectForm,
   useSettingsState,
   confirmFlow,
   shellLayout,
@@ -104,6 +105,7 @@ const [
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useProviderAuthActions.js"),
   read("src/composables/providerAuthState.js"),
+  read("src/composables/providerConnectForm.js"),
   read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
@@ -307,6 +309,11 @@ assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "pro
 assertNotIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions no longer own OAuth provider configs");
 assertNotIncludes(providerAuthActions, "const oauthProviderConfigs", "provider auth actions fold OAuth metadata into auth provider configs");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider settings actions reuse provider connect endpoint helper");
+assertIncludes(providerSettingsActions, "createProviderConnectForm(provider)", "provider settings actions reuse provider connect form helper");
+assertIncludes(providerConnectForm, "export function createEmptyProviderConnectForm", "provider connect form centralizes empty form state");
+assertIncludes(providerConnectForm, "export function createProviderConnectForm", "provider connect form centralizes provider-derived form state");
+assertIncludes(useSettingsState, "connectForm: createEmptyProviderConnectForm()", "settings state reuses provider connect form defaults");
+assertIncludes(chatClient, "Object.assign(settingsState.connectForm, createEmptyProviderConnectForm())", "chat client reuses provider connect form reset");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
 assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");

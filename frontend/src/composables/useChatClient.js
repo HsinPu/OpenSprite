@@ -15,6 +15,7 @@ import { useModelSettingsActions } from "./useModelSettingsActions";
 import { useNetworkSettingsActions } from "./useNetworkSettingsActions";
 import { useProviderAuthActions } from "./useProviderAuthActions";
 import { useProviderSettingsActions } from "./useProviderSettingsActions";
+import { createEmptyProviderConnectForm } from "./providerConnectForm";
 import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
@@ -2518,11 +2519,7 @@ export function useChatClient() {
   }
 
   function cancelProviderConnect() {
-    settingsState.connectForm.providerId = "";
-    settingsState.connectForm.name = "";
-    settingsState.connectForm.apiKey = "";
-    settingsState.connectForm.baseUrl = "";
-    settingsState.connectForm.showAdvanced = false;
+    Object.assign(settingsState.connectForm, createEmptyProviderConnectForm());
   }
 
   function beginCronJobEdit(job) {
