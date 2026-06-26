@@ -132,7 +132,7 @@ def extract_openai_compatible_message(
     return OpenAICompatibleMessageResult(message=message, choice=choice)
 
 
-def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
+def get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
     if isinstance(value, dict):
         return value.get(name, default)
     return getattr(value, name, default)
@@ -141,26 +141,26 @@ def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
 def extract_openai_compatible_tool_calls(message: Any, *, provider_name: str) -> list[ToolCall]:
     """Extract tool calls from an OpenAI-compatible response message."""
     tool_calls: list[ToolCall] = []
-    raw_tool_calls = _get_attr_or_item(message, "tool_calls")
+    raw_tool_calls = get_attr_or_item(message, "tool_calls")
     if not raw_tool_calls:
         return tool_calls
 
     for raw_tool_call in raw_tool_calls:
-        function = _get_attr_or_item(raw_tool_call, "function")
+        function = get_attr_or_item(raw_tool_call, "function")
         if function is None:
             logger.warning("{} tool call missing function payload; skipping", provider_name)
             continue
 
-        tool_name = _get_attr_or_item(function, "name", "") or ""
+        tool_name = get_attr_or_item(function, "name", "") or ""
         args = parse_tool_arguments(
-            _get_attr_or_item(function, "arguments"),
+            get_attr_or_item(function, "arguments"),
             provider_name=provider_name,
             tool_name=tool_name,
         )
 
         tool_calls.append(
             ToolCall(
-                id=_get_attr_or_item(raw_tool_call, "id", "") or f"tool_call_{len(tool_calls) + 1}",
+                id=get_attr_or_item(raw_tool_call, "id", "") or f"tool_call_{len(tool_calls) + 1}",
                 name=tool_name,
                 arguments=args,
             )

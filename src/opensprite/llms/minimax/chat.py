@@ -10,15 +10,10 @@ from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_from_effort
 from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
+from ..response_utils import get_attr_or_item as _get_attr_or_item
 from ..response_utils import json_safe as _json_safe
 from ..tool_args import parse_tool_arguments
 from ...utils.url import join_url_path
-
-
-def _message_attr(message: ChatMessage | dict[str, Any], key: str, default: Any = None) -> Any:
-    if isinstance(message, dict):
-        return message.get(key, default)
-    return getattr(message, key, default)
 
 
 def _convert_content_part(part: Any) -> dict[str, Any] | None:
@@ -94,8 +89,8 @@ class MiniMaxLLM(LLMProvider):
         system_blocks: list[Any] = []
         out: list[dict[str, Any]] = []
         for message in messages:
-            role = str(_message_attr(message, "role", "user") or "user")
-            content = _message_attr(message, "content", "")
+            role = str(_get_attr_or_item(message, "role", "user") or "user")
+            content = _get_attr_or_item(message, "content", "")
             if role == "system":
                 system_blocks.append(_convert_content(content))
                 continue
@@ -104,14 +99,14 @@ class MiniMaxLLM(LLMProvider):
                     "role": "user",
                     "content": [{
                         "type": "tool_result",
-                        "tool_use_id": str(_message_attr(message, "tool_call_id", "")),
+                        "tool_use_id": str(_get_attr_or_item(message, "tool_call_id", "")),
                         "content": _coerce_content(content),
                     }],
                 })
                 continue
             anthropic_role = "assistant" if role == "assistant" else "user"
             converted = _convert_content(content)
-            tool_calls = _message_attr(message, "tool_calls") or []
+            tool_calls = _get_attr_or_item(message, "tool_calls") or []
             if tool_calls:
                 blocks = converted if isinstance(converted, list) else ([{"type": "text", "text": converted}] if converted else [])
                 for call in tool_calls:

@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable
 from ..base import LLMResponse, ToolCall
 from ..response_utils import coerce_content as _coerce_content
 from ..response_utils import coerce_reasoning_details
+from ..response_utils import get_attr_or_item as _get_attr_or_item
 from ..tool_args import parse_tool_arguments
 from ...utils.log import logger
 
@@ -29,12 +30,6 @@ def _coerce_reasoning(delta_payload: Any) -> str:
     if details:
         return "".join(_coerce_content(item.get("text") or item.get("summary") or "") for item in details)
     return ""
-
-
-def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
-    if isinstance(value, dict):
-        return value.get(name, default)
-    return getattr(value, name, default)
 
 
 def _iter_tool_call_deltas(delta_payload: Any) -> list[Any]:
