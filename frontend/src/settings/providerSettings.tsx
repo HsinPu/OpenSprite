@@ -48,10 +48,44 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
     state.copilotAuthLoading ||
     state.copilotAuth?.configured ||
     Boolean(state.copilotAuth?.userCode || state.copilotAuthNotice || state.copilotAuthError);
-  const codexAuthStatusLabel = authStatusLabel(providerCopy.codexAuth, state.codexAuth, state.codexAuthLoading);
-  const copilotAuthStatusLabel = authStatusLabel(providerCopy.copilotAuth, state.copilotAuth, state.copilotAuthLoading);
-  const codexAuthDescription = codexDescription(copy, state);
-  const copilotAuthDescription = copilotDescription(copy, state);
+  const authSections = [
+    {
+      key: "codex",
+      visible: showCodexAuthCard,
+      title: providerCopy.codexAuth?.title || "OpenAI Codex auth",
+      notice: state.codexAuthNotice,
+      error: state.codexAuthError,
+      mark: "Cx",
+      name: providerCopy.codexAuth?.name || "OpenAI Codex",
+      status: authStatusLabel(providerCopy.codexAuth, state.codexAuth, state.codexAuthLoading),
+      description: codexDescription(copy, state),
+      loading: state.codexAuthLoading,
+      configured: state.codexAuth?.configured,
+      copy: providerCopy.codexAuth || {},
+      auth: state.codexAuth || {},
+      onRefresh: client.loadCodexAuthStatus,
+      onLogin: client.startCodexAuthLogin,
+      onLogout: client.logoutCodexAuth,
+    },
+    {
+      key: "copilot",
+      visible: showCopilotAuthCard,
+      title: providerCopy.copilotAuth?.title || "GitHub Copilot auth",
+      notice: state.copilotAuthNotice,
+      error: state.copilotAuthError,
+      mark: "Gh",
+      name: providerCopy.copilotAuth?.name || "GitHub Copilot",
+      status: authStatusLabel(providerCopy.copilotAuth, state.copilotAuth, state.copilotAuthLoading),
+      description: copilotDescription(copy, state),
+      loading: state.copilotAuthLoading,
+      configured: state.copilotAuth?.configured,
+      copy: providerCopy.copilotAuth || {},
+      auth: state.copilotAuth || {},
+      onRefresh: client.loadCopilotAuthStatus,
+      onLogin: client.startCopilotAuthLogin,
+      onLogout: client.logoutCopilotAuth,
+    },
+  ];
 
   return (
     <section className="settings-page">
@@ -59,43 +93,9 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
       <SettingsStatus message={state.providersNotice} />
       <SettingsStatus message={state.providersError} type="error" />
 
-      {showCodexAuthCard ? (
-        <ProviderAuthSection
-          title={providerCopy.codexAuth?.title || "OpenAI Codex auth"}
-          notice={state.codexAuthNotice}
-          error={state.codexAuthError}
-          mark="Cx"
-          name={providerCopy.codexAuth?.name || "OpenAI Codex"}
-          status={codexAuthStatusLabel}
-          description={codexAuthDescription}
-          loading={state.codexAuthLoading}
-          configured={state.codexAuth?.configured}
-          copy={providerCopy.codexAuth || {}}
-          auth={state.codexAuth || {}}
-          onRefresh={client.loadCodexAuthStatus}
-          onLogin={client.startCodexAuthLogin}
-          onLogout={client.logoutCodexAuth}
-        />
-      ) : null}
-
-      {showCopilotAuthCard ? (
-        <ProviderAuthSection
-          title={providerCopy.copilotAuth?.title || "GitHub Copilot auth"}
-          notice={state.copilotAuthNotice}
-          error={state.copilotAuthError}
-          mark="Gh"
-          name={providerCopy.copilotAuth?.name || "GitHub Copilot"}
-          status={copilotAuthStatusLabel}
-          description={copilotAuthDescription}
-          loading={state.copilotAuthLoading}
-          configured={state.copilotAuth?.configured}
-          copy={providerCopy.copilotAuth || {}}
-          auth={state.copilotAuth || {}}
-          onRefresh={client.loadCopilotAuthStatus}
-          onLogin={client.startCopilotAuthLogin}
-          onLogout={client.logoutCopilotAuth}
-        />
-      ) : null}
+      {authSections.map(({ key, visible, ...section }) =>
+        visible ? <ProviderAuthSection key={key} {...section} /> : null
+      )}
 
       <ConnectedProvidersSection
         copy={copy}
