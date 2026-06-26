@@ -64,6 +64,7 @@ const [
   workStateCard,
   authProviderCard,
   availableProvidersSection,
+  connectedProvidersSection,
   logSettings,
   providerSettings,
   modelSettings,
@@ -107,6 +108,7 @@ const [
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
+  read("src/settings/connectedProvidersSection.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -241,6 +243,7 @@ assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider setting
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(providerSettings, "AuthProviderCard", "provider settings delegates auth provider card");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
+assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");
@@ -251,6 +254,12 @@ assertIncludes(availableProvidersSection, "provider.auth_type === \"github_copil
 assertIncludes(availableProvidersSection, "onConnectOAuth(provider) : onBeginConnect(provider)", "available providers keeps connect routing");
 assertIncludes(availableProvidersSection, "providerCopy.builtInBadge", "available providers keeps built-in badge");
 assertIncludes(availableProvidersSection, "providerCopy.noAvailableTitle", "available providers keeps empty state title");
+assertIncludes(connectedProvidersSection, "providerCredentials(state, provider)", "connected providers keeps credential lookup");
+assertIncludes(connectedProvidersSection, "providerEffectiveCredentialId(provider)", "connected providers keeps effective credential lookup");
+assertIncludes(connectedProvidersSection, "onSetCredential(provider, value)", "connected providers keeps credential switch action");
+assertIncludes(connectedProvidersSection, "onDeleteCredential(provider, effectiveCredentialId)", "connected providers keeps credential deletion action");
+assertIncludes(connectedProvidersSection, "onDisconnect(provider)", "connected providers keeps disconnect action");
+assertIncludes(connectedProvidersSection, "provider-row__credential--missing", "connected providers keeps missing credential state");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
