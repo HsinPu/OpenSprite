@@ -28,34 +28,61 @@ export function useProviderSettingsActions({
 
   async function refreshProviderState() { await loadProviderSettings(); await loadModelSettings(); }
 
-  async function loadProviderAuthStatus(endpoint, loadingKey, errorKey, stateKey, loadFailedNotice, normalizePayload) {
-    settingsState[loadingKey] = true;
-    settingsState[errorKey] = "";
+  async function loadProviderAuthStatus(config) {
+    settingsState[config.loadingKey] = true;
+    settingsState[config.errorKey] = "";
     try {
-      const payload = await requestSettingsJson(endpoint);
-      settingsState[stateKey] = { ...settingsState[stateKey], ...normalizePayload(payload) };
+      const payload = await requestSettingsJson(config.endpoint);
+      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalize(payload) };
     } catch (error) {
-      settingsState[errorKey] = error?.message || loadFailedNotice;
+      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loadFailedNoticeKey];
     } finally {
-      settingsState[loadingKey] = false;
+      settingsState[config.loadingKey] = false;
     }
   }
 
+  const providerAuthStatusConfigs = {
+    "openai-codex": {
+      endpoint: "/api/settings/auth/openai-codex",
+      loadingKey: "codexAuthLoading",
+      errorKey: "codexAuthError",
+      stateKey: "codexAuth",
+      loadFailedNoticeKey: "codexAuthLoadFailed",
+      normalize: (payload) => ({
+        configured: Boolean(payload.configured),
+        expired: Boolean(payload.expired),
+        expires_at: payload.expires_at || null,
+        account_id: payload.account_id || "",
+        path: payload.path || "",
+      }),
+    },
+    copilot: {
+      endpoint: "/api/settings/auth/copilot",
+      loadingKey: "copilotAuthLoading",
+      errorKey: "copilotAuthError",
+      stateKey: "copilotAuth",
+      loadFailedNoticeKey: "copilotAuthLoadFailed",
+      normalize: (payload) => ({
+        configured: Boolean(payload.configured),
+        path: payload.path || "",
+      }),
+    },
+  };
+
+  function providerAuthStatusConfig(providerId) {
+    return providerAuthStatusConfigs[providerId] || providerAuthStatusConfigs["openai-codex"];
+  }
+
+  async function loadProviderAuthStatusById(providerId) {
+    return loadProviderAuthStatus(providerAuthStatusConfig(providerId));
+  }
+
   async function loadCodexAuthStatus() {
-    return loadProviderAuthStatus("/api/settings/auth/openai-codex", "codexAuthLoading", "codexAuthError", "codexAuth", copy.value.notices.codexAuthLoadFailed, (payload) => ({
-      configured: Boolean(payload.configured),
-      expired: Boolean(payload.expired),
-      expires_at: payload.expires_at || null,
-      account_id: payload.account_id || "",
-      path: payload.path || "",
-    }));
+    return loadProviderAuthStatusById("openai-codex");
   }
 
   async function loadCopilotAuthStatus() {
-    return loadProviderAuthStatus("/api/settings/auth/copilot", "copilotAuthLoading", "copilotAuthError", "copilotAuth", copy.value.notices.copilotAuthLoadFailed, (payload) => ({
-      configured: Boolean(payload.configured),
-      path: payload.path || "",
-    }));
+    return loadProviderAuthStatusById("copilot");
   }
 
   function beginProviderConnect(provider) {

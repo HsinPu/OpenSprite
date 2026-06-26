@@ -264,6 +264,11 @@ assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "
 assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
 assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
+assertIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions centralize auth status configs");
+assertIncludes(providerSettingsActions, "endpoint: \"/api/settings/auth/openai-codex\"", "provider settings actions keep Codex auth status endpoint");
+assertIncludes(providerSettingsActions, "endpoint: \"/api/settings/auth/copilot\"", "provider settings actions keep Copilot auth status endpoint");
+assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(\"openai-codex\")", "provider settings actions keep Codex auth status wrapper");
+assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(\"copilot\")", "provider settings actions keep Copilot auth status wrapper");
 assertIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions centralize OAuth provider configs");
 assertIncludes(providerSettingsActions, "\"openai-codex\": {", "provider settings actions keep Codex OAuth config");
 assertIncludes(providerSettingsActions, "copilot: {", "provider settings actions keep Copilot OAuth config");
