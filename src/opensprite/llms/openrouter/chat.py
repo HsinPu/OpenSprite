@@ -7,7 +7,6 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 from typing import Any, Awaitable, Callable
 
 from ..base import DefaultModelProviderMixin, LLMProvider, LLMResponse, ChatMessage
-from ..openai.streaming import collect_openai_compatible_stream
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
@@ -122,9 +121,8 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMP
         log_llm_request_params("OpenRouter", params, request_mode=request_mode)
 
         if response_delta_callback is not None:
-            stream = await self._create_chat_completion(params)
-            return await collect_openai_compatible_stream(
-                stream,
+            return await self._collect_chat_completion_stream(
+                params,
                 provider_name="OpenRouter",
                 default_model=resolved_model,
                 response_delta_callback=response_delta_callback,

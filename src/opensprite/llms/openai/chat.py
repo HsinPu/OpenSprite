@@ -15,7 +15,6 @@ from ..request_modes import resolve_response_format
 from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..openai_compatible import build_openai_compatible_response
-from .streaming import collect_openai_compatible_stream
 
 
 _REQUEST_PROFILE = OPENAI_CHAT_REQUEST_PROFILE
@@ -123,9 +122,8 @@ class OpenAILLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvi
         log_llm_request_params("OpenAI", params, request_mode=request_mode)
 
         if response_delta_callback is not None:
-            stream = await self._create_chat_completion(params)
-            return await collect_openai_compatible_stream(
-                stream,
+            return await self._collect_chat_completion_stream(
+                params,
                 provider_name="OpenAI",
                 default_model=model or self.default_model,
                 response_delta_callback=response_delta_callback,

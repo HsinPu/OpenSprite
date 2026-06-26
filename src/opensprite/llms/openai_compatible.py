@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .base import LLMResponse
@@ -41,6 +41,28 @@ class OpenAICompatibleClientMixin:
 
     async def _create_chat_completion(self, params: dict[str, Any]) -> Any:
         return await self.client.chat.completions.create(**params)
+
+    async def _collect_chat_completion_stream(
+        self,
+        params: dict[str, Any],
+        *,
+        provider_name: str,
+        default_model: str,
+        response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+    ) -> LLMResponse:
+        from .openai.streaming import collect_openai_compatible_stream
+
+        stream = await self._create_chat_completion(params)
+        return await collect_openai_compatible_stream(
+            stream,
+            provider_name=provider_name,
+            default_model=default_model,
+            response_delta_callback=response_delta_callback,
+            tool_input_delta_callback=tool_input_delta_callback,
+            reasoning_delta_callback=reasoning_delta_callback,
+        )
 
     def recover_after_error(self, error: BaseException) -> bool:
         _ = error
