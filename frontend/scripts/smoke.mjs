@@ -50,6 +50,7 @@ const [
   providerAuthConfigs,
   providerAuthState,
   providerConnectForm,
+  providerMutationRunner,
   settingsSectionLoaders,
   useSettingsState,
   confirmFlow,
@@ -109,6 +110,7 @@ const [
   read("src/composables/providerAuthConfigs.js"),
   read("src/composables/providerAuthState.js"),
   read("src/composables/providerConnectForm.js"),
+  read("src/composables/providerMutationRunner.js"),
   read("src/composables/settingsSectionLoaders.js"),
   read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
@@ -338,11 +340,14 @@ assertIncludes(settingsSectionLoaders, "loadCronJobs();", "settings section load
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
 assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");
-assertIncludes(providerSettingsActions, "async function runProviderMutation", "provider settings actions centralize mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerConnectFailed", "provider connect uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerDisconnectFailed", "provider disconnect uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
+assertIncludes(providerMutationRunner, "export async function runProviderMutation", "provider mutation runner centralizes provider mutation lifecycle");
+assertIncludes(providerMutationRunner, "settingsState.providersLoading = true", "provider mutation runner sets provider loading");
+assertIncludes(providerMutationRunner, "settingsState.providersNotice = \"\"", "provider mutation runner clears provider notice");
+assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider connect uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerDisconnectFailed", "provider disconnect uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
+assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
 assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth actions reuse provider connect endpoint helper");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
 assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth configs reuse Codex runtime config helper");

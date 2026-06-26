@@ -1,4 +1,5 @@
 import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
+import { runProviderMutation } from "./providerMutationRunner";
 import {
   CODEX_PROVIDER_ID,
   COPILOT_PROVIDER_ID,
@@ -91,11 +92,7 @@ export function useProviderAuthActions({
 
   async function connectOAuthBackedProvider(provider, options) {
     const providerId = provider?.id || options.providerId;
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    settingsState[options.noticeKey] = "";
-    try {
+    await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
       await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
         body: JSON.stringify({
@@ -106,11 +103,11 @@ export function useProviderAuthActions({
       setSettingsSuccess("providersNotice", options.connectedNotice());
       await refreshProviderState();
       await options.startAuthLogin();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    }, {
+      before: () => {
+        settingsState[options.noticeKey] = "";
+      },
+    });
   }
 
   async function connectOAuthProviderById(provider, providerId) {
