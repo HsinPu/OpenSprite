@@ -64,6 +64,7 @@ const [
   workStateCard,
   authProviderCard,
   providerAuthSection,
+  providerEmptyState,
   availableProviderRow,
   connectedProviderRow,
   availableProvidersSection,
@@ -112,6 +113,7 @@ const [
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
+  read("src/settings/providerEmptyState.tsx"),
   read("src/settings/availableProviderRow.tsx"),
   read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
@@ -264,13 +266,18 @@ assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps 
 assertIncludes(authProviderCard, "onClick={onLogout}", "auth provider card keeps logout action");
 assertIncludes(authProviderCard, "auth.userCode", "auth provider card keeps user code display");
 assertIncludes(availableProvidersSection, "AvailableProviderRow", "available providers delegates available provider row");
+assertIncludes(availableProvidersSection, "ProviderEmptyState", "available providers delegates provider empty state");
 assertIncludes(availableProvidersSection, "providerCopy.noAvailableTitle", "available providers keeps empty state title");
+assertIncludes(providerEmptyState, "provider-row--empty", "provider empty state keeps row class");
+assertIncludes(providerEmptyState, "<strong>{title}</strong>", "provider empty state keeps title");
+assertIncludes(providerEmptyState, "<span>{description}</span>", "provider empty state keeps description");
 assertIncludes(availableProviderRow, "provider.auth_type === \"openai_codex_oauth\"", "available provider row keeps Codex OAuth detection");
 assertIncludes(availableProviderRow, "provider.auth_type === \"github_copilot_oauth\"", "available provider row keeps Copilot OAuth detection");
 assertIncludes(availableProviderRow, "onConnectOAuth(provider) : onBeginConnect(provider)", "available provider row keeps connect routing");
 assertIncludes(availableProviderRow, "providerCopy.builtInBadge", "available provider row keeps built-in badge");
 assertIncludes(availableProviderRow, "providerCopy.connectedCount", "available provider row keeps connected count badge");
 assertIncludes(connectedProvidersSection, "ConnectedProviderRow", "connected providers delegates connected provider row");
+assertIncludes(connectedProvidersSection, "ProviderEmptyState", "connected providers delegates provider empty state");
 assertIncludes(connectedProviderRow, "providerCredentials(state, provider)", "connected provider row keeps credential lookup");
 assertIncludes(connectedProviderRow, "providerEffectiveCredentialId(provider)", "connected provider row keeps effective credential lookup");
 assertIncludes(connectedProviderRow, "onSetCredential(provider, value)", "connected provider row keeps credential switch action");

@@ -1,5 +1,6 @@
 import { List } from "antd";
 import { ConnectedProviderRow } from "./connectedProviderRow";
+import { ProviderEmptyState } from "./providerEmptyState";
 import { SettingsCard, SettingsSectionTitle } from "./settingsPrimitives";
 
 type AnyRecord = Record<string, any>;
@@ -30,12 +31,10 @@ export function ConnectedProvidersSection({
           dataSource={providers}
           locale={{
             emptyText: (
-              <div className="provider-row provider-row--empty">
-                <div>
-                  <strong>{providerCopy.noConnectedTitle || "No connected providers"}</strong>
-                  <span>{providerCopy.noConnectedDescription || ""}</span>
-                </div>
-              </div>
+              <ProviderEmptyState
+                title={providerCopy.noConnectedTitle || "No connected providers"}
+                description={providerCopy.noConnectedDescription || ""}
+              />
             ),
           }}
           renderItem={(provider: AnyRecord) => (
