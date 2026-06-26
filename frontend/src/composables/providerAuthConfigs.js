@@ -19,6 +19,13 @@ function normalizeConfiguredPathStatus(payload, extra = {}) {
   return { configured: Boolean(payload.configured), ...extra, path: payload.path || "" };
 }
 
+function deviceAuthPollConfig(config) {
+  return {
+    hasPendingPoll: (auth) => Boolean(auth[config.deviceKey] && (!config.pollRequiresUserCode || auth.userCode)),
+    buildPollBody: (auth) => ({ [config.payloadDeviceKey]: auth[config.deviceKey], ...(config.pollRequiresUserCode ? { user_code: auth.userCode } : {}) }),
+  };
+}
+
 export function createProviderAuthConfigs() {
   const codexAuthConfig = providerAuthSectionForId(CODEX_PROVIDER_ID);
   const copilotAuthConfig = providerAuthSectionForId(COPILOT_PROVIDER_ID);
@@ -26,8 +33,7 @@ export function createProviderAuthConfigs() {
   return {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(codexAuthConfig),
-      hasPendingPoll: (auth) => Boolean(auth[codexAuthConfig.deviceKey] && auth.userCode),
-      buildPollBody: (auth) => ({ [codexAuthConfig.payloadDeviceKey]: auth[codexAuthConfig.deviceKey], user_code: auth.userCode }),
+      ...deviceAuthPollConfig(codexAuthConfig),
       normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, {
         expired: Boolean(payload.expired),
         expires_at: payload.expires_at || null,
@@ -43,8 +49,7 @@ export function createProviderAuthConfigs() {
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(copilotAuthConfig),
-      hasPendingPoll: (auth) => Boolean(auth[copilotAuthConfig.deviceKey]),
-      buildPollBody: (auth) => ({ [copilotAuthConfig.payloadDeviceKey]: auth[copilotAuthConfig.deviceKey] }),
+      ...deviceAuthPollConfig(copilotAuthConfig),
       normalizeStatus: normalizeConfiguredPathStatus,
       normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, copilotAuthConfig.deviceKey, copilotAuthConfig.payloadDeviceKey),
       normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey),

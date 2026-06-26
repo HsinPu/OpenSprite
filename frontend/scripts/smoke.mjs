@@ -310,6 +310,7 @@ assertIncludes(providerConstants, "function providerAuthKeyForId", "provider con
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
+assertIncludes(providerConstants, "pollRequiresUserCode: true", "provider constants keep Codex poll user code requirement in metadata");
 assertIncludes(providerConstants, "loginExtra: { command: \"\" }", "provider constants keep Codex login extras in metadata");
 assertIncludes(providerConstants, "logoutReset: { expired: false, expires_at: null, account_id: \"\", command: \"\" }", "provider constants keep Codex logout reset state in metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceCode\"", "provider constants keep Copilot device auth key in metadata");
@@ -364,10 +365,11 @@ assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "pr
 assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provider auth configs use metadata-derived default provider");
 assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
-assertIncludes(providerAuthConfigs, "auth[codexAuthConfig.deviceKey]", "provider auth configs read Codex device key from metadata");
-assertIncludes(providerAuthConfigs, "codexAuthConfig.payloadDeviceKey", "provider auth configs read Codex payload key from metadata");
-assertIncludes(providerAuthConfigs, "auth[copilotAuthConfig.deviceKey]", "provider auth configs read Copilot device key from metadata");
-assertIncludes(providerAuthConfigs, "copilotAuthConfig.payloadDeviceKey", "provider auth configs read Copilot payload key from metadata");
+assertIncludes(providerAuthConfigs, "function deviceAuthPollConfig", "provider auth configs share device auth poll config helper");
+assertIncludes(providerAuthConfigs, "...deviceAuthPollConfig(codexAuthConfig)", "provider auth configs reuse shared Codex poll config");
+assertIncludes(providerAuthConfigs, "...deviceAuthPollConfig(copilotAuthConfig)", "provider auth configs reuse shared Copilot poll config");
+assertIncludes(providerAuthConfigs, "auth[config.deviceKey]", "provider auth configs read device key from metadata");
+assertIncludes(providerAuthConfigs, "config.payloadDeviceKey", "provider auth configs read payload key from metadata");
 assertNotIncludes(providerAuthConfigs, "\"deviceAuthId\"", "provider auth configs avoid hardcoded Codex device auth key");
 assertNotIncludes(providerAuthConfigs, "\"device_auth_id\"", "provider auth configs avoid hardcoded Codex device auth payload key");
 assertNotIncludes(providerAuthConfigs, "\"deviceCode\"", "provider auth configs avoid hardcoded Copilot device auth key");
@@ -504,8 +506,10 @@ assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(copilotAuthConfig
 assertNotIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTIONS", "provider auth configs avoid local auth section indexes");
 assertNotIncludes(providerAuthConfigs, "CODEX_AUTH_STATE_KEYS", "provider auth configs avoid direct Codex auth state key ownership");
 assertNotIncludes(providerAuthConfigs, "COPILOT_AUTH_STATE_KEYS", "provider auth configs avoid direct Copilot auth state key ownership");
-assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ [codexAuthConfig.payloadDeviceKey]: auth[codexAuthConfig.deviceKey], user_code: auth.userCode })", "provider auth configs keep Codex auth poll body through metadata");
-assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ [copilotAuthConfig.payloadDeviceKey]: auth[copilotAuthConfig.deviceKey] })", "provider auth configs keep Copilot auth poll body through metadata");
+assertIncludes(providerAuthConfigs, "[config.payloadDeviceKey]: auth[config.deviceKey]", "provider auth configs build device auth poll body from metadata");
+assertIncludes(providerAuthConfigs, "config.pollRequiresUserCode ? { user_code: auth.userCode } : {}", "provider auth configs keep optional user code poll body through metadata");
+assertNotIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ [codexAuthConfig.payloadDeviceKey]", "provider auth configs avoid hardcoded Codex poll body");
+assertNotIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ [copilotAuthConfig.payloadDeviceKey]", "provider auth configs avoid hardcoded Copilot poll body");
 assertIncludes(providerAuthActions, "startProviderAuthLoginById,", "provider auth actions expose provider-id auth login action");
 assertIncludes(providerAuthActions, "logoutProviderAuthById,", "provider auth actions expose provider-id auth logout action");
 assertNotIncludes(providerAuthActions, "async function startProviderAuthLogin(config)", "provider auth actions avoid login action wrapper");
