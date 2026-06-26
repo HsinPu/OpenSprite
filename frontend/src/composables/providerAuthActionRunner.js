@@ -11,6 +11,7 @@ export async function runProviderAuthAction(settingsState, copy, config, fallbac
   }
   try {
     await action();
+    await options.after?.();
   } catch (error) {
     setProviderAuthError(settingsState, copy, config, fallbackNoticeKey, error);
   } finally {

@@ -175,8 +175,7 @@ export function useProviderAuthActions({
       await requestProviderAuthLogout(requestSettingsJson, config);
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
-      await config.loadStatus();
-    }, { clearNotice: true, before: config.clearPoll });
+    }, { clearNotice: true, before: config.clearPoll, after: config.loadStatus });
   }
 
   function clearProviderAuthPollTimers() {

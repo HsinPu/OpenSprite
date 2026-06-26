@@ -438,10 +438,12 @@ assertIncludes(providerAuthActions, "pollProviderAuthLoginById(COPILOT_PROVIDER_
 assertIncludes(providerAuthActionRunner, "export function setProviderAuthError", "provider auth action runner centralizes auth error state");
 assertIncludes(providerAuthActionRunner, "setProviderAuthError(settingsState, copy, config, fallbackNoticeKey, error)", "provider auth action lifecycle reuses auth error helper");
 assertIncludes(providerAuthActionRunner, "export async function runProviderAuthAction", "provider auth action runner centralizes auth action lifecycle");
+assertIncludes(providerAuthActionRunner, "await options.after?.();", "provider auth action runner supports shared success follow-up");
 assertIncludes(providerAuthActions, "import { runProviderAuthAction, setProviderAuthError } from \"./providerAuthActionRunner\"", "provider auth actions reuse auth action lifecycle helpers");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
+assertIncludes(providerAuthActions, "after: config.loadStatus", "provider auth logout refreshes status after logout through shared follow-up");
 assertIncludes(providerAuthActions, "setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error)", "provider auth polling reuses auth error helper");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthLogin", "provider auth requests centralize auth login request");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthPoll", "provider auth requests centralize auth poll request");
