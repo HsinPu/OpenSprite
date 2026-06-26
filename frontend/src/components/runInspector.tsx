@@ -1,5 +1,6 @@
-import { Button, Card, Collapse, Descriptions, Empty, List, Select, Space, Tag, Timeline, Typography } from "antd";
-import { runOptionLabel, runStatusColor } from "./displayHelpers";
+import { Button, Card, Collapse, Descriptions, Empty, List, Space, Tag, Timeline, Typography } from "antd";
+import { runStatusColor } from "./displayHelpers";
+import { RunHistorySelector } from "./runHistorySelector";
 
 type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
@@ -28,28 +29,7 @@ export function RunInspector({ client }: { client: RunInspectorClient }) {
 
   return (
     <div className="trace-sidebar__body">
-      {client.state.showRunHistory && (runs.length > 1 || client.currentRunsLoading.value || client.currentRunsError.value) ? (
-        <section className="run-history" aria-live="polite">
-          <div className="run-history__title">
-            <span>{copy.runHistory.title}</span>
-            {client.currentRunsLoading.value ? <small>{copy.runHistory.loading}</small> : null}
-            {!client.currentRunsLoading.value && client.currentRunsError.value ? <small>{copy.runHistory.unavailable}</small> : null}
-          </div>
-          {runs.length ? (
-            <label className="run-history__select">
-              <span className="sr-only">{copy.runHistory.select}</span>
-              <Select
-                value={run?.runId || ""}
-                options={runs.map((item: AnyRecord, index: number) => ({
-                  value: item.runId,
-                  label: runOptionLabel(copy, item, index),
-                }))}
-                onChange={(value) => client.selectRun(value)}
-              />
-            </label>
-          ) : null}
-        </section>
-      ) : null}
+      <RunHistorySelector client={client} run={run} runs={runs} />
 
       {client.state.showWorkState && client.currentWorkState.value ? (
         <WorkStateCard client={client} workState={client.currentWorkState.value} />

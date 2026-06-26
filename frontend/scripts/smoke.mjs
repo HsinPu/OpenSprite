@@ -57,6 +57,7 @@ const [
   traceSidebar,
   browserSettings,
   runInspector,
+  runHistorySelector,
   logSettings,
   providerSettings,
   modelSettings,
@@ -93,6 +94,7 @@ const [
   read("src/components/traceSidebar.tsx"),
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
+  read("src/components/runHistorySelector.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -270,6 +272,7 @@ assertNotIncludes(openSpriteShell, "<input", "app shell avoids raw input element
 assertNotIncludes(openSpriteShell, "<select", "app shell avoids raw select elements");
 assertNotIncludes(openSpriteShell, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
+assertIncludes(runInspector, "RunHistorySelector", "run inspector delegates run history selector");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
 assertIncludes(settingsModal, "selectedKeys={[section]}", "settings nav marks active section");
@@ -281,7 +284,7 @@ assertIncludes(settingsModal, "<ProviderSettings client={pageClient}", "settings
 assertNotIncludes(settingsModal, "const contentBySection", "settings modal should not build a section map during render");
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
-assertRegex(runInspector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
+assertRegex(runHistorySelector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
 assertNotIncludes(openSpriteShell, "BackgroundProcessSidebar", "background process sidebar stays removed");
 assertNotIncludes(openSpriteShell, "CuratorSettingsPage", "curator settings page stays removed");
 
