@@ -49,6 +49,7 @@ const [
   confirmDialog,
   emptyState,
   messageList,
+  mobileNavControls,
   sidebarNav,
   traceSidebar,
   browserSettings,
@@ -81,6 +82,7 @@ const [
   read("src/components/confirmDialog.tsx"),
   read("src/components/emptyState.tsx"),
   read("src/components/messageList.tsx"),
+  read("src/components/mobileNavControls.tsx"),
   read("src/components/sidebarNav.tsx"),
   read("src/components/traceSidebar.tsx"),
   read("src/settings/browserSettings.tsx"),
@@ -178,6 +180,12 @@ assertIncludes(app, "viewTraceForRun", "assistant message trace action");
 assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
 assertIncludes(chatPanel, "client.currentRuns.value", "run history uses active session runs");
+assertIncludes(app, "MobileNavControls", "React mobile nav controls");
+assertIncludes(mobileNavControls, "mobile-nav-toggle", "mobile nav keeps toggle button");
+assertIncludes(mobileNavControls, "aria-controls=\"sidebar\"", "mobile nav keeps sidebar aria target");
+assertIncludes(mobileNavControls, "icon={sidebarOpen ? <CloseOutlined /> : <MenuUnfoldOutlined />}", "mobile nav keeps open/close icons");
+assertIncludes(mobileNavControls, "mobile-nav-backdrop", "mobile nav keeps backdrop button");
+assertIncludes(mobileNavControls, "onClick={client.toggleSidebar}", "mobile nav keeps sidebar toggle action");
 assertIncludes(confirmDialog, "okButtonProps={{ danger: true, loading: dialog.busy }}", "confirm dialog keeps destructive loading state");
 assertIncludes(confirmDialog, "cancelButtonProps={{ disabled: dialog.busy }}", "confirm dialog disables cancel while busy");
 assertIncludes(confirmDialog, "onCancel={dialog.busy ? undefined : onCancel}", "confirm dialog blocks cancel while busy");

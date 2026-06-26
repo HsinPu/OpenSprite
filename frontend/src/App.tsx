@@ -1,14 +1,10 @@
 import React, { CSSProperties, useEffect, useState } from "react";
-import { Button } from "antd";
-import {
-  CloseOutlined,
-  MenuUnfoldOutlined,
-} from "@ant-design/icons";
 import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
 import { AuthGate } from "./components/authGate";
 import { ChatPanel } from "./components/chatPanel";
 import { ConfirmDialog } from "./components/confirmDialog";
+import { MobileNavControls } from "./components/mobileNavControls";
 import { SidebarNav } from "./components/sidebarNav";
 import { ToastStack } from "./components/toastStack";
 import { TraceSidebar } from "./components/traceSidebar";
@@ -214,18 +210,7 @@ function OpenSpriteShell() {
           .join(" ")}
         style={appShellStyle}
       >
-        <Button
-          className="mobile-nav-toggle"
-          aria-controls="sidebar"
-          aria-expanded={client.sidebarOpen.value}
-          icon={client.sidebarOpen.value ? <CloseOutlined /> : <MenuUnfoldOutlined />}
-          onClick={client.toggleSidebar}
-        >
-          {client.sidebarOpen.value ? copy.timeline.collapse : copy.app.menu}
-        </Button>
-        {client.sidebarOpen.value ? (
-          <Button className="mobile-nav-backdrop" type="text" aria-label="Close menu" onClick={client.toggleSidebar} />
-        ) : null}
+        <MobileNavControls client={client} />
 
         <SidebarNav
           client={client}
