@@ -1,9 +1,3 @@
-const CODEX_PROVIDER_ID = "openai-codex";
-const COPILOT_PROVIDER_ID = "copilot";
-
-const CODEX_PROVIDER_NAME = "OpenAI Codex";
-const COPILOT_PROVIDER_NAME = "GitHub Copilot";
-
 export function providerAuthStateKeys(authKey: string) {
   return {
     authKey,
@@ -49,12 +43,9 @@ export function providerAuthRequestConfig(config: ReturnType<typeof providerAuth
   };
 }
 
-const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
-const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
-
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
-    providerId: CODEX_PROVIDER_ID, ...providerAuthStateKeys("codexAuth"), mark: "Cx", providerName: CODEX_PROVIDER_NAME, oauthAuthType: OPENAI_CODEX_OAUTH_AUTH_TYPE,
+    providerId: "openai-codex", ...providerAuthStateKeys("codexAuth"), mark: "Cx", providerName: "OpenAI Codex", oauthAuthType: "openai_codex_oauth",
     deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
     pollRequiresUserCode: true,
     includeAccountStatus: true,
@@ -63,7 +54,7 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
     initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
   },
   {
-    providerId: COPILOT_PROVIDER_ID, ...providerAuthStateKeys("copilotAuth"), mark: "Gh", providerName: COPILOT_PROVIDER_NAME, oauthAuthType: GITHUB_COPILOT_OAUTH_AUTH_TYPE,
+    providerId: "copilot", ...providerAuthStateKeys("copilotAuth"), mark: "Gh", providerName: "GitHub Copilot", oauthAuthType: "github_copilot_oauth",
     deviceKey: "deviceCode", payloadDeviceKey: "device_code",
     logoutReset: { path: "" },
     initialAuth: providerDeviceAuthInitialState("deviceCode"),
