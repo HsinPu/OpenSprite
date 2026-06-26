@@ -18,24 +18,22 @@ export function useProviderAuthActions({
   loadModelSettings,
   refreshProviderState,
 }) {
-  const providerAuthPollTimers = {
-    [CODEX_PROVIDER_ID]: null,
-    [COPILOT_PROVIDER_ID]: null,
-  };
+  const providerAuthPollTimers = new Map();
 
   function clearProviderAuthPollTimer(providerId) {
-    if (providerAuthPollTimers[providerId]) {
-      clearTimeout(providerAuthPollTimers[providerId]);
-      providerAuthPollTimers[providerId] = null;
+    const timer = providerAuthPollTimers.get(providerId);
+    if (timer) {
+      clearTimeout(timer);
+      providerAuthPollTimers.delete(providerId);
     }
   }
 
   function scheduleProviderAuthPoll(providerId, auth, poll) {
     clearProviderAuthPollTimer(providerId);
     const delayMs = Math.max(3, auth.pollIntervalSeconds || 5) * 1000;
-    providerAuthPollTimers[providerId] = window.setTimeout(() => {
+    providerAuthPollTimers.set(providerId, window.setTimeout(() => {
       void poll();
-    }, delayMs);
+    }, delayMs));
   }
 
   const providerAuthConfigs = {
@@ -116,13 +114,18 @@ export function useProviderAuthActions({
     },
   };
 
+  function resolveProviderAuthId(providerId) {
+    return providerAuthConfigs[providerId] ? providerId : CODEX_PROVIDER_ID;
+  }
+
   function providerAuthConfig(providerId) {
-    return providerAuthConfigs[providerId] || providerAuthConfigs[CODEX_PROVIDER_ID];
+    return providerAuthConfigs[resolveProviderAuthId(providerId)];
   }
 
   function scheduleProviderAuthPollById(providerId) {
-    const config = providerAuthConfig(providerId);
-    scheduleProviderAuthPoll(providerId, settingsState[config.authKey], () => pollProviderAuthLoginById(providerId));
+    const resolvedProviderId = resolveProviderAuthId(providerId);
+    const config = providerAuthConfig(resolvedProviderId);
+    scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey], () => pollProviderAuthLoginById(resolvedProviderId));
   }
 
   async function loadProviderAuthStatus(config) {
@@ -187,7 +190,7 @@ export function useProviderAuthActions({
   }
 
   async function connectOAuthProvider(provider) {
-    await connectOAuthProviderById(provider, provider?.id === COPILOT_PROVIDER_ID ? COPILOT_PROVIDER_ID : CODEX_PROVIDER_ID);
+    await connectOAuthProviderById(provider, provider?.id);
   }
 
   async function startProviderAuthLogin(config) {
