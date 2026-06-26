@@ -39,12 +39,7 @@ export function createProviderAuthConfigs() {
         expires_at: auth.expires_at || null,
         account_id: auth.account_id || "",
       }),
-      resetLogout: (auth) => resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, {
-        expired: false,
-        expires_at: null,
-        account_id: "",
-        command: "",
-      }),
+      resetLogout: (auth) => resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, codexAuthConfig.logoutReset),
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(copilotAuthConfig),
@@ -53,7 +48,7 @@ export function createProviderAuthConfigs() {
       normalizeStatus: normalizeConfiguredPathStatus,
       normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, copilotAuthConfig.deviceKey, copilotAuthConfig.payloadDeviceKey),
       normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey),
-      resetLogout: (auth) => resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, { path: "" }),
+      resetLogout: (auth) => resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, copilotAuthConfig.logoutReset),
     },
   };
 }

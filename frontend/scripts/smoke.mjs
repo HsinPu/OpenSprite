@@ -311,8 +311,10 @@ assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState("
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
 assertIncludes(providerConstants, "loginExtra: { command: \"\" }", "provider constants keep Codex login extras in metadata");
+assertIncludes(providerConstants, "logoutReset: { expired: false, expires_at: null, account_id: \"\", command: \"\" }", "provider constants keep Codex logout reset state in metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceCode\"", "provider constants keep Copilot device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_code\"", "provider constants keep Copilot device auth payload key in metadata");
+assertIncludes(providerConstants, "logoutReset: { path: \"\" }", "provider constants keep Copilot logout reset state in metadata");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
 assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
 assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
@@ -465,6 +467,10 @@ assertIncludes(providerAuthConfigs, "function normalizeAuthorizedDeviceAuth", "p
 assertIncludes(providerAuthConfigs, "function resetDeviceAuthLogout", "provider auth configs share device auth logout reset");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState", "provider auth configs reuse cleared device auth state");
 assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "provider auth state centralizes cleared device auth state");
+assertIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, codexAuthConfig.logoutReset)", "provider auth configs read Codex logout reset from metadata");
+assertIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, copilotAuthConfig.logoutReset)", "provider auth configs read Copilot logout reset from metadata");
+assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, {", "provider auth configs avoid hardcoded Codex logout reset state");
+assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, { path: \"\" })", "provider auth configs avoid hardcoded Copilot logout reset state");
 assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey", "provider auth configs keep Codex cleared device auth id state through metadata");
 assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey)", "provider auth configs keep Copilot cleared device code state through metadata");
 assertIncludes(providerAuthActions, "settingsState[config.noticeKey]", "provider auth actions reuse provider auth notice state key");
