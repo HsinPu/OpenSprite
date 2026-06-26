@@ -1,9 +1,11 @@
 import {
   type AnyRecord,
+} from "./providerHelpers";
+import {
   authStatusLabel,
   providerAuthDescription,
   providerAuthVisible,
-} from "./providerHelpers";
+} from "./providerAuthHelpers";
 import { PROVIDER_AUTH_SECTION_CONFIGS } from "./providerAuthMetadata";
 
 export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: AnyRecord) {

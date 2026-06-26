@@ -1,11 +1,13 @@
 import { Button, Form, List, Select, Tag } from "antd";
 import {
-  type AnyRecord,
-  credentialSourceLabel,
   providerAuthConfigured,
   providerAuthCopyKey,
-  providerCredentials,
   providerDescription,
+} from "./providerAuthHelpers";
+import {
+  type AnyRecord,
+  credentialSourceLabel,
+  providerCredentials,
   providerEffectiveCredentialId,
   providerMark,
 } from "./providerHelpers";
