@@ -311,6 +311,7 @@ assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState("
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
 assertIncludes(providerConstants, "pollRequiresUserCode: true", "provider constants keep Codex poll user code requirement in metadata");
+assertIncludes(providerConstants, "includeAccountStatus: true", "provider constants keep Codex account status support in metadata");
 assertIncludes(providerConstants, "loginExtra: { command: \"\" }", "provider constants keep Codex login extras in metadata");
 assertIncludes(providerConstants, "logoutReset: { expired: false, expires_at: null, account_id: \"\", command: \"\" }", "provider constants keep Codex logout reset state in metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceCode\"", "provider constants keep Copilot device auth key in metadata");
@@ -379,7 +380,8 @@ assertNotIncludes(providerAuthActions, "async function loadProviderAuthStatus(co
 assertNotIncludes(providerAuthActions, "async function loadCodexAuthStatus", "provider auth actions avoid Codex-specific status wrapper");
 assertNotIncludes(providerAuthActions, "async function loadCopilotAuthStatus", "provider auth actions avoid Copilot-specific status wrapper");
 assertIncludes(providerAuthConfigs, "function normalizeConfiguredPathStatus", "provider auth configs share configured/path status normalization");
-assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload", "provider auth configs keep Codex status normalization inside provider config");
+assertIncludes(providerAuthConfigs, "function normalizeProviderAccountStatus", "provider auth configs share provider account status normalization");
+assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(codexAuthConfig, payload)", "provider auth configs read Codex account status from metadata");
 assertIncludes(providerAuthConfigs, "normalizeStatus: normalizeConfiguredPathStatus", "provider auth configs reuse shared Copilot status normalization");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthStatus", "provider auth requests centralize auth status request");
 assertIncludes(providerAuthRequests, "requestSettingsJson(config.endpoint)", "provider auth requests keep shared auth status request");
@@ -473,7 +475,7 @@ assertIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, codexAuthConfig
 assertIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, copilotAuthConfig.logoutReset)", "provider auth configs read Copilot logout reset from metadata");
 assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, {", "provider auth configs avoid hardcoded Codex logout reset state");
 assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, { path: \"\" })", "provider auth configs avoid hardcoded Copilot logout reset state");
-assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey", "provider auth configs keep Codex cleared device auth id state through metadata");
+assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(codexAuthConfig, auth)", "provider auth configs read authorized Codex account status from metadata");
 assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey)", "provider auth configs keep Copilot cleared device code state through metadata");
 assertIncludes(providerAuthActions, "settingsState[config.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider))", "provider auth actions reuse shared provider key helper for OAuth connect");

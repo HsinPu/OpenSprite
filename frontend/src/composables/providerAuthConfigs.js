@@ -19,6 +19,10 @@ function normalizeConfiguredPathStatus(payload, extra = {}) {
   return { configured: Boolean(payload.configured), ...extra, path: payload.path || "" };
 }
 
+function normalizeProviderAccountStatus(config, payload) {
+  return config.includeAccountStatus ? { expired: Boolean(payload.expired), expires_at: payload.expires_at || null, account_id: payload.account_id || "" } : {};
+}
+
 function deviceAuthPollConfig(config) {
   return {
     hasPendingPoll: (auth) => Boolean(auth[config.deviceKey] && (!config.pollRequiresUserCode || auth.userCode)),
@@ -34,17 +38,9 @@ export function createProviderAuthConfigs() {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(codexAuthConfig),
       ...deviceAuthPollConfig(codexAuthConfig),
-      normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, {
-        expired: Boolean(payload.expired),
-        expires_at: payload.expires_at || null,
-        account_id: payload.account_id || "",
-      }),
+      normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(codexAuthConfig, payload)),
       normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, codexAuthConfig.deviceKey, codexAuthConfig.payloadDeviceKey, codexAuthConfig.loginExtra),
-      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey, {
-        expired: Boolean(auth.expired),
-        expires_at: auth.expires_at || null,
-        account_id: auth.account_id || "",
-      }),
+      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey, normalizeProviderAccountStatus(codexAuthConfig, auth)),
       resetLogout: (auth) => resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, codexAuthConfig.logoutReset),
     },
     [COPILOT_PROVIDER_ID]: {

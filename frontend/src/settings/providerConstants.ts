@@ -60,6 +60,7 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
     providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME,
     deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
     pollRequiresUserCode: true,
+    includeAccountStatus: true,
     loginExtra: { command: "" },
     logoutReset: { expired: false, expires_at: null, account_id: "", command: "" },
     initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
