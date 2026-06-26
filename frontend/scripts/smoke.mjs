@@ -40,6 +40,7 @@ const [
   indexHtml,
   app,
   appProviders,
+  openSpriteShell,
   main,
   styles,
   reactiveCompat,
@@ -75,6 +76,7 @@ const [
   read("index.html"),
   read("src/App.tsx"),
   read("src/providers/appProviders.tsx"),
+  read("src/components/openSpriteShell.tsx"),
   read("src/main.tsx"),
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
@@ -138,12 +140,13 @@ assertNotIncludes(indexHtml, "/src/main.js", "legacy JS entry removed");
 assertIncludes(main, "createRoot", "React root mount");
 assertIncludes(main, "antd/dist/reset.css", "Ant Design reset stylesheet");
 assertIncludes(app, "AppProviders", "React shell uses app providers");
+assertIncludes(app, "OpenSpriteShell", "React app mounts shell component");
 assertIncludes(appProviders, "ConfigProvider", "Ant Design provider");
 assertIncludes(appProviders, "<AntdApp>{children}</AntdApp>", "Ant Design app context provider");
 assertIncludes(appProviders, "colorPrimary: \"#2563eb\"", "Ant Design theme token retained");
-assertIncludes(app, "useReactiveStore", "React subscription bridge");
-assertIncludes(app, "useConfirmDialog(client)", "app shell delegates confirm dialog flow");
-assertIncludes(app, "useShellLayout(client)", "app shell delegates resize layout logic");
+assertIncludes(openSpriteShell, "useReactiveStore", "React subscription bridge");
+assertIncludes(openSpriteShell, "useConfirmDialog(client)", "app shell delegates confirm dialog flow");
+assertIncludes(openSpriteShell, "useShellLayout(client)", "app shell delegates resize layout logic");
 assertIncludes(confirmFlow, "action: () => client.deleteSessions(targets)", "confirm flow keeps session delete action");
 assertIncludes(confirmFlow, "action: () => client.clearWebSessions()", "confirm flow keeps web history cleanup action");
 assertIncludes(confirmFlow, "setConfirmDialog((dialog) => ({ ...dialog, busy: true }))", "confirm flow keeps busy state");
@@ -154,8 +157,8 @@ assertIncludes(shellLayout, "window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_K
 assertIncludes(shellLayout, "setSidebarWidth(clampSidebarWidth(moveEvent.clientX))", "shell layout keeps sidebar drag math");
 assertIncludes(shellLayout, "setTraceInspectorWidth(clampTraceWidth(window.innerWidth - moveEvent.clientX))", "shell layout keeps trace drag math");
 assertIncludes(settingsModal, "useTransition", "settings modal uses transition for deferred content");
-assertIncludes(app, "useChatClient", "existing chat client flow reused");
-assertIncludes(app, "SidebarNav", "React sidebar shell");
+assertIncludes(openSpriteShell, "useChatClient", "existing chat client flow reused");
+assertIncludes(openSpriteShell, "SidebarNav", "React sidebar shell");
 assertIncludes(sidebarNav, "<Checkbox", "sidebar selection uses Ant Checkbox controls");
 assertIncludes(sidebarNav, "<Segmented", "sidebar filters use Ant Segmented controls");
 assertIncludes(sidebarNav, "client.setSessionChannelFilter(String(value))", "sidebar keeps channel filter action");
@@ -163,7 +166,7 @@ assertIncludes(sidebarNav, "client.setShowHiddenSessions(checked)", "sidebar kee
 assertIncludes(sidebarNav, "deleteSessions(selectedSessions)", "sidebar keeps bulk delete flow");
 assertIncludes(sidebarNav, "client.setActiveSession(session.externalChatId)", "sidebar keeps session switching");
 assertIncludes(sidebarNav, "onPointerDown={beginSidebarResize}", "sidebar keeps resize handle");
-assertIncludes(app, "ChatPanel", "React chat panel");
+assertIncludes(openSpriteShell, "ChatPanel", "React chat panel");
 assertIncludes(chatPanel, "client.submitMessage", "chat panel keeps composer submit flow");
 assertIncludes(chatPanel, "client.applyCommandHint(command)", "chat panel keeps command hint flow");
 assertIncludes(chatPanel, "client.setMessageStageRef", "chat panel keeps message stage ref");
@@ -172,12 +175,12 @@ assertIncludes(chatPanel, "client.resizeComposer()", "chat panel keeps composer 
 assertIncludes(chatPanel, "client.handleComposerKeydown", "chat panel keeps keyboard handling");
 assertIncludes(chatPanel, "sendDisabled.value", "chat panel keeps send disabled state");
 assertIncludes(chatPanel, "viewTraceForRun={viewTraceForRun}", "chat panel passes trace callback to message list");
-assertIncludes(app, "TraceSidebar", "React trace sidebar");
+assertIncludes(openSpriteShell, "TraceSidebar", "React trace sidebar");
 assertIncludes(traceSidebar, "RunInspector", "trace sidebar renders run inspector");
 assertIncludes(traceSidebar, "onPointerDown={beginTraceResize}", "trace sidebar keeps resize handle");
 assertIncludes(traceSidebar, "client.toggleTraceInspectorCollapsed", "trace sidebar keeps collapse action");
 assertIncludes(traceSidebar, "aria-label=\"Run trace inspector\"", "trace sidebar keeps inspector landmark");
-assertIncludes(app, "SettingsModal", "React settings modal");
+assertIncludes(openSpriteShell, "SettingsModal", "React settings modal");
 assertIncludes(authGate, "auth-gate", "auth gate component keeps auth overlay layout");
 assertIncludes(authGate, "client.submitAccessToken", "auth gate keeps token submit flow");
 assertIncludes(authGate, "client.settingsForm.accessToken", "auth gate keeps access token field");
@@ -191,11 +194,11 @@ assertIncludes(messageList, "message__trace-button", "message list keeps trace a
 assertIncludes(messageList, "viewTraceForRun(message.traceRunId)", "message list keeps trace run selection callback");
 assertIncludes(messageList, "normalizeMessages", "message list keeps message normalization");
 assertIncludes(messageList, "message__artifact", "message list keeps artifact cards");
-assertIncludes(app, "viewTraceForRun", "assistant message trace action");
-assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
-assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
+assertIncludes(openSpriteShell, "viewTraceForRun", "assistant message trace action");
+assertIncludes(openSpriteShell, "client.selectRun(runId)", "trace action selects the requested run");
+assertIncludes(openSpriteShell, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
 assertIncludes(chatPanel, "client.currentRuns.value", "run history uses active session runs");
-assertIncludes(app, "MobileNavControls", "React mobile nav controls");
+assertIncludes(openSpriteShell, "MobileNavControls", "React mobile nav controls");
 assertIncludes(mobileNavControls, "mobile-nav-toggle", "mobile nav keeps toggle button");
 assertIncludes(mobileNavControls, "aria-controls=\"sidebar\"", "mobile nav keeps sidebar aria target");
 assertIncludes(mobileNavControls, "icon={sidebarOpen ? <CloseOutlined /> : <MenuUnfoldOutlined />}", "mobile nav keeps open/close icons");
@@ -210,7 +213,7 @@ assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings 
 assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");
 assertIncludes(mcpSettings, "client.saveMcpServer", "MCP settings action");
 assertIncludes(modelSettings, "client.selectModel", "model selection action");
-assertIncludes(app, "clearWebSessions={clearWebSessions}", "app shell wires web history cleanup callback");
+assertIncludes(openSpriteShell, "clearWebSessions={clearWebSessions}", "app shell wires web history cleanup callback");
 assertIncludes(generalSettings, "onClick={clearWebSessions}", "general settings keeps web history cleanup button");
 assertIncludes(generalSettings, "form.externalChatId", "general settings keeps external chat id control");
 assertIncludes(generalSettings, "client.runUpdate", "general settings keeps update apply action");
@@ -262,10 +265,10 @@ assertIncludes(generalSettings, "<SettingsCard className=\"settings-card--form\"
 assertIncludes(generalSettings, "<Select", "general settings uses Ant Select controls");
 assertIncludes(generalSettings, "<Switch", "general settings uses Ant Switch controls");
 assertIncludes(generalSettings, "<Input", "general settings uses Ant Input controls");
-assertNotIncludes(app, "<button", "app shell avoids raw button elements");
-assertNotIncludes(app, "<input", "app shell avoids raw input elements");
-assertNotIncludes(app, "<select", "app shell avoids raw select elements");
-assertNotIncludes(app, "<textarea", "app shell avoids raw textarea elements");
+assertNotIncludes(openSpriteShell, "<button", "app shell avoids raw button elements");
+assertNotIncludes(openSpriteShell, "<input", "app shell avoids raw input elements");
+assertNotIncludes(openSpriteShell, "<select", "app shell avoids raw select elements");
+assertNotIncludes(openSpriteShell, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
@@ -279,8 +282,8 @@ assertNotIncludes(settingsModal, "const contentBySection", "settings modal shoul
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
 assertRegex(runInspector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
-assertNotIncludes(app, "BackgroundProcessSidebar", "background process sidebar stays removed");
-assertNotIncludes(app, "CuratorSettingsPage", "curator settings page stays removed");
+assertNotIncludes(openSpriteShell, "BackgroundProcessSidebar", "background process sidebar stays removed");
+assertNotIncludes(openSpriteShell, "CuratorSettingsPage", "curator settings page stays removed");
 
 for (const exportName of ["ref", "silentRef", "reactive", "computed", "watch", "onMounted", "onBeforeUnmount", "useReactiveStore"]) {
   assertRegex(reactiveCompat, new RegExp(`export function ${exportName}\\b`), `reactive compat export ${exportName}`);
