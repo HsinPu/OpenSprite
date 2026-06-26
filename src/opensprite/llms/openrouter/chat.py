@@ -12,6 +12,7 @@ from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
 from ..request_modes import response_format_for_request_mode
+from ..openai_compatible import OpenAICompatibleClientMixin
 from ..response_utils import coerce_content as _coerce_content
 from ..response_utils import coerce_reasoning_details
 from ..response_utils import extract_openai_compatible_message
@@ -32,7 +33,7 @@ def _openrouter_reasoning_extra_body(reasoning_config: dict[str, Any] | None) ->
     return {"reasoning": dict(reasoning_config)}
 
 
-class OpenRouterLLM(LLMProvider):
+class OpenRouterLLM(OpenAICompatibleClientMixin, LLMProvider):
     """
     OpenRouter LLM 實作
     
@@ -84,11 +85,6 @@ class OpenRouterLLM(LLMProvider):
             ),
         }
         self.client = self._build_client()
-
-    def _build_client(self):
-        from openai import AsyncOpenAI
-
-        return AsyncOpenAI(**self._client_kwargs)
 
     async def _create_completion(self, params: dict[str, Any]):
         return await self.client.chat.completions.create(**params)
@@ -172,11 +168,3 @@ class OpenRouterLLM(LLMProvider):
     
     def get_default_model(self) -> str:
         return self.default_model
-
-    def recover_after_error(self, error: BaseException) -> bool:
-        _ = error
-        try:
-            self.client = self._build_client()
-            return True
-        except Exception:
-            return False
