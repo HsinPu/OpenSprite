@@ -301,6 +301,8 @@ assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider co
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider constants keep Copilot auth key internal");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
 assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
+assertIncludes(providerConstants, "[keys.stateKey]: auth", "provider constants initialize auth state through state key metadata");
+assertNotIncludes(providerConstants, "[keys.authKey]: auth", "provider constants avoid auth key ownership for initial state writes");
 assertIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants centralize provider auth initial states");
 assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "provider constants share device auth initial state defaults");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");

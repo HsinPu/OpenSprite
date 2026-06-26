@@ -21,7 +21,7 @@ export function providerAuthInitialState(keys: ReturnType<typeof providerAuthSta
     [keys.loadingKey]: false,
     [keys.errorKey]: "",
     [keys.noticeKey]: "",
-    [keys.authKey]: auth,
+    [keys.stateKey]: auth,
   };
 }
 
