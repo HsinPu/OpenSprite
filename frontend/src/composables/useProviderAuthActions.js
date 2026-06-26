@@ -1,4 +1,4 @@
-import { coerceNonNegativeInteger } from "./chatClientCoercion";
+import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 import {
   CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
@@ -44,24 +44,6 @@ export function useProviderAuthActions({
       clearPoll: () => clearProviderAuthPollTimer(providerId),
       schedulePoll: () => scheduleProviderAuthPollById(providerId),
       loadStatus,
-    };
-  }
-
-  function normalizeDeviceAuthLogin(payload, deviceKey, payloadDeviceKey, extra = {}) {
-    return {
-      ...extra,
-      verificationUri: payload.verification_uri || "",
-      userCode: payload.user_code || "",
-      [deviceKey]: payload[payloadDeviceKey] || "",
-      pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
-    };
-  }
-
-  function clearedDeviceAuthState(deviceKey) {
-    return {
-      verificationUri: "",
-      userCode: "",
-      [deviceKey]: "",
     };
   }
 

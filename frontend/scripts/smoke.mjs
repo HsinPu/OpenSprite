@@ -47,6 +47,7 @@ const [
   chatClient,
   providerSettingsActions,
   providerAuthActions,
+  providerAuthState,
   useSettingsState,
   confirmFlow,
   shellLayout,
@@ -102,6 +103,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useProviderAuthActions.js"),
+  read("src/composables/providerAuthState.js"),
   read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
@@ -317,10 +319,12 @@ assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"conn
 assertIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions centralize runtime config fields");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth actions reuse Codex runtime config helper");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot runtime config helper");
-assertIncludes(providerAuthActions, "function normalizeDeviceAuthLogin", "provider auth actions centralize device login normalization");
+assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin", "provider auth actions import device login normalization");
+assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
 assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth actions keep Codex device auth id normalization");
 assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth actions keep Copilot device code normalization");
-assertIncludes(providerAuthActions, "function clearedDeviceAuthState", "provider auth actions centralize cleared device auth state");
+assertIncludes(providerAuthActions, "clearedDeviceAuthState", "provider auth actions import cleared device auth state");
+assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "provider auth state centralizes cleared device auth state");
 assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth actions keep Codex cleared device auth id state");
 assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceCode\")", "provider auth actions keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
