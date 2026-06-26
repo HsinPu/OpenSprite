@@ -24,6 +24,15 @@ export function providerAuthStateKeys(authKey: string) {
   };
 }
 
+export function providerAuthInitialState(keys: ReturnType<typeof providerAuthStateKeys>, auth: Record<string, unknown>) {
+  return {
+    [keys.loadingKey]: false,
+    [keys.errorKey]: "",
+    [keys.noticeKey]: "",
+    [keys.authKey]: auth,
+  };
+}
+
 export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 

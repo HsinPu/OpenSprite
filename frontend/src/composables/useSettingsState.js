@@ -3,6 +3,11 @@ import { createDefaultLogForm, createDefaultLogState } from "./logDefaults";
 import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDefaults";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
+import {
+  CODEX_AUTH_STATE_KEYS,
+  COPILOT_AUTH_STATE_KEYS,
+  providerAuthInitialState,
+} from "../settings/providerConstants";
 
 export function createSettingsForm(state) {
   return {
@@ -44,10 +49,7 @@ export function createSettingsState() {
       available: [],
     },
     credentials: {},
-    codexAuthLoading: false,
-    codexAuthError: "",
-    codexAuthNotice: "",
-    codexAuth: {
+    ...providerAuthInitialState(CODEX_AUTH_STATE_KEYS, {
       configured: false,
       expired: false,
       expires_at: null,
@@ -58,18 +60,15 @@ export function createSettingsState() {
       userCode: "",
       deviceAuthId: "",
       pollIntervalSeconds: 5,
-    },
-    copilotAuthLoading: false,
-    copilotAuthError: "",
-    copilotAuthNotice: "",
-    copilotAuth: {
+    }),
+    ...providerAuthInitialState(COPILOT_AUTH_STATE_KEYS, {
       configured: false,
       path: "",
       verificationUri: "",
       userCode: "",
       deviceCode: "",
       pollIntervalSeconds: 5,
-    },
+    }),
     connectForm: {
       providerId: "",
       name: "",

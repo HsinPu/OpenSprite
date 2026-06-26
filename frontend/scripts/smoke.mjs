@@ -46,6 +46,7 @@ const [
   reactiveCompat,
   chatClient,
   providerSettingsActions,
+  useSettingsState,
   confirmFlow,
   shellLayout,
   authGate,
@@ -99,6 +100,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
+  read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
   read("src/components/authGate.tsx"),
@@ -266,6 +268,7 @@ assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", 
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
+assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
@@ -301,6 +304,8 @@ assertIncludes(providerSettingsActions, "authNoticeKey: COPILOT_AUTH_STATE_KEYS.
 assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider settings actions keep Codex OAuth wrapper");
 assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, COPILOT_PROVIDER_ID)", "provider settings actions keep Copilot OAuth wrapper");
 assertIncludes(providerSettingsActions, "provider?.id === COPILOT_PROVIDER_ID ? COPILOT_PROVIDER_ID : CODEX_PROVIDER_ID", "provider settings actions keep default OAuth provider selection");
+assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");
+assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "settings state initializes Copilot auth through provider metadata");
 assertIncludes(chatClient, "const providerAuthPollTimers", "chat client centralizes provider auth poll timers");
 assertIncludes(chatClient, "clearProviderAuthPollTimer(CODEX_PROVIDER_ID)", "chat client keeps Codex auth timer wrapper");
 assertIncludes(chatClient, "clearProviderAuthPollTimer(COPILOT_PROVIDER_ID)", "chat client keeps Copilot auth timer wrapper");
