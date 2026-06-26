@@ -4,7 +4,7 @@ import { createDefaultNetworkForm, createDefaultNetworkState } from "./networkDe
 import { createEmptyProviderConnectForm } from "./providerConnectForm";
 import { createDefaultScheduleForm, createDefaultScheduleState, DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
-import { createProviderAuthInitialStates } from "../settings/providerConstants";
+import { createProviderAuthInitialStates } from "../settings/providerAuthInitialState";
 
 export function createSettingsForm(state) {
   return {

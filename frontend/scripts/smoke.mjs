@@ -78,6 +78,7 @@ const [
   authProviderCard,
   providerAuthSection,
   providerAuthSections,
+  providerAuthInitialState,
   providerConstants,
   providerEndpoints,
   providerEmptyState,
@@ -144,6 +145,7 @@ const [
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
   read("src/settings/providerAuthSections.ts"),
+  read("src/settings/providerAuthInitialState.ts"),
   read("src/settings/providerConstants.ts"),
   read("src/settings/providerEndpoints.ts"),
   read("src/settings/providerEmptyState.tsx"),
@@ -305,10 +307,12 @@ assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider 
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
 assertIncludes(providerConstants, "function providerAuthSectionKeys", "provider constants keep UI copy key ownership in section metadata");
 assertIncludes(providerConstants, "return { copyKey: authKey, ...providerAuthStateKeys(authKey) };", "provider constants keep copy key out of auth state key factory");
-assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
-assertIncludes(providerConstants, "[keys.stateKey]: auth", "provider constants initialize auth state through state key metadata");
-assertNotIncludes(providerConstants, "[keys.authKey]: auth", "provider constants avoid auth key ownership for initial state writes");
-assertIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants centralize provider auth initial states");
+assertNotIncludes(providerConstants, "function providerAuthInitialState", "provider constants keep auth initial state assembly separate");
+assertNotIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants keep auth initial state assembly separate");
+assertIncludes(providerAuthInitialState, "function providerAuthInitialState", "provider auth initial state owns auth initial state factory");
+assertIncludes(providerAuthInitialState, "[keys.stateKey]: auth", "provider auth initial state initializes through state key metadata");
+assertNotIncludes(providerAuthInitialState, "[keys.authKey]: auth", "provider auth initial state avoids auth key ownership for writes");
+assertIncludes(providerAuthInitialState, "function createProviderAuthInitialStates", "provider auth initial state centralizes provider auth initial states");
 assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "provider constants share device auth initial state defaults");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");
 assertNotIncludes(providerConstants, "const CODEX_AUTH_KEY", "provider constants avoid Codex auth key middle constant");
@@ -329,9 +333,9 @@ assertIncludes(providerConstants, "logoutReset: { expired: false, expires_at: nu
 assertIncludes(providerConstants, "deviceKey: \"deviceCode\"", "provider constants keep Copilot device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_code\"", "provider constants keep Copilot device auth payload key in metadata");
 assertIncludes(providerConstants, "logoutReset: { path: \"\" }", "provider constants keep Copilot logout reset state in metadata");
-assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
-assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
-assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
+assertIncludes(providerAuthInitialState, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider auth initial state builds auth initial states from provider metadata");
+assertNotIncludes(providerAuthInitialState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider auth initial state avoids Codex-specific auth initial state assembly");
+assertNotIncludes(providerAuthInitialState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider auth initial state avoids Copilot-specific auth initial state assembly");
 assertIncludes(providerHelpers, "return providerAuthSectionForId(providerCatalogKey(provider))", "provider helpers delegate provider section lookup through shared provider key resolver");
 assertIncludes(providerHelpers, "state[config.stateKey]?.configured", "provider auth configured reads state through state key metadata");
 assertIncludes(providerHelpers, "providerCopy[authConfig.copyKey]?.providerNeedsLogin", "provider description reads login copy through copy key metadata");

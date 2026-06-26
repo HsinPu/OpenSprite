@@ -18,15 +18,6 @@ function providerAuthSectionKeys(authKey: string) {
   return { copyKey: authKey, ...providerAuthStateKeys(authKey) };
 }
 
-export function providerAuthInitialState(keys: ReturnType<typeof providerAuthStateKeys>, auth: Record<string, unknown>) {
-  return {
-    [keys.loadingKey]: false,
-    [keys.errorKey]: "",
-    [keys.noticeKey]: "",
-    [keys.stateKey]: auth,
-  };
-}
-
 function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string, unknown> = {}) {
   return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
 }
@@ -50,13 +41,6 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
 ];
 
 export const DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId;
-
-export function createProviderAuthInitialStates() {
-  return Object.assign(
-    {},
-    ...PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth)),
-  );
-}
 
 const PROVIDER_AUTH_SECTIONS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, config]));
 
