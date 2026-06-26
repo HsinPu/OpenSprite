@@ -1,5 +1,5 @@
 import { randomToken } from "./chatClientTokens";
-import { coerceBoolean, coerceStringList } from "./chatClientCoercion";
+import { coerceBoolean, coerceNonNegativeInteger, coerceStringList } from "./chatClientCoercion";
 
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
@@ -34,14 +34,6 @@ function formatShortList(value, maxItems = 3) {
   const visible = items.slice(0, maxItems).join(", ");
   const remaining = items.length - maxItems;
   return remaining > 0 ? `${visible} +${remaining}` : visible;
-}
-
-function coerceNonNegativeInteger(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
-  }
-  return Math.floor(number);
 }
 
 function normalizeEventTimestamp(value) {

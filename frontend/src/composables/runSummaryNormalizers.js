@@ -1,12 +1,4 @@
-import { coerceBoolean, coerceStringList } from "./chatClientCoercion";
-
-function coerceNonNegativeInteger(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
-  }
-  return Math.floor(number);
-}
+import { coerceBoolean, coerceNonNegativeInteger, coerceStringList } from "./chatClientCoercion";
 
 function normalizeEventTimestamp(value) {
   const numericValue = Number(value);

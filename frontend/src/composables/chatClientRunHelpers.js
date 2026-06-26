@@ -1,14 +1,7 @@
 import { normalizeTraceEventCounts } from "./runTraceNormalizers";
+import { coerceNonNegativeInteger } from "./chatClientCoercion";
 
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
-
-function coerceNonNegativeInteger(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
-  }
-  return Math.trunc(number);
-}
 
 export function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
   return {
