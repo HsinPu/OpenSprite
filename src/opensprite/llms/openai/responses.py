@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from ..openai_compatible import OpenAICompatibleClientMixin
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_RESPONSES_REQUEST_PROFILE, build_llm_request
 from ..request_log_fields import log_llm_request_params
@@ -108,7 +109,7 @@ def _extract_tool_calls(response: Any) -> list[ToolCall]:
     return calls
 
 
-class OpenAIResponsesLLM(LLMProvider):
+class OpenAIResponsesLLM(OpenAICompatibleClientMixin, LLMProvider):
     """OpenAI Responses API provider used by Codex OAuth and direct Responses routes."""
 
     def __init__(
@@ -118,15 +119,13 @@ class OpenAIResponsesLLM(LLMProvider):
         default_model: str = "gpt-5.1-codex",
         reasoning_effort: str = "",
     ):
-        from openai import AsyncOpenAI
-
         self.api_key = api_key
         self.base_url = base_url
         self.default_model = default_model
         self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
         self.reasoning_config = reasoning_config_or_default(self.reasoning_effort)
         self._client_kwargs = {"api_key": api_key, **({"base_url": base_url} if base_url else {})}
-        self.client = AsyncOpenAI(**self._client_kwargs)
+        self.client = self._build_client()
 
     async def chat(
         self,
@@ -196,13 +195,3 @@ class OpenAIResponsesLLM(LLMProvider):
 
     def get_default_model(self) -> str:
         return self.default_model
-
-    def recover_after_error(self, error: BaseException) -> bool:
-        _ = error
-        try:
-            from openai import AsyncOpenAI
-
-            self.client = AsyncOpenAI(**self._client_kwargs)
-            return True
-        except Exception:
-            return False
