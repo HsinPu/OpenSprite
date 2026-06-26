@@ -1,8 +1,15 @@
+import {
+  CODEX_AUTH_KEY,
+  CODEX_PROVIDER_ID,
+  COPILOT_AUTH_KEY,
+  COPILOT_PROVIDER_ID,
+} from "./providerConstants";
+
 export type AnyRecord = Record<string, any>;
 
 const PROVIDER_AUTH_KEYS: Record<string, string> = {
-  "openai-codex": "codexAuth",
-  copilot: "copilotAuth",
+  [CODEX_PROVIDER_ID]: CODEX_AUTH_KEY,
+  [COPILOT_PROVIDER_ID]: COPILOT_AUTH_KEY,
 };
 
 export function providerMark(value: AnyRecord) {

@@ -66,6 +66,7 @@ const [
   authProviderCard,
   providerAuthSection,
   providerAuthSections,
+  providerConstants,
   providerEmptyState,
   providerHelpers,
   availableProviderRow,
@@ -118,6 +119,7 @@ const [
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
   read("src/settings/providerAuthSections.ts"),
+  read("src/settings/providerConstants.ts"),
   read("src/settings/providerEmptyState.tsx"),
   read("src/settings/providerHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
@@ -257,9 +259,13 @@ assertIncludes(generalSettings, "form.colorScheme", "general settings keeps colo
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
 assertIncludes(providerSettings, "ProviderAuthSection", "provider settings delegates auth provider section");
 assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
+assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
+assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
+assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
+assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
 assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
-assertIncludes(providerAuthSections, "providerId: \"openai-codex\"", "provider auth sections keep Codex auth provider");
-assertIncludes(providerAuthSections, "providerId: \"copilot\"", "provider auth sections keep Copilot auth provider");
+assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider auth sections keep Codex auth provider");
+assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
 assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "provider auth sections keep Codex refresh action");
 assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
@@ -342,8 +348,8 @@ assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.c
 assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
 assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
-assertIncludes(providerHelpers, "\"openai-codex\": \"codexAuth\"", "provider helpers map Codex auth key");
-assertIncludes(providerHelpers, "copilot: \"copilotAuth\"", "provider helpers map Copilot auth key");
+assertIncludes(providerHelpers, "[CODEX_PROVIDER_ID]: CODEX_AUTH_KEY", "provider helpers map Codex auth key");
+assertIncludes(providerHelpers, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_KEY", "provider helpers map Copilot auth key");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");

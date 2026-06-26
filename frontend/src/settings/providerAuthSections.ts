@@ -5,12 +5,18 @@ import {
   copilotDescription,
   providerAuthVisible,
 } from "./providerHelpers";
+import {
+  CODEX_AUTH_KEY,
+  CODEX_PROVIDER_ID,
+  COPILOT_AUTH_KEY,
+  COPILOT_PROVIDER_ID,
+} from "./providerConstants";
 
 const PROVIDER_AUTH_SECTIONS = [
   {
     key: "codex",
-    providerId: "openai-codex",
-    copyKey: "codexAuth",
+    providerId: CODEX_PROVIDER_ID,
+    copyKey: CODEX_AUTH_KEY,
     loadingKey: "codexAuthLoading",
     noticeKey: "codexAuthNotice",
     errorKey: "codexAuthError",
@@ -24,8 +30,8 @@ const PROVIDER_AUTH_SECTIONS = [
   },
   {
     key: "copilot",
-    providerId: "copilot",
-    copyKey: "copilotAuth",
+    providerId: COPILOT_PROVIDER_ID,
+    copyKey: COPILOT_AUTH_KEY,
     loadingKey: "copilotAuthLoading",
     noticeKey: "copilotAuthNotice",
     errorKey: "copilotAuthError",
