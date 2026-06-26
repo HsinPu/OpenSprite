@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from aiohttp import web
@@ -105,6 +107,14 @@ def raise_provider_settings_error(exc: ProviderSettingsError) -> None:
     _raise_settings_error(
         exc, ProviderSettingsValidationError, ProviderSettingsNotFound, ProviderSettingsConflict
     )
+
+
+@contextmanager
+def provider_settings_errors() -> Iterator[None]:
+    try:
+        yield
+    except ProviderSettingsError as exc:
+        raise_provider_settings_error(exc)
 
 
 def raise_channel_settings_error(exc: ChannelSettingsError) -> None:
