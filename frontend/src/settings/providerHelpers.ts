@@ -1,4 +1,4 @@
-import { providerAuthKeyForId } from "./providerConstants";
+import { providerAuthSectionForId } from "./providerConstants";
 
 export type AnyRecord = Record<string, any>;
 
@@ -19,7 +19,7 @@ export function providerAuthVisible(state: AnyRecord, providerId: string, auth: 
 }
 
 export function providerAuthKey(provider: AnyRecord) {
-  return providerAuthKeyForId(providerCatalogKey(provider));
+  return providerAuthSectionForId(providerCatalogKey(provider))?.authKey || "";
 }
 
 export function providerAuthConfigured(state: AnyRecord, provider: AnyRecord) {

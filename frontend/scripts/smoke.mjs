@@ -289,7 +289,7 @@ assertNotIncludes(providerConstants, "export const CODEX_PROVIDER_ID", "provider
 assertNotIncludes(providerConstants, "export const COPILOT_PROVIDER_ID", "provider constants keep Copilot provider id internal");
 assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_SECTIONS)", "provider constants derive auth provider ids from section metadata");
 assertIncludes(providerConstants, "export function providerAuthSectionForId", "provider constants centralize provider auth section lookup");
-assertIncludes(providerConstants, "return providerAuthSectionForId(providerId)?.authKey || \"\"", "provider constants derive auth keys through section lookup");
+assertNotIncludes(providerConstants, "function providerAuthKeyForId", "provider constants keep auth key derivation out of exported constants");
 assertNotIncludes(providerConstants, "PROVIDER_AUTH_KEYS", "provider constants avoid duplicate auth key map ownership");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
@@ -310,7 +310,7 @@ assertIncludes(providerConstants, "connectedNoticeKey: authKey.replace(/Auth$/, 
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_STATE_KEYS", "provider constants keep Codex auth state keys internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_STATE_KEYS", "provider constants keep Copilot auth state keys internal");
 assertIncludes(providerConstants, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId", "provider constants derive default auth provider from metadata");
-assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
+assertIncludes(providerHelpers, "providerAuthSectionForId(providerCatalogKey(provider))?.authKey || \"\"", "provider helpers derive auth keys through section metadata");
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
@@ -324,7 +324,7 @@ assertIncludes(providerConstants, "logoutReset: { path: \"\" }", "provider const
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
 assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
 assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
-assertIncludes(providerHelpers, "providerAuthKeyForId(providerCatalogKey(provider))", "provider helpers delegate provider auth key lookup through shared provider key resolver");
+assertIncludes(providerHelpers, "providerAuthSectionForId(providerCatalogKey(provider))", "provider helpers delegate provider auth key lookup through shared provider key resolver");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");

@@ -87,10 +87,6 @@ export function providerAuthSectionForId(providerId: string) {
   return PROVIDER_AUTH_SECTIONS[providerId];
 }
 
-export function providerAuthKeyForId(providerId: string) {
-  return providerAuthSectionForId(providerId)?.authKey || "";
-}
-
 export function providerAuthEndpoint(providerId: string, action = "") {
   return `/api/settings/auth/${providerId}${action ? `/${action}` : ""}`;
 }
