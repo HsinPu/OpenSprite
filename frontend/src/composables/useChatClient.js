@@ -1544,6 +1544,9 @@ export function useChatClient() {
   const {
     loadCodexAuthStatus,
     loadCopilotAuthStatus,
+    connectCodexProvider,
+    connectOAuthProvider,
+    connectCopilotProvider,
     clearProviderAuthPollTimers,
     startCodexAuthLogin,
     logoutCodexAuth,
@@ -1555,6 +1558,10 @@ export function useChatClient() {
     copy,
     setSettingsSuccess,
     loadModelSettings,
+    refreshProviderState: async () => {
+      await loadProviderSettings();
+      await loadModelSettings();
+    },
   });
 
   const {
@@ -1618,9 +1625,6 @@ export function useChatClient() {
     disconnectProvider,
     setProviderCredential,
     deleteCredential,
-    connectCodexProvider,
-    connectOAuthProvider,
-    connectCopilotProvider,
   } = useProviderSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -1629,8 +1633,6 @@ export function useChatClient() {
     cancelChannelConnect,
     cancelProviderConnect,
     loadModelSettings,
-    startCodexAuthLogin,
-    startCopilotAuthLogin,
   });
 
   const { loadUpdateStatus, runUpdate } = useUpdateSettingsActions({

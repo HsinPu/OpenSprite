@@ -2,8 +2,10 @@ import { coerceNonNegativeInteger } from "./chatClientCoercion";
 import {
   CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
+  CODEX_PROVIDER_NAME,
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
+  COPILOT_PROVIDER_NAME,
   providerAuthRequestConfig,
 } from "../settings/providerConstants";
 
@@ -13,6 +15,7 @@ export function useProviderAuthActions({
   copy,
   setSettingsSuccess,
   loadModelSettings,
+  refreshProviderState,
 }) {
   const providerAuthPollTimers = {
     [CODEX_PROVIDER_ID]: null,
@@ -160,6 +163,71 @@ export function useProviderAuthActions({
     return loadProviderAuthStatusById(COPILOT_PROVIDER_ID);
   }
 
+  async function connectOAuthBackedProvider(provider, options) {
+    const providerId = provider?.id || options.providerId;
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    settingsState[options.authNoticeKey] = "";
+    try {
+      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: provider?.name || options.providerName,
+          base_url: provider?.default_base_url || "",
+        }),
+      });
+      setSettingsSuccess("providersNotice", options.connectedNotice);
+      await refreshProviderState();
+      await options.startAuthLogin();
+    } catch (error) {
+      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
+    } finally {
+      settingsState.providersLoading = false;
+    }
+  }
+
+  const oauthProviderConfigs = {
+    [CODEX_PROVIDER_ID]: {
+      providerId: CODEX_PROVIDER_ID,
+      providerName: CODEX_PROVIDER_NAME,
+      authNoticeKey: CODEX_AUTH_STATE_KEYS.noticeKey,
+      connectedNotice: () => copy.value.notices.codexProviderConnected,
+      startAuthLogin: startCodexAuthLogin,
+    },
+    [COPILOT_PROVIDER_ID]: {
+      providerId: COPILOT_PROVIDER_ID,
+      providerName: COPILOT_PROVIDER_NAME,
+      authNoticeKey: COPILOT_AUTH_STATE_KEYS.noticeKey,
+      connectedNotice: () => copy.value.notices.copilotProviderConnected,
+      startAuthLogin: startCopilotAuthLogin,
+    },
+  };
+
+  function oauthProviderConfig(providerId) {
+    return oauthProviderConfigs[providerId] || oauthProviderConfigs[CODEX_PROVIDER_ID];
+  }
+
+  async function connectOAuthProviderById(provider, providerId) {
+    const config = oauthProviderConfig(providerId);
+    return connectOAuthBackedProvider(provider, {
+      ...config,
+      connectedNotice: config.connectedNotice(),
+    });
+  }
+
+  async function connectCodexProvider(provider) {
+    return connectOAuthProviderById(provider, CODEX_PROVIDER_ID);
+  }
+
+  async function connectCopilotProvider(provider) {
+    return connectOAuthProviderById(provider, COPILOT_PROVIDER_ID);
+  }
+
+  async function connectOAuthProvider(provider) {
+    await connectOAuthProviderById(provider, provider?.id === COPILOT_PROVIDER_ID ? COPILOT_PROVIDER_ID : CODEX_PROVIDER_ID);
+  }
+
   async function startProviderAuthLogin(config) {
     config.clearPoll();
     settingsState[config.loadingKey] = true;
@@ -258,6 +326,9 @@ export function useProviderAuthActions({
   return {
     loadCodexAuthStatus,
     loadCopilotAuthStatus,
+    connectCodexProvider,
+    connectOAuthProvider,
+    connectCopilotProvider,
     clearProviderAuthPollTimers,
     startCodexAuthLogin,
     logoutCodexAuth,
