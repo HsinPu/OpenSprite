@@ -315,6 +315,7 @@ assertIncludes(providerConstants, "function providerAuthRequestConfig", "provide
 assertIncludes(providerConstants, "loginEndpoint: providerAuthEndpoint(providerId, \"login\")", "provider constants keep auth login endpoint metadata");
 assertIncludes(providerConstants, "logoutEndpoint: providerAuthEndpoint(providerId, \"logout\")", "provider constants keep auth logout endpoint metadata");
 assertIncludes(providerConstants, "pollEndpoint: providerAuthEndpoint(providerId, \"poll\")", "provider constants keep auth poll endpoint metadata");
+assertIncludes(providerConstants, "Object.keys(providerAuthStateKeys(\"\"))", "provider constants derive auth request keys from state key factory");
 assertIncludes(providerConstants, "PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key, config[key]])", "provider constants keep auth request fields separate from UI provider metadata");
 assertIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE = \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type");
 assertIncludes(providerConstants, "GITHUB_COPILOT_OAUTH_AUTH_TYPE = \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type");

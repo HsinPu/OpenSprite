@@ -37,20 +37,7 @@ function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string,
   return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
 }
 
-const PROVIDER_AUTH_REQUEST_KEYS = [
-  "authKey",
-  "copyKey",
-  "stateKey",
-  "loadingKey",
-  "errorKey",
-  "noticeKey",
-  "loadFailedNoticeKey",
-  "loginReadyNoticeKey",
-  "loginFailedNoticeKey",
-  "loginCompleteNoticeKey",
-  "loggedOutNoticeKey",
-  "logoutFailedNoticeKey",
-] as const;
+const PROVIDER_AUTH_REQUEST_KEYS = Object.keys(providerAuthStateKeys("")) as Array<keyof ReturnType<typeof providerAuthStateKeys>>;
 
 export function providerAuthRequestConfig(config: ReturnType<typeof providerAuthStateKeys> & { providerId: string }) {
   const { providerId } = config;
