@@ -2,7 +2,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, silentRe
 import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
-import { coerceBoolean, coerceNonNegativeInteger, coerceStringList } from "./chatClientCoercion";
+import {
+  coerceBoolean,
+  coerceNonNegativeInteger,
+  coerceStringList,
+  normalizeEventTimestamp,
+} from "./chatClientCoercion";
 import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
@@ -201,14 +206,6 @@ function normalizeCommandCatalog(payload) {
       subcommands: coerceStringList(item?.subcommands),
     };
   }).filter(Boolean);
-}
-
-function normalizeEventTimestamp(value) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return Date.now();
-  }
-  return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
 }
 
 function buildRunCancelUrl(wsUrl, runId, sessionId) {

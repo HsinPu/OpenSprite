@@ -1,12 +1,9 @@
-import { coerceBoolean, coerceNonNegativeInteger, coerceStringList } from "./chatClientCoercion";
-
-function normalizeEventTimestamp(value) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return Date.now();
-  }
-  return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
-}
+import {
+  coerceBoolean,
+  coerceNonNegativeInteger,
+  coerceStringList,
+  normalizeEventTimestamp,
+} from "./chatClientCoercion";
 
 export function normalizeDiffSummary(payload) {
   if (!payload || typeof payload !== "object") {
