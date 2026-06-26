@@ -17,6 +17,10 @@ export function createProviderConnectForm(provider) {
   };
 }
 
+export function resetProviderConnectForm(form) {
+  Object.assign(form, createEmptyProviderConnectForm());
+}
+
 export function providerConnectPayloadFromForm(form) {
   return {
     name: form.name,

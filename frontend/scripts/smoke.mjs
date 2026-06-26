@@ -343,6 +343,7 @@ assertNotIncludes(providerSettingsActions, "providerSettingsEndpoint(", "provide
 assertIncludes(providerSettingsActions, "createProviderConnectForm(provider)", "provider settings actions reuse provider connect form helper");
 assertIncludes(providerConnectForm, "export function createEmptyProviderConnectForm", "provider connect form centralizes empty form state");
 assertIncludes(providerConnectForm, "export function createProviderConnectForm", "provider connect form centralizes provider-derived form state");
+assertIncludes(providerConnectForm, "export function resetProviderConnectForm", "provider connect form centralizes connect form reset");
 assertIncludes(providerConnectForm, "export function providerConnectPayloadFromForm", "provider connect form centralizes connect payload shape");
 assertIncludes(providerSettingsRequests, "providerConnectPayloadFromForm(form)", "provider settings requests reuse connect payload helper");
 assertIncludes(providerConnectForm, "export function providerOAuthConnectPayload", "provider connect form centralizes OAuth connect payload shape");
@@ -352,7 +353,8 @@ assertIncludes(providerSettingsRequests, "providerCredentialPayload(credentialId
 assertIncludes(providerConnectForm, "export function providerCredentialKey", "provider connect form centralizes credential provider key resolution");
 assertIncludes(providerSettingsActions, "providerCredentialKey(provider)", "provider settings actions reuse credential key helper");
 assertIncludes(useSettingsState, "connectForm: createEmptyProviderConnectForm()", "settings state reuses provider connect form defaults");
-assertIncludes(chatClient, "Object.assign(settingsState.connectForm, createEmptyProviderConnectForm())", "chat client reuses provider connect form reset");
+assertIncludes(chatClient, "resetProviderConnectForm(settingsState.connectForm)", "chat client reuses provider connect form reset helper");
+assertNotIncludes(chatClient, "Object.assign(settingsState.connectForm, createEmptyProviderConnectForm())", "chat client no longer owns provider connect form reset fields");
 assertIncludes(chatClient, "const loadSettingsSection = createSettingsSectionLoader({", "chat client delegates settings section loading");
 assertNotIncludes(chatClient, "function loadSettingsSection(sectionName)", "chat client no longer owns settings section loader dispatch");
 assertIncludes(settingsSectionLoaders, "export function createSettingsSectionLoader", "settings section loaders centralize section dispatch");
