@@ -23,7 +23,7 @@ export function providerAuthVisible(state: AnyRecord, config: AnyRecord) {
   return Boolean(hasConnectedProvider(state, config.providerId) || state[config.loadingKey] || auth?.configured || auth?.userCode || state[config.noticeKey] || state[config.errorKey]);
 }
 
-export function providerAuthKey(provider: AnyRecord) {
+export function providerAuthCopyKey(provider: AnyRecord) {
   return providerAuthSection(provider)?.copyKey || "";
 }
 

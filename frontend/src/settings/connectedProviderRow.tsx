@@ -3,7 +3,7 @@ import {
   type AnyRecord,
   credentialSourceLabel,
   providerAuthConfigured,
-  providerAuthKey,
+  providerAuthCopyKey,
   providerCredentials,
   providerDescription,
   providerEffectiveCredentialId,
@@ -29,7 +29,7 @@ export function ConnectedProviderRow({
 }) {
   const credentials = providerCredentials(state, provider);
   const effectiveCredentialId = providerEffectiveCredentialId(provider);
-  const authKey = providerAuthKey(provider);
+  const authCopyKey = providerAuthCopyKey(provider);
 
   return (
     <List.Item key={provider.id} className="provider-row">
@@ -40,7 +40,7 @@ export function ConnectedProviderRow({
             <strong>{provider.name || provider.id}</strong>
             {provider.is_default ? <Tag className="provider-row__badge">{providerCopy.currentBadge || "Current"}</Tag> : null}
             {provider.preset_name && provider.preset_name !== provider.name ? <Tag className="provider-row__badge">{provider.preset_name}</Tag> : null}
-            {authKey && !providerAuthConfigured(state, provider) ? <Tag className="provider-row__badge">{providerCopy[authKey]?.notConfigured || "Not configured"}</Tag> : null}
+            {authCopyKey && !providerAuthConfigured(state, provider) ? <Tag className="provider-row__badge">{providerCopy[authCopyKey]?.notConfigured || "Not configured"}</Tag> : null}
           </div>
           <span>{providerDescription(copy, state, provider)}</span>
           {provider.credential_preview ? (

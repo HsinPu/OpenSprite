@@ -596,7 +596,8 @@ assertIncludes(connectedProvidersSection, "ConnectedProviderRow", "connected pro
 assertIncludes(connectedProvidersSection, "ProviderEmptyState", "connected providers delegates provider empty state");
 assertIncludes(connectedProviderRow, "providerCredentials(state, provider)", "connected provider row keeps credential lookup");
 assertIncludes(connectedProviderRow, "providerEffectiveCredentialId(provider)", "connected provider row keeps effective credential lookup");
-assertIncludes(connectedProviderRow, "providerAuthKey(provider)", "connected provider row keeps provider auth key lookup");
+assertIncludes(connectedProviderRow, "providerAuthCopyKey(provider)", "connected provider row keeps provider auth copy lookup");
+assertIncludes(providerHelpers, "export function providerAuthCopyKey", "provider helpers expose provider auth copy key helper");
 assertIncludes(connectedProviderRow, "providerAuthConfigured(state, provider)", "connected provider row keeps auth configured badge rule");
 assertIncludes(connectedProviderRow, "onSetCredential(provider, value)", "connected provider row keeps credential switch action");
 assertIncludes(connectedProviderRow, "onDeleteCredential(provider, effectiveCredentialId)", "connected provider row keeps credential deletion action");
