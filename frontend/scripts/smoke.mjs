@@ -58,6 +58,7 @@ const [
   browserSettings,
   runInspector,
   runHistorySelector,
+  runSummaryCard,
   runTimeline,
   workStateCard,
   logSettings,
@@ -97,6 +98,7 @@ const [
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/components/runHistorySelector.tsx"),
+  read("src/components/runSummaryCard.tsx"),
   read("src/components/runTimeline.tsx"),
   read("src/components/workStateCard.tsx"),
   read("src/settings/logSettings.tsx"),
@@ -277,6 +279,7 @@ assertNotIncludes(openSpriteShell, "<select", "app shell avoids raw select eleme
 assertNotIncludes(openSpriteShell, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(runInspector, "RunHistorySelector", "run inspector delegates run history selector");
+assertIncludes(runInspector, "RunSummaryCard", "run inspector delegates run summary card");
 assertIncludes(runInspector, "RunTimeline", "run inspector delegates run timeline");
 assertIncludes(runInspector, "WorkStateCard", "run inspector delegates work state card");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
@@ -291,6 +294,11 @@ assertNotIncludes(settingsModal, "const contentBySection", "settings modal shoul
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
 assertRegex(runHistorySelector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
+assertIncludes(runSummaryCard, "className=\"run-summary-card\"", "run summary card keeps card class");
+assertIncludes(runSummaryCard, "cleanupWorktreeSandbox(run)", "run summary card keeps cleanup sandbox action");
+assertIncludes(runSummaryCard, "summary.status || run.status", "run summary card keeps status fallback");
+assertIncludes(runSummaryCard, "summary.result || summary.final_answer", "run summary card keeps result fallback");
+assertIncludes(runSummaryCard, "run.summaryError", "run summary card keeps summary error state");
 assertIncludes(runTimeline, "className=\"run-timeline\"", "run timeline keeps card class");
 assertIncludes(runTimeline, "copy.timeline?.title || copy.runHistory.title", "run timeline keeps fallback title");
 assertIncludes(runTimeline, "event.tone === \"error\" ? \"red\"", "run timeline keeps event tone mapping");
