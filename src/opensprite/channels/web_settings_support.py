@@ -103,17 +103,21 @@ def _raise_settings_error(
     raise web.HTTPServiceUnavailable(text=str(exc)) from exc
 
 
-def raise_provider_settings_error(exc: ProviderSettingsError) -> None:
+def raise_provider_settings_error(exc: Exception) -> None:
     _raise_settings_error(
         exc, ProviderSettingsValidationError, ProviderSettingsNotFound, ProviderSettingsConflict
     )
 
 
 @contextmanager
-def provider_settings_errors() -> Iterator[None]:
+def provider_settings_errors(*, include_unexpected: bool = False) -> Iterator[None]:
     try:
         yield
     except ProviderSettingsError as exc:
+        raise_provider_settings_error(exc)
+    except Exception as exc:
+        if not include_unexpected:
+            raise
         raise_provider_settings_error(exc)
 
 

@@ -18,10 +18,8 @@ from . import web_settings_coercion, web_settings_payloads, web_settings_reload,
 
 
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
-    try:
+    with web_settings_support.provider_settings_errors(include_unexpected=True):
         payload = web_settings_support.get_media_settings(adapter).list_media()
-    except Exception as exc:
-        web_settings_support.raise_provider_settings_error(exc)
     return web.json_response(payload)
 
 
@@ -30,15 +28,13 @@ async def handle_settings_media_update(adapter: Any, request: web.Request) -> we
     category = adapter._coerce_optional_text(body.get("category"))
     if category is None:
         raise web.HTTPBadRequest(text="category is required")
-    try:
+    with web_settings_support.provider_settings_errors(include_unexpected=True):
         payload = web_settings_support.get_media_settings(adapter).update_media(
             category,
             enabled=web_settings_coercion.coerce_bool(body.get("enabled"), field="enabled", default=False),
             provider_id=adapter._coerce_optional_text(body.get("provider_id")),
             model=adapter._coerce_optional_text(body.get("model")),
         )
-    except Exception as exc:
-        web_settings_support.raise_provider_settings_error(exc)
     payload = web_settings_reload.reload_media_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
@@ -54,14 +50,12 @@ async def handle_settings_model_select(adapter: Any, request: web.Request) -> we
     )
     if provider_id is None or model is None:
         raise web.HTTPBadRequest(text="provider_id and model are required")
-    try:
+    with web_settings_support.provider_settings_errors(include_unexpected=True):
         payload = web_settings_support.get_provider_settings(adapter).select_model(
             provider_id,
             model,
             reasoning_effort=reasoning_effort,
         )
-    except Exception as exc:
-        web_settings_support.raise_provider_settings_error(exc)
     payload = web_settings_reload.reload_agent_llm_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 
