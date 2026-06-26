@@ -13,10 +13,6 @@ import {
   requestProviderOAuthConnect,
 } from "./providerAuthRequests";
 import { runProviderMutation } from "./providerMutationRunner";
-import {
-  CODEX_PROVIDER_ID,
-  COPILOT_PROVIDER_ID,
-} from "../settings/providerConstants";
 
 export function useProviderAuthActions({
   settingsState,
@@ -37,8 +33,7 @@ export function useProviderAuthActions({
     startAuthLoginById,
     clearProviderAuthPollTimer,
     scheduleProviderAuthPollById,
-    loadCodexAuthStatus,
-    loadCopilotAuthStatus,
+    loadProviderAuthStatusById,
   }));
 
   function scheduleProviderAuthPollById(providerId) {
@@ -55,14 +50,6 @@ export function useProviderAuthActions({
 
   async function loadProviderAuthStatusById(providerId) {
     return loadProviderAuthStatus(getProviderAuthConfig(providerAuthConfigs, providerId));
-  }
-
-  async function loadCodexAuthStatus() {
-    return loadProviderAuthStatusById(CODEX_PROVIDER_ID);
-  }
-
-  async function loadCopilotAuthStatus() {
-    return loadProviderAuthStatusById(COPILOT_PROVIDER_ID);
   }
 
   async function connectOAuthBackedProvider(provider, options) {
@@ -101,22 +88,6 @@ export function useProviderAuthActions({
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
       config.schedulePoll();
     }, { clearNotice: true, before: config.clearPoll });
-  }
-
-  async function startCodexAuthLogin() {
-    return startProviderAuthLoginById(CODEX_PROVIDER_ID);
-  }
-
-  async function logoutCodexAuth() {
-    return logoutProviderAuthById(CODEX_PROVIDER_ID);
-  }
-
-  async function startCopilotAuthLogin() {
-    return startProviderAuthLoginById(COPILOT_PROVIDER_ID);
-  }
-
-  async function logoutCopilotAuth() {
-    return logoutProviderAuthById(COPILOT_PROVIDER_ID);
   }
 
   async function startProviderAuthLoginById(providerId) {
@@ -167,13 +138,10 @@ export function useProviderAuthActions({
   }
 
   return {
-    loadCodexAuthStatus,
-    loadCopilotAuthStatus,
+    loadProviderAuthStatusById,
     connectOAuthProvider,
     clearProviderAuthPollTimers,
-    startCodexAuthLogin,
-    logoutCodexAuth,
-    startCopilotAuthLogin,
-    logoutCopilotAuth,
+    startProviderAuthLoginById,
+    logoutProviderAuthById,
   };
 }

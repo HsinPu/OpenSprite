@@ -11,12 +11,9 @@ type ValueRef<T> = { value: T };
 type ProviderSettingsClient = {
   copy: ValueRef<AnyRecord>;
   settingsState: AnyRecord;
-  loadCodexAuthStatus: () => void;
-  startCodexAuthLogin: () => void;
-  logoutCodexAuth: () => void;
-  loadCopilotAuthStatus: () => void;
-  startCopilotAuthLogin: () => void;
-  logoutCopilotAuth: () => void;
+  loadProviderAuthStatusById: (providerId: string) => void;
+  startProviderAuthLoginById: (providerId: string) => void;
+  logoutProviderAuthById: (providerId: string) => void;
   setProviderCredential: (provider: AnyRecord, credentialId: string) => void;
   deleteCredential: (provider: AnyRecord, credentialId: string) => void;
   disconnectProvider: (provider: AnyRecord) => void;

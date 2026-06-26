@@ -14,20 +14,19 @@ export function createProviderAuthRuntimeConfigs({
   startAuthLoginById,
   clearProviderAuthPollTimer,
   scheduleProviderAuthPollById,
-  loadCodexAuthStatus,
-  loadCopilotAuthStatus,
+  loadProviderAuthStatusById,
 }) {
-  const runtimeConfig = (providerId, providerName, connectedNoticeKey, loadStatus) => ({
+  const runtimeConfig = (providerId, providerName, connectedNoticeKey) => ({
     providerName,
     connectedNotice: () => copy.value.notices[connectedNoticeKey],
     startAuthLogin: () => startAuthLoginById(providerId),
     clearPoll: () => clearProviderAuthPollTimer(providerId),
     schedulePoll: () => scheduleProviderAuthPollById(providerId),
-    loadStatus,
+    loadStatus: () => loadProviderAuthStatusById(providerId),
   });
   return {
-    [CODEX_PROVIDER_ID]: runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME, "codexProviderConnected", loadCodexAuthStatus),
-    [COPILOT_PROVIDER_ID]: runtimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME, "copilotProviderConnected", loadCopilotAuthStatus),
+    [CODEX_PROVIDER_ID]: runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME, "codexProviderConnected"),
+    [COPILOT_PROVIDER_ID]: runtimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME, "copilotProviderConnected"),
   };
 }
 

@@ -23,9 +23,6 @@ const PROVIDER_AUTH_SECTIONS = [
     defaultTitle: `${CODEX_PROVIDER_NAME} auth`,
     defaultName: CODEX_PROVIDER_NAME,
     describe: codexDescription,
-    refreshAction: "loadCodexAuthStatus",
-    loginAction: "startCodexAuthLogin",
-    logoutAction: "logoutCodexAuth",
   },
   {
     key: "copilot",
@@ -35,9 +32,6 @@ const PROVIDER_AUTH_SECTIONS = [
     defaultTitle: `${COPILOT_PROVIDER_NAME} auth`,
     defaultName: COPILOT_PROVIDER_NAME,
     describe: copilotDescription,
-    refreshAction: "loadCopilotAuthStatus",
-    loginAction: "startCopilotAuthLogin",
-    logoutAction: "logoutCopilotAuth",
   },
 ];
 
@@ -70,9 +64,9 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
       configured: auth?.configured,
       copy: authCopy,
       auth,
-      onRefresh: client[config.refreshAction],
-      onLogin: client[config.loginAction],
-      onLogout: client[config.logoutAction],
+      onRefresh: () => client.loadProviderAuthStatusById(config.providerId),
+      onLogin: () => client.startProviderAuthLoginById(config.providerId),
+      onLogout: () => client.logoutProviderAuthById(config.providerId),
     };
   });
 }
