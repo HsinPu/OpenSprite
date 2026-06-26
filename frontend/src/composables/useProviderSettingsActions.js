@@ -26,6 +26,10 @@ export function useProviderSettingsActions({
 
   async function refreshProviderState() { await loadProviderSettings(); await loadModelSettings(); }
 
+  async function runProviderSettingsMutation(fallbackNotice, action) {
+    await runProviderMutation(settingsState, fallbackNotice, action, { after: refreshProviderState });
+  }
+
   function beginProviderConnect(provider) {
     settingsState.providersNotice = "";
     settingsState.providersError = "";
@@ -38,19 +42,17 @@ export function useProviderSettingsActions({
     if (!providerId) {
       return;
     }
-    await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
+    await runProviderSettingsMutation(copy.value.notices.providerConnectFailed, async () => {
       await requestProviderConnect(requestSettingsJson, settingsState.connectForm);
       setSettingsSuccess("providersNotice", copy.value.notices.providerConnected);
       cancelProviderConnect();
-      await refreshProviderState();
     });
   }
 
   async function disconnectProvider(provider) {
-    await runProviderMutation(settingsState, copy.value.notices.providerDisconnectFailed, async () => {
+    await runProviderSettingsMutation(copy.value.notices.providerDisconnectFailed, async () => {
       const payload = await requestProviderDisconnect(requestSettingsJson, provider);
       setSettingsSuccess("providersNotice", copy.value.notices.providerDisconnected(provider.name, payload.restart_required));
-      await refreshProviderState();
     });
   }
 
@@ -58,10 +60,9 @@ export function useProviderSettingsActions({
     if (!provider?.id || !credentialId || credentialId === provider.credential_id) {
       return;
     }
-    await runProviderMutation(settingsState, copy.value.notices.providerCredentialUpdateFailed, async () => {
+    await runProviderSettingsMutation(copy.value.notices.providerCredentialUpdateFailed, async () => {
       const payload = await requestProviderCredentialUpdate(requestSettingsJson, provider, credentialId);
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
-      await refreshProviderState();
     });
   }
 
@@ -70,10 +71,9 @@ export function useProviderSettingsActions({
     if (!providerKey || !credentialId) {
       return;
     }
-    await runProviderMutation(settingsState, copy.value.notices.providerCredentialDeleteFailed, async () => {
+    await runProviderSettingsMutation(copy.value.notices.providerCredentialDeleteFailed, async () => {
       await requestProviderCredentialDelete(requestSettingsJson, providerKey, credentialId);
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);
-      await refreshProviderState();
     });
   }
 

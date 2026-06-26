@@ -5,6 +5,7 @@ export async function runProviderMutation(settingsState, fallbackNotice, action,
   options.before?.();
   try {
     await action();
+    await options.after?.();
   } catch (error) {
     settingsState.providersError = error?.message || fallbackNotice;
   } finally {

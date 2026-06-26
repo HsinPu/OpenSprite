@@ -376,10 +376,13 @@ assertIncludes(providerSettingsActions, "requestProviderCredentialDelete(request
 assertIncludes(providerMutationRunner, "export async function runProviderMutation", "provider mutation runner centralizes provider mutation lifecycle");
 assertIncludes(providerMutationRunner, "settingsState.providersLoading = true", "provider mutation runner sets provider loading");
 assertIncludes(providerMutationRunner, "settingsState.providersNotice = \"\"", "provider mutation runner clears provider notice");
-assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider connect uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerDisconnectFailed", "provider disconnect uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
-assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
+assertIncludes(providerMutationRunner, "await options.after?.();", "provider mutation runner supports shared success follow-up");
+assertIncludes(providerSettingsActions, "async function runProviderSettingsMutation", "provider settings actions centralize mutation refresh");
+assertIncludes(providerSettingsActions, "runProviderMutation(settingsState, fallbackNotice, action, { after: refreshProviderState })", "provider settings mutation helper refreshes after success");
+assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerConnectFailed", "provider connect uses settings mutation helper");
+assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerDisconnectFailed", "provider disconnect uses settings mutation helper");
+assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses settings mutation helper");
+assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses settings mutation helper");
 assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
 assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
 assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
