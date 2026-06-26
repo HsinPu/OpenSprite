@@ -46,6 +46,7 @@ const [
   reactiveCompat,
   chatClient,
   providerSettingsActions,
+  providerAuthActions,
   useSettingsState,
   confirmFlow,
   shellLayout,
@@ -100,6 +101,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
+  read("src/composables/useProviderAuthActions.js"),
   read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
@@ -308,27 +310,30 @@ assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, COPI
 assertIncludes(providerSettingsActions, "provider?.id === COPILOT_PROVIDER_ID ? COPILOT_PROVIDER_ID : CODEX_PROVIDER_ID", "provider settings actions keep default OAuth provider selection");
 assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");
 assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "settings state initializes Copilot auth through provider metadata");
-assertIncludes(chatClient, "const providerAuthPollTimers", "chat client centralizes provider auth poll timers");
-assertIncludes(chatClient, "clearProviderAuthPollTimer(CODEX_PROVIDER_ID)", "chat client keeps Codex auth timer wrapper");
-assertIncludes(chatClient, "clearProviderAuthPollTimer(COPILOT_PROVIDER_ID)", "chat client keeps Copilot auth timer wrapper");
-assertIncludes(chatClient, "scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_STATE_KEYS.authKey], pollCodexAuthLogin)", "chat client keeps Codex auth poll scheduling");
-assertIncludes(chatClient, "scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_STATE_KEYS.authKey], pollCopilotAuthLogin)", "chat client keeps Copilot auth poll scheduling");
+assertIncludes(chatClient, "useProviderAuthActions({", "chat client delegates provider auth actions");
+assertIncludes(chatClient, "clearProviderAuthPollTimers();", "chat client clears delegated provider auth poll timers");
+assertNotIncludes(chatClient, "const providerAuthPollTimers", "chat client no longer owns provider auth poll timers");
+assertIncludes(providerAuthActions, "const providerAuthPollTimers", "provider auth actions centralize provider auth poll timers");
+assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth timer wrapper");
+assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth timer wrapper");
+assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_STATE_KEYS.authKey], pollCodexAuthLogin)", "provider auth actions keep Codex auth poll scheduling");
+assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_STATE_KEYS.authKey], pollCopilotAuthLogin)", "provider auth actions keep Copilot auth poll scheduling");
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
-assertIncludes(chatClient, "const providerAuthFlowConfigs", "chat client centralizes provider auth flow configs");
-assertIncludes(chatClient, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "chat client builds Codex auth flow metadata through provider helper");
-assertIncludes(chatClient, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "chat client builds Copilot auth flow metadata through provider helper");
-assertIncludes(chatClient, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "chat client keeps Codex auth poll body");
-assertIncludes(chatClient, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "chat client keeps Copilot auth poll body");
-assertIncludes(chatClient, "startProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "chat client keeps Codex auth login wrapper");
-assertIncludes(chatClient, "startProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "chat client keeps Copilot auth login wrapper");
-assertIncludes(chatClient, "logoutProviderAuth(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "chat client keeps Codex auth logout wrapper");
-assertIncludes(chatClient, "logoutProviderAuth(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "chat client keeps Copilot auth logout wrapper");
-assertIncludes(chatClient, "pollProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "chat client keeps Codex auth poll wrapper");
-assertIncludes(chatClient, "pollProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "chat client keeps Copilot auth poll wrapper");
-assertIncludes(chatClient, "requestSettingsJson(config.loginEndpoint, { method: \"POST\" })", "chat client keeps shared auth login request");
-assertIncludes(chatClient, "requestSettingsJson(config.logoutEndpoint, { method: \"POST\" })", "chat client keeps shared auth logout request");
-assertIncludes(chatClient, "requestSettingsJson(config.pollEndpoint", "chat client keeps shared auth poll request");
+assertIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions centralize provider auth flow configs");
+assertIncludes(providerAuthActions, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "provider auth actions build Codex auth flow metadata through provider helper");
+assertIncludes(providerAuthActions, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "provider auth actions build Copilot auth flow metadata through provider helper");
+assertIncludes(providerAuthActions, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "provider auth actions keep Codex auth poll body");
+assertIncludes(providerAuthActions, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "provider auth actions keep Copilot auth poll body");
+assertIncludes(providerAuthActions, "startProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "provider auth actions keep Codex auth login wrapper");
+assertIncludes(providerAuthActions, "startProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "provider auth actions keep Copilot auth login wrapper");
+assertIncludes(providerAuthActions, "logoutProviderAuth(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "provider auth actions keep Codex auth logout wrapper");
+assertIncludes(providerAuthActions, "logoutProviderAuth(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "provider auth actions keep Copilot auth logout wrapper");
+assertIncludes(providerAuthActions, "pollProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "provider auth actions keep Codex auth poll wrapper");
+assertIncludes(providerAuthActions, "pollProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID])", "provider auth actions keep Copilot auth poll wrapper");
+assertIncludes(providerAuthActions, "requestSettingsJson(config.loginEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth login request");
+assertIncludes(providerAuthActions, "requestSettingsJson(config.logoutEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth logout request");
+assertIncludes(providerAuthActions, "requestSettingsJson(config.pollEndpoint", "provider auth actions keep shared auth poll request");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
