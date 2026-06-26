@@ -42,15 +42,12 @@ export function useProviderAuthActions({
     scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey], () => pollProviderAuthLoginById(config.providerId));
   }
 
-  async function loadProviderAuthStatus(config) {
+  async function loadProviderAuthStatusById(providerId) {
+    const config = getProviderAuthConfig(providerAuthConfigs, providerId);
     await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey, async () => {
       const payload = await requestProviderAuthStatus(requestSettingsJson, config);
       settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
     });
-  }
-
-  async function loadProviderAuthStatusById(providerId) {
-    return loadProviderAuthStatus(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function connectOAuthBackedProvider(provider, options) {

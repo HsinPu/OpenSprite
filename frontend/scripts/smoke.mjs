@@ -335,6 +335,7 @@ assertNotIncludes(providerAuthConfigs, "export function resolveProviderAuthConfi
 assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById,", "provider auth actions expose provider-id auth status action");
+assertNotIncludes(providerAuthActions, "async function loadProviderAuthStatus(config)", "provider auth actions avoid status loader wrapper");
 assertNotIncludes(providerAuthActions, "async function loadCodexAuthStatus", "provider auth actions avoid Codex-specific status wrapper");
 assertNotIncludes(providerAuthActions, "async function loadCopilotAuthStatus", "provider auth actions avoid Copilot-specific status wrapper");
 assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
