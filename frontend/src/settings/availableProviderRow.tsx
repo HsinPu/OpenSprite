@@ -1,6 +1,5 @@
 import { Button, List, Tag } from "antd";
-import { isOAuthProviderAuthType } from "./providerConstants";
-import { type AnyRecord, providerMark } from "./providerHelpers";
+import { type AnyRecord, isOAuthProviderAuthType, providerMark } from "./providerHelpers";
 
 export function AvailableProviderRow({
   provider,

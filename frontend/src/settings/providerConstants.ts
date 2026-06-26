@@ -65,7 +65,3 @@ export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_SECTIONS);
 export function providerAuthSectionForId(providerId: string) {
   return PROVIDER_AUTH_SECTIONS[providerId];
 }
-
-export function isOAuthProviderAuthType(authType: string) {
-  return PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType);
-}

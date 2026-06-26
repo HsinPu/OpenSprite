@@ -1,4 +1,4 @@
-import { providerAuthSectionForId } from "./providerConstants";
+import { PROVIDER_AUTH_SECTION_CONFIGS, providerAuthSectionForId } from "./providerConstants";
 
 export type AnyRecord = Record<string, any>;
 
@@ -8,6 +8,10 @@ export function providerCatalogKey(provider: AnyRecord) {
 
 export function providerMark(value: AnyRecord) {
   return String(value?.name || value?.id || value?.type || "??").trim().slice(0, 2).toUpperCase();
+}
+
+export function isOAuthProviderAuthType(authType: string) {
+  return PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType);
 }
 
 export function hasConnectedProvider(state: AnyRecord, presetId: string) {
