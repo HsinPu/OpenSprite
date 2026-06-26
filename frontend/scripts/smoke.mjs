@@ -44,6 +44,7 @@ const [
   reactiveCompat,
   chatClient,
   runInspector,
+  logSettings,
   providerSettings,
   modelSettings,
   channelSettings,
@@ -61,6 +62,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/components/runInspector.tsx"),
+  read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
   read("src/settings/channelSettings.tsx"),
@@ -143,6 +145,11 @@ assertNotIncludes(networkSettings, "state.networkForm.enabled", "network setting
 assertIncludes(app, "form.jinaApiKey", "search settings keeps Jina API key field");
 assertIncludes(app, "form.searxngEngines", "search settings keeps SearXNG engine selection");
 assertIncludes(app, "form.searxngCategories", "search settings keeps SearXNG category selection");
+assertIncludes(logSettings, "client.saveLogSettings", "log settings keeps save action");
+assertIncludes(logSettings, "form.retentionDays", "log settings keeps retention field");
+assertIncludes(logSettings, "form.logSystemPrompt", "log settings keeps system prompt toggle");
+assertIncludes(logSettings, "form.logSystemPromptLines", "log settings keeps system prompt line limit");
+assertIncludes(logSettings, "form.logReasoningDetails", "log settings keeps reasoning detail toggle");
 assertIncludes(app, "form.commandTimeout", "browser settings keeps command timeout");
 assertIncludes(app, "form.sessionTimeout", "browser settings keeps session timeout");
 assertIncludes(app, "form.allowPrivateUrls", "browser settings keeps private URL toggle");
