@@ -63,6 +63,7 @@ const [
   runTraceViewer,
   workStateCard,
   authProviderCard,
+  availableProvidersSection,
   logSettings,
   providerSettings,
   modelSettings,
@@ -105,6 +106,7 @@ const [
   read("src/components/runTraceViewer.tsx"),
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
+  read("src/settings/availableProvidersSection.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -238,11 +240,17 @@ assertIncludes(providerSettings, "client.deleteCredential", "provider settings k
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(providerSettings, "AuthProviderCard", "provider settings delegates auth provider card");
+assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");
 assertIncludes(authProviderCard, "onClick={onLogout}", "auth provider card keeps logout action");
 assertIncludes(authProviderCard, "auth.userCode", "auth provider card keeps user code display");
+assertIncludes(availableProvidersSection, "provider.auth_type === \"openai_codex_oauth\"", "available providers keeps Codex OAuth detection");
+assertIncludes(availableProvidersSection, "provider.auth_type === \"github_copilot_oauth\"", "available providers keeps Copilot OAuth detection");
+assertIncludes(availableProvidersSection, "onConnectOAuth(provider) : onBeginConnect(provider)", "available providers keeps connect routing");
+assertIncludes(availableProvidersSection, "providerCopy.builtInBadge", "available providers keeps built-in badge");
+assertIncludes(availableProvidersSection, "providerCopy.noAvailableTitle", "available providers keeps empty state title");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
