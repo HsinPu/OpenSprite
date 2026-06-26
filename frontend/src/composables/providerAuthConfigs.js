@@ -7,24 +7,11 @@ import {
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
-export function createProviderAuthRuntimeConfigs({
-  loadProviderAuthStatusById,
-}) {
-  const runtimeConfig = (providerId, connectedNoticeKey) => ({
-    connectedNoticeKey,
-    loadStatus: () => loadProviderAuthStatusById(providerId),
-  });
-  return {
-    [CODEX_PROVIDER_ID]: runtimeConfig(CODEX_PROVIDER_ID, "codexProviderConnected"),
-    [COPILOT_PROVIDER_ID]: runtimeConfig(COPILOT_PROVIDER_ID, "copilotProviderConnected"),
-  };
-}
-
-export function createProviderAuthConfigs(runtimeConfigs = {}) {
+export function createProviderAuthConfigs() {
   return {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
-      ...(runtimeConfigs[CODEX_PROVIDER_ID] || {}),
+      connectedNoticeKey: "codexProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
       buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
       normalizeStatus: (payload) => ({
@@ -55,7 +42,7 @@ export function createProviderAuthConfigs(runtimeConfigs = {}) {
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
-      ...(runtimeConfigs[COPILOT_PROVIDER_ID] || {}),
+      connectedNoticeKey: "copilotProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
       buildPollBody: (auth) => ({ device_code: auth.deviceCode }),
       normalizeStatus: (payload) => ({

@@ -1,7 +1,6 @@
 import { runProviderAuthAction, setProviderAuthError } from "./providerAuthActionRunner";
 import {
   createProviderAuthConfigs,
-  createProviderAuthRuntimeConfigs,
   getProviderAuthConfig,
 } from "./providerAuthConfigs";
 import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
@@ -29,9 +28,7 @@ export function useProviderAuthActions({
     clearProviderAuthPollTimers: clearProviderAuthPollTimersById,
   } = createProviderAuthPollTimers();
 
-  const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
-    loadProviderAuthStatusById,
-  }));
+  const providerAuthConfigs = createProviderAuthConfigs();
 
   function scheduleProviderAuthPollById(providerId) {
     const config = getProviderAuthConfig(providerAuthConfigs, providerId);
@@ -108,7 +105,11 @@ export function useProviderAuthActions({
       await requestProviderAuthLogout(requestSettingsJson, config);
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
-    }, { clearNotice: true, before: () => clearProviderAuthPollTimer(config.providerId), after: config.loadStatus });
+    }, {
+      clearNotice: true,
+      before: () => clearProviderAuthPollTimer(config.providerId),
+      after: () => loadProviderAuthStatusById(config.providerId),
+    });
   }
 
   function clearProviderAuthPollTimers() {

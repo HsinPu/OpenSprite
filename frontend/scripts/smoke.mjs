@@ -327,9 +327,9 @@ assertNotIncludes(providerAuthSections, "loginAction:", "provider auth sections 
 assertNotIncludes(providerAuthSections, "logoutAction:", "provider auth sections no longer store logout action-name strings");
 assertNotIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions no longer own auth status configs");
 assertNotIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provider auth actions no longer split auth status configs");
-assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({", "provider auth actions assemble auth provider configs");
+assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs();", "provider auth actions assemble auth provider configs");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthConfigs", "provider auth configs centralize provider-specific auth config");
-assertIncludes(providerAuthConfigs, "export function createProviderAuthRuntimeConfigs", "provider auth configs centralize provider runtime metadata");
+assertNotIncludes(providerAuthConfigs, "createProviderAuthRuntimeConfigs", "provider auth configs avoid runtime config assembly");
 assertIncludes(providerAuthConfigs, "function resolveProviderAuthConfigId", "provider auth configs keep provider id fallback internal");
 assertNotIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs avoid exporting internal provider id fallback");
 assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
@@ -410,14 +410,13 @@ assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"con
 assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, config)", "provider auth actions delegate OAuth connect request");
 assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider auth actions no longer own provider endpoint assembly");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
-assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, \"codexProviderConnected\")", "provider auth configs reuse Codex runtime config helper");
-assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, \"copilotProviderConnected\")", "provider auth configs reuse Copilot runtime config helper");
-assertIncludes(providerAuthConfigs, "connectedNoticeKey,", "provider auth configs keep connected notice as metadata");
+assertIncludes(providerAuthConfigs, "connectedNoticeKey: \"codexProviderConnected\"", "provider auth configs keep Codex connected notice as metadata");
+assertIncludes(providerAuthConfigs, "connectedNoticeKey: \"copilotProviderConnected\"", "provider auth configs keep Copilot connected notice as metadata");
 assertNotIncludes(providerAuthConfigs, "startAuthLogin", "provider auth configs avoid auth login closure");
+assertNotIncludes(providerAuthConfigs, "loadStatus", "provider auth configs avoid auth status loading closure");
 assertNotIncludes(providerAuthConfigs, "connectedNotice: () =>", "provider auth configs avoid notice lookup closures");
 assertNotIncludes(providerAuthConfigs, "copy.value.notices", "provider auth configs avoid owning localized copy lookup");
 assertNotIncludes(providerAuthConfigs, "providerName", "provider auth configs avoid UI display metadata");
-assertIncludes(providerAuthConfigs, "loadStatus: () => loadProviderAuthStatusById(providerId)", "provider auth configs refresh status through provider id");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth configs reuse device login normalization");
 assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth configs keep Codex device auth id normalization");
@@ -473,7 +472,7 @@ assertIncludes(providerAuthActions, "import { runProviderAuthAction, setProvider
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
-assertIncludes(providerAuthActions, "after: config.loadStatus", "provider auth logout refreshes status after logout through shared follow-up");
+assertIncludes(providerAuthActions, "after: () => loadProviderAuthStatusById(config.providerId)", "provider auth logout refreshes status after logout through provider id");
 assertIncludes(providerAuthActions, "setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error)", "provider auth polling reuses auth error helper");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthLogin", "provider auth requests centralize auth login request");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthPoll", "provider auth requests centralize auth poll request");
