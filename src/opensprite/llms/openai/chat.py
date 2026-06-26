@@ -12,6 +12,7 @@ from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default,
 from ..request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
 from ..request_modes import response_format_for_request_mode
+from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..openai_compatible import build_openai_compatible_response
 from .streaming import collect_openai_compatible_stream
@@ -62,17 +63,17 @@ class OpenAILLM(OpenAICompatibleClientMixin, LLMProvider):
             base_url: API 端點（可選，例如用 OpenRouter 或本地模型）
             default_model: 預設模型名稱
         """
-        from openai import AsyncOpenAI
-        
         self.api_key = api_key
         self.base_url = base_url
         self.default_model = default_model
         self.default_headers = dict(default_headers or {})
         self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
         self.reasoning_config = reasoning_config_or_default(self.reasoning_effort)
-        self._client_kwargs = {"api_key": api_key, **({"base_url": base_url} if base_url else {})}
-        if self.default_headers:
-            self._client_kwargs["default_headers"] = self.default_headers
+        self._client_kwargs = build_openai_client_kwargs(
+            api_key,
+            base_url=base_url,
+            default_headers=self.default_headers,
+        )
         self.client = self._build_client()
 
     async def chat(

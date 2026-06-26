@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_RESPONSES_REQUEST_PROFILE, build_llm_request
@@ -124,7 +125,7 @@ class OpenAIResponsesLLM(OpenAICompatibleClientMixin, LLMProvider):
         self.default_model = default_model
         self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
         self.reasoning_config = reasoning_config_or_default(self.reasoning_effort)
-        self._client_kwargs = {"api_key": api_key, **({"base_url": base_url} if base_url else {})}
+        self._client_kwargs = build_openai_client_kwargs(api_key, base_url=base_url)
         self.client = self._build_client()
 
     async def chat(

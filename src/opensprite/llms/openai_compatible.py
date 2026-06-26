@@ -12,6 +12,23 @@ from .response_utils import extract_openai_compatible_tool_calls
 from .response_utils import usage_payload
 
 
+def build_openai_client_kwargs(
+    api_key: str,
+    *,
+    base_url: str | None = None,
+    default_headers: dict[str, str] | None = None,
+    **extra_kwargs: Any,
+) -> dict[str, Any]:
+    """Build AsyncOpenAI constructor kwargs while omitting unset optional fields."""
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    if default_headers:
+        kwargs["default_headers"] = dict(default_headers)
+    kwargs.update({key: value for key, value in extra_kwargs.items() if value is not None})
+    return kwargs
+
+
 class OpenAICompatibleClientMixin:
     """Mixin for providers that rebuild an AsyncOpenAI client from kwargs."""
 

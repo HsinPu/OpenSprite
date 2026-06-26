@@ -12,6 +12,7 @@ from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
 from ..request_modes import response_format_for_request_mode
+from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..openai_compatible import build_openai_compatible_response
 from ..response_utils import coerce_reasoning_details
@@ -64,23 +65,23 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, LLMProvider):
         self.reasoning_config = reasoning_config_or_default(self.reasoning_effort)
         from httpx import Timeout
 
-        self._client_kwargs = {
-            "api_key": api_key,
-            "base_url": base_url or "https://openrouter.ai/api/v1",
+        self._client_kwargs = build_openai_client_kwargs(
+            api_key,
+            base_url=base_url or "https://openrouter.ai/api/v1",
             # OpenRouter 需要這些 headers
-            "default_headers": {
+            default_headers={
                 "HTTP-Referer": "https://github.com/HsinPu/opensprite",
                 "X-OpenRouter-Title": "OpenSprite",
                 "X-Title": "OpenSprite"
             },
-            "timeout": Timeout(
+            timeout=Timeout(
                 _OPENROUTER_TIMEOUT_SECONDS,
                 connect=_OPENROUTER_CONNECT_TIMEOUT_SECONDS,
                 read=_OPENROUTER_TIMEOUT_SECONDS,
                 write=30.0,
                 pool=_OPENROUTER_CONNECT_TIMEOUT_SECONDS,
             ),
-        }
+        )
         self.client = self._build_client()
 
     async def _create_completion(self, params: dict[str, Any]):
