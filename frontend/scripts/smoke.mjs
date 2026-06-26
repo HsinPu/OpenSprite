@@ -366,9 +366,13 @@ assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "pr
 assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provider auth configs use metadata-derived default provider");
 assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
+assertIncludes(providerAuthConfigs, "PROVIDER_AUTH_PROVIDER_IDS", "provider auth configs build configs from provider id metadata");
+assertIncludes(providerAuthConfigs, "Object.fromEntries", "provider auth configs derive provider config map from metadata");
+assertIncludes(providerAuthConfigs, "providerAuthSectionForId(providerId)", "provider auth configs resolve each provider section by id");
+assertNotIncludes(providerAuthConfigs, "CODEX_PROVIDER_ID", "provider auth configs avoid hardcoded Codex config entry");
+assertNotIncludes(providerAuthConfigs, "COPILOT_PROVIDER_ID", "provider auth configs avoid hardcoded Copilot config entry");
 assertIncludes(providerAuthConfigs, "function deviceAuthBaseConfig", "provider auth configs share device auth base config helper");
-assertIncludes(providerAuthConfigs, "[CODEX_PROVIDER_ID]: deviceAuthBaseConfig(codexAuthConfig)", "provider auth configs reuse shared Codex base config directly");
-assertIncludes(providerAuthConfigs, "[COPILOT_PROVIDER_ID]: deviceAuthBaseConfig(copilotAuthConfig)", "provider auth configs reuse shared Copilot base config directly");
+assertIncludes(providerAuthConfigs, "deviceAuthBaseConfig(providerAuthSectionForId(providerId))", "provider auth configs reuse shared base config for every provider id");
 assertIncludes(providerAuthConfigs, "function deviceAuthPollConfig", "provider auth configs share device auth poll config helper");
 assertIncludes(providerAuthConfigs, "...deviceAuthPollConfig(config)", "provider auth configs reuse shared poll config inside base config");
 assertIncludes(providerAuthConfigs, "auth[config.deviceKey]", "provider auth configs read device key from metadata");

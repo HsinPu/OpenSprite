@@ -1,7 +1,6 @@
 import {
-  CODEX_PROVIDER_ID,
-  COPILOT_PROVIDER_ID,
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
+  PROVIDER_AUTH_PROVIDER_IDS,
   providerAuthRequestConfig,
   providerAuthSectionForId,
 } from "../settings/providerConstants";
@@ -42,13 +41,9 @@ function deviceAuthBaseConfig(config) {
 }
 
 export function createProviderAuthConfigs() {
-  const codexAuthConfig = providerAuthSectionForId(CODEX_PROVIDER_ID);
-  const copilotAuthConfig = providerAuthSectionForId(COPILOT_PROVIDER_ID);
-
-  return {
-    [CODEX_PROVIDER_ID]: deviceAuthBaseConfig(codexAuthConfig),
-    [COPILOT_PROVIDER_ID]: deviceAuthBaseConfig(copilotAuthConfig),
-  };
+  return Object.fromEntries(
+    PROVIDER_AUTH_PROVIDER_IDS.map((providerId) => [providerId, deviceAuthBaseConfig(providerAuthSectionForId(providerId))]),
+  );
 }
 
 function resolveProviderAuthConfigId(providerAuthConfigs, providerId) {
