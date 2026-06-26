@@ -48,6 +48,7 @@ const [
   providerSettingsActions,
   providerAuthActions,
   providerAuthConfigs,
+  providerAuthPollTimers,
   providerAuthState,
   providerConnectForm,
   providerMutationRunner,
@@ -108,6 +109,7 @@ const [
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useProviderAuthActions.js"),
   read("src/composables/providerAuthConfigs.js"),
+  read("src/composables/providerAuthPollTimers.js"),
   read("src/composables/providerAuthState.js"),
   read("src/composables/providerConnectForm.js"),
   read("src/composables/providerMutationRunner.js"),
@@ -371,8 +373,10 @@ assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KE
 assertIncludes(chatClient, "useProviderAuthActions({", "chat client delegates provider auth actions");
 assertIncludes(chatClient, "clearProviderAuthPollTimers();", "chat client clears delegated provider auth poll timers");
 assertNotIncludes(chatClient, "const providerAuthPollTimers", "chat client no longer owns provider auth poll timers");
-assertIncludes(providerAuthActions, "const providerAuthPollTimers = new Map()", "provider auth actions centralize provider auth poll timers");
-assertIncludes(providerAuthActions, "providerAuthPollTimers.set(providerId", "provider auth actions store auth poll timers by provider id");
+assertIncludes(providerAuthActions, "createProviderAuthPollTimers()", "provider auth actions delegate provider auth poll timer storage");
+assertIncludes(providerAuthPollTimers, "const providerAuthPollTimers = new Map()", "provider auth poll timers centralize provider auth poll timers");
+assertIncludes(providerAuthPollTimers, "providerAuthPollTimers.set(providerId", "provider auth poll timers store auth poll timers by provider id");
+assertIncludes(providerAuthPollTimers, "window.setTimeout", "provider auth poll timers keep browser timer scheduling");
 assertIncludes(providerAuthConfigs, "clearPoll: () => clearProviderAuthPollTimer(providerId)", "provider auth runtime config keeps auth timer clearing");
 assertIncludes(providerAuthConfigs, "schedulePoll: () => scheduleProviderAuthPollById(providerId)", "provider auth runtime config keeps auth poll scheduling");
 assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");

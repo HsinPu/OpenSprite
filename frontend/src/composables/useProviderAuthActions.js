@@ -1,4 +1,5 @@
 import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
+import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
 import { runProviderMutation } from "./providerMutationRunner";
 import {
   CODEX_PROVIDER_ID,
@@ -14,23 +15,11 @@ export function useProviderAuthActions({
   loadModelSettings,
   refreshProviderState,
 }) {
-  const providerAuthPollTimers = new Map();
-
-  function clearProviderAuthPollTimer(providerId) {
-    const timer = providerAuthPollTimers.get(providerId);
-    if (timer) {
-      clearTimeout(timer);
-      providerAuthPollTimers.delete(providerId);
-    }
-  }
-
-  function scheduleProviderAuthPoll(providerId, auth, poll) {
-    clearProviderAuthPollTimer(providerId);
-    const delayMs = Math.max(3, auth.pollIntervalSeconds || 5) * 1000;
-    providerAuthPollTimers.set(providerId, window.setTimeout(() => {
-      void poll();
-    }, delayMs));
-  }
+  const {
+    clearProviderAuthPollTimer,
+    scheduleProviderAuthPoll,
+    clearProviderAuthPollTimers: clearProviderAuthPollTimersById,
+  } = createProviderAuthPollTimers();
 
   const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
     copy,
@@ -213,9 +202,7 @@ export function useProviderAuthActions({
   }
 
   function clearProviderAuthPollTimers() {
-    for (const providerId of Object.keys(providerAuthConfigs)) {
-      clearProviderAuthPollTimer(providerId);
-    }
+    clearProviderAuthPollTimersById(Object.keys(providerAuthConfigs));
   }
 
   return {
