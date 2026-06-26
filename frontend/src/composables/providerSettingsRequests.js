@@ -1,4 +1,4 @@
-import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
+import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerEndpoints";
 import {
   providerConnectPayloadFromForm,
   providerCredentialPayload,

@@ -79,6 +79,7 @@ const [
   providerAuthSection,
   providerAuthSections,
   providerConstants,
+  providerEndpoints,
   providerEmptyState,
   providerHelpers,
   availableProviderRow,
@@ -144,6 +145,7 @@ const [
   read("src/settings/providerAuthSection.tsx"),
   read("src/settings/providerAuthSections.ts"),
   read("src/settings/providerConstants.ts"),
+  read("src/settings/providerEndpoints.ts"),
   read("src/settings/providerEmptyState.tsx"),
   read("src/settings/providerHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
@@ -333,10 +335,13 @@ assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STAT
 assertIncludes(providerHelpers, "return providerAuthSectionForId(providerCatalogKey(provider))", "provider helpers delegate provider section lookup through shared provider key resolver");
 assertIncludes(providerHelpers, "state[config.stateKey]?.configured", "provider auth configured reads state through state key metadata");
 assertIncludes(providerHelpers, "providerCopy[authConfig.copyKey]?.providerNeedsLogin", "provider description reads login copy through copy key metadata");
-assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
-assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
-assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");
-assertIncludes(providerConstants, "function providerCredentialEndpoint", "provider constants expose provider credential endpoint builder");
+assertNotIncludes(providerConstants, "function providerAuthEndpoint", "provider constants keep endpoint builders in provider endpoints");
+assertNotIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants keep provider endpoint builders separate");
+assertNotIncludes(providerConstants, "function providerCredentialEndpoint", "provider constants keep credential endpoint builders separate");
+assertIncludes(providerEndpoints, "function providerAuthEndpoint", "provider endpoints expose auth endpoint builder");
+assertIncludes(providerEndpoints, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider endpoints keep auth endpoint path shape");
+assertIncludes(providerEndpoints, "function providerSettingsEndpoint", "provider endpoints expose provider settings endpoint builder");
+assertIncludes(providerEndpoints, "function providerCredentialEndpoint", "provider endpoints expose provider credential endpoint builder");
 assertNotIncludes(providerConstants, "function providerAuthActionConfig", "provider constants keep auth action metadata out of settings constants");
 assertNotIncludes(providerConstants, "function providerAuthRequestConfig", "provider constants avoid request-only naming for auth action metadata");
 assertIncludes(providerAuthConfigs, "function providerAuthActionConfig", "provider auth configs own auth action metadata factory");

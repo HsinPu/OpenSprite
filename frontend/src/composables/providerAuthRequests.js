@@ -1,4 +1,4 @@
-import { providerSettingsEndpoint } from "../settings/providerConstants";
+import { providerSettingsEndpoint } from "../settings/providerEndpoints";
 import { providerOAuthConnectPayload } from "./providerConnectForm";
 
 export function requestProviderAuthStatus(requestSettingsJson, config) {

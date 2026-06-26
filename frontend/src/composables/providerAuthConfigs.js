@@ -1,9 +1,9 @@
 import {
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
   PROVIDER_AUTH_SECTION_CONFIGS,
-  providerAuthEndpoint,
   providerAuthStateKeys,
 } from "../settings/providerConstants";
+import { providerAuthEndpoint } from "../settings/providerEndpoints";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
 const PROVIDER_AUTH_ACTION_KEYS = Object.keys(providerAuthStateKeys(""));

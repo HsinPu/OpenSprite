@@ -66,18 +66,6 @@ export function providerAuthSectionForId(providerId: string) {
   return PROVIDER_AUTH_SECTIONS[providerId];
 }
 
-export function providerAuthEndpoint(providerId: string, action = "") {
-  return `/api/settings/auth/${providerId}${action ? `/${action}` : ""}`;
-}
-
-export function providerSettingsEndpoint(providerId: string, action = "") {
-  return `/api/settings/providers/${encodeURIComponent(providerId)}${action ? `/${action}` : ""}`;
-}
-
-export function providerCredentialEndpoint(providerKey: string, credentialId: string) {
-  return `/api/settings/credentials/${encodeURIComponent(providerKey)}/${encodeURIComponent(credentialId)}`;
-}
-
 export function isOAuthProviderAuthType(authType: string) {
   return PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType);
 }
