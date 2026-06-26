@@ -1,6 +1,4 @@
-import { CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID } from "../settings/providerConstants";
-
-const PROVIDER_AUTH_REFRESH_IDS = [CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID];
+import { PROVIDER_AUTH_PROVIDER_IDS } from "../settings/providerConstants";
 
 export function createSettingsSectionLoader(loaders) {
   const sectionLoaders = {
@@ -8,7 +6,7 @@ export function createSettingsSectionLoader(loaders) {
     channels: () => loaders.loadChannelSettings(),
     providers: () => {
       loaders.loadProviderSettings();
-      for (const providerId of PROVIDER_AUTH_REFRESH_IDS) {
+      for (const providerId of PROVIDER_AUTH_PROVIDER_IDS) {
         loaders.loadProviderAuthStatusById(providerId);
       }
     },

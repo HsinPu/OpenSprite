@@ -285,6 +285,7 @@ assertIncludes(providerSettings, "ProviderAuthSection", "provider settings deleg
 assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
 assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
+assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS", "provider constants keep auth provider id list");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
@@ -365,7 +366,7 @@ assertNotIncludes(chatClient, "function loadSettingsSection(sectionName)", "chat
 assertIncludes(settingsSectionLoaders, "export function createSettingsSectionLoader", "settings section loaders centralize section dispatch");
 assertIncludes(settingsSectionLoaders, "providers: () => {", "settings section loaders keep provider section loader");
 assertIncludes(settingsSectionLoaders, "loadProviderSettings();", "settings section loaders keep provider settings refresh");
-assertIncludes(settingsSectionLoaders, "PROVIDER_AUTH_REFRESH_IDS", "settings section loaders keep provider auth refresh list");
+assertIncludes(settingsSectionLoaders, "PROVIDER_AUTH_PROVIDER_IDS", "settings section loaders use shared provider auth refresh list");
 assertIncludes(settingsSectionLoaders, "loadProviderAuthStatusById(providerId)", "settings section loaders refresh auth through provider id");
 assertIncludes(settingsSectionLoaders, "loadScheduleSettings();", "settings section loaders keep schedule settings refresh");
 assertIncludes(settingsSectionLoaders, "loadCronJobs();", "settings section loaders keep cron jobs refresh");

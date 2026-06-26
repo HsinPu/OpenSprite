@@ -1,5 +1,6 @@
 export const CODEX_PROVIDER_ID = "openai-codex";
 export const COPILOT_PROVIDER_ID = "copilot";
+export const PROVIDER_AUTH_PROVIDER_IDS = [CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID] as const;
 
 export const CODEX_PROVIDER_NAME = "OpenAI Codex";
 export const COPILOT_PROVIDER_NAME = "GitHub Copilot";
