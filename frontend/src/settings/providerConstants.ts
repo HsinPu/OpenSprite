@@ -1,6 +1,5 @@
 export function providerAuthStateKeys(authKey: string) {
   return {
-    authKey,
     copyKey: authKey,
     stateKey: authKey,
     loadingKey: `${authKey}Loading`,

@@ -297,6 +297,7 @@ assertNotIncludes(providerConstants, "CODEX_PROVIDER_NAME", "provider constants 
 assertNotIncludes(providerConstants, "COPILOT_PROVIDER_NAME", "provider constants avoid Copilot provider name middle constant");
 assertIncludes(providerConstants, "providerAuthStateKeys(\"codexAuth\")", "provider constants keep Codex auth key in provider metadata");
 assertIncludes(providerConstants, "providerAuthStateKeys(\"copilotAuth\")", "provider constants keep Copilot auth key in provider metadata");
+assertNotIncludes(providerConstants, "    authKey,\n", "provider constants avoid exposing auth key as runtime metadata");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider constants keep Codex auth key internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider constants keep Copilot auth key internal");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
