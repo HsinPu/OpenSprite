@@ -31,9 +31,9 @@ function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string,
   return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
 }
 
-const PROVIDER_AUTH_REQUEST_KEYS = Object.keys(providerAuthStateKeys("")) as Array<keyof ReturnType<typeof providerAuthStateKeys>>;
+const PROVIDER_AUTH_ACTION_KEYS = Object.keys(providerAuthStateKeys("")) as Array<keyof ReturnType<typeof providerAuthStateKeys>>;
 
-export function providerAuthRequestConfig(config: ReturnType<typeof providerAuthStateKeys> & { providerId: string }) {
+export function providerAuthActionConfig(config: ReturnType<typeof providerAuthStateKeys> & { providerId: string }) {
   const { providerId } = config;
   return {
     providerId,
@@ -41,7 +41,7 @@ export function providerAuthRequestConfig(config: ReturnType<typeof providerAuth
     loginEndpoint: providerAuthEndpoint(providerId, "login"),
     logoutEndpoint: providerAuthEndpoint(providerId, "logout"),
     pollEndpoint: providerAuthEndpoint(providerId, "poll"),
-    ...Object.fromEntries(PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key, config[key]])),
+    ...Object.fromEntries(PROVIDER_AUTH_ACTION_KEYS.map((key) => [key, config[key]])),
   };
 }
 

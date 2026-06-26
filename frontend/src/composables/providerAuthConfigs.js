@@ -1,7 +1,7 @@
 import {
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
   PROVIDER_AUTH_SECTION_CONFIGS,
-  providerAuthRequestConfig,
+  providerAuthActionConfig,
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
@@ -30,7 +30,7 @@ function deviceAuthPollConfig(config) {
 
 function deviceAuthBaseConfig(config) {
   return {
-    ...providerAuthRequestConfig(config),
+    ...providerAuthActionConfig(config),
     ...deviceAuthPollConfig(config),
     normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, config.deviceKey, config.payloadDeviceKey, config.loginExtra),
     normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(config, payload)),

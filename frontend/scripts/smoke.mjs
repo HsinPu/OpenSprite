@@ -337,12 +337,13 @@ assertIncludes(providerConstants, "function providerAuthEndpoint", "provider con
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");
 assertIncludes(providerConstants, "function providerCredentialEndpoint", "provider constants expose provider credential endpoint builder");
-assertIncludes(providerConstants, "function providerAuthRequestConfig", "provider constants expose auth request metadata factory");
+assertIncludes(providerConstants, "function providerAuthActionConfig", "provider constants expose auth action metadata factory");
+assertNotIncludes(providerConstants, "function providerAuthRequestConfig", "provider constants avoid request-only naming for auth action metadata");
 assertIncludes(providerConstants, "loginEndpoint: providerAuthEndpoint(providerId, \"login\")", "provider constants keep auth login endpoint metadata");
 assertIncludes(providerConstants, "logoutEndpoint: providerAuthEndpoint(providerId, \"logout\")", "provider constants keep auth logout endpoint metadata");
 assertIncludes(providerConstants, "pollEndpoint: providerAuthEndpoint(providerId, \"poll\")", "provider constants keep auth poll endpoint metadata");
 assertIncludes(providerConstants, "Object.keys(providerAuthStateKeys(\"\"))", "provider constants derive auth request keys from state key factory");
-assertIncludes(providerConstants, "PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key, config[key]])", "provider constants keep auth request fields separate from UI provider metadata");
+assertIncludes(providerConstants, "PROVIDER_AUTH_ACTION_KEYS.map((key) => [key, config[key]])", "provider constants keep auth action fields separate from UI provider metadata");
 assertIncludes(providerConstants, "oauthAuthType: \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type in section metadata");
 assertIncludes(providerConstants, "oauthAuthType: \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type in section metadata");
 assertNotIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE", "provider constants avoid Codex OAuth auth type middle constant");
@@ -526,7 +527,8 @@ assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes spl
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertNotIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions no longer split auth flow configs");
 assertNotIncludes(providerAuthConfigs, "providerAuthSectionForId", "provider auth configs avoid id lookup while building configs");
-assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(config)", "provider auth configs build request metadata from provider section metadata");
+assertIncludes(providerAuthConfigs, "providerAuthActionConfig(config)", "provider auth configs build action metadata from provider section metadata");
+assertNotIncludes(providerAuthConfigs, "providerAuthRequestConfig(config)", "provider auth configs avoid request-only naming for action metadata");
 assertNotIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTIONS", "provider auth configs avoid local auth section indexes");
 assertNotIncludes(providerAuthConfigs, "CODEX_AUTH_STATE_KEYS", "provider auth configs avoid direct Codex auth state key ownership");
 assertNotIncludes(providerAuthConfigs, "COPILOT_AUTH_STATE_KEYS", "provider auth configs avoid direct Copilot auth state key ownership");
