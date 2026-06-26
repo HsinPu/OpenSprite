@@ -44,6 +44,7 @@ const [
   reactiveCompat,
   chatClient,
   authGate,
+  emptyState,
   browserSettings,
   runInspector,
   logSettings,
@@ -69,6 +70,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/components/authGate.tsx"),
+  read("src/components/emptyState.tsx"),
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/settings/logSettings.tsx"),
@@ -129,6 +131,9 @@ assertIncludes(authGate, "auth-gate", "auth gate component keeps auth overlay la
 assertIncludes(authGate, "client.submitAccessToken", "auth gate keeps token submit flow");
 assertIncludes(authGate, "client.settingsForm.accessToken", "auth gate keeps access token field");
 assertIncludes(authGate, "client.openSettings(\"general\")", "auth gate keeps settings fallback action");
+assertIncludes(emptyState, "empty-state", "empty state component keeps starter screen layout");
+assertIncludes(emptyState, "prompt-card", "empty state keeps prompt card layout");
+assertIncludes(emptyState, "applyPrompt(prompt.text)", "empty state keeps prompt application flow");
 assertIncludes(app, "MessageList", "React message list");
 assertIncludes(app, "MessageTextRenderer", "React message renderer");
 assertIncludes(app, "viewTraceForRun", "assistant message trace action");
