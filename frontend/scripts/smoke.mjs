@@ -45,6 +45,7 @@ const [
   chatClient,
   authGate,
   chatPanel,
+  confirmDialog,
   emptyState,
   messageList,
   sidebarNav,
@@ -74,6 +75,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/components/authGate.tsx"),
   read("src/components/chatPanel.tsx"),
+  read("src/components/confirmDialog.tsx"),
   read("src/components/emptyState.tsx"),
   read("src/components/messageList.tsx"),
   read("src/components/sidebarNav.tsx"),
@@ -165,6 +167,10 @@ assertIncludes(app, "viewTraceForRun", "assistant message trace action");
 assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
 assertIncludes(chatPanel, "client.currentRuns.value", "run history uses active session runs");
+assertIncludes(confirmDialog, "okButtonProps={{ danger: true, loading: dialog.busy }}", "confirm dialog keeps destructive loading state");
+assertIncludes(confirmDialog, "cancelButtonProps={{ disabled: dialog.busy }}", "confirm dialog disables cancel while busy");
+assertIncludes(confirmDialog, "onCancel={dialog.busy ? undefined : onCancel}", "confirm dialog blocks cancel while busy");
+assertIncludes(confirmDialog, "Alert type=\"warning\"", "confirm dialog keeps warning detail");
 assertIncludes(generalSettings, "client.settingsState", "settings API state remains wired through settings modules");
 assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings save action");
 assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");

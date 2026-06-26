@@ -1,11 +1,8 @@
 import React, { CSSProperties, useEffect, useState } from "react";
 import {
-  Alert,
   App as AntdApp,
   Button,
   ConfigProvider,
-  Modal,
-  Typography,
   theme,
 } from "antd";
 import {
@@ -16,6 +13,7 @@ import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
 import { AuthGate } from "./components/authGate";
 import { ChatPanel } from "./components/chatPanel";
+import { ConfirmDialog } from "./components/confirmDialog";
 import { RunInspector } from "./components/runInspector";
 import { SidebarNav } from "./components/sidebarNav";
 import { ToastStack } from "./components/toastStack";
@@ -283,20 +281,7 @@ function OpenSpriteShell() {
 
       <AuthGate client={client} />
       <SettingsModal client={client} clearWebSessions={clearWebSessions} />
-      <Modal
-        open={confirmDialog.open}
-        title={confirmDialog.title}
-        okText={confirmDialog.confirmLabel}
-        cancelText={confirmDialog.cancelLabel}
-        okButtonProps={{ danger: true, loading: confirmDialog.busy }}
-        cancelButtonProps={{ disabled: confirmDialog.busy }}
-        onOk={confirmDialogAction}
-        onCancel={confirmDialog.busy ? undefined : closeConfirmDialog}
-      >
-        <Typography.Text type="secondary">{confirmDialog.eyebrow}</Typography.Text>
-        <Typography.Paragraph>{confirmDialog.message}</Typography.Paragraph>
-        {confirmDialog.detail ? <Alert type="warning" showIcon message={confirmDialog.detail} /> : null}
-      </Modal>
+      <ConfirmDialog dialog={confirmDialog} onConfirm={confirmDialogAction} onCancel={closeConfirmDialog} />
       <ToastStack client={client} />
     </>
   );
