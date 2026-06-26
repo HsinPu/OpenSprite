@@ -47,6 +47,7 @@ const [
   chatClient,
   providerSettingsActions,
   providerAuthActions,
+  providerAuthActionRunner,
   providerAuthConfigs,
   providerAuthPollTimers,
   providerAuthState,
@@ -108,6 +109,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useProviderAuthActions.js"),
+  read("src/composables/providerAuthActionRunner.js"),
   read("src/composables/providerAuthConfigs.js"),
   read("src/composables/providerAuthPollTimers.js"),
   read("src/composables/providerAuthState.js"),
@@ -395,10 +397,11 @@ assertIncludes(providerAuthActions, "logoutProviderAuthById(CODEX_PROVIDER_ID)",
 assertIncludes(providerAuthActions, "logoutProviderAuthById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth logout wrapper");
 assertIncludes(providerAuthActions, "pollProviderAuthLoginById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth poll wrapper");
 assertIncludes(providerAuthActions, "pollProviderAuthLoginById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth poll wrapper");
-assertIncludes(providerAuthActions, "async function runProviderAuthAction", "provider auth actions centralize auth action lifecycle");
-assertIncludes(providerAuthActions, "await runProviderAuthAction(config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
-assertIncludes(providerAuthActions, "await runProviderAuthAction(config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
-assertIncludes(providerAuthActions, "await runProviderAuthAction(config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
+assertIncludes(providerAuthActionRunner, "export async function runProviderAuthAction", "provider auth action runner centralizes auth action lifecycle");
+assertIncludes(providerAuthActions, "import { runProviderAuthAction } from \"./providerAuthActionRunner\"", "provider auth actions reuse auth action lifecycle helper");
+assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
+assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
+assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
 assertIncludes(providerAuthActions, "requestSettingsJson(config.loginEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth login request");
 assertIncludes(providerAuthActions, "requestSettingsJson(config.logoutEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth logout request");
 assertIncludes(providerAuthActions, "requestSettingsJson(config.pollEndpoint", "provider auth actions keep shared auth poll request");

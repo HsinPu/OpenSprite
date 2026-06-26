@@ -1,3 +1,4 @@
+import { runProviderAuthAction } from "./providerAuthActionRunner";
 import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
 import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
 import { providerOAuthConnectPayload } from "./providerConnectForm";
@@ -45,24 +46,8 @@ export function useProviderAuthActions({
     scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey], () => pollProviderAuthLoginById(resolvedProviderId));
   }
 
-  async function runProviderAuthAction(config, fallbackNoticeKey, action, options = {}) {
-    options.before?.();
-    settingsState[config.loadingKey] = true;
-    settingsState[config.errorKey] = "";
-    if (options.clearNotice) {
-      settingsState[config.noticeKey] = "";
-    }
-    try {
-      await action();
-    } catch (error) {
-      settingsState[config.errorKey] = error?.message || copy.value.notices[fallbackNoticeKey];
-    } finally {
-      settingsState[config.loadingKey] = false;
-    }
-  }
-
   async function loadProviderAuthStatus(config) {
-    await runProviderAuthAction(config, config.loadFailedNoticeKey, async () => {
+    await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey, async () => {
       const payload = await requestSettingsJson(config.endpoint);
       settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
     });
@@ -114,7 +99,7 @@ export function useProviderAuthActions({
   }
 
   async function startProviderAuthLogin(config) {
-    await runProviderAuthAction(config, config.loginFailedNoticeKey, async () => {
+    await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey, async () => {
       const payload = await requestSettingsJson(config.loginEndpoint, { method: "POST" });
       settingsState[config.authKey] = {
         ...settingsState[config.authKey],
@@ -191,7 +176,7 @@ export function useProviderAuthActions({
   }
 
   async function logoutProviderAuth(config) {
-    await runProviderAuthAction(config, config.logoutFailedNoticeKey, async () => {
+    await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey, async () => {
       await requestSettingsJson(config.logoutEndpoint, { method: "POST" });
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
