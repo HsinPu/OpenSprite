@@ -1,9 +1,6 @@
 import { Button, Form, Input, Select, Switch, Tag } from "antd";
-import {
-  mediaModelCategories,
-  mediaModelsForProvider,
-  providerMark,
-} from "./providerHelpers";
+import { providerMark } from "./providerHelpers";
+import { mediaModelCategories, mediaModelsForProvider } from "./providerMediaHelpers";
 import { modelOptionsForProvider, textModelOptionLabel } from "./providerModelHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 

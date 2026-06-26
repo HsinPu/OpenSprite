@@ -86,6 +86,7 @@ const [
   providerAuthHelpers,
   providerCredentialHelpers,
   providerModelHelpers,
+  providerMediaHelpers,
   availableProviderRow,
   connectedProviderRow,
   availableProvidersSection,
@@ -156,6 +157,7 @@ const [
   read("src/settings/providerAuthHelpers.ts"),
   read("src/settings/providerCredentialHelpers.ts"),
   read("src/settings/providerModelHelpers.ts"),
+  read("src/settings/providerMediaHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
   read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
@@ -459,6 +461,9 @@ assertNotIncludes(providerHelpers, "function providerCredentials", "provider hel
 assertIncludes(providerModelHelpers, "function modelOptionsForProvider", "provider model helpers expose text model options");
 assertIncludes(providerModelHelpers, "function textModelOptionLabel", "provider model helpers expose text model labels");
 assertNotIncludes(providerHelpers, "function modelOptionsForProvider", "provider helpers keep text model options out of generic helpers");
+assertIncludes(providerMediaHelpers, "function mediaModelCategories", "provider media helpers expose media categories");
+assertIncludes(providerMediaHelpers, "function mediaModelsForProvider", "provider media helpers expose media model lookup");
+assertNotIncludes(providerHelpers, "function mediaModelCategories", "provider helpers keep media model categories out of generic helpers");
 assertIncludes(providerSettingsActions, "providerCatalogKey(provider)", "provider settings actions reuse shared provider key helper");
 assertNotIncludes(providerConnectForm, "providerCredentialKey", "provider connect form no longer owns provider key resolution");
 assertNotIncludes(providerSettingsActions, "providerCredentialKey", "provider settings actions avoid form-owned provider key helper");
@@ -655,6 +660,8 @@ assertNotIncludes(providerHelpers, "COPILOT_AUTH_STATE_KEYS", "provider helpers 
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(modelSettings, "modelOptionsForProvider(selectedProvider, selectedModel)", "model settings keeps text model option helper");
 assertIncludes(modelSettings, "textModelOptionLabel(copy, selectedProvider, model)", "model settings keeps text model label helper");
+assertIncludes(modelSettings, "mediaModelCategories(copy).map", "model settings keeps media category helper");
+assertIncludes(modelSettings, "mediaModelsForProvider(state, category.key, selection.providerId, selection.model)", "model settings keeps media model lookup helper");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
 assertIncludes(mcpSettings, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
