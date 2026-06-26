@@ -5,39 +5,21 @@ import {
   copilotDescription,
   providerAuthVisible,
 } from "./providerHelpers";
-import {
-  CODEX_AUTH_STATE_KEYS,
-  CODEX_PROVIDER_ID,
-  CODEX_PROVIDER_NAME,
-  COPILOT_AUTH_STATE_KEYS,
-  COPILOT_PROVIDER_ID,
-  COPILOT_PROVIDER_NAME,
-} from "./providerConstants";
+import { PROVIDER_AUTH_SECTION_CONFIGS } from "./providerConstants";
 
-const PROVIDER_AUTH_SECTIONS = [
-  {
-    providerId: CODEX_PROVIDER_ID,
-    ...CODEX_AUTH_STATE_KEYS,
-    mark: "Cx",
-    providerName: CODEX_PROVIDER_NAME,
-    describe: codexDescription,
-  },
-  {
-    providerId: COPILOT_PROVIDER_ID,
-    ...COPILOT_AUTH_STATE_KEYS,
-    mark: "Gh",
-    providerName: COPILOT_PROVIDER_NAME,
-    describe: copilotDescription,
-  },
-];
+const PROVIDER_AUTH_DESCRIPTIONS: Record<string, (copy: AnyRecord, state: AnyRecord) => string> = {
+  codexAuth: codexDescription,
+  copilotAuth: copilotDescription,
+};
 
 export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: AnyRecord) {
   const providerCopy = copy.settings.providers || {};
 
-  return PROVIDER_AUTH_SECTIONS.map((config) => {
+  return PROVIDER_AUTH_SECTION_CONFIGS.map((config) => {
     const auth = state[config.copyKey] || {};
     const loading = Boolean(state[config.loadingKey]);
     const authCopy = providerCopy[config.copyKey] || {};
+    const describe = PROVIDER_AUTH_DESCRIPTIONS[config.copyKey] || (() => "");
 
     return {
       key: config.providerId,
@@ -55,7 +37,7 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
       mark: config.mark,
       name: authCopy.name || config.providerName,
       status: authStatusLabel(authCopy, auth, loading),
-      description: config.describe(copy, state),
+      description: describe(copy, state),
       loading,
       configured: auth?.configured,
       copy: authCopy,

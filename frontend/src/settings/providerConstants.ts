@@ -51,6 +51,11 @@ export function providerAuthRequestConfig(providerId: string, keys: ReturnType<t
 export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 
+export const PROVIDER_AUTH_SECTION_CONFIGS = [
+  { providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME },
+  { providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME },
+];
+
 export function createProviderAuthInitialStates() {
   return {
     ...providerAuthInitialState(CODEX_AUTH_STATE_KEYS, providerDeviceAuthInitialState("deviceAuthId", {
