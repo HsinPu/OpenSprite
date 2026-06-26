@@ -91,7 +91,7 @@ import {
   CODEX_PROVIDER_ID,
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
-  providerAuthEndpoint,
+  providerAuthRequestConfig,
 } from "../settings/providerConstants";
 
 const STORAGE_KEYS = {
@@ -2521,10 +2521,7 @@ export function useChatClient() {
 
   const providerAuthFlowConfigs = {
     [CODEX_PROVIDER_ID]: {
-      loginEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "login"),
-      logoutEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "logout"),
-      pollEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "poll"),
-      ...CODEX_AUTH_STATE_KEYS,
+      ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
       clearPoll: clearCodexAuthPollTimer,
       schedulePoll: scheduleCodexAuthPoll,
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
@@ -2560,10 +2557,7 @@ export function useChatClient() {
       }),
     },
     [COPILOT_PROVIDER_ID]: {
-      loginEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "login"),
-      logoutEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "logout"),
-      pollEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "poll"),
-      ...COPILOT_AUTH_STATE_KEYS,
+      ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
       clearPoll: clearCopilotAuthPollTimer,
       schedulePoll: scheduleCopilotAuthPoll,
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),

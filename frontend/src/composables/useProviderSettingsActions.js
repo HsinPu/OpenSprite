@@ -5,7 +5,7 @@ import {
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
   COPILOT_PROVIDER_NAME,
-  providerAuthEndpoint,
+  providerAuthRequestConfig,
 } from "../settings/providerConstants";
 
 export function useProviderSettingsActions({
@@ -53,8 +53,7 @@ export function useProviderSettingsActions({
 
   const providerAuthStatusConfigs = {
     [CODEX_PROVIDER_ID]: {
-      endpoint: providerAuthEndpoint(CODEX_PROVIDER_ID),
-      ...CODEX_AUTH_STATE_KEYS,
+      ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
       normalize: (payload) => ({
         configured: Boolean(payload.configured),
         expired: Boolean(payload.expired),
@@ -64,8 +63,7 @@ export function useProviderSettingsActions({
       }),
     },
     [COPILOT_PROVIDER_ID]: {
-      endpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID),
-      ...COPILOT_AUTH_STATE_KEYS,
+      ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
       normalize: (payload) => ({
         configured: Boolean(payload.configured),
         path: payload.path || "",

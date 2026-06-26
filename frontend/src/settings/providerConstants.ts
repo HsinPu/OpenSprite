@@ -33,6 +33,17 @@ export function providerAuthInitialState(keys: ReturnType<typeof providerAuthSta
   };
 }
 
+export function providerAuthRequestConfig(providerId: string, keys: ReturnType<typeof providerAuthStateKeys>) {
+  return {
+    providerId,
+    endpoint: providerAuthEndpoint(providerId),
+    loginEndpoint: providerAuthEndpoint(providerId, "login"),
+    logoutEndpoint: providerAuthEndpoint(providerId, "logout"),
+    pollEndpoint: providerAuthEndpoint(providerId, "poll"),
+    ...keys,
+  };
+}
+
 export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 
