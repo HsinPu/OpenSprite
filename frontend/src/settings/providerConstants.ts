@@ -52,20 +52,21 @@ export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
-  { providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME },
-  { providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME },
+  {
+    providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME,
+    initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
+  },
+  {
+    providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME,
+    initialAuth: providerDeviceAuthInitialState("deviceCode"),
+  },
 ];
 
 export function createProviderAuthInitialStates() {
-  return {
-    ...providerAuthInitialState(CODEX_AUTH_STATE_KEYS, providerDeviceAuthInitialState("deviceAuthId", {
-      expired: false,
-      expires_at: null,
-      account_id: "",
-      command: "",
-    })),
-    ...providerAuthInitialState(COPILOT_AUTH_STATE_KEYS, providerDeviceAuthInitialState("deviceCode")),
-  };
+  return Object.assign(
+    {},
+    ...PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth)),
+  );
 }
 
 const PROVIDER_AUTH_KEYS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map(({ providerId, authKey }) => [providerId, authKey]));

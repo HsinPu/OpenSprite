@@ -299,6 +299,10 @@ assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider con
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
 assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
+assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
+assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
+assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
+assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
 assertIncludes(providerHelpers, "providerAuthKeyForId(provider?.provider)", "provider helpers delegate provider auth key lookup");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
