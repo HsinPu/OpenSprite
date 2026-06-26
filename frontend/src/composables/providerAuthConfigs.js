@@ -33,7 +33,7 @@ export function createProviderAuthConfigs() {
         expires_at: payload.expires_at || null,
         account_id: payload.account_id || "",
       }),
-      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, codexAuthConfig.deviceKey, codexAuthConfig.payloadDeviceKey, { command: "" }),
+      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, codexAuthConfig.deviceKey, codexAuthConfig.payloadDeviceKey, codexAuthConfig.loginExtra),
       normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey, {
         expired: Boolean(auth.expired),
         expires_at: auth.expires_at || null,

@@ -310,6 +310,7 @@ assertIncludes(providerConstants, "function providerAuthKeyForId", "provider con
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
+assertIncludes(providerConstants, "loginExtra: { command: \"\" }", "provider constants keep Codex login extras in metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceCode\"", "provider constants keep Copilot device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_code\"", "provider constants keep Copilot device auth payload key in metadata");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
@@ -457,6 +458,8 @@ assertNotIncludes(providerAuthConfigs, "providerName", "provider auth configs av
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth configs reuse device login normalization");
 assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, codexAuthConfig.deviceKey, codexAuthConfig.payloadDeviceKey", "provider auth configs keep Codex device auth id normalization through metadata");
+assertIncludes(providerAuthConfigs, "codexAuthConfig.loginExtra", "provider auth configs read Codex login extras from metadata");
+assertNotIncludes(providerAuthConfigs, "codexAuthConfig.payloadDeviceKey, { command: \"\" }", "provider auth configs avoid hardcoded Codex login extras");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin(payload, copilotAuthConfig.deviceKey, copilotAuthConfig.payloadDeviceKey)", "provider auth configs keep Copilot device code normalization through metadata");
 assertIncludes(providerAuthConfigs, "function normalizeAuthorizedDeviceAuth", "provider auth configs share authorized device auth normalization");
 assertIncludes(providerAuthConfigs, "function resetDeviceAuthLogout", "provider auth configs share device auth logout reset");
