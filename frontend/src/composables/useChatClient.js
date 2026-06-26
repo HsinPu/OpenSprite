@@ -2516,16 +2516,20 @@ export function useChatClient() {
     "openai-codex": {
       loginEndpoint: "/api/settings/auth/openai-codex/login",
       logoutEndpoint: "/api/settings/auth/openai-codex/logout",
+      pollEndpoint: "/api/settings/auth/openai-codex/poll",
       authKey: "codexAuth",
       loadingKey: "codexAuthLoading",
       errorKey: "codexAuthError",
       noticeKey: "codexAuthNotice",
       loginReadyNoticeKey: "codexAuthLoginReady",
       loginFailedNoticeKey: "codexAuthLoginFailed",
+      loginCompleteNoticeKey: "codexAuthLoginComplete",
       loggedOutNoticeKey: "codexAuthLoggedOut",
       logoutFailedNoticeKey: "codexAuthLogoutFailed",
       clearPoll: clearCodexAuthPollTimer,
       schedulePoll: scheduleCodexAuthPoll,
+      hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
+      buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
       loadStatus: loadCodexAuthStatus,
       normalizeLogin: (payload) => ({
         command: "",
@@ -2533,6 +2537,16 @@ export function useChatClient() {
         userCode: payload.user_code || "",
         deviceAuthId: payload.device_auth_id || "",
         pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+      }),
+      normalizeAuthorized: (auth, currentAuth) => ({
+        configured: Boolean(auth.configured),
+        expired: Boolean(auth.expired),
+        expires_at: auth.expires_at || null,
+        account_id: auth.account_id || "",
+        path: auth.path || currentAuth.path,
+        verificationUri: "",
+        userCode: "",
+        deviceAuthId: "",
       }),
       resetLogout: (auth) => ({
         ...auth,
@@ -2549,22 +2563,33 @@ export function useChatClient() {
     copilot: {
       loginEndpoint: "/api/settings/auth/copilot/login",
       logoutEndpoint: "/api/settings/auth/copilot/logout",
+      pollEndpoint: "/api/settings/auth/copilot/poll",
       authKey: "copilotAuth",
       loadingKey: "copilotAuthLoading",
       errorKey: "copilotAuthError",
       noticeKey: "copilotAuthNotice",
       loginReadyNoticeKey: "copilotAuthLoginReady",
       loginFailedNoticeKey: "copilotAuthLoginFailed",
+      loginCompleteNoticeKey: "copilotAuthLoginComplete",
       loggedOutNoticeKey: "copilotAuthLoggedOut",
       logoutFailedNoticeKey: "copilotAuthLogoutFailed",
       clearPoll: clearCopilotAuthPollTimer,
       schedulePoll: scheduleCopilotAuthPoll,
+      hasPendingPoll: (auth) => Boolean(auth.deviceCode),
+      buildPollBody: (auth) => ({ device_code: auth.deviceCode }),
       loadStatus: loadCopilotAuthStatus,
       normalizeLogin: (payload) => ({
         verificationUri: payload.verification_uri || "",
         userCode: payload.user_code || "",
         deviceCode: payload.device_code || "",
         pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+      }),
+      normalizeAuthorized: (auth, currentAuth) => ({
+        configured: Boolean(auth.configured),
+        path: auth.path || currentAuth.path,
+        verificationUri: "",
+        userCode: "",
+        deviceCode: "",
       }),
       resetLogout: (auth) => ({ ...auth, configured: false, path: "", verificationUri: "", userCode: "", deviceCode: "" }),
     },
@@ -2621,38 +2646,7 @@ export function useChatClient() {
   }
 
   async function pollCodexAuthLogin() {
-    const deviceAuthId = settingsState.codexAuth.deviceAuthId;
-    const userCode = settingsState.codexAuth.userCode;
-    if (!deviceAuthId || !userCode) {
-      return;
-    }
-    try {
-      const payload = await requestSettingsJson("/api/settings/auth/openai-codex/poll", {
-        method: "POST",
-        body: JSON.stringify({ device_auth_id: deviceAuthId, user_code: userCode }),
-      });
-      if (payload.status === "authorized") {
-        const auth = payload.auth || {};
-        settingsState.codexAuth = {
-          ...settingsState.codexAuth,
-          configured: Boolean(auth.configured),
-          expired: Boolean(auth.expired),
-          expires_at: auth.expires_at || null,
-          account_id: auth.account_id || "",
-          path: auth.path || settingsState.codexAuth.path,
-          verificationUri: "",
-          userCode: "",
-          deviceAuthId: "",
-        };
-        setSettingsSuccess("codexAuthNotice", copy.value.notices.codexAuthLoginComplete);
-        await loadModelSettings();
-        return;
-      }
-      scheduleCodexAuthPoll();
-    } catch (error) {
-      settingsState.codexAuthError = error?.message || copy.value.notices.codexAuthLoginFailed;
-      clearCodexAuthPollTimer();
-    }
+    return pollProviderAuthLogin(providerAuthFlowConfigs["openai-codex"]);
   }
 
   async function logoutCodexAuth() {
@@ -2672,31 +2666,32 @@ export function useChatClient() {
   }
 
   async function pollCopilotAuthLogin() {
-    const deviceCode = settingsState.copilotAuth.deviceCode;
-    if (!deviceCode) return;
+    return pollProviderAuthLogin(providerAuthFlowConfigs.copilot);
+  }
+
+  async function pollProviderAuthLogin(config) {
+    const pendingAuth = settingsState[config.authKey] || {};
+    if (!config.hasPendingPoll(pendingAuth)) return;
     try {
-      const payload = await requestSettingsJson("/api/settings/auth/copilot/poll", {
+      const payload = await requestSettingsJson(config.pollEndpoint, {
         method: "POST",
-        body: JSON.stringify({ device_code: deviceCode }),
+        body: JSON.stringify(config.buildPollBody(pendingAuth)),
       });
       if (payload.status === "authorized") {
         const auth = payload.auth || {};
-        settingsState.copilotAuth = {
-          ...settingsState.copilotAuth,
-          configured: Boolean(auth.configured),
-          path: auth.path || settingsState.copilotAuth.path,
-          verificationUri: "",
-          userCode: "",
-          deviceCode: "",
+        const currentAuth = settingsState[config.authKey] || {};
+        settingsState[config.authKey] = {
+          ...currentAuth,
+          ...config.normalizeAuthorized(auth, currentAuth),
         };
-        setSettingsSuccess("copilotAuthNotice", copy.value.notices.copilotAuthLoginComplete);
+        setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginCompleteNoticeKey]);
         await loadModelSettings();
         return;
       }
-      scheduleCopilotAuthPoll();
+      config.schedulePoll();
     } catch (error) {
-      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoginFailed;
-      clearCopilotAuthPollTimer();
+      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loginFailedNoticeKey];
+      config.clearPoll();
     }
   }
 
