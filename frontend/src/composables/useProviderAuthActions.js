@@ -47,6 +47,16 @@ export function useProviderAuthActions({
     };
   }
 
+  function normalizeDeviceAuthLogin(payload, deviceKey, payloadDeviceKey, extra = {}) {
+    return {
+      ...extra,
+      verificationUri: payload.verification_uri || "",
+      userCode: payload.user_code || "",
+      [deviceKey]: payload[payloadDeviceKey] || "",
+      pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+    };
+  }
+
   const providerAuthConfigs = {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
@@ -60,13 +70,7 @@ export function useProviderAuthActions({
         account_id: payload.account_id || "",
         path: payload.path || "",
       }),
-      normalizeLogin: (payload) => ({
-        command: "",
-        verificationUri: payload.verification_uri || "",
-        userCode: payload.user_code || "",
-        deviceAuthId: payload.device_auth_id || "",
-        pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
-      }),
+      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, "deviceAuthId", "device_auth_id", { command: "" }),
       normalizeAuthorized: (auth, currentAuth) => ({
         configured: Boolean(auth.configured),
         expired: Boolean(auth.expired),
@@ -98,12 +102,7 @@ export function useProviderAuthActions({
         configured: Boolean(payload.configured),
         path: payload.path || "",
       }),
-      normalizeLogin: (payload) => ({
-        verificationUri: payload.verification_uri || "",
-        userCode: payload.user_code || "",
-        deviceCode: payload.device_code || "",
-        pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
-      }),
+      normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, "deviceCode", "device_code"),
       normalizeAuthorized: (auth, currentAuth) => ({
         configured: Boolean(auth.configured),
         path: auth.path || currentAuth.path,

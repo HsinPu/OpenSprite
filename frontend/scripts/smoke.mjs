@@ -317,6 +317,9 @@ assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"conn
 assertIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions centralize runtime config fields");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth actions reuse Codex runtime config helper");
 assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot runtime config helper");
+assertIncludes(providerAuthActions, "function normalizeDeviceAuthLogin", "provider auth actions centralize device login normalization");
+assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth actions keep Codex device auth id normalization");
+assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth actions keep Copilot device code normalization");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, providerAuthConfig(providerId))", "provider auth actions reuse auth provider config for OAuth connect");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");
