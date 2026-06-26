@@ -47,6 +47,7 @@ const [
   chatPanel,
   emptyState,
   messageList,
+  sidebarNav,
   browserSettings,
   runInspector,
   logSettings,
@@ -75,6 +76,7 @@ const [
   read("src/components/chatPanel.tsx"),
   read("src/components/emptyState.tsx"),
   read("src/components/messageList.tsx"),
+  read("src/components/sidebarNav.tsx"),
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/settings/logSettings.tsx"),
@@ -128,6 +130,13 @@ assertIncludes(app, "useReactiveStore", "React subscription bridge");
 assertIncludes(settingsModal, "useTransition", "settings modal uses transition for deferred content");
 assertIncludes(app, "useChatClient", "existing chat client flow reused");
 assertIncludes(app, "SidebarNav", "React sidebar shell");
+assertIncludes(sidebarNav, "<Checkbox", "sidebar selection uses Ant Checkbox controls");
+assertIncludes(sidebarNav, "<Segmented", "sidebar filters use Ant Segmented controls");
+assertIncludes(sidebarNav, "client.setSessionChannelFilter(String(value))", "sidebar keeps channel filter action");
+assertIncludes(sidebarNav, "client.setShowHiddenSessions(checked)", "sidebar keeps hidden session toggle");
+assertIncludes(sidebarNav, "deleteSessions(selectedSessions)", "sidebar keeps bulk delete flow");
+assertIncludes(sidebarNav, "client.setActiveSession(session.externalChatId)", "sidebar keeps session switching");
+assertIncludes(sidebarNav, "onPointerDown={beginSidebarResize}", "sidebar keeps resize handle");
 assertIncludes(app, "ChatPanel", "React chat panel");
 assertIncludes(chatPanel, "client.submitMessage", "chat panel keeps composer submit flow");
 assertIncludes(chatPanel, "client.applyCommandHint(command)", "chat panel keeps command hint flow");
@@ -213,8 +222,6 @@ assertIncludes(generalSettings, "<SettingsCard className=\"settings-card--form\"
 assertIncludes(generalSettings, "<Select", "general settings uses Ant Select controls");
 assertIncludes(generalSettings, "<Switch", "general settings uses Ant Switch controls");
 assertIncludes(generalSettings, "<Input", "general settings uses Ant Input controls");
-assertIncludes(app, "<Checkbox", "sidebar selection uses Ant Checkbox controls");
-assertIncludes(app, "<Segmented", "sidebar filters use Ant Segmented controls");
 assertNotIncludes(app, "<button", "app shell avoids raw button elements");
 assertNotIncludes(app, "<input", "app shell avoids raw input elements");
 assertNotIncludes(app, "<select", "app shell avoids raw select elements");
