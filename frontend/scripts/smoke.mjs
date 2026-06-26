@@ -48,6 +48,7 @@ const [
   modelSettings,
   channelSettings,
   mcpSettings,
+  networkSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -64,6 +65,7 @@ const [
   read("src/settings/modelSettings.tsx"),
   read("src/settings/channelSettings.tsx"),
   read("src/settings/mcpSettings.tsx"),
+  read("src/settings/networkSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -134,10 +136,10 @@ assertIncludes(mcpSettings, "form.headersJson", "MCP settings keeps headers JSON
 assertIncludes(app, "state.scheduleForm.defaultTimezone", "schedule settings keeps default timezone field");
 assertIncludes(app, "client.saveCronJob", "schedule settings keeps cron editor save");
 assertIncludes(app, "client.runCronJobAction(job, job.enabled ? \"pause\" : \"enable\")", "schedule settings keeps pause/enable action");
-assertIncludes(app, "form.httpProxy", "network settings keeps HTTP proxy field");
-assertIncludes(app, "form.httpsProxy", "network settings keeps HTTPS proxy field");
-assertIncludes(app, "form.noProxy", "network settings keeps no proxy field");
-assertNotIncludes(app, "state.networkForm.enabled", "network settings does not show unsupported enabled field");
+assertIncludes(networkSettings, "form.httpProxy", "network settings keeps HTTP proxy field");
+assertIncludes(networkSettings, "form.httpsProxy", "network settings keeps HTTPS proxy field");
+assertIncludes(networkSettings, "form.noProxy", "network settings keeps no proxy field");
+assertNotIncludes(networkSettings, "state.networkForm.enabled", "network settings does not show unsupported enabled field");
 assertIncludes(app, "form.jinaApiKey", "search settings keeps Jina API key field");
 assertIncludes(app, "form.searxngEngines", "search settings keeps SearXNG engine selection");
 assertIncludes(app, "form.searxngCategories", "search settings keeps SearXNG category selection");
