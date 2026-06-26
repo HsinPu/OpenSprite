@@ -1,9 +1,7 @@
-import { createProviderAuthConfigs } from "./providerAuthConfigs";
+import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
 import {
   CODEX_PROVIDER_ID,
-  CODEX_PROVIDER_NAME,
   COPILOT_PROVIDER_ID,
-  COPILOT_PROVIDER_NAME,
   providerSettingsEndpoint,
 } from "../settings/providerConstants";
 
@@ -33,21 +31,14 @@ export function useProviderAuthActions({
     }, delayMs));
   }
 
-  function providerAuthRuntimeConfig(providerId, providerName, connectedNoticeKey, loadStatus) {
-    return {
-      providerName,
-      connectedNotice: () => copy.value.notices[connectedNoticeKey],
-      startAuthLogin: () => startProviderAuthLoginById(providerId),
-      clearPoll: () => clearProviderAuthPollTimer(providerId),
-      schedulePoll: () => scheduleProviderAuthPollById(providerId),
-      loadStatus,
-    };
-  }
-
-  const providerAuthConfigs = createProviderAuthConfigs({
-    [CODEX_PROVIDER_ID]: providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME, "codexProviderConnected", loadCodexAuthStatus),
-    [COPILOT_PROVIDER_ID]: providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME, "copilotProviderConnected", loadCopilotAuthStatus),
-  });
+  const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
+    copy,
+    startAuthLoginById,
+    clearProviderAuthPollTimer,
+    scheduleProviderAuthPollById,
+    loadCodexAuthStatus,
+    loadCopilotAuthStatus,
+  }));
 
   function resolveProviderAuthId(providerId) {
     return providerAuthConfigs[providerId] ? providerId : CODEX_PROVIDER_ID;

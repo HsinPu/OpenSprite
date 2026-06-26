@@ -1,11 +1,35 @@
 import {
   CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
+  CODEX_PROVIDER_NAME,
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
+  COPILOT_PROVIDER_NAME,
   providerAuthRequestConfig,
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
+
+export function createProviderAuthRuntimeConfigs({
+  copy,
+  startAuthLoginById,
+  clearProviderAuthPollTimer,
+  scheduleProviderAuthPollById,
+  loadCodexAuthStatus,
+  loadCopilotAuthStatus,
+}) {
+  const runtimeConfig = (providerId, providerName, connectedNoticeKey, loadStatus) => ({
+    providerName,
+    connectedNotice: () => copy.value.notices[connectedNoticeKey],
+    startAuthLogin: () => startAuthLoginById(providerId),
+    clearPoll: () => clearProviderAuthPollTimer(providerId),
+    schedulePoll: () => scheduleProviderAuthPollById(providerId),
+    loadStatus,
+  });
+  return {
+    [CODEX_PROVIDER_ID]: runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME, "codexProviderConnected", loadCodexAuthStatus),
+    [COPILOT_PROVIDER_ID]: runtimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME, "copilotProviderConnected", loadCopilotAuthStatus),
+  };
+}
 
 export function createProviderAuthConfigs(runtimeConfigs = {}) {
   return {
