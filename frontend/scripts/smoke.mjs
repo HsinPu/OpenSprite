@@ -302,6 +302,7 @@ assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "pr
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
+assertIncludes(providerConstants, "connectedNoticeKey: authKey.replace(/Auth$/, \"ProviderConnected\")", "provider constants derive provider connected notices from auth keys");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_STATE_KEYS", "provider constants keep Codex auth state keys internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_STATE_KEYS", "provider constants keep Copilot auth state keys internal");
 assertIncludes(providerConstants, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId", "provider constants derive default auth provider from metadata");
@@ -446,8 +447,8 @@ assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"con
 assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, config)", "provider auth actions delegate OAuth connect request");
 assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider auth actions no longer own provider endpoint assembly");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
-assertIncludes(providerAuthConfigs, "connectedNoticeKey: \"codexProviderConnected\"", "provider auth configs keep Codex connected notice as metadata");
-assertIncludes(providerAuthConfigs, "connectedNoticeKey: \"copilotProviderConnected\"", "provider auth configs keep Copilot connected notice as metadata");
+assertNotIncludes(providerAuthConfigs, "connectedNoticeKey: \"codexProviderConnected\"", "provider auth configs avoid hardcoded Codex connected notice key");
+assertNotIncludes(providerAuthConfigs, "connectedNoticeKey: \"copilotProviderConnected\"", "provider auth configs avoid hardcoded Copilot connected notice key");
 assertNotIncludes(providerAuthConfigs, "startAuthLogin", "provider auth configs avoid auth login closure");
 assertNotIncludes(providerAuthConfigs, "loadStatus", "provider auth configs avoid auth status loading closure");
 assertNotIncludes(providerAuthConfigs, "connectedNotice: () =>", "provider auth configs avoid notice lookup closures");

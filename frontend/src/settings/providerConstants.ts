@@ -15,6 +15,7 @@ export function providerAuthStateKeys(authKey: string) {
     loadingKey: `${authKey}Loading`,
     errorKey: `${authKey}Error`,
     noticeKey: `${authKey}Notice`,
+    connectedNoticeKey: authKey.replace(/Auth$/, "ProviderConnected"),
     loadFailedNoticeKey: `${authKey}LoadFailed`,
     loginReadyNoticeKey: `${authKey}LoginReady`,
     loginFailedNoticeKey: `${authKey}LoginFailed`,

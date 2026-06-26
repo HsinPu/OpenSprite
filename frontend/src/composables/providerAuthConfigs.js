@@ -26,7 +26,6 @@ export function createProviderAuthConfigs() {
   return {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(codexAuthConfig),
-      connectedNoticeKey: "codexProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth[codexAuthConfig.deviceKey] && auth.userCode),
       buildPollBody: (auth) => ({ [codexAuthConfig.payloadDeviceKey]: auth[codexAuthConfig.deviceKey], user_code: auth.userCode }),
       normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, {
@@ -49,7 +48,6 @@ export function createProviderAuthConfigs() {
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(copilotAuthConfig),
-      connectedNoticeKey: "copilotProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth[copilotAuthConfig.deviceKey]),
       buildPollBody: (auth) => ({ [copilotAuthConfig.payloadDeviceKey]: auth[copilotAuthConfig.deviceKey] }),
       normalizeStatus: normalizeConfiguredPathStatus,
