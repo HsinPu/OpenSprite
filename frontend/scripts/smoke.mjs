@@ -43,6 +43,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  runInspector,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -54,6 +55,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/components/runInspector.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -147,7 +149,7 @@ assertNotIncludes(app, "<button", "app shell avoids raw button elements");
 assertNotIncludes(app, "<input", "app shell avoids raw input elements");
 assertNotIncludes(app, "<select", "app shell avoids raw select elements");
 assertNotIncludes(app, "<textarea", "app shell avoids raw textarea elements");
-assertIncludes(app, "JSON.stringify({ run, exported_at", "trace debug JSON export");
+assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(app, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(app, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
 assertIncludes(app, "selectedKeys={[section]}", "settings nav marks active section");
@@ -157,7 +159,7 @@ assertIncludes(app, "settings-page--loading", "settings modal defers heavy secti
 assertNotIncludes(app, "const contentBySection", "settings modal should not build a section map during render");
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
-assertRegex(app, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
+assertRegex(runInspector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
 assertNotIncludes(app, "BackgroundProcessSidebar", "background process sidebar stays removed");
 assertNotIncludes(app, "CuratorSettingsPage", "curator settings page stays removed");
 
