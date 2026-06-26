@@ -363,8 +363,10 @@ assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.c
 assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
 assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
-assertIncludes(providerHelpers, "[CODEX_PROVIDER_ID]: CODEX_AUTH_KEY", "provider helpers map Codex auth key");
-assertIncludes(providerHelpers, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_KEY", "provider helpers map Copilot auth key");
+assertIncludes(providerHelpers, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider helpers map Codex auth key");
+assertIncludes(providerHelpers, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider helpers map Copilot auth key");
+assertIncludes(providerHelpers, "state[CODEX_AUTH_STATE_KEYS.authKey]", "provider helpers read Codex auth state through metadata");
+assertIncludes(providerHelpers, "state[COPILOT_AUTH_STATE_KEYS.authKey]", "provider helpers read Copilot auth state through metadata");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
