@@ -64,6 +64,7 @@ import {
   providerMark,
   textModelOptionLabel,
 } from "./settings/providerHelpers";
+import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settings/settingsPrimitives";
 
 type AnyRecord = Record<string, any>;
 type Client = ReturnType<typeof useChatClient>;
@@ -1293,40 +1294,6 @@ function SettingsNav({
         <strong>OpenSprite Web</strong>
         <span>{copy.settings.version}</span>
       </div>
-    </div>
-  );
-}
-
-function SettingsSectionTitle({ children }: { children: React.ReactNode }) {
-  return <Typography.Title className="settings-section-title" level={5}>{children}</Typography.Title>;
-}
-
-function SettingsCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <Card size="small" className={["settings-card", className].filter(Boolean).join(" ")}>{children}</Card>;
-}
-
-function SettingsStatus({ message, type = "info" }: { message?: string; type?: "info" | "success" | "warning" | "error" }) {
-  return message ? <Alert className="settings-inline-status" type={type} showIcon message={message} /> : null;
-}
-
-function SettingsRow({
-  title,
-  description,
-  children,
-  className = "",
-}: {
-  title: React.ReactNode;
-  description?: React.ReactNode;
-  children?: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={["settings-row", className].filter(Boolean).join(" ")}>
-      <div className="settings-row__copy">
-        <Typography.Text strong>{title}</Typography.Text>
-        {description ? <Typography.Text type="secondary">{description}</Typography.Text> : null}
-      </div>
-      {children ? <div className="settings-row__control">{children}</div> : null}
     </div>
   );
 }

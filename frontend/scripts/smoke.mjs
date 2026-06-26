@@ -43,6 +43,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
   read("vite.config.ts"),
@@ -53,6 +54,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/settings/settingsPrimitives.tsx"),
 ]);
 
 const packageJson = JSON.parse(packageJsonRaw);
@@ -134,7 +136,7 @@ assertIncludes(app, "form.sessionTimeout", "browser settings keeps session timeo
 assertIncludes(app, "form.allowPrivateUrls", "browser settings keeps private URL toggle");
 assertNotIncludes(app, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
 assertIncludes(app, "shortcut-keys", "shortcut settings uses parity layout");
-assertIncludes(app, "function SettingsCard", "settings pages use Ant card helper");
+assertIncludes(settingsPrimitives, "function SettingsCard", "settings pages use Ant card helper");
 assertIncludes(app, "<SettingsCard className=\"settings-card--form\"", "settings form cards use Ant card helper");
 assertIncludes(app, "<Select", "settings pages use Ant Select controls");
 assertIncludes(app, "<Switch", "settings pages use Ant Switch controls");
