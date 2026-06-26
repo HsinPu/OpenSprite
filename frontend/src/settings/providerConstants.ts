@@ -1,8 +1,8 @@
-export const CODEX_PROVIDER_ID = "openai-codex";
-export const COPILOT_PROVIDER_ID = "copilot";
+const CODEX_PROVIDER_ID = "openai-codex";
+const COPILOT_PROVIDER_ID = "copilot";
 
-export const CODEX_PROVIDER_NAME = "OpenAI Codex";
-export const COPILOT_PROVIDER_NAME = "GitHub Copilot";
+const CODEX_PROVIDER_NAME = "OpenAI Codex";
+const COPILOT_PROVIDER_NAME = "GitHub Copilot";
 
 export function providerAuthStateKeys(authKey: string) {
   return {
@@ -49,8 +49,8 @@ export function providerAuthRequestConfig(config: ReturnType<typeof providerAuth
   };
 }
 
-export const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
-export const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
+const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
+const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
 
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {

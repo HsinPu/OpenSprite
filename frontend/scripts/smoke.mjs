@@ -285,12 +285,16 @@ assertIncludes(providerSettings, "ProviderAuthSection", "provider settings deleg
 assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
 assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
+assertNotIncludes(providerConstants, "export const CODEX_PROVIDER_ID", "provider constants keep Codex provider id internal");
+assertNotIncludes(providerConstants, "export const COPILOT_PROVIDER_ID", "provider constants keep Copilot provider id internal");
 assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_SECTIONS)", "provider constants derive auth provider ids from section metadata");
 assertIncludes(providerConstants, "export function providerAuthSectionForId", "provider constants centralize provider auth section lookup");
 assertIncludes(providerConstants, "return providerAuthSectionForId(providerId)?.authKey || \"\"", "provider constants derive auth keys through section lookup");
 assertNotIncludes(providerConstants, "PROVIDER_AUTH_KEYS", "provider constants avoid duplicate auth key map ownership");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
+assertNotIncludes(providerConstants, "export const CODEX_PROVIDER_NAME", "provider constants keep Codex provider name internal");
+assertNotIncludes(providerConstants, "export const COPILOT_PROVIDER_NAME", "provider constants keep Copilot provider name internal");
 assertIncludes(providerConstants, "providerAuthStateKeys(\"codexAuth\")", "provider constants keep Codex auth key in provider metadata");
 assertIncludes(providerConstants, "providerAuthStateKeys(\"copilotAuth\")", "provider constants keep Copilot auth key in provider metadata");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider constants keep Codex auth key internal");
@@ -333,6 +337,8 @@ assertIncludes(providerConstants, "Object.keys(providerAuthStateKeys(\"\"))", "p
 assertIncludes(providerConstants, "PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key, config[key]])", "provider constants keep auth request fields separate from UI provider metadata");
 assertIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE = \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type");
 assertIncludes(providerConstants, "GITHUB_COPILOT_OAUTH_AUTH_TYPE = \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type");
+assertNotIncludes(providerConstants, "export const OPENAI_CODEX_OAUTH_AUTH_TYPE", "provider constants keep Codex OAuth auth type internal");
+assertNotIncludes(providerConstants, "export const GITHUB_COPILOT_OAUTH_AUTH_TYPE", "provider constants keep Copilot OAuth auth type internal");
 assertIncludes(providerConstants, "function isOAuthProviderAuthType", "provider constants expose OAuth auth type helper");
 assertIncludes(providerConstants, "oauthAuthType: OPENAI_CODEX_OAUTH_AUTH_TYPE", "provider constants keep Codex OAuth auth type in provider metadata");
 assertIncludes(providerConstants, "oauthAuthType: GITHUB_COPILOT_OAUTH_AUTH_TYPE", "provider constants keep Copilot OAuth auth type in provider metadata");
