@@ -310,7 +310,8 @@ assertIncludes(providerConstants, "connectedNoticeKey: authKey.replace(/Auth$/, 
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_STATE_KEYS", "provider constants keep Codex auth state keys internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_STATE_KEYS", "provider constants keep Copilot auth state keys internal");
 assertIncludes(providerConstants, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId", "provider constants derive default auth provider from metadata");
-assertIncludes(providerHelpers, "providerAuthSectionForId(providerCatalogKey(provider))?.authKey || \"\"", "provider helpers derive auth keys through section metadata");
+assertIncludes(providerHelpers, "function providerAuthSection", "provider helpers centralize provider section lookup");
+assertIncludes(providerHelpers, "return providerAuthSection(provider)?.copyKey || \"\"", "provider helpers derive auth copy keys through section metadata");
 assertIncludes(providerConstants, "initialAuth: providerDeviceAuthInitialState(", "provider constants keep auth initial payloads in provider metadata");
 assertIncludes(providerConstants, "deviceKey: \"deviceAuthId\"", "provider constants keep Codex device auth key in metadata");
 assertIncludes(providerConstants, "payloadDeviceKey: \"device_auth_id\"", "provider constants keep Codex device auth payload key in metadata");
@@ -324,7 +325,9 @@ assertIncludes(providerConstants, "logoutReset: { path: \"\" }", "provider const
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => providerAuthInitialState(config, config.initialAuth))", "provider constants build auth initial states from provider metadata");
 assertNotIncludes(providerConstants, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex-specific auth initial state assembly");
 assertNotIncludes(providerConstants, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot-specific auth initial state assembly");
-assertIncludes(providerHelpers, "providerAuthSectionForId(providerCatalogKey(provider))", "provider helpers delegate provider auth key lookup through shared provider key resolver");
+assertIncludes(providerHelpers, "return providerAuthSectionForId(providerCatalogKey(provider))", "provider helpers delegate provider section lookup through shared provider key resolver");
+assertIncludes(providerHelpers, "state[config.stateKey]?.configured", "provider auth configured reads state through state key metadata");
+assertIncludes(providerHelpers, "providerCopy[authConfig.copyKey]?.providerNeedsLogin", "provider description reads login copy through copy key metadata");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");

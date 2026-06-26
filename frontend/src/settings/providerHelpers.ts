@@ -14,18 +14,22 @@ export function hasConnectedProvider(state: AnyRecord, presetId: string) {
   return (state.providers?.connected || []).some((provider: AnyRecord) => providerCatalogKey(provider) === presetId);
 }
 
+function providerAuthSection(provider: AnyRecord) {
+  return providerAuthSectionForId(providerCatalogKey(provider));
+}
+
 export function providerAuthVisible(state: AnyRecord, config: AnyRecord) {
   const auth = state[config.stateKey] || {};
   return Boolean(hasConnectedProvider(state, config.providerId) || state[config.loadingKey] || auth?.configured || auth?.userCode || state[config.noticeKey] || state[config.errorKey]);
 }
 
 export function providerAuthKey(provider: AnyRecord) {
-  return providerAuthSectionForId(providerCatalogKey(provider))?.authKey || "";
+  return providerAuthSection(provider)?.copyKey || "";
 }
 
 export function providerAuthConfigured(state: AnyRecord, provider: AnyRecord) {
-  const authKey = providerAuthKey(provider);
-  return !authKey || Boolean(state[authKey]?.configured);
+  const config = providerAuthSection(provider);
+  return !config || Boolean(state[config.stateKey]?.configured);
 }
 
 export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, loading = false) {
@@ -81,9 +85,9 @@ export function credentialSourceLabel(copy: AnyRecord, provider: AnyRecord) {
 
 export function providerDescription(copy: AnyRecord, state: AnyRecord, provider: AnyRecord) {
   const providerCopy = copy.settings.providers || {};
-  const authKey = providerAuthKey(provider);
-  if (authKey && !providerAuthConfigured(state, provider)) {
-    return providerCopy[authKey]?.providerNeedsLogin || provider.base_url || "";
+  const authConfig = providerAuthSection(provider);
+  if (authConfig && !state[authConfig.stateKey]?.configured) {
+    return providerCopy[authConfig.copyKey]?.providerNeedsLogin || provider.base_url || "";
   }
   return provider?.base_url || provider?.description || "";
 }
