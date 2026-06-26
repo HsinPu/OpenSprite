@@ -2,8 +2,8 @@ import {
   CODEX_PROVIDER_ID,
   COPILOT_PROVIDER_ID,
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
-  PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthRequestConfig,
+  providerAuthSectionForId,
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
@@ -19,12 +19,10 @@ function normalizeConfiguredPathStatus(payload, extra = {}) {
   return { configured: Boolean(payload.configured), ...extra, path: payload.path || "" };
 }
 
-const PROVIDER_AUTH_SECTIONS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, config]));
-
 export function createProviderAuthConfigs() {
   return {
     [CODEX_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(PROVIDER_AUTH_SECTIONS[CODEX_PROVIDER_ID]),
+      ...providerAuthRequestConfig(providerAuthSectionForId(CODEX_PROVIDER_ID)),
       connectedNoticeKey: "codexProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
       buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
@@ -47,7 +45,7 @@ export function createProviderAuthConfigs() {
       }),
     },
     [COPILOT_PROVIDER_ID]: {
-      ...providerAuthRequestConfig(PROVIDER_AUTH_SECTIONS[COPILOT_PROVIDER_ID]),
+      ...providerAuthRequestConfig(providerAuthSectionForId(COPILOT_PROVIDER_ID)),
       connectedNoticeKey: "copilotProviderConnected",
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
       buildPollBody: (auth) => ({ device_code: auth.deviceCode }),

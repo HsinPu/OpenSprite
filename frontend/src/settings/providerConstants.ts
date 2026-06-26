@@ -87,12 +87,16 @@ export function createProviderAuthInitialStates() {
   );
 }
 
-const PROVIDER_AUTH_KEYS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map(({ providerId, authKey }) => [providerId, authKey]));
+const PROVIDER_AUTH_SECTIONS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, config]));
 
-export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_KEYS);
+export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_SECTIONS);
+
+export function providerAuthSectionForId(providerId: string) {
+  return PROVIDER_AUTH_SECTIONS[providerId];
+}
 
 export function providerAuthKeyForId(providerId: string) {
-  return PROVIDER_AUTH_KEYS[providerId] || "";
+  return providerAuthSectionForId(providerId)?.authKey || "";
 }
 
 export const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
