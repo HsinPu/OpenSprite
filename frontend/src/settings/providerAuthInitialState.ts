@@ -1,7 +1,7 @@
 import {
   PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthStateKeys,
-} from "./providerConstants";
+} from "./providerAuthMetadata";
 
 function providerAuthInitialState(keys: ReturnType<typeof providerAuthStateKeys>, auth: Record<string, unknown>) {
   return {

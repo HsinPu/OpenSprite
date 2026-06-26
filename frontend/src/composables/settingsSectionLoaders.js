@@ -1,4 +1,4 @@
-import { PROVIDER_AUTH_PROVIDER_IDS } from "../settings/providerConstants";
+import { PROVIDER_AUTH_PROVIDER_IDS } from "../settings/providerAuthMetadata";
 
 export function createSettingsSectionLoader(loaders) {
   const sectionLoaders = {

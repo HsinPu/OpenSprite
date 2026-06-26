@@ -1,4 +1,4 @@
-import { PROVIDER_AUTH_SECTION_CONFIGS, providerAuthSectionForId } from "./providerConstants";
+import { PROVIDER_AUTH_SECTION_CONFIGS, providerAuthSectionForId } from "./providerAuthMetadata";
 
 export type AnyRecord = Record<string, any>;
 

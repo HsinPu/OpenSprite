@@ -4,7 +4,7 @@ import {
   providerAuthDescription,
   providerAuthVisible,
 } from "./providerHelpers";
-import { PROVIDER_AUTH_SECTION_CONFIGS } from "./providerConstants";
+import { PROVIDER_AUTH_SECTION_CONFIGS } from "./providerAuthMetadata";
 
 export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: AnyRecord) {
   const providerCopy = copy.settings.providers || {};

@@ -2,7 +2,7 @@ import {
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
   PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthStateKeys,
-} from "../settings/providerConstants";
+} from "../settings/providerAuthMetadata";
 import { providerAuthEndpoint } from "../settings/providerEndpoints";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
