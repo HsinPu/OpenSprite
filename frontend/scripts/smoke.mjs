@@ -433,8 +433,8 @@ assertIncludes(providerAuthActions, "startProviderAuthLoginById(CODEX_PROVIDER_I
 assertIncludes(providerAuthActions, "startProviderAuthLoginById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth login wrapper");
 assertIncludes(providerAuthActions, "logoutProviderAuthById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth logout wrapper");
 assertIncludes(providerAuthActions, "logoutProviderAuthById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth logout wrapper");
-assertIncludes(providerAuthActions, "pollProviderAuthLoginById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth poll wrapper");
-assertIncludes(providerAuthActions, "pollProviderAuthLoginById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth poll wrapper");
+assertNotIncludes(providerAuthActions, "async function pollCodexAuthLogin", "provider auth actions avoid unused Codex-specific poll wrapper");
+assertNotIncludes(providerAuthActions, "async function pollCopilotAuthLogin", "provider auth actions avoid unused Copilot-specific poll wrapper");
 assertIncludes(providerAuthActionRunner, "export function setProviderAuthError", "provider auth action runner centralizes auth error state");
 assertIncludes(providerAuthActionRunner, "setProviderAuthError(settingsState, copy, config, fallbackNoticeKey, error)", "provider auth action lifecycle reuses auth error helper");
 assertIncludes(providerAuthActionRunner, "export async function runProviderAuthAction", "provider auth action runner centralizes auth action lifecycle");

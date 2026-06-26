@@ -115,20 +115,12 @@ export function useProviderAuthActions({
     return startProviderAuthLoginById(CODEX_PROVIDER_ID);
   }
 
-  async function pollCodexAuthLogin() {
-    return pollProviderAuthLoginById(CODEX_PROVIDER_ID);
-  }
-
   async function logoutCodexAuth() {
     return logoutProviderAuthById(CODEX_PROVIDER_ID);
   }
 
   async function startCopilotAuthLogin() {
     return startProviderAuthLoginById(COPILOT_PROVIDER_ID);
-  }
-
-  async function pollCopilotAuthLogin() {
-    return pollProviderAuthLoginById(COPILOT_PROVIDER_ID);
   }
 
   async function logoutCopilotAuth() {
