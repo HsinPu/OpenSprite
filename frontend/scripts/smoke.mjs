@@ -320,6 +320,9 @@ assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(COPILOT_PROVIDER_
 assertIncludes(providerAuthActions, "function normalizeDeviceAuthLogin", "provider auth actions centralize device login normalization");
 assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceAuthId\", \"device_auth_id\"", "provider auth actions keep Codex device auth id normalization");
 assertIncludes(providerAuthActions, "normalizeDeviceAuthLogin(payload, \"deviceCode\", \"device_code\")", "provider auth actions keep Copilot device code normalization");
+assertIncludes(providerAuthActions, "function clearedDeviceAuthState", "provider auth actions centralize cleared device auth state");
+assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth actions keep Codex cleared device auth id state");
+assertIncludes(providerAuthActions, "clearedDeviceAuthState(\"deviceCode\")", "provider auth actions keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, providerAuthConfig(providerId))", "provider auth actions reuse auth provider config for OAuth connect");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");

@@ -57,6 +57,14 @@ export function useProviderAuthActions({
     };
   }
 
+  function clearedDeviceAuthState(deviceKey) {
+    return {
+      verificationUri: "",
+      userCode: "",
+      [deviceKey]: "",
+    };
+  }
+
   const providerAuthConfigs = {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
@@ -77,9 +85,7 @@ export function useProviderAuthActions({
         expires_at: auth.expires_at || null,
         account_id: auth.account_id || "",
         path: auth.path || currentAuth.path,
-        verificationUri: "",
-        userCode: "",
-        deviceAuthId: "",
+        ...clearedDeviceAuthState("deviceAuthId"),
       }),
       resetLogout: (auth) => ({
         ...auth,
@@ -88,9 +94,7 @@ export function useProviderAuthActions({
         expires_at: null,
         account_id: "",
         command: "",
-        verificationUri: "",
-        userCode: "",
-        deviceAuthId: "",
+        ...clearedDeviceAuthState("deviceAuthId"),
       }),
     },
     [COPILOT_PROVIDER_ID]: {
@@ -106,11 +110,9 @@ export function useProviderAuthActions({
       normalizeAuthorized: (auth, currentAuth) => ({
         configured: Boolean(auth.configured),
         path: auth.path || currentAuth.path,
-        verificationUri: "",
-        userCode: "",
-        deviceCode: "",
+        ...clearedDeviceAuthState("deviceCode"),
       }),
-      resetLogout: (auth) => ({ ...auth, configured: false, path: "", verificationUri: "", userCode: "", deviceCode: "" }),
+      resetLogout: (auth) => ({ ...auth, configured: false, path: "", ...clearedDeviceAuthState("deviceCode") }),
     },
   };
 
