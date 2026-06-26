@@ -44,6 +44,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  confirmFlow,
   shellLayout,
   authGate,
   chatPanel,
@@ -78,6 +79,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
   read("src/components/authGate.tsx"),
   read("src/components/chatPanel.tsx"),
@@ -140,7 +142,12 @@ assertIncludes(appProviders, "ConfigProvider", "Ant Design provider");
 assertIncludes(appProviders, "<AntdApp>{children}</AntdApp>", "Ant Design app context provider");
 assertIncludes(appProviders, "colorPrimary: \"#2563eb\"", "Ant Design theme token retained");
 assertIncludes(app, "useReactiveStore", "React subscription bridge");
+assertIncludes(app, "useConfirmDialog(client)", "app shell delegates confirm dialog flow");
 assertIncludes(app, "useShellLayout(client)", "app shell delegates resize layout logic");
+assertIncludes(confirmFlow, "action: () => client.deleteSessions(targets)", "confirm flow keeps session delete action");
+assertIncludes(confirmFlow, "action: () => client.clearWebSessions()", "confirm flow keeps web history cleanup action");
+assertIncludes(confirmFlow, "setConfirmDialog((dialog) => ({ ...dialog, busy: true }))", "confirm flow keeps busy state");
+assertIncludes(confirmFlow, "copy.sidebar.confirmDeleteChat(client.getSessionTitle(targets[0]))", "confirm flow keeps single-session delete copy");
 assertIncludes(shellLayout, "SIDEBAR_WIDTH_DEFAULT = 268", "shell layout keeps sidebar default width");
 assertIncludes(shellLayout, "TRACE_WIDTH_MIN = 440", "shell layout keeps trace minimum width");
 assertIncludes(shellLayout, "window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY", "shell layout persists sidebar width");
@@ -203,7 +210,7 @@ assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings 
 assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");
 assertIncludes(mcpSettings, "client.saveMcpServer", "MCP settings action");
 assertIncludes(modelSettings, "client.selectModel", "model selection action");
-assertIncludes(app, "client.clearWebSessions()", "web history cleanup action owner");
+assertIncludes(app, "clearWebSessions={clearWebSessions}", "app shell wires web history cleanup callback");
 assertIncludes(generalSettings, "onClick={clearWebSessions}", "general settings keeps web history cleanup button");
 assertIncludes(generalSettings, "form.externalChatId", "general settings keeps external chat id control");
 assertIncludes(generalSettings, "client.runUpdate", "general settings keeps update apply action");
