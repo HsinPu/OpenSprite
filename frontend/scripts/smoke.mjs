@@ -409,8 +409,9 @@ assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"con
 assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, options)", "provider auth actions delegate OAuth connect request");
 assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider auth actions no longer own provider endpoint assembly");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
-assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth configs reuse Codex runtime config helper");
-assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth configs reuse Copilot runtime config helper");
+assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, \"codexProviderConnected\")", "provider auth configs reuse Codex runtime config helper");
+assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, \"copilotProviderConnected\")", "provider auth configs reuse Copilot runtime config helper");
+assertNotIncludes(providerAuthConfigs, "providerName", "provider auth configs avoid UI display metadata");
 assertIncludes(providerAuthConfigs, "loadStatus: () => loadProviderAuthStatusById(providerId)", "provider auth configs refresh status through provider id");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth configs reuse device login normalization");
 assertIncludes(providerAuthState, "export function normalizeDeviceAuthLogin", "provider auth state centralizes device login normalization");
