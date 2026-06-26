@@ -367,8 +367,8 @@ assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provid
 assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
 assertIncludes(providerAuthConfigs, "function deviceAuthBaseConfig", "provider auth configs share device auth base config helper");
-assertIncludes(providerAuthConfigs, "...deviceAuthBaseConfig(codexAuthConfig)", "provider auth configs reuse shared Codex base config");
-assertIncludes(providerAuthConfigs, "...deviceAuthBaseConfig(copilotAuthConfig)", "provider auth configs reuse shared Copilot base config");
+assertIncludes(providerAuthConfigs, "[CODEX_PROVIDER_ID]: deviceAuthBaseConfig(codexAuthConfig)", "provider auth configs reuse shared Codex base config directly");
+assertIncludes(providerAuthConfigs, "[COPILOT_PROVIDER_ID]: deviceAuthBaseConfig(copilotAuthConfig)", "provider auth configs reuse shared Copilot base config directly");
 assertIncludes(providerAuthConfigs, "function deviceAuthPollConfig", "provider auth configs share device auth poll config helper");
 assertIncludes(providerAuthConfigs, "...deviceAuthPollConfig(config)", "provider auth configs reuse shared poll config inside base config");
 assertIncludes(providerAuthConfigs, "auth[config.deviceKey]", "provider auth configs read device key from metadata");
@@ -383,8 +383,8 @@ assertNotIncludes(providerAuthActions, "async function loadCodexAuthStatus", "pr
 assertNotIncludes(providerAuthActions, "async function loadCopilotAuthStatus", "provider auth actions avoid Copilot-specific status wrapper");
 assertIncludes(providerAuthConfigs, "function normalizeConfiguredPathStatus", "provider auth configs share configured/path status normalization");
 assertIncludes(providerAuthConfigs, "function normalizeProviderAccountStatus", "provider auth configs share provider account status normalization");
-assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(codexAuthConfig, payload)", "provider auth configs read Codex account status from metadata");
-assertIncludes(providerAuthConfigs, "normalizeStatus: normalizeConfiguredPathStatus", "provider auth configs reuse shared Copilot status normalization");
+assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(config, payload))", "provider auth configs normalize status through shared provider metadata");
+assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(config, payload)", "provider auth configs read account status from provider metadata");
 assertIncludes(providerAuthRequests, "export function requestProviderAuthStatus", "provider auth requests centralize auth status request");
 assertIncludes(providerAuthRequests, "requestSettingsJson(config.endpoint)", "provider auth requests keep shared auth status request");
 assertIncludes(providerAuthActions, "requestProviderAuthStatus(requestSettingsJson, config)", "provider auth actions delegate auth status request");
@@ -474,8 +474,8 @@ assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "pro
 assertIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, config.deviceKey, config.logoutReset)", "provider auth configs read logout reset from metadata");
 assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, codexAuthConfig.deviceKey, {", "provider auth configs avoid hardcoded Codex logout reset state");
 assertNotIncludes(providerAuthConfigs, "resetDeviceAuthLogout(auth, copilotAuthConfig.deviceKey, { path: \"\" })", "provider auth configs avoid hardcoded Copilot logout reset state");
-assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(codexAuthConfig, auth)", "provider auth configs read authorized Codex account status from metadata");
-assertIncludes(providerAuthConfigs, "normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey)", "provider auth configs keep Copilot cleared device code state through metadata");
+assertIncludes(providerAuthConfigs, "normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, config.deviceKey, normalizeProviderAccountStatus(config, auth))", "provider auth configs normalize authorized auth through shared provider metadata");
+assertIncludes(providerAuthConfigs, "normalizeProviderAccountStatus(config, auth)", "provider auth configs read authorized account status from provider metadata");
 assertIncludes(providerAuthActions, "settingsState[config.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider))", "provider auth actions reuse shared provider key helper for OAuth connect");
 assertNotIncludes(providerAuthActions, "connectOAuthBackedProvider", "provider auth actions avoid OAuth connect wrapper");

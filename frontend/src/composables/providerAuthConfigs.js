@@ -35,6 +35,8 @@ function deviceAuthBaseConfig(config) {
     ...providerAuthRequestConfig(config),
     ...deviceAuthPollConfig(config),
     normalizeLogin: (payload) => normalizeDeviceAuthLogin(payload, config.deviceKey, config.payloadDeviceKey, config.loginExtra),
+    normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(config, payload)),
+    normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, config.deviceKey, normalizeProviderAccountStatus(config, auth)),
     resetLogout: (auth) => resetDeviceAuthLogout(auth, config.deviceKey, config.logoutReset),
   };
 }
@@ -44,16 +46,8 @@ export function createProviderAuthConfigs() {
   const copilotAuthConfig = providerAuthSectionForId(COPILOT_PROVIDER_ID);
 
   return {
-    [CODEX_PROVIDER_ID]: {
-      ...deviceAuthBaseConfig(codexAuthConfig),
-      normalizeStatus: (payload) => normalizeConfiguredPathStatus(payload, normalizeProviderAccountStatus(codexAuthConfig, payload)),
-      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, codexAuthConfig.deviceKey, normalizeProviderAccountStatus(codexAuthConfig, auth)),
-    },
-    [COPILOT_PROVIDER_ID]: {
-      ...deviceAuthBaseConfig(copilotAuthConfig),
-      normalizeStatus: normalizeConfiguredPathStatus,
-      normalizeAuthorized: (auth, currentAuth) => normalizeAuthorizedDeviceAuth(auth, currentAuth, copilotAuthConfig.deviceKey),
-    },
+    [CODEX_PROVIDER_ID]: deviceAuthBaseConfig(codexAuthConfig),
+    [COPILOT_PROVIDER_ID]: deviceAuthBaseConfig(copilotAuthConfig),
   };
 }
 
