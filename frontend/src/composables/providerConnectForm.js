@@ -16,3 +16,19 @@ export function createProviderConnectForm(provider) {
     baseUrl: provider.default_base_url || provider.base_url || "",
   };
 }
+
+export function providerConnectPayloadFromForm(form) {
+  return {
+    name: form.name,
+    api_key: form.apiKey,
+    base_url: form.baseUrl,
+  };
+}
+
+export function providerCredentialPayload(credentialId) {
+  return { credential_id: credentialId };
+}
+
+export function providerCredentialKey(provider) {
+  return provider?.provider || provider?.id;
+}

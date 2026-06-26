@@ -1,5 +1,10 @@
 import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
-import { createProviderConnectForm } from "./providerConnectForm";
+import {
+  createProviderConnectForm,
+  providerConnectPayloadFromForm,
+  providerCredentialKey,
+  providerCredentialPayload,
+} from "./providerConnectForm";
 
 export function useProviderSettingsActions({
   settingsState,
@@ -57,11 +62,7 @@ export function useProviderSettingsActions({
     await runProviderMutation(copy.value.notices.providerConnectFailed, async () => {
       await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
-        body: JSON.stringify({
-          name: settingsState.connectForm.name,
-          api_key: settingsState.connectForm.apiKey,
-          base_url: settingsState.connectForm.baseUrl,
-        }),
+        body: JSON.stringify(providerConnectPayloadFromForm(settingsState.connectForm)),
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerConnected);
       cancelProviderConnect();
@@ -86,7 +87,7 @@ export function useProviderSettingsActions({
     await runProviderMutation(copy.value.notices.providerCredentialUpdateFailed, async () => {
       const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "credential"), {
         method: "POST",
-        body: JSON.stringify({ credential_id: credentialId }),
+        body: JSON.stringify(providerCredentialPayload(credentialId)),
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
       await refreshProviderState();
@@ -94,7 +95,7 @@ export function useProviderSettingsActions({
   }
 
   async function deleteCredential(provider, credentialId) {
-    const providerKey = provider?.provider || provider?.id;
+    const providerKey = providerCredentialKey(provider);
     if (!providerKey || !credentialId) {
       return;
     }
