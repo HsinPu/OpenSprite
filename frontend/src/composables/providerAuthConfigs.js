@@ -10,14 +10,12 @@ import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuth
 export function createProviderAuthRuntimeConfigs({
   startAuthLoginById,
   clearProviderAuthPollTimer,
-  scheduleProviderAuthPollById,
   loadProviderAuthStatusById,
 }) {
   const runtimeConfig = (providerId, connectedNoticeKey) => ({
     connectedNoticeKey,
     startAuthLogin: () => startAuthLoginById(providerId),
     clearPoll: () => clearProviderAuthPollTimer(providerId),
-    schedulePoll: () => scheduleProviderAuthPollById(providerId),
     loadStatus: () => loadProviderAuthStatusById(providerId),
   });
   return {

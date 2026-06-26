@@ -32,7 +32,6 @@ export function useProviderAuthActions({
   const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
     startAuthLoginById,
     clearProviderAuthPollTimer,
-    scheduleProviderAuthPollById,
     loadProviderAuthStatusById,
   }));
 
@@ -77,7 +76,7 @@ export function useProviderAuthActions({
         window.open(settingsState[config.authKey].verificationUri, "_blank", "noopener,noreferrer");
       }
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
-      config.schedulePoll();
+      scheduleProviderAuthPollById(config.providerId);
     }, { clearNotice: true, before: config.clearPoll });
   }
 
@@ -98,7 +97,7 @@ export function useProviderAuthActions({
         await loadModelSettings();
         return;
       }
-      config.schedulePoll();
+      scheduleProviderAuthPollById(config.providerId);
     } catch (error) {
       setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error);
       config.clearPoll();
