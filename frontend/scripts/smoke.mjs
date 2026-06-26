@@ -384,6 +384,9 @@ assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.
 assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses settings mutation helper");
 assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses settings mutation helper");
 assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
+assertIncludes(providerAuthActions, "after: async () => {", "provider auth OAuth connect uses shared success follow-up");
+assertIncludes(providerAuthActions, "await refreshProviderState();", "provider auth OAuth connect refreshes provider state after connect");
+assertIncludes(providerAuthActions, "await options.startAuthLogin();", "provider auth OAuth connect starts login after refresh");
 assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
 assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
 assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, options)", "provider auth actions delegate OAuth connect request");

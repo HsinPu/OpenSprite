@@ -69,11 +69,13 @@ export function useProviderAuthActions({
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
       await requestProviderOAuthConnect(requestSettingsJson, provider, options);
       setSettingsSuccess("providersNotice", options.connectedNotice());
-      await refreshProviderState();
-      await options.startAuthLogin();
     }, {
       before: () => {
         settingsState[options.noticeKey] = "";
+      },
+      after: async () => {
+        await refreshProviderState();
+        await options.startAuthLogin();
       },
     });
   }
