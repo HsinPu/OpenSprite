@@ -1,5 +1,6 @@
 import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
 import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
+import { providerOAuthConnectPayload } from "./providerConnectForm";
 import { runProviderMutation } from "./providerMutationRunner";
 import {
   CODEX_PROVIDER_ID,
@@ -84,10 +85,7 @@ export function useProviderAuthActions({
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
       await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
-        body: JSON.stringify({
-          name: provider?.name || options.providerName,
-          base_url: provider?.default_base_url || "",
-        }),
+        body: JSON.stringify(providerOAuthConnectPayload(provider, options)),
       });
       setSettingsSuccess("providersNotice", options.connectedNotice());
       await refreshProviderState();

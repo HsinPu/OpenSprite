@@ -324,6 +324,8 @@ assertIncludes(providerConnectForm, "export function createEmptyProviderConnectF
 assertIncludes(providerConnectForm, "export function createProviderConnectForm", "provider connect form centralizes provider-derived form state");
 assertIncludes(providerConnectForm, "export function providerConnectPayloadFromForm", "provider connect form centralizes connect payload shape");
 assertIncludes(providerSettingsActions, "providerConnectPayloadFromForm(settingsState.connectForm)", "provider settings actions reuse connect payload helper");
+assertIncludes(providerConnectForm, "export function providerOAuthConnectPayload", "provider connect form centralizes OAuth connect payload shape");
+assertIncludes(providerAuthActions, "providerOAuthConnectPayload(provider, options)", "provider auth actions reuse OAuth connect payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialPayload", "provider connect form centralizes credential payload shape");
 assertIncludes(providerSettingsActions, "providerCredentialPayload(credentialId)", "provider settings actions reuse credential payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialKey", "provider connect form centralizes credential provider key resolution");

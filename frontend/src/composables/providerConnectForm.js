@@ -25,6 +25,13 @@ export function providerConnectPayloadFromForm(form) {
   };
 }
 
+export function providerOAuthConnectPayload(provider, options) {
+  return {
+    name: provider?.name || options.providerName,
+    base_url: provider?.default_base_url || "",
+  };
+}
+
 export function providerCredentialPayload(credentialId) {
   return { credential_id: credentialId };
 }
