@@ -28,6 +28,19 @@ export function useProviderSettingsActions({
 
   async function refreshProviderState() { await loadProviderSettings(); await loadModelSettings(); }
 
+  async function runProviderMutation(fallbackNotice, action) {
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    try {
+      await action();
+    } catch (error) {
+      settingsState.providersError = error?.message || fallbackNotice;
+    } finally {
+      settingsState.providersLoading = false;
+    }
+  }
+
   function beginProviderConnect(provider) {
     settingsState.providersNotice = "";
     settingsState.providersError = "";
@@ -46,10 +59,7 @@ export function useProviderSettingsActions({
     if (!providerId) {
       return;
     }
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    try {
+    await runProviderMutation(copy.value.notices.providerConnectFailed, async () => {
       await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
         body: JSON.stringify({
@@ -61,49 +71,31 @@ export function useProviderSettingsActions({
       setSettingsSuccess("providersNotice", copy.value.notices.providerConnected);
       cancelProviderConnect();
       await refreshProviderState();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    });
   }
 
   async function disconnectProvider(provider) {
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    try {
+    await runProviderMutation(copy.value.notices.providerDisconnectFailed, async () => {
       const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "disconnect"), {
         method: "POST",
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerDisconnected(provider.name, payload.restart_required));
       await refreshProviderState();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerDisconnectFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    });
   }
 
   async function setProviderCredential(provider, credentialId) {
     if (!provider?.id || !credentialId || credentialId === provider.credential_id) {
       return;
     }
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    try {
+    await runProviderMutation(copy.value.notices.providerCredentialUpdateFailed, async () => {
       const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "credential"), {
         method: "POST",
         body: JSON.stringify({ credential_id: credentialId }),
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
       await refreshProviderState();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerCredentialUpdateFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    });
   }
 
   async function deleteCredential(provider, credentialId) {
@@ -111,21 +103,14 @@ export function useProviderSettingsActions({
     if (!providerKey || !credentialId) {
       return;
     }
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    settingsState.providersNotice = "";
-    try {
+    await runProviderMutation(copy.value.notices.providerCredentialDeleteFailed, async () => {
       await requestSettingsJson(
         providerCredentialEndpoint(providerKey, credentialId),
         { method: "DELETE" },
       );
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);
       await refreshProviderState();
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerCredentialDeleteFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    });
   }
 
   return {

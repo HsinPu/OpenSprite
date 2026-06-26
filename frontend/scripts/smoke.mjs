@@ -308,6 +308,11 @@ assertIncludes(providerSettingsActions, "providerSettingsEndpoint(providerId, \"
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
 assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");
+assertIncludes(providerSettingsActions, "async function runProviderMutation", "provider settings actions centralize mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerConnectFailed", "provider connect uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerDisconnectFailed", "provider disconnect uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
+assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
 assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth actions reuse provider connect endpoint helper");
 assertIncludes(providerAuthActions, "providerName: CODEX_PROVIDER_NAME", "provider auth actions reuse Codex provider name");
 assertIncludes(providerAuthActions, "providerName: COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot provider name");
