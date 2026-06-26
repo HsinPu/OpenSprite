@@ -50,6 +50,7 @@ const [
   channelSettings,
   mcpSettings,
   networkSettings,
+  scheduleSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -68,6 +69,7 @@ const [
   read("src/settings/channelSettings.tsx"),
   read("src/settings/mcpSettings.tsx"),
   read("src/settings/networkSettings.tsx"),
+  read("src/settings/scheduleSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -135,9 +137,13 @@ assertIncludes(mcpSettings, "client.toggleMcpJsonInput", "MCP settings keeps JSO
 assertIncludes(mcpSettings, "client.applyMcpJson", "MCP settings keeps JSON import action");
 assertIncludes(mcpSettings, "form.envJson", "MCP settings keeps environment JSON field");
 assertIncludes(mcpSettings, "form.headersJson", "MCP settings keeps headers JSON field");
-assertIncludes(app, "state.scheduleForm.defaultTimezone", "schedule settings keeps default timezone field");
-assertIncludes(app, "client.saveCronJob", "schedule settings keeps cron editor save");
-assertIncludes(app, "client.runCronJobAction(job, job.enabled ? \"pause\" : \"enable\")", "schedule settings keeps pause/enable action");
+assertIncludes(scheduleSettings, "state.scheduleForm.defaultTimezone", "schedule settings keeps default timezone field");
+assertIncludes(scheduleSettings, "client.saveScheduleSettings", "schedule settings keeps default save action");
+assertIncludes(scheduleSettings, "client.saveCronJob", "schedule settings keeps cron editor save");
+assertIncludes(scheduleSettings, "client.runCronJobAction(job, job.enabled ? \"pause\" : \"enable\")", "schedule settings keeps pause/enable action");
+assertIncludes(scheduleSettings, "client.runCronJobAction(job, \"run\")", "schedule settings keeps run-now action");
+assertIncludes(scheduleSettings, "client.runCronJobAction(job, \"remove\")", "schedule settings keeps remove action");
+assertIncludes(scheduleSettings, "form.deliver", "schedule settings keeps delivery toggle");
 assertIncludes(networkSettings, "form.httpProxy", "network settings keeps HTTP proxy field");
 assertIncludes(networkSettings, "form.httpsProxy", "network settings keeps HTTPS proxy field");
 assertIncludes(networkSettings, "form.noProxy", "network settings keeps no proxy field");
