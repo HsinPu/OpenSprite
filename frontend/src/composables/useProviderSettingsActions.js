@@ -1,8 +1,10 @@
 import {
   CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
+  CODEX_PROVIDER_NAME,
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
+  COPILOT_PROVIDER_NAME,
   providerAuthEndpoint,
 } from "../settings/providerConstants";
 
@@ -214,14 +216,14 @@ export function useProviderSettingsActions({
   const oauthProviderConfigs = {
     [CODEX_PROVIDER_ID]: {
       providerId: CODEX_PROVIDER_ID,
-      providerName: "OpenAI Codex",
+      providerName: CODEX_PROVIDER_NAME,
       authNoticeKey: CODEX_AUTH_STATE_KEYS.noticeKey,
       connectedNotice: () => copy.value.notices.codexProviderConnected,
       startAuthLogin: startCodexAuthLogin,
     },
     [COPILOT_PROVIDER_ID]: {
       providerId: COPILOT_PROVIDER_ID,
-      providerName: "GitHub Copilot",
+      providerName: COPILOT_PROVIDER_NAME,
       authNoticeKey: COPILOT_AUTH_STATE_KEYS.noticeKey,
       connectedNotice: () => copy.value.notices.copilotProviderConnected,
       startAuthLogin: startCopilotAuthLogin,

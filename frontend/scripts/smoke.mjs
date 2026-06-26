@@ -261,6 +261,8 @@ assertIncludes(providerSettings, "ProviderAuthSection", "provider settings deleg
 assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
 assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
+assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
+assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
@@ -276,6 +278,8 @@ assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider 
 assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
 assertIncludes(providerAuthSections, "...CODEX_AUTH_STATE_KEYS", "provider auth sections reuse Codex auth state keys");
 assertIncludes(providerAuthSections, "...COPILOT_AUTH_STATE_KEYS", "provider auth sections reuse Copilot auth state keys");
+assertIncludes(providerAuthSections, "defaultName: CODEX_PROVIDER_NAME", "provider auth sections reuse Codex provider name");
+assertIncludes(providerAuthSections, "defaultName: COPILOT_PROVIDER_NAME", "provider auth sections reuse Copilot provider name");
 assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "provider auth sections keep Codex refresh action");
 assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
@@ -290,6 +294,8 @@ assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(COPILOT_PROV
 assertIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions centralize OAuth provider configs");
 assertIncludes(providerSettingsActions, "[CODEX_PROVIDER_ID]: {", "provider settings actions keep Codex OAuth config");
 assertIncludes(providerSettingsActions, "[COPILOT_PROVIDER_ID]: {", "provider settings actions keep Copilot OAuth config");
+assertIncludes(providerSettingsActions, "providerName: CODEX_PROVIDER_NAME", "provider settings actions reuse Codex provider name");
+assertIncludes(providerSettingsActions, "providerName: COPILOT_PROVIDER_NAME", "provider settings actions reuse Copilot provider name");
 assertIncludes(providerSettingsActions, "authNoticeKey: CODEX_AUTH_STATE_KEYS.noticeKey", "provider settings actions keep Codex OAuth notice state key");
 assertIncludes(providerSettingsActions, "authNoticeKey: COPILOT_AUTH_STATE_KEYS.noticeKey", "provider settings actions keep Copilot OAuth notice state key");
 assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider settings actions keep Codex OAuth wrapper");

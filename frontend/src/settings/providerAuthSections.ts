@@ -8,8 +8,10 @@ import {
 import {
   CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
+  CODEX_PROVIDER_NAME,
   COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
+  COPILOT_PROVIDER_NAME,
 } from "./providerConstants";
 
 const PROVIDER_AUTH_SECTIONS = [
@@ -18,8 +20,8 @@ const PROVIDER_AUTH_SECTIONS = [
     providerId: CODEX_PROVIDER_ID,
     ...CODEX_AUTH_STATE_KEYS,
     mark: "Cx",
-    defaultTitle: "OpenAI Codex auth",
-    defaultName: "OpenAI Codex",
+    defaultTitle: `${CODEX_PROVIDER_NAME} auth`,
+    defaultName: CODEX_PROVIDER_NAME,
     describe: codexDescription,
     refreshAction: "loadCodexAuthStatus",
     loginAction: "startCodexAuthLogin",
@@ -30,8 +32,8 @@ const PROVIDER_AUTH_SECTIONS = [
     providerId: COPILOT_PROVIDER_ID,
     ...COPILOT_AUTH_STATE_KEYS,
     mark: "Gh",
-    defaultTitle: "GitHub Copilot auth",
-    defaultName: "GitHub Copilot",
+    defaultTitle: `${COPILOT_PROVIDER_NAME} auth`,
+    defaultName: COPILOT_PROVIDER_NAME,
     describe: copilotDescription,
     refreshAction: "loadCopilotAuthStatus",
     loginAction: "startCopilotAuthLogin",

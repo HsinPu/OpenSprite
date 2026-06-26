@@ -1,6 +1,9 @@
 export const CODEX_PROVIDER_ID = "openai-codex";
 export const COPILOT_PROVIDER_ID = "copilot";
 
+export const CODEX_PROVIDER_NAME = "OpenAI Codex";
+export const COPILOT_PROVIDER_NAME = "GitHub Copilot";
+
 export const CODEX_AUTH_KEY = "codexAuth";
 export const COPILOT_AUTH_KEY = "copilotAuth";
 
