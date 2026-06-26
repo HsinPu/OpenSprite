@@ -6,7 +6,6 @@ import {
   Card,
   Checkbox,
   ConfigProvider,
-  Form,
   Input,
   InputNumber,
   Modal,
@@ -29,6 +28,7 @@ import {
 import { useReactiveStore } from "./lib/reactiveCompat";
 import { useChatClient } from "./composables/useChatClient";
 import { noticeTone, runStatusColor } from "./components/displayHelpers";
+import { AuthGate } from "./components/authGate";
 import { artifactStatusLabel, artifactTypeLabel, normalizeMessages } from "./components/messageData";
 import { MessageTextRenderer } from "./components/messageMarkdown";
 import { RunInspector } from "./components/runInspector";
@@ -717,38 +717,6 @@ function MessageList({
         </article>
       ))}
     </div>
-  );
-}
-
-function AuthGate({ client }: { client: Client }) {
-  const copy = client.copy.value;
-  if (!client.state.authRequired) {
-    return null;
-  }
-  return (
-    <section className="auth-gate" aria-labelledby="authGateTitle">
-      <form className="auth-gate__card" onSubmit={client.submitAccessToken}>
-        <span className="auth-gate__mark" aria-hidden="true">OS</span>
-        <Typography.Title id="authGateTitle">{copy.auth.title}</Typography.Title>
-        <Typography.Paragraph>{copy.auth.description}</Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label={copy.auth.tokenLabel}>
-            <Input.Password
-              value={client.settingsForm.accessToken}
-              autoFocus
-              onChange={(event) => {
-                client.settingsForm.accessToken = event.target.value;
-              }}
-            />
-          </Form.Item>
-        </Form>
-        {client.state.authError ? <Alert type="error" message={client.state.authError} /> : null}
-        <Space>
-          <Button type="primary" htmlType="submit">{copy.auth.submit}</Button>
-          <Button onClick={() => client.openSettings("general")}>{copy.auth.settings}</Button>
-        </Space>
-      </form>
-    </section>
   );
 }
 
