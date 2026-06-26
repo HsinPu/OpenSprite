@@ -16,14 +16,7 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
 
     return {
       key: config.providerId,
-      visible: providerAuthVisible(
-        state,
-        config.providerId,
-        auth,
-        loading,
-        state[config.noticeKey],
-        state[config.errorKey],
-      ),
+      visible: providerAuthVisible(state, config),
       title: authCopy.title || `${config.providerName} auth`,
       notice: state[config.noticeKey],
       error: state[config.errorKey],

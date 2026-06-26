@@ -14,8 +14,9 @@ export function hasConnectedProvider(state: AnyRecord, presetId: string) {
   return (state.providers?.connected || []).some((provider: AnyRecord) => providerCatalogKey(provider) === presetId);
 }
 
-export function providerAuthVisible(state: AnyRecord, providerId: string, auth: AnyRecord = {}, loading = false, notice = "", error = "") {
-  return Boolean(hasConnectedProvider(state, providerId) || loading || auth?.configured || auth?.userCode || notice || error);
+export function providerAuthVisible(state: AnyRecord, config: AnyRecord) {
+  const auth = state[config.authKey] || {};
+  return Boolean(hasConnectedProvider(state, config.providerId) || state[config.loadingKey] || auth?.configured || auth?.userCode || state[config.noticeKey] || state[config.errorKey]);
 }
 
 export function providerAuthKey(provider: AnyRecord) {

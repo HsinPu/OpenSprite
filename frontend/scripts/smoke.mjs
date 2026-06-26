@@ -344,7 +344,7 @@ assertIncludes(providerConstants, "oauthAuthType: \"openai_codex_oauth\"", "prov
 assertIncludes(providerConstants, "oauthAuthType: \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type in provider metadata");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS.some((config) => config.oauthAuthType === authType)", "provider constants resolve OAuth auth types from provider metadata");
 assertNotIncludes(providerConstants, "authType === OPENAI_CODEX_OAUTH_AUTH_TYPE || authType === GITHUB_COPILOT_OAUTH_AUTH_TYPE", "provider constants avoid hardcoded OAuth auth type branch");
-assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
+assertIncludes(providerAuthSections, "providerAuthVisible(state, config)", "provider auth sections delegate visibility through provider metadata");
 assertIncludes(providerConstants, "providerId: \"openai-codex\"", "provider constants keep Codex auth provider section");
 assertIncludes(providerConstants, "providerId: \"copilot\"", "provider constants keep Copilot auth provider section");
 assertIncludes(providerAuthSections, "PROVIDER_AUTH_SECTION_CONFIGS.map", "provider auth sections consume provider section metadata");
@@ -569,8 +569,9 @@ assertIncludes(providerAuthSection, "SettingsStatus message={notice}", "provider
 assertIncludes(providerAuthSection, "SettingsStatus message={error} type=\"error\"", "provider auth section keeps error status");
 assertIncludes(providerAuthSection, "AuthProviderCard", "provider auth section renders auth provider card");
 assertIncludes(providerAuthSection, "onLogin={onLogin}", "provider auth section keeps login action");
-assertIncludes(providerHelpers, "hasConnectedProvider(state, providerId)", "provider auth visibility includes connected provider state");
-assertIncludes(providerHelpers, "auth?.userCode || notice || error", "provider auth visibility includes pending auth state");
+assertIncludes(providerHelpers, "hasConnectedProvider(state, config.providerId)", "provider auth visibility reads connected provider state through metadata");
+assertIncludes(providerHelpers, "state[config.noticeKey]", "provider auth visibility reads notice state through metadata");
+assertIncludes(providerHelpers, "state[config.errorKey]", "provider auth visibility reads error state through metadata");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");
