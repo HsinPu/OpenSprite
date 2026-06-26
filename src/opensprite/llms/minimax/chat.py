@@ -12,6 +12,7 @@ from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
 from ..response_utils import get_attr_or_item as _get_attr_or_item
 from ..response_utils import json_safe as _json_safe
+from ..response_utils import usage_payload as _usage_payload
 from ..tool_args import parse_tool_arguments
 from ...utils.url import join_url_path
 
@@ -203,12 +204,11 @@ class MiniMaxLLM(LLMProvider):
                     name=str(block.get("name") or ""),
                     arguments=parse_tool_arguments(block.get("input") or {}, provider_name="MiniMax", tool_name=str(block.get("name") or "")),
                 ))
-        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         return LLMResponse(
             content="\n".join(part for part in text_parts if part),
             model=str(data.get("model") or model or self.default_model),
             tool_calls=tool_calls,
-            usage=usage,
+            usage=_usage_payload(data.get("usage")),
             finish_reason=str(data.get("stop_reason") or "") or None,
             reasoning_details=reasoning_details or None,
         )
