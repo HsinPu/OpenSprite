@@ -1,7 +1,4 @@
-import {
-  PROVIDER_AUTH_SECTION_CONFIGS,
-  providerAuthKeyForId,
-} from "./providerConstants";
+import { providerAuthKeyForId } from "./providerConstants";
 
 export type AnyRecord = Record<string, any>;
 
@@ -43,31 +40,23 @@ export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, load
   return copy.configured || "Configured";
 }
 
-const [CODEX_AUTH_CONFIG, COPILOT_AUTH_CONFIG] = PROVIDER_AUTH_SECTION_CONFIGS;
-
-export function codexDescription(copy: AnyRecord, state: AnyRecord) {
-  const auth = state[CODEX_AUTH_CONFIG.authKey] || {};
-  const authCopy = copy.settings.providers?.[CODEX_AUTH_CONFIG.copyKey] || {};
+export function providerAuthDescription(copy: AnyRecord, state: AnyRecord, config: AnyRecord) {
+  const auth = state[config.authKey] || {};
+  const authCopy = copy.settings.providers?.[config.copyKey] || {};
   if (!auth.configured) {
     return authCopy.description || "";
   }
-  const parts = [];
+  const parts: string[] = [];
   if (auth.account_id && typeof authCopy.account === "function") {
     parts.push(authCopy.account(auth.account_id));
   }
   if (auth.expires_at && typeof authCopy.expires === "function") {
     parts.push(authCopy.expires(auth.expires_at));
   }
-  return parts.join(" - ") || authCopy.configuredDescription || "";
-}
-
-export function copilotDescription(copy: AnyRecord, state: AnyRecord) {
-  const auth = state[COPILOT_AUTH_CONFIG.authKey] || {};
-  const authCopy = copy.settings.providers?.[COPILOT_AUTH_CONFIG.copyKey] || {};
-  if (!auth.configured) {
-    return authCopy.description || "";
+  if (auth.path && typeof authCopy.path === "function") {
+    parts.push(authCopy.path(auth.path));
   }
-  return auth.path && typeof authCopy.path === "function" ? authCopy.path(auth.path) : authCopy.configuredDescription || "";
+  return parts.join(" - ") || authCopy.configuredDescription || "";
 }
 
 export function providerCredentials(state: AnyRecord, provider: AnyRecord) {

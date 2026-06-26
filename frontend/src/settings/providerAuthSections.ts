@@ -1,16 +1,10 @@
 import {
   type AnyRecord,
   authStatusLabel,
-  codexDescription,
-  copilotDescription,
+  providerAuthDescription,
   providerAuthVisible,
 } from "./providerHelpers";
 import { PROVIDER_AUTH_SECTION_CONFIGS } from "./providerConstants";
-
-const PROVIDER_AUTH_DESCRIPTIONS: Record<string, (copy: AnyRecord, state: AnyRecord) => string> = {
-  codexAuth: codexDescription,
-  copilotAuth: copilotDescription,
-};
 
 export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: AnyRecord) {
   const providerCopy = copy.settings.providers || {};
@@ -19,7 +13,6 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
     const auth = state[config.copyKey] || {};
     const loading = Boolean(state[config.loadingKey]);
     const authCopy = providerCopy[config.copyKey] || {};
-    const describe = PROVIDER_AUTH_DESCRIPTIONS[config.copyKey] || (() => "");
 
     return {
       key: config.providerId,
@@ -37,7 +30,7 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
       mark: config.mark,
       name: authCopy.name || config.providerName,
       status: authStatusLabel(authCopy, auth, loading),
-      description: describe(copy, state),
+      description: providerAuthDescription(copy, state, config),
       loading,
       configured: auth?.configured,
       copy: authCopy,
