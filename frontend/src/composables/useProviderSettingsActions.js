@@ -1,4 +1,4 @@
-import { CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID } from "../settings/providerConstants";
+import { CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID, providerAuthEndpoint } from "../settings/providerConstants";
 
 export function useProviderSettingsActions({
   settingsState,
@@ -45,7 +45,7 @@ export function useProviderSettingsActions({
 
   const providerAuthStatusConfigs = {
     [CODEX_PROVIDER_ID]: {
-      endpoint: "/api/settings/auth/openai-codex",
+      endpoint: providerAuthEndpoint(CODEX_PROVIDER_ID),
       loadingKey: "codexAuthLoading",
       errorKey: "codexAuthError",
       stateKey: "codexAuth",
@@ -59,7 +59,7 @@ export function useProviderSettingsActions({
       }),
     },
     [COPILOT_PROVIDER_ID]: {
-      endpoint: "/api/settings/auth/copilot",
+      endpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID),
       loadingKey: "copilotAuthLoading",
       errorKey: "copilotAuthError",
       stateKey: "copilotAuth",

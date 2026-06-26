@@ -263,6 +263,8 @@ assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provi
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
+assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
+assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
 assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider auth sections keep Codex auth provider");
 assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
@@ -271,8 +273,8 @@ assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"",
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
 assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
 assertIncludes(providerSettingsActions, "const providerAuthStatusConfigs", "provider settings actions centralize auth status configs");
-assertIncludes(providerSettingsActions, "endpoint: \"/api/settings/auth/openai-codex\"", "provider settings actions keep Codex auth status endpoint");
-assertIncludes(providerSettingsActions, "endpoint: \"/api/settings/auth/copilot\"", "provider settings actions keep Copilot auth status endpoint");
+assertIncludes(providerSettingsActions, "endpoint: providerAuthEndpoint(CODEX_PROVIDER_ID)", "provider settings actions keep Codex auth status endpoint");
+assertIncludes(providerSettingsActions, "endpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID)", "provider settings actions keep Copilot auth status endpoint");
 assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider settings actions keep Codex auth status wrapper");
 assertIncludes(providerSettingsActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider settings actions keep Copilot auth status wrapper");
 assertIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions centralize OAuth provider configs");
@@ -289,12 +291,12 @@ assertIncludes(chatClient, "scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settin
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertIncludes(chatClient, "const providerAuthFlowConfigs", "chat client centralizes provider auth flow configs");
-assertIncludes(chatClient, "loginEndpoint: \"/api/settings/auth/openai-codex/login\"", "chat client keeps Codex auth login endpoint");
-assertIncludes(chatClient, "loginEndpoint: \"/api/settings/auth/copilot/login\"", "chat client keeps Copilot auth login endpoint");
-assertIncludes(chatClient, "logoutEndpoint: \"/api/settings/auth/openai-codex/logout\"", "chat client keeps Codex auth logout endpoint");
-assertIncludes(chatClient, "logoutEndpoint: \"/api/settings/auth/copilot/logout\"", "chat client keeps Copilot auth logout endpoint");
-assertIncludes(chatClient, "pollEndpoint: \"/api/settings/auth/openai-codex/poll\"", "chat client keeps Codex auth poll endpoint");
-assertIncludes(chatClient, "pollEndpoint: \"/api/settings/auth/copilot/poll\"", "chat client keeps Copilot auth poll endpoint");
+assertIncludes(chatClient, "loginEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, \"login\")", "chat client keeps Codex auth login endpoint");
+assertIncludes(chatClient, "loginEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, \"login\")", "chat client keeps Copilot auth login endpoint");
+assertIncludes(chatClient, "logoutEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, \"logout\")", "chat client keeps Codex auth logout endpoint");
+assertIncludes(chatClient, "logoutEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, \"logout\")", "chat client keeps Copilot auth logout endpoint");
+assertIncludes(chatClient, "pollEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, \"poll\")", "chat client keeps Codex auth poll endpoint");
+assertIncludes(chatClient, "pollEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, \"poll\")", "chat client keeps Copilot auth poll endpoint");
 assertIncludes(chatClient, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "chat client keeps Codex auth poll body");
 assertIncludes(chatClient, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "chat client keeps Copilot auth poll body");
 assertIncludes(chatClient, "startProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID])", "chat client keeps Codex auth login wrapper");

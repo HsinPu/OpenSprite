@@ -91,6 +91,7 @@ import {
   CODEX_PROVIDER_ID,
   COPILOT_AUTH_KEY,
   COPILOT_PROVIDER_ID,
+  providerAuthEndpoint,
 } from "../settings/providerConstants";
 
 const STORAGE_KEYS = {
@@ -2520,9 +2521,9 @@ export function useChatClient() {
 
   const providerAuthFlowConfigs = {
     [CODEX_PROVIDER_ID]: {
-      loginEndpoint: "/api/settings/auth/openai-codex/login",
-      logoutEndpoint: "/api/settings/auth/openai-codex/logout",
-      pollEndpoint: "/api/settings/auth/openai-codex/poll",
+      loginEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "login"),
+      logoutEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "logout"),
+      pollEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "poll"),
       authKey: CODEX_AUTH_KEY,
       loadingKey: "codexAuthLoading",
       errorKey: "codexAuthError",
@@ -2567,9 +2568,9 @@ export function useChatClient() {
       }),
     },
     [COPILOT_PROVIDER_ID]: {
-      loginEndpoint: "/api/settings/auth/copilot/login",
-      logoutEndpoint: "/api/settings/auth/copilot/logout",
-      pollEndpoint: "/api/settings/auth/copilot/poll",
+      loginEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "login"),
+      logoutEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "logout"),
+      pollEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "poll"),
       authKey: COPILOT_AUTH_KEY,
       loadingKey: "copilotAuthLoading",
       errorKey: "copilotAuthError",
