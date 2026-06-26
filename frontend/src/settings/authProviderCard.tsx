@@ -1,8 +1,7 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { Button, Space, Tag } from "antd";
+import type { AnyRecord } from "./providerHelpers";
 import { SettingsCard } from "./settingsPrimitives";
-
-type AnyRecord = Record<string, any>;
 
 export function AuthProviderCard({
   mark,

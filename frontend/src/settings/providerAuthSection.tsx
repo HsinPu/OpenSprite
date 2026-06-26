@@ -1,7 +1,6 @@
 import { AuthProviderCard } from "./authProviderCard";
+import type { AnyRecord } from "./providerHelpers";
 import { SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
-
-type AnyRecord = Record<string, any>;
 
 export function ProviderAuthSection({
   title,

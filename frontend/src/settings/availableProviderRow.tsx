@@ -1,7 +1,5 @@
 import { Button, List, Tag } from "antd";
-import { providerMark } from "./providerHelpers";
-
-type AnyRecord = Record<string, any>;
+import { type AnyRecord, providerMark } from "./providerHelpers";
 
 export function AvailableProviderRow({
   provider,

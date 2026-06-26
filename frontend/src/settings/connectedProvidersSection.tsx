@@ -1,9 +1,8 @@
 import { List } from "antd";
 import { ConnectedProviderRow } from "./connectedProviderRow";
 import { ProviderEmptyState } from "./providerEmptyState";
+import type { AnyRecord } from "./providerHelpers";
 import { SettingsCard, SettingsSectionTitle } from "./settingsPrimitives";
-
-type AnyRecord = Record<string, any>;
 
 export function ConnectedProvidersSection({
   copy,

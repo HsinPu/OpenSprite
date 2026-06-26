@@ -1,4 +1,5 @@
 import {
+  type AnyRecord,
   authStatusLabel,
   codexDescription,
   copilotDescription,
@@ -10,7 +11,6 @@ import { ProviderAuthSection } from "./providerAuthSection";
 import { ProviderConnectDialog } from "./providerConnectDialog";
 import { SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
 type ProviderSettingsClient = {

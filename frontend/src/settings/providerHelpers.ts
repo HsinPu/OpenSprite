@@ -1,4 +1,4 @@
-type AnyRecord = Record<string, any>;
+export type AnyRecord = Record<string, any>;
 
 export function providerMark(value: AnyRecord) {
   return String(value?.name || value?.id || value?.type || "??").trim().slice(0, 2).toUpperCase();

@@ -1,8 +1,6 @@
 import { ArrowLeftOutlined, CloseOutlined } from "@ant-design/icons";
 import { Button, Form, Input } from "antd";
-import { providerMark } from "./providerHelpers";
-
-type AnyRecord = Record<string, any>;
+import { type AnyRecord, providerMark } from "./providerHelpers";
 
 export function ProviderConnectDialog({
   provider,

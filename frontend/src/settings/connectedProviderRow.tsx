@@ -1,13 +1,12 @@
 import { Button, Form, List, Select, Tag } from "antd";
 import {
+  type AnyRecord,
   credentialSourceLabel,
   providerCredentials,
   providerDescription,
   providerEffectiveCredentialId,
   providerMark,
 } from "./providerHelpers";
-
-type AnyRecord = Record<string, any>;
 
 export function ConnectedProviderRow({
   copy,
