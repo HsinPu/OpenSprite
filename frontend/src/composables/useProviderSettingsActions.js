@@ -182,32 +182,45 @@ export function useProviderSettingsActions({
     }
   }
 
-  async function connectCodexProvider(provider) {
-    return connectOAuthBackedProvider(provider, {
+  const oauthProviderConfigs = {
+    "openai-codex": {
       providerId: "openai-codex",
       providerName: "OpenAI Codex",
       authNoticeKey: "codexAuthNotice",
-      connectedNotice: copy.value.notices.codexProviderConnected,
+      connectedNotice: () => copy.value.notices.codexProviderConnected,
       startAuthLogin: startCodexAuthLogin,
-    });
-  }
-
-  async function connectCopilotProvider(provider) {
-    return connectOAuthBackedProvider(provider, {
+    },
+    copilot: {
       providerId: "copilot",
       providerName: "GitHub Copilot",
       authNoticeKey: "copilotAuthNotice",
-      connectedNotice: copy.value.notices.copilotProviderConnected,
+      connectedNotice: () => copy.value.notices.copilotProviderConnected,
       startAuthLogin: startCopilotAuthLogin,
+    },
+  };
+
+  function oauthProviderConfig(providerId) {
+    return oauthProviderConfigs[providerId] || oauthProviderConfigs["openai-codex"];
+  }
+
+  async function connectOAuthProviderById(provider, providerId) {
+    const config = oauthProviderConfig(providerId);
+    return connectOAuthBackedProvider(provider, {
+      ...config,
+      connectedNotice: config.connectedNotice(),
     });
   }
 
+  async function connectCodexProvider(provider) {
+    return connectOAuthProviderById(provider, "openai-codex");
+  }
+
+  async function connectCopilotProvider(provider) {
+    return connectOAuthProviderById(provider, "copilot");
+  }
+
   async function connectOAuthProvider(provider) {
-    if (provider?.id === "copilot") {
-      await connectCopilotProvider(provider);
-      return;
-    }
-    await connectCodexProvider(provider);
+    await connectOAuthProviderById(provider, provider?.id === "copilot" ? "copilot" : "openai-codex");
   }
 
   return {

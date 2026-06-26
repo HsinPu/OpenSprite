@@ -45,6 +45,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  providerSettingsActions,
   confirmFlow,
   shellLayout,
   authGate,
@@ -96,6 +97,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/composables/useProviderSettingsActions.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
   read("src/components/authGate.tsx"),
@@ -262,6 +264,12 @@ assertIncludes(providerAuthSections, "refreshAction: \"loadCodexAuthStatus\"", "
 assertIncludes(providerAuthSections, "refreshAction: \"loadCopilotAuthStatus\"", "provider auth sections keep Copilot refresh action");
 assertIncludes(providerAuthSections, "loginAction: \"startCodexAuthLogin\"", "provider auth sections keep OpenAI Codex OAuth login");
 assertIncludes(providerAuthSections, "loginAction: \"startCopilotAuthLogin\"", "provider auth sections keep Copilot OAuth login");
+assertIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions centralize OAuth provider configs");
+assertIncludes(providerSettingsActions, "\"openai-codex\": {", "provider settings actions keep Codex OAuth config");
+assertIncludes(providerSettingsActions, "copilot: {", "provider settings actions keep Copilot OAuth config");
+assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, \"openai-codex\")", "provider settings actions keep Codex OAuth wrapper");
+assertIncludes(providerSettingsActions, "connectOAuthProviderById(provider, \"copilot\")", "provider settings actions keep Copilot OAuth wrapper");
+assertIncludes(providerSettingsActions, "provider?.id === \"copilot\" ? \"copilot\" : \"openai-codex\"", "provider settings actions keep default OAuth provider selection");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
