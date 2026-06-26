@@ -310,6 +310,7 @@ assertIncludes(providerConstants, "function isOAuthProviderAuthType", "provider 
 assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
 assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider auth sections keep Codex auth provider");
 assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
+assertIncludes(providerAuthSections, "key: config.providerId", "provider auth sections derive section key from provider id");
 assertIncludes(providerAuthSections, "...CODEX_AUTH_STATE_KEYS", "provider auth sections reuse Codex auth state keys");
 assertIncludes(providerAuthSections, "...COPILOT_AUTH_STATE_KEYS", "provider auth sections reuse Copilot auth state keys");
 assertIncludes(providerAuthSections, "providerName: CODEX_PROVIDER_NAME", "provider auth sections reuse Codex provider name");
@@ -319,6 +320,8 @@ assertIncludes(providerAuthSections, "authCopy.name || config.providerName", "pr
 assertIncludes(providerAuthSections, "client.loadProviderAuthStatusById(config.providerId)", "provider auth sections refresh through provider id");
 assertIncludes(providerAuthSections, "client.startProviderAuthLoginById(config.providerId)", "provider auth sections login through provider id");
 assertIncludes(providerAuthSections, "client.logoutProviderAuthById(config.providerId)", "provider auth sections logout through provider id");
+assertNotIncludes(providerAuthSections, "key: \"codex\"", "provider auth sections avoid Codex-specific section key metadata");
+assertNotIncludes(providerAuthSections, "key: \"copilot\"", "provider auth sections avoid Copilot-specific section key metadata");
 assertNotIncludes(providerAuthSections, "refreshAction:", "provider auth sections no longer store action-name strings");
 assertNotIncludes(providerAuthSections, "loginAction:", "provider auth sections no longer store login action-name strings");
 assertNotIncludes(providerAuthSections, "logoutAction:", "provider auth sections no longer store logout action-name strings");

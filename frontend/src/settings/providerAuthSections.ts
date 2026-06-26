@@ -16,7 +16,6 @@ import {
 
 const PROVIDER_AUTH_SECTIONS = [
   {
-    key: "codex",
     providerId: CODEX_PROVIDER_ID,
     ...CODEX_AUTH_STATE_KEYS,
     mark: "Cx",
@@ -24,7 +23,6 @@ const PROVIDER_AUTH_SECTIONS = [
     describe: codexDescription,
   },
   {
-    key: "copilot",
     providerId: COPILOT_PROVIDER_ID,
     ...COPILOT_AUTH_STATE_KEYS,
     mark: "Gh",
@@ -42,7 +40,7 @@ export function providerAuthSections(copy: AnyRecord, state: AnyRecord, client: 
     const authCopy = providerCopy[config.copyKey] || {};
 
     return {
-      key: config.key,
+      key: config.providerId,
       visible: providerAuthVisible(
         state,
         config.providerId,
