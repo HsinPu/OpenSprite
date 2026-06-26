@@ -61,7 +61,7 @@ import {
   shortRunId,
   statusFromRunEvent,
 } from "./chatClientRunHelpers";
-import { normalizeRunSummary } from "./runSummaryNormalizers";
+import { normalizeDiffSummary, normalizeRunSummary } from "./runSummaryNormalizers";
 import {
   coerceEventPayload,
   compactRunEvents,
@@ -201,29 +201,6 @@ function normalizeCommandCatalog(payload) {
       subcommands: coerceStringList(item?.subcommands),
     };
   }).filter(Boolean);
-}
-
-function normalizeDiffSummary(payload) {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-  const actions = payload.actions && typeof payload.actions === "object" ? payload.actions : {};
-  const paths = Array.isArray(payload.paths)
-    ? payload.paths.map((path) => String(path || "").trim()).filter(Boolean)
-    : [];
-  return {
-    schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
-    changedFiles: coerceNonNegativeInteger(payload.changed_files ?? payload.changedFiles ?? paths.length),
-    changeCount: coerceNonNegativeInteger(payload.change_count ?? payload.changeCount),
-    additions: coerceNonNegativeInteger(payload.additions),
-    deletions: coerceNonNegativeInteger(payload.deletions),
-    paths,
-    actions: Object.fromEntries(
-      Object.entries(actions)
-        .map(([action, count]) => [String(action || "unknown").trim() || "unknown", coerceNonNegativeInteger(count)])
-        .filter(([action, count]) => action && count > 0),
-    ),
-  };
 }
 
 function normalizeEventTimestamp(value) {

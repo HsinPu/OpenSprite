@@ -8,7 +8,7 @@ function normalizeEventTimestamp(value) {
   return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
 }
 
-function normalizeDiffSummary(payload) {
+export function normalizeDiffSummary(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
   }
