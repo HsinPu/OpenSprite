@@ -86,6 +86,12 @@ import {
 } from "./runTraceNormalizers";
 import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createSettingsForm, createSettingsState } from "./useSettingsState";
+import {
+  CODEX_AUTH_KEY,
+  CODEX_PROVIDER_ID,
+  COPILOT_AUTH_KEY,
+  COPILOT_PROVIDER_ID,
+} from "../settings/providerConstants";
 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
@@ -737,8 +743,8 @@ export function useChatClient() {
   const runSummaryTimers = new Map();
   const runBackfillTimes = new Map();
   const providerAuthPollTimers = {
-    "openai-codex": null,
-    copilot: null,
+    [CODEX_PROVIDER_ID]: null,
+    [COPILOT_PROVIDER_ID]: null,
   };
   let toastId = 0;
   const toastTimers = new Map();
@@ -2513,11 +2519,11 @@ export function useChatClient() {
   }
 
   const providerAuthFlowConfigs = {
-    "openai-codex": {
+    [CODEX_PROVIDER_ID]: {
       loginEndpoint: "/api/settings/auth/openai-codex/login",
       logoutEndpoint: "/api/settings/auth/openai-codex/logout",
       pollEndpoint: "/api/settings/auth/openai-codex/poll",
-      authKey: "codexAuth",
+      authKey: CODEX_AUTH_KEY,
       loadingKey: "codexAuthLoading",
       errorKey: "codexAuthError",
       noticeKey: "codexAuthNotice",
@@ -2560,11 +2566,11 @@ export function useChatClient() {
         deviceAuthId: "",
       }),
     },
-    copilot: {
+    [COPILOT_PROVIDER_ID]: {
       loginEndpoint: "/api/settings/auth/copilot/login",
       logoutEndpoint: "/api/settings/auth/copilot/logout",
       pollEndpoint: "/api/settings/auth/copilot/poll",
-      authKey: "copilotAuth",
+      authKey: COPILOT_AUTH_KEY,
       loadingKey: "copilotAuthLoading",
       errorKey: "copilotAuthError",
       noticeKey: "copilotAuthNotice",
@@ -2619,7 +2625,7 @@ export function useChatClient() {
   }
 
   async function startCodexAuthLogin() {
-    return startProviderAuthLogin(providerAuthFlowConfigs["openai-codex"]);
+    return startProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
   }
 
   function clearProviderAuthPollTimer(providerId) {
@@ -2638,35 +2644,35 @@ export function useChatClient() {
   }
 
   function clearCodexAuthPollTimer() {
-    clearProviderAuthPollTimer("openai-codex");
+    clearProviderAuthPollTimer(CODEX_PROVIDER_ID);
   }
 
   function scheduleCodexAuthPoll() {
-    scheduleProviderAuthPoll("openai-codex", settingsState.codexAuth, pollCodexAuthLogin);
+    scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_KEY], pollCodexAuthLogin);
   }
 
   async function pollCodexAuthLogin() {
-    return pollProviderAuthLogin(providerAuthFlowConfigs["openai-codex"]);
+    return pollProviderAuthLogin(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
   }
 
   async function logoutCodexAuth() {
-    return logoutProviderAuth(providerAuthFlowConfigs["openai-codex"]);
+    return logoutProviderAuth(providerAuthFlowConfigs[CODEX_PROVIDER_ID]);
   }
 
   async function startCopilotAuthLogin() {
-    return startProviderAuthLogin(providerAuthFlowConfigs.copilot);
+    return startProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
   }
 
   function clearCopilotAuthPollTimer() {
-    clearProviderAuthPollTimer("copilot");
+    clearProviderAuthPollTimer(COPILOT_PROVIDER_ID);
   }
 
   function scheduleCopilotAuthPoll() {
-    scheduleProviderAuthPoll("copilot", settingsState.copilotAuth, pollCopilotAuthLogin);
+    scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_KEY], pollCopilotAuthLogin);
   }
 
   async function pollCopilotAuthLogin() {
-    return pollProviderAuthLogin(providerAuthFlowConfigs.copilot);
+    return pollProviderAuthLogin(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
   }
 
   async function pollProviderAuthLogin(config) {
@@ -2696,7 +2702,7 @@ export function useChatClient() {
   }
 
   async function logoutCopilotAuth() {
-    return logoutProviderAuth(providerAuthFlowConfigs.copilot);
+    return logoutProviderAuth(providerAuthFlowConfigs[COPILOT_PROVIDER_ID]);
   }
 
   async function logoutProviderAuth(config) {
