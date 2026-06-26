@@ -1,8 +1,7 @@
 import {
   DEFAULT_PROVIDER_AUTH_PROVIDER_ID,
-  PROVIDER_AUTH_PROVIDER_IDS,
+  PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthRequestConfig,
-  providerAuthSectionForId,
 } from "../settings/providerConstants";
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
@@ -42,7 +41,7 @@ function deviceAuthBaseConfig(config) {
 
 export function createProviderAuthConfigs() {
   return Object.fromEntries(
-    PROVIDER_AUTH_PROVIDER_IDS.map((providerId) => [providerId, deviceAuthBaseConfig(providerAuthSectionForId(providerId))]),
+    PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, deviceAuthBaseConfig(config)]),
   );
 }
 

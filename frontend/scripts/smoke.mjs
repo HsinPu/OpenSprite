@@ -376,13 +376,13 @@ assertIncludes(providerAuthConfigs, "providerAuthConfigs[providerId] || provider
 assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provider auth configs use metadata-derived default provider");
 assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
-assertIncludes(providerAuthConfigs, "PROVIDER_AUTH_PROVIDER_IDS", "provider auth configs build configs from provider id metadata");
+assertIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTION_CONFIGS", "provider auth configs build configs directly from provider section metadata");
 assertIncludes(providerAuthConfigs, "Object.fromEntries", "provider auth configs derive provider config map from metadata");
-assertIncludes(providerAuthConfigs, "providerAuthSectionForId(providerId)", "provider auth configs resolve each provider section by id");
+assertIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, deviceAuthBaseConfig(config)])", "provider auth configs map provider sections without id lookup");
 assertNotIncludes(providerAuthConfigs, "CODEX_PROVIDER_ID", "provider auth configs avoid hardcoded Codex config entry");
 assertNotIncludes(providerAuthConfigs, "COPILOT_PROVIDER_ID", "provider auth configs avoid hardcoded Copilot config entry");
 assertIncludes(providerAuthConfigs, "function deviceAuthBaseConfig", "provider auth configs share device auth base config helper");
-assertIncludes(providerAuthConfigs, "deviceAuthBaseConfig(providerAuthSectionForId(providerId))", "provider auth configs reuse shared base config for every provider id");
+assertIncludes(providerAuthConfigs, "deviceAuthBaseConfig(config)", "provider auth configs reuse shared base config for every provider section");
 assertIncludes(providerAuthConfigs, "function deviceAuthPollConfig", "provider auth configs share device auth poll config helper");
 assertIncludes(providerAuthConfigs, "...deviceAuthPollConfig(config)", "provider auth configs reuse shared poll config inside base config");
 assertIncludes(providerAuthConfigs, "auth[config.deviceKey]", "provider auth configs read device key from metadata");
@@ -515,8 +515,8 @@ assertIncludes(providerAuthActions, "scheduleProviderAuthPollById(config.provide
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertNotIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions no longer split auth flow configs");
-assertIncludes(providerAuthConfigs, "providerAuthSectionForId", "provider auth configs reuse centralized auth section lookup");
-assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(config)", "provider auth configs build request metadata from provider section lookup");
+assertNotIncludes(providerAuthConfigs, "providerAuthSectionForId", "provider auth configs avoid id lookup while building configs");
+assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(config)", "provider auth configs build request metadata from provider section metadata");
 assertNotIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTIONS", "provider auth configs avoid local auth section indexes");
 assertNotIncludes(providerAuthConfigs, "CODEX_AUTH_STATE_KEYS", "provider auth configs avoid direct Codex auth state key ownership");
 assertNotIncludes(providerAuthConfigs, "COPILOT_AUTH_STATE_KEYS", "provider auth configs avoid direct Copilot auth state key ownership");
