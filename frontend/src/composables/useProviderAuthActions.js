@@ -37,27 +37,14 @@ export function useProviderAuthActions({
     }, delayMs);
   }
 
-  function clearCodexAuthPollTimer() {
-    clearProviderAuthPollTimer(CODEX_PROVIDER_ID);
-  }
-
-  function scheduleCodexAuthPoll() {
-    scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_STATE_KEYS.authKey], pollCodexAuthLogin);
-  }
-
-  function clearCopilotAuthPollTimer() {
-    clearProviderAuthPollTimer(COPILOT_PROVIDER_ID);
-  }
-
-  function scheduleCopilotAuthPoll() {
-    scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_STATE_KEYS.authKey], pollCopilotAuthLogin);
-  }
-
   const providerAuthConfigs = {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
-      clearPoll: clearCodexAuthPollTimer,
-      schedulePoll: scheduleCodexAuthPoll,
+      providerName: CODEX_PROVIDER_NAME,
+      connectedNotice: () => copy.value.notices.codexProviderConnected,
+      startAuthLogin: () => startProviderAuthLoginById(CODEX_PROVIDER_ID),
+      clearPoll: () => clearProviderAuthPollTimer(CODEX_PROVIDER_ID),
+      schedulePoll: () => scheduleProviderAuthPollById(CODEX_PROVIDER_ID),
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
       buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
       loadStatus: loadCodexAuthStatus,
@@ -99,8 +86,11 @@ export function useProviderAuthActions({
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
-      clearPoll: clearCopilotAuthPollTimer,
-      schedulePoll: scheduleCopilotAuthPoll,
+      providerName: COPILOT_PROVIDER_NAME,
+      connectedNotice: () => copy.value.notices.copilotProviderConnected,
+      startAuthLogin: () => startProviderAuthLoginById(COPILOT_PROVIDER_ID),
+      clearPoll: () => clearProviderAuthPollTimer(COPILOT_PROVIDER_ID),
+      schedulePoll: () => scheduleProviderAuthPollById(COPILOT_PROVIDER_ID),
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
       buildPollBody: (auth) => ({ device_code: auth.deviceCode }),
       loadStatus: loadCopilotAuthStatus,
@@ -127,6 +117,11 @@ export function useProviderAuthActions({
 
   function providerAuthConfig(providerId) {
     return providerAuthConfigs[providerId] || providerAuthConfigs[CODEX_PROVIDER_ID];
+  }
+
+  function scheduleProviderAuthPollById(providerId) {
+    const config = providerAuthConfig(providerId);
+    scheduleProviderAuthPoll(providerId, settingsState[config.authKey], () => pollProviderAuthLoginById(providerId));
   }
 
   async function loadProviderAuthStatus(config) {
@@ -159,7 +154,7 @@ export function useProviderAuthActions({
     settingsState.providersLoading = true;
     settingsState.providersError = "";
     settingsState.providersNotice = "";
-    settingsState[options.authNoticeKey] = "";
+    settingsState[options.noticeKey] = "";
     try {
       await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
         method: "PUT",
@@ -168,7 +163,7 @@ export function useProviderAuthActions({
           base_url: provider?.default_base_url || "",
         }),
       });
-      setSettingsSuccess("providersNotice", options.connectedNotice);
+      setSettingsSuccess("providersNotice", options.connectedNotice());
       await refreshProviderState();
       await options.startAuthLogin();
     } catch (error) {
@@ -178,33 +173,8 @@ export function useProviderAuthActions({
     }
   }
 
-  const oauthProviderConfigs = {
-    [CODEX_PROVIDER_ID]: {
-      providerId: CODEX_PROVIDER_ID,
-      providerName: CODEX_PROVIDER_NAME,
-      authNoticeKey: CODEX_AUTH_STATE_KEYS.noticeKey,
-      connectedNotice: () => copy.value.notices.codexProviderConnected,
-      startAuthLogin: startCodexAuthLogin,
-    },
-    [COPILOT_PROVIDER_ID]: {
-      providerId: COPILOT_PROVIDER_ID,
-      providerName: COPILOT_PROVIDER_NAME,
-      authNoticeKey: COPILOT_AUTH_STATE_KEYS.noticeKey,
-      connectedNotice: () => copy.value.notices.copilotProviderConnected,
-      startAuthLogin: startCopilotAuthLogin,
-    },
-  };
-
-  function oauthProviderConfig(providerId) {
-    return oauthProviderConfigs[providerId] || oauthProviderConfigs[CODEX_PROVIDER_ID];
-  }
-
   async function connectOAuthProviderById(provider, providerId) {
-    const config = oauthProviderConfig(providerId);
-    return connectOAuthBackedProvider(provider, {
-      ...config,
-      connectedNotice: config.connectedNotice(),
-    });
+    return connectOAuthBackedProvider(provider, providerAuthConfig(providerId));
   }
 
   async function connectCodexProvider(provider) {
@@ -243,27 +213,39 @@ export function useProviderAuthActions({
   }
 
   async function startCodexAuthLogin() {
-    return startProviderAuthLogin(providerAuthConfig(CODEX_PROVIDER_ID));
+    return startProviderAuthLoginById(CODEX_PROVIDER_ID);
   }
 
   async function pollCodexAuthLogin() {
-    return pollProviderAuthLogin(providerAuthConfig(CODEX_PROVIDER_ID));
+    return pollProviderAuthLoginById(CODEX_PROVIDER_ID);
   }
 
   async function logoutCodexAuth() {
-    return logoutProviderAuth(providerAuthConfig(CODEX_PROVIDER_ID));
+    return logoutProviderAuthById(CODEX_PROVIDER_ID);
   }
 
   async function startCopilotAuthLogin() {
-    return startProviderAuthLogin(providerAuthConfig(COPILOT_PROVIDER_ID));
+    return startProviderAuthLoginById(COPILOT_PROVIDER_ID);
   }
 
   async function pollCopilotAuthLogin() {
-    return pollProviderAuthLogin(providerAuthConfig(COPILOT_PROVIDER_ID));
+    return pollProviderAuthLoginById(COPILOT_PROVIDER_ID);
   }
 
   async function logoutCopilotAuth() {
-    return logoutProviderAuth(providerAuthConfig(COPILOT_PROVIDER_ID));
+    return logoutProviderAuthById(COPILOT_PROVIDER_ID);
+  }
+
+  async function startProviderAuthLoginById(providerId) {
+    return startProviderAuthLogin(providerAuthConfig(providerId));
+  }
+
+  async function pollProviderAuthLoginById(providerId) {
+    return pollProviderAuthLogin(providerAuthConfig(providerId));
+  }
+
+  async function logoutProviderAuthById(providerId) {
+    return logoutProviderAuth(providerAuthConfig(providerId));
   }
 
   async function pollProviderAuthLogin(config) {
@@ -310,8 +292,9 @@ export function useProviderAuthActions({
   }
 
   function clearProviderAuthPollTimers() {
-    clearCodexAuthPollTimer();
-    clearCopilotAuthPollTimer();
+    for (const providerId of Object.keys(providerAuthConfigs)) {
+      clearProviderAuthPollTimer(providerId);
+    }
   }
 
   return {
