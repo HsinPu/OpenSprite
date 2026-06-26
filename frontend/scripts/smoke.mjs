@@ -370,9 +370,9 @@ assertNotIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provi
 assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs();", "provider auth actions assemble auth provider configs");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthConfigs", "provider auth configs centralize provider-specific auth config");
 assertNotIncludes(providerAuthConfigs, "createProviderAuthRuntimeConfigs", "provider auth configs avoid runtime config assembly");
-assertIncludes(providerAuthConfigs, "function resolveProviderAuthConfigId", "provider auth configs keep provider id fallback internal");
-assertNotIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs avoid exporting internal provider id fallback");
+assertNotIncludes(providerAuthConfigs, "resolveProviderAuthConfigId", "provider auth configs avoid fallback wrapper helper");
 assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
+assertIncludes(providerAuthConfigs, "providerAuthConfigs[providerId] || providerAuthConfigs[DEFAULT_PROVIDER_AUTH_PROVIDER_ID]", "provider auth configs keep provider id fallback inside lookup helper");
 assertIncludes(providerAuthConfigs, "DEFAULT_PROVIDER_AUTH_PROVIDER_ID", "provider auth configs use metadata-derived default provider");
 assertNotIncludes(providerAuthConfigs, ": CODEX_PROVIDER_ID;", "provider auth configs avoid direct Codex fallback");
 assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");

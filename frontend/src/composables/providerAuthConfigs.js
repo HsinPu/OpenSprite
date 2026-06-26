@@ -46,10 +46,6 @@ export function createProviderAuthConfigs() {
   );
 }
 
-function resolveProviderAuthConfigId(providerAuthConfigs, providerId) {
-  return providerAuthConfigs[providerId] ? providerId : DEFAULT_PROVIDER_AUTH_PROVIDER_ID;
-}
-
 export function getProviderAuthConfig(providerAuthConfigs, providerId) {
-  return providerAuthConfigs[resolveProviderAuthConfigId(providerAuthConfigs, providerId)];
+  return providerAuthConfigs[providerId] || providerAuthConfigs[DEFAULT_PROVIDER_AUTH_PROVIDER_ID];
 }
