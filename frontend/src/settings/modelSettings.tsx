@@ -2,10 +2,9 @@ import { Button, Form, Input, Select, Switch, Tag } from "antd";
 import {
   mediaModelCategories,
   mediaModelsForProvider,
-  modelOptionsForProvider,
   providerMark,
-  textModelOptionLabel,
 } from "./providerHelpers";
+import { modelOptionsForProvider, textModelOptionLabel } from "./providerModelHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
 type AnyRecord = Record<string, any>;

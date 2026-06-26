@@ -85,6 +85,7 @@ const [
   providerHelpers,
   providerAuthHelpers,
   providerCredentialHelpers,
+  providerModelHelpers,
   availableProviderRow,
   connectedProviderRow,
   availableProvidersSection,
@@ -154,6 +155,7 @@ const [
   read("src/settings/providerHelpers.ts"),
   read("src/settings/providerAuthHelpers.ts"),
   read("src/settings/providerCredentialHelpers.ts"),
+  read("src/settings/providerModelHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
   read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
@@ -454,6 +456,9 @@ assertIncludes(providerHelpers, "export function providerCatalogKey", "provider 
 assertIncludes(providerHelpers, "providerCatalogKey(provider) === presetId", "provider helpers reuse provider key resolution for connected providers");
 assertIncludes(providerCredentialHelpers, "const providerKey = providerCatalogKey(provider)", "provider credential helpers reuse provider key resolution for credentials");
 assertNotIncludes(providerHelpers, "function providerCredentials", "provider helpers keep credential lookup out of generic helpers");
+assertIncludes(providerModelHelpers, "function modelOptionsForProvider", "provider model helpers expose text model options");
+assertIncludes(providerModelHelpers, "function textModelOptionLabel", "provider model helpers expose text model labels");
+assertNotIncludes(providerHelpers, "function modelOptionsForProvider", "provider helpers keep text model options out of generic helpers");
 assertIncludes(providerSettingsActions, "providerCatalogKey(provider)", "provider settings actions reuse shared provider key helper");
 assertNotIncludes(providerConnectForm, "providerCredentialKey", "provider connect form no longer owns provider key resolution");
 assertNotIncludes(providerSettingsActions, "providerCredentialKey", "provider settings actions avoid form-owned provider key helper");
@@ -648,6 +653,8 @@ assertNotIncludes(providerHelpers, "COPILOT_AUTH_CONFIG", "provider helpers avoi
 assertNotIncludes(providerHelpers, "CODEX_AUTH_STATE_KEYS", "provider helpers avoid direct Codex auth state key ownership");
 assertNotIncludes(providerHelpers, "COPILOT_AUTH_STATE_KEYS", "provider helpers avoid direct Copilot auth state key ownership");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
+assertIncludes(modelSettings, "modelOptionsForProvider(selectedProvider, selectedModel)", "model settings keeps text model option helper");
+assertIncludes(modelSettings, "textModelOptionLabel(copy, selectedProvider, model)", "model settings keeps text model label helper");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
 assertIncludes(mcpSettings, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
