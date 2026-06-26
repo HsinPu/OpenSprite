@@ -736,8 +736,10 @@ export function useChatClient() {
   let boundMessageStage = null;
   const runSummaryTimers = new Map();
   const runBackfillTimes = new Map();
-  let codexAuthPollTimer = null;
-  let copilotAuthPollTimer = null;
+  const providerAuthPollTimers = {
+    "openai-codex": null,
+    copilot: null,
+  };
   let toastId = 0;
   const toastTimers = new Map();
   const deletedSessionTombstones = new Map();
@@ -2537,19 +2539,27 @@ export function useChatClient() {
     }
   }
 
-  function clearCodexAuthPollTimer() {
-    if (codexAuthPollTimer) {
-      clearTimeout(codexAuthPollTimer);
-      codexAuthPollTimer = null;
+  function clearProviderAuthPollTimer(providerId) {
+    if (providerAuthPollTimers[providerId]) {
+      clearTimeout(providerAuthPollTimers[providerId]);
+      providerAuthPollTimers[providerId] = null;
     }
   }
 
-  function scheduleCodexAuthPoll() {
-    clearCodexAuthPollTimer();
-    const delayMs = Math.max(3, settingsState.codexAuth.pollIntervalSeconds || 5) * 1000;
-    codexAuthPollTimer = window.setTimeout(() => {
-      void pollCodexAuthLogin();
+  function scheduleProviderAuthPoll(providerId, auth, poll) {
+    clearProviderAuthPollTimer(providerId);
+    const delayMs = Math.max(3, auth.pollIntervalSeconds || 5) * 1000;
+    providerAuthPollTimers[providerId] = window.setTimeout(() => {
+      void poll();
     }, delayMs);
+  }
+
+  function clearCodexAuthPollTimer() {
+    clearProviderAuthPollTimer("openai-codex");
+  }
+
+  function scheduleCodexAuthPoll() {
+    scheduleProviderAuthPoll("openai-codex", settingsState.codexAuth, pollCodexAuthLogin);
   }
 
   async function pollCodexAuthLogin() {
@@ -2641,18 +2651,11 @@ export function useChatClient() {
   }
 
   function clearCopilotAuthPollTimer() {
-    if (copilotAuthPollTimer) {
-      clearTimeout(copilotAuthPollTimer);
-      copilotAuthPollTimer = null;
-    }
+    clearProviderAuthPollTimer("copilot");
   }
 
   function scheduleCopilotAuthPoll() {
-    clearCopilotAuthPollTimer();
-    const delayMs = Math.max(3, settingsState.copilotAuth.pollIntervalSeconds || 5) * 1000;
-    copilotAuthPollTimer = window.setTimeout(() => {
-      void pollCopilotAuthLogin();
-    }, delayMs);
+    scheduleProviderAuthPoll("copilot", settingsState.copilotAuth, pollCopilotAuthLogin);
   }
 
   async function pollCopilotAuthLogin() {
