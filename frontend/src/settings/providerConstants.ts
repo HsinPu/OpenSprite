@@ -68,10 +68,7 @@ export function createProviderAuthInitialStates() {
   };
 }
 
-const PROVIDER_AUTH_KEYS: Record<string, string> = {
-  [CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey,
-  [COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey,
-};
+const PROVIDER_AUTH_KEYS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map(({ providerId, authKey }) => [providerId, authKey]));
 
 export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_KEYS);
 

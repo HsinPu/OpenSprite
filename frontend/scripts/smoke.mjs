@@ -286,6 +286,7 @@ assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "p
 assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
 assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_KEYS)", "provider constants derive auth provider ids from auth key map");
+assertIncludes(providerConstants, "Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map", "provider constants derive auth key map from section metadata");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
@@ -542,8 +543,8 @@ assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.c
 assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
 assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
-assertIncludes(providerConstants, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider constants map Codex auth key");
-assertIncludes(providerConstants, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider constants map Copilot auth key");
+assertNotIncludes(providerConstants, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Codex auth key map");
+assertNotIncludes(providerConstants, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Copilot auth key map");
 assertIncludes(providerHelpers, "state[CODEX_AUTH_STATE_KEYS.authKey]", "provider helpers read Codex auth state through metadata");
 assertIncludes(providerHelpers, "state[COPILOT_AUTH_STATE_KEYS.authKey]", "provider helpers read Copilot auth state through metadata");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
