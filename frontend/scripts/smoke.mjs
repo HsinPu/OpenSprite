@@ -54,6 +54,7 @@ const [
   networkSettings,
   scheduleSettings,
   searchSettings,
+  shortcutSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -76,6 +77,7 @@ const [
   read("src/settings/networkSettings.tsx"),
   read("src/settings/scheduleSettings.tsx"),
   read("src/settings/searchSettings.tsx"),
+  read("src/settings/shortcutSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -176,7 +178,7 @@ assertIncludes(browserSettings, "form.allowPrivateUrls", "browser settings keeps
 assertIncludes(browserSettings, "client.runBrowserDoctor", "browser settings keeps doctor action");
 assertIncludes(browserSettings, "client.runBrowserInstall", "browser settings keeps install action");
 assertNotIncludes(browserSettings, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
-assertIncludes(app, "shortcut-keys", "shortcut settings uses parity layout");
+assertIncludes(shortcutSettings, "shortcut-keys", "shortcut settings uses parity layout");
 assertIncludes(settingsPrimitives, "function SettingsCard", "settings pages use Ant card helper");
 assertIncludes(generalSettings, "<SettingsCard className=\"settings-card--form\"", "general settings form cards use Ant card helper");
 assertIncludes(generalSettings, "<Select", "general settings uses Ant Select controls");
