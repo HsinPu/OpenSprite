@@ -403,7 +403,7 @@ assertIncludes(providerSettingsActions, "await runProviderSettingsMutation(copy.
 assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
 assertIncludes(providerAuthActions, "after: async () => {", "provider auth OAuth connect uses shared success follow-up");
 assertIncludes(providerAuthActions, "await refreshProviderState();", "provider auth OAuth connect refreshes provider state after connect");
-assertIncludes(providerAuthActions, "await config.startAuthLogin();", "provider auth OAuth connect starts login after refresh");
+assertIncludes(providerAuthActions, "await startProviderAuthLoginById(config.providerId);", "provider auth OAuth connect starts login after refresh");
 assertIncludes(providerAuthActions, "copy.value.notices[config.connectedNoticeKey]", "provider auth OAuth connect resolves provider notice from metadata");
 assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
 assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
@@ -413,6 +413,7 @@ assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "pr
 assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, \"codexProviderConnected\")", "provider auth configs reuse Codex runtime config helper");
 assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, \"copilotProviderConnected\")", "provider auth configs reuse Copilot runtime config helper");
 assertIncludes(providerAuthConfigs, "connectedNoticeKey,", "provider auth configs keep connected notice as metadata");
+assertNotIncludes(providerAuthConfigs, "startAuthLogin", "provider auth configs avoid auth login closure");
 assertNotIncludes(providerAuthConfigs, "connectedNotice: () =>", "provider auth configs avoid notice lookup closures");
 assertNotIncludes(providerAuthConfigs, "copy.value.notices", "provider auth configs avoid owning localized copy lookup");
 assertNotIncludes(providerAuthConfigs, "providerName", "provider auth configs avoid UI display metadata");

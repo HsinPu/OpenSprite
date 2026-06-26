@@ -8,12 +8,10 @@ import {
 import { clearedDeviceAuthState, normalizeDeviceAuthLogin } from "./providerAuthState";
 
 export function createProviderAuthRuntimeConfigs({
-  startAuthLoginById,
   loadProviderAuthStatusById,
 }) {
   const runtimeConfig = (providerId, connectedNoticeKey) => ({
     connectedNoticeKey,
-    startAuthLogin: () => startAuthLoginById(providerId),
     loadStatus: () => loadProviderAuthStatusById(providerId),
   });
   return {

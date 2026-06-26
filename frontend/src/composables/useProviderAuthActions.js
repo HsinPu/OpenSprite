@@ -30,7 +30,6 @@ export function useProviderAuthActions({
   } = createProviderAuthPollTimers();
 
   const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
-    startAuthLoginById,
     loadProviderAuthStatusById,
   }));
 
@@ -58,7 +57,7 @@ export function useProviderAuthActions({
       },
       after: async () => {
         await refreshProviderState();
-        await config.startAuthLogin();
+        await startProviderAuthLoginById(config.providerId);
       },
     });
   }
