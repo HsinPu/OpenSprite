@@ -404,6 +404,7 @@ assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, co
 assertIncludes(providerAuthActions, "after: async () => {", "provider auth OAuth connect uses shared success follow-up");
 assertIncludes(providerAuthActions, "await refreshProviderState();", "provider auth OAuth connect refreshes provider state after connect");
 assertIncludes(providerAuthActions, "await config.startAuthLogin();", "provider auth OAuth connect starts login after refresh");
+assertIncludes(providerAuthActions, "copy.value.notices[config.connectedNoticeKey]", "provider auth OAuth connect resolves provider notice from metadata");
 assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
 assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
 assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, config)", "provider auth actions delegate OAuth connect request");
@@ -411,6 +412,9 @@ assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider au
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
 assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, \"codexProviderConnected\")", "provider auth configs reuse Codex runtime config helper");
 assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, \"copilotProviderConnected\")", "provider auth configs reuse Copilot runtime config helper");
+assertIncludes(providerAuthConfigs, "connectedNoticeKey,", "provider auth configs keep connected notice as metadata");
+assertNotIncludes(providerAuthConfigs, "connectedNotice: () =>", "provider auth configs avoid notice lookup closures");
+assertNotIncludes(providerAuthConfigs, "copy.value.notices", "provider auth configs avoid owning localized copy lookup");
 assertNotIncludes(providerAuthConfigs, "providerName", "provider auth configs avoid UI display metadata");
 assertIncludes(providerAuthConfigs, "loadStatus: () => loadProviderAuthStatusById(providerId)", "provider auth configs refresh status through provider id");
 assertIncludes(providerAuthConfigs, "normalizeDeviceAuthLogin", "provider auth configs reuse device login normalization");

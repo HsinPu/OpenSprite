@@ -30,7 +30,6 @@ export function useProviderAuthActions({
   } = createProviderAuthPollTimers();
 
   const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
-    copy,
     startAuthLoginById,
     clearProviderAuthPollTimer,
     scheduleProviderAuthPollById,
@@ -54,7 +53,7 @@ export function useProviderAuthActions({
     const config = getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider));
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
       await requestProviderOAuthConnect(requestSettingsJson, provider, config);
-      setSettingsSuccess("providersNotice", config.connectedNotice());
+      setSettingsSuccess("providersNotice", copy.value.notices[config.connectedNoticeKey]);
     }, {
       before: () => {
         settingsState[config.noticeKey] = "";
