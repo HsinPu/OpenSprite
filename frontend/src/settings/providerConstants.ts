@@ -57,10 +57,12 @@ const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
     providerId: CODEX_PROVIDER_ID, ...CODEX_AUTH_STATE_KEYS, mark: "Cx", providerName: CODEX_PROVIDER_NAME,
+    deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
     initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
   },
   {
     providerId: COPILOT_PROVIDER_ID, ...COPILOT_AUTH_STATE_KEYS, mark: "Gh", providerName: COPILOT_PROVIDER_NAME,
+    deviceKey: "deviceCode", payloadDeviceKey: "device_code",
     initialAuth: providerDeviceAuthInitialState("deviceCode"),
   },
 ];
