@@ -84,6 +84,7 @@ const [
   providerEmptyState,
   providerHelpers,
   providerAuthHelpers,
+  providerCredentialHelpers,
   availableProviderRow,
   connectedProviderRow,
   availableProvidersSection,
@@ -152,6 +153,7 @@ const [
   read("src/settings/providerEmptyState.tsx"),
   read("src/settings/providerHelpers.ts"),
   read("src/settings/providerAuthHelpers.ts"),
+  read("src/settings/providerCredentialHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
   read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
@@ -450,7 +452,8 @@ assertIncludes(providerConnectForm, "export function providerCredentialPayload",
 assertIncludes(providerSettingsRequests, "providerCredentialPayload(credentialId)", "provider settings requests reuse credential payload helper");
 assertIncludes(providerHelpers, "export function providerCatalogKey", "provider helpers centralize provider key resolution");
 assertIncludes(providerHelpers, "providerCatalogKey(provider) === presetId", "provider helpers reuse provider key resolution for connected providers");
-assertIncludes(providerHelpers, "const providerKey = providerCatalogKey(provider)", "provider helpers reuse provider key resolution for credentials");
+assertIncludes(providerCredentialHelpers, "const providerKey = providerCatalogKey(provider)", "provider credential helpers reuse provider key resolution for credentials");
+assertNotIncludes(providerHelpers, "function providerCredentials", "provider helpers keep credential lookup out of generic helpers");
 assertIncludes(providerSettingsActions, "providerCatalogKey(provider)", "provider settings actions reuse shared provider key helper");
 assertNotIncludes(providerConnectForm, "providerCredentialKey", "provider connect form no longer owns provider key resolution");
 assertNotIncludes(providerSettingsActions, "providerCredentialKey", "provider settings actions avoid form-owned provider key helper");
@@ -617,6 +620,9 @@ assertIncludes(connectedProvidersSection, "ConnectedProviderRow", "connected pro
 assertIncludes(connectedProvidersSection, "ProviderEmptyState", "connected providers delegates provider empty state");
 assertIncludes(connectedProviderRow, "providerCredentials(state, provider)", "connected provider row keeps credential lookup");
 assertIncludes(connectedProviderRow, "providerEffectiveCredentialId(provider)", "connected provider row keeps effective credential lookup");
+assertIncludes(providerCredentialHelpers, "export function providerCredentials", "provider credential helpers expose credential lookup");
+assertIncludes(providerCredentialHelpers, "export function providerEffectiveCredentialId", "provider credential helpers expose effective credential id lookup");
+assertIncludes(providerCredentialHelpers, "export function credentialSourceLabel", "provider credential helpers expose credential source labels");
 assertIncludes(connectedProviderRow, "providerAuthCopyKey(provider)", "connected provider row keeps provider auth copy lookup");
 assertIncludes(providerAuthHelpers, "export function providerAuthCopyKey", "provider auth helpers expose provider auth copy key helper");
 assertIncludes(connectedProviderRow, "providerAuthConfigured(state, provider)", "connected provider row keeps auth configured badge rule");

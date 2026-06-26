@@ -5,10 +5,12 @@ import {
   providerDescription,
 } from "./providerAuthHelpers";
 import {
-  type AnyRecord,
   credentialSourceLabel,
   providerCredentials,
   providerEffectiveCredentialId,
+} from "./providerCredentialHelpers";
+import {
+  type AnyRecord,
   providerMark,
 } from "./providerHelpers";
 
