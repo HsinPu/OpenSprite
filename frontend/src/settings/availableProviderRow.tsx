@@ -1,4 +1,5 @@
 import { Button, List, Tag } from "antd";
+import { isOAuthProviderAuthType } from "./providerConstants";
 import { type AnyRecord, providerMark } from "./providerHelpers";
 
 export function AvailableProviderRow({
@@ -14,7 +15,7 @@ export function AvailableProviderRow({
   onConnectOAuth: (provider: AnyRecord) => void;
   onBeginConnect: (provider: AnyRecord) => void;
 }) {
-  const oauth = provider.auth_type === "openai_codex_oauth" || provider.auth_type === "github_copilot_oauth";
+  const oauth = isOAuthProviderAuthType(provider.auth_type);
 
   return (
     <List.Item key={provider.id} className="provider-row provider-row--stacked">

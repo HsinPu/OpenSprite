@@ -265,6 +265,9 @@ assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider co
 assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
+assertIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE = \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type");
+assertIncludes(providerConstants, "GITHUB_COPILOT_OAUTH_AUTH_TYPE = \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type");
+assertIncludes(providerConstants, "function isOAuthProviderAuthType", "provider constants expose OAuth auth type helper");
 assertIncludes(providerAuthSections, "providerAuthVisible(", "provider auth sections keep visibility helper");
 assertIncludes(providerAuthSections, "providerId: CODEX_PROVIDER_ID", "provider auth sections keep Codex auth provider");
 assertIncludes(providerAuthSections, "providerId: COPILOT_PROVIDER_ID", "provider auth sections keep Copilot auth provider");
@@ -329,8 +332,7 @@ assertIncludes(availableProvidersSection, "providerCopy.noAvailableTitle", "avai
 assertIncludes(providerEmptyState, "provider-row--empty", "provider empty state keeps row class");
 assertIncludes(providerEmptyState, "<strong>{title}</strong>", "provider empty state keeps title");
 assertIncludes(providerEmptyState, "<span>{description}</span>", "provider empty state keeps description");
-assertIncludes(availableProviderRow, "provider.auth_type === \"openai_codex_oauth\"", "available provider row keeps Codex OAuth detection");
-assertIncludes(availableProviderRow, "provider.auth_type === \"github_copilot_oauth\"", "available provider row keeps Copilot OAuth detection");
+assertIncludes(availableProviderRow, "isOAuthProviderAuthType(provider.auth_type)", "available provider row keeps OAuth detection");
 assertIncludes(availableProviderRow, "onConnectOAuth(provider) : onBeginConnect(provider)", "available provider row keeps connect routing");
 assertIncludes(availableProviderRow, "providerCopy.builtInBadge", "available provider row keeps built-in badge");
 assertIncludes(availableProviderRow, "providerCopy.connectedCount", "available provider row keeps connected count badge");
