@@ -6,9 +6,9 @@ import {
   providerAuthVisible,
 } from "./providerHelpers";
 import {
-  CODEX_AUTH_KEY,
+  CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
-  COPILOT_AUTH_KEY,
+  COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
 } from "./providerConstants";
 
@@ -16,10 +16,7 @@ const PROVIDER_AUTH_SECTIONS = [
   {
     key: "codex",
     providerId: CODEX_PROVIDER_ID,
-    copyKey: CODEX_AUTH_KEY,
-    loadingKey: "codexAuthLoading",
-    noticeKey: "codexAuthNotice",
-    errorKey: "codexAuthError",
+    ...CODEX_AUTH_STATE_KEYS,
     mark: "Cx",
     defaultTitle: "OpenAI Codex auth",
     defaultName: "OpenAI Codex",
@@ -31,10 +28,7 @@ const PROVIDER_AUTH_SECTIONS = [
   {
     key: "copilot",
     providerId: COPILOT_PROVIDER_ID,
-    copyKey: COPILOT_AUTH_KEY,
-    loadingKey: "copilotAuthLoading",
-    noticeKey: "copilotAuthNotice",
-    errorKey: "copilotAuthError",
+    ...COPILOT_AUTH_STATE_KEYS,
     mark: "Gh",
     defaultTitle: "GitHub Copilot auth",
     defaultName: "GitHub Copilot",

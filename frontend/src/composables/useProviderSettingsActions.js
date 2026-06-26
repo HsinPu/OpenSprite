@@ -1,4 +1,10 @@
-import { CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID, providerAuthEndpoint } from "../settings/providerConstants";
+import {
+  CODEX_AUTH_STATE_KEYS,
+  CODEX_PROVIDER_ID,
+  COPILOT_AUTH_STATE_KEYS,
+  COPILOT_PROVIDER_ID,
+  providerAuthEndpoint,
+} from "../settings/providerConstants";
 
 export function useProviderSettingsActions({
   settingsState,
@@ -46,10 +52,7 @@ export function useProviderSettingsActions({
   const providerAuthStatusConfigs = {
     [CODEX_PROVIDER_ID]: {
       endpoint: providerAuthEndpoint(CODEX_PROVIDER_ID),
-      loadingKey: "codexAuthLoading",
-      errorKey: "codexAuthError",
-      stateKey: "codexAuth",
-      loadFailedNoticeKey: "codexAuthLoadFailed",
+      ...CODEX_AUTH_STATE_KEYS,
       normalize: (payload) => ({
         configured: Boolean(payload.configured),
         expired: Boolean(payload.expired),
@@ -60,10 +63,7 @@ export function useProviderSettingsActions({
     },
     [COPILOT_PROVIDER_ID]: {
       endpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID),
-      loadingKey: "copilotAuthLoading",
-      errorKey: "copilotAuthError",
-      stateKey: "copilotAuth",
-      loadFailedNoticeKey: "copilotAuthLoadFailed",
+      ...COPILOT_AUTH_STATE_KEYS,
       normalize: (payload) => ({
         configured: Boolean(payload.configured),
         path: payload.path || "",
@@ -215,14 +215,14 @@ export function useProviderSettingsActions({
     [CODEX_PROVIDER_ID]: {
       providerId: CODEX_PROVIDER_ID,
       providerName: "OpenAI Codex",
-      authNoticeKey: "codexAuthNotice",
+      authNoticeKey: CODEX_AUTH_STATE_KEYS.noticeKey,
       connectedNotice: () => copy.value.notices.codexProviderConnected,
       startAuthLogin: startCodexAuthLogin,
     },
     [COPILOT_PROVIDER_ID]: {
       providerId: COPILOT_PROVIDER_ID,
       providerName: "GitHub Copilot",
-      authNoticeKey: "copilotAuthNotice",
+      authNoticeKey: COPILOT_AUTH_STATE_KEYS.noticeKey,
       connectedNotice: () => copy.value.notices.copilotProviderConnected,
       startAuthLogin: startCopilotAuthLogin,
     },

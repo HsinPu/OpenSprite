@@ -87,9 +87,9 @@ import {
 import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
 import { createSettingsForm, createSettingsState } from "./useSettingsState";
 import {
-  CODEX_AUTH_KEY,
+  CODEX_AUTH_STATE_KEYS,
   CODEX_PROVIDER_ID,
-  COPILOT_AUTH_KEY,
+  COPILOT_AUTH_STATE_KEYS,
   COPILOT_PROVIDER_ID,
   providerAuthEndpoint,
 } from "../settings/providerConstants";
@@ -2524,15 +2524,7 @@ export function useChatClient() {
       loginEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "login"),
       logoutEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "logout"),
       pollEndpoint: providerAuthEndpoint(CODEX_PROVIDER_ID, "poll"),
-      authKey: CODEX_AUTH_KEY,
-      loadingKey: "codexAuthLoading",
-      errorKey: "codexAuthError",
-      noticeKey: "codexAuthNotice",
-      loginReadyNoticeKey: "codexAuthLoginReady",
-      loginFailedNoticeKey: "codexAuthLoginFailed",
-      loginCompleteNoticeKey: "codexAuthLoginComplete",
-      loggedOutNoticeKey: "codexAuthLoggedOut",
-      logoutFailedNoticeKey: "codexAuthLogoutFailed",
+      ...CODEX_AUTH_STATE_KEYS,
       clearPoll: clearCodexAuthPollTimer,
       schedulePoll: scheduleCodexAuthPoll,
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
@@ -2571,15 +2563,7 @@ export function useChatClient() {
       loginEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "login"),
       logoutEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "logout"),
       pollEndpoint: providerAuthEndpoint(COPILOT_PROVIDER_ID, "poll"),
-      authKey: COPILOT_AUTH_KEY,
-      loadingKey: "copilotAuthLoading",
-      errorKey: "copilotAuthError",
-      noticeKey: "copilotAuthNotice",
-      loginReadyNoticeKey: "copilotAuthLoginReady",
-      loginFailedNoticeKey: "copilotAuthLoginFailed",
-      loginCompleteNoticeKey: "copilotAuthLoginComplete",
-      loggedOutNoticeKey: "copilotAuthLoggedOut",
-      logoutFailedNoticeKey: "copilotAuthLogoutFailed",
+      ...COPILOT_AUTH_STATE_KEYS,
       clearPoll: clearCopilotAuthPollTimer,
       schedulePoll: scheduleCopilotAuthPoll,
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
@@ -2649,7 +2633,7 @@ export function useChatClient() {
   }
 
   function scheduleCodexAuthPoll() {
-    scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_KEY], pollCodexAuthLogin);
+    scheduleProviderAuthPoll(CODEX_PROVIDER_ID, settingsState[CODEX_AUTH_STATE_KEYS.authKey], pollCodexAuthLogin);
   }
 
   async function pollCodexAuthLogin() {
@@ -2669,7 +2653,7 @@ export function useChatClient() {
   }
 
   function scheduleCopilotAuthPoll() {
-    scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_KEY], pollCopilotAuthLogin);
+    scheduleProviderAuthPoll(COPILOT_PROVIDER_ID, settingsState[COPILOT_AUTH_STATE_KEYS.authKey], pollCopilotAuthLogin);
   }
 
   async function pollCopilotAuthLogin() {
