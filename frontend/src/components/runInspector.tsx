@@ -4,7 +4,7 @@ import { runOptionLabel, runStatusColor } from "./displayHelpers";
 type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
-type RunInspectorClient = {
+export type RunInspectorClient = {
   state: AnyRecord;
   copy: ValueRef<AnyRecord>;
   currentRun: ValueRef<AnyRecord | null>;

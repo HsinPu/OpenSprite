@@ -9,9 +9,9 @@ import { useChatClient } from "./composables/useChatClient";
 import { AuthGate } from "./components/authGate";
 import { ChatPanel } from "./components/chatPanel";
 import { ConfirmDialog } from "./components/confirmDialog";
-import { RunInspector } from "./components/runInspector";
 import { SidebarNav } from "./components/sidebarNav";
 import { ToastStack } from "./components/toastStack";
+import { TraceSidebar } from "./components/traceSidebar";
 import { AppProviders } from "./providers/appProviders";
 import { SettingsModal } from "./settings/settingsModal";
 
@@ -235,32 +235,7 @@ function OpenSpriteShell() {
 
         <ChatPanel client={client} viewTraceForRun={viewTraceForRun} />
 
-        <aside className="trace-sidebar" data-collapsed={client.traceInspectorCollapsed.value} aria-label="Run trace inspector">
-          {!client.traceInspectorCollapsed.value ? (
-            <>
-              <Button
-                className="trace-sidebar__resize"
-                type="text"
-                aria-label="Resize trace inspector"
-                title="Drag to resize trace inspector"
-                onPointerDown={beginTraceResize}
-              />
-              <div className="trace-sidebar__rail">
-                <Button
-                  className="trace-sidebar__toggle"
-                  aria-expanded={!client.traceInspectorCollapsed.value}
-                  aria-label="Close trace panel"
-                  title="Close trace panel"
-                  icon={<CloseOutlined />}
-                  onClick={client.toggleTraceInspectorCollapsed}
-                >
-                  {copy.trace.collapse}
-                </Button>
-              </div>
-              <RunInspector client={client} />
-            </>
-          ) : null}
-        </aside>
+        <TraceSidebar client={client} beginTraceResize={beginTraceResize} />
       </div>
 
       <AuthGate client={client} />

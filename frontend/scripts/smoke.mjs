@@ -50,6 +50,7 @@ const [
   emptyState,
   messageList,
   sidebarNav,
+  traceSidebar,
   browserSettings,
   runInspector,
   logSettings,
@@ -81,6 +82,7 @@ const [
   read("src/components/emptyState.tsx"),
   read("src/components/messageList.tsx"),
   read("src/components/sidebarNav.tsx"),
+  read("src/components/traceSidebar.tsx"),
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/settings/logSettings.tsx"),
@@ -153,7 +155,11 @@ assertIncludes(chatPanel, "client.resizeComposer()", "chat panel keeps composer 
 assertIncludes(chatPanel, "client.handleComposerKeydown", "chat panel keeps keyboard handling");
 assertIncludes(chatPanel, "sendDisabled.value", "chat panel keeps send disabled state");
 assertIncludes(chatPanel, "viewTraceForRun={viewTraceForRun}", "chat panel passes trace callback to message list");
-assertIncludes(app, "RunInspector", "React trace inspector");
+assertIncludes(app, "TraceSidebar", "React trace sidebar");
+assertIncludes(traceSidebar, "RunInspector", "trace sidebar renders run inspector");
+assertIncludes(traceSidebar, "onPointerDown={beginTraceResize}", "trace sidebar keeps resize handle");
+assertIncludes(traceSidebar, "client.toggleTraceInspectorCollapsed", "trace sidebar keeps collapse action");
+assertIncludes(traceSidebar, "aria-label=\"Run trace inspector\"", "trace sidebar keeps inspector landmark");
 assertIncludes(app, "SettingsModal", "React settings modal");
 assertIncludes(authGate, "auth-gate", "auth gate component keeps auth overlay layout");
 assertIncludes(authGate, "client.submitAccessToken", "auth gate keeps token submit flow");
