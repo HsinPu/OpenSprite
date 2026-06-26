@@ -1,6 +1,5 @@
 import {
-  CODEX_AUTH_STATE_KEYS,
-  COPILOT_AUTH_STATE_KEYS,
+  PROVIDER_AUTH_SECTION_CONFIGS,
   providerAuthKeyForId,
 } from "./providerConstants";
 
@@ -44,9 +43,11 @@ export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, load
   return copy.configured || "Configured";
 }
 
+const [CODEX_AUTH_CONFIG, COPILOT_AUTH_CONFIG] = PROVIDER_AUTH_SECTION_CONFIGS;
+
 export function codexDescription(copy: AnyRecord, state: AnyRecord) {
-  const auth = state[CODEX_AUTH_STATE_KEYS.authKey] || {};
-  const authCopy = copy.settings.providers?.[CODEX_AUTH_STATE_KEYS.copyKey] || {};
+  const auth = state[CODEX_AUTH_CONFIG.authKey] || {};
+  const authCopy = copy.settings.providers?.[CODEX_AUTH_CONFIG.copyKey] || {};
   if (!auth.configured) {
     return authCopy.description || "";
   }
@@ -61,8 +62,8 @@ export function codexDescription(copy: AnyRecord, state: AnyRecord) {
 }
 
 export function copilotDescription(copy: AnyRecord, state: AnyRecord) {
-  const auth = state[COPILOT_AUTH_STATE_KEYS.authKey] || {};
-  const authCopy = copy.settings.providers?.[COPILOT_AUTH_STATE_KEYS.copyKey] || {};
+  const auth = state[COPILOT_AUTH_CONFIG.authKey] || {};
+  const authCopy = copy.settings.providers?.[COPILOT_AUTH_CONFIG.copyKey] || {};
   if (!auth.configured) {
     return authCopy.description || "";
   }

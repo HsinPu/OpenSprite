@@ -545,8 +545,11 @@ assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider con
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
 assertNotIncludes(providerConstants, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Codex auth key map");
 assertNotIncludes(providerConstants, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider constants avoid duplicate Copilot auth key map");
-assertIncludes(providerHelpers, "state[CODEX_AUTH_STATE_KEYS.authKey]", "provider helpers read Codex auth state through metadata");
-assertIncludes(providerHelpers, "state[COPILOT_AUTH_STATE_KEYS.authKey]", "provider helpers read Copilot auth state through metadata");
+assertIncludes(providerHelpers, "const [CODEX_AUTH_CONFIG, COPILOT_AUTH_CONFIG] = PROVIDER_AUTH_SECTION_CONFIGS", "provider helpers derive auth config from provider metadata");
+assertIncludes(providerHelpers, "state[CODEX_AUTH_CONFIG.authKey]", "provider helpers read Codex auth state through metadata");
+assertIncludes(providerHelpers, "state[COPILOT_AUTH_CONFIG.authKey]", "provider helpers read Copilot auth state through metadata");
+assertNotIncludes(providerHelpers, "CODEX_AUTH_STATE_KEYS", "provider helpers avoid direct Codex auth state key ownership");
+assertNotIncludes(providerHelpers, "COPILOT_AUTH_STATE_KEYS", "provider helpers avoid direct Copilot auth state key ownership");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
