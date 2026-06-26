@@ -13,6 +13,7 @@ import {
   requestProviderOAuthConnect,
 } from "./providerAuthRequests";
 import { runProviderMutation } from "./providerMutationRunner";
+import { providerCatalogKey } from "../settings/providerHelpers";
 
 export function useProviderAuthActions({
   settingsState,
@@ -67,12 +68,8 @@ export function useProviderAuthActions({
     });
   }
 
-  async function connectOAuthProviderById(provider, providerId) {
-    return connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId));
-  }
-
   async function connectOAuthProvider(provider) {
-    await connectOAuthProviderById(provider, provider?.id);
+    await connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider)));
   }
 
   async function startProviderAuthLogin(config) {

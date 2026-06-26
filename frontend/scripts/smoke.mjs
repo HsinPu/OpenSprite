@@ -420,11 +420,11 @@ assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "pro
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth configs keep Codex cleared device auth id state");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
-assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId))", "provider auth actions reuse auth provider config lookup for OAuth connect");
+assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider)))", "provider auth actions reuse shared provider key helper for OAuth connect");
 assertNotIncludes(providerAuthActions, "async function connectCodexProvider", "provider auth actions avoid unused Codex-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "async function connectCopilotProvider", "provider auth actions avoid unused Copilot-specific OAuth wrapper");
 assertNotIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions no longer own provider id fallback");
-assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, provider?.id)", "provider auth actions route OAuth connect through provider id resolver");
+assertNotIncludes(providerAuthActions, "connectOAuthProviderById", "provider auth actions avoid OAuth provider id wrapper");
 assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");
 assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "settings state initializes Copilot auth through provider metadata");
 assertIncludes(chatClient, "useProviderAuthActions({", "chat client delegates provider auth actions");
