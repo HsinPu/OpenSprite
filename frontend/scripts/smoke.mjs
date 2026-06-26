@@ -62,6 +62,7 @@ const [
   runTimeline,
   runTraceViewer,
   workStateCard,
+  authProviderCard,
   logSettings,
   providerSettings,
   modelSettings,
@@ -103,6 +104,7 @@ const [
   read("src/components/runTimeline.tsx"),
   read("src/components/runTraceViewer.tsx"),
   read("src/components/workStateCard.tsx"),
+  read("src/settings/authProviderCard.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -235,6 +237,12 @@ assertIncludes(generalSettings, "form.colorScheme", "general settings keeps colo
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
+assertIncludes(providerSettings, "AuthProviderCard", "provider settings delegates auth provider card");
+assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
+assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
+assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");
+assertIncludes(authProviderCard, "onClick={onLogout}", "auth provider card keeps logout action");
+assertIncludes(authProviderCard, "auth.userCode", "auth provider card keeps user code display");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(channelSettings, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(mcpSettings, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
