@@ -1,16 +1,10 @@
 import {
   CODEX_AUTH_STATE_KEYS,
-  CODEX_PROVIDER_ID,
   COPILOT_AUTH_STATE_KEYS,
-  COPILOT_PROVIDER_ID,
+  providerAuthKeyForId,
 } from "./providerConstants";
 
 export type AnyRecord = Record<string, any>;
-
-const PROVIDER_AUTH_KEYS: Record<string, string> = {
-  [CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey,
-  [COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey,
-};
 
 export function providerMark(value: AnyRecord) {
   return String(value?.name || value?.id || value?.type || "??").trim().slice(0, 2).toUpperCase();
@@ -25,7 +19,7 @@ export function providerAuthVisible(state: AnyRecord, providerId: string, auth: 
 }
 
 export function providerAuthKey(provider: AnyRecord) {
-  return PROVIDER_AUTH_KEYS[provider?.provider] || "";
+  return providerAuthKeyForId(provider?.provider);
 }
 
 export function providerAuthConfigured(state: AnyRecord, provider: AnyRecord) {

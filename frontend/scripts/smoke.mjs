@@ -293,6 +293,8 @@ assertIncludes(providerConstants, "function providerAuthStateKeys", "provider co
 assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
 assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
+assertIncludes(providerConstants, "function providerAuthKeyForId", "provider constants expose provider auth key lookup");
+assertIncludes(providerHelpers, "providerAuthKeyForId(provider?.provider)", "provider helpers delegate provider auth key lookup");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
 assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");
@@ -498,8 +500,8 @@ assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.c
 assertIncludes(providerConnectDialog, "state.connectForm.baseUrl", "provider connect dialog keeps base URL field");
 assertIncludes(providerConnectDialog, "onFinish={() => onSave()}", "provider connect dialog keeps save action");
 assertIncludes(providerConnectDialog, "onClick={onCancel}", "provider connect dialog keeps cancel actions");
-assertIncludes(providerHelpers, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider helpers map Codex auth key");
-assertIncludes(providerHelpers, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider helpers map Copilot auth key");
+assertIncludes(providerConstants, "[CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey", "provider constants map Codex auth key");
+assertIncludes(providerConstants, "[COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey", "provider constants map Copilot auth key");
 assertIncludes(providerHelpers, "state[CODEX_AUTH_STATE_KEYS.authKey]", "provider helpers read Codex auth state through metadata");
 assertIncludes(providerHelpers, "state[COPILOT_AUTH_STATE_KEYS.authKey]", "provider helpers read Copilot auth state through metadata");
 assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");

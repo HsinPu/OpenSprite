@@ -47,6 +47,15 @@ export function providerAuthRequestConfig(providerId: string, keys: ReturnType<t
 export const CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY);
 export const COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY);
 
+const PROVIDER_AUTH_KEYS: Record<string, string> = {
+  [CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey,
+  [COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey,
+};
+
+export function providerAuthKeyForId(providerId: string) {
+  return PROVIDER_AUTH_KEYS[providerId] || "";
+}
+
 export const OPENAI_CODEX_OAUTH_AUTH_TYPE = "openai_codex_oauth";
 export const GITHUB_COPILOT_OAUTH_AUTH_TYPE = "github_copilot_oauth";
 
