@@ -1,6 +1,5 @@
 export function providerAuthStateKeys(authKey: string) {
   return {
-    copyKey: authKey,
     stateKey: authKey,
     loadingKey: `${authKey}Loading`,
     errorKey: `${authKey}Error`,
@@ -13,6 +12,10 @@ export function providerAuthStateKeys(authKey: string) {
     loggedOutNoticeKey: `${authKey}LoggedOut`,
     logoutFailedNoticeKey: `${authKey}LogoutFailed`,
   };
+}
+
+function providerAuthSectionKeys(authKey: string) {
+  return { copyKey: authKey, ...providerAuthStateKeys(authKey) };
 }
 
 export function providerAuthInitialState(keys: ReturnType<typeof providerAuthStateKeys>, auth: Record<string, unknown>) {
@@ -44,7 +47,7 @@ export function providerAuthRequestConfig(config: ReturnType<typeof providerAuth
 
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
-    providerId: "openai-codex", ...providerAuthStateKeys("codexAuth"), mark: "Cx", providerName: "OpenAI Codex", oauthAuthType: "openai_codex_oauth",
+    providerId: "openai-codex", ...providerAuthSectionKeys("codexAuth"), mark: "Cx", providerName: "OpenAI Codex", oauthAuthType: "openai_codex_oauth",
     deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
     pollRequiresUserCode: true,
     includeAccountStatus: true,
@@ -53,7 +56,7 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
     initialAuth: providerDeviceAuthInitialState("deviceAuthId", { expired: false, expires_at: null, account_id: "", command: "" }),
   },
   {
-    providerId: "copilot", ...providerAuthStateKeys("copilotAuth"), mark: "Gh", providerName: "GitHub Copilot", oauthAuthType: "github_copilot_oauth",
+    providerId: "copilot", ...providerAuthSectionKeys("copilotAuth"), mark: "Gh", providerName: "GitHub Copilot", oauthAuthType: "github_copilot_oauth",
     deviceKey: "deviceCode", payloadDeviceKey: "device_code",
     logoutReset: { path: "" },
     initialAuth: providerDeviceAuthInitialState("deviceCode"),

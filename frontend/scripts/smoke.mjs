@@ -295,12 +295,14 @@ assertIncludes(providerConstants, "providerName: \"OpenAI Codex\"", "provider co
 assertIncludes(providerConstants, "providerName: \"GitHub Copilot\"", "provider constants keep Copilot provider name in section metadata");
 assertNotIncludes(providerConstants, "CODEX_PROVIDER_NAME", "provider constants avoid Codex provider name middle constant");
 assertNotIncludes(providerConstants, "COPILOT_PROVIDER_NAME", "provider constants avoid Copilot provider name middle constant");
-assertIncludes(providerConstants, "providerAuthStateKeys(\"codexAuth\")", "provider constants keep Codex auth key in provider metadata");
-assertIncludes(providerConstants, "providerAuthStateKeys(\"copilotAuth\")", "provider constants keep Copilot auth key in provider metadata");
+assertIncludes(providerConstants, "providerAuthSectionKeys(\"codexAuth\")", "provider constants keep Codex auth key in provider metadata");
+assertIncludes(providerConstants, "providerAuthSectionKeys(\"copilotAuth\")", "provider constants keep Copilot auth key in provider metadata");
 assertNotIncludes(providerConstants, "    authKey,\n", "provider constants avoid exposing auth key as runtime metadata");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider constants keep Codex auth key internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider constants keep Copilot auth key internal");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
+assertIncludes(providerConstants, "function providerAuthSectionKeys", "provider constants keep UI copy key ownership in section metadata");
+assertIncludes(providerConstants, "return { copyKey: authKey, ...providerAuthStateKeys(authKey) };", "provider constants keep copy key out of auth state key factory");
 assertIncludes(providerConstants, "function providerAuthInitialState", "provider constants expose auth initial state factory");
 assertIncludes(providerConstants, "[keys.stateKey]: auth", "provider constants initialize auth state through state key metadata");
 assertNotIncludes(providerConstants, "[keys.authKey]: auth", "provider constants avoid auth key ownership for initial state writes");
