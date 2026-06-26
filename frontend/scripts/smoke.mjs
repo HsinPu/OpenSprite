@@ -275,6 +275,8 @@ assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys
 assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
 assertIncludes(providerConstants, "function providerAuthEndpoint", "provider constants expose auth endpoint builder");
 assertIncludes(providerConstants, "`/api/settings/auth/${providerId}${action ? `/${action}` : \"\"}`", "provider constants keep auth endpoint path shape");
+assertIncludes(providerConstants, "function providerSettingsEndpoint", "provider constants expose provider settings endpoint builder");
+assertIncludes(providerConstants, "function providerCredentialEndpoint", "provider constants expose provider credential endpoint builder");
 assertIncludes(providerConstants, "function providerAuthRequestConfig", "provider constants expose auth request metadata factory");
 assertIncludes(providerConstants, "loginEndpoint: providerAuthEndpoint(providerId, \"login\")", "provider constants keep auth login endpoint metadata");
 assertIncludes(providerConstants, "logoutEndpoint: providerAuthEndpoint(providerId, \"logout\")", "provider constants keep auth logout endpoint metadata");
@@ -302,6 +304,11 @@ assertIncludes(providerAuthActions, "normalizeStatus: (payload) => ({", "provide
 assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "provider auth actions keep shared auth status request");
 assertNotIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions no longer own OAuth provider configs");
 assertNotIncludes(providerAuthActions, "const oauthProviderConfigs", "provider auth actions fold OAuth metadata into auth provider configs");
+assertIncludes(providerSettingsActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider settings actions reuse provider connect endpoint helper");
+assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
+assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
+assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");
+assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth actions reuse provider connect endpoint helper");
 assertIncludes(providerAuthActions, "providerName: CODEX_PROVIDER_NAME", "provider auth actions reuse Codex provider name");
 assertIncludes(providerAuthActions, "providerName: COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot provider name");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");

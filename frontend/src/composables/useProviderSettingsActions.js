@@ -1,3 +1,5 @@
+import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
+
 export function useProviderSettingsActions({
   settingsState,
   requestSettingsJson,
@@ -48,7 +50,7 @@ export function useProviderSettingsActions({
     settingsState.providersError = "";
     settingsState.providersNotice = "";
     try {
-      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
+      await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
         body: JSON.stringify({
           name: settingsState.connectForm.name,
@@ -71,7 +73,7 @@ export function useProviderSettingsActions({
     settingsState.providersError = "";
     settingsState.providersNotice = "";
     try {
-      const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/disconnect`, {
+      const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "disconnect"), {
         method: "POST",
       });
       setSettingsSuccess("providersNotice", copy.value.notices.providerDisconnected(provider.name, payload.restart_required));
@@ -91,7 +93,7 @@ export function useProviderSettingsActions({
     settingsState.providersError = "";
     settingsState.providersNotice = "";
     try {
-      const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/credential`, {
+      const payload = await requestSettingsJson(providerSettingsEndpoint(provider.id, "credential"), {
         method: "POST",
         body: JSON.stringify({ credential_id: credentialId }),
       });
@@ -114,7 +116,7 @@ export function useProviderSettingsActions({
     settingsState.providersNotice = "";
     try {
       await requestSettingsJson(
-        `/api/settings/credentials/${encodeURIComponent(providerKey)}/${encodeURIComponent(credentialId)}`,
+        providerCredentialEndpoint(providerKey, credentialId),
         { method: "DELETE" },
       );
       setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);

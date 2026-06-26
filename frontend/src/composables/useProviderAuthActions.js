@@ -7,6 +7,7 @@ import {
   COPILOT_PROVIDER_ID,
   COPILOT_PROVIDER_NAME,
   providerAuthRequestConfig,
+  providerSettingsEndpoint,
 } from "../settings/providerConstants";
 
 export function useProviderAuthActions({
@@ -156,7 +157,7 @@ export function useProviderAuthActions({
     settingsState.providersNotice = "";
     settingsState[options.noticeKey] = "";
     try {
-      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
+      await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
         method: "PUT",
         body: JSON.stringify({
           name: provider?.name || options.providerName,
