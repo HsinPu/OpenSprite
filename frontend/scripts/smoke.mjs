@@ -44,6 +44,7 @@ const [
   reactiveCompat,
   chatClient,
   authGate,
+  chatPanel,
   emptyState,
   messageList,
   browserSettings,
@@ -71,6 +72,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/components/authGate.tsx"),
+  read("src/components/chatPanel.tsx"),
   read("src/components/emptyState.tsx"),
   read("src/components/messageList.tsx"),
   read("src/settings/browserSettings.tsx"),
@@ -127,6 +129,14 @@ assertIncludes(settingsModal, "useTransition", "settings modal uses transition f
 assertIncludes(app, "useChatClient", "existing chat client flow reused");
 assertIncludes(app, "SidebarNav", "React sidebar shell");
 assertIncludes(app, "ChatPanel", "React chat panel");
+assertIncludes(chatPanel, "client.submitMessage", "chat panel keeps composer submit flow");
+assertIncludes(chatPanel, "client.applyCommandHint(command)", "chat panel keeps command hint flow");
+assertIncludes(chatPanel, "client.setMessageStageRef", "chat panel keeps message stage ref");
+assertIncludes(chatPanel, "client.setMessageInputRef", "chat panel keeps composer input ref");
+assertIncludes(chatPanel, "client.resizeComposer()", "chat panel keeps composer resizing");
+assertIncludes(chatPanel, "client.handleComposerKeydown", "chat panel keeps keyboard handling");
+assertIncludes(chatPanel, "sendDisabled.value", "chat panel keeps send disabled state");
+assertIncludes(chatPanel, "viewTraceForRun={viewTraceForRun}", "chat panel passes trace callback to message list");
 assertIncludes(app, "RunInspector", "React trace inspector");
 assertIncludes(app, "SettingsModal", "React settings modal");
 assertIncludes(authGate, "auth-gate", "auth gate component keeps auth overlay layout");
@@ -136,7 +146,7 @@ assertIncludes(authGate, "client.openSettings(\"general\")", "auth gate keeps se
 assertIncludes(emptyState, "empty-state", "empty state component keeps starter screen layout");
 assertIncludes(emptyState, "prompt-card", "empty state keeps prompt card layout");
 assertIncludes(emptyState, "applyPrompt(prompt.text)", "empty state keeps prompt application flow");
-assertIncludes(app, "MessageList", "React message list");
+assertIncludes(chatPanel, "MessageList", "React message list");
 assertIncludes(messageList, "MessageTextRenderer", "React message renderer");
 assertIncludes(messageList, "message__trace-button", "message list keeps trace action button");
 assertIncludes(messageList, "viewTraceForRun(message.traceRunId)", "message list keeps trace run selection callback");
@@ -145,7 +155,7 @@ assertIncludes(messageList, "message__artifact", "message list keeps artifact ca
 assertIncludes(app, "viewTraceForRun", "assistant message trace action");
 assertIncludes(app, "client.selectRun(runId)", "trace action selects the requested run");
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
-assertIncludes(app, "client.currentRuns.value", "run history uses active session runs");
+assertIncludes(chatPanel, "client.currentRuns.value", "run history uses active session runs");
 assertIncludes(generalSettings, "client.settingsState", "settings API state remains wired through settings modules");
 assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings save action");
 assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");
