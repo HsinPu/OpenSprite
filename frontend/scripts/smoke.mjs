@@ -65,6 +65,7 @@ const [
   authProviderCard,
   providerAuthSection,
   providerEmptyState,
+  providerHelpers,
   availableProviderRow,
   connectedProviderRow,
   availableProvidersSection,
@@ -114,6 +115,7 @@ const [
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
   read("src/settings/providerEmptyState.tsx"),
+  read("src/settings/providerHelpers.ts"),
   read("src/settings/availableProviderRow.tsx"),
   read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
@@ -252,6 +254,8 @@ assertIncludes(providerSettings, "client.deleteCredential", "provider settings k
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
 assertIncludes(providerSettings, "ProviderAuthSection", "provider settings delegates auth provider section");
+assertIncludes(providerSettings, "providerAuthVisible(state, \"openai-codex\"", "provider settings keeps Codex auth visibility helper");
+assertIncludes(providerSettings, "providerAuthVisible(state, \"copilot\"", "provider settings keeps Copilot auth visibility helper");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
@@ -260,6 +264,8 @@ assertIncludes(providerAuthSection, "SettingsStatus message={notice}", "provider
 assertIncludes(providerAuthSection, "SettingsStatus message={error} type=\"error\"", "provider auth section keeps error status");
 assertIncludes(providerAuthSection, "AuthProviderCard", "provider auth section renders auth provider card");
 assertIncludes(providerAuthSection, "onLogin={onLogin}", "provider auth section keeps login action");
+assertIncludes(providerHelpers, "hasConnectedProvider(state, providerId)", "provider auth visibility includes connected provider state");
+assertIncludes(providerHelpers, "auth?.userCode || notice || error", "provider auth visibility includes pending auth state");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");

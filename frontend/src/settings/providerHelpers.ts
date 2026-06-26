@@ -8,6 +8,10 @@ export function hasConnectedProvider(state: AnyRecord, presetId: string) {
   return (state.providers?.connected || []).some((provider: AnyRecord) => provider.provider === presetId || provider.id === presetId);
 }
 
+export function providerAuthVisible(state: AnyRecord, providerId: string, auth: AnyRecord = {}, loading = false, notice = "", error = "") {
+  return Boolean(hasConnectedProvider(state, providerId) || loading || auth?.configured || auth?.userCode || notice || error);
+}
+
 export function authStatusLabel(copy: AnyRecord = {}, auth: AnyRecord = {}, loading = false) {
   if (loading) {
     return copy.loading || "Loading";

@@ -3,7 +3,7 @@ import {
   authStatusLabel,
   codexDescription,
   copilotDescription,
-  hasConnectedProvider,
+  providerAuthVisible,
 } from "./providerHelpers";
 import { AvailableProvidersSection } from "./availableProvidersSection";
 import { ConnectedProvidersSection } from "./connectedProvidersSection";
@@ -38,20 +38,10 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
   const providerCopy = copy.settings.providers || {};
   const selectedConnectProvider =
     [...(providers.available || []), ...(providers.connected || [])].find((provider: AnyRecord) => provider.id === state.connectForm.providerId) || null;
-  const showCodexAuthCard =
-    hasConnectedProvider(state, "openai-codex") ||
-    state.codexAuthLoading ||
-    state.codexAuth?.configured ||
-    Boolean(state.codexAuth?.userCode || state.codexAuthNotice || state.codexAuthError);
-  const showCopilotAuthCard =
-    hasConnectedProvider(state, "copilot") ||
-    state.copilotAuthLoading ||
-    state.copilotAuth?.configured ||
-    Boolean(state.copilotAuth?.userCode || state.copilotAuthNotice || state.copilotAuthError);
   const authSections = [
     {
       key: "codex",
-      visible: showCodexAuthCard,
+      visible: providerAuthVisible(state, "openai-codex", state.codexAuth, state.codexAuthLoading, state.codexAuthNotice, state.codexAuthError),
       title: providerCopy.codexAuth?.title || "OpenAI Codex auth",
       notice: state.codexAuthNotice,
       error: state.codexAuthError,
@@ -69,7 +59,7 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
     },
     {
       key: "copilot",
-      visible: showCopilotAuthCard,
+      visible: providerAuthVisible(state, "copilot", state.copilotAuth, state.copilotAuthLoading, state.copilotAuthNotice, state.copilotAuthError),
       title: providerCopy.copilotAuth?.title || "GitHub Copilot auth",
       notice: state.copilotAuthNotice,
       error: state.copilotAuthError,
