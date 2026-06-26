@@ -11,7 +11,7 @@ from ..openai.streaming import collect_openai_compatible_stream
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
-from ..request_modes import response_format_for_request_mode
+from ..request_modes import resolve_response_format
 from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..openai_compatible import build_openai_compatible_response
@@ -118,11 +118,7 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMP
                 tools=tools,
                 max_tokens=max_tokens,
                 extra_body=_openrouter_reasoning_extra_body(self.reasoning_config),
-                response_format=(
-                    response_format
-                    if response_format is not None
-                    else response_format_for_request_mode(request_mode)
-                ),
+                response_format=resolve_response_format(response_format, request_mode),
                 stream=response_delta_callback is not None,
             )
         )

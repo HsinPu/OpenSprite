@@ -10,7 +10,7 @@ from ..openai_compatible import OpenAICompatibleClientMixin
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_RESPONSES_REQUEST_PROFILE, build_llm_request
 from ..request_log_fields import log_llm_request_params
-from ..request_modes import response_format_for_request_mode
+from ..request_modes import resolve_response_format
 from ..response_utils import usage_payload as _usage_payload
 from ..tool_args import parse_tool_arguments
 
@@ -143,11 +143,7 @@ class OpenAIResponsesLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin,
     ) -> LLMResponse:
         _ = status_callback, tool_input_delta_callback
         converted_tools = _responses_tools(tools)
-        resolved_response_format = (
-            response_format
-            if response_format is not None
-            else response_format_for_request_mode(request_mode)
-        )
+        resolved_response_format = resolve_response_format(response_format, request_mode)
         params = build_llm_request(
             _REQUEST_PROFILE.options(
                 model=model or self.default_model,

@@ -11,6 +11,7 @@ from opensprite.llms.request_modes import (
     LLMRequestMode,
     request_kwargs_for_mode,
     request_mode_requires_json_response,
+    resolve_response_format,
 )
 from opensprite.llms.request_builder import (
     OPENAI_CHAT_REQUEST_PROFILE,
@@ -140,6 +141,14 @@ def test_json_only_request_modes_require_provider_json_response():
     assert request_mode_requires_json_response(LLMRequestMode.COMPLETION_VERIFIER) is True
     assert request_mode_requires_json_response("json_planning") is True
     assert request_mode_requires_json_response(LLMRequestMode.MAIN_CHAT) is False
+
+
+def test_resolve_response_format_prefers_explicit_format_over_mode_policy():
+    explicit = {"type": "json_schema", "name": "custom"}
+
+    assert resolve_response_format(explicit, LLMRequestMode.JSON_PLANNING) is explicit
+    assert resolve_response_format(None, LLMRequestMode.JSON_PLANNING) == JSON_OBJECT_RESPONSE_FORMAT
+    assert resolve_response_format(None, LLMRequestMode.MAIN_CHAT) is None
 
 
 def test_request_param_log_fields_are_sanitized_and_provider_neutral():

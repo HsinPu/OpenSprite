@@ -38,6 +38,16 @@ def response_format_for_request_mode(mode: LLMRequestMode | str | None) -> dict[
     return None
 
 
+def resolve_response_format(
+    response_format: dict[str, Any] | None,
+    mode: LLMRequestMode | str | None,
+) -> dict[str, Any] | None:
+    """Prefer an explicit provider response_format, otherwise use request-mode policy."""
+    if response_format is not None:
+        return response_format
+    return response_format_for_request_mode(mode)
+
+
 def request_kwargs_for_mode(
     base_kwargs: Mapping[str, Any] | None,
     mode: LLMRequestMode | str | None,
