@@ -10,23 +10,9 @@ from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_from_effort
 from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
+from ..response_utils import json_safe as _json_safe
 from ..tool_args import parse_tool_arguments
 from ...utils.url import join_url_path
-
-
-def _as_plain_data(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, list):
-        return [_as_plain_data(item) for item in value]
-    if isinstance(value, tuple):
-        return [_as_plain_data(item) for item in value]
-    if isinstance(value, dict):
-        return {str(key): _as_plain_data(item) for key, item in value.items()}
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return _as_plain_data(model_dump())
-    return str(value)
 
 
 def _message_attr(message: ChatMessage | dict[str, Any], key: str, default: Any = None) -> Any:
@@ -213,7 +199,7 @@ class MiniMaxLLM(LLMProvider):
             if block_type == "text":
                 text_parts.append(_coerce_content(block.get("text", "")))
             elif block_type == "thinking":
-                reasoning_details.append(_as_plain_data(block))
+                reasoning_details.append(_json_safe(block))
                 if reasoning_delta_callback is not None:
                     await reasoning_delta_callback(_coerce_content(block.get("thinking", "")))
             elif block_type == "tool_use":
