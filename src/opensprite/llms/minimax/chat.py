@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 
 import httpx
 
-from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from ..base import ChatMessage, DefaultModelProviderMixin, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_from_effort
 from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
@@ -55,7 +55,7 @@ def _convert_tool(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-class MiniMaxLLM(LLMProvider):
+class MiniMaxLLM(DefaultModelProviderMixin, LLMProvider):
     """MiniMax provider using the Anthropic-compatible Messages API."""
 
     def __init__(
@@ -212,6 +212,3 @@ class MiniMaxLLM(LLMProvider):
             finish_reason=str(data.get("stop_reason") or "") or None,
             reasoning_details=reasoning_details or None,
         )
-
-    def get_default_model(self) -> str:
-        return self.default_model

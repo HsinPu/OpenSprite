@@ -153,6 +153,15 @@ class LLMProvider(ABC):
         return {}
 
 
+class DefaultModelProviderMixin:
+    """Mixin for providers that store their default model in self.default_model."""
+
+    default_model: str
+
+    def get_default_model(self) -> str:
+        return self.default_model
+
+
 def is_unconfigured_llm(provider: Any, model: str | None) -> bool:
     """Return whether an LLM provider/model pair represents the unconfigured fallback."""
     return provider is None or isinstance(provider, UnconfiguredLLM) or str(model or "").strip().lower() == UNCONFIGURED_LLM_MODEL

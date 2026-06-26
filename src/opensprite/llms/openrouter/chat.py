@@ -6,7 +6,7 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 """
 from typing import Any, Awaitable, Callable
 
-from ..base import LLMProvider, LLMResponse, ChatMessage
+from ..base import DefaultModelProviderMixin, LLMProvider, LLMResponse, ChatMessage
 from ..openai.streaming import collect_openai_compatible_stream
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
@@ -31,7 +31,7 @@ def _openrouter_reasoning_extra_body(reasoning_config: dict[str, Any] | None) ->
     return {"reasoning": dict(reasoning_config)}
 
 
-class OpenRouterLLM(OpenAICompatibleClientMixin, LLMProvider):
+class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvider):
     """
     OpenRouter LLM 實作
     
@@ -154,6 +154,3 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, LLMProvider):
             default_model=resolved_model,
             reasoning_details_from_message=reasoning_details_from_message,
         )
-    
-    def get_default_model(self) -> str:
-        return self.default_model

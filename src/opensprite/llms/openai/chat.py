@@ -7,7 +7,7 @@ opensprite/llms/openai.py - OpenAI LLM 實作
 from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
-from ..base import LLMProvider, LLMResponse, ChatMessage
+from ..base import DefaultModelProviderMixin, LLMProvider, LLMResponse, ChatMessage
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from ..request_log_fields import log_llm_request_params
@@ -40,7 +40,7 @@ def _openai_chat_reasoning_params(
     return {"reasoning_effort": effort} if effort else {}
 
 
-class OpenAILLM(OpenAICompatibleClientMixin, LLMProvider):
+class OpenAILLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvider):
     """
     OpenAI LLM 實作
     
@@ -144,6 +144,3 @@ class OpenAILLM(OpenAICompatibleClientMixin, LLMProvider):
             provider_name="OpenAI",
             default_model=model or self.default_model,
         )
-    
-    def get_default_model(self) -> str:
-        return self.default_model

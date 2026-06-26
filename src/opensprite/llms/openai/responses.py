@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
+from ..base import ChatMessage, DefaultModelProviderMixin, LLMProvider, LLMResponse, ToolCall
 from ..openai_compatible import build_openai_client_kwargs
 from ..openai_compatible import OpenAICompatibleClientMixin
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
@@ -110,7 +110,7 @@ def _extract_tool_calls(response: Any) -> list[ToolCall]:
     return calls
 
 
-class OpenAIResponsesLLM(OpenAICompatibleClientMixin, LLMProvider):
+class OpenAIResponsesLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvider):
     """OpenAI Responses API provider used by Codex OAuth and direct Responses routes."""
 
     def __init__(
@@ -193,6 +193,3 @@ class OpenAIResponsesLLM(OpenAICompatibleClientMixin, LLMProvider):
             usage=_usage_payload(getattr(response, "usage", None)),
             finish_reason=str(getattr(response, "status", "") or "") or None,
         )
-
-    def get_default_model(self) -> str:
-        return self.default_model
