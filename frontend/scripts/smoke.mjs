@@ -58,6 +58,7 @@ const [
   browserSettings,
   runInspector,
   runHistorySelector,
+  workStateCard,
   logSettings,
   providerSettings,
   modelSettings,
@@ -95,6 +96,7 @@ const [
   read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/components/runHistorySelector.tsx"),
+  read("src/components/workStateCard.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
   read("src/settings/modelSettings.tsx"),
@@ -273,6 +275,7 @@ assertNotIncludes(openSpriteShell, "<select", "app shell avoids raw select eleme
 assertNotIncludes(openSpriteShell, "<textarea", "app shell avoids raw textarea elements");
 assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(runInspector, "RunHistorySelector", "run inspector delegates run history selector");
+assertIncludes(runInspector, "WorkStateCard", "run inspector delegates work state card");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
 assertIncludes(settingsModal, "selectedKeys={[section]}", "settings nav marks active section");
@@ -285,6 +288,10 @@ assertNotIncludes(settingsModal, "const contentBySection", "settings modal shoul
 assertIncludes(styles, ".settings-page--loading", "settings deferred loading state is styled");
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
 assertRegex(runHistorySelector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
+assertIncludes(workStateCard, "className=\"work-state-card\"", "work state card keeps card class");
+assertIncludes(workStateCard, "client.resumeFollowUp", "work state card keeps continue action");
+assertIncludes(workStateCard, "client.runVerification", "work state card keeps verify action");
+assertIncludes(workStateCard, "next_steps.slice(0, 4)", "work state card keeps next step limit");
 assertNotIncludes(openSpriteShell, "BackgroundProcessSidebar", "background process sidebar stays removed");
 assertNotIncludes(openSpriteShell, "CuratorSettingsPage", "curator settings page stays removed");
 
