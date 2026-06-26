@@ -1,5 +1,9 @@
 import { runProviderAuthAction } from "./providerAuthActionRunner";
-import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
+import {
+  createProviderAuthConfigs,
+  createProviderAuthRuntimeConfigs,
+  getProviderAuthConfig,
+} from "./providerAuthConfigs";
 import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
 import {
   requestProviderAuthLogin,
@@ -37,18 +41,9 @@ export function useProviderAuthActions({
     loadCopilotAuthStatus,
   }));
 
-  function resolveProviderAuthId(providerId) {
-    return providerAuthConfigs[providerId] ? providerId : CODEX_PROVIDER_ID;
-  }
-
-  function providerAuthConfig(providerId) {
-    return providerAuthConfigs[resolveProviderAuthId(providerId)];
-  }
-
   function scheduleProviderAuthPollById(providerId) {
-    const resolvedProviderId = resolveProviderAuthId(providerId);
-    const config = providerAuthConfig(resolvedProviderId);
-    scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey], () => pollProviderAuthLoginById(resolvedProviderId));
+    const config = getProviderAuthConfig(providerAuthConfigs, providerId);
+    scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey], () => pollProviderAuthLoginById(config.providerId));
   }
 
   async function loadProviderAuthStatus(config) {
@@ -59,7 +54,7 @@ export function useProviderAuthActions({
   }
 
   async function loadProviderAuthStatusById(providerId) {
-    return loadProviderAuthStatus(providerAuthConfig(providerId));
+    return loadProviderAuthStatus(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function loadCodexAuthStatus() {
@@ -84,7 +79,7 @@ export function useProviderAuthActions({
   }
 
   async function connectOAuthProviderById(provider, providerId) {
-    return connectOAuthBackedProvider(provider, providerAuthConfig(providerId));
+    return connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function connectCodexProvider(provider) {
@@ -139,15 +134,15 @@ export function useProviderAuthActions({
   }
 
   async function startProviderAuthLoginById(providerId) {
-    return startProviderAuthLogin(providerAuthConfig(providerId));
+    return startProviderAuthLogin(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function pollProviderAuthLoginById(providerId) {
-    return pollProviderAuthLogin(providerAuthConfig(providerId));
+    return pollProviderAuthLogin(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function logoutProviderAuthById(providerId) {
-    return logoutProviderAuth(providerAuthConfig(providerId));
+    return logoutProviderAuth(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function pollProviderAuthLogin(config) {

@@ -320,6 +320,9 @@ assertNotIncludes(providerAuthActions, "const providerAuthStatusConfigs", "provi
 assertIncludes(providerAuthActions, "const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({", "provider auth actions assemble auth provider configs");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthConfigs", "provider auth configs centralize provider-specific auth config");
 assertIncludes(providerAuthConfigs, "export function createProviderAuthRuntimeConfigs", "provider auth configs centralize provider runtime metadata");
+assertIncludes(providerAuthConfigs, "export function resolveProviderAuthConfigId", "provider auth configs centralize provider id fallback");
+assertIncludes(providerAuthConfigs, "export function getProviderAuthConfig", "provider auth configs centralize provider config lookup");
+assertIncludes(providerAuthActions, "getProviderAuthConfig(providerAuthConfigs, providerId)", "provider auth actions reuse provider config lookup helper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth status wrapper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth status wrapper");
 assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
@@ -392,10 +395,10 @@ assertIncludes(providerAuthState, "export function clearedDeviceAuthState", "pro
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceAuthId\")", "provider auth configs keep Codex cleared device auth id state");
 assertIncludes(providerAuthConfigs, "clearedDeviceAuthState(\"deviceCode\")", "provider auth configs keep Copilot cleared device code state");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
-assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, providerAuthConfig(providerId))", "provider auth actions reuse auth provider config for OAuth connect");
+assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerId))", "provider auth actions reuse auth provider config lookup for OAuth connect");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot OAuth wrapper");
-assertIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions centralize provider id fallback");
+assertNotIncludes(providerAuthActions, "function resolveProviderAuthId", "provider auth actions no longer own provider id fallback");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, provider?.id)", "provider auth actions route OAuth connect through provider id resolver");
 assertIncludes(useSettingsState, "providerAuthInitialState(CODEX_AUTH_STATE_KEYS", "settings state initializes Codex auth through provider metadata");
 assertIncludes(useSettingsState, "providerAuthInitialState(COPILOT_AUTH_STATE_KEYS", "settings state initializes Copilot auth through provider metadata");
@@ -408,7 +411,7 @@ assertIncludes(providerAuthPollTimers, "providerAuthPollTimers.set(providerId", 
 assertIncludes(providerAuthPollTimers, "window.setTimeout", "provider auth poll timers keep browser timer scheduling");
 assertIncludes(providerAuthConfigs, "clearPoll: () => clearProviderAuthPollTimer(providerId)", "provider auth runtime config keeps auth timer clearing");
 assertIncludes(providerAuthConfigs, "schedulePoll: () => scheduleProviderAuthPollById(providerId)", "provider auth runtime config keeps auth poll scheduling");
-assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");
+assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertNotIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions no longer split auth flow configs");
