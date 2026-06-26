@@ -1,3 +1,5 @@
+import { CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID } from "../settings/providerConstants";
+
 export function useProviderSettingsActions({
   settingsState,
   requestSettingsJson,
@@ -42,7 +44,7 @@ export function useProviderSettingsActions({
   }
 
   const providerAuthStatusConfigs = {
-    "openai-codex": {
+    [CODEX_PROVIDER_ID]: {
       endpoint: "/api/settings/auth/openai-codex",
       loadingKey: "codexAuthLoading",
       errorKey: "codexAuthError",
@@ -56,7 +58,7 @@ export function useProviderSettingsActions({
         path: payload.path || "",
       }),
     },
-    copilot: {
+    [COPILOT_PROVIDER_ID]: {
       endpoint: "/api/settings/auth/copilot",
       loadingKey: "copilotAuthLoading",
       errorKey: "copilotAuthError",
@@ -70,7 +72,7 @@ export function useProviderSettingsActions({
   };
 
   function providerAuthStatusConfig(providerId) {
-    return providerAuthStatusConfigs[providerId] || providerAuthStatusConfigs["openai-codex"];
+    return providerAuthStatusConfigs[providerId] || providerAuthStatusConfigs[CODEX_PROVIDER_ID];
   }
 
   async function loadProviderAuthStatusById(providerId) {
@@ -78,11 +80,11 @@ export function useProviderSettingsActions({
   }
 
   async function loadCodexAuthStatus() {
-    return loadProviderAuthStatusById("openai-codex");
+    return loadProviderAuthStatusById(CODEX_PROVIDER_ID);
   }
 
   async function loadCopilotAuthStatus() {
-    return loadProviderAuthStatusById("copilot");
+    return loadProviderAuthStatusById(COPILOT_PROVIDER_ID);
   }
 
   function beginProviderConnect(provider) {
@@ -210,15 +212,15 @@ export function useProviderSettingsActions({
   }
 
   const oauthProviderConfigs = {
-    "openai-codex": {
-      providerId: "openai-codex",
+    [CODEX_PROVIDER_ID]: {
+      providerId: CODEX_PROVIDER_ID,
       providerName: "OpenAI Codex",
       authNoticeKey: "codexAuthNotice",
       connectedNotice: () => copy.value.notices.codexProviderConnected,
       startAuthLogin: startCodexAuthLogin,
     },
-    copilot: {
-      providerId: "copilot",
+    [COPILOT_PROVIDER_ID]: {
+      providerId: COPILOT_PROVIDER_ID,
       providerName: "GitHub Copilot",
       authNoticeKey: "copilotAuthNotice",
       connectedNotice: () => copy.value.notices.copilotProviderConnected,
@@ -227,7 +229,7 @@ export function useProviderSettingsActions({
   };
 
   function oauthProviderConfig(providerId) {
-    return oauthProviderConfigs[providerId] || oauthProviderConfigs["openai-codex"];
+    return oauthProviderConfigs[providerId] || oauthProviderConfigs[CODEX_PROVIDER_ID];
   }
 
   async function connectOAuthProviderById(provider, providerId) {
@@ -239,15 +241,15 @@ export function useProviderSettingsActions({
   }
 
   async function connectCodexProvider(provider) {
-    return connectOAuthProviderById(provider, "openai-codex");
+    return connectOAuthProviderById(provider, CODEX_PROVIDER_ID);
   }
 
   async function connectCopilotProvider(provider) {
-    return connectOAuthProviderById(provider, "copilot");
+    return connectOAuthProviderById(provider, COPILOT_PROVIDER_ID);
   }
 
   async function connectOAuthProvider(provider) {
-    await connectOAuthProviderById(provider, provider?.id === "copilot" ? "copilot" : "openai-codex");
+    await connectOAuthProviderById(provider, provider?.id === COPILOT_PROVIDER_ID ? COPILOT_PROVIDER_ID : CODEX_PROVIDER_ID);
   }
 
   return {
