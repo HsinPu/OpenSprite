@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
+
+from .base import LLMResponse
+from .response_utils import coerce_content
+from .response_utils import extract_openai_compatible_message
+from .response_utils import extract_openai_compatible_tool_calls
+from .response_utils import usage_payload
 
 
 class OpenAICompatibleClientMixin:
@@ -22,3 +29,34 @@ class OpenAICompatibleClientMixin:
             return True
         except Exception:
             return False
+
+
+def build_openai_compatible_response(
+    response: Any,
+    *,
+    provider_name: str,
+    default_model: str,
+    reasoning_details_from_message: Callable[[Any], list[dict[str, Any]] | None] | None = None,
+) -> LLMResponse:
+    """Build a normalized LLMResponse from an OpenAI-compatible chat response."""
+    message_result = extract_openai_compatible_message(
+        response,
+        provider_name=provider_name,
+        default_model=default_model,
+    )
+    if message_result.fallback_response is not None:
+        return message_result.fallback_response
+
+    message = message_result.message
+    return LLMResponse(
+        content=coerce_content(getattr(message, "content", "")),
+        model=getattr(response, "model", default_model),
+        tool_calls=extract_openai_compatible_tool_calls(message, provider_name=provider_name),
+        usage=usage_payload(getattr(response, "usage", None)),
+        finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,
+        reasoning_details=(
+            reasoning_details_from_message(message)
+            if reasoning_details_from_message is not None
+            else None
+        ),
+    )

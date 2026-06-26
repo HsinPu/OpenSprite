@@ -13,11 +13,8 @@ from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_ll
 from ..request_log_fields import log_llm_request_params
 from ..request_modes import response_format_for_request_mode
 from ..openai_compatible import OpenAICompatibleClientMixin
-from ..response_utils import coerce_content as _coerce_content
+from ..openai_compatible import build_openai_compatible_response
 from ..response_utils import coerce_reasoning_details
-from ..response_utils import extract_openai_compatible_message
-from ..response_utils import extract_openai_compatible_tool_calls
-from ..response_utils import usage_payload as _usage_payload
 from ...utils.log import logger
 
 
@@ -143,27 +140,18 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, LLMProvider):
 
         # 呼叫 API
         response = await self._create_completion(params)
-        message_result = extract_openai_compatible_message(
+
+        def reasoning_details_from_message(message: Any) -> list[dict[str, Any]] | None:
+            reasoning_details = coerce_reasoning_details(getattr(message, "reasoning_details", None))
+            if reasoning_details:
+                logger.info("OpenRouter response reasoning_details count={}", len(reasoning_details))
+            return reasoning_details
+
+        return build_openai_compatible_response(
             response,
             provider_name="OpenRouter",
             default_model=resolved_model,
-        )
-        if message_result.fallback_response is not None:
-            return message_result.fallback_response
-        message = message_result.message
-        tool_calls = extract_openai_compatible_tool_calls(message, provider_name="OpenRouter")
-
-        reasoning_details = coerce_reasoning_details(getattr(message, "reasoning_details", None))
-        if reasoning_details:
-            logger.info("OpenRouter response reasoning_details count={}", len(reasoning_details))
-        
-        return LLMResponse(
-            content=_coerce_content(getattr(message, "content", "")),
-            model=getattr(response, "model", resolved_model),
-            tool_calls=tool_calls,
-            usage=_usage_payload(getattr(response, "usage", None)),
-            finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,
-            reasoning_details=reasoning_details,
+            reasoning_details_from_message=reasoning_details_from_message,
         )
     
     def get_default_model(self) -> str:

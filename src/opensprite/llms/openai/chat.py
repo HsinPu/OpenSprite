@@ -13,10 +13,7 @@ from ..request_builder import OPENAI_CHAT_REQUEST_PROFILE, build_llm_request, no
 from ..request_log_fields import log_llm_request_params
 from ..request_modes import response_format_for_request_mode
 from ..openai_compatible import OpenAICompatibleClientMixin
-from ..response_utils import coerce_content as _coerce_content
-from ..response_utils import extract_openai_compatible_message
-from ..response_utils import extract_openai_compatible_tool_calls
-from ..response_utils import usage_payload as _usage_payload
+from ..openai_compatible import build_openai_compatible_response
 from .streaming import collect_openai_compatible_stream
 
 
@@ -141,22 +138,10 @@ class OpenAILLM(OpenAICompatibleClientMixin, LLMProvider):
 
         # 呼叫 API
         response = await self.client.chat.completions.create(**params)
-        message_result = extract_openai_compatible_message(
+        return build_openai_compatible_response(
             response,
             provider_name="OpenAI",
             default_model=model or self.default_model,
-        )
-        if message_result.fallback_response is not None:
-            return message_result.fallback_response
-        message = message_result.message
-        tool_calls = extract_openai_compatible_tool_calls(message, provider_name="OpenAI")
-        
-        return LLMResponse(
-            content=_coerce_content(getattr(message, "content", "")),
-            model=getattr(response, "model", model or self.default_model),
-            tool_calls=tool_calls,
-            usage=_usage_payload(getattr(response, "usage", None)),
-            finish_reason=str(getattr(message_result.choice, "finish_reason", "") or "") or None,
         )
     
     def get_default_model(self) -> str:
