@@ -64,6 +64,7 @@ const [
   workStateCard,
   authProviderCard,
   providerAuthSection,
+  connectedProviderRow,
   availableProvidersSection,
   connectedProvidersSection,
   providerConnectDialog,
@@ -110,6 +111,7 @@ const [
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
   read("src/settings/providerAuthSection.tsx"),
+  read("src/settings/connectedProviderRow.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
   read("src/settings/connectedProvidersSection.tsx"),
   read("src/settings/providerConnectDialog.tsx"),
@@ -264,12 +266,13 @@ assertIncludes(availableProvidersSection, "provider.auth_type === \"github_copil
 assertIncludes(availableProvidersSection, "onConnectOAuth(provider) : onBeginConnect(provider)", "available providers keeps connect routing");
 assertIncludes(availableProvidersSection, "providerCopy.builtInBadge", "available providers keeps built-in badge");
 assertIncludes(availableProvidersSection, "providerCopy.noAvailableTitle", "available providers keeps empty state title");
-assertIncludes(connectedProvidersSection, "providerCredentials(state, provider)", "connected providers keeps credential lookup");
-assertIncludes(connectedProvidersSection, "providerEffectiveCredentialId(provider)", "connected providers keeps effective credential lookup");
-assertIncludes(connectedProvidersSection, "onSetCredential(provider, value)", "connected providers keeps credential switch action");
-assertIncludes(connectedProvidersSection, "onDeleteCredential(provider, effectiveCredentialId)", "connected providers keeps credential deletion action");
-assertIncludes(connectedProvidersSection, "onDisconnect(provider)", "connected providers keeps disconnect action");
-assertIncludes(connectedProvidersSection, "provider-row__credential--missing", "connected providers keeps missing credential state");
+assertIncludes(connectedProvidersSection, "ConnectedProviderRow", "connected providers delegates connected provider row");
+assertIncludes(connectedProviderRow, "providerCredentials(state, provider)", "connected provider row keeps credential lookup");
+assertIncludes(connectedProviderRow, "providerEffectiveCredentialId(provider)", "connected provider row keeps effective credential lookup");
+assertIncludes(connectedProviderRow, "onSetCredential(provider, value)", "connected provider row keeps credential switch action");
+assertIncludes(connectedProviderRow, "onDeleteCredential(provider, effectiveCredentialId)", "connected provider row keeps credential deletion action");
+assertIncludes(connectedProviderRow, "onDisconnect(provider)", "connected provider row keeps disconnect action");
+assertIncludes(connectedProviderRow, "provider-row__credential--missing", "connected provider row keeps missing credential state");
 assertIncludes(providerConnectDialog, "role=\"dialog\"", "provider connect dialog keeps dialog role");
 assertIncludes(providerConnectDialog, "provider.requires_api_key !== false || provider.api_key_optional === true", "provider connect dialog keeps API key requirement rule");
 assertIncludes(providerConnectDialog, "state.connectForm.showAdvanced = !state.connectForm.showAdvanced", "provider connect dialog keeps advanced toggle");
