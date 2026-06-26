@@ -36,17 +36,23 @@ export function useProviderAuthActions({
     }, delayMs));
   }
 
+  function providerAuthRuntimeConfig(providerId, providerName, connectedNoticeKey, loadStatus) {
+    return {
+      providerName,
+      connectedNotice: () => copy.value.notices[connectedNoticeKey],
+      startAuthLogin: () => startProviderAuthLoginById(providerId),
+      clearPoll: () => clearProviderAuthPollTimer(providerId),
+      schedulePoll: () => scheduleProviderAuthPollById(providerId),
+      loadStatus,
+    };
+  }
+
   const providerAuthConfigs = {
     [CODEX_PROVIDER_ID]: {
       ...providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS),
-      providerName: CODEX_PROVIDER_NAME,
-      connectedNotice: () => copy.value.notices.codexProviderConnected,
-      startAuthLogin: () => startProviderAuthLoginById(CODEX_PROVIDER_ID),
-      clearPoll: () => clearProviderAuthPollTimer(CODEX_PROVIDER_ID),
-      schedulePoll: () => scheduleProviderAuthPollById(CODEX_PROVIDER_ID),
+      ...providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME, "codexProviderConnected", loadCodexAuthStatus),
       hasPendingPoll: (auth) => Boolean(auth.deviceAuthId && auth.userCode),
       buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode }),
-      loadStatus: loadCodexAuthStatus,
       normalizeStatus: (payload) => ({
         configured: Boolean(payload.configured),
         expired: Boolean(payload.expired),
@@ -85,14 +91,9 @@ export function useProviderAuthActions({
     },
     [COPILOT_PROVIDER_ID]: {
       ...providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS),
-      providerName: COPILOT_PROVIDER_NAME,
-      connectedNotice: () => copy.value.notices.copilotProviderConnected,
-      startAuthLogin: () => startProviderAuthLoginById(COPILOT_PROVIDER_ID),
-      clearPoll: () => clearProviderAuthPollTimer(COPILOT_PROVIDER_ID),
-      schedulePoll: () => scheduleProviderAuthPollById(COPILOT_PROVIDER_ID),
+      ...providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME, "copilotProviderConnected", loadCopilotAuthStatus),
       hasPendingPoll: (auth) => Boolean(auth.deviceCode),
       buildPollBody: (auth) => ({ device_code: auth.deviceCode }),
-      loadStatus: loadCopilotAuthStatus,
       normalizeStatus: (payload) => ({
         configured: Boolean(payload.configured),
         path: payload.path || "",

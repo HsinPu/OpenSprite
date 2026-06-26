@@ -314,8 +314,9 @@ assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.no
 assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
 assertIncludes(providerSettingsActions, "await runProviderMutation(copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
 assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth actions reuse provider connect endpoint helper");
-assertIncludes(providerAuthActions, "providerName: CODEX_PROVIDER_NAME", "provider auth actions reuse Codex provider name");
-assertIncludes(providerAuthActions, "providerName: COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot provider name");
+assertIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions centralize runtime config fields");
+assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth actions reuse Codex runtime config helper");
+assertIncludes(providerAuthActions, "providerAuthRuntimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth actions reuse Copilot runtime config helper");
 assertIncludes(providerAuthActions, "settingsState[options.noticeKey]", "provider auth actions reuse provider auth notice state key");
 assertIncludes(providerAuthActions, "connectOAuthBackedProvider(provider, providerAuthConfig(providerId))", "provider auth actions reuse auth provider config for OAuth connect");
 assertIncludes(providerAuthActions, "connectOAuthProviderById(provider, CODEX_PROVIDER_ID)", "provider auth actions keep Codex OAuth wrapper");
@@ -329,10 +330,8 @@ assertIncludes(chatClient, "clearProviderAuthPollTimers();", "chat client clears
 assertNotIncludes(chatClient, "const providerAuthPollTimers", "chat client no longer owns provider auth poll timers");
 assertIncludes(providerAuthActions, "const providerAuthPollTimers = new Map()", "provider auth actions centralize provider auth poll timers");
 assertIncludes(providerAuthActions, "providerAuthPollTimers.set(providerId", "provider auth actions store auth poll timers by provider id");
-assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth timer wrapper");
-assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth timer wrapper");
-assertIncludes(providerAuthActions, "schedulePoll: () => scheduleProviderAuthPollById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth poll scheduling");
-assertIncludes(providerAuthActions, "schedulePoll: () => scheduleProviderAuthPollById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth poll scheduling");
+assertIncludes(providerAuthActions, "clearPoll: () => clearProviderAuthPollTimer(providerId)", "provider auth runtime config keeps auth timer clearing");
+assertIncludes(providerAuthActions, "schedulePoll: () => scheduleProviderAuthPollById(providerId)", "provider auth runtime config keeps auth poll scheduling");
 assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
