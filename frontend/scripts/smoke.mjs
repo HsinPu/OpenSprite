@@ -43,6 +43,7 @@ const [
   styles,
   reactiveCompat,
   chatClient,
+  browserSettings,
   runInspector,
   logSettings,
   providerSettings,
@@ -62,6 +63,7 @@ const [
   read("styles.css"),
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
+  read("src/settings/browserSettings.tsx"),
   read("src/components/runInspector.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
@@ -120,8 +122,8 @@ assertIncludes(app, "client.selectRun(runId)", "trace action selects the request
 assertIncludes(app, "client.toggleTraceInspectorCollapsed()", "trace action opens collapsed inspector");
 assertIncludes(app, "client.currentRuns.value", "run history uses active session runs");
 assertIncludes(app, "client.settingsState", "settings API state remains wired");
-assertIncludes(app, "client.saveBrowserSettings", "browser settings save action");
-assertIncludes(app, "client.runBrowserTest", "browser manual test action");
+assertIncludes(browserSettings, "client.saveBrowserSettings", "browser settings save action");
+assertIncludes(browserSettings, "client.runBrowserTest", "browser manual test action");
 assertIncludes(mcpSettings, "client.saveMcpServer", "MCP settings action");
 assertIncludes(modelSettings, "client.selectModel", "model selection action");
 assertIncludes(app, "client.clearWebSessions()", "web history cleanup action");
@@ -156,10 +158,12 @@ assertIncludes(logSettings, "form.retentionDays", "log settings keeps retention 
 assertIncludes(logSettings, "form.logSystemPrompt", "log settings keeps system prompt toggle");
 assertIncludes(logSettings, "form.logSystemPromptLines", "log settings keeps system prompt line limit");
 assertIncludes(logSettings, "form.logReasoningDetails", "log settings keeps reasoning detail toggle");
-assertIncludes(app, "form.commandTimeout", "browser settings keeps command timeout");
-assertIncludes(app, "form.sessionTimeout", "browser settings keeps session timeout");
-assertIncludes(app, "form.allowPrivateUrls", "browser settings keeps private URL toggle");
-assertNotIncludes(app, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
+assertIncludes(browserSettings, "form.commandTimeout", "browser settings keeps command timeout");
+assertIncludes(browserSettings, "form.sessionTimeout", "browser settings keeps session timeout");
+assertIncludes(browserSettings, "form.allowPrivateUrls", "browser settings keeps private URL toggle");
+assertIncludes(browserSettings, "client.runBrowserDoctor", "browser settings keeps doctor action");
+assertIncludes(browserSettings, "client.runBrowserInstall", "browser settings keeps install action");
+assertNotIncludes(browserSettings, "sessionTimeoutSeconds", "browser settings avoids stale session timeout field");
 assertIncludes(app, "shortcut-keys", "shortcut settings uses parity layout");
 assertIncludes(settingsPrimitives, "function SettingsCard", "settings pages use Ant card helper");
 assertIncludes(app, "<SettingsCard className=\"settings-card--form\"", "settings form cards use Ant card helper");
