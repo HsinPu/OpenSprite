@@ -31,7 +31,6 @@ export function useProviderAuthActions({
 
   const providerAuthConfigs = createProviderAuthConfigs(createProviderAuthRuntimeConfigs({
     startAuthLoginById,
-    clearProviderAuthPollTimer,
     loadProviderAuthStatusById,
   }));
 
@@ -77,7 +76,7 @@ export function useProviderAuthActions({
       }
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
       scheduleProviderAuthPollById(config.providerId);
-    }, { clearNotice: true, before: config.clearPoll });
+    }, { clearNotice: true, before: () => clearProviderAuthPollTimer(config.providerId) });
   }
 
   async function pollProviderAuthLoginById(providerId) {
@@ -100,7 +99,7 @@ export function useProviderAuthActions({
       scheduleProviderAuthPollById(config.providerId);
     } catch (error) {
       setProviderAuthError(settingsState, copy, config, config.loginFailedNoticeKey, error);
-      config.clearPoll();
+      clearProviderAuthPollTimer(config.providerId);
     }
   }
 
@@ -110,7 +109,7 @@ export function useProviderAuthActions({
       await requestProviderAuthLogout(requestSettingsJson, config);
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
-    }, { clearNotice: true, before: config.clearPoll, after: config.loadStatus });
+    }, { clearNotice: true, before: () => clearProviderAuthPollTimer(config.providerId), after: config.loadStatus });
   }
 
   function clearProviderAuthPollTimers() {

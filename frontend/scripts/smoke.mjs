@@ -441,7 +441,8 @@ assertIncludes(providerAuthActions, "createProviderAuthPollTimers()", "provider 
 assertIncludes(providerAuthPollTimers, "const providerAuthPollTimers = new Map()", "provider auth poll timers centralize provider auth poll timers");
 assertIncludes(providerAuthPollTimers, "providerAuthPollTimers.set(providerId", "provider auth poll timers store auth poll timers by provider id");
 assertIncludes(providerAuthPollTimers, "window.setTimeout", "provider auth poll timers keep browser timer scheduling");
-assertIncludes(providerAuthConfigs, "clearPoll: () => clearProviderAuthPollTimer(providerId)", "provider auth runtime config keeps auth timer clearing");
+assertNotIncludes(providerAuthConfigs, "clearPoll", "provider auth configs avoid auth poll clearing closure");
+assertIncludes(providerAuthActions, "clearProviderAuthPollTimer(config.providerId)", "provider auth actions clear polling through provider id");
 assertNotIncludes(providerAuthConfigs, "schedulePoll", "provider auth configs avoid auth poll scheduling closure");
 assertIncludes(providerAuthActions, "scheduleProviderAuthPoll(config.providerId, settingsState[config.authKey]", "provider auth actions schedule polling through resolved provider config");
 assertIncludes(providerAuthActions, "scheduleProviderAuthPollById(config.providerId)", "provider auth actions reschedule polling through provider id");
