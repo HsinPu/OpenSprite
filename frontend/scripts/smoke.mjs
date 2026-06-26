@@ -291,8 +291,8 @@ assertIncludes(providerConstants, "return providerAuthSectionForId(providerId)?.
 assertNotIncludes(providerConstants, "PROVIDER_AUTH_KEYS", "provider constants avoid duplicate auth key map ownership");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
-assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
-assertIncludes(providerConstants, "COPILOT_AUTH_KEY = \"copilotAuth\"", "provider constants keep Copilot auth key");
+assertIncludes(providerConstants, "providerAuthStateKeys(\"codexAuth\")", "provider constants keep Codex auth key in provider metadata");
+assertIncludes(providerConstants, "providerAuthStateKeys(\"copilotAuth\")", "provider constants keep Copilot auth key in provider metadata");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_KEY", "provider constants keep Codex auth key internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_KEY", "provider constants keep Copilot auth key internal");
 assertIncludes(providerConstants, "function providerAuthStateKeys", "provider constants expose auth state key factory");
@@ -300,8 +300,8 @@ assertIncludes(providerConstants, "function providerAuthInitialState", "provider
 assertIncludes(providerConstants, "function createProviderAuthInitialStates", "provider constants centralize provider auth initial states");
 assertIncludes(providerConstants, "function providerDeviceAuthInitialState", "provider constants share device auth initial state defaults");
 assertIncludes(providerConstants, "PROVIDER_AUTH_SECTION_CONFIGS", "provider constants centralize provider auth section metadata");
-assertIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS = providerAuthStateKeys(CODEX_AUTH_KEY)", "provider constants keep Codex auth state keys");
-assertIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS = providerAuthStateKeys(COPILOT_AUTH_KEY)", "provider constants keep Copilot auth state keys");
+assertNotIncludes(providerConstants, "const CODEX_AUTH_KEY", "provider constants avoid Codex auth key middle constant");
+assertNotIncludes(providerConstants, "const COPILOT_AUTH_KEY", "provider constants avoid Copilot auth key middle constant");
 assertIncludes(providerConstants, "connectedNoticeKey: authKey.replace(/Auth$/, \"ProviderConnected\")", "provider constants derive provider connected notices from auth keys");
 assertNotIncludes(providerConstants, "export const CODEX_AUTH_STATE_KEYS", "provider constants keep Codex auth state keys internal");
 assertNotIncludes(providerConstants, "export const COPILOT_AUTH_STATE_KEYS", "provider constants keep Copilot auth state keys internal");
@@ -343,8 +343,8 @@ assertIncludes(providerConstants, "providerId: CODEX_PROVIDER_ID", "provider con
 assertIncludes(providerConstants, "providerId: COPILOT_PROVIDER_ID", "provider constants keep Copilot auth provider section");
 assertIncludes(providerAuthSections, "PROVIDER_AUTH_SECTION_CONFIGS.map", "provider auth sections consume provider section metadata");
 assertIncludes(providerAuthSections, "key: config.providerId", "provider auth sections derive section key from provider id");
-assertIncludes(providerConstants, "...CODEX_AUTH_STATE_KEYS", "provider constants reuse Codex auth state keys for section metadata");
-assertIncludes(providerConstants, "...COPILOT_AUTH_STATE_KEYS", "provider constants reuse Copilot auth state keys for section metadata");
+assertNotIncludes(providerConstants, "CODEX_AUTH_STATE_KEYS", "provider constants avoid Codex auth state key middle constant");
+assertNotIncludes(providerConstants, "COPILOT_AUTH_STATE_KEYS", "provider constants avoid Copilot auth state key middle constant");
 assertIncludes(providerConstants, "providerName: CODEX_PROVIDER_NAME", "provider constants reuse Codex provider name for section metadata");
 assertIncludes(providerConstants, "providerName: COPILOT_PROVIDER_NAME", "provider constants reuse Copilot provider name for section metadata");
 assertNotIncludes(providerAuthSections, "CODEX_AUTH_STATE_KEYS", "provider auth sections avoid owning Codex auth state metadata");
