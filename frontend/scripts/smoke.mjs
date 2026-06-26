@@ -60,6 +60,7 @@ const [
   runHistorySelector,
   runSummaryCard,
   runTimeline,
+  runTraceViewer,
   workStateCard,
   logSettings,
   providerSettings,
@@ -100,6 +101,7 @@ const [
   read("src/components/runHistorySelector.tsx"),
   read("src/components/runSummaryCard.tsx"),
   read("src/components/runTimeline.tsx"),
+  read("src/components/runTraceViewer.tsx"),
   read("src/components/workStateCard.tsx"),
   read("src/settings/logSettings.tsx"),
   read("src/settings/providerSettings.tsx"),
@@ -277,10 +279,10 @@ assertNotIncludes(openSpriteShell, "<button", "app shell avoids raw button eleme
 assertNotIncludes(openSpriteShell, "<input", "app shell avoids raw input elements");
 assertNotIncludes(openSpriteShell, "<select", "app shell avoids raw select elements");
 assertNotIncludes(openSpriteShell, "<textarea", "app shell avoids raw textarea elements");
-assertIncludes(runInspector, "JSON.stringify({ run, exported_at", "trace debug JSON export");
 assertIncludes(runInspector, "RunHistorySelector", "run inspector delegates run history selector");
 assertIncludes(runInspector, "RunSummaryCard", "run inspector delegates run summary card");
 assertIncludes(runInspector, "RunTimeline", "run inspector delegates run timeline");
+assertIncludes(runInspector, "RunTraceViewer", "run inspector delegates run trace viewer");
 assertIncludes(runInspector, "WorkStateCard", "run inspector delegates work state card");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
@@ -303,6 +305,12 @@ assertIncludes(runTimeline, "className=\"run-timeline\"", "run timeline keeps ca
 assertIncludes(runTimeline, "copy.timeline?.title || copy.runHistory.title", "run timeline keeps fallback title");
 assertIncludes(runTimeline, "event.tone === \"error\" ? \"red\"", "run timeline keeps event tone mapping");
 assertIncludes(runTimeline, "Empty.PRESENTED_IMAGE_SIMPLE", "run timeline keeps empty state");
+assertIncludes(runTraceViewer, "JSON.stringify({ run, exported_at", "trace viewer keeps debug JSON export");
+assertIncludes(runTraceViewer, "URL.revokeObjectURL(url)", "trace viewer releases debug JSON URL");
+assertIncludes(runTraceViewer, "events.slice(-120)", "trace viewer keeps event limit");
+assertIncludes(runTraceViewer, "revertFileChange(run, change)", "trace viewer keeps file revert action");
+assertIncludes(runTraceViewer, "cancelRun(run)", "trace viewer keeps cancel action");
+assertIncludes(runTraceViewer, "defaultActiveKey={[\"artifacts\"]}", "trace viewer keeps default section");
 assertIncludes(workStateCard, "className=\"work-state-card\"", "work state card keeps card class");
 assertIncludes(workStateCard, "client.resumeFollowUp", "work state card keeps continue action");
 assertIncludes(workStateCard, "client.runVerification", "work state card keeps verify action");
