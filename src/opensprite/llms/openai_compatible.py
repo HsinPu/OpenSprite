@@ -39,6 +39,9 @@ class OpenAICompatibleClientMixin:
 
         return AsyncOpenAI(**self._client_kwargs)
 
+    async def _create_chat_completion(self, params: dict[str, Any]) -> Any:
+        return await self.client.chat.completions.create(**params)
+
     def recover_after_error(self, error: BaseException) -> bool:
         _ = error
         try:

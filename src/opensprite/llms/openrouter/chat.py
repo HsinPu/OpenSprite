@@ -84,9 +84,6 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMP
         )
         self.client = self._build_client()
 
-    async def _create_completion(self, params: dict[str, Any]):
-        return await self.client.chat.completions.create(**params)
-    
     async def chat(
         self, 
         messages: list[ChatMessage], 
@@ -125,7 +122,7 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMP
         log_llm_request_params("OpenRouter", params, request_mode=request_mode)
 
         if response_delta_callback is not None:
-            stream = await self._create_completion(params)
+            stream = await self._create_chat_completion(params)
             return await collect_openai_compatible_stream(
                 stream,
                 provider_name="OpenRouter",
@@ -136,7 +133,7 @@ class OpenRouterLLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMP
             )
 
         # 呼叫 API
-        response = await self._create_completion(params)
+        response = await self._create_chat_completion(params)
 
         def reasoning_details_from_message(message: Any) -> list[dict[str, Any]] | None:
             reasoning_details = coerce_reasoning_details(getattr(message, "reasoning_details", None))

@@ -123,7 +123,7 @@ class OpenAILLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvi
         log_llm_request_params("OpenAI", params, request_mode=request_mode)
 
         if response_delta_callback is not None:
-            stream = await self.client.chat.completions.create(**params)
+            stream = await self._create_chat_completion(params)
             return await collect_openai_compatible_stream(
                 stream,
                 provider_name="OpenAI",
@@ -134,7 +134,7 @@ class OpenAILLM(OpenAICompatibleClientMixin, DefaultModelProviderMixin, LLMProvi
             )
 
         # 呼叫 API
-        response = await self.client.chat.completions.create(**params)
+        response = await self._create_chat_completion(params)
         return build_openai_compatible_response(
             response,
             provider_name="OpenAI",
