@@ -24,3 +24,11 @@ export function normalizeEventTimestamp(value) {
   }
   return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
 }
+
+export function previewText(value) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+}

@@ -4,20 +4,13 @@ import {
   coerceNonNegativeInteger,
   coerceStringList,
   normalizeEventTimestamp,
+  previewText,
 } from "./chatClientCoercion";
 
 const MAX_RUN_EVENTS = 80;
 const MAX_RUN_TEXT_EVENTS = 24;
 
 const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "work", "completion", "file", "process", "text", "system", "other"]);
-
-function previewText(value) {
-  const normalized = String(value || "").replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
 
 function compactJoin(values, separator = " · ") {
   return values.map((value) => String(value || "").trim()).filter(Boolean).join(separator);

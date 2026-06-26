@@ -7,6 +7,7 @@ import {
   coerceNonNegativeInteger,
   coerceStringList,
   normalizeEventTimestamp,
+  previewText,
 } from "./chatClientCoercion";
 import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
@@ -180,14 +181,6 @@ function resolveDefaultWsUrl() {
 }
 
 const DEFAULT_WS_URL = resolveDefaultWsUrl();
-
-function previewText(value) {
-  const normalized = String(value || "").replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-}
 
 function normalizeCommandCatalog(payload) {
   const commands = Array.isArray(payload?.commands) ? payload.commands : [];
