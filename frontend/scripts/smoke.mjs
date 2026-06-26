@@ -50,6 +50,7 @@ const [
   providerSettingsRequests,
   providerAuthActions,
   providerAuthActionRunner,
+  providerAuthRequests,
   providerAuthConfigs,
   providerAuthPollTimers,
   providerAuthState,
@@ -114,6 +115,7 @@ const [
   read("src/composables/providerSettingsRequests.js"),
   read("src/composables/useProviderAuthActions.js"),
   read("src/composables/providerAuthActionRunner.js"),
+  read("src/composables/providerAuthRequests.js"),
   read("src/composables/providerAuthConfigs.js"),
   read("src/composables/providerAuthPollTimers.js"),
   read("src/composables/providerAuthState.js"),
@@ -321,7 +323,9 @@ assertIncludes(providerAuthConfigs, "export function createProviderAuthRuntimeCo
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(CODEX_PROVIDER_ID)", "provider auth actions keep Codex auth status wrapper");
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth status wrapper");
 assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
-assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "provider auth actions keep shared auth status request");
+assertIncludes(providerAuthRequests, "export function requestProviderAuthStatus", "provider auth requests centralize auth status request");
+assertIncludes(providerAuthRequests, "requestSettingsJson(config.endpoint)", "provider auth requests keep shared auth status request");
+assertIncludes(providerAuthActions, "requestProviderAuthStatus(requestSettingsJson, config)", "provider auth actions delegate auth status request");
 assertIncludes(providerSettingsLoader, "export async function loadProviderSettingsState", "provider settings loader centralizes provider list loading");
 assertIncludes(providerSettingsLoader, "requestSettingsJson(\"/api/settings/providers\")", "provider settings loader keeps provider catalog request");
 assertIncludes(providerSettingsLoader, "requestSettingsJson(\"/api/settings/credentials\")", "provider settings loader keeps credential catalog request");
@@ -339,7 +343,7 @@ assertIncludes(providerConnectForm, "export function createProviderConnectForm",
 assertIncludes(providerConnectForm, "export function providerConnectPayloadFromForm", "provider connect form centralizes connect payload shape");
 assertIncludes(providerSettingsRequests, "providerConnectPayloadFromForm(form)", "provider settings requests reuse connect payload helper");
 assertIncludes(providerConnectForm, "export function providerOAuthConnectPayload", "provider connect form centralizes OAuth connect payload shape");
-assertIncludes(providerAuthActions, "providerOAuthConnectPayload(provider, options)", "provider auth actions reuse OAuth connect payload helper");
+assertIncludes(providerAuthRequests, "providerOAuthConnectPayload(provider, options)", "provider auth requests reuse OAuth connect payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialPayload", "provider connect form centralizes credential payload shape");
 assertIncludes(providerSettingsRequests, "providerCredentialPayload(credentialId)", "provider settings requests reuse credential payload helper");
 assertIncludes(providerConnectForm, "export function providerCredentialKey", "provider connect form centralizes credential provider key resolution");
@@ -372,7 +376,10 @@ assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState
 assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialUpdateFailed", "provider credential update uses shared mutation lifecycle");
 assertIncludes(providerSettingsActions, "await runProviderMutation(settingsState, copy.value.notices.providerCredentialDeleteFailed", "provider credential delete uses shared mutation lifecycle");
 assertIncludes(providerAuthActions, "await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed", "provider auth OAuth connect uses shared provider mutation lifecycle");
-assertIncludes(providerAuthActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth actions reuse provider connect endpoint helper");
+assertIncludes(providerAuthRequests, "export function requestProviderOAuthConnect", "provider auth requests centralize OAuth connect request");
+assertIncludes(providerAuthRequests, "providerSettingsEndpoint(providerId, \"connect\")", "provider auth requests keep provider connect endpoint helper");
+assertIncludes(providerAuthActions, "requestProviderOAuthConnect(requestSettingsJson, provider, options)", "provider auth actions delegate OAuth connect request");
+assertNotIncludes(providerAuthActions, "providerSettingsEndpoint(", "provider auth actions no longer own provider endpoint assembly");
 assertNotIncludes(providerAuthActions, "function providerAuthRuntimeConfig", "provider auth actions no longer own runtime config fields");
 assertIncludes(providerAuthConfigs, "runtimeConfig(CODEX_PROVIDER_ID, CODEX_PROVIDER_NAME", "provider auth configs reuse Codex runtime config helper");
 assertIncludes(providerAuthConfigs, "runtimeConfig(COPILOT_PROVIDER_ID, COPILOT_PROVIDER_NAME", "provider auth configs reuse Copilot runtime config helper");
@@ -420,9 +427,19 @@ assertIncludes(providerAuthActions, "import { runProviderAuthAction } from \"./p
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey", "provider auth status uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey", "provider auth login uses shared action lifecycle");
 assertIncludes(providerAuthActions, "await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey", "provider auth logout uses shared action lifecycle");
-assertIncludes(providerAuthActions, "requestSettingsJson(config.loginEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth login request");
-assertIncludes(providerAuthActions, "requestSettingsJson(config.logoutEndpoint, { method: \"POST\" })", "provider auth actions keep shared auth logout request");
-assertIncludes(providerAuthActions, "requestSettingsJson(config.pollEndpoint", "provider auth actions keep shared auth poll request");
+assertIncludes(providerAuthRequests, "export function requestProviderAuthLogin", "provider auth requests centralize auth login request");
+assertIncludes(providerAuthRequests, "export function requestProviderAuthPoll", "provider auth requests centralize auth poll request");
+assertIncludes(providerAuthRequests, "export function requestProviderAuthLogout", "provider auth requests centralize auth logout request");
+assertIncludes(providerAuthRequests, "requestSettingsJson(config.loginEndpoint, { method: \"POST\" })", "provider auth requests keep shared auth login request");
+assertIncludes(providerAuthRequests, "requestSettingsJson(config.logoutEndpoint, { method: \"POST\" })", "provider auth requests keep shared auth logout request");
+assertIncludes(providerAuthRequests, "requestSettingsJson(config.pollEndpoint", "provider auth requests keep shared auth poll request");
+assertIncludes(providerAuthRequests, "config.buildPollBody(pendingAuth)", "provider auth requests keep provider-specific poll payload");
+assertIncludes(providerAuthActions, "requestProviderAuthLogin(requestSettingsJson, config)", "provider auth actions delegate auth login request");
+assertIncludes(providerAuthActions, "requestProviderAuthPoll(requestSettingsJson, config, pendingAuth)", "provider auth actions delegate auth poll request");
+assertIncludes(providerAuthActions, "requestProviderAuthLogout(requestSettingsJson, config)", "provider auth actions delegate auth logout request");
+assertNotIncludes(providerAuthActions, "requestSettingsJson(config.loginEndpoint", "provider auth actions no longer own auth login request");
+assertNotIncludes(providerAuthActions, "requestSettingsJson(config.pollEndpoint", "provider auth actions no longer own auth poll request");
+assertNotIncludes(providerAuthActions, "requestSettingsJson(config.logoutEndpoint", "provider auth actions no longer own auth logout request");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");

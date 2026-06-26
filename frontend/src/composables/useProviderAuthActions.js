@@ -1,12 +1,17 @@
 import { runProviderAuthAction } from "./providerAuthActionRunner";
 import { createProviderAuthConfigs, createProviderAuthRuntimeConfigs } from "./providerAuthConfigs";
 import { createProviderAuthPollTimers } from "./providerAuthPollTimers";
-import { providerOAuthConnectPayload } from "./providerConnectForm";
+import {
+  requestProviderAuthLogin,
+  requestProviderAuthLogout,
+  requestProviderAuthPoll,
+  requestProviderAuthStatus,
+  requestProviderOAuthConnect,
+} from "./providerAuthRequests";
 import { runProviderMutation } from "./providerMutationRunner";
 import {
   CODEX_PROVIDER_ID,
   COPILOT_PROVIDER_ID,
-  providerSettingsEndpoint,
 } from "../settings/providerConstants";
 
 export function useProviderAuthActions({
@@ -48,7 +53,7 @@ export function useProviderAuthActions({
 
   async function loadProviderAuthStatus(config) {
     await runProviderAuthAction(settingsState, copy, config, config.loadFailedNoticeKey, async () => {
-      const payload = await requestSettingsJson(config.endpoint);
+      const payload = await requestProviderAuthStatus(requestSettingsJson, config);
       settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
     });
   }
@@ -66,12 +71,8 @@ export function useProviderAuthActions({
   }
 
   async function connectOAuthBackedProvider(provider, options) {
-    const providerId = provider?.id || options.providerId;
     await runProviderMutation(settingsState, copy.value.notices.providerConnectFailed, async () => {
-      await requestSettingsJson(providerSettingsEndpoint(providerId, "connect"), {
-        method: "PUT",
-        body: JSON.stringify(providerOAuthConnectPayload(provider, options)),
-      });
+      await requestProviderOAuthConnect(requestSettingsJson, provider, options);
       setSettingsSuccess("providersNotice", options.connectedNotice());
       await refreshProviderState();
       await options.startAuthLogin();
@@ -100,7 +101,7 @@ export function useProviderAuthActions({
 
   async function startProviderAuthLogin(config) {
     await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey, async () => {
-      const payload = await requestSettingsJson(config.loginEndpoint, { method: "POST" });
+      const payload = await requestProviderAuthLogin(requestSettingsJson, config);
       settingsState[config.authKey] = {
         ...settingsState[config.authKey],
         ...config.normalizeLogin(payload),
@@ -153,10 +154,7 @@ export function useProviderAuthActions({
     const pendingAuth = settingsState[config.authKey] || {};
     if (!config.hasPendingPoll(pendingAuth)) return;
     try {
-      const payload = await requestSettingsJson(config.pollEndpoint, {
-        method: "POST",
-        body: JSON.stringify(config.buildPollBody(pendingAuth)),
-      });
+      const payload = await requestProviderAuthPoll(requestSettingsJson, config, pendingAuth);
       if (payload.status === "authorized") {
         const auth = payload.auth || {};
         const currentAuth = settingsState[config.authKey] || {};
@@ -177,7 +175,7 @@ export function useProviderAuthActions({
 
   async function logoutProviderAuth(config) {
     await runProviderAuthAction(settingsState, copy, config, config.logoutFailedNoticeKey, async () => {
-      await requestSettingsJson(config.logoutEndpoint, { method: "POST" });
+      await requestProviderAuthLogout(requestSettingsJson, config);
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
       await config.loadStatus();
