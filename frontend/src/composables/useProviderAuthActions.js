@@ -128,17 +128,27 @@ export function useProviderAuthActions({
     scheduleProviderAuthPoll(resolvedProviderId, settingsState[config.authKey], () => pollProviderAuthLoginById(resolvedProviderId));
   }
 
-  async function loadProviderAuthStatus(config) {
+  async function runProviderAuthAction(config, fallbackNoticeKey, action, options = {}) {
+    options.before?.();
     settingsState[config.loadingKey] = true;
     settingsState[config.errorKey] = "";
+    if (options.clearNotice) {
+      settingsState[config.noticeKey] = "";
+    }
     try {
-      const payload = await requestSettingsJson(config.endpoint);
-      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
+      await action();
     } catch (error) {
-      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loadFailedNoticeKey];
+      settingsState[config.errorKey] = error?.message || copy.value.notices[fallbackNoticeKey];
     } finally {
       settingsState[config.loadingKey] = false;
     }
+  }
+
+  async function loadProviderAuthStatus(config) {
+    await runProviderAuthAction(config, config.loadFailedNoticeKey, async () => {
+      const payload = await requestSettingsJson(config.endpoint);
+      settingsState[config.stateKey] = { ...settingsState[config.stateKey], ...config.normalizeStatus(payload) };
+    });
   }
 
   async function loadProviderAuthStatusById(providerId) {
@@ -194,11 +204,7 @@ export function useProviderAuthActions({
   }
 
   async function startProviderAuthLogin(config) {
-    config.clearPoll();
-    settingsState[config.loadingKey] = true;
-    settingsState[config.errorKey] = "";
-    settingsState[config.noticeKey] = "";
-    try {
+    await runProviderAuthAction(config, config.loginFailedNoticeKey, async () => {
       const payload = await requestSettingsJson(config.loginEndpoint, { method: "POST" });
       settingsState[config.authKey] = {
         ...settingsState[config.authKey],
@@ -209,11 +215,7 @@ export function useProviderAuthActions({
       }
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
       config.schedulePoll();
-    } catch (error) {
-      settingsState[config.errorKey] = error?.message || copy.value.notices[config.loginFailedNoticeKey];
-    } finally {
-      settingsState[config.loadingKey] = false;
-    }
+    }, { clearNotice: true, before: config.clearPoll });
   }
 
   async function startCodexAuthLogin() {
@@ -279,20 +281,12 @@ export function useProviderAuthActions({
   }
 
   async function logoutProviderAuth(config) {
-    config.clearPoll();
-    settingsState[config.loadingKey] = true;
-    settingsState[config.errorKey] = "";
-    settingsState[config.noticeKey] = "";
-    try {
+    await runProviderAuthAction(config, config.logoutFailedNoticeKey, async () => {
       await requestSettingsJson(config.logoutEndpoint, { method: "POST" });
       settingsState[config.authKey] = config.resetLogout(settingsState[config.authKey]);
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loggedOutNoticeKey]);
       await config.loadStatus();
-    } catch (error) {
-      settingsState[config.errorKey] = error?.message || copy.value.notices[config.logoutFailedNoticeKey];
-    } finally {
-      settingsState[config.loadingKey] = false;
-    }
+    }, { clearNotice: true, before: config.clearPoll });
   }
 
   function clearProviderAuthPollTimers() {
