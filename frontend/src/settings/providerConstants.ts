@@ -1,6 +1,5 @@
 export const CODEX_PROVIDER_ID = "openai-codex";
 export const COPILOT_PROVIDER_ID = "copilot";
-export const PROVIDER_AUTH_PROVIDER_IDS = [CODEX_PROVIDER_ID, COPILOT_PROVIDER_ID] as const;
 
 export const CODEX_PROVIDER_NAME = "OpenAI Codex";
 export const COPILOT_PROVIDER_NAME = "GitHub Copilot";
@@ -52,6 +51,8 @@ const PROVIDER_AUTH_KEYS: Record<string, string> = {
   [CODEX_PROVIDER_ID]: CODEX_AUTH_STATE_KEYS.authKey,
   [COPILOT_PROVIDER_ID]: COPILOT_AUTH_STATE_KEYS.authKey,
 };
+
+export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_KEYS);
 
 export function providerAuthKeyForId(providerId: string) {
   return PROVIDER_AUTH_KEYS[providerId] || "";

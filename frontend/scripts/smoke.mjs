@@ -285,7 +285,7 @@ assertIncludes(providerSettings, "ProviderAuthSection", "provider settings deleg
 assertIncludes(providerSettings, "providerAuthSections(copy, state, client)", "provider settings delegates auth section assembly");
 assertIncludes(providerConstants, "CODEX_PROVIDER_ID = \"openai-codex\"", "provider constants keep Codex provider id");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_ID = \"copilot\"", "provider constants keep Copilot provider id");
-assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS", "provider constants keep auth provider id list");
+assertIncludes(providerConstants, "PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_KEYS)", "provider constants derive auth provider ids from auth key map");
 assertIncludes(providerConstants, "CODEX_PROVIDER_NAME = \"OpenAI Codex\"", "provider constants keep Codex provider name");
 assertIncludes(providerConstants, "COPILOT_PROVIDER_NAME = \"GitHub Copilot\"", "provider constants keep Copilot provider name");
 assertIncludes(providerConstants, "CODEX_AUTH_KEY = \"codexAuth\"", "provider constants keep Codex auth key");
