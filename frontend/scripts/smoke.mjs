@@ -50,6 +50,7 @@ const [
   providerAuthConfigs,
   providerAuthState,
   providerConnectForm,
+  settingsSectionLoaders,
   useSettingsState,
   confirmFlow,
   shellLayout,
@@ -108,6 +109,7 @@ const [
   read("src/composables/providerAuthConfigs.js"),
   read("src/composables/providerAuthState.js"),
   read("src/composables/providerConnectForm.js"),
+  read("src/composables/settingsSectionLoaders.js"),
   read("src/composables/useSettingsState.js"),
   read("src/composables/useConfirmDialog.ts"),
   read("src/composables/useShellLayout.ts"),
@@ -317,6 +319,15 @@ assertIncludes(providerConnectForm, "export function createEmptyProviderConnectF
 assertIncludes(providerConnectForm, "export function createProviderConnectForm", "provider connect form centralizes provider-derived form state");
 assertIncludes(useSettingsState, "connectForm: createEmptyProviderConnectForm()", "settings state reuses provider connect form defaults");
 assertIncludes(chatClient, "Object.assign(settingsState.connectForm, createEmptyProviderConnectForm())", "chat client reuses provider connect form reset");
+assertIncludes(chatClient, "const loadSettingsSection = createSettingsSectionLoader({", "chat client delegates settings section loading");
+assertNotIncludes(chatClient, "function loadSettingsSection(sectionName)", "chat client no longer owns settings section loader dispatch");
+assertIncludes(settingsSectionLoaders, "export function createSettingsSectionLoader", "settings section loaders centralize section dispatch");
+assertIncludes(settingsSectionLoaders, "providers: () => {", "settings section loaders keep provider section loader");
+assertIncludes(settingsSectionLoaders, "loadProviderSettings();", "settings section loaders keep provider settings refresh");
+assertIncludes(settingsSectionLoaders, "loadCodexAuthStatus();", "settings section loaders keep Codex auth refresh");
+assertIncludes(settingsSectionLoaders, "loadCopilotAuthStatus();", "settings section loaders keep Copilot auth refresh");
+assertIncludes(settingsSectionLoaders, "loadScheduleSettings();", "settings section loaders keep schedule settings refresh");
+assertIncludes(settingsSectionLoaders, "loadCronJobs();", "settings section loaders keep cron jobs refresh");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"disconnect\")", "provider settings actions reuse provider disconnect endpoint helper");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(provider.id, \"credential\")", "provider settings actions reuse provider credential endpoint helper");
 assertIncludes(providerSettingsActions, "providerCredentialEndpoint(providerKey, credentialId)", "provider settings actions reuse credential endpoint helper");

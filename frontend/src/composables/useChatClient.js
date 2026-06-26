@@ -19,6 +19,7 @@ import { createEmptyProviderConnectForm } from "./providerConnectForm";
 import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
+import { createSettingsSectionLoader } from "./settingsSectionLoaders";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
 import {
   buildRunFileChangeRevertPath,
@@ -1642,6 +1643,22 @@ export function useChatClient() {
     copy,
   });
 
+  const loadSettingsSection = createSettingsSectionLoader({
+    loadUpdateStatus,
+    loadChannelSettings,
+    loadProviderSettings,
+    loadCodexAuthStatus,
+    loadCopilotAuthStatus,
+    loadModelSettings,
+    loadMcpSettings,
+    loadScheduleSettings,
+    loadCronJobs,
+    loadNetworkSettings,
+    loadSearchSettings,
+    loadBrowserSettings,
+    loadLogSettings,
+  });
+
   function setActiveSession(externalChatId) {
     state.activeExternalChatId = externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, externalChatId);
@@ -2469,52 +2486,6 @@ export function useChatClient() {
       settingsState.cronJobsError = error?.message || copy.value.notices.cronJobsLoadFailed;
     } finally {
       settingsState.cronJobsLoading = false;
-    }
-  }
-
-  function loadSettingsSection(sectionName) {
-    if (sectionName === "general") {
-      loadUpdateStatus();
-      return;
-    }
-    if (sectionName === "channels") {
-      loadChannelSettings();
-      return;
-    }
-    if (sectionName === "providers") {
-      loadProviderSettings();
-      loadCodexAuthStatus();
-      loadCopilotAuthStatus();
-      return;
-    }
-    if (sectionName === "models") {
-      loadModelSettings();
-      return;
-    }
-    if (sectionName === "mcp") {
-      loadMcpSettings();
-      return;
-    }
-    if (sectionName === "schedule") {
-      loadScheduleSettings();
-      loadCronJobs();
-      return;
-    }
-    if (sectionName === "network") {
-      loadNetworkSettings();
-      return;
-    }
-    if (sectionName === "search") {
-      loadSearchSettings();
-      return;
-    }
-    if (sectionName === "browser") {
-      loadBrowserSettings();
-      return;
-    }
-    if (sectionName === "log") {
-      loadLogSettings();
-      return;
     }
   }
 
