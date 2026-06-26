@@ -45,6 +45,7 @@ const [
   chatClient,
   runInspector,
   providerSettings,
+  modelSettings,
   settingsPrimitives,
 ] = await Promise.all([
   read("package.json"),
@@ -58,6 +59,7 @@ const [
   read("src/composables/useChatClient.js"),
   read("src/components/runInspector.tsx"),
   read("src/settings/providerSettings.tsx"),
+  read("src/settings/modelSettings.tsx"),
   read("src/settings/settingsPrimitives.tsx"),
 ]);
 
@@ -111,14 +113,14 @@ assertIncludes(app, "client.settingsState", "settings API state remains wired");
 assertIncludes(app, "client.saveBrowserSettings", "browser settings save action");
 assertIncludes(app, "client.runBrowserTest", "browser manual test action");
 assertIncludes(app, "client.saveMcpServer", "MCP settings action");
-assertIncludes(app, "client.selectModel", "model selection action");
+assertIncludes(modelSettings, "client.selectModel", "model selection action");
 assertIncludes(app, "client.clearWebSessions()", "web history cleanup action");
 assertIncludes(app, "form.externalChatId", "general settings keeps external chat id control");
 assertIncludes(app, "client.runUpdate", "general settings keeps update apply action");
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
-assertIncludes(app, "client.saveMediaModel", "model settings keeps media model save action");
+assertIncludes(modelSettings, "client.saveMediaModel", "model settings keeps media model save action");
 assertIncludes(app, "client.beginChannelConnect", "channel settings keeps add channel flow");
 assertIncludes(app, "client.toggleMcpAdvanced", "MCP settings keeps advanced editor");
 assertIncludes(app, "client.toggleMcpJsonInput", "MCP settings keeps JSON editor");
