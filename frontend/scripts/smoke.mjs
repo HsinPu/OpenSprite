@@ -46,6 +46,7 @@ const [
   reactiveCompat,
   chatClient,
   providerSettingsActions,
+  providerSettingsLoader,
   providerAuthActions,
   providerAuthActionRunner,
   providerAuthConfigs,
@@ -108,6 +109,7 @@ const [
   read("src/lib/reactiveCompat.ts"),
   read("src/composables/useChatClient.js"),
   read("src/composables/useProviderSettingsActions.js"),
+  read("src/composables/providerSettingsLoader.js"),
   read("src/composables/useProviderAuthActions.js"),
   read("src/composables/providerAuthActionRunner.js"),
   read("src/composables/providerAuthConfigs.js"),
@@ -318,6 +320,11 @@ assertIncludes(providerAuthActions, "loadProviderAuthStatusById(CODEX_PROVIDER_I
 assertIncludes(providerAuthActions, "loadProviderAuthStatusById(COPILOT_PROVIDER_ID)", "provider auth actions keep Copilot auth status wrapper");
 assertIncludes(providerAuthConfigs, "normalizeStatus: (payload) => ({", "provider auth configs keep status normalization inside provider config");
 assertIncludes(providerAuthActions, "requestSettingsJson(config.endpoint)", "provider auth actions keep shared auth status request");
+assertIncludes(providerSettingsLoader, "export async function loadProviderSettingsState", "provider settings loader centralizes provider list loading");
+assertIncludes(providerSettingsLoader, "requestSettingsJson(\"/api/settings/providers\")", "provider settings loader keeps provider catalog request");
+assertIncludes(providerSettingsLoader, "requestSettingsJson(\"/api/settings/credentials\")", "provider settings loader keeps credential catalog request");
+assertIncludes(providerSettingsActions, "loadProviderSettingsState(settingsState, requestSettingsJson, copy)", "provider settings actions delegate provider list loading");
+assertNotIncludes(providerSettingsActions, "requestSettingsJson(\"/api/settings/providers\")", "provider settings actions no longer own provider catalog request");
 assertNotIncludes(providerSettingsActions, "const oauthProviderConfigs", "provider settings actions no longer own OAuth provider configs");
 assertNotIncludes(providerAuthActions, "const oauthProviderConfigs", "provider auth actions fold OAuth metadata into auth provider configs");
 assertIncludes(providerSettingsActions, "providerSettingsEndpoint(providerId, \"connect\")", "provider settings actions reuse provider connect endpoint helper");

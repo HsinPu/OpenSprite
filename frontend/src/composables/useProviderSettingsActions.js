@@ -1,4 +1,5 @@
 import { providerCredentialEndpoint, providerSettingsEndpoint } from "../settings/providerConstants";
+import { loadProviderSettingsState } from "./providerSettingsLoader";
 import { runProviderMutation } from "./providerMutationRunner";
 import {
   createProviderConnectForm,
@@ -17,20 +18,7 @@ export function useProviderSettingsActions({
   loadModelSettings,
 }) {
   async function loadProviderSettings() {
-    settingsState.providersLoading = true;
-    settingsState.providersError = "";
-    try {
-      const [providers, credentials] = await Promise.all([
-        requestSettingsJson("/api/settings/providers"),
-        requestSettingsJson("/api/settings/credentials"),
-      ]);
-      settingsState.providers = providers;
-      settingsState.credentials = credentials.credentials || {};
-    } catch (error) {
-      settingsState.providersError = error?.message || copy.value.notices.providerLoadFailed;
-    } finally {
-      settingsState.providersLoading = false;
-    }
+    await loadProviderSettingsState(settingsState, requestSettingsJson, copy);
   }
 
   async function refreshProviderState() { await loadProviderSettings(); await loadModelSettings(); }
