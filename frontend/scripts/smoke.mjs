@@ -63,6 +63,7 @@ const [
   runTraceViewer,
   workStateCard,
   authProviderCard,
+  providerAuthSection,
   availableProvidersSection,
   connectedProvidersSection,
   providerConnectDialog,
@@ -108,6 +109,7 @@ const [
   read("src/components/runTraceViewer.tsx"),
   read("src/components/workStateCard.tsx"),
   read("src/settings/authProviderCard.tsx"),
+  read("src/settings/providerAuthSection.tsx"),
   read("src/settings/availableProvidersSection.tsx"),
   read("src/settings/connectedProvidersSection.tsx"),
   read("src/settings/providerConnectDialog.tsx"),
@@ -243,10 +245,15 @@ assertIncludes(generalSettings, "form.colorScheme", "general settings keeps colo
 assertIncludes(providerSettings, "client.deleteCredential", "provider settings keeps credential deletion");
 assertIncludes(providerSettings, "client.startCodexAuthLogin", "provider settings keeps OpenAI Codex OAuth login");
 assertIncludes(providerSettings, "client.startCopilotAuthLogin", "provider settings keeps Copilot OAuth login");
-assertIncludes(providerSettings, "AuthProviderCard", "provider settings delegates auth provider card");
+assertIncludes(providerSettings, "ProviderAuthSection", "provider settings delegates auth provider section");
 assertIncludes(providerSettings, "AvailableProvidersSection", "provider settings delegates available providers section");
 assertIncludes(providerSettings, "ConnectedProvidersSection", "provider settings delegates connected providers section");
 assertIncludes(providerSettings, "ProviderConnectDialog", "provider settings delegates provider connect dialog");
+assertIncludes(providerAuthSection, "SettingsSectionTitle", "provider auth section keeps section title");
+assertIncludes(providerAuthSection, "SettingsStatus message={notice}", "provider auth section keeps notice status");
+assertIncludes(providerAuthSection, "SettingsStatus message={error} type=\"error\"", "provider auth section keeps error status");
+assertIncludes(providerAuthSection, "AuthProviderCard", "provider auth section renders auth provider card");
+assertIncludes(providerAuthSection, "onLogin={onLogin}", "provider auth section keeps login action");
 assertIncludes(authProviderCard, "codex-auth-row", "auth provider card keeps auth row layout");
 assertIncludes(authProviderCard, "onClick={onRefresh}", "auth provider card keeps refresh action");
 assertIncludes(authProviderCard, "onClick={onLogin}", "auth provider card keeps login action");

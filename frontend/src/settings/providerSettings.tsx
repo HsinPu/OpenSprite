@@ -4,11 +4,11 @@ import {
   copilotDescription,
   hasConnectedProvider,
 } from "./providerHelpers";
-import { AuthProviderCard } from "./authProviderCard";
 import { AvailableProvidersSection } from "./availableProvidersSection";
 import { ConnectedProvidersSection } from "./connectedProvidersSection";
+import { ProviderAuthSection } from "./providerAuthSection";
 import { ProviderConnectDialog } from "./providerConnectDialog";
-import { SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
+import { SettingsStatus } from "./settingsPrimitives";
 
 type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
@@ -60,45 +60,41 @@ export function ProviderSettings({ client }: { client: ProviderSettingsClient })
       <SettingsStatus message={state.providersError} type="error" />
 
       {showCodexAuthCard ? (
-        <>
-          <SettingsSectionTitle>{providerCopy.codexAuth?.title || "OpenAI Codex auth"}</SettingsSectionTitle>
-          <SettingsStatus message={state.codexAuthNotice} />
-          <SettingsStatus message={state.codexAuthError} type="error" />
-          <AuthProviderCard
-            mark="Cx"
-            name={providerCopy.codexAuth?.name || "OpenAI Codex"}
-            status={codexAuthStatusLabel}
-            description={codexAuthDescription}
-            loading={state.codexAuthLoading}
-            configured={state.codexAuth?.configured}
-            copy={providerCopy.codexAuth || {}}
-            auth={state.codexAuth || {}}
-            onRefresh={client.loadCodexAuthStatus}
-            onLogin={client.startCodexAuthLogin}
-            onLogout={client.logoutCodexAuth}
-          />
-        </>
+        <ProviderAuthSection
+          title={providerCopy.codexAuth?.title || "OpenAI Codex auth"}
+          notice={state.codexAuthNotice}
+          error={state.codexAuthError}
+          mark="Cx"
+          name={providerCopy.codexAuth?.name || "OpenAI Codex"}
+          status={codexAuthStatusLabel}
+          description={codexAuthDescription}
+          loading={state.codexAuthLoading}
+          configured={state.codexAuth?.configured}
+          copy={providerCopy.codexAuth || {}}
+          auth={state.codexAuth || {}}
+          onRefresh={client.loadCodexAuthStatus}
+          onLogin={client.startCodexAuthLogin}
+          onLogout={client.logoutCodexAuth}
+        />
       ) : null}
 
       {showCopilotAuthCard ? (
-        <>
-          <SettingsSectionTitle>{providerCopy.copilotAuth?.title || "GitHub Copilot auth"}</SettingsSectionTitle>
-          <SettingsStatus message={state.copilotAuthNotice} />
-          <SettingsStatus message={state.copilotAuthError} type="error" />
-          <AuthProviderCard
-            mark="Gh"
-            name={providerCopy.copilotAuth?.name || "GitHub Copilot"}
-            status={copilotAuthStatusLabel}
-            description={copilotAuthDescription}
-            loading={state.copilotAuthLoading}
-            configured={state.copilotAuth?.configured}
-            copy={providerCopy.copilotAuth || {}}
-            auth={state.copilotAuth || {}}
-            onRefresh={client.loadCopilotAuthStatus}
-            onLogin={client.startCopilotAuthLogin}
-            onLogout={client.logoutCopilotAuth}
-          />
-        </>
+        <ProviderAuthSection
+          title={providerCopy.copilotAuth?.title || "GitHub Copilot auth"}
+          notice={state.copilotAuthNotice}
+          error={state.copilotAuthError}
+          mark="Gh"
+          name={providerCopy.copilotAuth?.name || "GitHub Copilot"}
+          status={copilotAuthStatusLabel}
+          description={copilotAuthDescription}
+          loading={state.copilotAuthLoading}
+          configured={state.copilotAuth?.configured}
+          copy={providerCopy.copilotAuth || {}}
+          auth={state.copilotAuth || {}}
+          onRefresh={client.loadCopilotAuthStatus}
+          onLogin={client.startCopilotAuthLogin}
+          onLogout={client.logoutCopilotAuth}
+        />
       ) : null}
 
       <ConnectedProvidersSection
