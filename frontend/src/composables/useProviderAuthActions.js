@@ -69,7 +69,8 @@ export function useProviderAuthActions({
     await connectOAuthBackedProvider(provider, getProviderAuthConfig(providerAuthConfigs, providerCatalogKey(provider)));
   }
 
-  async function startProviderAuthLogin(config) {
+  async function startProviderAuthLoginById(providerId) {
+    const config = getProviderAuthConfig(providerAuthConfigs, providerId);
     await runProviderAuthAction(settingsState, copy, config, config.loginFailedNoticeKey, async () => {
       const payload = await requestProviderAuthLogin(requestSettingsJson, config);
       settingsState[config.authKey] = {
@@ -82,10 +83,6 @@ export function useProviderAuthActions({
       setSettingsSuccess(config.noticeKey, copy.value.notices[config.loginReadyNoticeKey]);
       config.schedulePoll();
     }, { clearNotice: true, before: config.clearPoll });
-  }
-
-  async function startProviderAuthLoginById(providerId) {
-    return startProviderAuthLogin(getProviderAuthConfig(providerAuthConfigs, providerId));
   }
 
   async function pollProviderAuthLoginById(providerId) {
