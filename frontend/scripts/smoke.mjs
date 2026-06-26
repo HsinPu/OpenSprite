@@ -312,6 +312,7 @@ assertIncludes(providerConstants, "function providerAuthRequestConfig", "provide
 assertIncludes(providerConstants, "loginEndpoint: providerAuthEndpoint(providerId, \"login\")", "provider constants keep auth login endpoint metadata");
 assertIncludes(providerConstants, "logoutEndpoint: providerAuthEndpoint(providerId, \"logout\")", "provider constants keep auth logout endpoint metadata");
 assertIncludes(providerConstants, "pollEndpoint: providerAuthEndpoint(providerId, \"poll\")", "provider constants keep auth poll endpoint metadata");
+assertIncludes(providerConstants, "PROVIDER_AUTH_REQUEST_KEYS.map((key) => [key, config[key]])", "provider constants keep auth request fields separate from UI provider metadata");
 assertIncludes(providerConstants, "OPENAI_CODEX_OAUTH_AUTH_TYPE = \"openai_codex_oauth\"", "provider constants keep Codex OAuth auth type");
 assertIncludes(providerConstants, "GITHUB_COPILOT_OAUTH_AUTH_TYPE = \"github_copilot_oauth\"", "provider constants keep Copilot OAuth auth type");
 assertIncludes(providerConstants, "function isOAuthProviderAuthType", "provider constants expose OAuth auth type helper");
@@ -465,8 +466,11 @@ assertIncludes(providerAuthActions, "scheduleProviderAuthPollById(config.provide
 assertNotIncludes(chatClient, "let codexAuthPollTimer", "chat client removes split Codex auth timer state");
 assertNotIncludes(chatClient, "let copilotAuthPollTimer", "chat client removes split Copilot auth timer state");
 assertNotIncludes(providerAuthActions, "const providerAuthFlowConfigs", "provider auth actions no longer split auth flow configs");
-assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(CODEX_PROVIDER_ID, CODEX_AUTH_STATE_KEYS)", "provider auth configs build Codex auth flow metadata through provider helper");
-assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(COPILOT_PROVIDER_ID, COPILOT_AUTH_STATE_KEYS)", "provider auth configs build Copilot auth flow metadata through provider helper");
+assertIncludes(providerAuthConfigs, "PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, config])", "provider auth configs index auth sections from provider metadata");
+assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(PROVIDER_AUTH_SECTIONS[CODEX_PROVIDER_ID])", "provider auth configs build Codex request metadata from provider section metadata");
+assertIncludes(providerAuthConfigs, "providerAuthRequestConfig(PROVIDER_AUTH_SECTIONS[COPILOT_PROVIDER_ID])", "provider auth configs build Copilot request metadata from provider section metadata");
+assertNotIncludes(providerAuthConfigs, "CODEX_AUTH_STATE_KEYS", "provider auth configs avoid direct Codex auth state key ownership");
+assertNotIncludes(providerAuthConfigs, "COPILOT_AUTH_STATE_KEYS", "provider auth configs avoid direct Copilot auth state key ownership");
 assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ device_auth_id: auth.deviceAuthId, user_code: auth.userCode })", "provider auth configs keep Codex auth poll body");
 assertIncludes(providerAuthConfigs, "buildPollBody: (auth) => ({ device_code: auth.deviceCode })", "provider auth configs keep Copilot auth poll body");
 assertIncludes(providerAuthActions, "startProviderAuthLoginById,", "provider auth actions expose provider-id auth login action");
