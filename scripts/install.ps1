@@ -127,11 +127,11 @@ function Resolve-Python {
         $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
         if (-not $cmd) { continue }
 
-        $args = if ($candidate -eq "py") { @("-3", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") } else { @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") }
+        $args = if ($candidate -eq "py") { @("-3.12", "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") } else { @("-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)") }
         & $cmd.Source @args 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Success "$candidate provides Python 3.12+"
-            return @{ FilePath = $cmd.Source; PrefixArgs = if ($candidate -eq "py") { @("-3") } else { @() } }
+            return @{ FilePath = $cmd.Source; PrefixArgs = if ($candidate -eq "py") { @("-3.12") } else { @() } }
         }
     }
 
