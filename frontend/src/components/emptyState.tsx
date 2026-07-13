@@ -1,8 +1,28 @@
 import { Button } from "antd";
 
-type AnyRecord = Record<string, any>;
+export interface EmptyStateCopy {
+  empty: {
+    ariaLabel: string;
+    title: string;
+    description: string;
+  };
+}
 
-export function EmptyState({ copy, prompts, applyPrompt }: { copy: AnyRecord; prompts: AnyRecord[]; applyPrompt: (text: string) => void }) {
+export interface PromptOption {
+  title: string;
+  description: string;
+  text: string;
+}
+
+export function EmptyState({
+  copy,
+  prompts,
+  applyPrompt,
+}: {
+  copy: EmptyStateCopy;
+  prompts: PromptOption[];
+  applyPrompt: (text: string) => void;
+}) {
   return (
     <section className="empty-state" aria-label={copy.empty.ariaLabel}>
       <div className="empty-state__mark" aria-hidden="true">OS</div>

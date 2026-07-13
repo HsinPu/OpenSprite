@@ -1,8 +1,52 @@
 import React from "react";
 
-type AnyRecord = Record<string, any>;
+export type MessageCopy = {
+  message: {
+    assistantAvatar?: string;
+    artifactTypes?: Record<string, string>;
+    jsonArray: (count: number) => string;
+    jsonObject: (keys: string, count: number) => string;
+    jsonTitle: string;
+    jsonValue: string;
+    userAvatar?: string;
+    viewTrace?: string;
+  };
+  run?: {
+    statusLabels?: Record<string, string>;
+  };
+};
 
-export function MessageTextRenderer({ blocks, copy }: { blocks: AnyRecord[]; copy: AnyRecord }) {
+type MessageSegment =
+  | { id: string; type: "text" | "code" | "strong"; text: string }
+  | { id: string; type: "link"; text: string; href: string };
+
+type MessageListItem = {
+  id: string;
+  text: string;
+  segments: MessageSegment[];
+};
+
+type MessageTableCell = {
+  id: string;
+  text: string;
+};
+
+type MessageTableRow = {
+  id: string;
+  cells: MessageTableCell[];
+};
+
+export type MessageBlock =
+  | { id: string; type: "heading"; level: number; text: string; segments: MessageSegment[] }
+  | { id: string; type: "list"; ordered: boolean; items: MessageListItem[] }
+  | { id: string; type: "quote"; segments: MessageSegment[] }
+  | { id: string; type: "code"; language: string; code: string }
+  | { id: string; type: "json"; summary: string; code: string }
+  | { id: string; type: "table"; headers: MessageTableCell[]; rows: MessageTableRow[] }
+  | { id: string; type: "rule" }
+  | { id: string; type: "paragraph"; text: string; segments: MessageSegment[] };
+
+export function MessageTextRenderer({ blocks, copy }: { blocks: MessageBlock[]; copy: MessageCopy }) {
   return (
     <div className="message__rendered">
       {blocks.map((block) => {
@@ -19,7 +63,7 @@ export function MessageTextRenderer({ blocks, copy }: { blocks: AnyRecord[]; cop
           const ListTag = block.ordered ? "ol" : "ul";
           return (
             <ListTag key={block.id}>
-              {block.items.map((item: AnyRecord) => (
+              {block.items.map((item) => (
                 <li key={item.id}>{renderSegments(item.segments)}</li>
               ))}
             </ListTag>
@@ -52,15 +96,15 @@ export function MessageTextRenderer({ blocks, copy }: { blocks: AnyRecord[]; cop
               <table className="message__table">
                 <thead>
                   <tr>
-                    {block.headers.map((header: AnyRecord) => (
+                    {block.headers.map((header) => (
                       <th key={header.id}>{header.text}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {block.rows.map((row: AnyRecord) => (
+                  {block.rows.map((row) => (
                     <tr key={row.id}>
-                      {row.cells.map((cell: AnyRecord) => (
+                      {row.cells.map((cell) => (
                         <td key={cell.id}>{cell.text}</td>
                       ))}
                     </tr>
@@ -79,7 +123,7 @@ export function MessageTextRenderer({ blocks, copy }: { blocks: AnyRecord[]; cop
   );
 }
 
-export function buildMessageBlocks(copy: AnyRecord, value: any, keyPrefix: string) {
+export function buildMessageBlocks(copy: MessageCopy, value: unknown, keyPrefix: string): MessageBlock[] {
   const text = String(value || "").replace(/\r\n/g, "\n").trim();
   if (!text) {
     return [];
@@ -91,7 +135,7 @@ export function buildMessageBlocks(copy: AnyRecord, value: any, keyPrefix: strin
   return parseMarkdownBlocks(copy, text, keyPrefix);
 }
 
-function maybeJsonBlock(copy: AnyRecord, text: string, id: string) {
+function maybeJsonBlock(copy: MessageCopy, text: string, id: string): MessageBlock | null {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
     return null;
@@ -109,7 +153,7 @@ function maybeJsonBlock(copy: AnyRecord, text: string, id: string) {
   }
 }
 
-function jsonSummary(copy: AnyRecord, value: any) {
+function jsonSummary(copy: MessageCopy, value: unknown) {
   if (Array.isArray(value)) {
     return copy.message.jsonArray(value.length);
   }
@@ -120,9 +164,9 @@ function jsonSummary(copy: AnyRecord, value: any) {
   return copy.message.jsonValue;
 }
 
-function parseMarkdownBlocks(copy: AnyRecord, text: string, keyPrefix: string) {
+function parseMarkdownBlocks(copy: MessageCopy, text: string, keyPrefix: string): MessageBlock[] {
   const lines = text.split("\n");
-  const blocks: AnyRecord[] = [];
+  const blocks: MessageBlock[] = [];
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
@@ -139,7 +183,7 @@ function parseMarkdownBlocks(copy: AnyRecord, text: string, keyPrefix: string) {
     const fence = trimmed.match(/^```([A-Za-z0-9_-]*)\s*$/);
     if (fence) {
       const language = fence[1] || "";
-      const codeLines = [];
+      const codeLines: string[] = [];
       index += 1;
       while (index < lines.length && !lines[index].trim().startsWith("```")) {
         codeLines.push(lines[index]);
@@ -177,7 +221,7 @@ function parseMarkdownBlocks(copy: AnyRecord, text: string, keyPrefix: string) {
     const ordered = trimmed.match(/^\d+[.)]\s+(.+)$/);
     if (unordered || ordered) {
       const orderedList = Boolean(ordered);
-      const items = [];
+      const items: MessageListItem[] = [];
       while (index < lines.length) {
         const itemMatch = lines[index].trim().match(orderedList ? /^\d+[.)]\s+(.+)$/ : /^[-*]\s+(.+)$/);
         if (!itemMatch) {
@@ -194,7 +238,7 @@ function parseMarkdownBlocks(copy: AnyRecord, text: string, keyPrefix: string) {
       blocks.push({ id: `${keyPrefix}:list-${blocks.length}`, type: "list", ordered: orderedList, items });
       continue;
     }
-    const paragraphLines = [];
+    const paragraphLines: string[] = [];
     while (index < lines.length && !isBlockStart(lines, index)) {
       if (!lines[index].trim()) {
         break;
@@ -215,7 +259,7 @@ function parseMarkdownBlocks(copy: AnyRecord, text: string, keyPrefix: string) {
   return blocks;
 }
 
-function codeBlock(copy: AnyRecord, code: string, language: string, id: string) {
+function codeBlock(copy: MessageCopy, code: string, language: string, id: string): MessageBlock {
   const jsonBlock = language.toLowerCase() === "json" ? maybeJsonBlock(copy, code, id) : null;
   if (jsonBlock) {
     return jsonBlock;
@@ -249,7 +293,7 @@ function isMarkdownTable(lines: string[], index: number) {
   return current.includes("|") && /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(next);
 }
 
-function tableBlock(tableLines: string[], id: string) {
+function tableBlock(tableLines: string[], id: string): MessageBlock {
   const headers = splitTableRow(tableLines[0]).map((text, index) => ({ id: `${id}:h-${index}`, text }));
   const rows = tableLines.slice(1).map((line, rowIndex) => {
     const cells = splitTableRow(line).map((text, cellIndex) => ({ id: `${id}:r-${rowIndex}-${cellIndex}`, text }));
@@ -267,8 +311,8 @@ function splitTableRow(line: string) {
     .map((cell) => cell.trim());
 }
 
-function inlineSegments(text: string, idPrefix: string) {
-  const segments: AnyRecord[] = [];
+function inlineSegments(text: string, idPrefix: string): MessageSegment[] {
+  const segments: MessageSegment[] = [];
   const pattern = /(`[^`]+`)|(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))|(\*\*([^*\n][\s\S]*?[^*\n])\*\*)/g;
   let cursor = 0;
   let match;
@@ -291,7 +335,7 @@ function inlineSegments(text: string, idPrefix: string) {
   return segments.length ? segments : [{ id: `${idPrefix}:t-0`, type: "text", text }];
 }
 
-function renderSegments(segments: AnyRecord[] = []) {
+function renderSegments(segments: MessageSegment[] = []) {
   return segments.map((segment) => {
     if (segment.type === "code") {
       return <code key={segment.id}>{segment.text}</code>;

@@ -1,0 +1,29 @@
+import { randomToken } from "./chatClientTokens";
+
+export function generateExternalChatId(): string {
+  return `browser-${Date.now().toString(36)}-${randomToken()}`;
+}
+
+export function generateOverlayProfileId(): string {
+  return `profile-${Date.now().toString(36)}-${randomToken()}`;
+}
+
+export function externalChatIdFromSessionId(sessionId: unknown): string {
+  const normalized = String(sessionId || "").trim();
+  const separatorIndex = normalized.indexOf(":");
+  if (separatorIndex < 0) {
+    return normalized;
+  }
+  return normalized.slice(separatorIndex + 1).trim();
+}
+
+export function channelFromSessionId(sessionId: unknown): string {
+  const normalized = String(sessionId || "").trim();
+  const separatorIndex = normalized.indexOf(":");
+  return separatorIndex > 0 ? normalized.slice(0, separatorIndex).trim() : "web";
+}
+
+export function isExternalChannelSessionId(value: unknown): boolean {
+  const normalized = String(value || "").trim();
+  return normalized.includes(":") && channelFromSessionId(normalized) !== "web";
+}

@@ -1,17 +1,102 @@
 import { DeleteOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { Button, Input, Segmented, Select, Space, Switch } from "antd";
 import { connectionLabel } from "../components/displayHelpers";
+import {
+  DEFAULT_COLOR_SCHEME,
+  DEFAULT_LANGUAGE,
+  SUPPORTED_COLOR_SCHEMES,
+  SUPPORTED_LANGUAGES,
+  normalizeChoice,
+} from "../composables/chatClientPreferences";
+import type { ConnectionState } from "../composables/useChatClient";
+import type { SettingsForm, UpdateStatusView } from "../composables/useSettingsState";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
+type RunPanelKey = "showWorkState" | "showRunHistory" | "showRunTimeline" | "showRunSummary" | "showRunTrace";
+
+type SettingsCopyText = {
+  title?: string;
+  description?: string;
+};
+
+type SettingsOptionCopy = SettingsCopyText & {
+  options?: Record<string, string>;
+};
+
+type GatewayCopy = SettingsCopyText & {
+  connecting?: string;
+  connected?: string;
+  disconnected?: string;
+};
+
+type ClearWebChatsCopy = {
+  title?: string;
+  description?: string | ((count: number) => string);
+  action?: string;
+};
+
+type UpdateCopy = SettingsCopyText & {
+  checking?: string;
+  unsupported?: string;
+  dirty?: string;
+  available?: (commitsBehind: number) => string;
+  current?: string;
+  check?: string;
+  apply?: string;
+};
+
+type GeneralSettingsCopyView = {
+  language?: SettingsOptionCopy;
+  workState?: SettingsCopyText;
+  runHistory?: SettingsCopyText;
+  runTimeline?: SettingsCopyText;
+  runSummary?: SettingsCopyText;
+  runTrace?: SettingsCopyText;
+  connectionTitle?: string;
+  wsUrl?: SettingsCopyText;
+  accessToken?: SettingsCopyText;
+  displayName?: SettingsCopyText;
+  externalChatId?: SettingsCopyText;
+  gateway?: GatewayCopy;
+  saveConnection?: string;
+  appearanceTitle?: string;
+  colorScheme?: SettingsOptionCopy;
+  conversationsTitle?: string;
+  clearWebChats?: ClearWebChatsCopy;
+  update?: UpdateCopy;
+};
+
+type GeneralSettingsCopy = {
+  auth: {
+    tokenLabel?: string;
+  };
+  connection?: Record<string, string>;
+  settings: {
+    general?: GeneralSettingsCopyView;
+    save?: string;
+  };
+};
+
+type GeneralSettingsStateView = {
+  updateLoading: boolean;
+  updateNotice: string;
+  updateError: string;
+  updateStatus: UpdateStatusView;
+};
+
+type GeneralClientStateView = {
+  connectionState: ConnectionState;
+};
+
+type RunPanelRow = [RunPanelKey, SettingsCopyText | undefined, boolean];
 
 type GeneralSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
-  settingsForm: AnyRecord;
+  copy: ValueRef<GeneralSettingsCopy>;
+  settingsState: GeneralSettingsStateView;
+  settingsForm: SettingsForm;
   webSessionCount?: ValueRef<number>;
-  state: AnyRecord;
+  state: GeneralClientStateView;
   toggleSettingsConnection: (checked: boolean) => void;
   saveConnectionSettings: () => void;
   loadUpdateStatus: () => void;
@@ -34,7 +119,7 @@ export function GeneralSettings({ client, clearWebSessions }: { client: GeneralS
     }
     return general.gateway?.disconnected || connectionLabel(copy, "disconnected");
   })();
-  const updateStatus: AnyRecord = state.updateStatus || {};
+  const updateStatus = state.updateStatus;
   const updateStatusLabel = (() => {
     if (state.updateLoading) {
       return general.update?.checking || "Checking for updates...";
@@ -46,13 +131,14 @@ export function GeneralSettings({ client, clearWebSessions }: { client: GeneralS
       return general.update?.dirty || "Working tree has local changes.";
     }
     if (updateStatus.update_available) {
+      const commitsBehind = updateStatus.commits_behind;
       return typeof general.update?.available === "function"
-        ? general.update.available(updateStatus.commits_behind || 0)
-        : `${updateStatus.commits_behind || 0} commits behind`;
+        ? general.update.available(commitsBehind)
+        : `${commitsBehind} commits behind`;
     }
     return general.update?.current || "Current";
   })();
-  const runPanelRows = [
+  const runPanelRows: RunPanelRow[] = [
     ["showWorkState", general.workState, form.showWorkState],
     ["showRunHistory", general.runHistory, form.showRunHistory],
     ["showRunTimeline", general.runTimeline, form.showRunTimeline],
@@ -72,11 +158,11 @@ export function GeneralSettings({ client, clearWebSessions }: { client: GeneralS
               { value: "zh-TW", label: general.language?.options?.zhTW || "Traditional Chinese" },
               { value: "en", label: general.language?.options?.en || "English" },
             ]}
-            onChange={(value) => (form.language = value)}
+            onChange={(value) => (form.language = normalizeChoice(value, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES))}
           />
         </SettingsRow>
 
-        {runPanelRows.map(([key, item, checked]: any[]) => (
+        {runPanelRows.map(([key, item, checked]) => (
           <SettingsRow key={key} title={item?.title || key} description={item?.description || ""}>
             <Switch aria-label={item?.title || key} checked={Boolean(checked)} onChange={(checkedValue) => (form[key] = checkedValue)} />
           </SettingsRow>
@@ -122,7 +208,7 @@ export function GeneralSettings({ client, clearWebSessions }: { client: GeneralS
               { value: "light", label: general.colorScheme?.options?.light || "Light" },
               { value: "dark", label: general.colorScheme?.options?.dark || "Dark" },
             ]}
-            onChange={(value) => (form.colorScheme = String(value))}
+            onChange={(value) => (form.colorScheme = normalizeChoice(value, DEFAULT_COLOR_SCHEME, SUPPORTED_COLOR_SCHEMES))}
           />
         </SettingsRow>
       </SettingsCard>

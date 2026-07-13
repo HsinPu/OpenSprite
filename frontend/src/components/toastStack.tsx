@@ -1,11 +1,12 @@
 import { Alert } from "antd";
 import { noticeTone } from "./displayHelpers";
+import type { ToastNotice } from "../composables/useChatClient";
 
-type AnyRecord = Record<string, any>;
+type ValueRef<T> = { value: T };
 
 type ToastClient = {
-  toasts: { value?: AnyRecord[] };
-  dismissToast: (id: any) => void;
+  toasts: ValueRef<ToastNotice[]>;
+  dismissToast: (id: string) => void;
 };
 
 export function ToastStack({ client }: { client: ToastClient }) {
@@ -15,7 +16,7 @@ export function ToastStack({ client }: { client: ToastClient }) {
   }
   return (
     <div className="toast-stack">
-      {toasts.map((toast: AnyRecord) => (
+      {toasts.map((toast: ToastNotice) => (
         <Alert
           key={toast.id}
           type={noticeTone(toast.tone)}

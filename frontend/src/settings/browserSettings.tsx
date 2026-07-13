@@ -1,21 +1,39 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Select, Space, Switch } from "antd";
+import type { BrowserForm, BrowserOperationResult, BrowserState } from "../composables/browserDefaults";
 import {
   browserBackendOptions,
+  browserDoctorChecks,
   browserDoctorCheckSummary,
   browserDoctorSummary,
   browserRuntimeStatus,
   browserSummary,
   browserTestSummary,
+  type BrowserSettingsCopy,
+  type BrowserSettingsCopyView,
+  type BrowserSettingsStateLike,
 } from "./searchBrowserHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type BrowserSettingsStateView = BrowserSettingsStateLike & {
+  browserLoading: boolean;
+  browserTestLoading: boolean;
+  browserDoctorLoading: boolean;
+  browserInstallLoading: boolean;
+  browserError: string;
+  browserNotice: string;
+  browserTestResult: BrowserOperationResult | null;
+  browserDoctorResult: BrowserOperationResult | null;
+  browserInstallResult: BrowserOperationResult | null;
+  browser: BrowserState;
+  browserForm: BrowserForm;
+};
+
 type BrowserSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<BrowserSettingsCopy>;
+  settingsState: BrowserSettingsStateView;
   saveBrowserSettings: () => void;
   runBrowserTest: () => void;
   runBrowserDoctor: () => void;
@@ -26,12 +44,14 @@ export function BrowserSettings({ client }: { client: BrowserSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
   const form = state.browserForm;
-  const browserCopy = copy.settings.browser || {};
+  const browserCopy: BrowserSettingsCopyView = copy.settings.browser ?? {};
   const backendOptions = browserBackendOptions(copy, state);
   const summary = browserSummary(copy, state);
   const runtime = browserRuntimeStatus(copy, state);
   const testSummary = browserTestSummary(copy, state);
   const doctorSummary = browserDoctorSummary(copy, state);
+  const doctorChecks = browserDoctorChecks(state.browserDoctorResult);
+  const installHint = typeof state.browser.runtime.install_hint === "string" ? state.browser.runtime.install_hint : "";
 
   return (
     <section className="settings-page">
@@ -84,7 +104,7 @@ export function BrowserSettings({ client }: { client: BrowserSettingsClient }) {
       </SettingsCard>
 
       <SettingsCard>
-        <SettingsRow title={browserCopy.runtimeTitle || "Runtime status"} description={<>{runtime}{state.browser.runtime?.install_hint ? <><br />{state.browser.runtime.install_hint}</> : null}</>} />
+        <SettingsRow title={browserCopy.runtimeTitle || "Runtime status"} description={<>{runtime}{installHint ? <><br />{installHint}</> : null}</>} />
       </SettingsCard>
 
       <SettingsSectionTitle>{browserCopy.doctor?.title || "Browser install check"}</SettingsSectionTitle>
@@ -99,10 +119,10 @@ export function BrowserSettings({ client }: { client: BrowserSettingsClient }) {
             </Button>
           </Space>
         </SettingsRow>
-        {state.browserDoctorResult?.checks?.length ? (
+        {doctorChecks.length ? (
           <div className="settings-stack">
-            {state.browserDoctorResult.checks.map((check: AnyRecord) => (
-              <SettingsRow key={check.name || check.command} title={check.command || check.name} description={browserDoctorCheckSummary(copy, check)} />
+            {doctorChecks.map((check, index) => (
+              <SettingsRow key={String(check.name || check.command || index)} title={String(check.command || check.name || "")} description={browserDoctorCheckSummary(copy, check)} />
             ))}
           </div>
         ) : null}

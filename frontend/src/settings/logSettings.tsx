@@ -1,13 +1,49 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, InputNumber, Select, Switch } from "antd";
+import { DEFAULT_LOG_LEVELS, type LogForm, type LogState } from "../composables/logDefaults";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type SettingsCopyText = {
+  title: string;
+  description: string;
+};
+
+type LogSettingsCopyView = {
+  title: string;
+  loading: string;
+  disabled: string;
+  enabled: SettingsCopyText;
+  level: SettingsCopyText;
+  retention: SettingsCopyText;
+  systemPrompt: SettingsCopyText;
+  systemPromptLines: SettingsCopyText;
+  reasoningDetails: SettingsCopyText;
+  currentTitle: string;
+  save: string;
+  rawResponseTitle: string;
+  rawResponseDescription: string;
+  summary: (level: string, retentionDays: number) => string;
+};
+
+type LogSettingsCopy = {
+  settings: {
+    log: LogSettingsCopyView;
+  };
+};
+
+type LogSettingsStateView = {
+  logLoading: boolean;
+  logNotice: string;
+  logError: string;
+  log: Pick<LogState, "levels">;
+  logForm: LogForm;
+};
+
 type LogSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<LogSettingsCopy>;
+  settingsState: LogSettingsStateView;
   saveLogSettings: () => void;
 };
 
@@ -18,7 +54,7 @@ export function LogSettings({ client }: { client: LogSettingsClient }) {
   const logCopy = copy.settings.log;
   const logLevelOptions = Array.isArray(state.log?.levels) && state.log.levels.length
     ? state.log.levels
-    : ["TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"];
+    : DEFAULT_LOG_LEVELS;
   const logSummary = form.enabled
     ? logCopy.summary(form.level || "INFO", Number(form.retentionDays || 365))
     : logCopy.disabled;

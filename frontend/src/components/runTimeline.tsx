@@ -1,21 +1,37 @@
 import { Card, Empty, Timeline, Typography } from "antd";
+import type { RunTimelineEventView } from "../composables/chatClientRunHelpers";
 
-type AnyRecord = Record<string, any>;
+export type RunTimelineCopy = {
+  timeline?: {
+    title?: string;
+  };
+  runHistory: {
+    title: string;
+  };
+};
 
-export function RunTimeline({ copy, events }: { copy: AnyRecord; events: AnyRecord[] }) {
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback).trim();
+}
+
+export function RunTimeline({ copy, events }: { copy: RunTimelineCopy; events: RunTimelineEventView[] }) {
   return (
     <Card size="small" className="run-timeline" title={copy.timeline?.title || copy.runHistory.title}>
       {events.length ? (
         <Timeline
-          items={events.map((event) => ({
-            color: event.tone === "error" ? "red" : event.tone === "success" ? "green" : "blue",
-            children: (
-              <div>
-                <strong>{event.label || event.eventType}</strong>
-                {event.detail ? <Typography.Paragraph type="secondary">{event.detail}</Typography.Paragraph> : null}
-              </div>
-            ),
-          }))}
+          items={events.map((event) => {
+            const tone = text(event.tone);
+            const detail = text(event.detail);
+            return {
+              color: tone === "error" ? "red" : tone === "success" ? "green" : "blue",
+              children: (
+                <div>
+                  <strong>{text(event.label, text(event.eventType))}</strong>
+                  {detail ? <Typography.Paragraph type="secondary">{detail}</Typography.Paragraph> : null}
+                </div>
+              ),
+            };
+          })}
         />
       ) : (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />

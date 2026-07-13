@@ -3,25 +3,62 @@ import { RunSummaryCard } from "./runSummaryCard";
 import { RunTimeline } from "./runTimeline";
 import { RunTraceViewer } from "./runTraceViewer";
 import { WorkStateCard } from "./workStateCard";
+import type { RunSummaryCopy } from "./runSummaryCard";
+import type { RunTimelineCopy } from "./runTimeline";
+import type { RunTraceCopy } from "./runTraceViewer";
+import type { RunTimelineEventView, RunViewState } from "../composables/chatClientRunHelpers";
+import type { TraceFileChangeView, WorkStateView } from "../composables/runTraceNormalizers";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+export type RunInspectorStateView = {
+  showWorkState: boolean;
+  showRunHistory: boolean;
+  showRunSummary: boolean;
+  showRunTimeline: boolean;
+  showRunTrace: boolean;
+};
+
+export type RunInspectorCopy = RunSummaryCopy &
+  RunTimelineCopy &
+  RunTraceCopy & {
+    trace: RunTraceCopy["trace"] & {
+      collapse?: string;
+      noRun?: string;
+    };
+    runHistory: RunTimelineCopy["runHistory"] & {
+      latest?: string;
+      loading?: string;
+      select?: string;
+      unavailable: string;
+    };
+    runSummary: RunSummaryCopy["runSummary"] & {
+      objective?: string;
+    };
+    workState?: {
+      currentTask?: string;
+      continue?: string;
+      continuePrompt?: string;
+      verify?: string;
+      verifyPrompt?: string;
+    };
+  };
+
 export type RunInspectorClient = {
-  state: AnyRecord;
-  copy: ValueRef<AnyRecord>;
-  currentRun: ValueRef<AnyRecord | null>;
-  currentRuns: ValueRef<AnyRecord[]>;
+  state: RunInspectorStateView;
+  copy: ValueRef<RunInspectorCopy>;
+  currentRun: ValueRef<RunViewState | null>;
+  currentRuns: ValueRef<RunViewState[]>;
   currentRunsLoading: ValueRef<boolean>;
   currentRunsError: ValueRef<string>;
-  currentWorkState: ValueRef<AnyRecord | null>;
-  currentRunTimeline: ValueRef<AnyRecord[]>;
+  currentWorkState: ValueRef<WorkStateView | null>;
+  currentRunTimeline: ValueRef<RunTimelineEventView[]>;
   selectRun: (runId: string) => void;
   resumeFollowUp: (prompt: string) => void;
   runVerification: (prompt: string) => void;
-  cleanupWorktreeSandbox: (run: AnyRecord) => void;
-  cancelRun: (run: AnyRecord) => void;
-  revertRunFileChange: (run: AnyRecord, change: AnyRecord) => void;
+  cleanupWorktreeSandbox: (run: RunViewState) => void;
+  cancelRun: (run: RunViewState) => void;
+  revertRunFileChange: (run: RunViewState, change: TraceFileChangeView) => void;
 };
 
 export function RunInspector({ client }: { client: RunInspectorClient }) {
@@ -42,7 +79,7 @@ export function RunInspector({ client }: { client: RunInspectorClient }) {
   );
 }
 
-function RunDetailsPanel({ client, run }: { client: RunInspectorClient; run: AnyRecord | null }) {
+function RunDetailsPanel({ client, run }: { client: RunInspectorClient; run: RunViewState | null }) {
   const copy = client.copy.value;
   if (!run) {
     return <div className="run-trace__empty">{copy.trace?.noRun || copy.runHistory.unavailable}</div>;

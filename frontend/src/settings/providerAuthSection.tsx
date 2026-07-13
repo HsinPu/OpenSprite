@@ -1,6 +1,6 @@
 import { AuthProviderCard } from "./authProviderCard";
-import type { AnyRecord } from "./providerHelpers";
 import { SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
+import type { ProviderAuthSectionView } from "./providerAuthSections";
 
 export function ProviderAuthSection({
   title,
@@ -17,22 +17,7 @@ export function ProviderAuthSection({
   onRefresh,
   onLogin,
   onLogout,
-}: {
-  title: string;
-  notice?: string;
-  error?: string;
-  mark: string;
-  name: string;
-  status: string;
-  description: string;
-  loading?: boolean;
-  configured?: boolean;
-  copy: AnyRecord;
-  auth: AnyRecord;
-  onRefresh: () => void;
-  onLogin: () => void;
-  onLogout: () => void;
-}) {
+}: Omit<ProviderAuthSectionView, "key" | "visible">) {
   return (
     <>
       <SettingsSectionTitle>{title}</SettingsSectionTitle>

@@ -1,7 +1,35 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { Button, Space, Tag } from "antd";
-import type { AnyRecord } from "./providerHelpers";
 import { SettingsCard } from "./settingsPrimitives";
+
+type AuthProviderCardCopy = {
+  login?: unknown;
+  logout?: unknown;
+  openVerification?: unknown;
+  refresh?: unknown;
+  userCodeLabel?: unknown;
+};
+type AuthProviderCardState = {
+  userCode?: unknown;
+  verificationUri?: unknown;
+};
+type AuthProviderCardProps = {
+  mark: string;
+  name: string;
+  status: string;
+  description: string;
+  loading?: boolean;
+  configured?: boolean;
+  copy: AuthProviderCardCopy;
+  auth: AuthProviderCardState;
+  onRefresh: () => void;
+  onLogin: () => void;
+  onLogout: () => void;
+};
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
 
 export function AuthProviderCard({
   mark,
@@ -15,7 +43,10 @@ export function AuthProviderCard({
   onRefresh,
   onLogin,
   onLogout,
-}: AnyRecord) {
+}: AuthProviderCardProps) {
+  const userCode = text(auth.userCode);
+  const verificationUri = text(auth.verificationUri);
+
   return (
     <SettingsCard className="provider-card">
       <div className="provider-row provider-row--stacked codex-auth-row">
@@ -31,16 +62,16 @@ export function AuthProviderCard({
             </div>
           </div>
           <Space className="provider-row__actions" wrap>
-            <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={onRefresh}>{copy.refresh || "Refresh"}</Button>
-            <Button type="primary" loading={loading} disabled={loading} onClick={onLogin}>{copy.login || "Login"}</Button>
-            <Button disabled={loading || !configured} onClick={onLogout}>{copy.logout || "Logout"}</Button>
+            <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={onRefresh}>{text(copy.refresh, "Refresh")}</Button>
+            <Button type="primary" loading={loading} disabled={loading} onClick={onLogin}>{text(copy.login, "Login")}</Button>
+            <Button disabled={loading || !configured} onClick={onLogout}>{text(copy.logout, "Logout")}</Button>
           </Space>
         </div>
-        {auth.userCode ? (
+        {userCode ? (
           <div className="codex-auth-command">
-            <span>{copy.userCodeLabel || "User code"}</span>
-            <code>{auth.userCode}</code>
-            {auth.verificationUri ? <a href={auth.verificationUri} target="_blank" rel="noreferrer">{copy.openVerification || "Open verification"}</a> : null}
+            <span>{text(copy.userCodeLabel, "User code")}</span>
+            <code>{userCode}</code>
+            {verificationUri ? <a href={verificationUri} target="_blank" rel="noreferrer">{text(copy.openVerification, "Open verification")}</a> : null}
           </div>
         ) : null}
       </div>

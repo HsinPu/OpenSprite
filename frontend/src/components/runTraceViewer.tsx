@@ -1,7 +1,26 @@
 import { Button, Collapse, Empty, List, Tag, Timeline } from "antd";
 import { runStatusColor } from "./displayHelpers";
+import type { RunViewState } from "../composables/chatClientRunHelpers";
+import type { RunArtifactView, TraceEventView, TraceFileChangeView, TracePartView } from "../composables/runTraceNormalizers";
 
-type AnyRecord = Record<string, any>;
+export type RunTraceCopy = {
+  trace: {
+    artifactHeading?: string;
+    artifacts: string;
+    events?: string;
+    parts: string;
+    title: string;
+    exportDebug: string;
+    cancelRun: string;
+    loading?: string;
+  };
+  runSummary: {
+    diffSummary?: string;
+  };
+  runFileInspector?: {
+    revert?: string;
+  };
+};
 
 export function RunTraceViewer({
   copy,
@@ -9,13 +28,13 @@ export function RunTraceViewer({
   cancelRun,
   revertFileChange,
 }: {
-  copy: AnyRecord;
-  run: AnyRecord;
-  cancelRun: (run: AnyRecord) => void;
-  revertFileChange: (run: AnyRecord, change: AnyRecord) => void;
+  copy: RunTraceCopy;
+  run: RunViewState;
+  cancelRun: (run: RunViewState) => void;
+  revertFileChange: (run: RunViewState, change: TraceFileChangeView) => void;
 }) {
   const artifacts = run.artifacts || [];
-  const events = run.rawEvents || run.events || [];
+  const events = run.rawEvents || [];
   const parts = run.parts || [];
   const fileChanges = run.fileChanges || [];
 
@@ -38,12 +57,12 @@ export function RunTraceViewer({
       children: artifacts.length ? (
         <List
           dataSource={artifacts}
-          renderItem={(artifact: AnyRecord) => (
+          renderItem={(artifact: RunArtifactView) => (
             <List.Item>
               <List.Item.Meta
-                avatar={<Tag color={runStatusColor(artifact.status)}>{artifact.status || artifact.kind || artifact.type}</Tag>}
-                title={artifact.title || artifact.name || artifact.toolName || artifact.kind || artifact.type}
-                description={artifact.detail || artifact.summary || artifact.path || artifact.message}
+                avatar={<Tag color={runStatusColor(artifact.status)}>{artifact.status || artifact.kind}</Tag>}
+                title={artifact.title || artifact.toolName || artifact.kind || artifact.artifactType}
+                description={artifact.detail || artifact.path || artifact.diffPreview}
               />
             </List.Item>
           )}
@@ -57,8 +76,8 @@ export function RunTraceViewer({
       label: `${copy.trace.events || "Events"} (${events.length})`,
       children: events.length ? (
         <Timeline
-          items={events.slice(-120).map((event: AnyRecord) => ({
-            color: event.status === "failed" || event.tone === "error" ? "red" : "blue",
+          items={events.slice(-120).map((event: TraceEventView) => ({
+            color: event.status === "failed" ? "red" : "blue",
             children: (
               <Collapse
                 className="run-trace__event-collapse"
@@ -66,9 +85,9 @@ export function RunTraceViewer({
                 ghost
                 items={[
                   {
-                    key: event.id || event.eventType || event.type || "event",
-                    label: event.label || event.eventType || event.type,
-                    children: <pre>{JSON.stringify(event.payload || event, null, 2)}</pre>,
+                    key: event.id || event.eventType || "event",
+                    label: event.eventType || "event",
+                    children: <pre>{JSON.stringify(event.payload, null, 2)}</pre>,
                   },
                 ]}
               />
@@ -84,10 +103,10 @@ export function RunTraceViewer({
       label: `${copy.trace.parts} (${parts.length})`,
       children: parts.length ? (
         <Collapse
-          items={parts.map((part: AnyRecord, index: number) => ({
-            key: part.id || index,
-            label: part.title || part.type || `${copy.trace.parts} ${index + 1}`,
-            children: <pre>{part.text || part.content || JSON.stringify(part, null, 2)}</pre>,
+          items={parts.map((part: TracePartView, index: number) => ({
+            key: part.partId || String(index),
+            label: part.partType || `${copy.trace.parts} ${index + 1}`,
+            children: <pre>{part.content || JSON.stringify(part, null, 2)}</pre>,
           }))}
         />
       ) : (
@@ -100,10 +119,10 @@ export function RunTraceViewer({
       children: fileChanges.length ? (
         <List
           dataSource={fileChanges}
-          renderItem={(change: AnyRecord) => (
+          renderItem={(change: TraceFileChangeView) => (
             <List.Item
               actions={[
-                change.revertSupported ? (
+                Boolean(change.revertSupported) ? (
                   <Button size="small" onClick={() => revertFileChange(run, change)}>
                     {copy.runFileInspector?.revert || "Revert"}
                   </Button>

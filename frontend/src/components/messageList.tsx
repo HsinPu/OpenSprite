@@ -3,9 +3,11 @@ import { EyeOutlined } from "@ant-design/icons";
 import { Button, Card, Space, Tag, Typography } from "antd";
 import { runStatusColor } from "./displayHelpers";
 import { artifactStatusLabel, artifactTypeLabel, normalizeMessages } from "./messageData";
+import type { NormalizedMessagePart } from "./messageData";
 import { MessageTextRenderer } from "./messageMarkdown";
-
-type AnyRecord = Record<string, any>;
+import type { MessageCopy } from "./messageMarkdown";
+import type { RunViewState } from "../composables/chatClientRunHelpers";
+import type { ChatMessage, LiveEntry } from "../composables/chatClientSessions";
 
 export function MessageList({
   copy,
@@ -15,10 +17,10 @@ export function MessageList({
   displayName,
   viewTraceForRun,
 }: {
-  copy: AnyRecord;
-  entries: AnyRecord[];
-  messages: AnyRecord[];
-  runs: AnyRecord[];
+  copy: MessageCopy;
+  entries: LiveEntry[];
+  messages: ChatMessage[];
+  runs: RunViewState[];
   displayName: string;
   viewTraceForRun: (runId: string) => void;
 }) {
@@ -58,10 +60,10 @@ export function MessageList({
             ) : null}
             {message.content?.length ? (
               <div className="message__parts">
-                {message.content.map((part: AnyRecord) =>
+                {message.content.map((part: NormalizedMessagePart) =>
                   part.type === "text" ? (
                     <div key={part.id} className="message__bubble">
-                      <MessageTextRenderer blocks={part.textBlocks} copy={copy} />
+                      <MessageTextRenderer blocks={part.textBlocks || []} copy={copy} />
                     </div>
                   ) : (
                     <Card key={part.id} size="small" className="message__artifact">

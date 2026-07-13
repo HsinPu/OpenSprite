@@ -1,8 +1,22 @@
 import { List } from "antd";
 import { AvailableProviderRow } from "./availableProviderRow";
 import { ProviderEmptyState } from "./providerEmptyState";
-import type { AnyRecord } from "./providerHelpers";
+import type { ProviderLike } from "./providerHelpers";
 import { SettingsCard, SettingsSectionTitle } from "./settingsPrimitives";
+
+type AvailableProviderCopyView = {
+  builtInBadge?: unknown;
+  connect?: unknown;
+  connectOAuth?: unknown;
+  connectedCount?: unknown;
+  noAvailableDescription?: unknown;
+  noAvailableTitle?: unknown;
+  popularTitle?: unknown;
+};
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
 
 export function AvailableProvidersSection({
   providers,
@@ -11,15 +25,15 @@ export function AvailableProvidersSection({
   onConnectOAuth,
   onBeginConnect,
 }: {
-  providers: AnyRecord[];
-  providerCopy: AnyRecord;
+  providers: ProviderLike[];
+  providerCopy: AvailableProviderCopyView;
   providersLoading: boolean;
-  onConnectOAuth: (provider: AnyRecord) => void;
-  onBeginConnect: (provider: AnyRecord) => void;
+  onConnectOAuth: (provider: ProviderLike) => void;
+  onBeginConnect: (provider: ProviderLike) => void;
 }) {
   return (
     <>
-      <SettingsSectionTitle>{providerCopy.popularTitle || "Available providers"}</SettingsSectionTitle>
+      <SettingsSectionTitle>{text(providerCopy.popularTitle, "Available providers")}</SettingsSectionTitle>
       <SettingsCard className="provider-card">
         <List
           className="provider-row-list"
@@ -27,14 +41,14 @@ export function AvailableProvidersSection({
           locale={{
             emptyText: (
               <ProviderEmptyState
-                title={providerCopy.noAvailableTitle || "No available providers"}
-                description={providerCopy.noAvailableDescription || ""}
+                title={text(providerCopy.noAvailableTitle, "No available providers")}
+                description={text(providerCopy.noAvailableDescription)}
               />
             ),
           }}
-          renderItem={(provider: AnyRecord) => (
+          renderItem={(provider: ProviderLike) => (
             <AvailableProviderRow
-              key={provider.id}
+              key={String(provider.id || "")}
               provider={provider}
               providerCopy={providerCopy}
               providersLoading={providersLoading}

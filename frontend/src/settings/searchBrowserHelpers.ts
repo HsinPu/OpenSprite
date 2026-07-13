@@ -1,27 +1,180 @@
-type AnyRecord = Record<string, any>;
+import { normalizeBrowserResultCheck, type BrowserForm, type BrowserOperationResult, type BrowserResultCheck, type BrowserRuntimeState, type BrowserState } from "../composables/browserDefaults";
+import { toPayloadSource } from "../composables/payloadBoundary";
+import type { SearchForm, SearchState, SearxngOptionEntry } from "../composables/searchDefaults";
 
-export function webSearchProviderLabel(copy: AnyRecord, provider: string) {
-  return copy.settings.search?.providers?.[provider] || provider;
+type SettingsCopyText = {
+  title?: string;
+  description?: string;
+  placeholder?: string;
+};
+
+type SearchCredentialsCopy = {
+  configured?: string;
+  notConfigured?: string;
+  description?: (status: string) => string;
+  placeholder?: string;
+  jina?: SettingsCopyText;
+};
+
+export type SearchSettingsCopyView = {
+  loading?: string;
+  title?: string;
+  provider?: SettingsCopyText;
+  providers?: Record<string, string>;
+  freshness?: SettingsCopyText & {
+    options?: Record<string, string>;
+  };
+  maxResults?: SettingsCopyText;
+  duckduckgoMaxPages?: SettingsCopyText;
+  searxngMaxPages?: SettingsCopyText;
+  searxngUrl?: SettingsCopyText;
+  searxngOptions?: SettingsCopyText & {
+    collapse?: string;
+    expand?: string;
+    loadTitle?: string;
+    loadDescription?: string;
+    loading?: string;
+    load?: string;
+    emptyEngines?: string;
+    emptyCategories?: string;
+    configuredOnly?: string;
+  };
+  searxngEngines?: SettingsCopyText;
+  searxngCategories?: SettingsCopyText;
+  proxy?: SettingsCopyText;
+  currentTitle?: string;
+  save?: string;
+  credentialsTitle?: string;
+  credentials?: SearchCredentialsCopy;
+  summary?: (providerLabel: string, freshnessLabel: string, maxResults: number) => string;
+};
+
+export type SearchSettingsCopy = {
+  settings: {
+    search?: SearchSettingsCopyView;
+  };
+};
+
+export type SearchSettingsStateLike = {
+  search?: Partial<SearchState>;
+  searchForm?: Partial<SearchForm>;
+};
+
+export type SearchSelectOption = {
+  id: string;
+  label: string;
+};
+
+export type SearchOptionEntry = SearxngOptionEntry;
+
+type BrowserCopyFormatter<T extends unknown[]> = (...args: T) => string;
+
+export type BrowserSettingsCopyView = {
+  loading?: string;
+  title?: string;
+  enabled?: SettingsCopyText;
+  backend?: SettingsCopyText;
+  backends?: Record<string, string>;
+  cdpUrl?: SettingsCopyText;
+  launchArgs?: SettingsCopyText;
+  commandTimeout?: SettingsCopyText;
+  sessionTimeout?: SettingsCopyText;
+  allowPrivateUrls?: SettingsCopyText;
+  currentTitle?: string;
+  disabled?: string;
+  enabledSummary?: string;
+  cdpEnabled?: string;
+  runtimeTitle?: string;
+  runtimeAvailable?: BrowserCopyFormatter<[string]>;
+  runtimeMissing?: string;
+  cloudConfigured?: BrowserCopyFormatter<[string]>;
+  cloudMissing?: BrowserCopyFormatter<[string]>;
+  cloudAttachRuntimeMissing?: BrowserCopyFormatter<[string]>;
+  cloudEnabled?: BrowserCopyFormatter<[string]>;
+  test?: SettingsCopyText & {
+    title?: string;
+    urlTitle?: string;
+    currentTitle?: string;
+    notRun?: string;
+    run?: string;
+    running?: string;
+    resultPassed?: BrowserCopyFormatter<[string]>;
+    resultFailed?: BrowserCopyFormatter<[string]>;
+  };
+  doctor?: {
+    title?: string;
+    currentTitle?: string;
+    notRun?: string;
+    run?: string;
+    running?: string;
+    resultPassed?: BrowserCopyFormatter<[number, number]>;
+    resultFailed?: BrowserCopyFormatter<[number, number]>;
+    checkPassed?: string;
+    checkFailed?: string;
+  };
+  install?: {
+    run?: string;
+    running?: string;
+  };
+  save?: string;
+};
+
+export type BrowserSettingsCopy = {
+  settings: {
+    browser?: BrowserSettingsCopyView;
+  };
+};
+
+export type BrowserSettingsStateLike = {
+  browser?: Partial<BrowserState>;
+  browserForm?: Partial<BrowserForm>;
+  browserTestResult?: BrowserOperationResult | null;
+  browserDoctorResult?: BrowserOperationResult | null;
+  browserInstallResult?: BrowserOperationResult | null;
+};
+
+type BrowserCloudBackendPayload = {
+  configured?: unknown;
+};
+
+function searchCopyFor(copy: SearchSettingsCopy): SearchSettingsCopyView {
+  return copy.settings.search ?? {};
 }
 
-export function webSearchFreshnessLabel(copy: AnyRecord, freshness: string) {
-  return copy.settings.search?.freshness?.options?.[freshness] || freshness;
+function browserCopyFor(copy: BrowserSettingsCopy): BrowserSettingsCopyView {
+  return copy.settings.browser ?? {};
 }
 
-export function webSearchProviderOptions(copy: AnyRecord, state: AnyRecord) {
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((entry) => String(entry || "").trim()).filter(Boolean) : [];
+}
+
+export function webSearchProviderLabel(copy: SearchSettingsCopy, provider: string): string {
+  return searchCopyFor(copy).providers?.[provider] || provider;
+}
+
+export function webSearchFreshnessLabel(copy: SearchSettingsCopy, freshness: string): string {
+  return searchCopyFor(copy).freshness?.options?.[freshness] || freshness;
+}
+
+export function webSearchProviderOptions(copy: SearchSettingsCopy, state: SearchSettingsStateLike): SearchSelectOption[] {
   const providers = state.search?.providers;
   const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "searxng", "jina"];
-  return values.map((id: string) => ({ id, label: webSearchProviderLabel(copy, id) }));
+  return values.map((id) => ({ id, label: webSearchProviderLabel(copy, id) }));
 }
 
-export function webSearchFreshnessOptions(copy: AnyRecord, state: AnyRecord) {
+export function webSearchFreshnessOptions(copy: SearchSettingsCopy, state: SearchSettingsStateLike): SearchSelectOption[] {
   const freshnessOptions = state.search?.freshness_options;
   const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["auto", "none", "day", "week", "month", "year"];
-  return values.map((id: string) => ({ id, label: webSearchFreshnessLabel(copy, id) }));
+  return values.map((id) => ({ id, label: webSearchFreshnessLabel(copy, id) }));
 }
 
-export function mergeSelectedSearchOptions(options: AnyRecord[] = [], selected: string[] = []) {
-  const merged = new Map<string, AnyRecord>();
+export function mergeSelectedSearchOptions(options: SearxngOptionEntry[] = [], selected: string[] = []): SearchOptionEntry[] {
+  const merged = new Map<string, SearchOptionEntry>();
   for (const option of Array.isArray(options) ? options : []) {
     const id = String(option?.id || "").trim();
     if (!id) {
@@ -39,34 +192,37 @@ export function mergeSelectedSearchOptions(options: AnyRecord[] = [], selected: 
     if (!value || merged.has(value)) {
       continue;
     }
-    merged.set(value, { id: value, label: value, categories: [], shortcut: "", configuredOnly: true });
+    merged.set(value, { id: value, label: value, categories: [], shortcut: "", enabled: null, configuredOnly: true });
   }
   return Array.from(merged.values());
 }
 
-export function searxngEngineMeta(copy: AnyRecord, option: AnyRecord) {
-  const parts = [];
+export function searxngEngineMeta(copy: SearchSettingsCopy, option: SearchOptionEntry): string {
+  const parts: string[] = [];
   if (option.shortcut) {
     parts.push(option.shortcut);
   }
-  if (Array.isArray(option.categories) && option.categories.length) {
-    parts.push(option.categories.join(", "));
+  const categories = stringList(option.categories);
+  if (categories.length) {
+    parts.push(categories.join(", "));
   }
   if (option.configuredOnly) {
-    parts.push(copy.settings.search?.searxngOptions?.configuredOnly || "Configured but not listed");
+    parts.push(searchCopyFor(copy).searxngOptions?.configuredOnly || "Configured but not listed");
   }
   return parts.join(" - ");
 }
 
-export function webSearchCredentialStatus(copy: AnyRecord, state: AnyRecord, provider: string) {
+export function webSearchCredentialStatus(copy: SearchSettingsCopy, state: SearchSettingsStateLike, provider: string): string {
   const configured = state.search?.[`${provider}_api_key_configured`] === true;
-  return configured ? copy.settings.search?.credentials?.configured || "Configured" : copy.settings.search?.credentials?.notConfigured || "Not configured";
+  const credentials = searchCopyFor(copy).credentials;
+  return configured ? credentials?.configured || "Configured" : credentials?.notConfigured || "Not configured";
 }
 
-export function webSearchSummary(copy: AnyRecord, state: AnyRecord) {
+export function webSearchSummary(copy: SearchSettingsCopy, state: SearchSettingsStateLike): string {
   const form = state.searchForm || {};
-  return typeof copy.settings.search?.summary === "function"
-    ? copy.settings.search.summary(
+  const searchCopy = searchCopyFor(copy);
+  return typeof searchCopy.summary === "function"
+    ? searchCopy.summary(
       webSearchProviderLabel(copy, form.provider || "searxng"),
       webSearchFreshnessLabel(copy, form.freshness || "auto"),
       Number(form.maxResults || 25),
@@ -74,28 +230,28 @@ export function webSearchSummary(copy: AnyRecord, state: AnyRecord) {
     : `${form.provider || "searxng"} - ${form.freshness || "auto"} - ${Number(form.maxResults || 25)}`;
 }
 
-export function browserBackendOptions(copy: AnyRecord, state: AnyRecord) {
+export function browserBackendOptions(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): SearchSelectOption[] {
   const backends = state.browser?.backends;
   const values = Array.isArray(backends) && backends.length ? backends : ["agent-browser", "browserbase", "browser-use", "firecrawl"];
-  return values.map((id: string) => ({ id, label: copy.settings.browser?.backends?.[id] || id }));
+  return values.map((id) => ({ id, label: browserCopyFor(copy).backends?.[id] || id }));
 }
 
-export function selectedBrowserBackend(state: AnyRecord) {
-  return state.browserForm?.backend || state.browser?.backend || "agent-browser";
+export function selectedBrowserBackend(state: BrowserSettingsStateLike): string {
+  return text(state.browserForm?.backend, text(state.browser?.backend, "agent-browser"));
 }
 
-export function selectedBrowserBackendLabel(copy: AnyRecord, state: AnyRecord) {
+export function selectedBrowserBackendLabel(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): string {
   const backend = selectedBrowserBackend(state);
-  return copy.settings.browser?.backends?.[backend] || backend;
+  return browserCopyFor(copy).backends?.[backend] || backend;
 }
 
-export function browserRuntimeStatus(copy: AnyRecord, state: AnyRecord) {
-  const browserCopy = copy.settings.browser || {};
-  const runtime = state.browser?.runtime || {};
+export function browserRuntimeStatus(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): string {
+  const browserCopy = browserCopyFor(copy);
+  const runtime: Partial<BrowserRuntimeState> = state.browser?.runtime || {};
   const backend = selectedBrowserBackend(state);
   const backendLabel = selectedBrowserBackendLabel(copy, state);
   if (backend !== "agent-browser") {
-    const cloud = state.browser?.cloud?.[backend] || {};
+    const cloud = toPayloadSource<BrowserCloudBackendPayload>(state.browser?.cloud?.[backend]) || {};
     if (!cloud.configured) {
       return typeof browserCopy.cloudMissing === "function" ? browserCopy.cloudMissing(backendLabel) : `${backendLabel} credentials are not configured.`;
     }
@@ -105,13 +261,14 @@ export function browserRuntimeStatus(copy: AnyRecord, state: AnyRecord) {
     return typeof browserCopy.cloudConfigured === "function" ? browserCopy.cloudConfigured(backendLabel) : `${backendLabel} is configured.`;
   }
   if (runtime.available) {
-    return typeof browserCopy.runtimeAvailable === "function" ? browserCopy.runtimeAvailable(runtime.command || "agent-browser") : `Available: ${runtime.command || "agent-browser"}`;
+    const command = text(runtime.command, "agent-browser");
+    return typeof browserCopy.runtimeAvailable === "function" ? browserCopy.runtimeAvailable(command) : `Available: ${command}`;
   }
   return browserCopy.runtimeMissing || "agent-browser and npx were not found.";
 }
 
-export function browserSummary(copy: AnyRecord, state: AnyRecord) {
-  const browserCopy = copy.settings.browser || {};
+export function browserSummary(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): string {
+  const browserCopy = browserCopyFor(copy);
   const form = state.browserForm || {};
   const backend = selectedBrowserBackend(state);
   const backendLabel = selectedBrowserBackendLabel(copy, state);
@@ -127,36 +284,44 @@ export function browserSummary(copy: AnyRecord, state: AnyRecord) {
   return browserCopy.enabledSummary || "Browser tools are enabled.";
 }
 
-export function browserTestSummary(copy: AnyRecord, state: AnyRecord) {
-  const browserCopy = copy.settings.browser || {};
+export function browserTestSummary(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): string {
+  const browserCopy = browserCopyFor(copy);
   const result = state.browserTestResult;
   if (!result) {
     return browserCopy.test?.notRun || "No manual browser test has run yet.";
   }
   if (result.ok) {
-    return typeof browserCopy.test?.resultPassed === "function" ? browserCopy.test.resultPassed(result.url || "") : `Browser test passed: ${result.url || ""}`;
+    const url = text(result.url);
+    return typeof browserCopy.test?.resultPassed === "function" ? browserCopy.test.resultPassed(url) : `Browser test passed: ${url}`;
   }
-  const error = result.error || result.open?.error || result.snapshot?.error || "";
+  const error = text(result.error, text(result.open?.error, text(result.snapshot?.error)));
   return typeof browserCopy.test?.resultFailed === "function" ? browserCopy.test.resultFailed(error) : `Browser test failed${error ? `: ${error}` : "."}`;
 }
 
-export function browserDoctorSummary(copy: AnyRecord, state: AnyRecord) {
-  const browserCopy = copy.settings.browser || {};
+export function browserDoctorChecks(value: BrowserOperationResult | null | undefined): BrowserResultCheck[] {
+  const checks = value?.checks;
+  return Array.isArray(checks)
+    ? checks.map(normalizeBrowserResultCheck).filter((check) => Object.keys(check).length > 0)
+    : [];
+}
+
+export function browserDoctorSummary(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): string {
+  const browserCopy = browserCopyFor(copy);
   const result = state.browserDoctorResult;
   if (!result) {
     return browserCopy.doctor?.notRun || "Install has not been checked yet.";
   }
-  const checks = Array.isArray(result.checks) ? result.checks : [];
-  const passed = checks.filter((check: AnyRecord) => check?.ok).length;
+  const checks = browserDoctorChecks(result);
+  const passed = checks.filter((check) => check.ok).length;
   if (result.ok) {
     return typeof browserCopy.doctor?.resultPassed === "function" ? browserCopy.doctor.resultPassed(passed, checks.length) : `Install check passed: ${passed}/${checks.length}`;
   }
   return typeof browserCopy.doctor?.resultFailed === "function" ? browserCopy.doctor.resultFailed(passed, checks.length) : `Install check failed: ${passed}/${checks.length}`;
 }
 
-export function browserDoctorCheckSummary(copy: AnyRecord, check: AnyRecord) {
-  const browserCopy = copy.settings.browser || {};
+export function browserDoctorCheckSummary(copy: BrowserSettingsCopy, check: BrowserResultCheck): string {
+  const browserCopy = browserCopyFor(copy);
   const status = check?.ok ? browserCopy.doctor?.checkPassed || "Passed" : browserCopy.doctor?.checkFailed || "Failed";
-  const detail = String(check?.suggestion || check?.stderr || check?.stdout || "").trim();
+  const detail = text(check?.suggestion, text(check?.stderr, text(check?.stdout))).trim();
   return detail ? `${status}: ${detail}` : status;
 }

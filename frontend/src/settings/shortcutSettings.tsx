@@ -1,8 +1,17 @@
 import { SettingsCard, SettingsRow } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
+type ShortcutSettingsCopy = {
+  settings: {
+    shortcuts?: {
+      openSettings?: string;
+      openSettingsDescription?: string;
+      sendMessage?: string;
+      sendMessageDescription?: string;
+    };
+  };
+};
 
-export function ShortcutSettings({ copy }: { copy: AnyRecord }) {
+export function ShortcutSettings({ copy }: { copy: ShortcutSettingsCopy }) {
   return (
     <section className="settings-page">
       <SettingsCard>

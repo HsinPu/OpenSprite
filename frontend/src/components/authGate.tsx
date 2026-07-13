@@ -1,19 +1,34 @@
 import type { FormEvent } from "react";
 import { Alert, Button, Form, Input, Space, Typography } from "antd";
+import type { SettingsSectionId } from "../composables/settingsSectionLoaders";
 
-type AnyRecord = Record<string, any>;
+type ValueRef<T> = { value: T };
+
+interface AuthGateCopy {
+  auth: {
+    title: string;
+    description: string;
+    tokenLabel: string;
+    submit: string;
+    settings: string;
+  };
+}
+
+interface AuthGateState {
+  authRequired?: boolean;
+  authError?: string;
+}
+
+interface AuthGateSettingsForm {
+  accessToken: string;
+}
 
 type AuthGateClient = {
-  copy: { value: AnyRecord };
-  state: {
-    authRequired?: boolean;
-    authError?: string;
-  };
-  settingsForm: {
-    accessToken: string;
-  };
+  copy: ValueRef<AuthGateCopy>;
+  state: AuthGateState;
+  settingsForm: AuthGateSettingsForm;
   submitAccessToken: (event: FormEvent<HTMLFormElement>) => void;
-  openSettings: (section: string) => void;
+  openSettings: (section: SettingsSectionId) => void;
 };
 
 export function AuthGate({ client }: { client: AuthGateClient }) {

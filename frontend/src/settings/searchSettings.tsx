@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Select } from "antd";
+import type { SearchForm, SearchState } from "../composables/searchDefaults";
 import {
   mergeSelectedSearchOptions,
   searxngEngineMeta,
+  type SearchOptionEntry,
+  type SearchSettingsCopy,
+  type SearchSettingsCopyView,
+  type SearchSettingsStateLike,
   webSearchCredentialStatus,
   webSearchFreshnessOptions,
   webSearchProviderOptions,
@@ -11,12 +16,22 @@ import {
 } from "./searchBrowserHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type SearchSettingsStateView = SearchSettingsStateLike & {
+  searchLoading: boolean;
+  searchOptionsLoading: boolean;
+  searchError: string;
+  searchOptionsError: string;
+  searchNotice: string;
+  searchOptionsNotice: string;
+  search: SearchState;
+  searchForm: SearchForm;
+};
+
 type SearchSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<SearchSettingsCopy>;
+  settingsState: SearchSettingsStateView;
   loadSearxngOptions: () => void;
   saveSearchSettings: () => void;
 };
@@ -25,12 +40,12 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
   const [searxngOptionsExpanded, setSearxngOptionsExpanded] = useState(false);
-  const searchCopy = copy.settings.search || {};
+  const searchCopy: SearchSettingsCopyView = copy.settings.search ?? {};
   const form = state.searchForm;
   const providerOptions = webSearchProviderOptions(copy, state);
   const freshnessOptions = webSearchFreshnessOptions(copy, state);
-  const engineOptions = mergeSelectedSearchOptions(state.search?.searxng_options?.engines, form.searxngEngines);
-  const categoryOptions = mergeSelectedSearchOptions(state.search?.searxng_options?.categories, form.searxngCategories);
+  const engineOptions = mergeSelectedSearchOptions(state.search.searxng_options.engines, form.searxngEngines);
+  const categoryOptions = mergeSelectedSearchOptions(state.search.searxng_options.categories, form.searxngCategories);
   const summary = webSearchSummary(copy, state);
 
   return (
@@ -96,7 +111,7 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
                   className="settings-control"
                   value={form.searxngEngines || []}
                   disabled={state.searchLoading}
-                  options={engineOptions.map((option: AnyRecord) => ({ value: option.id, label: `${option.label}${searxngEngineMeta(copy, option) ? ` - ${searxngEngineMeta(copy, option)}` : ""}` }))}
+                  options={engineOptions.map((option: SearchOptionEntry) => ({ value: option.id, label: `${option.label}${searxngEngineMeta(copy, option) ? ` - ${searxngEngineMeta(copy, option)}` : ""}` }))}
                   onChange={(values) => (form.searxngEngines = values)}
                 />
               ) : <p className="settings-empty-inline">{searchCopy.searxngOptions?.emptyEngines || "No engines loaded."}</p>}
@@ -108,7 +123,7 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
                   className="settings-control"
                   value={form.searxngCategories || []}
                   disabled={state.searchLoading}
-                  options={categoryOptions.map((option: AnyRecord) => ({ value: option.id, label: `${option.label}${option.configuredOnly ? ` - ${searchCopy.searxngOptions?.configuredOnly || "Configured but not listed"}` : ""}` }))}
+                  options={categoryOptions.map((option: SearchOptionEntry) => ({ value: option.id, label: `${option.label}${option.configuredOnly ? ` - ${searchCopy.searxngOptions?.configuredOnly || "Configured but not listed"}` : ""}` }))}
                   onChange={(values) => (form.searxngCategories = values)}
                 />
               ) : <p className="settings-empty-inline">{searchCopy.searxngOptions?.emptyCategories || "No categories loaded."}</p>}

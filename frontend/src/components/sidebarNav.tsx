@@ -1,17 +1,56 @@
 import { useState, type PointerEvent } from "react";
 import { MenuFoldOutlined, MenuUnfoldOutlined, PlusOutlined } from "@ant-design/icons";
 import { Button, Checkbox, Segmented, Switch } from "antd";
+import { normalizeSessionChannelFilter, type ChatSession, type SessionChannelFilter } from "../composables/chatClientSessions";
+import type { SettingsSectionId } from "../composables/settingsSectionLoaders";
 
-type AnyRecord = Record<string, any>;
+type ValueRef<T> = { value: T };
 
-type SidebarNavClient = AnyRecord & {
-  copy: { value: AnyRecord };
-  sidebarSessions: { value: AnyRecord[] };
-  sidebarSessionTotal: { value: number };
-  sidebarCollapsed: { value: boolean };
-  sessionChannelFilter: { value: string };
-  showHiddenSessions: { value: boolean };
-  state: AnyRecord;
+interface SidebarCopy {
+  sidebar: {
+    ariaLabel: string;
+    expand: string;
+    collapse: string;
+    brandSubtitle: string;
+    newChat: string;
+    chats: string;
+    deleteChat: string;
+    cancelDelete: string;
+    deleteSelectedChats: (count: number) => string;
+    filters: {
+      all: string;
+      web: string;
+    };
+    showHiddenSessionsTitle: string;
+    showHiddenSessions: string;
+    selectChat: (title: string) => string;
+    historySessionLabel: (channel: string) => string;
+    settings: string;
+    settingsSubtitle: string;
+    resizeSidebar: string;
+  };
+}
+
+interface SidebarState {
+  activeExternalChatId: string;
+}
+
+type SidebarNavClient = {
+  copy: ValueRef<SidebarCopy>;
+  sidebarSessions: ValueRef<ChatSession[]>;
+  sidebarSessionTotal: ValueRef<number>;
+  sidebarCollapsed: ValueRef<boolean>;
+  sessionChannelFilter: ValueRef<SessionChannelFilter>;
+  showHiddenSessions: ValueRef<boolean>;
+  state: SidebarState;
+  toggleSidebarCollapsed: () => void;
+  createNewChat: () => void;
+  setSessionChannelFilter: (value: SessionChannelFilter) => void;
+  setShowHiddenSessions: (checked: boolean) => void;
+  getSessionTitle: (session: ChatSession | null | undefined) => string;
+  getSessionDisplayId: (session: ChatSession | null | undefined) => string;
+  setActiveSession: (externalChatId: string) => void;
+  openSettings: (section: SettingsSectionId) => void;
 };
 
 export function SidebarNav({
@@ -21,19 +60,19 @@ export function SidebarNav({
 }: {
   client: SidebarNavClient;
   beginSidebarResize: (event: PointerEvent) => void;
-  deleteSessions: (sessions: AnyRecord[]) => void;
+  deleteSessions: (sessions: ChatSession[]) => void;
 }) {
   const copy = client.copy.value;
   const [deleteMode, setDeleteMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const sessions = client.sidebarSessions.value || [];
-  const selectedSessions = sessions.filter((session: AnyRecord) => selectedIds.includes(sessionSelectionKey(session)));
+  const selectedSessions = sessions.filter((session) => selectedIds.includes(sessionSelectionKey(session)));
 
-  function sessionSelectionKey(session: AnyRecord) {
+  function sessionSelectionKey(session: ChatSession) {
     return String(session?.sessionId || session?.externalChatId || "");
   }
 
-  function toggleSelected(session: AnyRecord, checked: boolean) {
+  function toggleSelected(session: ChatSession, checked: boolean) {
     const key = sessionSelectionKey(session);
     if (!key) {
       return;
@@ -157,7 +196,7 @@ export function SidebarNav({
               { value: "all", label: copy.sidebar.filters.all },
               { value: "web", label: copy.sidebar.filters.web },
             ]}
-            onChange={(value) => client.setSessionChannelFilter(String(value))}
+            onChange={(value) => client.setSessionChannelFilter(normalizeSessionChannelFilter(value))}
           />
 
           <label className="session-history-toggle" title={copy.sidebar.showHiddenSessionsTitle}>
@@ -170,7 +209,7 @@ export function SidebarNav({
           </label>
 
           <div className="session-list">
-            {sessions.map((session: AnyRecord) => {
+            {sessions.map((session) => {
               const key = sessionSelectionKey(session);
               const active = session.externalChatId === client.state.activeExternalChatId;
               return (

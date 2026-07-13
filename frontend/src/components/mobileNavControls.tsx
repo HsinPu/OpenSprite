@@ -1,10 +1,17 @@
 import { CloseOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 
-type AnyRecord = Record<string, any>;
+interface MobileNavCopy {
+  app: {
+    menu: string;
+  };
+  timeline: {
+    collapse: string;
+  };
+}
 
 type MobileNavClient = {
-  copy: { value: AnyRecord };
+  copy: { value: MobileNavCopy };
   sidebarOpen: { value: boolean };
   toggleSidebar: () => void;
 };

@@ -1,8 +1,30 @@
 import { List } from "antd";
 import { ConnectedProviderRow } from "./connectedProviderRow";
 import { ProviderEmptyState } from "./providerEmptyState";
-import type { AnyRecord } from "./providerHelpers";
+import type { ProviderAuthSlotState } from "./providerAuthHelpers";
+import type { ProviderLike } from "./providerHelpers";
 import { SettingsCard, SettingsSectionTitle } from "./settingsPrimitives";
+import type { ProviderCredentialsState } from "../composables/useSettingsState";
+
+type ConnectedProviderCopyView = {
+  connectedTitle?: unknown;
+  credentialLabel?: unknown;
+  credentialSelect?: unknown;
+  currentBadge?: unknown;
+  deleteCredential?: unknown;
+  disconnect?: unknown;
+  missingCredential?: unknown;
+  noConnectedDescription?: unknown;
+  noConnectedTitle?: unknown;
+};
+type ConnectedProvidersStateView = ProviderAuthSlotState & {
+  credentials?: ProviderCredentialsState;
+  providersLoading?: unknown;
+};
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
 
 export function ConnectedProvidersSection({
   copy,
@@ -13,17 +35,17 @@ export function ConnectedProvidersSection({
   onDeleteCredential,
   onDisconnect,
 }: {
-  copy: AnyRecord;
-  state: AnyRecord;
-  providers: AnyRecord[];
-  providerCopy: AnyRecord;
-  onSetCredential: (provider: AnyRecord, credentialId: string) => void;
-  onDeleteCredential: (provider: AnyRecord, credentialId: string) => void;
-  onDisconnect: (provider: AnyRecord) => void;
+  copy: unknown;
+  state: ConnectedProvidersStateView;
+  providers: ProviderLike[];
+  providerCopy: ConnectedProviderCopyView;
+  onSetCredential: (provider: ProviderLike, credentialId: string) => void;
+  onDeleteCredential: (provider: ProviderLike, credentialId: string) => void;
+  onDisconnect: (provider: ProviderLike) => void;
 }) {
   return (
     <>
-      <SettingsSectionTitle>{providerCopy.connectedTitle || "Connected providers"}</SettingsSectionTitle>
+      <SettingsSectionTitle>{text(providerCopy.connectedTitle, "Connected providers")}</SettingsSectionTitle>
       <SettingsCard className="provider-card">
         <List
           className="provider-row-list"
@@ -31,14 +53,14 @@ export function ConnectedProvidersSection({
           locale={{
             emptyText: (
               <ProviderEmptyState
-                title={providerCopy.noConnectedTitle || "No connected providers"}
-                description={providerCopy.noConnectedDescription || ""}
+                title={text(providerCopy.noConnectedTitle, "No connected providers")}
+                description={text(providerCopy.noConnectedDescription)}
               />
             ),
           }}
-          renderItem={(provider: AnyRecord) => (
+          renderItem={(provider: ProviderLike) => (
             <ConnectedProviderRow
-              key={provider.id}
+              key={String(provider.id || "")}
               copy={copy}
               state={state}
               provider={provider}

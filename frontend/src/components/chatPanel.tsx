@@ -1,15 +1,55 @@
+import type { FormEvent, KeyboardEvent } from "react";
 import { SendOutlined } from "@ant-design/icons";
 import { Alert, Button, Input } from "antd";
 import { noticeTone } from "./displayHelpers";
-import { EmptyState } from "./emptyState";
+import { EmptyState, type EmptyStateCopy, type PromptOption } from "./emptyState";
 import { MessageList } from "./messageList";
+import type { MessageCopy } from "./messageMarkdown";
+import type { RunViewState } from "../composables/chatClientRunHelpers";
+import type { ChatMessage, LiveEntry } from "../composables/chatClientSessions";
+import type { CommandCatalogItem, NoticeState } from "../composables/useChatClient";
 
-type AnyRecord = Record<string, any>;
+type ValueRef<T> = { value: T };
+type ChatPanelCopy = EmptyStateCopy &
+  MessageCopy & {
+    chat: {
+      title: string;
+    };
+    composer: {
+      commandSuggestions: string;
+      disclaimer: string;
+      placeholder: string;
+      send: string;
+      sendAria: string;
+    };
+  };
 
-type ChatPanelClient = AnyRecord & {
-  copy: { value: AnyRecord };
-  prompts: { value: AnyRecord[] };
-  state: AnyRecord;
+type ChatPanelState = {
+  displayName: string;
+  notice: NoticeState;
+};
+
+type ChatPanelClient = {
+  copy: ValueRef<ChatPanelCopy>;
+  composerHint: ValueRef<string>;
+  prompts: ValueRef<PromptOption[]>;
+  commandHints: ValueRef<CommandCatalogItem[]>;
+  currentEntries: ValueRef<LiveEntry[]>;
+  currentMessages: ValueRef<ChatMessage[]>;
+  currentRuns: ValueRef<RunViewState[]>;
+  currentSessionReadOnly: ValueRef<boolean>;
+  messageText: ValueRef<string>;
+  sendDisabled: ValueRef<boolean>;
+  sessionMeta: ValueRef<string>;
+  applyPrompt: (prompt: string) => void;
+  applyCommandHint: (command: CommandCatalogItem) => void;
+  handleComposerKeydown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  resizeComposer: () => void;
+  setMessageInputRef: (element: HTMLTextAreaElement | null) => void;
+  setMessageStageRef: (element: HTMLElement | null) => void;
+  setMessageText: (value: string) => void;
+  state: ChatPanelState;
+  submitMessage: (event: FormEvent<HTMLFormElement>) => void;
 };
 
 export function ChatPanel({ client, viewTraceForRun }: { client: ChatPanelClient; viewTraceForRun: (runId: string) => void }) {
@@ -26,8 +66,8 @@ export function ChatPanel({ client, viewTraceForRun }: { client: ChatPanelClient
         </div>
       </header>
 
-      {notice?.text ? (
-        <Alert className="notice-banner" role="status" type={noticeTone(notice.tone || "info")} showIcon message={notice.text} data-tone={notice.tone || "info"} />
+      {notice.text ? (
+        <Alert className="notice-banner" role="status" type={noticeTone(notice.tone)} showIcon message={notice.text} data-tone={notice.tone} />
       ) : null}
 
       <section ref={client.setMessageStageRef} className="message-stage" aria-live="polite">
@@ -49,7 +89,7 @@ export function ChatPanel({ client, viewTraceForRun }: { client: ChatPanelClient
       <form className="composer" onSubmit={client.submitMessage}>
         {client.commandHints.value?.length ? (
           <div className="composer__commands" aria-label={copy.composer.commandSuggestions}>
-            {client.commandHints.value.map((command: AnyRecord) => (
+            {client.commandHints.value.map((command: CommandCatalogItem) => (
               <Button
                 key={command.name || command.command || command.usage}
                 type="text"

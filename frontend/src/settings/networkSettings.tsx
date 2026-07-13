@@ -1,21 +1,55 @@
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Input } from "antd";
+import type { NetworkForm } from "../composables/networkDefaults";
 import { networkSummary } from "./scheduleNetworkHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type SettingsCopyText = {
+  title?: string;
+  description?: string;
+  placeholder?: string;
+};
+
+type NetworkSettingsCopyView = {
+  loading?: string;
+  title?: string;
+  httpProxy?: SettingsCopyText;
+  httpsProxy?: SettingsCopyText;
+  noProxy?: SettingsCopyText;
+  proxyPlaceholder?: string;
+  currentTitle?: string;
+  save?: string;
+  scopeTitle?: string;
+  scopeDescription?: string;
+  noProxyConfigured?: string;
+  proxyConfigured?: (active: number) => string;
+};
+
+type NetworkSettingsCopy = {
+  settings: {
+    network?: NetworkSettingsCopyView;
+  };
+};
+
+type NetworkSettingsStateView = {
+  networkLoading: boolean;
+  networkNotice: string;
+  networkError: string;
+  networkForm: NetworkForm;
+};
+
 type NetworkSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<NetworkSettingsCopy>;
+  settingsState: NetworkSettingsStateView;
   saveNetworkSettings: () => void;
 };
 
 export function NetworkSettings({ client }: { client: NetworkSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
-  const networkCopy = copy.settings.network || {};
+  const networkCopy: NetworkSettingsCopyView = copy.settings.network ?? {};
   const form = state.networkForm;
   const summary = networkSummary(copy, state);
 

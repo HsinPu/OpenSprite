@@ -1,8 +1,10 @@
 import { Button, Form, List, Select, Tag } from "antd";
 import {
+  providerAuthCopyForProvider,
   providerAuthConfigured,
   providerAuthCopyKey,
   providerDescription,
+  type ProviderAuthSlotState,
 } from "./providerAuthHelpers";
 import {
   credentialSourceLabel,
@@ -10,9 +12,53 @@ import {
   providerEffectiveCredentialId,
 } from "./providerCredentialHelpers";
 import {
-  type AnyRecord,
   providerMark,
+  type ProviderLike,
 } from "./providerHelpers";
+import type { ProviderCredentialView, ProviderCredentialsState } from "../composables/useSettingsState";
+
+type ConnectedProviderView = ProviderLike & {
+  credential_label?: unknown;
+  credential_preview?: unknown;
+  is_default?: unknown;
+  preset_name?: unknown;
+  requires_api_key?: unknown;
+};
+type ProviderCopyView = {
+  credentialLabel?: unknown;
+  credentialSelect?: unknown;
+  currentBadge?: unknown;
+  deleteCredential?: unknown;
+  disconnect?: unknown;
+  missingCredential?: unknown;
+};
+type ConnectedProviderStateView = ProviderAuthSlotState & {
+  credentials?: ProviderCredentialsState;
+  providersLoading?: unknown;
+};
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
+
+function credentialOption(credential: ProviderCredentialView): { value: string; label: string } {
+  const value = text(credential.id);
+  const label = text(credential.label || credential.name || credential.id);
+  const secretPreview = text(credential.secret_preview);
+  return {
+    value,
+    label: `${label}${secretPreview ? ` - ${secretPreview}` : ""}`,
+  };
+}
+
+function credentialPreviewLabel(copy: unknown, providerCopy: ProviderCopyView, provider: ConnectedProviderView): string {
+  const preview = text(provider.credential_preview);
+  if (!preview) return "";
+  if (typeof providerCopy.credentialLabel === "function") {
+    return String(providerCopy.credentialLabel(text(provider.credential_label || provider.name), preview, credentialSourceLabel(copy, provider)));
+  }
+  return preview;
+}
 
 export function ConnectedProviderRow({
   copy,
@@ -23,49 +69,50 @@ export function ConnectedProviderRow({
   onDeleteCredential,
   onDisconnect,
 }: {
-  copy: AnyRecord;
-  state: AnyRecord;
-  provider: AnyRecord;
-  providerCopy: AnyRecord;
-  onSetCredential: (provider: AnyRecord, credentialId: string) => void;
-  onDeleteCredential: (provider: AnyRecord, credentialId: string) => void;
-  onDisconnect: (provider: AnyRecord) => void;
+  copy: unknown;
+  state: ConnectedProviderStateView;
+  provider: ConnectedProviderView;
+  providerCopy: ProviderCopyView;
+  onSetCredential: (provider: ConnectedProviderView, credentialId: string) => void;
+  onDeleteCredential: (provider: ConnectedProviderView, credentialId: string) => void;
+  onDisconnect: (provider: ConnectedProviderView) => void;
 }) {
   const credentials = providerCredentials(state, provider);
   const effectiveCredentialId = providerEffectiveCredentialId(provider);
   const authCopyKey = providerAuthCopyKey(provider);
+  const authCopy = providerAuthCopyForProvider(copy, provider);
+  const providerId = text(provider.id);
+  const providerName = text(provider.name || provider.id);
+  const presetName = text(provider.preset_name);
+  const credentialPreview = credentialPreviewLabel(copy, providerCopy, provider);
+  const providersLoading = Boolean(state.providersLoading);
 
   return (
-    <List.Item key={provider.id} className="provider-row">
+    <List.Item key={providerId} className="provider-row">
       <div className="provider-row__main">
         <span className="provider-row__mark" aria-hidden="true">{providerMark(provider)}</span>
         <div>
           <div className="provider-row__title">
-            <strong>{provider.name || provider.id}</strong>
-            {provider.is_default ? <Tag className="provider-row__badge">{providerCopy.currentBadge || "Current"}</Tag> : null}
-            {provider.preset_name && provider.preset_name !== provider.name ? <Tag className="provider-row__badge">{provider.preset_name}</Tag> : null}
-            {authCopyKey && !providerAuthConfigured(state, provider) ? <Tag className="provider-row__badge">{providerCopy[authCopyKey]?.notConfigured || "Not configured"}</Tag> : null}
+            <strong>{providerName}</strong>
+            {provider.is_default ? <Tag className="provider-row__badge">{text(providerCopy.currentBadge, "Current")}</Tag> : null}
+            {presetName && presetName !== providerName ? <Tag className="provider-row__badge">{presetName}</Tag> : null}
+            {authCopyKey && !providerAuthConfigured(state, provider) ? <Tag className="provider-row__badge">{text(authCopy.notConfigured, "Not configured")}</Tag> : null}
           </div>
           <span>{providerDescription(copy, state, provider)}</span>
-          {provider.credential_preview ? (
+          {credentialPreview ? (
             <span className="provider-row__credential">
-              {typeof providerCopy.credentialLabel === "function"
-                ? providerCopy.credentialLabel(provider.credential_label || provider.name, provider.credential_preview, credentialSourceLabel(copy, provider))
-                : provider.credential_preview}
+              {credentialPreview}
             </span>
           ) : provider.requires_api_key ? (
-            <span className="provider-row__credential provider-row__credential--missing">{providerCopy.missingCredential || "Missing credential"}</span>
+            <span className="provider-row__credential provider-row__credential--missing">{text(providerCopy.missingCredential, "Missing credential")}</span>
           ) : null}
           {credentials.length > 1 ? (
-            <Form.Item className="provider-row__select" label={providerCopy.credentialSelect || "Credential"}>
+            <Form.Item className="provider-row__select" label={text(providerCopy.credentialSelect, "Credential")}>
               <Select
                 value={effectiveCredentialId}
-                disabled={state.providersLoading}
-                options={credentials.map((credential: AnyRecord) => ({
-                  value: credential.id,
-                  label: `${credential.label || credential.name || credential.id}${credential.secret_preview ? ` - ${credential.secret_preview}` : ""}`,
-                }))}
-                onChange={(value) => onSetCredential(provider, value)}
+                disabled={providersLoading}
+                options={credentials.map(credentialOption)}
+                onChange={(value) => onSetCredential(provider, String(value || ""))}
               />
             </Form.Item>
           ) : null}
@@ -73,12 +120,12 @@ export function ConnectedProviderRow({
       </div>
       <div className="provider-row__actions provider-row__actions--connected">
         {effectiveCredentialId ? (
-          <Button size="small" danger disabled={state.providersLoading} onClick={() => onDeleteCredential(provider, effectiveCredentialId)}>
-            {providerCopy.deleteCredential || "Delete credential"}
+          <Button size="small" danger disabled={providersLoading} onClick={() => onDeleteCredential(provider, effectiveCredentialId)}>
+            {text(providerCopy.deleteCredential, "Delete credential")}
           </Button>
         ) : null}
-        <Button size="small" disabled={state.providersLoading} onClick={() => onDisconnect(provider)}>
-          {providerCopy.disconnect || "Disconnect"}
+        <Button size="small" disabled={providersLoading} onClick={() => onDisconnect(provider)}>
+          {text(providerCopy.disconnect, "Disconnect")}
         </Button>
       </div>
     </List.Item>

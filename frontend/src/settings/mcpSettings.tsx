@@ -1,19 +1,85 @@
 import { ArrowLeftOutlined, CloseOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, Select, Tag } from "antd";
-import { mcpRuntimeStatus, mcpToolGroups } from "./mcpHelpers";
+import { MCP_TRANSPORT_TYPES, normalizeMcpTransport } from "../composables/settingsNormalizers";
+import type { McpForm, McpServerView, McpSettings as McpSettingsValue } from "../composables/useSettingsState";
+import { mcpRuntimeStatus, mcpToolGroups, type McpToolGroup } from "./mcpHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type McpCopyFormatter<T> = (value: T) => string;
+
+type McpSettingsCopyView = {
+  loading?: string;
+  runtimeTitle?: string;
+  runtimeStatus?: string;
+  reload?: string;
+  connectedTools?: string;
+  noTools?: string;
+  toolCount?: McpCopyFormatter<number>;
+  serversTitle?: string;
+  openAdd?: string;
+  addServer?: string;
+  noServersTitle?: string;
+  noServersDescription?: string;
+  autoTransport?: string;
+  noEndpoint?: string;
+  toolsLabel?: McpCopyFormatter<string>;
+  envKeys?: McpCopyFormatter<string>;
+  headerKeys?: McpCopyFormatter<string>;
+  edit?: string;
+  remove?: string;
+  backToList?: string;
+  editTitle?: string;
+  addTitle?: string;
+  simpleHint?: string;
+  serverId?: string;
+  transport?: string;
+  command?: string;
+  args?: string;
+  url?: string;
+  hideAdvanced?: string;
+  showAdvanced?: string;
+  hideJson?: string;
+  showJson?: string;
+  configJson?: string;
+  configJsonPlaceholder?: string;
+  applyJson?: string;
+  advancedTitle?: string;
+  advancedHint?: string;
+  toolTimeout?: string;
+  enabledTools?: string;
+  env?: string;
+  headers?: string;
+  jsonPlaceholder?: string;
+  update?: string;
+  add?: string;
+};
+
+type McpSettingsCopy = {
+  settings: {
+    closeAria?: string;
+    mcp?: McpSettingsCopyView;
+  };
+};
+
+type McpSettingsStateView = {
+  mcpLoading: boolean;
+  mcpNotice: string;
+  mcpError: string;
+  mcp: McpSettingsValue;
+  mcpForm: McpForm;
+  mcpToolGroupsExpanded: Record<string, boolean>;
+};
+
 type McpSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<McpSettingsCopy>;
+  settingsState: McpSettingsStateView;
   reloadMcpSettings: () => void;
   toggleMcpToolGroup: (serverId: string) => void;
   beginMcpCreate: () => void;
-  beginMcpEdit: (server: AnyRecord) => void;
-  removeMcpServer: (server: AnyRecord) => void;
+  beginMcpEdit: (server: McpServerView) => void;
+  removeMcpServer: (server: McpServerView) => void;
   cancelMcpEdit: () => void;
   saveMcpServer: () => void;
   toggleMcpAdvanced: () => void;
@@ -21,13 +87,34 @@ type McpSettingsClient = {
   applyMcpJson: () => void;
 };
 
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((entry) => text(entry).trim()).filter(Boolean) : [];
+}
+
+function mcpServerId(server: McpServerView): string {
+  return text(server.id);
+}
+
+function mcpServerName(server: McpServerView): string {
+  return text(server.name, mcpServerId(server));
+}
+
+function mcpServerEndpoint(server: McpServerView, fallback: string): string {
+  return text(server.command, text(server.url, fallback));
+}
+
 export function McpSettings({ client }: { client: McpSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
-  const mcpCopy = copy.settings.mcp || {};
+  const mcpCopy: McpSettingsCopyView = copy.settings.mcp ?? {};
   const form = state.mcpForm;
-  const toolGroups: AnyRecord[] = mcpToolGroups(copy, state);
+  const toolGroups: McpToolGroup[] = mcpToolGroups(copy, state);
   const runtimeStatus = mcpRuntimeStatus(copy, state);
+  const servers = state.mcp.servers ?? [];
 
   return (
     <section className="settings-page">
@@ -54,7 +141,7 @@ export function McpSettings({ client }: { client: McpSettingsClient }) {
                 </Button>
                 {group.expanded ? (
                   <div className="mcp-tool-group__tools">
-                    {group.tools.map((tool: AnyRecord) => <Tag key={tool.fullName} className="mcp-tool-chip">{tool.name}</Tag>)}
+                    {group.tools.map((tool) => <Tag key={tool.fullName} className="mcp-tool-chip">{tool.name}</Tag>)}
                   </div>
                 ) : null}
               </div>
@@ -79,24 +166,29 @@ export function McpSettings({ client }: { client: McpSettingsClient }) {
               </div>
             </div>
           ) : null}
-          {(state.mcp.servers || []).map((server: AnyRecord) => (
-            <div key={server.id} className="schedule-job-row">
-              <div className="schedule-job-row__main">
-                <div className="provider-row__title">
-                  <strong>{server.name || server.id}</strong>
-                  <Tag className="provider-row__badge">{server.type || mcpCopy.autoTransport || "auto"}</Tag>
+          {servers.map((server) => {
+            const enabledTools = stringList(server.enabled_tools).join(", ");
+            const envKeys = stringList(server.env_keys).join(", ");
+            const headerKeys = stringList(server.headers_keys).join(", ");
+            return (
+              <div key={mcpServerId(server) || mcpServerName(server)} className="schedule-job-row">
+                <div className="schedule-job-row__main">
+                  <div className="provider-row__title">
+                    <strong>{mcpServerName(server)}</strong>
+                    <Tag className="provider-row__badge">{text(server.type, mcpCopy.autoTransport || "auto")}</Tag>
+                  </div>
+                  <span>{mcpServerEndpoint(server, mcpCopy.noEndpoint || "")}</span>
+                  <span>{typeof mcpCopy.toolsLabel === "function" ? mcpCopy.toolsLabel(enabledTools) : enabledTools}</span>
+                  {Boolean(server.env_configured) ? <span>{typeof mcpCopy.envKeys === "function" ? mcpCopy.envKeys(envKeys) : envKeys}</span> : null}
+                  {Boolean(server.headers_configured) ? <span>{typeof mcpCopy.headerKeys === "function" ? mcpCopy.headerKeys(headerKeys) : headerKeys}</span> : null}
                 </div>
-                <span>{server.command || server.url || mcpCopy.noEndpoint || ""}</span>
-                <span>{typeof mcpCopy.toolsLabel === "function" ? mcpCopy.toolsLabel((server.enabled_tools || []).join(", ")) : (server.enabled_tools || []).join(", ")}</span>
-                {server.env_configured ? <span>{typeof mcpCopy.envKeys === "function" ? mcpCopy.envKeys((server.env_keys || []).join(", ")) : (server.env_keys || []).join(", ")}</span> : null}
-                {server.headers_configured ? <span>{typeof mcpCopy.headerKeys === "function" ? mcpCopy.headerKeys((server.headers_keys || []).join(", ")) : (server.headers_keys || []).join(", ")}</span> : null}
+                <div className="schedule-job-row__actions">
+                  <Button onClick={() => client.beginMcpEdit(server)}>{mcpCopy.edit || "Edit"}</Button>
+                  <Button danger disabled={state.mcpLoading} onClick={() => client.removeMcpServer(server)}>{mcpCopy.remove || "Remove"}</Button>
+                </div>
               </div>
-              <div className="schedule-job-row__actions">
-                <Button onClick={() => client.beginMcpEdit(server)}>{mcpCopy.edit || "Edit"}</Button>
-                <Button danger disabled={state.mcpLoading} onClick={() => client.removeMcpServer(server)}>{mcpCopy.remove || "Remove"}</Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </SettingsCard>
       </div>
 
@@ -118,12 +210,8 @@ export function McpSettings({ client }: { client: McpSettingsClient }) {
             <Form.Item className="provider-connect-field" label={mcpCopy.transport || "Transport"}>
               <Select
                 value={form.type}
-                options={[
-                  { value: "stdio", label: "stdio" },
-                  { value: "sse", label: "sse" },
-                  { value: "streamableHttp", label: "streamableHttp" },
-                ]}
-                onChange={(value) => (form.type = value)}
+                options={MCP_TRANSPORT_TYPES.map((transport) => ({ value: transport, label: transport }))}
+                onChange={(value) => (form.type = normalizeMcpTransport(value))}
               />
             </Form.Item>
             {form.type === "stdio" ? (

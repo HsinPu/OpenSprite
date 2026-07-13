@@ -1,4 +1,4 @@
-import { useEffect, useState, useTransition } from "react";
+import { type ComponentProps, useEffect, useState, useTransition } from "react";
 import {
   ApiOutlined,
   BranchesOutlined,
@@ -21,16 +21,47 @@ import { ProviderSettings } from "./providerSettings";
 import { ScheduleSettings } from "./scheduleSettings";
 import { SearchSettings } from "./searchSettings";
 import { ShortcutSettings } from "./shortcutSettings";
+import { normalizeSettingsSectionId, type SettingsSectionId } from "../composables/settingsSectionLoaders";
 
-type AnyRecord = Record<string, any>;
+type ValueRef<T> = { value: T };
 
-type SettingsModalClient = AnyRecord & {
-  copy: { value: AnyRecord };
+type SettingsModalCopy = {
+  settings: {
+    closeAria: string;
+    close: string;
+    loading?: string;
+    web: string;
+    server: string;
+    version: string;
+    shortcuts?: {
+      openSettings?: string;
+      openSettingsDescription?: string;
+      sendMessage?: string;
+      sendMessageDescription?: string;
+    };
+  };
+  settingsTitles: Record<SettingsSectionId, string>;
+};
+
+type SettingsPageClient =
+  & ComponentProps<typeof BrowserSettings>["client"]
+  & ComponentProps<typeof ChannelSettings>["client"]
+  & ComponentProps<typeof GeneralSettings>["client"]
+  & ComponentProps<typeof LogSettings>["client"]
+  & ComponentProps<typeof McpSettings>["client"]
+  & ComponentProps<typeof ModelSettings>["client"]
+  & ComponentProps<typeof NetworkSettings>["client"]
+  & ComponentProps<typeof ProviderSettings>["client"]
+  & ComponentProps<typeof ScheduleSettings>["client"]
+  & ComponentProps<typeof SearchSettings>["client"];
+
+type SettingsModalClient = SettingsPageClient & {
+  copy: ValueRef<SettingsModalCopy>;
   settingsOpen: { value: boolean };
-  settingsSection: { value: string };
+  settingsSection: { value: SettingsSectionId };
   settingsTitle: { value: string };
   closeSettings: () => void;
-  selectSettingsSection: (section: string) => void;
+  selectSettingsSection: (section: SettingsSectionId) => void;
 };
 
 export function SettingsModal({ client, clearWebSessions }: { client: SettingsModalClient; clearWebSessions: () => void }) {
@@ -123,36 +154,35 @@ export function SettingsModal({ client, clearWebSessions }: { client: SettingsMo
 }
 
 function renderSettingsSection(
-  section: string,
+  section: SettingsSectionId,
   client: SettingsModalClient,
   clearWebSessions: () => void,
-  copy: AnyRecord,
+  copy: SettingsModalCopy,
 ) {
-  const pageClient = client as any;
   switch (section) {
     case "providers":
-      return <ProviderSettings client={pageClient} />;
+      return <ProviderSettings client={client} />;
     case "models":
-      return <ModelSettings client={pageClient} />;
+      return <ModelSettings client={client} />;
     case "channels":
-      return <ChannelSettings client={pageClient} />;
+      return <ChannelSettings client={client} />;
     case "mcp":
-      return <McpSettings client={pageClient} />;
+      return <McpSettings client={client} />;
     case "schedule":
-      return <ScheduleSettings client={pageClient} />;
+      return <ScheduleSettings client={client} />;
     case "network":
-      return <NetworkSettings client={pageClient} />;
+      return <NetworkSettings client={client} />;
     case "search":
-      return <SearchSettings client={pageClient} />;
+      return <SearchSettings client={client} />;
     case "browser":
-      return <BrowserSettings client={pageClient} />;
+      return <BrowserSettings client={client} />;
     case "log":
-      return <LogSettings client={pageClient} />;
+      return <LogSettings client={client} />;
     case "shortcuts":
       return <ShortcutSettings copy={copy} />;
     case "general":
     default:
-      return <GeneralSettings client={pageClient} clearWebSessions={clearWebSessions} />;
+      return <GeneralSettings client={client} clearWebSessions={clearWebSessions} />;
   }
 }
 
@@ -161,9 +191,9 @@ function SettingsNav({
   section,
   selectSection,
 }: {
-  copy: AnyRecord;
-  section: string;
-  selectSection: (section: string) => void;
+  copy: SettingsModalCopy;
+  section: SettingsSectionId;
+  selectSection: (section: SettingsSectionId) => void;
 }) {
   const groups = [
     {
@@ -207,7 +237,7 @@ function SettingsNav({
         mode="inline"
         selectedKeys={[section]}
         items={menuItems}
-        onClick={({ key }) => selectSection(String(key))}
+        onClick={({ key }) => selectSection(normalizeSettingsSectionId(key))}
       />
       <div className="settings-nav__footer">
         <strong>OpenSprite Web</strong>

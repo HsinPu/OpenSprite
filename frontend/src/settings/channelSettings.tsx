@@ -1,27 +1,76 @@
 import { ArrowLeftOutlined, CloseOutlined } from "@ant-design/icons";
 import { Button, Form, Input, List, Tag } from "antd";
+import type { ChannelConnectForm, ChannelSettings as ChannelSettingsValue, ChannelView } from "../composables/useSettingsState";
 import { providerMark } from "./providerHelpers";
 import { SettingsCard, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
 
+type ChannelCopyFormatter = (name: string) => string;
+
+type ChannelSettingsCopyView = {
+  loading?: string;
+  connectedTitle?: string;
+  noConnectedTitle?: string;
+  noConnectedDescription?: string;
+  connectedBadge?: string;
+  enabledBadge?: string;
+  disconnect?: string;
+  availableTitle?: string;
+  noAvailableTitle?: string;
+  noAvailableDescription?: string;
+  builtInBadge?: string;
+  add?: string;
+  connect?: string;
+  backAria?: string;
+  closeAria?: string;
+  dialogTitle?: ChannelCopyFormatter;
+  dialogDescription?: ChannelCopyFormatter;
+  nameLabel?: string;
+  namePlaceholder?: string;
+  tokenLabel?: ChannelCopyFormatter;
+  submit?: string;
+};
+
+type ChannelSettingsCopy = {
+  settings: {
+    channels?: ChannelSettingsCopyView;
+  };
+};
+
+type ChannelSettingsStateView = {
+  channelsLoading: boolean;
+  channelsNotice: string;
+  channelsError: string;
+  channels: ChannelSettingsValue;
+  channelConnectForm: ChannelConnectForm;
+};
+
 type ChannelSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
-  disconnectChannel: (channel: AnyRecord) => void;
-  beginChannelConnect: (channel: AnyRecord) => void;
+  copy: ValueRef<ChannelSettingsCopy>;
+  settingsState: ChannelSettingsStateView;
+  disconnectChannel: (channel: ChannelView) => void;
+  beginChannelConnect: (channel: ChannelView) => void;
   cancelChannelConnect: () => void;
   saveChannelConnection: () => void;
 };
+
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
+}
+
+function channelName(channel: ChannelView): string {
+  return text(channel.name, text(channel.type, channel.id));
+}
 
 export function ChannelSettings({ client }: { client: ChannelSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
   const channelCopy = copy.settings.channels || {};
-  const channels: AnyRecord = state.channels || {};
+  const channels = state.channels;
   const selectedConnectChannel =
-    [...(channels.available || []), ...(channels.connected || [])].find((channel: AnyRecord) => (channel.type || channel.id) === state.channelConnectForm.type) || null;
+    [...(channels.available || []), ...(channels.connected || [])].find((channel) => (channel.type || channel.id) === state.channelConnectForm.type) || null;
+  const selectedConnectName = selectedConnectChannel ? channelName(selectedConnectChannel) : "";
 
   return (
     <section className="settings-page">
@@ -44,17 +93,17 @@ export function ChannelSettings({ client }: { client: ChannelSettingsClient }) {
               </div>
             ),
           }}
-          renderItem={(channel: AnyRecord) => (
+          renderItem={(channel: ChannelView) => (
             <List.Item key={channel.id || channel.type} className="provider-row">
               <div className="provider-row__main">
                 <span className="provider-row__mark" aria-hidden="true">{providerMark(channel)}</span>
                 <div>
                   <div className="provider-row__title">
-                    <strong>{channel.name || channel.type || channel.id}</strong>
+                    <strong>{channelName(channel)}</strong>
                     <Tag className="provider-row__badge">{channelCopy.connectedBadge || "Connected"}</Tag>
-                    {channel.enabled ? <Tag className="provider-row__badge">{channelCopy.enabledBadge || "Enabled"}</Tag> : null}
+                    {Boolean(channel.enabled) ? <Tag className="provider-row__badge">{channelCopy.enabledBadge || "Enabled"}</Tag> : null}
                   </div>
-                  <span>{channel.description || channel.status || channel.id}</span>
+                  <span>{text(channel.description, text(channel.status, channel.id))}</span>
                 </div>
               </div>
               <Button disabled={state.channelsLoading} onClick={() => client.disconnectChannel(channel)}>
@@ -80,17 +129,17 @@ export function ChannelSettings({ client }: { client: ChannelSettingsClient }) {
               </div>
             ),
           }}
-          renderItem={(channel: AnyRecord) => (
+          renderItem={(channel: ChannelView) => (
             <List.Item key={channel.id || channel.type} className="provider-row provider-row--stacked">
               <div className="provider-row__content">
                 <div className="provider-row__main">
                   <span className="provider-row__mark" aria-hidden="true">{providerMark(channel)}</span>
                   <div>
                     <div className="provider-row__title">
-                      <strong>{channel.name || channel.type || channel.id}</strong>
+                      <strong>{channelName(channel)}</strong>
                       <Tag className="provider-row__badge">{channelCopy.builtInBadge || "Built-in"}</Tag>
                     </div>
-                    <span>{channel.description || channel.id}</span>
+                    <span>{text(channel.description, channel.id)}</span>
                   </div>
                 </div>
                 <Button type="primary" disabled={state.channelsLoading} onClick={() => client.beginChannelConnect(channel)}>
@@ -111,13 +160,13 @@ export function ChannelSettings({ client }: { client: ChannelSettingsClient }) {
           <Form className="provider-connect-dialog__body" layout="vertical" onFinish={() => client.saveChannelConnection()}>
             <div className="provider-connect-dialog__title">
               <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedConnectChannel)}</span>
-              <h3>{typeof channelCopy.dialogTitle === "function" ? channelCopy.dialogTitle(selectedConnectChannel.name) : `Connect ${selectedConnectChannel.name}`}</h3>
+              <h3>{typeof channelCopy.dialogTitle === "function" ? channelCopy.dialogTitle(selectedConnectName) : `Connect ${selectedConnectName}`}</h3>
             </div>
-            <p>{typeof channelCopy.dialogDescription === "function" ? channelCopy.dialogDescription(selectedConnectChannel.name) : ""}</p>
+            <p>{typeof channelCopy.dialogDescription === "function" ? channelCopy.dialogDescription(selectedConnectName) : ""}</p>
             <Form.Item className="provider-connect-field" label={channelCopy.nameLabel || "Name"}>
               <Input value={state.channelConnectForm.name} placeholder={channelCopy.namePlaceholder || ""} autoComplete="off" onChange={(event) => (state.channelConnectForm.name = event.target.value)} />
             </Form.Item>
-            <Form.Item className="provider-connect-field" label={typeof channelCopy.tokenLabel === "function" ? channelCopy.tokenLabel(selectedConnectChannel.name) : "Token"}>
+            <Form.Item className="provider-connect-field" label={typeof channelCopy.tokenLabel === "function" ? channelCopy.tokenLabel(selectedConnectName) : "Token"}>
               <Input.Password value={state.channelConnectForm.token} placeholder="Token" autoComplete="off" onChange={(event) => (state.channelConnectForm.token = event.target.value)} />
             </Form.Item>
             <Button className="provider-connect-dialog__submit" type="primary" htmlType="submit" loading={state.channelsLoading} disabled={state.channelsLoading}>

@@ -1,23 +1,39 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
 type Cleanup = void | (() => void);
+type RegisteredCleanup = () => void;
 type LifecycleCallback = () => Cleanup;
-type WatchCallback = (value: any, previousValue: any) => void;
+type RefLike<T> = { value: T };
+type ReadonlyRefLike<T> = { readonly value: T };
+type WatchCallback<T> = (value: T, previousValue: T | undefined) => void;
+type WatchSource<T> = ReadonlyRefLike<T> | (() => T);
+type WatchOptions = { immediate?: boolean };
+type WatchStopHandle = () => void;
+type WatchRunner = () => void;
+type StoreListener = () => void;
+type StoreSubscription = () => void;
+type Scheduler = (callback: StoreListener) => void;
+type ProxyCache = WeakMap<object, object>;
 
 type LifecycleContext = {
-  mounted: LifecycleCallback[];
-  beforeUnmount: LifecycleCallback[];
-  watchers: Set<() => void>;
-  listeners: Set<() => void>;
+  readonly mounted: LifecycleCallback[];
+  readonly beforeUnmount: LifecycleCallback[];
+  readonly watchers: Set<WatchRunner>;
+  readonly listeners: Set<StoreListener>;
   version: number;
   pending: boolean;
-  notify: () => void;
-  subscribe: (listener: () => void) => () => void;
-  getSnapshot: () => number;
+  readonly proxyCache: ProxyCache;
+  readonly notify: () => void;
+  readonly subscribe: (listener: StoreListener) => StoreSubscription;
+  readonly getSnapshot: () => number;
+};
+type ReactiveStoreEntry<T extends object> = {
+  readonly context: LifecycleContext;
+  readonly store: T;
+  cleanups: RegisteredCleanup[];
 };
 
 let activeContext: LifecycleContext | null = null;
-const proxyCache = new WeakMap<object, any>();
 
 function createLifecycleContext(): LifecycleContext {
   const context: LifecycleContext = {
@@ -27,12 +43,13 @@ function createLifecycleContext(): LifecycleContext {
     listeners: new Set(),
     version: 0,
     pending: false,
+    proxyCache: new WeakMap(),
     notify() {
       if (context.pending) {
         return;
       }
       context.pending = true;
-      const schedule =
+      const schedule: Scheduler =
         typeof requestAnimationFrame === "function"
           ? (callback: () => void) => requestAnimationFrame(() => callback())
           : (callback: () => void) => setTimeout(callback, 0);
@@ -60,7 +77,7 @@ function createLifecycleContext(): LifecycleContext {
   return context;
 }
 
-function currentContext() {
+function currentContext(): LifecycleContext {
   if (!activeContext) {
     activeContext = createLifecycleContext();
   }
@@ -91,14 +108,15 @@ function isProxyable(value: unknown): value is object {
   return Object.prototype.toString.call(value) === "[object Object]";
 }
 
-function toComparable(value: any) {
+function toComparable<T>(value: T): T;
+function toComparable(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.slice();
   }
   return value;
 }
 
-function hasChanged(left: any, right: any) {
+function hasChanged(left: unknown, right: unknown): boolean {
   if (Array.isArray(left) && Array.isArray(right)) {
     if (left.length !== right.length) {
       return true;
@@ -108,8 +126,13 @@ function hasChanged(left: any, right: any) {
   return !Object.is(left, right);
 }
 
-function proxied<T extends object>(target: T, context: LifecycleContext): T {
-  const cached = proxyCache.get(target);
+function isRegisteredCleanup(value: Cleanup): value is RegisteredCleanup {
+  return typeof value === "function";
+}
+
+function proxied<T extends object>(target: T, context: LifecycleContext): T;
+function proxied(target: object, context: LifecycleContext): object {
+  const cached = context.proxyCache.get(target);
   if (cached) {
     return cached;
   }
@@ -138,11 +161,11 @@ function proxied<T extends object>(target: T, context: LifecycleContext): T {
     },
   });
 
-  proxyCache.set(target, proxy);
+  context.proxyCache.set(target, proxy);
   return proxy;
 }
 
-export function ref<T>(initialValue: T) {
+export function ref<T>(initialValue: T): RefLike<T> {
   const context = currentContext();
   let innerValue = isProxyable(initialValue) ? proxied(initialValue, context) : initialValue;
   return {
@@ -163,23 +186,11 @@ export function ref<T>(initialValue: T) {
   };
 }
 
-export function silentRef<T>(initialValue: T) {
-  let innerValue = initialValue;
-  return {
-    get value() {
-      return innerValue;
-    },
-    set value(nextValue) {
-      innerValue = nextValue;
-    },
-  };
-}
-
 export function reactive<T extends object>(target: T): T {
   return proxied(target, currentContext());
 }
 
-export function computed<T>(factory: () => T) {
+export function computed<T>(factory: () => T): ReadonlyRefLike<T> {
   return {
     get value() {
       return factory();
@@ -187,9 +198,9 @@ export function computed<T>(factory: () => T) {
   };
 }
 
-export function watch(source: any, callback: WatchCallback, options: { immediate?: boolean } = {}) {
+export function watch<T>(source: WatchSource<T>, callback: WatchCallback<T>, options: WatchOptions = {}): WatchStopHandle {
   const context = currentContext();
-  const read = () => (typeof source === "function" ? source() : source?.value);
+  const read: () => T = () => (typeof source === "function" ? source() : source.value);
   let previous = toComparable(read());
 
   if (options.immediate) {
@@ -197,13 +208,13 @@ export function watch(source: any, callback: WatchCallback, options: { immediate
     previous = toComparable(read());
   }
 
-  const runner = () => {
+  const runner: WatchRunner = () => {
     const next = toComparable(read());
     if (!hasChanged(next, previous)) {
       return;
     }
     const oldValue = previous;
-    previous = Array.isArray(next) ? next.slice() : next;
+    previous = next;
     callback(read(), oldValue);
   };
   context.watchers.add(runner);
@@ -212,41 +223,31 @@ export function watch(source: any, callback: WatchCallback, options: { immediate
   };
 }
 
-export function nextTick(callback?: () => void) {
-  const promise = Promise.resolve();
-  if (callback) {
-    return promise.then(callback);
-  }
-  return promise;
-}
-
-export function onMounted(callback: LifecycleCallback) {
+export function onMounted(callback: LifecycleCallback): void {
   currentContext().mounted.push(callback);
 }
 
-export function onBeforeUnmount(callback: LifecycleCallback) {
+export function onBeforeUnmount(callback: LifecycleCallback): void {
   currentContext().beforeUnmount.push(callback);
 }
 
 export function useReactiveStore<T extends object>(factory: () => T): T {
-  const storeRef = useRef<{ context: LifecycleContext; store: T; cleanups: Cleanup[] } | null>(null);
+  const storeRef = useRef<ReactiveStoreEntry<T> | null>(null);
   if (!storeRef.current) {
     const context = createLifecycleContext();
     const store = withLifecycle(context, factory);
     storeRef.current = { context, store, cleanups: [] };
   }
 
-  const { context, store } = storeRef.current;
+  const entry = storeRef.current;
+  const { context, store } = entry;
   useSyncExternalStore(context.subscribe, context.getSnapshot, context.getSnapshot);
 
   useEffect(() => {
-    const cleanups = context.mounted.map((callback) => callback()).filter(Boolean);
-    storeRef.current!.cleanups = cleanups;
+    entry.cleanups = context.mounted.map((callback) => callback()).filter(isRegisteredCleanup);
     return () => {
-      for (const cleanup of storeRef.current?.cleanups || []) {
-        if (typeof cleanup === "function") {
-          cleanup();
-        }
+      for (const cleanup of entry.cleanups) {
+        cleanup();
       }
       for (const callback of context.beforeUnmount) {
         const cleanup = callback();
@@ -257,7 +258,7 @@ export function useReactiveStore<T extends object>(factory: () => T): T {
       context.watchers.clear();
       context.listeners.clear();
     };
-  }, [context]);
+  }, [context, entry]);
 
   return store;
 }

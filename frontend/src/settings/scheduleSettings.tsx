@@ -1,28 +1,134 @@
 import { ArrowLeftOutlined, CloseOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { Button, Form, Input, InputNumber, List, Select, Space, Switch, Tag } from "antd";
+import { CRON_JOB_MODES, normalizeCronJobMode, type CronJobAction, type CronJobMode, type ScheduleForm, type ScheduleState } from "../composables/scheduleDefaults";
+import type { CronJobForm, CronJobView } from "../composables/useSettingsState";
 import { scheduleTimezoneOptions } from "./scheduleNetworkHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
+type SettingsCopyText = { title?: string; description?: string };
+
+type ScheduleSettingsCopyView = {
+  loading?: string;
+  defaultsTitle?: string;
+  defaultTimezone?: SettingsCopyText;
+  currentTitle?: string;
+  save?: string;
+  manageTitle?: string;
+  openAdd?: string;
+  jobsTitle?: string;
+  jobsLoading?: string;
+  noJobsTitle?: string;
+  noJobsDescription?: string;
+  enabled?: string;
+  paused?: string;
+  sessionLabel?: (sessionId: string) => string;
+  nextRun?: (nextRunDisplay: string) => string;
+  edit?: string;
+  pause?: string;
+  enable?: string;
+  runNow?: string;
+  remove?: string;
+  usageTitle?: string;
+  usageCron?: SettingsCopyText;
+  usageExisting?: SettingsCopyText;
+  backToList?: string;
+  editJobTitle?: string;
+  newJobTitle?: string;
+  newJobDescription?: string;
+  jobName?: string;
+  jobType?: string;
+  jobTypes?: {
+    cron?: string;
+    every?: string;
+    at?: string;
+  };
+  everySeconds?: string;
+  cronExpression?: string;
+  timezone?: string;
+  runAt?: string;
+  message?: string;
+  deliver?: SettingsCopyText;
+  updateJob?: string;
+  createJob?: string;
+};
+
+type ScheduleSettingsCopy = {
+  settings: {
+    closeAria?: string;
+    schedule?: ScheduleSettingsCopyView;
+  };
+};
+
+type ScheduleSettingsStateView = {
+  scheduleLoading: boolean;
+  scheduleError: string;
+  scheduleNotice: string;
+  schedule: ScheduleState;
+  scheduleForm: ScheduleForm;
+  cronJobsLoading?: boolean;
+  cronJobsError?: string;
+  cronJobs?: CronJobView[];
+  cronJobForm: CronJobForm;
+};
 
 type ScheduleSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
+  copy: ValueRef<ScheduleSettingsCopy>;
+  settingsState: ScheduleSettingsStateView;
   saveScheduleSettings: () => void;
   beginCronJobCreate: () => void;
-  beginCronJobEdit: (job: AnyRecord) => void;
-  runCronJobAction: (job: AnyRecord, action: string) => void;
+  beginCronJobEdit: (job: CronJobView) => void;
+  runCronJobAction: (job: CronJobView, action: CronJobAction) => void;
   cancelCronJobEdit: () => void;
   saveCronJob: () => void;
 };
 
+function text(value: unknown, fallback = ""): string {
+  const resolved = typeof value === "string" ? value : value == null ? "" : String(value);
+  return resolved.trim() || fallback;
+}
+
+function jobId(job: CronJobView): string {
+  return text(job.id, "schedule-job");
+}
+
+function jobName(job: CronJobView): string {
+  return text(job.name) || jobId(job);
+}
+
+function jobScheduleSummary(job: CronJobView): string {
+  return text(job.schedule.display) || text(job.cron_expr) || text(job.every_seconds);
+}
+
+function jobSessionId(job: CronJobView): string {
+  return text(job.session_id);
+}
+
+function jobNextRunDisplay(job: CronJobView): string {
+  return text(job.state.next_run_display);
+}
+
+function jobMessage(job: CronJobView): string {
+  return text(job.payload.message) || text(job.message);
+}
+
+function cronJobModeLabel(copy: ScheduleSettingsCopyView, mode: CronJobMode): string {
+  if (mode === "every") {
+    return copy.jobTypes?.every || "Fixed interval";
+  }
+  if (mode === "at") {
+    return copy.jobTypes?.at || "Run once";
+  }
+  return copy.jobTypes?.cron || "Cron expression";
+}
+
 export function ScheduleSettings({ client }: { client: ScheduleSettingsClient }) {
   const state = client.settingsState;
   const copy = client.copy.value;
-  const scheduleCopy = copy.settings.schedule || {};
+  const scheduleCopy: ScheduleSettingsCopyView = copy.settings.schedule ?? {};
   const timezones = scheduleTimezoneOptions(state);
   const form = state.cronJobForm;
+  const jobs = state.cronJobs || [];
 
   return (
     <section className="settings-page">
@@ -61,7 +167,7 @@ export function ScheduleSettings({ client }: { client: ScheduleSettingsClient })
       <SettingsCard className="provider-card">
         <List
           className="provider-row-list schedule-job-list"
-          dataSource={state.cronJobs || []}
+          dataSource={jobs}
           locale={{
             emptyText: (
               <div className="provider-row provider-row--empty">
@@ -72,28 +178,32 @@ export function ScheduleSettings({ client }: { client: ScheduleSettingsClient })
               </div>
             ),
           }}
-          renderItem={(job: AnyRecord) => (
-            <List.Item key={job.id} className="schedule-job-row">
-              <div className="schedule-job-row__main">
-                <div className="provider-row__title">
-                  <strong>{job.name || job.id}</strong>
-                  <Tag className="provider-row__badge">{job.enabled ? scheduleCopy.enabled || "Enabled" : scheduleCopy.paused || "Paused"}</Tag>
+          renderItem={(job: CronJobView) => {
+            const sessionId = jobSessionId(job);
+            const nextRunDisplay = jobNextRunDisplay(job);
+            return (
+              <List.Item key={jobId(job)} className="schedule-job-row">
+                <div className="schedule-job-row__main">
+                  <div className="provider-row__title">
+                    <strong>{jobName(job)}</strong>
+                    <Tag className="provider-row__badge">{job.enabled ? scheduleCopy.enabled || "Enabled" : scheduleCopy.paused || "Paused"}</Tag>
+                  </div>
+                  <span>{jobScheduleSummary(job)}</span>
+                  {sessionId ? <span>{typeof scheduleCopy.sessionLabel === "function" ? scheduleCopy.sessionLabel(sessionId) : sessionId}</span> : null}
+                  {nextRunDisplay ? <span>{typeof scheduleCopy.nextRun === "function" ? scheduleCopy.nextRun(nextRunDisplay) : nextRunDisplay}</span> : null}
+                  <p>{jobMessage(job)}</p>
                 </div>
-                <span>{job.schedule?.display || job.cron_expr || job.every_seconds || ""}</span>
-                {job.session_id ? <span>{typeof scheduleCopy.sessionLabel === "function" ? scheduleCopy.sessionLabel(job.session_id) : job.session_id}</span> : null}
-                {job.state?.next_run_display ? <span>{typeof scheduleCopy.nextRun === "function" ? scheduleCopy.nextRun(job.state.next_run_display) : job.state.next_run_display}</span> : null}
-                <p>{job.payload?.message || job.message || ""}</p>
-              </div>
-              <Space className="schedule-job-row__actions" wrap>
-                <Button onClick={() => client.beginCronJobEdit(job)}>{scheduleCopy.edit || "Edit"}</Button>
-                <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, job.enabled ? "pause" : "enable")}>
-                  {job.enabled ? scheduleCopy.pause || "Pause" : scheduleCopy.enable || "Enable"}
-                </Button>
-                <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "run")}>{scheduleCopy.runNow || "Run now"}</Button>
-                <Button danger disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "remove")}>{scheduleCopy.remove || "Remove"}</Button>
-              </Space>
-            </List.Item>
-          )}
+                <Space className="schedule-job-row__actions" wrap>
+                  <Button onClick={() => client.beginCronJobEdit(job)}>{scheduleCopy.edit || "Edit"}</Button>
+                  <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, job.enabled ? "pause" : "enable")}>
+                    {job.enabled ? scheduleCopy.pause || "Pause" : scheduleCopy.enable || "Enable"}
+                  </Button>
+                  <Button disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "run")}>{scheduleCopy.runNow || "Run now"}</Button>
+                  <Button danger disabled={state.cronJobsLoading} onClick={() => client.runCronJobAction(job, "remove")}>{scheduleCopy.remove || "Remove"}</Button>
+                </Space>
+              </List.Item>
+            );
+          }}
         />
       </SettingsCard>
 
@@ -121,12 +231,8 @@ export function ScheduleSettings({ client }: { client: ScheduleSettingsClient })
             <Form.Item className="provider-connect-field" label={scheduleCopy.jobType || "Type"}>
               <Select
                 value={form.mode}
-                options={[
-                  { value: "cron", label: scheduleCopy.jobTypes?.cron || "Cron expression" },
-                  { value: "every", label: scheduleCopy.jobTypes?.every || "Fixed interval" },
-                  { value: "at", label: scheduleCopy.jobTypes?.at || "Run once" },
-                ]}
-                onChange={(value) => (form.mode = value)}
+                options={CRON_JOB_MODES.map((mode) => ({ value: mode, label: cronJobModeLabel(scheduleCopy, mode) }))}
+                onChange={(value) => (form.mode = normalizeCronJobMode(value))}
               />
             </Form.Item>
             {form.mode === "every" ? (

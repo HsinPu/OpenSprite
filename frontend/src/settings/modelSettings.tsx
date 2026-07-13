@@ -3,39 +3,134 @@ import { providerMark } from "./providerHelpers";
 import { mediaModelCategories, mediaModelsForProvider } from "./providerMediaHelpers";
 import { modelOptionsForProvider, textModelOptionLabel } from "./providerModelHelpers";
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
+import { MODEL_REASONING_EFFORTS, normalizeModelReasoningEffort, type ModelReasoningEffort } from "../composables/modelReasoning";
+import { toPayloadSource } from "../composables/payloadBoundary";
+import type {
+  MediaCategory,
+  MediaCustomModels,
+  MediaSelection,
+  MediaSelections,
+  MediaSettings as MediaSettingsView,
+  ModelProviderView,
+  ModelSettings as ModelSettingsView,
+} from "../composables/useSettingsState";
 
-type AnyRecord = Record<string, any>;
 type ValueRef<T> = { value: T };
+type ModelSettingsCopyView = {
+  active?: unknown;
+  apply?: unknown;
+  currentBadge?: unknown;
+  customModel?: unknown;
+  customPlaceholder?: unknown;
+  enableMediaModel?: unknown;
+  enabledBadge?: unknown;
+  loading?: unknown;
+  mediaNoProvidersDescription?: unknown;
+  mediaTitle?: unknown;
+  modelChoice?: unknown;
+  noModel?: unknown;
+  noProvidersBadge?: unknown;
+  noProvidersDescription?: unknown;
+  noProvidersTitle?: unknown;
+  providerChoice?: unknown;
+  reasoningChoice?: unknown;
+  reasoningDefault?: unknown;
+  reasoningHigh?: unknown;
+  reasoningLow?: unknown;
+  reasoningMedium?: unknown;
+  reasoningMinimal?: unknown;
+  reasoningNone?: unknown;
+  reasoningXhigh?: unknown;
+  saveMediaModel?: unknown;
+  select?: unknown;
+  textTitle?: unknown;
+  useCustom?: unknown;
+};
+type ModelSettingsCopy = {
+  settings?: unknown;
+};
+type ModelSettingsContainerPayload = {
+  models?: unknown;
+};
+type ModelSettingsStateView = {
+  customModels: Record<string, string>;
+  media: MediaSettingsView;
+  mediaCustomModels: MediaCustomModels;
+  mediaError: string;
+  mediaLoading: boolean;
+  mediaSelections: MediaSelections;
+  modelSelections: Record<string, string>;
+  models: ModelSettingsView;
+  modelsError: string;
+  modelsLoading: boolean;
+  modelsNotice: string;
+  reasoningSelections: Record<string, ModelReasoningEffort>;
+  selectedTextProviderId: string;
+};
 
 type ModelSettingsClient = {
-  copy: ValueRef<AnyRecord>;
-  settingsState: AnyRecord;
-  selectModel: (providerId: string, model: string, reasoning?: string) => void;
-  saveMediaModel: (category: string, model?: string) => void;
+  copy: ValueRef<ModelSettingsCopy>;
+  settingsState: ModelSettingsStateView;
+  selectModel: (providerId: string, model: string, reasoning?: ModelReasoningEffort) => void;
+  saveMediaModel: (category: MediaCategory, model?: string) => void;
 };
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
+
+function modelSettingsCopy(copy: ModelSettingsCopy): ModelSettingsCopyView {
+  const settings = toPayloadSource<ModelSettingsContainerPayload>(copy.settings);
+  return toPayloadSource<ModelSettingsCopyView>(settings?.models) || {};
+}
+
+function emptyMediaSelection(): MediaSelection {
+  return { enabled: false, providerId: "", model: "" };
+}
+
+function reasoningEffortLabel(copy: ModelSettingsCopyView, effort: ModelReasoningEffort): string {
+  switch (effort) {
+    case "none":
+      return text(copy.reasoningNone, "None");
+    case "minimal":
+      return text(copy.reasoningMinimal, "Minimal");
+    case "low":
+      return text(copy.reasoningLow, "Low");
+    case "medium":
+      return text(copy.reasoningMedium, "Medium");
+    case "high":
+      return text(copy.reasoningHigh, "High");
+    case "xhigh":
+      return text(copy.reasoningXhigh, "XHigh");
+    default:
+      return text(copy.reasoningDefault, "Default");
+  }
+}
 
 export function ModelSettings({ client }: { client: ModelSettingsClient }) {
   const copy = client.copy.value;
   const state = client.settingsState;
-  const modelCopy = copy.settings.models || {};
-  const providers = state.models?.providers || [];
-  const selectedProvider = providers.find((provider: AnyRecord) => provider.id === state.selectedTextProviderId) || providers[0] || null;
+  const modelCopy = modelSettingsCopy(copy);
+  const providers = state.models.providers || [];
+  const selectedProvider = providers.find((provider) => provider.id === state.selectedTextProviderId) || providers[0] || null;
   const selectedProviderId = selectedProvider?.id || "";
   const selectedModel = selectedProvider ? state.modelSelections[selectedProvider.id] || selectedProvider.selected_model || "" : "";
-  const selectedReasoning = selectedProvider ? state.reasoningSelections[selectedProvider.id] || selectedProvider.reasoning_effort || "" : "";
+  const selectedReasoning = selectedProvider
+    ? normalizeModelReasoningEffort(state.reasoningSelections[selectedProvider.id] || selectedProvider.reasoning_effort)
+    : "";
 
   return (
     <section className="settings-page">
-      <SettingsStatus message={state.modelsLoading ? modelCopy.loading || "Loading models..." : ""} />
+      <SettingsStatus message={state.modelsLoading ? text(modelCopy.loading, "Loading models...") : ""} />
       <SettingsStatus message={state.modelsNotice} />
       <SettingsStatus message={state.modelsError} type="error" />
       <SettingsStatus message={state.mediaError} type="error" />
 
-      <SettingsSectionTitle>{modelCopy.textTitle || "Text model"}</SettingsSectionTitle>
+      <SettingsSectionTitle>{text(modelCopy.textTitle, "Text model")}</SettingsSectionTitle>
       {providers.length === 0 ? (
         <SettingsCard>
-          <SettingsRow title={modelCopy.noProvidersTitle || "No providers"} description={modelCopy.noProvidersDescription || ""}>
-            <Tag>{modelCopy.noProvidersBadge || ""}</Tag>
+          <SettingsRow title={text(modelCopy.noProvidersTitle, "No providers")} description={text(modelCopy.noProvidersDescription)}>
+            <Tag>{text(modelCopy.noProvidersBadge)}</Tag>
           </SettingsRow>
         </SettingsCard>
       ) : null}
@@ -47,86 +142,82 @@ export function ModelSettings({ client }: { client: ModelSettingsClient }) {
               <span className="provider-row__mark" aria-hidden="true">{providerMark(selectedProvider)}</span>
               <div>
                 <div className="provider-row__title">
-                  <strong>{selectedProvider.name || selectedProvider.id}</strong>
-                  {selectedProvider.is_default ? <Tag className="provider-row__badge">{modelCopy.currentBadge || "Current"}</Tag> : null}
+                  <strong>{text(selectedProvider.name, selectedProvider.id)}</strong>
+                  {selectedProvider.is_default ? <Tag className="provider-row__badge">{text(modelCopy.currentBadge, "Current")}</Tag> : null}
                 </div>
-                <span>{selectedProvider.selected_model || modelCopy.noModel || "No model selected"}</span>
+                <span>{text(selectedProvider.selected_model || modelCopy.noModel, "No model selected")}</span>
               </div>
             </div>
           </div>
 
           <div className="model-select-row">
-            <Form.Item className="ant-field-label" label={modelCopy.providerChoice || "Provider"}>
+            <Form.Item className="ant-field-label" label={text(modelCopy.providerChoice, "Provider")}>
               <Select
                 value={selectedProviderId}
                 disabled={state.modelsLoading}
-                options={providers.map((provider: AnyRecord) => ({
+                options={providers.map((provider: ModelProviderView) => ({
                   value: provider.id,
-                  label: `${provider.name || provider.id}${provider.is_default ? ` (${modelCopy.active || "active"})` : ""}`,
+                  label: `${text(provider.name, provider.id)}${provider.is_default ? ` (${text(modelCopy.active, "active")})` : ""}`,
                 }))}
                 onChange={(value) => {
-                  state.selectedTextProviderId = value;
-                  state.modelSelections[value] = "";
+                  const providerId = String(value || "");
+                  state.selectedTextProviderId = providerId;
+                  state.modelSelections[providerId] = "";
                 }}
               />
             </Form.Item>
-            <Form.Item className="ant-field-label" label={modelCopy.modelChoice || "Model"}>
+            <Form.Item className="ant-field-label" label={text(modelCopy.modelChoice, "Model")}>
               <Select
                 value={selectedModel}
                 disabled={state.modelsLoading}
                 options={[
-                  { value: "", label: modelCopy.noModel || "No model" },
+                  { value: "", label: text(modelCopy.noModel, "No model") },
                   ...modelOptionsForProvider(selectedProvider, selectedModel).map((model: string) => ({
                     value: model,
                     label: textModelOptionLabel(copy, selectedProvider, model),
                   })),
                 ]}
-                onChange={(value) => (state.modelSelections[selectedProvider.id] = value)}
+                onChange={(value) => (state.modelSelections[selectedProvider.id] = String(value || ""))}
               />
             </Form.Item>
-            <Form.Item className="ant-field-label" label={modelCopy.reasoningChoice || "Reasoning"}>
+            <Form.Item className="ant-field-label" label={text(modelCopy.reasoningChoice, "Reasoning")}>
               <Select
                 value={selectedReasoning}
                 disabled={state.modelsLoading}
-                options={[
-                  { value: "", label: modelCopy.reasoningDefault || "Default" },
-                  { value: "none", label: modelCopy.reasoningNone || "None" },
-                  { value: "minimal", label: modelCopy.reasoningMinimal || "Minimal" },
-                  { value: "low", label: modelCopy.reasoningLow || "Low" },
-                  { value: "medium", label: modelCopy.reasoningMedium || "Medium" },
-                  { value: "high", label: modelCopy.reasoningHigh || "High" },
-                  { value: "xhigh", label: modelCopy.reasoningXhigh || "XHigh" },
-                ]}
-                onChange={(value) => (state.reasoningSelections[selectedProvider.id] = value)}
+                options={MODEL_REASONING_EFFORTS.map((effort) => ({
+                  value: effort,
+                  label: reasoningEffortLabel(modelCopy, effort),
+                }))}
+                onChange={(value) => (state.reasoningSelections[selectedProvider.id] = normalizeModelReasoningEffort(value))}
               />
             </Form.Item>
             <Button type="primary" disabled={state.modelsLoading || !selectedModel} loading={state.modelsLoading} onClick={() => client.selectModel(selectedProvider.id, selectedModel, selectedReasoning)}>
-              {modelCopy.select || modelCopy.apply || "Apply"}
+              {text(modelCopy.select || modelCopy.apply, "Apply")}
             </Button>
           </div>
 
           <div className="custom-model-row">
-            <Form.Item className="ant-field-label" label={modelCopy.customModel || "Custom model"}>
-              <Input value={state.customModels[selectedProvider.id] || ""} placeholder={modelCopy.customPlaceholder || ""} spellCheck={false} onChange={(event) => (state.customModels[selectedProvider.id] = event.target.value)} />
+            <Form.Item className="ant-field-label" label={text(modelCopy.customModel, "Custom model")}>
+              <Input value={state.customModels[selectedProvider.id] || ""} placeholder={text(modelCopy.customPlaceholder)} spellCheck={false} onChange={(event) => (state.customModels[selectedProvider.id] = event.target.value)} />
             </Form.Item>
             <Button disabled={state.modelsLoading || !state.customModels[selectedProvider.id]} onClick={() => client.selectModel(selectedProvider.id, state.customModels[selectedProvider.id], selectedReasoning)}>
-              {modelCopy.useCustom || "Use custom"}
+              {text(modelCopy.useCustom, "Use custom")}
             </Button>
           </div>
         </SettingsCard>
       ) : null}
 
-      <SettingsSectionTitle>{modelCopy.mediaTitle || "Media models"}</SettingsSectionTitle>
-      {(state.media.providers || []).length === 0 ? (
+      <SettingsSectionTitle>{text(modelCopy.mediaTitle, "Media models")}</SettingsSectionTitle>
+      {state.media.providers.length === 0 ? (
         <SettingsCard>
-          <SettingsRow title={modelCopy.noProvidersTitle || "No providers"} description={modelCopy.mediaNoProvidersDescription || ""}>
-            <Tag>{modelCopy.noProvidersBadge || ""}</Tag>
+          <SettingsRow title={text(modelCopy.noProvidersTitle, "No providers")} description={text(modelCopy.mediaNoProvidersDescription)}>
+            <Tag>{text(modelCopy.noProvidersBadge)}</Tag>
           </SettingsRow>
         </SettingsCard>
       ) : null}
 
       {mediaModelCategories(copy).map((category) => {
-        const selection = state.mediaSelections[category.key] || {};
+        const selection = state.mediaSelections[category.key] || emptyMediaSelection();
         const providerModels = mediaModelsForProvider(state, category.key, selection.providerId, selection.model);
         return (
           <SettingsCard key={category.key} className="model-provider-card">
@@ -136,20 +227,20 @@ export function ModelSettings({ client }: { client: ModelSettingsClient }) {
                 <div>
                   <div className="provider-row__title">
                     <strong>{category.title}</strong>
-                    {state.media.sections?.[category.key]?.enabled ? <Tag className="provider-row__badge">{modelCopy.enabledBadge || "Enabled"}</Tag> : null}
+                    {state.media.sections?.[category.key]?.enabled ? <Tag className="provider-row__badge">{text(modelCopy.enabledBadge, "Enabled")}</Tag> : null}
                   </div>
-                  <span>{state.media.sections?.[category.key]?.model || modelCopy.noModel || "No model"}</span>
+                  <span>{text(state.media.sections?.[category.key]?.model || modelCopy.noModel, "No model")}</span>
                 </div>
               </div>
             </div>
-            <SettingsRow title={modelCopy.enableMediaModel || "Enable media model"} description={category.description}>
+            <SettingsRow title={text(modelCopy.enableMediaModel, "Enable media model")} description={category.description}>
               <Switch
-                aria-label={modelCopy.enableMediaModel || "Enable media model"}
+                aria-label={text(modelCopy.enableMediaModel, "Enable media model")}
                 checked={Boolean(selection.enabled)}
                 onChange={(checkedValue) => {
                   selection.enabled = checkedValue;
                   if (selection.enabled && !selection.providerId) {
-                    selection.providerId = state.media.providers?.[0]?.id || "";
+                    selection.providerId = state.media.providers[0]?.id || "";
                   }
                   if (selection.enabled) {
                     selection.model = "";
@@ -159,42 +250,42 @@ export function ModelSettings({ client }: { client: ModelSettingsClient }) {
             </SettingsRow>
             <div className="model-select-row">
               {selection.enabled ? (
-                <Form.Item className="ant-field-label" label={modelCopy.providerChoice || "Provider"}>
+                <Form.Item className="ant-field-label" label={text(modelCopy.providerChoice, "Provider")}>
                   <Select
                     value={selection.providerId || ""}
                     disabled={state.mediaLoading}
-                    options={(state.media.providers || []).map((provider: AnyRecord) => ({
+                    options={state.media.providers.map((provider: ModelProviderView) => ({
                       value: provider.id,
-                      label: provider.name || provider.id,
+                      label: text(provider.name, provider.id),
                     }))}
                     onChange={(value) => {
-                      selection.providerId = value;
+                      selection.providerId = String(value || "");
                       selection.model = "";
                     }}
                   />
                 </Form.Item>
               ) : null}
               {selection.enabled ? (
-                <Form.Item className="ant-field-label" label={modelCopy.modelChoice || "Model"}>
+                <Form.Item className="ant-field-label" label={text(modelCopy.modelChoice, "Model")}>
                   <Select
                     value={selection.model || ""}
                     disabled={state.mediaLoading}
                     options={providerModels.map((model: string) => ({ value: model, label: model }))}
-                    onChange={(value) => (selection.model = value)}
+                    onChange={(value) => (selection.model = String(value || ""))}
                   />
                 </Form.Item>
               ) : null}
               <Button disabled={state.mediaLoading || (selection.enabled && !selection.providerId)} loading={state.mediaLoading} onClick={() => client.saveMediaModel(category.key)}>
-                {modelCopy.saveMediaModel || modelCopy.apply || "Save"}
+                {text(modelCopy.saveMediaModel || modelCopy.apply, "Save")}
               </Button>
             </div>
             {selection.enabled ? (
               <div className="custom-model-row">
-                <Form.Item className="ant-field-label" label={modelCopy.customModel || "Custom model"}>
-                  <Input value={state.mediaCustomModels[category.key] || ""} placeholder={modelCopy.customPlaceholder || ""} disabled={state.mediaLoading} spellCheck={false} onChange={(event) => (state.mediaCustomModels[category.key] = event.target.value)} />
+                <Form.Item className="ant-field-label" label={text(modelCopy.customModel, "Custom model")}>
+                  <Input value={state.mediaCustomModels[category.key] || ""} placeholder={text(modelCopy.customPlaceholder)} disabled={state.mediaLoading} spellCheck={false} onChange={(event) => (state.mediaCustomModels[category.key] = event.target.value)} />
                 </Form.Item>
                 <Button disabled={state.mediaLoading || !state.mediaCustomModels[category.key]} onClick={() => client.saveMediaModel(category.key, state.mediaCustomModels[category.key])}>
-                  {modelCopy.useCustom || "Use custom"}
+                  {text(modelCopy.useCustom, "Use custom")}
                 </Button>
               </div>
             ) : null}

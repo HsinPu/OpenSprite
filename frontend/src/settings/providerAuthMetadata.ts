@@ -1,9 +1,14 @@
-export function providerAuthStateKeys(authKey: string) {
+import type {
+  ProviderAuthDeviceKey,
+  ProviderAuthStatePayload,
+} from "../composables/providerAuthState";
+
+export function providerAuthStateKeys<const AuthKey extends string>(authKey: AuthKey) {
   return {
     stateKey: authKey,
-    loadingKey: `${authKey}Loading`,
-    errorKey: `${authKey}Error`,
-    noticeKey: `${authKey}Notice`,
+    loadingKey: `${authKey}Loading` as const,
+    errorKey: `${authKey}Error` as const,
+    noticeKey: `${authKey}Notice` as const,
     connectedNoticeKey: authKey.replace(/Auth$/, "ProviderConnected"),
     loadFailedNoticeKey: `${authKey}LoadFailed`,
     loginReadyNoticeKey: `${authKey}LoginReady`,
@@ -14,18 +19,21 @@ export function providerAuthStateKeys(authKey: string) {
   };
 }
 
-function providerAuthSectionKeys(authKey: string) {
+function providerAuthSectionKeys<const AuthKey extends string>(authKey: AuthKey) {
   return { copyKey: authKey, ...providerAuthStateKeys(authKey) };
 }
 
-function providerDeviceAuthInitialState(deviceKey: string, extra: Record<string, unknown> = {}) {
-  return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, [deviceKey]: "" };
+function providerDeviceAuthInitialState(deviceKey: ProviderAuthDeviceKey, extra: ProviderAuthStatePayload = {}): ProviderAuthStatePayload {
+  const deviceState = deviceKey === "deviceAuthId"
+    ? { deviceAuthId: "" }
+    : { deviceCode: "" };
+  return { configured: false, path: "", verificationUri: "", userCode: "", pollIntervalSeconds: 5, ...extra, ...deviceState };
 }
 
 export const PROVIDER_AUTH_SECTION_CONFIGS = [
   {
     providerId: "openai-codex", ...providerAuthSectionKeys("codexAuth"), mark: "Cx", providerName: "OpenAI Codex", oauthAuthType: "openai_codex_oauth",
-    deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id",
+    deviceKey: "deviceAuthId", payloadDeviceKey: "device_auth_id" as const,
     pollRequiresUserCode: true,
     includeAccountStatus: true,
     loginExtra: { command: "" },
@@ -34,18 +42,19 @@ export const PROVIDER_AUTH_SECTION_CONFIGS = [
   },
   {
     providerId: "copilot", ...providerAuthSectionKeys("copilotAuth"), mark: "Gh", providerName: "GitHub Copilot", oauthAuthType: "github_copilot_oauth",
-    deviceKey: "deviceCode", payloadDeviceKey: "device_code",
+    deviceKey: "deviceCode", payloadDeviceKey: "device_code" as const,
     logoutReset: { path: "" },
     initialAuth: providerDeviceAuthInitialState("deviceCode"),
   },
-];
+] as const;
+
+export type ProviderAuthSectionConfig = (typeof PROVIDER_AUTH_SECTION_CONFIGS)[number];
+export type ProviderAuthProviderId = ProviderAuthSectionConfig["providerId"];
 
 export const DEFAULT_PROVIDER_AUTH_PROVIDER_ID = PROVIDER_AUTH_SECTION_CONFIGS[0].providerId;
 
-const PROVIDER_AUTH_SECTIONS = Object.fromEntries(PROVIDER_AUTH_SECTION_CONFIGS.map((config) => [config.providerId, config]));
+export const PROVIDER_AUTH_PROVIDER_IDS = PROVIDER_AUTH_SECTION_CONFIGS.map((config) => config.providerId);
 
-export const PROVIDER_AUTH_PROVIDER_IDS = Object.keys(PROVIDER_AUTH_SECTIONS);
-
-export function providerAuthSectionForId(providerId: string) {
-  return PROVIDER_AUTH_SECTIONS[providerId];
+export function providerAuthSectionForId(providerId: string): ProviderAuthSectionConfig | undefined {
+  return PROVIDER_AUTH_SECTION_CONFIGS.find((config) => config.providerId === providerId);
 }

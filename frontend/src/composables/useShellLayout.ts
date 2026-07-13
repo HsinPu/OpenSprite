@@ -13,15 +13,19 @@ type ShellLayoutClient = {
   sidebarCollapsed: { value: boolean };
   traceInspectorCollapsed: { value: boolean };
 };
+type ShellStyle = CSSProperties & {
+  "--sidebar-width"?: string;
+  "--trace-sidebar-width"?: string;
+};
 
 export function useShellLayout(client: ShellLayoutClient) {
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [traceInspectorWidth, setTraceInspectorWidth] = useState(readStoredTraceWidth);
 
-  const appShellStyle = {
+  const appShellStyle: ShellStyle = {
     "--sidebar-width": sidebarWidth ? `${sidebarWidth}px` : undefined,
     "--trace-sidebar-width": traceInspectorWidth ? `${traceInspectorWidth}px` : undefined,
-  } as CSSProperties;
+  };
 
   function currentSidebarGutter() {
     return client.sidebarCollapsed.value ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth || SIDEBAR_WIDTH_DEFAULT;

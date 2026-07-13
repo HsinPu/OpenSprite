@@ -1,8 +1,7 @@
 import { Select } from "antd";
 import { runOptionLabel } from "./displayHelpers";
 import type { RunInspectorClient } from "./runInspector";
-
-type AnyRecord = Record<string, any>;
+import type { RunViewState } from "../composables/chatClientRunHelpers";
 
 export function RunHistorySelector({
   client,
@@ -10,8 +9,8 @@ export function RunHistorySelector({
   runs,
 }: {
   client: RunInspectorClient;
-  run: AnyRecord | null;
-  runs: AnyRecord[];
+  run: RunViewState | null;
+  runs: RunViewState[];
 }) {
   const copy = client.copy.value;
 
@@ -31,7 +30,7 @@ export function RunHistorySelector({
           <span className="sr-only">{copy.runHistory.select}</span>
           <Select
             value={run?.runId || ""}
-            options={runs.map((item: AnyRecord, index: number) => ({
+            options={runs.map((item: RunViewState, index: number) => ({
               value: item.runId,
               label: runOptionLabel(copy, item, index),
             }))}

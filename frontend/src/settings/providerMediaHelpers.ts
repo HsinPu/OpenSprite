@@ -1,19 +1,61 @@
-import type { AnyRecord } from "./providerHelpers";
+import { toPayloadSource } from "../composables/payloadBoundary";
+import type {
+  MediaCategory,
+  MediaSettings as SettingsMediaSettings,
+  ModelProviderView as SettingsModelProviderView,
+} from "../composables/useSettingsState";
 
-export function mediaModelCategories(copy: AnyRecord) {
-  const categories = copy.settings.models?.mediaCategories || {};
+type MediaProviderView = Pick<SettingsModelProviderView, "id" | "media_models" | "models">;
+type MediaStateView = {
+  media?: Pick<SettingsMediaSettings, "providers">;
+};
+type MediaCopyRootPayload = {
+  settings?: unknown;
+};
+type MediaCopySettingsPayload = {
+  models?: unknown;
+};
+type MediaModelsCopyPayload = {
+  mediaCategories?: unknown;
+};
+type MediaCategoriesCopyPayload = {
+  [Category in MediaCategory]?: unknown;
+};
+type MediaCategoryCopyView = {
+  title?: unknown;
+  description?: unknown;
+};
+type MediaModelCategory = {
+  key: MediaCategory;
+  mark: string;
+  title: string;
+  description: string;
+};
+
+function text(value: unknown, fallback = ""): string {
+  return String(value || fallback);
+}
+
+export function mediaModelCategories(copy: unknown): MediaModelCategory[] {
+  const root = toPayloadSource<MediaCopyRootPayload>(copy);
+  const settings = toPayloadSource<MediaCopySettingsPayload>(root?.settings);
+  const models = toPayloadSource<MediaModelsCopyPayload>(settings?.models);
+  const categories = toPayloadSource<MediaCategoriesCopyPayload>(models?.mediaCategories);
+  const vision = toPayloadSource<MediaCategoryCopyView>(categories?.vision) || {};
+  const ocr = toPayloadSource<MediaCategoryCopyView>(categories?.ocr) || {};
+  const speech = toPayloadSource<MediaCategoryCopyView>(categories?.speech) || {};
+  const video = toPayloadSource<MediaCategoryCopyView>(categories?.video) || {};
   return [
-    { key: "vision", mark: "VI", title: categories.vision?.title || "Vision", description: categories.vision?.description || "" },
-    { key: "ocr", mark: "OC", title: categories.ocr?.title || "OCR", description: categories.ocr?.description || "" },
-    { key: "speech", mark: "SP", title: categories.speech?.title || "Speech", description: categories.speech?.description || "" },
-    { key: "video", mark: "VD", title: categories.video?.title || "Video", description: categories.video?.description || "" },
+    { key: "vision", mark: "VI", title: text(vision.title, "Vision"), description: text(vision.description) },
+    { key: "ocr", mark: "OC", title: text(ocr.title, "OCR"), description: text(ocr.description) },
+    { key: "speech", mark: "SP", title: text(speech.title, "Speech"), description: text(speech.description) },
+    { key: "video", mark: "VD", title: text(video.title, "Video"), description: text(video.description) },
   ];
 }
 
-export function mediaModelsForProvider(state: AnyRecord, category: string, providerId: string, selectedModel = "") {
-  const provider = (state.media.providers || []).find((entry: AnyRecord) => entry.id === providerId);
-  const mediaModels = provider?.media_models?.[category];
-  const models = Array.isArray(mediaModels) ? [...mediaModels] : Array.isArray(provider?.models) ? [...provider.models] : [];
+export function mediaModelsForProvider(state: MediaStateView, category: MediaCategory, providerId: string, selectedModel = ""): string[] {
+  const provider = (state.media?.providers ?? []).find((entry: MediaProviderView) => entry.id === providerId);
+  const models = [...(provider?.media_models?.[category] ?? provider?.models ?? [])];
   const selected = String(selectedModel || "").trim();
   if (selected && !models.includes(selected)) {
     models.unshift(selected);
