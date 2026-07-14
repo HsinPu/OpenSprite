@@ -13,7 +13,8 @@ from typing import Any
 
 import typer
 
-from ..runs.events import TASK_CONTRACT_CREATED_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
+from ..runs.events import TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
+from ..runs.lifecycle import RUN_COMPLETED_STATUS
 from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredRunTrace
 from .commands_chat import _json_for_stdout, run_web_chat
 
@@ -79,11 +80,6 @@ def _tool_name_from_event(event_payload: dict[str, Any]) -> str:
     if isinstance(tool_call, dict) and isinstance(tool_call.get("name"), str):
         return str(tool_call["name"])
     return ""
-
-
-def _contract_type_from_payload(payload: dict[str, Any]) -> str:
-    value = payload.get("task_type")
-    return str(value) if isinstance(value, str) else ""
 
 
 def _load_json_object(value: Any) -> dict[str, Any]:
@@ -236,11 +232,8 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
         return {
             "run_id": fallback.get("run_id"),
             "run_status": fallback.get("run_status") or "",
+            "persisted": False,
             "event_count": int(fallback.get("run_event_count") or 0),
-            "task_type": "",
-            "contract": "",
-            "completion_status": "",
-            "completion_reason": "",
             "tool_count": int(fallback.get("tool_call_count") or 0),
             "tools": [],
             "failed_tool_count": 0,
@@ -249,11 +242,6 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
 
     tools: list[str] = []
     failed_tools: list[str] = []
-    task_type = ""
-    contract = ""
-    completion_status = ""
-    completion_reason = ""
-
     for event in trace.events:
         payload = event.payload if isinstance(event.payload, dict) else {}
         if event.event_type == TOOL_STARTED_EVENT:
@@ -266,24 +254,15 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
                 failed_tool = _tool_name_from_event(payload)
                 if failed_tool:
                     failed_tools.append(failed_tool)
-        elif event.event_type == TASK_CONTRACT_CREATED_EVENT:
-            contract = _contract_type_from_payload(payload) or contract
-            task_type = contract or task_type
-        elif event.event_type.startswith("completion_gate"):
-            completion_status = str(payload.get("status") or completion_status)
-            completion_reason = str(payload.get("reason") or completion_reason)
 
     run = trace.run
     return {
         "run_id": run.run_id,
         "run_status": run.status,
+        "persisted": True,
         "event_count": len(trace.events),
         "part_count": len(trace.parts),
         "file_change_count": len(trace.file_changes),
-        "task_type": task_type,
-        "contract": contract,
-        "completion_status": completion_status,
-        "completion_reason": completion_reason,
         "tool_count": len(tools),
         "tools": tools,
         "failed_tool_count": len(failed_tools),
@@ -294,15 +273,26 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
 def check_trace(case: SmokeCase, trace_summary: dict[str, Any]) -> list[str]:
     """Return strict smoke failures for one case."""
     failures: list[str] = []
+    run_id = str(trace_summary.get("run_id") or "").strip()
+    run_status = str(trace_summary.get("run_status") or "").strip().lower()
+    if not run_id:
+        failures.append("missing run id")
+    if trace_summary.get("persisted") is not True:
+        failures.append("persisted run trace was not found")
+    if run_status != RUN_COMPLETED_STATUS:
+        failures.append(f"run status was {run_status or '<missing>'}; expected {RUN_COMPLETED_STATUS}")
+
     tools = {str(tool) for tool in trace_summary.get("tools") or []}
     web_tools = tools & WEB_TOOL_NAMES
-    completion_status = str(trace_summary.get("completion_status") or "").strip().lower()
-    if completion_status and completion_status != "complete":
-        failures.append(f"completion gate status was {completion_status}")
     if case.expect_web_tools is True and not web_tools:
         failures.append("expected at least one web tool")
     elif case.expect_web_tools is False and web_tools:
         failures.append(f"unexpected web tool: {', '.join(sorted(web_tools))}")
+    failed_tools = [str(tool) for tool in trace_summary.get("failed_tools") or [] if str(tool).strip()]
+    failed_tool_count = int(trace_summary.get("failed_tool_count") or len(failed_tools))
+    if failed_tool_count:
+        detail = f": {', '.join(failed_tools)}" if failed_tools else ""
+        failures.append(f"{failed_tool_count} tool call(s) failed{detail}")
     return failures
 
 
@@ -336,12 +326,10 @@ async def run_smoke_cases(
         trace = load_trace_readonly(session_id, run_id, db_path=db_path) if run_id else None
         trace_summary = summarize_trace(trace, fallback=payload)
         failures = check_trace(case, trace_summary)
-        payload_ok = bool(payload.get("ok", True))
+        payload_ok = bool(payload.get("ok", False))
         payload_error = str(payload.get("error") or "").strip()
         if not payload_ok:
-            if trace_summary.get("run_status") == "completed" and trace_summary.get("completion_status") == "complete":
-                payload_ok = True
-            elif payload_error:
+            if payload_error:
                 failures.append(payload_error)
             else:
                 failures.append("web chat payload reported failure")
@@ -354,7 +342,7 @@ async def run_smoke_cases(
                 "external_chat_id": external_chat_id,
                 "reply_preview": str(payload.get("reply") or "")[:240],
                 "elapsed_seconds": payload.get("elapsed_seconds"),
-                "payload_ok": bool(payload.get("ok", True)),
+                "payload_ok": payload_ok,
                 "payload_error": payload_error,
                 "failures": failures,
                 "trace": trace_summary,
@@ -394,7 +382,7 @@ def _render_text(payload: dict[str, Any]) -> None:
         tools = ", ".join(trace.get("tools") or []) or "-"
         typer.echo(
             f"{status} {result['case']} run={trace.get('run_id') or '-'} "
-            f"task_type={trace.get('task_type') or '-'} tools={tools}"
+            f"tools={tools}"
         )
         for failure in result.get("failures") or []:
             typer.echo(f"  - {failure}")

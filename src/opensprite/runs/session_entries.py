@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .schema import RUN_SCHEMA_VERSION, serialize_run_artifacts, serialize_run_part
-from ..utils.json_safe import json_safe_payload
+from .schema import RUN_SCHEMA_VERSION, sanitize_run_metadata, serialize_run_artifacts, serialize_run_part
 
 
 def _text(value: Any) -> str:
@@ -25,7 +24,7 @@ def serialize_message_entry(message: Any, *, index: int | None = None) -> dict[s
     timestamp = float(getattr(message, "timestamp", 0) or 0)
     entry_id = f"message:{index}" if index is not None else None
     content = _text(getattr(message, "content", ""))
-    metadata = json_safe_payload(dict(getattr(message, "metadata", {}) or {}))
+    metadata = sanitize_run_metadata(dict(getattr(message, "metadata", {}) or {}))
 
     entry: dict[str, Any] = {
         "schema_version": RUN_SCHEMA_VERSION,
@@ -58,8 +57,6 @@ def _content_type_from_artifact(artifact: dict[str, Any]) -> str:
         return "file"
     if kind == "verification":
         return "verification"
-    if kind == "task" or artifact_type == "task_checklist":
-        return "task"
     if kind == "llm" or artifact_type == "llm_step":
         return "llm_step"
     if kind == "tool" or artifact_type == "tool":
@@ -113,7 +110,7 @@ def serialize_run_trace_entries(trace: Any) -> list[dict[str, Any]]:
             "created_at": getattr(run, "created_at", None),
             "updated_at": getattr(run, "updated_at", None),
             "content": content_items,
-            "metadata": json_safe_payload(dict(getattr(run, "metadata", {}) or {})),
+            "metadata": sanitize_run_metadata(dict(getattr(run, "metadata", {}) or {})),
         }
     ]
 

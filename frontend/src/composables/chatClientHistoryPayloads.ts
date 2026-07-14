@@ -95,7 +95,6 @@ export type HistorySessionPayload = {
   messages?: HistoryMessagePayload[];
   entries?: Array<HistoryEntryPayload | null>;
   runs?: Array<HistoryRunPayload | null>;
-  work_state?: unknown;
   status?: HistorySessionStatusPayload;
 };
 
@@ -305,7 +304,6 @@ function toHistorySessionPayload(value: unknown): HistorySessionPayload | null {
     messages: toHistoryMessagePayloadList(payload.messages),
     entries: toHistoryEntryPayloadList(payload.entries),
     runs: toHistoryRunPayloadList(payload.runs),
-    work_state: payload.work_state,
     status: toHistorySessionStatusPayload(payload.status),
   };
 }

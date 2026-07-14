@@ -22,13 +22,13 @@ opensprite/agent.py - Agent Loop
 
 from contextvars import ContextVar
 from pathlib import Path
+import asyncio
 import shutil
 from typing import Any, Awaitable, Callable
 
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider
-from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store, is_current_active_task_status
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
 from ..context.paths import (
@@ -44,11 +44,6 @@ from ..media import (
 )
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
-from ..runs.events import (
-    ACTIVE_TASK_REPLACED_EVENT,
-    ACTIVE_TASK_SEEDED_EVENT,
-    ACTIVE_TASK_UNCHANGED_EVENT,
-)
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
@@ -57,12 +52,8 @@ from ..tool_names import (
     PROCESS_TOOL_NAME,
 )
 from ..utils.log import logger
-from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
-from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
-from .completion.auto_continue import AutoContinueService
-from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
+from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..documents.curator import (
-    ActiveTaskUpdateService,
     CuratorService,
     MemoryConsolidationService,
     RecentSummaryUpdateService,
@@ -79,21 +70,13 @@ from ..context.message_history import (
     LearningLedger,
     MessageHistoryService,
     PreparedPromptHistory,
-    TaskContextRetrievalService,
 )
 from ..tools.registration import register_memory_tool
-from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
+from ..runs.trace import RunFileChangeService, RunTraceRecorder
+from ..runs.worktree import cleanup_worktree_sandbox
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagent_run import SubagentRunService
-from .task.contract import TaskPlanner
-from .task.resolution import (
-    TaskContextDecision,
-    TaskObjectiveDecision,
-)
-from .task.intent import TaskIntent, TaskIntentService
-from ..tools.selection import ToolSelectionResolver
 from .agent_run_hooks import AgentRunHookFactory
-from . import active_task_runtime
 from . import learning_runtime
 from . import media_runtime
 from .background_session_notifications import BackgroundSessionNotificationService
@@ -109,12 +92,8 @@ from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
 from .tool_setup import setup_agent_tools
 from .run_update_buffer import RunUpdateBuffer
-from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .verification_runner import run_agent_verification
 from .workflow import SubagentWorkflowService
-from .task.progress import WorkProgressService, WorkProgressUpdate
-from .task.active_task import ActiveTaskCommandService
-from .task.planning import required_tools_for_task_contract
 
 
 class AgentLoop:
@@ -140,6 +119,9 @@ class AgentLoop:
     """
 
     MAX_TOOL_ITERATIONS = 10
+    RUN_CANCEL_CLEANUP_TIMEOUT_SECONDS = 5.0
+    RUN_CANCEL_CLEANUP_ATTEMPTS = 2
+    RUN_CANCEL_EVENT_TIMEOUT_SECONDS = 2.0
 
     @staticmethod
     def _sanitize_log_filename(value: str) -> str:
@@ -248,6 +230,7 @@ class AgentLoop:
         *,
         channel: str | None = None,
         external_chat_id: str | None = None,
+        require_persistence: bool = False,
     ) -> None:
         """Persist and publish one structured run event."""
         await self.run_trace.emit_event(
@@ -257,11 +240,22 @@ class AgentLoop:
             payload,
             channel=channel,
             external_chat_id=external_chat_id,
+            require_persistence=require_persistence,
         )
 
-    def cleanup_worktree_sandbox(self, sandbox_path: str) -> dict[str, Any]:
-        """Remove an OpenSprite-managed worktree sandbox by marker-guarded path."""
-        return WorktreeSandboxInspector.cleanup(sandbox_path)
+    def cleanup_worktree_sandbox(
+        self,
+        sandbox_path: str,
+        *,
+        session_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        """Remove a legacy OpenSprite-managed worktree by marker-guarded path."""
+        return cleanup_worktree_sandbox(
+            sandbox_path,
+            session_id=session_id,
+            run_id=run_id,
+        )
 
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:
@@ -289,7 +283,6 @@ class AgentLoop:
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
         user_profile_config: UserProfileConfig | None = None,
-        active_task_config: ActiveTaskConfig | None = None,
         recent_summary_config: RecentSummaryConfig | None = None,
         cron_manager: Any | None = None,
         media_router: MediaRouter | None = None,
@@ -316,9 +309,6 @@ class AgentLoop:
         self.user_profile_config = user_profile_config or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
         )
-        self.active_task_config = active_task_config or ActiveTaskConfig(
-            **Config._merge_document_section({}, Config.load_template_data().get("active_task", {}))
-        )
         self.recent_summary_config = recent_summary_config or RecentSummaryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("recent_summary", {}))
         )
@@ -339,11 +329,16 @@ class AgentLoop:
             default=None,
         )
         self._current_run_id: ContextVar[str | None] = ContextVar("current_run_id", default=None)
-        self._current_work_progress: ContextVar[dict[str, Any] | None] = ContextVar(
-            "current_work_progress",
+        self._current_file_changes: ContextVar[dict[str, Any] | None] = ContextVar(
+            "current_file_changes",
             default=None,
         )
         self.background_process_manager: BackgroundProcessManager | None = None
+        self._run_cancel_cleanup_tasks: dict[
+            tuple[str, str],
+            asyncio.Task[list[BackgroundSession]],
+        ] = {}
+        self._run_cancel_event_tasks: set[asyncio.Task[None]] = set()
         self.turn_context = TurnContextService(
             current_session_id=self._current_session_id,
             current_channel=self._current_channel,
@@ -353,7 +348,7 @@ class AgentLoop:
             current_videos=self._current_videos,
             current_outbound_media=self._current_outbound_media,
             current_run_id=self._current_run_id,
-            current_work_progress=self._current_work_progress,
+            current_file_changes=self._current_file_changes,
         )
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
@@ -381,7 +376,6 @@ class AgentLoop:
             max_history_getter=lambda: self.config.max_history,
             emit_index_failure=self._emit_search_index_failure,
         )
-        self.retrieval = TaskContextRetrievalService(search_store=self.search_store)
         self._context_builder = self._setup_context_builder(context_builder)
         self.learning_ledger = self._setup_learning_ledger()
         self.history_reset = HistoryResetService(
@@ -399,18 +393,6 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
             log_config=self.log_config,
         )
-        self.task_intents = TaskIntentService()
-        self.tool_selection = ToolSelectionResolver()
-        self.task_planner = TaskPlanner(self.config.task_planner_llm)
-        self.completion_gate = CompletionGateService(llm_config=self.config.completion_verifier_llm)
-        self.auto_continue = AutoContinueService(
-            max_auto_continues=self.config.auto_continue_default_budget,
-            max_deterministic_actions=self.config.auto_continue_deterministic_action_budget,
-        )
-        self.work_progress = WorkProgressService(
-            default_continuation_budget=self.config.auto_continue_default_budget,
-            long_running_continuation_budget=self.config.auto_continue_long_running_budget,
-        )
         self.run_state = AgentRunStateService()
         self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
         self.user_overlay_index = UserOverlayIndexStore(app_home=self.app_home)
@@ -423,29 +405,20 @@ class AgentLoop:
             response_finalizer=self.response_finalizer,
             turn_context=self.turn_context,
             run_state=self.run_state,
-            task_initial_llm_config=self.config.task_context_llm,
-            completion_gate=self.completion_gate,
-            completion_verifier_context=lambda: (self.provider, self.provider.get_default_model()),
-            auto_continue=self.auto_continue,
-            work_progress=self.work_progress,
             connect_mcp=lambda: self.connect_mcp(),
             save_user_message=lambda *args, **kwargs: self._save_user_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
             transcribe_audio=lambda audios: media_runtime.transcribe_audio_input(self, audios),
-            run_workflow=lambda workflow, task, start_step=None: self.run_workflow(workflow, task, start_step),
-            run_verify=lambda action, path, pytest_args=(): self.run_verify(action=action, path=path, pytest_args=pytest_args),
-            verification_available=lambda: self.tools.get(VERIFICATION_TOOL_NAME) is not None,
             get_queued_outbound_media=lambda: media_runtime.get_queued_outbound_media(self),
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
-            llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
-            completion_blocker_messages=lambda: CompletionBlockerMessages(
-                intro=self.messages.agent.completion_blocker_intro,
-                reason_prefix=self.messages.agent.completion_blocker_reason_prefix,
-                detail_header=self.messages.agent.completion_blocker_detail_header,
-                missing_evidence_header=self.messages.agent.completion_blocker_missing_evidence_header,
-                stop_notice=self.messages.agent.completion_blocker_stop_notice,
+            media_persistence_failed_message=lambda: (
+                self.messages.agent.media_persistence_failed
             ),
+            media_persistence_partial_failure_message=lambda: (
+                self.messages.agent.media_persistence_partial_failure
+            ),
+            llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             format_log_preview=self._format_log_preview,
             set_session_overlay_id=lambda session_id, metadata, channel, sender_id: self._set_session_overlay_id(
                 session_id,
@@ -453,14 +426,6 @@ class AgentLoop:
                 channel,
                 sender_id,
             ),
-            read_active_task_snapshot=self._read_active_task_snapshot,
-            get_work_state=lambda session_id: self._get_work_state(session_id),
-            save_work_state=lambda state: self._save_work_state(state),
-            apply_completion_gate_result=lambda session_id, result: self._maybe_apply_completion_gate_result(
-                session_id,
-                result,
-            ),
-            apply_work_progress=lambda session_id, progress, state: self._maybe_apply_work_progress(session_id, progress, state),
             schedule_curator=lambda session_id, run_id, channel, external_chat_id, result: self._schedule_curator(
                 session_id,
                 run_id,
@@ -478,8 +443,6 @@ class AgentLoop:
             clear_delegated_task_updates=self.run_update_buffer.clear_delegated_task_updates,
             consume_workflow_outcomes=self.run_update_buffer.consume_workflow_outcomes,
             clear_workflow_outcomes=self.run_update_buffer.clear_workflow_outcomes,
-            worktree_sandbox_enabled=lambda: self.config.worktree_sandbox_enabled,
-            workspace_root=lambda: Path(self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())),
         )
         self.run_hooks = RunHookService(
             message_bus_getter=lambda: self._message_bus,
@@ -579,13 +542,6 @@ class AgentLoop:
             execute_messages=self._execute_messages,
         )
         self.user_profile_update = self._setup_user_profile_update()
-        self.active_task_update = self._setup_active_task_update()
-        self.active_task_commands = ActiveTaskCommandService(
-            storage=self.storage,
-            app_home_getter=lambda: self.app_home,
-            workspace_root_getter=lambda: self.tool_workspace,
-            messages=self.messages.task,
-        )
         self.recent_summary_update = self._setup_recent_summary_update()
         self.curator = self._setup_curator()
         self._skill_review_tasks = self.curator.tasks
@@ -594,13 +550,6 @@ class AgentLoop:
         self._maintenance_rerun = self.curator.rerun_keys
         self.llm_calls = LlmCallService(
             config=self.config,
-            maybe_seed_active_task=lambda session_id, message, task_intent=None, task_context_decision=None, task_objective_decision=None: self._maybe_seed_active_task(
-                session_id,
-                message,
-                task_intent=task_intent,
-                task_context_decision=task_context_decision,
-                task_objective_decision=task_objective_decision,
-            ),
             load_prompt_history=lambda session_id, current_message: self._load_prompt_history(
                 session_id,
                 current_message,
@@ -617,17 +566,6 @@ class AgentLoop:
             build_messages=lambda **kwargs: self._context_builder.build_messages(**kwargs),
             build_system_prompt=lambda session_id: self._context_builder.build_system_prompt(session_id),
             log_prepared_messages=self._log_prepared_messages,
-            get_work_state_summary=lambda session_id: self._get_work_state_summary(session_id),
-            read_active_task_snapshot=self._read_active_task_snapshot,
-            plan_task=lambda **kwargs: self.task_planner.plan(
-                provider=self.provider,
-                model=self.provider.get_default_model(),
-                **kwargs,
-            ),
-            resolve_tool_selection=lambda registry, contract: self.tool_selection.resolve_required_tools(
-                registry,
-                required_tools_for_task_contract(contract),
-            ),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,
                 run_id,
@@ -635,11 +573,6 @@ class AgentLoop:
                 payload,
                 channel=channel,
                 external_chat_id=external_chat_id,
-            ),
-            resolve_task_context_retrieval=lambda session_id, current_message, task_context_decision=None: self.retrieval.resolve(
-                session_id=session_id,
-                current_message=current_message,
-                task_context_decision=task_context_decision,
             ),
             get_tool_registry=lambda: self.tools,
             get_current_run_id=self.turn_context.current_run_id,
@@ -865,40 +798,17 @@ class AgentLoop:
         )
         return RecentSummaryUpdateService(consolidator)
 
-    def _setup_active_task_update(self) -> ActiveTaskUpdateService:
-        """Create the optional ACTIVE_TASK.md update service."""
-        if self.app_home is None:
-            return ActiveTaskUpdateService(None)
-
-        consolidator = ActiveTaskConsolidator(
-            storage=self.storage,
-            provider=self.provider,
-            model=self.provider.get_default_model(),
-            active_task_store_factory=lambda session_id: create_active_task_store(
-                self.app_home,
-                session_id,
-                workspace_root=self.tool_workspace,
-            ),
-            threshold=self.active_task_config.threshold,
-            lookback_messages=self.active_task_config.lookback_messages,
-            enabled=self.active_task_config.enabled,
-            llm=self.active_task_config.llm,
-        )
-        return ActiveTaskUpdateService(consolidator)
-
     def _setup_curator(self) -> CuratorService:
         """Create the post-turn background memory and skill curator."""
         return CuratorService(
             maybe_consolidate_memory=lambda session_id: self._maybe_consolidate_memory(session_id),
             maybe_update_recent_summary=lambda session_id: self._maybe_update_recent_summary(session_id),
             maybe_update_user_profile=lambda session_id: self._maybe_update_user_profile(session_id),
-            maybe_update_active_task=lambda session_id: self._maybe_update_active_task(session_id),
             run_skill_review=lambda session_id: self._run_skill_review(session_id),
             should_run_skill_review=lambda result: self._should_schedule_skill_review(result),
             read_memory_snapshot=self._read_memory_snapshot,
             read_recent_summary_snapshot=self._read_recent_summary_snapshot,
             read_user_profile_snapshot=self._read_user_profile_snapshot,
-            read_active_task_snapshot=self._read_active_task_snapshot,
             read_skill_snapshot=self._read_skill_snapshot,
             record_learning=lambda *args, **kwargs: learning_runtime.record_learning(self, *args, **kwargs),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel, external_chat_id: self._emit_run_event(
@@ -924,7 +834,6 @@ class AgentLoop:
 
     async def _clear_session_artifacts(self, session_id: str) -> None:
         """Delete all persisted session-scoped files and runtime metadata for one session."""
-        await self._clear_work_state(session_id)
         if self.background_process_manager is not None:
             await self.background_process_manager.kill_owned_sessions(session_id)
         if self.curator is not None:
@@ -1031,55 +940,6 @@ class AgentLoop:
         if close is not None:
             await close()
 
-    async def _maybe_seed_active_task(
-        self,
-        session_id: str,
-        current_message: str,
-        *,
-        task_intent: TaskIntent | None = None,
-        task_context_decision: TaskContextDecision | None = None,
-        task_objective_decision: TaskObjectiveDecision | None = None,
-    ) -> None:
-        """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
-        if task_intent is None:
-            task_intent = self.task_intents.classify(current_message)
-        store = self.active_task_commands.get_store(session_id)
-        before_status = store.read_status() if store is not None else "unavailable"
-        await self.active_task_commands.maybe_seed(
-            session_id,
-            current_message,
-            enabled=self.active_task_config.enabled,
-            task_intent=task_intent,
-            task_context_decision=task_context_decision,
-            task_objective_decision=task_objective_decision,
-        )
-        if store is None:
-            return
-        after_status = store.read_status()
-        run_id = self.turn_context.current_run_id()
-        if run_id is None:
-            return
-        changed = before_status != after_status
-        replacing = is_current_active_task_status(before_status) and changed
-        event_type = ACTIVE_TASK_REPLACED_EVENT if replacing else ACTIVE_TASK_SEEDED_EVENT if changed else ACTIVE_TASK_UNCHANGED_EVENT
-        await self._emit_run_event(
-            session_id,
-            run_id,
-            event_type,
-            {
-                "before_status": before_status,
-                "after_status": after_status,
-                "changed": changed,
-                "intent_kind": task_intent.kind if task_intent is not None else None,
-                "context_method": task_context_decision.method if task_context_decision is not None else None,
-                "context_continuation_type": task_context_decision.continuation_type if task_context_decision is not None else None,
-                "objective_method": task_objective_decision.method if task_objective_decision is not None else None,
-                "objective_used": bool(task_objective_decision and task_objective_decision.should_use_resolved_objective),
-            },
-            channel=self.turn_context.current_channel(),
-            external_chat_id=self.turn_context.current_external_chat_id(),
-        )
-
     async def reload_mcp_from_config(self) -> str:
         """Reload MCP settings from disk and reconnect MCP tools for this agent."""
         return await self.mcp_lifecycle.reload_from_config()
@@ -1132,6 +992,63 @@ class AgentLoop:
         if self.background_process_manager is None:
             return []
         return await self.background_process_manager.kill_owned_sessions(session_id, run_id=run_id)
+
+    def _run_cancel_cleanup_task(
+        self,
+        session_id: str,
+        run_id: str,
+    ) -> asyncio.Task[list[BackgroundSession]]:
+        """Return one shared, cancellation-resistant cleanup task per active run."""
+        key = (session_id, run_id)
+        existing = self._run_cancel_cleanup_tasks.get(key)
+        if existing is not None and not existing.done():
+            return existing
+
+        async def cleanup_with_retry() -> list[BackgroundSession]:
+            last_error: Exception | None = None
+            for attempt in range(1, self.RUN_CANCEL_CLEANUP_ATTEMPTS + 1):
+                try:
+                    return await self._cancel_owned_background_sessions(session_id, run_id)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning(
+                        "[{}] run.cancel.background_cleanup.failed | run_id={} attempt={} error={}",
+                        session_id,
+                        run_id,
+                        attempt,
+                        exc,
+                    )
+                    if attempt < self.RUN_CANCEL_CLEANUP_ATTEMPTS:
+                        await asyncio.sleep(0)
+            assert last_error is not None
+            raise last_error
+
+        task = asyncio.create_task(cleanup_with_retry())
+        self._run_cancel_cleanup_tasks[key] = task
+
+        def discard(completed: asyncio.Task[list[BackgroundSession]]) -> None:
+            if self._run_cancel_cleanup_tasks.get(key) is completed:
+                self._run_cancel_cleanup_tasks.pop(key, None)
+            if not completed.cancelled():
+                # Retrieve detached failures when a caller timed out or was
+                # cancelled before the shared cleanup finished.
+                completed.exception()
+
+        task.add_done_callback(discard)
+        return task
+
+    def _track_run_cancel_event_task(self, task: asyncio.Task[None]) -> None:
+        """Keep a slow advisory cancel event alive without blocking /stop."""
+        self._run_cancel_event_tasks.add(task)
+
+        def discard(completed: asyncio.Task[None]) -> None:
+            self._run_cancel_event_tasks.discard(completed)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(discard)
 
     def _get_current_workspace(self) -> Path:
         """Resolve the current task-local workspace."""
@@ -1260,7 +1177,6 @@ class AgentLoop:
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
         should_cancel: Callable[[], bool] | None = None,
-        work_state_summary: str = "",
     ) -> ExecutionResult:
         """Run the shared LLM execution loop for main and delegated agents."""
         return await self.execution_engine.execute_messages(
@@ -1279,7 +1195,6 @@ class AgentLoop:
             refresh_system_prompt=refresh_system_prompt,
             max_tool_iterations=max_tool_iterations,
             should_cancel=should_cancel,
-            work_state_summary=work_state_summary,
         )
 
     def _build_subagent_tools(self, prompt_type: str, *, workspace: Path | None = None) -> ToolRegistry:
@@ -1299,9 +1214,7 @@ class AgentLoop:
         *,
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
-        task_intent: TaskIntent | None = None,
-        task_context_decision: TaskContextDecision | None = None,
-        task_contract_override: Any | None = None,
+        history_current_message: str | None = None,
     ) -> ExecutionResult:
         """
         呼叫 LLM 生成對話回應。
@@ -1338,9 +1251,7 @@ class AgentLoop:
             user_video_files=user_video_files,
             external_chat_id=external_chat_id,
             emit_tool_progress=emit_tool_progress,
-            task_intent=task_intent,
-            task_context_decision=task_context_decision,
-            task_contract_override=task_contract_override,
+            history_current_message=history_current_message,
         )
 
     def _skill_review_tool_registry(self) -> ToolRegistry | None:
@@ -1472,6 +1383,8 @@ class AgentLoop:
         回傳：
             AssistantMessage: 統一格式的回覆
         """
+        session_id = self.turn_inputs.resolve_session_id(user_message)
+        self.run_state.ensure_available(session_id)
         turn = self.turn_inputs.prepare(user_message)
         return await self.turn_runner.run_user_turn(
             user_message=user_message,
@@ -1500,41 +1413,6 @@ class AgentLoop:
         await self.user_profile_update.maybe_update(session_id)
         self._maybe_update_user_overlay(session_id)
 
-    async def _maybe_update_active_task(self, session_id: str) -> None:
-        """Check whether this session's ACTIVE_TASK.md should be refreshed."""
-        await self.active_task_update.maybe_update(session_id)
-
-    async def _maybe_apply_completion_gate_result(
-        self,
-        session_id: str,
-        result: CompletionGateResult,
-    ) -> None:
-        """Apply completion-gate task-state updates when safe."""
-        await self.active_task_commands.apply_completion_gate_result(session_id, result)
-
-    async def _maybe_apply_work_progress(self, session_id: str, progress: WorkProgressUpdate, state) -> None:
-        """Apply final structured work progress hints to ACTIVE_TASK when useful."""
-        await self.active_task_commands.apply_work_progress(session_id, progress, state)
-
-    async def _get_work_state(self, session_id: str):
-        """Return persisted structured work state when supported by storage."""
-        return await get_storage_work_state(self.storage, session_id)
-
-    async def _save_work_state(self, state) -> None:
-        """Persist structured work state when supported by storage."""
-        if state is None:
-            return
-        await upsert_storage_work_state(self.storage, state)
-
-    async def _clear_work_state(self, session_id: str) -> None:
-        """Remove persisted structured work state when supported by storage."""
-        await clear_storage_work_state(self.storage, session_id)
-
-    async def _get_work_state_summary(self, session_id: str) -> str:
-        """Render the current persisted work state into a compact summary string."""
-        state = await self._get_work_state(session_id)
-        return self.work_progress.render_state_summary(state)
-
     def _is_run_cancel_requested(self, session_id: str, run_id: str | None) -> bool:
         """Return whether cooperative cancellation was requested for the current run."""
         if run_id is None:
@@ -1559,21 +1437,79 @@ class AgentLoop:
         active = self.run_state.request_cancel(session_id, run_id)
         if active is None:
             return False
-        if already_requested:
-            return True
-        killed_sessions = await self._cancel_owned_background_sessions(session_id, run_id)
-        await self._emit_run_event(
-            session_id,
-            run_id,
-            "run_cancel_requested",
-            {
-                "status": "cancelling",
-                "owned_background_sessions_cancelled": len(killed_sessions),
-                "owned_background_session_ids": [session.session_id for session in killed_sessions],
-            },
-            channel=channel,
-            external_chat_id=external_chat_id,
-        )
+        # Start process cleanup before publishing the advisory event.  A broken
+        # event transport must not prevent owned commands from being stopped.
+        cleanup_task = self._run_cancel_cleanup_task(session_id, run_id)
+        if not already_requested:
+            event_task = asyncio.create_task(
+                self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "run_cancel_requested",
+                    {"status": "cancelling"},
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+            )
+            self._track_run_cancel_event_task(event_task)
+            done, _pending = await asyncio.wait(
+                {event_task},
+                timeout=self.RUN_CANCEL_EVENT_TIMEOUT_SECONDS,
+            )
+            if not done:
+                logger.warning(
+                    "[{}] run.cancel.event.timeout | run_id={}",
+                    session_id,
+                    run_id,
+                )
+            else:
+                event_error = event_task.exception()
+                if event_error is not None:
+                    logger.warning(
+                        "[{}] run.cancel.event.failed | run_id={} error={}",
+                        session_id,
+                        run_id,
+                        event_error,
+                    )
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(cleanup_task),
+                timeout=self.RUN_CANCEL_CLEANUP_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            # The identity-bound cleanup remains tracked and continues after the
+            # foreground run is hard-cancelled.  Do not hold /stop indefinitely.
+            logger.warning(
+                "[{}] run.cancel.background_cleanup.timeout | run_id={}",
+                session_id,
+                run_id,
+            )
+        except asyncio.CancelledError:
+            # Preserve caller cancellation, but give the already-started cleanup
+            # a bounded chance to finish so owned commands are not orphaned.
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(cleanup_task),
+                    timeout=self.RUN_CANCEL_CLEANUP_TIMEOUT_SECONDS,
+                )
+            except (asyncio.CancelledError, Exception) as exc:
+                logger.warning(
+                    "[{}] run.cancel.background_cleanup.after_cancel.failed | run_id={} error={}",
+                    session_id,
+                    run_id,
+                    exc,
+                )
+            raise
+        except Exception as exc:
+            # Cancellation itself remains accepted even if both bounded cleanup
+            # attempts fail; the failure is explicit in logs and shutdown still
+            # has a final manager-wide cleanup path.
+            logger.warning(
+                "[{}] run.cancel.background_cleanup.exhausted | run_id={} error={}",
+                session_id,
+                run_id,
+                exc,
+            )
         return True
 
     async def _maybe_update_recent_summary(self, session_id: str) -> None:
@@ -1604,89 +1540,12 @@ class AgentLoop:
         )
         return store.read_managed_block()
 
-    def _read_active_task_snapshot(self, session_id: str) -> str:
-        """Return the ACTIVE_TASK.md managed block used for curator change detection."""
-        if self.app_home is None:
-            return ""
-        return create_active_task_store(
-            self.app_home,
-            session_id,
-            workspace_root=self.tool_workspace,
-        ).read_managed_block()
-
     def _read_skill_snapshot(self, session_id: str) -> str:
         """Return the mutable session skill fingerprint used for curator change detection."""
         workspace = self.tool_workspace or getattr(self._context_builder, "workspace", None)
         if workspace is None:
             return ""
         return fingerprint_text_directory(get_session_skills_dir(session_id, workspace_root=workspace))
-
-    def _clear_active_task(self, session_id: str) -> None:
-        """Reset ACTIVE_TASK.md for one session."""
-        self.active_task_commands.clear(session_id)
-
-    def _get_active_task_store(self, session_id: str):
-        return self.active_task_commands.get_store(session_id)
-
-    async def show_active_task(self, session_id: str) -> str | None:
-        """Return the current ACTIVE_TASK block for user display, if any."""
-        return await self.active_task_commands.show(session_id)
-
-    async def show_active_task_full(self, session_id: str) -> str | None:
-        """Return the full ACTIVE_TASK block for user display, if any."""
-        return await self.active_task_commands.show_full(session_id)
-
-    async def show_active_task_history(self, session_id: str, *, limit: int = 10) -> str | None:
-        """Return recent ACTIVE_TASK events for user display, if any."""
-        return await self.active_task_commands.show_history(session_id, limit=limit)
-
-    async def set_active_task_from_text(self, session_id: str, task_text: str) -> str | None:
-        """Create or replace the current ACTIVE_TASK from explicit user text."""
-        return await active_task_runtime.set_active_task_from_text(self, session_id, task_text)
-
-    async def set_goal_from_text(self, session_id: str, goal_text: str) -> str | None:
-        """Create a resumable session goal backed by ACTIVE_TASK and work state."""
-        return await active_task_runtime.set_goal_from_text(self, session_id, goal_text)
-
-    async def activate_active_task(self, session_id: str) -> str | None:
-        """Mark the current ACTIVE_TASK as active again."""
-        return await active_task_runtime.activate_active_task(self, session_id)
-
-    async def reopen_active_task(self, session_id: str) -> str | None:
-        """Reopen a terminal ACTIVE_TASK and resume it as active."""
-        return await active_task_runtime.reopen_active_task(self, session_id)
-
-    async def block_active_task(self, session_id: str, reason: str) -> str | None:
-        """Mark the current ACTIVE_TASK as blocked with one explicit reason."""
-        return await active_task_runtime.block_active_task(self, session_id, reason)
-
-    async def wait_on_active_task(self, session_id: str, question: str) -> str | None:
-        """Mark the current ACTIVE_TASK as waiting for user input."""
-        return await active_task_runtime.wait_on_active_task(self, session_id, question)
-
-    async def set_active_task_current_step(self, session_id: str, step_text: str) -> str | None:
-        """Replace the current step for the active task."""
-        return await active_task_runtime.set_active_task_current_step(self, session_id, step_text)
-
-    async def set_active_task_next_step(self, session_id: str, step_text: str) -> str | None:
-        """Replace the planned next step for the active task."""
-        return await active_task_runtime.set_active_task_next_step(self, session_id, step_text)
-
-    async def advance_active_task(self, session_id: str) -> str | None:
-        """Promote the next step into the current step and mark the previous step complete."""
-        return await active_task_runtime.advance_active_task(self, session_id)
-
-    async def complete_active_task_step(self, session_id: str, next_step_override: str | None = None) -> str | None:
-        """Complete the current step and either advance or finish the task."""
-        return await active_task_runtime.complete_active_task_step(self, session_id, next_step_override)
-
-    async def mark_active_task_status(self, session_id: str, status: str) -> str | None:
-        """Set the current ACTIVE_TASK status when one exists."""
-        return await active_task_runtime.mark_active_task_status(self, session_id, status)
-
-    async def reset_active_task(self, session_id: str) -> None:
-        """Clear the current ACTIVE_TASK state for one session."""
-        await active_task_runtime.reset_active_task(self, session_id)
 
     async def reset_history(self, session_id: str | None = None) -> None:
         """

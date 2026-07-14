@@ -32,7 +32,7 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
 )
-from ..runs.schema import serialize_run_event, serialize_work_state_todos
+from ..runs.schema import sanitize_run_metadata, serialize_run_event
 from ..utils.log import logger
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
@@ -242,7 +242,7 @@ class WebAdapter(MessageAdapter):
             "created_at": run.created_at,
             "updated_at": run.updated_at,
             "finished_at": run.finished_at,
-            "metadata": self._json_safe(dict(run.metadata or {})),
+            "metadata": sanitize_run_metadata(dict(run.metadata or {})),
         }
 
     def _serialize_message(self, message: Any) -> dict[str, Any]:
@@ -251,100 +251,8 @@ class WebAdapter(MessageAdapter):
             "role": str(getattr(message, "role", "assistant") or "assistant"),
             "content": str(getattr(message, "content", "") or ""),
             "tool_name": getattr(message, "tool_name", None),
-            "metadata": self._json_safe(dict(metadata or {})),
+            "metadata": sanitize_run_metadata(dict(metadata or {})),
             "created_at": float(getattr(message, "timestamp", 0) or 0),
-        }
-
-    def _serialize_work_state(self, state: Any) -> dict[str, Any] | None:
-        if state is None:
-            return None
-        return {
-            "session_id": state.session_id,
-            "objective": state.objective,
-            "kind": state.kind,
-            "status": state.status,
-            "steps": list(state.steps or ()),
-            "constraints": list(state.constraints or ()),
-            "done_criteria": list(state.done_criteria or ()),
-            "long_running": bool(state.long_running),
-            "coding_task": bool(state.coding_task),
-            "expects_code_change": bool(state.expects_code_change),
-            "expects_verification": bool(state.expects_verification),
-            "current_step": state.current_step,
-            "next_step": state.next_step,
-            "completed_steps": list(state.completed_steps or ()),
-            "pending_steps": list(state.pending_steps or ()),
-            "blockers": list(state.blockers or ()),
-            "verification_targets": list(state.verification_targets or ()),
-            "resume_hint": state.resume_hint,
-            "last_progress_signals": list(state.last_progress_signals or ()),
-            "file_change_count": int(state.file_change_count or 0),
-            "touched_paths": list(state.touched_paths or ()),
-            "verification_attempted": bool(state.verification_attempted),
-            "verification_passed": bool(state.verification_passed),
-            "last_next_action": state.last_next_action,
-            "delegated_tasks": [
-                {
-                    "task_id": task.task_id,
-                    "prompt_type": task.prompt_type,
-                    "status": task.status,
-                    "selected": bool(task.selected),
-                    "summary": task.summary,
-                    "error": task.error,
-                    "child_session_id": task.child_session_id,
-                    "last_child_run_id": task.last_child_run_id,
-                    "metadata": self._json_safe(dict(task.metadata or {})),
-                    "created_at": float(task.created_at or 0),
-                    "updated_at": float(task.updated_at or 0),
-                }
-                for task in list(state.delegated_tasks or ())
-            ],
-            "active_delegate_task_id": state.active_delegate_task_id,
-            "active_delegate_prompt_type": state.active_delegate_prompt_type,
-            **(
-                {"follow_up_workflow": str(state.metadata.get("follow_up_workflow") or "").strip()}
-                if str(state.metadata.get("follow_up_workflow") or "").strip()
-                else {}
-            ),
-            **(
-                {"follow_up_step_id": str(state.metadata.get("follow_up_step_id") or "").strip()}
-                if str(state.metadata.get("follow_up_step_id") or "").strip()
-                else {}
-            ),
-            **(
-                {"follow_up_step_label": str(state.metadata.get("follow_up_step_label") or "").strip()}
-                if str(state.metadata.get("follow_up_step_label") or "").strip()
-                else {}
-            ),
-            **(
-                {"follow_up_prompt_type": str(state.metadata.get("follow_up_prompt_type") or "").strip()}
-                if str(state.metadata.get("follow_up_prompt_type") or "").strip()
-                else {}
-            ),
-            **(
-                {"verification_action": str(state.metadata.get("verification_action") or "").strip()}
-                if str(state.metadata.get("verification_action") or "").strip()
-                else {}
-            ),
-            **(
-                {"verification_path": str(state.metadata.get("verification_path") or "").strip()}
-                if str(state.metadata.get("verification_path") or "").strip()
-                else {}
-            ),
-            **(
-                {"verification_pytest_args": self._json_safe(list(state.metadata.get("verification_pytest_args") or []))}
-                if isinstance(state.metadata.get("verification_pytest_args"), list) and state.metadata.get("verification_pytest_args")
-                else {}
-            ),
-            **(
-                {"active_task_detail": str(state.metadata.get("active_task_detail") or "").strip()}
-                if str(state.metadata.get("active_task_detail") or "").strip()
-                else {}
-            ),
-            "metadata": self._json_safe(dict(state.metadata or {})),
-            "todos": serialize_work_state_todos(state),
-            "created_at": float(state.created_at or 0),
-            "updated_at": float(state.updated_at or 0),
         }
 
     def _serialize_session_status(self, session_id: str) -> dict[str, Any]:

@@ -2,7 +2,9 @@
   "agent": {
     "empty_response_fallback": "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
     "llm_not_configured": "尚未設定 LLM，請在 OpenSprite Web UI 的 Settings > Providers / Models 設定後再試。",
-    "media_saved_ack": "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
+    "media_saved_ack": "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。",
+    "media_persistence_failed": "我收到媒體附件，但無法保存到工作區。請重新上傳或確認附件格式。",
+    "media_persistence_partial_failure": "部分媒體附件已保存，但仍有附件無法保存。請重新上傳失敗的附件。"
   },
   "queue": {
     "stop_cancelled": "已停止目前這段對話。",
@@ -45,37 +47,11 @@
     "job_not_found_or_paused": "Job {job_id} not found or already paused",
     "job_not_found_or_enabled": "Job {job_id} not found or already enabled"
   },
-  "task": {
-    "help_text": "任務命令:\n/task show [full]\n/task history [limit]\n/task set <task description>\n/task activate\n/task reopen\n/task block <reason>\n/task wait <question>\n/task step <current step>\n/task complete [next step]\n/task next [next step]\n/task done\n/task cancel\n/task reset\n/task help",
-    "unavailable": "任務追蹤功能目前不可用。",
-    "no_active_task": "目前沒有進行中的任務。",
-    "no_history": "目前沒有任務歷程。",
-    "set_done": "已設定目前任務。",
-    "reset_done": "已清除目前的任務狀態。",
-    "marked_done": "已將目前任務標記為完成。",
-    "marked_cancelled": "已將目前任務標記為取消。",
-    "marked_blocked": "已將目前任務標記為阻塞。",
-    "marked_waiting": "已將目前任務標記為等待使用者。",
-    "marked_active": "已重新啟用目前任務。",
-    "reopened": "已重新開啟目前任務。",
-    "updated_current_step": "已更新目前步驟。",
-    "updated_next_step": "已更新下一步。",
-    "advanced_to_next_step": "已將下一步提升為目前步驟。",
-    "completed_current_step": "已完成目前步驟。",
-    "progress_continue_current_step": "2. execute the highest-value next step toward the goal",
-    "progress_verify_current_step": "3. verify the result",
-    "error_set_usage": "Error: task description is required. Usage: /task set <task description>",
-    "error_block_usage": "Error: reason is required. Usage: /task block <reason>",
-    "error_wait_usage": "Error: question is required. Usage: /task wait <question>",
-    "error_step_usage": "Error: current step is required. Usage: /task step <current step>",
-    "error_history_limit": "Error: limit must be a positive integer. Usage: /task history [limit]",
-    "no_next_step": "目前沒有可前進的下一步。"
-  },
   "curator": {
-    "help_text": "背景整理命令:\n/curator status\n/curator history [limit]\n/curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]\n/curator pause\n/curator resume\n/curator help",
+    "help_text": "背景整理命令:\n/curator status\n/curator history [limit]\n/curator run [maintenance|skills|memory|recent_summary|user_profile]\n/curator pause\n/curator resume\n/curator help",
     "unavailable": "背景整理功能目前不可用。",
     "error_history_limit": "Error: limit must be a positive integer. Usage: /curator history [limit]",
-    "error_run_usage": "Usage: /curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]",
+    "error_run_usage": "Usage: /curator run [maintenance|skills|memory|recent_summary|user_profile]",
     "invalid_scope": "Unknown curator scope: {scope}. Valid scopes: {scopes}",
     "run_scheduled": "已排入背景整理。",
     "run_rerun_scheduled": "背景整理目前執行中，已排入下一輪。",

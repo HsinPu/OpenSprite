@@ -59,7 +59,7 @@ class AudioInputPreprocessor:
         user_message: UserMessage,
         turn: PreparedAudioTurnInput,
     ) -> AudioInputPreprocessResult:
-        """Turn pure dictated audio into text before task classification and LLM prompting."""
+        """Turn pure dictated audio into text before LLM prompting."""
         if not self.should_pretranscribe(user_message):
             return AudioInputPreprocessResult()
 

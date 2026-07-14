@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Protocol
 from uuid import uuid4
 
-from ..bus.message import UserMessage
+from ..bus.message import CLIENT_TURN_ID_METADATA_KEY, UserMessage
 from ..runs.events import INBOUND_MEDIA_EVENT_PREFIX, INBOUND_MEDIA_PERSISTED_EVENT
 from ..runs.trace import AgentRunStateService, RunTraceRecorder
 
@@ -28,6 +29,7 @@ class ActiveTurnRun:
     run_id: str
     channel: str | None
     external_chat_id: str | None
+    client_turn_id: str | None = None
 
 
 class RunLifecycleService:
@@ -58,25 +60,59 @@ class RunLifecycleService:
     ) -> ActiveTurnRun:
         """Create the run id, mark the session active, and start trace recording."""
         run_id = f"run_{uuid4().hex}"
-        self.run_state.start(turn.session_id, run_id)
-        await self.run_trace.start_turn_run(
-            turn.session_id,
-            run_id,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-            sender_id=user_message.sender_id,
-            sender_name=user_message.sender_name,
-            text=user_message.text,
-            images=user_message.images,
-            audios=user_message.audios,
-            videos=user_message.videos,
-        )
-        return ActiveTurnRun(
+        client_turn_id = str(
+            (user_message.metadata or {}).get(CLIENT_TURN_ID_METADATA_KEY) or ""
+        ).strip() or None
+        run = ActiveTurnRun(
             session_id=turn.session_id,
             run_id=run_id,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
+            client_turn_id=client_turn_id,
         )
+        self.run_state.start(turn.session_id, run_id)
+        try:
+            await self.run_trace.start_turn_run(
+                turn.session_id,
+                run_id,
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+                sender_id=user_message.sender_id,
+                sender_name=user_message.sender_name,
+                text=user_message.text,
+                images=user_message.images,
+                audios=user_message.audios,
+                videos=user_message.videos,
+                client_turn_id=client_turn_id,
+            )
+        except BaseException as exc:
+            # Cancellation and trace-start failures happen before AgentTurnRunner's
+            # outer try/finally. Best-effort close a run that may already have been
+            # created, then release the reservation so the session does not remain
+            # permanently busy. Never mask the original start failure.
+            status = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
+            event_payload = {
+                "status": status,
+                "error": "cancelled"
+                if isinstance(exc, asyncio.CancelledError)
+                else self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240),
+            }
+            if client_turn_id:
+                event_payload[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+            try:
+                await self.run_trace.fail_run(
+                    turn.session_id,
+                    run_id,
+                    status=status,
+                    event_payload=event_payload,
+                    channel=turn.channel,
+                    external_chat_id=turn.external_chat_id,
+                )
+            except BaseException:
+                pass
+            self.finish_turn(run)
+            raise
+        return run
 
     async def record_inbound_media(self, *, run: ActiveTurnRun, turn: PreparedTurnLifecycleInput) -> None:
         """Record inbound media persistence events for this run."""
@@ -94,25 +130,31 @@ class RunLifecycleService:
 
     async def record_cancelled(self, run: ActiveTurnRun) -> None:
         """Record cooperative cancellation for this run."""
+        event_payload = {"status": "cancelled", "error": "cancelled"}
+        if run.client_turn_id:
+            event_payload[CLIENT_TURN_ID_METADATA_KEY] = run.client_turn_id
         await self.run_trace.fail_run(
             run.session_id,
             run.run_id,
             status="cancelled",
-            event_payload={"status": "cancelled", "error": "cancelled"},
+            event_payload=event_payload,
             channel=run.channel,
             external_chat_id=run.external_chat_id,
         )
 
     async def record_failed(self, run: ActiveTurnRun, exc: Exception) -> None:
         """Record an unexpected failure for this run."""
+        event_payload = {
+            "status": "failed",
+            "error": self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240),
+        }
+        if run.client_turn_id:
+            event_payload[CLIENT_TURN_ID_METADATA_KEY] = run.client_turn_id
         await self.run_trace.fail_run(
             run.session_id,
             run.run_id,
             status="failed",
-            event_payload={
-                "status": "failed",
-                "error": self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240),
-            },
+            event_payload=event_payload,
             channel=run.channel,
             external_chat_id=run.external_chat_id,
         )

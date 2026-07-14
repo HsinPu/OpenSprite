@@ -1,11 +1,8 @@
 import asyncio
 import json
-from dataclasses import replace
 
 import opensprite.agent.execution as execution_module
-from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionEngine
-from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.execution_support.events import (
     LLM_COMPACTION_EMPTY_REASON,
     LLM_STEP_COMPLETED_STATUS,
@@ -13,20 +10,13 @@ from opensprite.agent.execution_support.events import (
     MAX_TOOL_ITERATIONS_STOP_REASON,
 )
 from opensprite.agent.execution_support.prompt_logging import PromptLoggingService
-from opensprite.tools.evidence import SOURCE_MATERIAL_INSUFFICIENT_REASON
-from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task.intent import TaskIntentService
-from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
+from opensprite.config.schema import Config, ToolsConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
 from opensprite.tools.base import Tool
 from opensprite.tools.credential_store import CredentialStoreTool
-from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.image import AnalyzeImageTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import tool_error_result
-from opensprite.tools.web_fetch import WebFetchTool
-from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_search_payloads import format_results as _format_results
 
 
 def test_execution_extracts_delegate_task_info_from_shared_result_labels():
@@ -55,32 +45,6 @@ class DummyTool(Tool):
         return f"tool:{value}"
 
 
-class EvidenceTool(Tool):
-    @property
-    def name(self) -> str:
-        return "evidence_tool"
-
-    @property
-    def description(self) -> str:
-        return "Tool with custom evidence"
-
-    @property
-    def parameters(self) -> dict:
-        return {"type": "object", "properties": {"resource": {"type": "string"}}}
-
-    async def _execute(self, resource: str, **kwargs) -> str:
-        return f"read:{resource}"
-
-    def build_evidence(self, params, result: str, *, ok: bool) -> ToolEvidence:
-        return ToolEvidence(
-            name=self.name,
-            args=dict(params or {}),
-            ok=ok,
-            resource_ids=(f"custom:{params.get('resource')}",),
-            result_preview=str(result or "")[:240],
-        )
-
-
 class FailingTool(Tool):
     def __init__(self):
         self.calls = 0
@@ -107,17 +71,17 @@ class FailingTool(Tool):
         )
 
 
-class TaskUpdateLikeTool(Tool):
+class HiddenTool(Tool):
     def __init__(self):
         self.calls = 0
 
     @property
     def name(self) -> str:
-        return "task_update"
+        return "hidden_tool"
 
     @property
     def description(self) -> str:
-        return "Task update"
+        return "A tool intentionally omitted from the active registry"
 
     @property
     def parameters(self) -> dict:
@@ -126,45 +90,6 @@ class TaskUpdateLikeTool(Tool):
     async def _execute(self, action: str, **kwargs) -> str:
         self.calls += 1
         return "updated"
-
-
-class TraceableWebResearchTool(Tool):
-    @property
-    def name(self) -> str:
-        return "web_research"
-
-    @property
-    def description(self) -> str:
-        return "Traceable web research"
-
-    @property
-    def parameters(self) -> dict:
-        return {"type": "object", "properties": {"query": {"type": "string"}}}
-
-    async def _execute(self, query: str, **kwargs) -> str:
-        return json.dumps({
-            "type": "web_research",
-            "query": query,
-            "source_count": 2,
-            "fetched_count": 2,
-            "sources": [
-                {
-                    "tool_name": "web_fetch",
-                    "title": "Fresh source",
-                    "url": "https://example.com/fresh",
-                    "snippet": "fresh source text",
-                    "content_chars": 1200,
-                },
-                {
-                    "tool_name": "web_fetch",
-                    "title": "Second source",
-                    "url": "https://example.com/second",
-                    "snippet": "second source text",
-                    "content_chars": 1000,
-                },
-            ],
-            "coverage": {"target_met": True, "fetched_count": 2, "failed_count": 0},
-        })
 
 
 class RepeatingReadFileTool(Tool):
@@ -227,35 +152,6 @@ class SlowProvider:
 class FakeMediaRouter:
     async def analyze_image(self, *, instruction, images, image_index=0):
         return f"image analysis:{image_index}:{instruction}"
-
-
-class FakeWebFetcher:
-    def __init__(
-        self,
-        max_chars=50000,
-        max_response_size=5242880,
-        timeout=30,
-        prefer_trafilatura=True,
-        firecrawl_api_key=None,
-        **kwargs,
-    ):
-        self.max_chars = max_chars
-        self.max_response_size = max_response_size
-        self.timeout = timeout
-        self.prefer_trafilatura = prefer_trafilatura
-        self.firecrawl_api_key = firecrawl_api_key
-
-    def fetch(self, url: str):
-        return {
-            "url": url,
-            "finalUrl": f"{url}?ref=1",
-            "status": 200,
-            "title": "SQLite FTS5",
-            "extractor": "trafilatura",
-            "contentType": "text/html",
-            "truncated": False,
-            "text": " ".join(["SQLite FTS5 supports full text search over local tables."] * 20),
-        }
 
 
 class StreamingProvider:
@@ -410,33 +306,6 @@ def _make_engine(provider, registry, save_calls, tools_config=None, **engine_kwa
     )
 
 
-def test_execution_engine_force_final_after_web_sources_uses_shared_policy():
-    artifact = TaskArtifact(
-        kind="web_source",
-        source_tool="web_research",
-        ok=True,
-        metadata={
-            "sources": [{"url": "https://example.com/a"}],
-            "coverage": {"target_met": True},
-        },
-    )
-
-    assert ExecutionEngine._should_force_final_after_web_sources([artifact], []) is True
-
-    non_research_artifact = TaskArtifact(
-        kind="web_source",
-        source_tool="web_search",
-        ok=True,
-        metadata={"sources": [{"url": "https://example.com/a"}]},
-    )
-    evidence = [
-        ToolEvidence(name="web_search", args={}, ok=True, metadata={"sources": [{"url": "https://example.com/a"}]}),
-        ToolEvidence(name="web_fetch", args={}, ok=True, metadata={"sources": [{"url": "https://example.com/b"}]}),
-    ]
-
-    assert ExecutionEngine._should_force_final_after_web_sources([non_research_artifact], evidence) is True
-
-
 def test_execution_engine_passes_provider_context_request_kwargs():
     provider = ContextKwargsProvider([LLMResponse(content="done", model="fake-model")])
     engine = _make_engine(
@@ -518,202 +387,7 @@ def test_execution_engine_provider_override_does_not_mutate_concurrent_runs():
     assert engine.provider is base_provider
 
 
-def test_execution_engine_uses_tool_defined_evidence():
-    registry = ToolRegistry()
-    registry.register(EvidenceTool())
-    provider = FakeProvider(
-        [
-            LLMResponse(
-                content="need evidence",
-                model="fake-model",
-                tool_calls=[ToolCall(id="tc1", name="evidence_tool", arguments={"resource": "a"})],
-            ),
-            LLMResponse(content="done", model="fake-model"),
-        ]
-    )
-    engine = _make_engine(provider, registry, [])
-
-    result = asyncio.run(
-        engine.execute_messages(
-            "chat-1",
-            [ChatMessage(role="user", content="read resource")],
-            allow_tools=True,
-        )
-    )
-
-    assert result.content == "done"
-    assert result.tool_evidence[0].name == "evidence_tool"
-    assert result.tool_evidence[0].resource_ids == ("custom:a",)
-
-
-def test_execution_engine_builds_task_artifacts_from_media_evidence():
-    registry = ToolRegistry()
-    registry.register(
-        AnalyzeImageTool(
-            media_router=FakeMediaRouter(),
-            get_current_images=lambda: ["data:image/png;base64,abc"],
-        )
-    )
-    provider = FakeProvider(
-        [
-            LLMResponse(
-                content="need image",
-                model="fake-model",
-                tool_calls=[
-                    ToolCall(
-                        id="tc1",
-                        name="analyze_image",
-                        arguments={"instruction": "read prompt", "image_index": 0},
-                    )
-                ],
-            ),
-            LLMResponse(content="done", model="fake-model"),
-        ]
-    )
-    engine = _make_engine(provider, registry, [])
-
-    result = asyncio.run(
-        engine.execute_messages(
-            "chat-1",
-            [ChatMessage(role="user", content="read the image")],
-            allow_tools=True,
-        )
-    )
-
-    assert result.content == "done"
-    assert result.tool_evidence[0].resource_ids == ("image_index:0",)
-    assert result.task_artifacts[0].kind == "image_analysis"
-    assert result.task_artifacts[0].source_tool == "analyze_image"
-    assert result.task_artifacts[0].resource_ids == ("image_index:0",)
-    assert "image analysis:0" in result.task_artifacts[0].content_preview
-
-
-def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
-    registry = ToolRegistry()
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=3))
-
-    async def fake_search(query, n, freshness):
-        return _format_results(
-            query,
-            [
-                {
-                    "title": "Reddit API docs",
-                    "url": "https://www.reddit.com/dev/api/",
-                    "content": "Official Reddit API documentation for listings and search.",
-                },
-                {
-                    "title": "Reddit API wiki",
-                    "url": "https://www.reddit.com/wiki/api/",
-                    "content": "Reddit API wiki with additional integration notes.",
-                }
-            ],
-            n,
-            provider="duckduckgo",
-        )
-
-    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
-    registry.register(tool)
-    provider = FakeProvider(
-        [
-            LLMResponse(
-                content="need web",
-                model="fake-model",
-                tool_calls=[
-                    ToolCall(
-                        id="tc1",
-                        name="web_search",
-                        arguments={"query": "reddit api search"},
-                    )
-                ],
-            ),
-            LLMResponse(
-                content=(
-                    "I found Reddit API docs at reddit.com. They are the best first source for authenticated "
-                    "search and listing behavior before adding any third-party historical source."
-                ),
-                model="fake-model",
-            ),
-        ]
-    )
-    engine = _make_engine(provider, registry, [])
-
-    result = asyncio.run(
-        engine.execute_messages(
-            "chat-1",
-            [ChatMessage(role="user", content="Please find Reddit API search sources")],
-            allow_tools=True,
-        )
-    )
-
-    assert result.task_artifacts[0].kind == "web_source"
-    assert result.task_artifacts[0].metadata["source_count"] == 2
-    source = result.task_artifacts[0].metadata["sources"][0]
-    assert source["url"] == "https://www.reddit.com/dev/api/"
-    assert source["title"] == "Reddit API docs"
-    assert source["snippet"] == "Official Reddit API documentation for listings and search."
-
-    intent = TaskIntentService().classify("Please find Reddit API search sources")
-    task_contract = TaskContractService.build(
-        task_intent=intent,
-        current_message="Please find Reddit API search sources",
-    )
-    completion = CompletionGateService().evaluate(
-        task_intent=intent,
-        response_text=result.content,
-        execution_result=replace(result, task_contract=task_contract),
-    )
-    assert completion.status == "incomplete"
-    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
-
-
-def test_execution_engine_builds_traceable_web_fetch_artifact(monkeypatch):
-    monkeypatch.setattr(
-        "opensprite.tools.web_fetch.WebFetcher",
-        lambda *args, **kwargs: FakeWebFetcher(**kwargs),
-    )
-    registry = ToolRegistry()
-    registry.register(WebFetchTool())
-    provider = FakeProvider(
-        [
-            LLMResponse(
-                content="need fetch",
-                model="fake-model",
-                tool_calls=[
-                    ToolCall(
-                        id="tc1",
-                        name="web_fetch",
-                        arguments={"url": "https://sqlite.org/fts5.html"},
-                    )
-                ],
-            ),
-            LLMResponse(
-                content=(
-                    "The sqlite.org FTS5 page explains that SQLite FTS5 supports full text search over local "
-                    "tables, so it is the relevant source for local indexing behavior."
-                ),
-                model="fake-model",
-            ),
-        ]
-    )
-    engine = _make_engine(provider, registry, [])
-
-    result = asyncio.run(
-        engine.execute_messages(
-            "chat-1",
-            [ChatMessage(role="user", content="Please fetch https://sqlite.org/fts5.html and summarize source")],
-            allow_tools=True,
-        )
-    )
-
-    artifact = result.task_artifacts[0]
-    assert artifact.kind == "web_source"
-    source = artifact.metadata["sources"][0]
-    assert source["url"] == "https://sqlite.org/fts5.html?ref=1"
-    assert source["title"] == "SQLite FTS5"
-    assert "full text search" in source["snippet"]
-
-
-def test_execution_engine_records_evidence_for_invalid_media_tool_args():
+def test_execution_engine_records_invalid_media_tool_args_as_tool_error():
     registry = ToolRegistry()
     registry.register(
         AnalyzeImageTool(
@@ -749,9 +423,6 @@ def test_execution_engine_records_evidence_for_invalid_media_tool_args():
 
     assert result.content == "done"
     assert result.had_tool_error is True
-    assert result.tool_evidence[0].name == "analyze_image"
-    assert result.tool_evidence[0].ok is False
-    assert result.tool_evidence[0].resource_ids == ("image_index:0",)
 
 
 def test_execution_engine_blocks_repeated_identical_tool_failures():
@@ -786,7 +457,7 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
 
 
 def test_execution_engine_records_unavailable_tool_call_as_tool_error():
-    tool = TaskUpdateLikeTool()
+    tool = HiddenTool()
     registry = ToolRegistry()
     registry.register(RepeatingReadFileTool())
     provider = FakeProvider(
@@ -794,7 +465,7 @@ def test_execution_engine_records_unavailable_tool_call_as_tool_error():
             LLMResponse(
                 content="try hidden tool",
                 model="fake-model",
-                tool_calls=[ToolCall(id="tc1", name="task_update", arguments={"action": "show"})],
+                tool_calls=[ToolCall(id="tc1", name="hidden_tool", arguments={"action": "show"})],
             ),
             LLMResponse(content="direct answer", model="fake-model"),
         ]
@@ -810,34 +481,6 @@ def test_execution_engine_records_unavailable_tool_call_as_tool_error():
     assert result.executed_tool_calls == 1
     assert tool.calls == 0
     assert "not available in this turn" in provider.calls[1]["messages"][-1].content
-    assert result.tool_evidence[0].ok is False
-
-
-def test_execution_engine_forces_final_after_complete_web_research_sources():
-    registry = ToolRegistry()
-    registry.register(TraceableWebResearchTool())
-    provider = FakeProvider(
-        [
-            LLMResponse(
-                content="checking",
-                model="fake-model",
-                tool_calls=[ToolCall(id="tc-web", name="web_research", arguments={"query": "fresh news"})],
-            ),
-            LLMResponse(content="final with sources", model="fake-model"),
-        ]
-    )
-    engine = _make_engine(provider, registry, [], tools_config=ToolsConfig(max_tool_iterations=5))
-    messages = [ChatMessage(role="user", content="find fresh sources")]
-
-    result = asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=True))
-
-    assert result.content == "final with sources"
-    assert result.executed_tool_calls == 1
-    assert len(provider.calls) == 2
-    assert provider.calls[1]["tools"] is None
-    assert messages[-1].role == "system"
-    assert "Stop calling tools now" in messages[-1].content
-    assert result.task_artifacts[0].kind == "web_source"
 
 
 def test_tool_result_failure_detection_allows_partial_web_research_payload():
@@ -1636,7 +1279,7 @@ def test_execution_engine_stops_when_cancel_checker_requests_stop():
         raise AssertionError("CancelledError was not raised")
 
 
-def test_execution_engine_records_aborted_tool_result_when_cancelled_after_tool_start():
+def test_execution_engine_records_completed_tool_result_when_cancel_requested_after_tool_returns():
     class CancellingTool(Tool):
         @property
         def name(self) -> str:
@@ -1679,6 +1322,7 @@ def test_execution_engine_records_aborted_tool_result_when_cancelled_after_tool_
                 "chat-1",
                 [ChatMessage(role="user", content="hi")],
                 allow_tools=True,
+                tool_result_session_id="chat-1",
                 should_cancel=lambda: cancel_requested["value"],
                 on_tool_after_execute=after,
             )
@@ -1689,14 +1333,319 @@ def test_execution_engine_records_aborted_tool_result_when_cancelled_after_tool_
         raise AssertionError("CancelledError was not raised")
 
     assert len(after_calls) == 1
-    assert after_calls[0][0] == "cancel_tool"
+    assert after_calls[0][0:3] == ("cancel_tool", {}, "finished")
+    assert after_calls[0][3:5] == ("tc1", 1)
+    assert after_calls[0][-1] == "completed"
+    assert save_calls[0][2] == "finished"
+
+
+def test_execution_engine_records_aborted_tool_result_when_task_cancelled_during_tool():
+    async def scenario():
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        class BlockingTool(Tool):
+            @property
+            def name(self) -> str:
+                return "blocking_tool"
+
+            @property
+            def description(self) -> str:
+                return "Block until the execution task is cancelled"
+
+            @property
+            def parameters(self) -> dict:
+                return {"type": "object", "properties": {}}
+
+            async def _execute(self, **kwargs) -> str:
+                entered.set()
+                await release.wait()
+                return "finished"
+
+        registry = ToolRegistry()
+        registry.register(BlockingTool())
+        provider = FakeProvider(
+            [
+                LLMResponse(
+                    content="need tool",
+                    model="fake-model",
+                    tool_calls=[ToolCall(id="tc1", name="blocking_tool", arguments={})],
+                ),
+            ]
+        )
+        engine = _make_engine(provider, registry, [])
+        after_calls = []
+
+        async def after(*args):
+            after_calls.append(args)
+
+        task = asyncio.create_task(
+            engine.execute_messages(
+                "chat-1",
+                [ChatMessage(role="user", content="hi")],
+                allow_tools=True,
+                on_tool_after_execute=after,
+            )
+        )
+        await asyncio.wait_for(entered.wait(), timeout=1)
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=1)
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("CancelledError was not raised")
+        return after_calls
+
+    after_calls = asyncio.run(scenario())
+
+    assert len(after_calls) == 1
+    assert after_calls[0][0] == "blocking_tool"
     assert after_calls[0][1] == {}
     aborted_payload = json.loads(after_calls[0][2])
     assert aborted_payload["error"] == "Tool execution aborted"
-    assert aborted_payload["error_type"] == "ToolGuardrailError"
-    assert aborted_payload["category"] == "tool_guardrail"
     assert after_calls[0][3:5] == ("tc1", 1)
     assert after_calls[0][-2:] == ("error", True)
+
+
+def test_execution_engine_finishes_tool_result_hook_atomically_when_cancelled():
+    async def scenario():
+        result_hook_entered = asyncio.Event()
+        result_hook_completed = asyncio.Event()
+
+        class FastTool(Tool):
+            @property
+            def name(self) -> str:
+                return "fast_tool"
+
+            @property
+            def description(self) -> str:
+                return "Finish before cancellation reaches the result hook"
+
+            @property
+            def parameters(self) -> dict:
+                return {"type": "object", "properties": {}}
+
+            async def _execute(self, **kwargs) -> str:
+                return "finished"
+
+        registry = ToolRegistry()
+        registry.register(FastTool())
+        provider = FakeProvider(
+            [
+                LLMResponse(
+                    content="need tool",
+                    model="fake-model",
+                    tool_calls=[ToolCall(id="tc1", name="fast_tool", arguments={})],
+                ),
+            ]
+        )
+        save_calls = []
+        engine = _make_engine(provider, registry, save_calls)
+        after_calls = []
+
+        async def after(*args):
+            result_hook_entered.set()
+            await asyncio.sleep(0.05)
+            after_calls.append(args)
+            result_hook_completed.set()
+
+        task = asyncio.create_task(
+            engine.execute_messages(
+                "chat-1",
+                [ChatMessage(role="user", content="hi")],
+                allow_tools=True,
+                tool_result_session_id="chat-1",
+                on_tool_after_execute=after,
+            )
+        )
+        await asyncio.wait_for(result_hook_entered.wait(), timeout=1)
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=1)
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("CancelledError was not raised")
+        await asyncio.wait_for(result_hook_completed.wait(), timeout=1)
+        return after_calls, result_hook_completed.is_set(), save_calls
+
+    after_calls, result_hook_completed, save_calls = asyncio.run(scenario())
+
+    assert result_hook_completed is True
+    assert len(after_calls) == 1
+    assert after_calls[0][0:3] == ("fast_tool", {}, "finished")
+    assert after_calls[0][3:5] == ("tc1", 1)
+    assert after_calls[0][-1] == "completed"
+    assert save_calls == [("chat-1", "tool", "finished", "fast_tool", {"tool_args": {}})]
+
+
+def test_execution_engine_projects_completed_tool_when_result_persistence_fails():
+    async def scenario():
+        class FastTool(Tool):
+            @property
+            def name(self) -> str:
+                return "fast_tool"
+
+            @property
+            def description(self) -> str:
+                return "Complete before persistence fails"
+
+            @property
+            def parameters(self) -> dict:
+                return {"type": "object", "properties": {}}
+
+            async def _execute(self, **kwargs) -> str:
+                return "finished"
+
+        registry = ToolRegistry()
+        registry.register(FastTool())
+        provider = FakeProvider(
+            [
+                LLMResponse(
+                    content="need tool",
+                    model="fake-model",
+                    tool_calls=[ToolCall(id="tc1", name="fast_tool", arguments={})],
+                ),
+            ]
+        )
+        engine = _make_engine(provider, registry, [])
+        after_calls = []
+
+        async def failing_save(*_args, **_kwargs):
+            raise OSError("tool result storage unavailable")
+
+        async def after(*args):
+            after_calls.append(args)
+
+        engine.tool_result_persistence.save_message = failing_save
+        try:
+            await engine.execute_messages(
+                "chat-1",
+                [ChatMessage(role="user", content="hi")],
+                allow_tools=True,
+                tool_result_session_id="chat-1",
+                on_tool_after_execute=after,
+            )
+        except OSError as exc:
+            assert str(exc) == "tool result storage unavailable"
+        else:
+            raise AssertionError("tool-result persistence failure was not propagated")
+        return after_calls
+
+    after_calls = asyncio.run(scenario())
+
+    assert len(after_calls) == 1
+    assert after_calls[0][0:3] == ("fast_tool", {}, "finished")
+    assert after_calls[0][3:5] == ("tc1", 1)
+    assert after_calls[0][-1] == "completed"
+
+
+def test_execution_engine_does_not_relabel_completed_tool_after_repeated_cancel(monkeypatch):
+    import opensprite.agent.execution as execution_module
+
+    monkeypatch.setattr(execution_module, "_CANCELLATION_HOOK_TIMEOUT_SECONDS", 0.02)
+
+    async def scenario():
+        result_hook_entered = asyncio.Event()
+        never_finish = asyncio.Event()
+        after_calls = []
+
+        class FastTool(Tool):
+            name = "fast_tool"
+            description = "Finish before cancellation reaches the result hook"
+            parameters = {"type": "object", "properties": {}}
+
+            async def _execute(self, **kwargs) -> str:
+                return "finished"
+
+        registry = ToolRegistry()
+        registry.register(FastTool())
+        provider = FakeProvider(
+            [
+                LLMResponse(
+                    content="need tool",
+                    model="fake-model",
+                    tool_calls=[ToolCall(id="tc1", name="fast_tool", arguments={})],
+                ),
+            ]
+        )
+        engine = _make_engine(provider, registry, [])
+
+        async def after(*args):
+            after_calls.append(args)
+            result_hook_entered.set()
+            await never_finish.wait()
+
+        task = asyncio.create_task(
+            engine.execute_messages(
+                "chat-1",
+                [ChatMessage(role="user", content="hi")],
+                allow_tools=True,
+                on_tool_after_execute=after,
+            )
+        )
+        await asyncio.wait_for(result_hook_entered.wait(), timeout=1)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=1)
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("CancelledError was not raised")
+        await asyncio.sleep(0.05)
+        return after_calls
+
+    after_calls = asyncio.run(scenario())
+
+    assert len(after_calls) == 1
+    assert after_calls[0][0:3] == ("fast_tool", {}, "finished")
+    assert after_calls[0][3:5] == ("tc1", 1)
+    assert after_calls[0][-1] == "completed"
+
+
+def test_execution_engine_does_not_retry_result_hook_after_internal_type_error():
+    class FastTool(Tool):
+        name = "fast_tool"
+        description = "Return immediately"
+        parameters = {"type": "object", "properties": {}}
+
+        async def _execute(self, **kwargs) -> str:
+            return "finished"
+
+    registry = ToolRegistry()
+    registry.register(FastTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need tool",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="fast_tool", arguments={})],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+    after_calls = []
+
+    async def after(*args):
+        after_calls.append(args)
+        raise TypeError("callback failed after producing a side effect")
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="hi")],
+            allow_tools=True,
+            on_tool_after_execute=after,
+        )
+    )
+
+    assert result.content == "done"
+    assert len(after_calls) == 1
+    assert after_calls[0][0:3] == ("fast_tool", {}, "finished")
 
 
 def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
@@ -2044,7 +1993,6 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
             messages,
             allow_tools=False,
             on_llm_status=status_hook,
-            work_state_summary="## Structured Work State\n- Objective: Finish compaction handoff\n- Resume hint: Continue validation",
         )
     )
 
@@ -2073,14 +2021,10 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert "approaching the configured context budget" in sent_messages[1].content
     assert "handoff from a previous context window" in sent_messages[1].content
     assert "Treat summarized older context as reference only" in sent_messages[1].content
-    assert "This handoff is not completion evidence" in sent_messages[1].content
-    assert "## Structured Work State" in sent_messages[1].content
     assert "## Preserved Recent Tail" in sent_messages[1].content
     assert "latest instruction" in sent_messages[1].content
     assert "A" * 2000 not in sent_messages[1].content
     assert result.compaction_handoff is not None
-    assert "Finish compaction handoff" in result.compaction_handoff
-    assert "This handoff is not completion evidence" in result.compaction_handoff
     assert sent_messages[2].content == "intermediate answer"
     assert sent_messages[3].content == "latest instruction"
     assert statuses == [

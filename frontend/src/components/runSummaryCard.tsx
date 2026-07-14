@@ -13,6 +13,7 @@ export type RunSummaryCopy = {
     title?: string;
     fallbackObjective: string;
     cleanupSandbox?: string;
+    cleanupRunning?: string;
     loading?: string;
   };
 };
@@ -82,8 +83,16 @@ export function RunSummaryCard({
             {copy.run.statusLabels?.[run.status] || run.status}
           </Tag>
           {Boolean(run.worktreeSandbox?.cleanupSupported) ? (
-            <Button className="run-summary-card__copy" size="small" onClick={() => cleanupWorktreeSandbox(run)}>
-              {copy.runSummary.cleanupSandbox || "Cleanup sandbox"}
+            <Button
+              className="run-summary-card__copy"
+              size="small"
+              loading={Boolean(run.worktreeSandbox?.cleanupPending)}
+              disabled={Boolean(run.worktreeSandbox?.cleanupPending)}
+              onClick={() => cleanupWorktreeSandbox(run)}
+            >
+              {run.worktreeSandbox?.cleanupPending
+                ? (copy.runSummary.cleanupRunning || "Cleaning up...")
+                : (copy.runSummary.cleanupSandbox || "Cleanup sandbox")}
             </Button>
           ) : null}
         </div>

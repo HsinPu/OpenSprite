@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from .completion_gate import CompletionGateResult
 from .turn_input import PreparedTurnInput
-from .turn_outcome import (
-    TURN_METADATA_COMPLETION_REASON_FIELD,
-    TURN_METADATA_COMPLETION_STATUS_FIELD,
-)
 
 
 class TurnEventEmitter:
@@ -30,24 +25,4 @@ class TurnEventEmitter:
             payload,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
-        )
-
-    async def emit_auto_continue(
-        self,
-        *,
-        turn: PreparedTurnInput,
-        run_id: str,
-        event_type: str,
-        decision: Any,
-        completion_result: CompletionGateResult,
-    ) -> None:
-        await self.emit(
-            turn,
-            run_id,
-            event_type,
-            {
-                **decision.to_metadata(),
-                TURN_METADATA_COMPLETION_STATUS_FIELD: completion_result.status,
-                TURN_METADATA_COMPLETION_REASON_FIELD: completion_result.reason,
-            },
         )

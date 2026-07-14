@@ -2,7 +2,6 @@ import asyncio
 
 from agent_test_helpers import make_agent_loop, make_tool_registry
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.task.intent import TaskIntentService
 
 
 def _make_media_agent(tmp_path):
@@ -32,7 +31,6 @@ def _capture_first_prompt(agent):
         refresh_system_prompt=None,
         max_tool_iterations=None,
         should_cancel=None,
-        work_state_summary="",
     ):
         captured["content"] = chat_messages[0].content
         return ExecutionResult(content="ok", executed_tool_calls=0, used_configure_skill=False)
@@ -61,13 +59,9 @@ def test_call_llm_replaces_direct_image_payload_with_tool_hint(tmp_path):
     )
 
 
-def test_call_llm_includes_task_contract_guidance_for_media_task(tmp_path):
+def test_call_llm_passes_media_files_directly_to_the_normal_prompt(tmp_path):
     agent = _make_media_agent(tmp_path)
     captured = _capture_first_prompt(agent)
-    intent = TaskIntentService().classify(
-        "Please inspect this image and summarize it.",
-        images=["img-a"],
-    )
 
     result = asyncio.run(
         agent.call_llm(
@@ -76,19 +70,15 @@ def test_call_llm_includes_task_contract_guidance_for_media_task(tmp_path):
             channel="telegram",
             user_images=["img-a"],
             user_image_files=["images/a.jpg"],
-            task_intent=intent,
         )
     )
 
     assert result.content == "ok"
     content = captured["content"]
-    assert "## Runtime Task Contract" in content
-    assert "Task type: media_extraction" in content
-    assert "image:images/a.jpg" in content
-    assert "Required evidence" in content
-    assert "tools=analyze_image" in content
-    assert "Final answer acceptance criteria" in content
-    assert "substantive final answer" in content
+    assert "Please inspect this image and summarize it." in content
+    assert "User attached 1 image(s)." in content
+    assert "Saved inbound image file(s) under the session workspace: images/a.jpg." in content
+    assert "Runtime Task Contract" not in content
 
 
 def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):

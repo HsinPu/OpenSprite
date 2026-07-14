@@ -24,12 +24,9 @@ from .base import (
     StoredRunEvent,
     StoredRunFileChange,
     StoredRunPart,
-    StoredWorkState,
-    coerce_stored_delegated_tasks,
-    selected_delegated_task,
 )
 
-SQLITE_SCHEMA_VERSION = 13
+SQLITE_SCHEMA_VERSION = 14
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -126,42 +123,6 @@ CREATE INDEX IF NOT EXISTS idx_run_file_changes_run_created
 
 CREATE INDEX IF NOT EXISTS idx_run_file_changes_chat_path
     ON run_file_changes(session_id, path, created_at, id);
-
-CREATE TABLE IF NOT EXISTS work_states (
-    session_id TEXT PRIMARY KEY REFERENCES chats(session_id) ON DELETE CASCADE,
-    objective TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL,
-    steps_json TEXT NOT NULL DEFAULT '[]',
-    constraints_json TEXT NOT NULL DEFAULT '[]',
-    done_criteria_json TEXT NOT NULL DEFAULT '[]',
-    long_running INTEGER NOT NULL DEFAULT 0,
-    coding_task INTEGER NOT NULL DEFAULT 0,
-    expects_code_change INTEGER NOT NULL DEFAULT 0,
-    expects_verification INTEGER NOT NULL DEFAULT 0,
-    current_step TEXT NOT NULL DEFAULT 'not set',
-    next_step TEXT NOT NULL DEFAULT 'not set',
-    completed_steps_json TEXT NOT NULL DEFAULT '[]',
-    pending_steps_json TEXT NOT NULL DEFAULT '[]',
-    blockers_json TEXT NOT NULL DEFAULT '[]',
-    verification_targets_json TEXT NOT NULL DEFAULT '[]',
-    resume_hint TEXT NOT NULL DEFAULT '',
-    last_progress_signals_json TEXT NOT NULL DEFAULT '[]',
-    file_change_count INTEGER NOT NULL DEFAULT 0,
-    touched_paths_json TEXT NOT NULL DEFAULT '[]',
-    verification_attempted INTEGER NOT NULL DEFAULT 0,
-    verification_passed INTEGER NOT NULL DEFAULT 0,
-    last_next_action TEXT NOT NULL DEFAULT '',
-    delegated_tasks_json TEXT NOT NULL DEFAULT '[]',
-    active_delegate_task_id TEXT,
-    active_delegate_prompt_type TEXT,
-    metadata_json TEXT NOT NULL DEFAULT '{}',
-    created_at REAL NOT NULL,
-    updated_at REAL NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_work_states_status
-    ON work_states(status, updated_at);
 
 CREATE TABLE IF NOT EXISTS background_processes (
     process_session_id TEXT PRIMARY KEY,
@@ -304,24 +265,6 @@ def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
             if column_name in file_change_columns:
                 continue
             conn.execute(f"ALTER TABLE run_file_changes ADD COLUMN {column_name} TEXT")
-
-    if table_exists(conn, "work_states"):
-        work_state_columns = {
-            str(row[1])
-            for row in conn.execute("PRAGMA table_info(work_states)").fetchall()
-        }
-        required_work_state_columns = {
-            "pending_steps_json": "TEXT NOT NULL DEFAULT '[]'",
-            "blockers_json": "TEXT NOT NULL DEFAULT '[]'",
-            "verification_targets_json": "TEXT NOT NULL DEFAULT '[]'",
-            "resume_hint": "TEXT NOT NULL DEFAULT ''",
-            "last_progress_signals_json": "TEXT NOT NULL DEFAULT '[]'",
-            "delegated_tasks_json": "TEXT NOT NULL DEFAULT '[]'",
-        }
-        for column_name, column_type in required_work_state_columns.items():
-            if column_name in work_state_columns:
-                continue
-            conn.execute(f"ALTER TABLE work_states ADD COLUMN {column_name} {column_type}")
 
     if not table_exists(conn, "background_processes"):
         conn.execute(
@@ -683,49 +626,6 @@ class SQLiteStorage(StorageProvider):
             )
             for row in rows
         ]
-
-    @staticmethod
-    def _row_to_work_state(row: sqlite3.Row | None) -> StoredWorkState | None:
-        """Convert one work-state row into a StoredWorkState object."""
-        if row is None:
-            return None
-        metadata = _load_metadata(row["metadata_json"])
-        delegated_tasks = coerce_stored_delegated_tasks(_load_json_list(row["delegated_tasks_json"]))
-        selected_task = selected_delegated_task(delegated_tasks)
-        return StoredWorkState(
-            session_id=str(row["session_id"]),
-            objective=str(row["objective"] or ""),
-            kind=str(row["kind"] or "task"),
-            status=str(row["status"] or "active"),
-            steps=tuple(_load_string_list(row["steps_json"])),
-            constraints=tuple(_load_string_list(row["constraints_json"])),
-            done_criteria=tuple(_load_string_list(row["done_criteria_json"])),
-            long_running=bool(row["long_running"]),
-            coding_task=bool(row["coding_task"]),
-            expects_code_change=bool(row["expects_code_change"]),
-            expects_verification=bool(row["expects_verification"]),
-            current_step=str(row["current_step"] or "not set"),
-            next_step=str(row["next_step"] or "not set"),
-            completed_steps=tuple(_load_string_list(row["completed_steps_json"])),
-            pending_steps=tuple(_load_string_list(row["pending_steps_json"])),
-            blockers=tuple(_load_string_list(row["blockers_json"])),
-            verification_targets=tuple(_load_string_list(row["verification_targets_json"])),
-            resume_hint=str(row["resume_hint"] or ""),
-            last_progress_signals=tuple(_load_string_list(row["last_progress_signals_json"])),
-            file_change_count=int(row["file_change_count"] or 0),
-            touched_paths=tuple(_load_string_list(row["touched_paths_json"])),
-            verification_attempted=bool(row["verification_attempted"]),
-            verification_passed=bool(row["verification_passed"]),
-            last_next_action=str(row["last_next_action"] or ""),
-            delegated_tasks=delegated_tasks,
-            active_delegate_task_id=selected_task.task_id if selected_task is not None else row["active_delegate_task_id"],
-            active_delegate_prompt_type=(
-                selected_task.prompt_type if selected_task is not None else row["active_delegate_prompt_type"]
-            ),
-            metadata=metadata,
-            created_at=float(row["created_at"] or 0),
-            updated_at=float(row["updated_at"] or 0),
-        )
 
     @staticmethod
     def _row_to_background_process(row: sqlite3.Row | None) -> StoredBackgroundProcess | None:
@@ -1140,152 +1040,6 @@ class SQLiteStorage(StorageProvider):
                     for process in (self._row_to_background_process(row) for row in rows)
                     if process is not None
                 ]
-            finally:
-                conn.close()
-
-    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
-        """Return the persisted structured work state for one chat."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                row = conn.execute(
-                    "SELECT * FROM work_states WHERE session_id = ?",
-                    (session_id,),
-                ).fetchone()
-                return self._row_to_work_state(row)
-            finally:
-                conn.close()
-
-    async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState | None:
-        """Create or replace structured work state for one chat."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                created_at = float(state.created_at or time.time())
-                updated_at = float(state.updated_at or time.time())
-                delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks)
-                selected_task = selected_delegated_task(delegated_tasks)
-                ensure_chat_row(conn, state.session_id, created_at=created_at, updated_at=updated_at)
-                existing = conn.execute(
-                    "SELECT created_at FROM work_states WHERE session_id = ?",
-                    (state.session_id,),
-                ).fetchone()
-                if existing is not None and existing["created_at"] is not None:
-                    created_at = float(existing["created_at"])
-                conn.execute(
-                    """
-                    INSERT INTO work_states (
-                        session_id,
-                        objective,
-                        kind,
-                        status,
-                        steps_json,
-                        constraints_json,
-                        done_criteria_json,
-                        long_running,
-                        coding_task,
-                        expects_code_change,
-                        expects_verification,
-                        current_step,
-                        next_step,
-                        completed_steps_json,
-                        pending_steps_json,
-                        blockers_json,
-                        verification_targets_json,
-                        resume_hint,
-                        last_progress_signals_json,
-                        file_change_count,
-                        touched_paths_json,
-                        verification_attempted,
-                        verification_passed,
-                        last_next_action,
-                        delegated_tasks_json,
-                        active_delegate_task_id,
-                        active_delegate_prompt_type,
-                        metadata_json,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(session_id) DO UPDATE SET
-                        objective = excluded.objective,
-                        kind = excluded.kind,
-                        status = excluded.status,
-                        steps_json = excluded.steps_json,
-                        constraints_json = excluded.constraints_json,
-                        done_criteria_json = excluded.done_criteria_json,
-                        long_running = excluded.long_running,
-                        coding_task = excluded.coding_task,
-                        expects_code_change = excluded.expects_code_change,
-                        expects_verification = excluded.expects_verification,
-                        current_step = excluded.current_step,
-                        next_step = excluded.next_step,
-                        completed_steps_json = excluded.completed_steps_json,
-                        pending_steps_json = excluded.pending_steps_json,
-                        blockers_json = excluded.blockers_json,
-                        verification_targets_json = excluded.verification_targets_json,
-                        resume_hint = excluded.resume_hint,
-                        last_progress_signals_json = excluded.last_progress_signals_json,
-                        file_change_count = excluded.file_change_count,
-                        touched_paths_json = excluded.touched_paths_json,
-                        verification_attempted = excluded.verification_attempted,
-                        verification_passed = excluded.verification_passed,
-                        last_next_action = excluded.last_next_action,
-                        delegated_tasks_json = excluded.delegated_tasks_json,
-                        active_delegate_task_id = excluded.active_delegate_task_id,
-                        active_delegate_prompt_type = excluded.active_delegate_prompt_type,
-                        metadata_json = excluded.metadata_json,
-                        updated_at = excluded.updated_at
-                    """,
-                    (
-                        state.session_id,
-                        state.objective,
-                        state.kind,
-                        state.status,
-                        json.dumps(json_safe(list(state.steps)), ensure_ascii=False),
-                        json.dumps(json_safe(list(state.constraints)), ensure_ascii=False),
-                        json.dumps(json_safe(list(state.done_criteria)), ensure_ascii=False),
-                        int(bool(state.long_running)),
-                        int(bool(state.coding_task)),
-                        int(bool(state.expects_code_change)),
-                        int(bool(state.expects_verification)),
-                        state.current_step,
-                        state.next_step,
-                        json.dumps(json_safe(list(state.completed_steps)), ensure_ascii=False),
-                        json.dumps(json_safe(list(state.pending_steps)), ensure_ascii=False),
-                        json.dumps(json_safe(list(state.blockers)), ensure_ascii=False),
-                        json.dumps(json_safe(list(state.verification_targets)), ensure_ascii=False),
-                        state.resume_hint,
-                        json.dumps(json_safe(list(state.last_progress_signals)), ensure_ascii=False),
-                        int(state.file_change_count),
-                        json.dumps(json_safe(list(state.touched_paths)), ensure_ascii=False),
-                        int(bool(state.verification_attempted)),
-                        int(bool(state.verification_passed)),
-                        state.last_next_action,
-                        json.dumps(json_safe([task.to_payload() for task in delegated_tasks]), ensure_ascii=False),
-                        selected_task.task_id if selected_task is not None else None,
-                        selected_task.prompt_type if selected_task is not None else None,
-                        json.dumps(json_safe(state.metadata or {}), ensure_ascii=False),
-                        created_at,
-                        updated_at,
-                    ),
-                )
-                conn.commit()
-                row = conn.execute(
-                    "SELECT * FROM work_states WHERE session_id = ?",
-                    (state.session_id,),
-                ).fetchone()
-                return self._row_to_work_state(row)
-            finally:
-                conn.close()
-
-    async def clear_work_state(self, session_id: str) -> None:
-        """Remove structured work state for one chat."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                conn.execute("DELETE FROM work_states WHERE session_id = ?", (session_id,))
-                conn.commit()
             finally:
                 conn.close()
 

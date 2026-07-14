@@ -16,17 +16,15 @@ def test_curator_maintenance_services_define_canonical_job_order():
         maybe_consolidate_memory=noop,
         maybe_update_recent_summary=noop,
         maybe_update_user_profile=noop,
-        maybe_update_active_task=noop,
         read_memory_snapshot=lambda _session_id: "memory",
         read_recent_summary_snapshot=lambda _session_id: "summary",
         read_user_profile_snapshot=lambda _session_id: "profile",
-        read_active_task_snapshot=lambda _session_id: "task",
     )
 
     jobs = services.jobs()
 
-    assert [job.key for job in jobs] == ["memory", "recent_summary", "user_profile", "active_task"]
-    assert [job.label for job in jobs] == ["memory", "recent summary", "user profile", "active task"]
+    assert [job.key for job in jobs] == ["memory", "recent_summary", "user_profile"]
+    assert [job.label for job in jobs] == ["memory", "recent summary", "user profile"]
 
 
 def test_skill_review_system_prompt_includes_shared_curator_boundaries():
@@ -41,7 +39,6 @@ def test_curator_service_emits_summary_for_changed_jobs():
             "memory": "",
             "recent_summary": "",
             "user_profile": "",
-            "active_task": "",
             "skills": "",
         }
         events = []
@@ -62,13 +59,11 @@ def test_curator_service_emits_summary_for_changed_jobs():
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=update_skills,
             should_run_skill_review=lambda result: result.executed_tool_calls >= 2,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -94,8 +89,6 @@ def test_curator_service_emits_summary_for_changed_jobs():
         "curator.job.started",
         "curator.job.skipped",
         "curator.job.started",
-        "curator.job.skipped",
-        "curator.job.started",
         "curator.job.completed",
         "curator.completed",
     ]
@@ -109,7 +102,6 @@ def test_curator_service_records_learning_entries_for_changed_jobs():
             "memory": "",
             "recent_summary": "",
             "user_profile": "",
-            "active_task": "",
             "skills": "",
         }
         learning_records = []
@@ -143,13 +135,11 @@ def test_curator_service_records_learning_entries_for_changed_jobs():
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=update_skills,
             should_run_skill_review=lambda result: result.executed_tool_calls >= 2,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
             record_learning=record_learning,
@@ -193,7 +183,7 @@ def test_curator_service_records_learning_entries_for_changed_jobs():
 
 def test_curator_service_emits_no_change_curator_trace():
     async def scenario():
-        state = {"memory": "stable", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "stable", "recent_summary": "", "user_profile": "", "skills": ""}
         events = []
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -206,13 +196,11 @@ def test_curator_service_emits_no_change_curator_trace():
             maybe_consolidate_memory=noop,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -237,8 +225,6 @@ def test_curator_service_emits_no_change_curator_trace():
         "curator.job.skipped",
         "curator.job.started",
         "curator.job.skipped",
-        "curator.job.started",
-        "curator.job.skipped",
         "curator.completed",
     ]
     assert events[-1][3]["changed"] == []
@@ -247,7 +233,7 @@ def test_curator_service_emits_no_change_curator_trace():
 
 def test_curator_service_pause_blocks_future_scheduling():
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         runs = []
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -263,13 +249,11 @@ def test_curator_service_pause_blocks_future_scheduling():
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -292,7 +276,7 @@ def test_curator_service_pause_blocks_future_scheduling():
 
 def test_curator_service_persists_pause_state(tmp_path):
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         state_path = tmp_path / "curator_state.json"
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -306,13 +290,11 @@ def test_curator_service_persists_pause_state(tmp_path):
                 maybe_consolidate_memory=noop,
                 maybe_update_recent_summary=noop,
                 maybe_update_user_profile=noop,
-                maybe_update_active_task=noop,
                 run_skill_review=noop,
                 should_run_skill_review=lambda result: False,
                 read_memory_snapshot=lambda _session_id: state["memory"],
                 read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
                 read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-                read_active_task_snapshot=lambda _session_id: state["active_task"],
                 read_skill_snapshot=lambda _session_id: state["skills"],
                 emit_run_event=emit_run_event,
                 state_path=state_path,
@@ -334,7 +316,7 @@ def test_curator_service_persists_pause_state(tmp_path):
 
 def test_curator_service_persists_run_metadata(tmp_path):
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         state_path = tmp_path / "curator_state.json"
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -351,13 +333,11 @@ def test_curator_service_persists_run_metadata(tmp_path):
                 maybe_consolidate_memory=update_memory,
                 maybe_update_recent_summary=noop,
                 maybe_update_user_profile=noop,
-                maybe_update_active_task=noop,
                 run_skill_review=noop,
                 should_run_skill_review=lambda result: False,
                 read_memory_snapshot=lambda _session_id: state["memory"],
                 read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
                 read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-                read_active_task_snapshot=lambda _session_id: state["active_task"],
                 read_skill_snapshot=lambda _session_id: state["skills"],
                 emit_run_event=emit_run_event,
                 state_path=state_path,
@@ -374,7 +354,7 @@ def test_curator_service_persists_run_metadata(tmp_path):
     assert status["run_count"] == 1
     assert status["last_run_at"]
     assert status["last_run_summary"] == "Updated memory."
-    assert status["last_run_jobs"] == ["memory", "recent_summary", "user_profile", "active_task", "skills"]
+    assert status["last_run_jobs"] == ["memory", "recent_summary", "user_profile", "skills"]
     assert status["last_run_changed"] == ["memory"]
     assert status["last_error"] is None
 
@@ -383,7 +363,7 @@ def test_curator_service_persists_to_session_state_file(tmp_path):
     async def scenario():
         app_home = tmp_path / "home"
         workspace_root = app_home / "workspace"
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
             return None
@@ -399,13 +379,11 @@ def test_curator_service_persists_to_session_state_file(tmp_path):
                 maybe_consolidate_memory=update_memory,
                 maybe_update_recent_summary=noop,
                 maybe_update_user_profile=noop,
-                maybe_update_active_task=noop,
                 run_skill_review=noop,
                 should_run_skill_review=lambda result: False,
                 read_memory_snapshot=lambda _session_id: state["memory"],
                 read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
                 read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-                read_active_task_snapshot=lambda _session_id: state["active_task"],
                 read_skill_snapshot=lambda _session_id: state["skills"],
                 emit_run_event=emit_run_event,
                 state_path_for_session=lambda session_id: get_session_curator_state_file(
@@ -424,12 +402,12 @@ def test_curator_service_persists_to_session_state_file(tmp_path):
     status = asyncio.run(scenario())
 
     assert status["run_count"] == 1
-    assert status["last_run_jobs"] == ["memory", "recent_summary", "user_profile", "active_task", "skills"]
+    assert status["last_run_jobs"] == ["memory", "recent_summary", "user_profile", "skills"]
 
 
 def test_curator_service_persists_run_history(tmp_path):
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         state_path = tmp_path / "curator_state.json"
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -449,13 +427,11 @@ def test_curator_service_persists_run_history(tmp_path):
                 maybe_consolidate_memory=update_memory,
                 maybe_update_recent_summary=noop,
                 maybe_update_user_profile=noop,
-                maybe_update_active_task=noop,
                 run_skill_review=update_skills,
                 should_run_skill_review=lambda result: False,
                 read_memory_snapshot=lambda _session_id: state["memory"],
                 read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
                 read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-                read_active_task_snapshot=lambda _session_id: state["active_task"],
                 read_skill_snapshot=lambda _session_id: state["skills"],
                 emit_run_event=emit_run_event,
                 state_path=state_path,
@@ -480,7 +456,7 @@ def test_curator_service_persists_run_history(tmp_path):
 
 def test_curator_service_manual_run_scope_runs_only_requested_maintenance_job():
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         calls = []
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -497,13 +473,11 @@ def test_curator_service_manual_run_scope_runs_only_requested_maintenance_job():
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -523,7 +497,7 @@ def test_curator_service_manual_run_scope_runs_only_requested_maintenance_job():
 
 def test_curator_service_manual_run_scope_runs_only_skill_review():
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         calls = []
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -540,13 +514,11 @@ def test_curator_service_manual_run_scope_runs_only_skill_review():
             maybe_consolidate_memory=noop,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=update_skills,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -566,7 +538,7 @@ def test_curator_service_manual_run_scope_runs_only_skill_review():
 
 def test_curator_service_manual_scope_rerun_unions_pending_jobs():
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         calls = []
         memory_started = asyncio.Event()
         release_memory = asyncio.Event()
@@ -595,13 +567,11 @@ def test_curator_service_manual_scope_rerun_unions_pending_jobs():
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=update_recent_summary,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=update_skills,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -632,13 +602,11 @@ def test_curator_service_manual_run_rejects_unknown_scope():
         maybe_consolidate_memory=noop,
         maybe_update_recent_summary=noop,
         maybe_update_user_profile=noop,
-        maybe_update_active_task=noop,
         run_skill_review=noop,
         should_run_skill_review=lambda result: False,
         read_memory_snapshot=lambda _session_id: "",
         read_recent_summary_snapshot=lambda _session_id: "",
         read_user_profile_snapshot=lambda _session_id: "",
-        read_active_task_snapshot=lambda _session_id: "",
         read_skill_snapshot=lambda _session_id: "",
         emit_run_event=emit_run_event,
     )
@@ -649,7 +617,7 @@ def test_curator_service_manual_run_rejects_unknown_scope():
 
 def test_curator_service_rerun_uses_pending_request_jobs_only():
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         calls = []
         skill_started = asyncio.Event()
         release_skill = asyncio.Event()
@@ -672,13 +640,11 @@ def test_curator_service_rerun_uses_pending_request_jobs_only():
             maybe_consolidate_memory=maintenance_runner("memory"),
             maybe_update_recent_summary=maintenance_runner("recent_summary"),
             maybe_update_user_profile=maintenance_runner("user_profile"),
-            maybe_update_active_task=maintenance_runner("active_task"),
             run_skill_review=run_skill,
             should_run_skill_review=lambda result: True,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )
@@ -703,12 +669,12 @@ def test_curator_service_rerun_uses_pending_request_jobs_only():
     assert status_while_running["current_job"] == "skills"
     assert status_while_running["current_job_label"] == "skills"
     assert status_while_running["active_jobs"] == ["skills"]
-    assert calls == ["skills", "memory", "recent_summary", "user_profile", "active_task"]
+    assert calls == ["skills", "memory", "recent_summary", "user_profile"]
 
 
 def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         state_path = tmp_path / "curator_state.json"
         events = []
 
@@ -718,8 +684,8 @@ def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
         async def fail_memory(_session_id):
             raise RuntimeError("memory broke")
 
-        async def update_active_task(_session_id):
-            state["active_task"] = "changed"
+        async def update_user_profile(_session_id):
+            state["user_profile"] = "changed"
 
         async def noop(_session_id):
             return None
@@ -727,14 +693,12 @@ def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
         service = CuratorService(
             maybe_consolidate_memory=fail_memory,
             maybe_update_recent_summary=noop,
-            maybe_update_user_profile=noop,
-            maybe_update_active_task=update_active_task,
+            maybe_update_user_profile=update_user_profile,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
             state_path=state_path,
@@ -759,8 +723,6 @@ def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
         "curator.job.started",
         "curator.job.skipped",
         "curator.job.started",
-        "curator.job.skipped",
-        "curator.job.started",
         "curator.job.completed",
         "curator.completed",
     ]
@@ -768,25 +730,24 @@ def test_curator_service_isolates_job_failure_and_records_error(tmp_path):
     assert events[2][3]["job"] == "memory"
     assert events[-1][3]["status"] == "completed_with_errors"
     assert events[-1][3]["failed"] == ["memory"]
-    assert events[-1][3]["changed"] == ["active_task"]
+    assert events[-1][3]["changed"] == ["user_profile"]
     assert status["last_run_status"] == "completed_with_errors"
     assert status["last_run_failed"] == ["memory"]
-    assert status["last_run_changed"] == ["active_task"]
+    assert status["last_run_changed"] == ["user_profile"]
     assert status["last_error"] == "memory: memory broke"
     assert [item["status"] for item in status["last_run_job_results"]] == [
         "failed",
         "skipped",
-        "skipped",
         "completed",
     ]
     assert history[0]["failed"] == ["memory"]
-    assert history[0]["changed"] == ["active_task"]
+    assert history[0]["changed"] == ["user_profile"]
     assert history[0]["job_results"][0]["error_type"] == "RuntimeError"
 
 
 def test_curator_service_marks_slow_jobs(monkeypatch):
     async def scenario():
-        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "skills": ""}
         events = []
 
         async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
@@ -804,13 +765,11 @@ def test_curator_service_marks_slow_jobs(monkeypatch):
             maybe_consolidate_memory=update_memory,
             maybe_update_recent_summary=noop,
             maybe_update_user_profile=noop,
-            maybe_update_active_task=noop,
             run_skill_review=noop,
             should_run_skill_review=lambda result: False,
             read_memory_snapshot=lambda _session_id: state["memory"],
             read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
             read_user_profile_snapshot=lambda _session_id: state["user_profile"],
-            read_active_task_snapshot=lambda _session_id: state["active_task"],
             read_skill_snapshot=lambda _session_id: state["skills"],
             emit_run_event=emit_run_event,
         )

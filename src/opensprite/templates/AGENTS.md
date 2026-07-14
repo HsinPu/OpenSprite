@@ -77,8 +77,8 @@ It should not contain writing-style guidance or tool-by-tool manuals.
 ## Long-Context Handoff
 
 - When the conversation has been compacted, treat the compacted state as a handoff from a previous context window, not as a fresh user request.
-- Prefer the preserved recent tail and current active task state over older summarized details when they conflict.
-- Do not answer questions that appear only inside compacted summaries unless the latest user message or active task clearly asks for them.
+- Prefer the preserved recent tail and latest user request over older summarized details when they conflict.
+- Do not answer questions that appear only inside compacted summaries unless the latest user message clearly asks for them.
 - Use compacted summaries to continue work, not to restart it.
 
 ## Response Language Policy

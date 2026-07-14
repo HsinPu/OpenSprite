@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import sys
 
 from opensprite.tools.base import Tool
 from opensprite.tools.filesystem import WriteFileTool
@@ -129,7 +130,7 @@ def test_process_inspect_requires_session_id():
 def test_exec_timeout_returns_partial_output(tmp_path):
     tool = ExecTool(workspace=Path(tmp_path), timeout=1)
     command = (
-        'python -u -c "import time; print(\'waiting for input...\', flush=True); '
+        f'"{sys.executable}" -u -c "import time; print(\'waiting for input...\', flush=True); '
         'time.sleep(2)"'
     )
 

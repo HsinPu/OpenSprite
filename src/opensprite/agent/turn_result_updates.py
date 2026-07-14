@@ -8,8 +8,12 @@ from typing import Any
 from ..storage import StoredDelegatedTask
 from ..storage.base import selected_delegated_task
 from .execution import ExecutionResult
-from .turn_outcome import workflow_run_id
 from .workflow import is_workflow_failed_status
+
+
+def workflow_run_id(outcome: dict[str, Any]) -> str:
+    """Return the stable identifier from one workflow outcome payload."""
+    return str(outcome.get("workflow_run_id") or "").strip()
 
 
 def with_delegated_tasks(
@@ -32,17 +36,18 @@ def with_workflow_outcomes(
     return replace(result, workflow_outcomes=workflow_outcomes)
 
 
-def apply_runtime_progress(exec_result: ExecutionResult, work_progress: dict[str, object]) -> ExecutionResult:
+def apply_runtime_file_changes(exec_result: ExecutionResult, file_changes: dict[str, object]) -> ExecutionResult:
+    """Merge file-change signals captured by tool hooks into the execution result."""
     exec_result.file_change_count = max(
         int(getattr(exec_result, "file_change_count", 0) or 0),
-        int(work_progress.get("file_change_count", 0) or 0),
+        int(file_changes.get("file_change_count", 0) or 0),
     )
     touched_paths = tuple(
         dict.fromkeys(
             str(path)
             for path in (
                 *getattr(exec_result, "touched_paths", ()),
-                *(work_progress.get("touched_paths", ()) or ()),
+                *(file_changes.get("touched_paths", ()) or ()),
             )
             if str(path).strip()
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import time
@@ -29,13 +30,7 @@ from ..tool_names import (
     EXEC_TOOL_NAME,
 )
 from ..tools import ToolRegistry
-from ..tools.evidence import (
-    ToolEvidence,
-    is_verification_tool_name,
-    is_web_research_source_artifact_tool,
-    is_web_source_artifact_kind,
-    is_web_source_evidence_tool,
-)
+from ..tool_names import is_verification_tool_name
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import (
@@ -45,11 +40,9 @@ from ..utils import (
 from ..utils.log import logger
 from ..utils.log_redaction import redact_log_preview
 from ..runs.trace import RunCancelledError
-from .task.contract import TaskContract
-from .execution_support.artifacts import TaskArtifact, build_task_artifact
 from .execution_support.events import (
     COMPACTED_CONVERSATION_STATE_HEADING,
-    COMPACTED_TASK_STATE_HEADING,
+    COMPACTED_EXECUTION_STATE_HEADING,
     LLM_COMPACTION_CONFIG_MISSING_REASON,
     LLM_COMPACTION_EMPTY_REASON,
     LLM_COMPACTION_ERROR_REASON,
@@ -118,6 +111,8 @@ from .subagent import (
     subagent_result_line,
     validate_subagent_task_id,
 )
+
+
 from .subagent_run import (
     SubagentRunService,
     _subagent_error_result,
@@ -164,12 +159,47 @@ from .workflow import (
     is_workflow_running_status,
     is_workflow_unsuccessful_status,
 )
-from .task.planning import TurnPlanningService
 from ..tools.loop_guardrail import (
     ToolLoopGuardrail,
     append_toolguard_guidance,
     build_toolguard_synthetic_result,
 )
+
+
+_CANCELLATION_HOOK_TIMEOUT_SECONDS = 5.0
+_CANCELLATION_CLEANUP_TASKS: set[asyncio.Task[None]] = set()
+
+
+def _track_cancellation_cleanup(task: asyncio.Task[None]) -> None:
+    """Keep terminal hook cleanup alive if the caller is cancelled again."""
+    _CANCELLATION_CLEANUP_TASKS.add(task)
+
+    def _consume_result(completed: asyncio.Task[None]) -> None:
+        _CANCELLATION_CLEANUP_TASKS.discard(completed)
+        try:
+            completed.result()
+        except BaseException:
+            pass
+
+    task.add_done_callback(_consume_result)
+
+
+def _select_callback_args(
+    callback: Callable[..., Awaitable[None]],
+    *candidates: tuple[Any, ...],
+) -> tuple[Any, ...]:
+    """Select one compatible callback shape without executing it twice."""
+    try:
+        signature = inspect.signature(callback)
+    except (TypeError, ValueError):
+        return candidates[0]
+    for args in candidates:
+        try:
+            signature.bind(*args)
+        except TypeError:
+            continue
+        return args
+    return candidates[0]
 
 
 @dataclass
@@ -196,10 +226,6 @@ class ExecutionResult:
     llm_step_events: list[LlmStepEvent] = field(default_factory=list)
     reasoning_details: list[dict[str, Any]] | None = None
     assistant_internal_only_response: bool = False
-    task_contract: TaskContract | None = None
-    tool_selection: dict[str, Any] | None = None
-    tool_evidence: tuple[ToolEvidence, ...] = ()
-    task_artifacts: tuple[TaskArtifact, ...] = ()
 
 
 @dataclass
@@ -258,8 +284,7 @@ class ExecutionEngine:
         "Continue from the compacted conversation handoff above. "
         "Treat it as reference state from a previous context window, not as a fresh user request. "
         "Do not ask the user to repeat information that is already preserved there. "
-        "Prefer the preserved recent tail and current active task state when deciding the next step. "
-        "Do not treat this handoff as completion evidence; verification, review, and evidence gates still apply. "
+        "Prefer the preserved recent tail when deciding what to do next. "
         "If more tool work is needed, continue using tools; otherwise provide the final answer."
     )
     CONTEXT_OVERFLOW_STATUS_MESSAGE = "上下文已接近上限，正在壓縮目前任務並繼續…"
@@ -275,8 +300,8 @@ Do not turn old requests into new instructions. Distinguish clearly between comp
 Preserve verification requirements, missing evidence, review findings, quality gaps, and blockers exactly. Never convert incomplete work into completed work.
 
 Output exactly these sections when applicable:
-{COMPACTED_TASK_STATE_HEADING}
-## Current Goal
+{COMPACTED_EXECUTION_STATE_HEADING}
+## Current Request
 ## Latest User Instruction
 ## Important Context And Constraints
 ## Completed Work
@@ -382,34 +407,6 @@ Output exactly these sections when applicable:
             task_id = task_id or parse_subagent_result_line(line, SUBAGENT_TASK_ID_LABEL)
             prompt_type = prompt_type or parse_subagent_result_line(line, SUBAGENT_PROMPT_TYPE_LABEL)
         return task_id, prompt_type
-
-    @staticmethod
-    def _should_force_final_after_web_sources(
-        task_artifacts: list[TaskArtifact],
-        tool_evidence: list[ToolEvidence],
-    ) -> bool:
-        web_artifacts = [
-            artifact
-            for artifact in task_artifacts
-            if artifact.ok and is_web_source_artifact_kind(artifact.kind) and artifact.metadata.get("sources")
-        ]
-        if not web_artifacts:
-            return False
-
-        for artifact in web_artifacts:
-            if not is_web_research_source_artifact_tool(artifact.source_tool):
-                continue
-            coverage = artifact.metadata.get("coverage")
-            if isinstance(coverage, dict) and coverage.get("target_met"):
-                return True
-
-        traceable_web_evidence_count = 0
-        for evidence in tool_evidence:
-            if not evidence.ok or not is_web_source_evidence_tool(evidence.name):
-                continue
-            if evidence.metadata.get("sources"):
-                traceable_web_evidence_count += 1
-        return traceable_web_evidence_count >= 2
 
     @classmethod
     async def _emit_response_deltas(
@@ -677,7 +674,6 @@ Output exactly these sections when applicable:
         *,
         tools: list[dict[str, Any]] | None,
         tool_results_history: list[str],
-        work_state_summary: str = "",
         provider: LLMProvider | None = None,
     ) -> _ProactiveCompactionResult | None:
         """Return compacted messages when the next request is nearing the configured budget."""
@@ -704,7 +700,6 @@ Output exactly these sections when applicable:
                 log_id,
                 chat_messages,
                 tool_results_history=tool_results_history,
-                work_state_summary=work_state_summary,
                 provider=provider,
             )
             compacted_messages = llm_attempt.messages
@@ -732,7 +727,6 @@ Output exactly these sections when applicable:
         compacted_messages = self._compact_messages_for_continuation(
             chat_messages,
             tool_results_history=tool_results_history,
-            work_state_summary=work_state_summary,
             reason=(
                 "The in-turn context was compacted automatically before the LLM request because "
                 "it was approaching the configured context budget."
@@ -856,7 +850,6 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         tool_results_history: list[str],
-        work_state_summary: str = "",
     ) -> list[ChatMessage] | None:
         _, body = self._split_leading_system_messages(chat_messages)
         if not body:
@@ -875,8 +868,6 @@ Output exactly these sections when applicable:
         ]
         if latest_user_text:
             sections.extend(["", "## Latest User Instruction", latest_user_text])
-        if work_state_summary.strip():
-            sections.extend(["", work_state_summary.strip()])
         sections.extend(["", "## Transcript", transcript or "(no transcript details)"])
         if tail:
             sections.extend([
@@ -906,7 +897,6 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         tool_results_history: list[str],
-        work_state_summary: str = "",
         provider: LLMProvider | None = None,
     ) -> _LlmCompactionAttempt:
         compaction_llm = self.context_compaction_llm
@@ -921,7 +911,6 @@ Output exactly these sections when applicable:
         compaction_messages = self._build_llm_compaction_prompt(
             chat_messages,
             tool_results_history=tool_results_history,
-            work_state_summary=work_state_summary,
         )
         if compaction_messages is None:
             return _LlmCompactionAttempt(fallback_reason=LLM_COMPACTION_NO_PROMPT_REASON)
@@ -952,8 +941,7 @@ Output exactly these sections when applicable:
             COMPACTED_CONVERSATION_STATE_HEADING,
             "The in-turn context was compacted by an LLM before the next request because it was approaching the configured context budget.",
             "This summary is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
-            "Treat summarized older context as reference only. Prefer the preserved recent tail and current active task state if they conflict with the summary.",
-            "This handoff is not completion evidence. Preserve verification, review, evidence, and quality-gate gaps until tools or final answers satisfy them.",
+            "Treat summarized older context as reference only. Prefer the preserved recent tail if it conflicts with the summary.",
             "Do not ask the user to repeat details already summarized here.",
             "",
             summary,
@@ -1062,7 +1050,6 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         tool_results_history: list[str],
-        work_state_summary: str = "",
         reason: str | None = None,
     ) -> list[ChatMessage] | None:
         """Create a smaller message list that can retry the same turn after overflow."""
@@ -1100,14 +1087,11 @@ Output exactly these sections when applicable:
             reason
             or "The previous in-turn context was compacted automatically after the LLM reported a context-window error.",
             "This is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
-            "Treat summarized older context as reference only. Prefer the preserved recent tail and current active task state if they conflict with the summary.",
-            "This handoff is not completion evidence. Preserve verification, review, evidence, and quality-gate gaps until tools or final answers satisfy them.",
+            "Treat summarized older context as reference only. Prefer the preserved recent tail if it conflicts with the summary.",
             "Do not ask the user to repeat details already summarized here.",
         ]
         if latest_user_text:
             summary_sections.extend(["", "## Latest User Instruction", latest_user_text])
-        if work_state_summary.strip():
-            summary_sections.extend(["", work_state_summary.strip()])
         summary_sections.extend(["", "## Compacted Transcript", transcript or "(no transcript details)"])
         if tail:
             summary_sections.extend([
@@ -1147,7 +1131,6 @@ Output exactly these sections when applicable:
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
         should_cancel: Callable[[], bool] | None = None,
-        work_state_summary: str = "",
     ) -> ExecutionResult:
         """Execute the prepared messages, including tool calls when enabled."""
         active_provider = provider_override or self.provider
@@ -1167,7 +1150,6 @@ Output exactly these sections when applicable:
             refresh_system_prompt=refresh_system_prompt,
             max_tool_iterations=max_tool_iterations,
             should_cancel=should_cancel,
-            work_state_summary=work_state_summary,
         )
 
     async def _execute_messages_with_provider(
@@ -1188,7 +1170,6 @@ Output exactly these sections when applicable:
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
         should_cancel: Callable[[], bool] | None = None,
-        work_state_summary: str = "",
     ) -> ExecutionResult:
         """Provider-bound execution body used by execute_messages()."""
         active_provider = active_provider or self.provider
@@ -1206,8 +1187,6 @@ Output exactly these sections when applicable:
         executed_tool_calls = 0
         used_configure_skill = False
         had_tool_error = False
-        tool_evidence: list[ToolEvidence] = []
-        task_artifacts: list[TaskArtifact] = []
         delegated_tasks: list[StoredDelegatedTask] = []
         active_delegate_task_id: str | None = None
         active_delegate_prompt_type: str | None = None
@@ -1231,7 +1210,6 @@ Output exactly these sections when applicable:
                     chat_messages,
                     tools=tools,
                     tool_results_history=tool_results_history,
-                    work_state_summary=work_state_summary,
                     provider=active_provider,
                 )
                 if proactive_compaction is not None:
@@ -1391,7 +1369,6 @@ Output exactly these sections when applicable:
                         compacted_messages = self._compact_messages_for_continuation(
                             chat_messages,
                             tool_results_history=tool_results_history,
-                            work_state_summary=work_state_summary,
                         )
                         if compacted_messages is not None:
                             overflow_context_compactions += 1
@@ -1544,8 +1521,6 @@ Output exactly these sections when applicable:
                             context_compaction_events=context_compaction_events,
                             llm_step_events=llm_step_events,
                             assistant_internal_only_response=True,
-                            tool_evidence=tuple(tool_evidence),
-                            task_artifacts=tuple(task_artifacts),
                         )
 
                     if response_delta_count == 0:
@@ -1569,8 +1544,6 @@ Output exactly these sections when applicable:
                         context_compaction_events=context_compaction_events,
                         llm_step_events=llm_step_events,
                         reasoning_details=response.reasoning_details,
-                        tool_evidence=tuple(tool_evidence),
-                        task_artifacts=tuple(task_artifacts),
                     )
 
                 logger.info(
@@ -1614,10 +1587,12 @@ Output exactly these sections when applicable:
                         if on_tool_before_execute is None:
                             return
                         try:
-                            try:
-                                await on_tool_before_execute(name, args, tc.id, iteration + 1)
-                            except TypeError:
-                                await on_tool_before_execute(name, args)
+                            callback_args = _select_callback_args(
+                                on_tool_before_execute,
+                                (name, args, tc.id, iteration + 1),
+                                (name, args),
+                            )
+                            await on_tool_before_execute(*callback_args)
                         except Exception:
                             logger.exception(
                                 f"[{log_id}] tool.progress-hook.error | name={name}"
@@ -1633,8 +1608,9 @@ Output exactly these sections when applicable:
                             metadata={"tool_name": tool_name},
                         )
                         try:
-                            try:
-                                await on_tool_after_execute(
+                            callback_args = _select_callback_args(
+                                on_tool_after_execute,
+                                (
                                     tool_name,
                                     display_tool_args,
                                     aborted_result,
@@ -1644,19 +1620,65 @@ Output exactly these sections when applicable:
                                     None,
                                     "error",
                                     True,
-                                )
-                            except TypeError:
-                                await on_tool_after_execute(
-                                    tool_name,
-                                    display_tool_args,
-                                    aborted_result,
-                                    tc.id,
-                                    iteration + 1,
-                                )
+                                ),
+                                (tool_name, display_tool_args, aborted_result, tc.id, iteration + 1),
+                                (tool_name, display_tool_args, aborted_result),
+                            )
+                            await on_tool_after_execute(*callback_args)
                         except Exception:
                             logger.exception(
                                 f"[{log_id}] tool.cancel-hook.error | name={tool_name}"
                             )
+
+                    async def _notify_tool_cancelled_bounded() -> None:
+                        async def _run_bounded() -> None:
+                            hook_task = asyncio.create_task(_notify_tool_cancelled())
+                            try:
+                                await asyncio.wait_for(
+                                    asyncio.shield(hook_task),
+                                    timeout=_CANCELLATION_HOOK_TIMEOUT_SECONDS,
+                                )
+                            except asyncio.TimeoutError:
+                                hook_task.cancel()
+                                await asyncio.gather(hook_task, return_exceptions=True)
+                                logger.error(
+                                    f"[{log_id}] tool.cancel-hook.timeout | name={tool_name}"
+                                )
+
+                        cleanup_task = asyncio.create_task(_run_bounded())
+                        _track_cancellation_cleanup(cleanup_task)
+                        try:
+                            await asyncio.shield(cleanup_task)
+                        except asyncio.CancelledError:
+                            # The tracked task owns the bounded hook lifecycle.
+                            # Preserve repeated cancellation for the caller.
+                            raise
+
+                    async def _notify_tool_result(
+                        result_text: str,
+                        *,
+                        failed: bool,
+                        delegate_task_id: str | None,
+                        delegate_prompt_type: str | None,
+                    ) -> None:
+                        if on_tool_after_execute is None:
+                            return
+                        callback_args = _select_callback_args(
+                            on_tool_after_execute,
+                            (
+                                tool_name,
+                                display_tool_args,
+                                result_text,
+                                tc.id,
+                                iteration + 1,
+                                delegate_task_id,
+                                delegate_prompt_type,
+                                "error" if failed else "completed",
+                            ),
+                            (tool_name, display_tool_args, result_text, tc.id, iteration + 1),
+                            (tool_name, display_tool_args, result_text),
+                        )
+                        await on_tool_after_execute(*callback_args)
 
                     if not before_guardrail.allows_execution:
                         logger.warning(
@@ -1671,9 +1693,8 @@ Output exactly these sections when applicable:
                                 tool_args,
                                 on_before_execute=_notify_tool_before_execute,
                             )
-                            self._raise_if_cancel_requested(should_cancel)
-                        except RunCancelledError:
-                            await _notify_tool_cancelled()
+                        except asyncio.CancelledError:
+                            await _notify_tool_cancelled_bounded()
                             raise
                         executed_tool_calls += 1
                     raw_result_for_repeated_error = result
@@ -1694,16 +1715,6 @@ Output exactly these sections when applicable:
                             tool_failed = self._tool_result_looks_like_failure(result)
                     if tool_failed:
                         had_tool_error = True
-                    evidence = active_tools.build_evidence(
-                        tool_name,
-                        display_tool_args,
-                        result,
-                        ok=not tool_failed,
-                    )
-                    tool_evidence.append(evidence)
-                    artifact = build_task_artifact(evidence)
-                    if artifact is not None:
-                        task_artifacts.append(artifact)
                     if is_verification_tool_name(tool_name):
                         verification_outcome = classify_verification_result(result)
                         verification_attempted = verification_attempted or bool(verification_outcome["attempted"])
@@ -1729,25 +1740,80 @@ Output exactly these sections when applicable:
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
                     )
-                    if on_tool_after_execute is not None:
+                    async def _finalize_tool_result() -> None:
+                        # Persist the real result before invoking the optional
+                        # projection hook.  A slow hook must not leave a
+                        # side-effecting tool without its durable tool message.
+                        persistence_error: Exception | None = None
                         try:
-                            try:
-                                await on_tool_after_execute(
-                                    tool_name,
-                                    display_tool_args,
-                                    result,
-                                    tc.id,
-                                    iteration + 1,
-                                    active_delegate_task_id if tool_name == DELEGATE_TOOL_NAME else None,
-                                    active_delegate_prompt_type if tool_name == DELEGATE_TOOL_NAME else None,
-                                    "error" if tool_failed else "completed",
-                                )
-                            except TypeError:
-                                await on_tool_after_execute(tool_name, display_tool_args, result)
-                        except Exception:
-                            logger.exception(
-                                f"[{log_id}] tool.result-hook.error | name={tool_name}"
+                            await self.tool_result_persistence.persist(
+                                session_id=tool_result_session_id,
+                                tool_name=tool_name,
+                                tool_args=display_tool_args,
+                                result=result,
                             )
+                        except Exception as exc:
+                            persistence_error = exc
+
+                        # The terminal projection is independently important:
+                        # even if durable message storage fails, close the live
+                        # started lifecycle exactly once with the real result.
+                        if on_tool_after_execute is not None:
+                            try:
+                                await _notify_tool_result(
+                                    result,
+                                    failed=tool_failed,
+                                    delegate_task_id=(
+                                        active_delegate_task_id if tool_name == DELEGATE_TOOL_NAME else None
+                                    ),
+                                    delegate_prompt_type=(
+                                        active_delegate_prompt_type if tool_name == DELEGATE_TOOL_NAME else None
+                                    ),
+                                )
+                            except Exception:
+                                logger.exception(
+                                    f"[{log_id}] tool.result-hook.error | name={tool_name}"
+                                )
+
+                        if persistence_error is not None:
+                            raise persistence_error
+
+                    result_finalization_task = asyncio.create_task(_finalize_tool_result())
+                    try:
+                        await asyncio.shield(result_finalization_task)
+                    except asyncio.CancelledError as cancel_error:
+                        async def _finish_result_finalization() -> None:
+                            try:
+                                await asyncio.wait_for(
+                                    asyncio.shield(result_finalization_task),
+                                    timeout=_CANCELLATION_HOOK_TIMEOUT_SECONDS,
+                                )
+                            except asyncio.TimeoutError:
+                                result_finalization_task.cancel()
+                                await asyncio.gather(result_finalization_task, return_exceptions=True)
+                                logger.error(
+                                    f"[{log_id}] tool.result-finalization.cancel-timeout | name={tool_name}"
+                                )
+                            except Exception:
+                                logger.exception(
+                                    f"[{log_id}] tool.result-finalization.cancel-error | name={tool_name}"
+                                )
+
+                        cleanup_task = asyncio.create_task(_finish_result_finalization())
+                        _track_cancellation_cleanup(cleanup_task)
+                        try:
+                            await asyncio.shield(cleanup_task)
+                        except (asyncio.CancelledError, Exception):
+                            # A repeated cancel or cleanup failure must not
+                            # replace the original cancellation. The tracked
+                            # task keeps enforcing the bounded finalization.
+                            pass
+                        raise cancel_error
+
+                    # Once execute() returns, the tool's real result is the
+                    # terminal truth even if a cooperative stop arrived at the
+                    # same moment. Finalize it before propagating cancellation.
+                    self._raise_if_cancel_requested(should_cancel)
                     result_for_context = self._summarize_tool_result_for_context_with_config(tool_name, result)
 
                     repeated_error_marker = self._classify_tool_result(raw_result_for_repeated_error)
@@ -1783,8 +1849,6 @@ Output exactly these sections when applicable:
                                 context_compactions=context_compactions,
                                 context_compaction_events=context_compaction_events,
                                 llm_step_events=llm_step_events,
-                                tool_evidence=tuple(tool_evidence),
-                                task_artifacts=tuple(task_artifacts),
                             )
                     else:
                         repeated_tool_error_key = None
@@ -1814,28 +1878,6 @@ Output exactly these sections when applicable:
                                 )
                         except Exception:
                             logger.exception(f"[{log_id}] prompt.refresh.error | after_tool={tool_name}")
-
-                    await self.tool_result_persistence.persist(
-                        session_id=tool_result_session_id,
-                        tool_name=tool_name,
-                        tool_args=display_tool_args,
-                        result=result,
-                    )
-
-                if self._should_force_final_after_web_sources(task_artifacts, tool_evidence):
-                    tools = None
-                    chat_messages.append(ChatMessage(
-                        role=CHAT_ROLE_SYSTEM,
-                        content=(
-                            "You already have enough traceable web source evidence for this turn. "
-                            "Stop calling tools now and write the final answer from the gathered sources. "
-                            "Cite source URLs or domains, and state uncertainty plainly if exact current data is unavailable."
-                        ),
-                    ))
-                    logger.info(
-                        f"[{log_id}] llm.force-final-after-web-sources | "
-                        f"artifacts={len(task_artifacts)} evidence={len(tool_evidence)}"
-                    )
 
                 continue
 
@@ -1885,8 +1927,6 @@ Output exactly these sections when applicable:
                     context_compaction_events=context_compaction_events,
                     llm_step_events=llm_step_events,
                     assistant_internal_only_response=assistant_internal_only_response,
-                    tool_evidence=tuple(tool_evidence),
-                    task_artifacts=tuple(task_artifacts),
                 )
 
             if response_delta_count == 0:
@@ -1910,8 +1950,6 @@ Output exactly these sections when applicable:
                 context_compaction_events=context_compaction_events,
                 llm_step_events=llm_step_events,
                 reasoning_details=response.reasoning_details,
-                tool_evidence=tuple(tool_evidence),
-                task_artifacts=tuple(task_artifacts),
             )
 
         stop_metadata = {
@@ -1952,6 +1990,4 @@ Output exactly these sections when applicable:
             context_compactions=context_compactions,
             context_compaction_events=context_compaction_events,
             llm_step_events=llm_step_events,
-            tool_evidence=tuple(tool_evidence),
-            task_artifacts=tuple(task_artifacts),
         )

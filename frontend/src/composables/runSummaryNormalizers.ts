@@ -55,20 +55,6 @@ type RunSummaryBooleanStatusPayload = {
   summary?: unknown;
 };
 
-type RunSummaryReviewView = RunSummaryBooleanStatusView & {
-  required: boolean;
-  promptTypes: string[];
-  findingCount: number;
-};
-
-type RunSummaryReviewPayload = RunSummaryBooleanStatusPayload & {
-  required?: unknown;
-  prompt_types?: unknown;
-  promptTypes?: unknown;
-  finding_count?: unknown;
-  findingCount?: unknown;
-};
-
 export type RunSummaryToolView = {
   name: string;
   count: number;
@@ -322,237 +308,6 @@ type RunSummaryParallelDelegationPayload = {
   groups?: unknown;
 };
 
-type RunSummaryTaskScorecardSensorCountsView = {
-  pass: number;
-  warn: number;
-  fail: number;
-  notApplicable: number;
-};
-
-export type RunSummaryTaskScorecardView = {
-  present: boolean;
-  status: string;
-  profile: string;
-  taskType: string;
-  sensorCounts: RunSummaryTaskScorecardSensorCountsView;
-  failingSensors: string[];
-  warningSensors: string[];
-};
-
-type RunSummaryTaskScorecardSensorCountsPayload = {
-  pass?: unknown;
-  warn?: unknown;
-  fail?: unknown;
-  not_applicable?: unknown;
-  notApplicable?: unknown;
-};
-
-type RunSummaryTaskScorecardPayload = {
-  present?: unknown;
-  status?: unknown;
-  profile?: unknown;
-  task_type?: unknown;
-  taskType?: unknown;
-  sensor_counts?: unknown;
-  sensorCounts?: unknown;
-  failing_sensors?: unknown;
-  failingSensors?: unknown;
-  warning_sensors?: unknown;
-  warningSensors?: unknown;
-};
-
-export type RunSummaryCompletionVerifierMetadataView = {
-  method: string;
-  role: string;
-  repairAttempted: boolean;
-  repairError: string;
-};
-
-type RunSummaryCompletionVerifierMetadataPayload = {
-  method?: unknown;
-  role?: unknown;
-  repair_attempted?: unknown;
-  repairAttempted?: unknown;
-  repair_error?: unknown;
-  repairError?: unknown;
-};
-
-export type RunSummaryCompletionVerifierView = {
-  status: string;
-  reason: string;
-  confidence: number;
-  issues: string[];
-  nextAction: string;
-  nextPrompt: string;
-  activeTaskStatus: string;
-  activeTaskDetail: string;
-  followUpWorkflow: string;
-  followUpStepId: string;
-  followUpStepLabel: string;
-  followUpPromptType: string;
-  verificationAction: string;
-  verificationPath: string;
-  verificationPytestArgs: string[];
-  verificationRequired: boolean;
-  verificationAttempted: boolean;
-  verificationPassed: boolean;
-  reviewRequired: boolean;
-  reviewAttempted: boolean;
-  reviewPassed: boolean;
-  reviewSummary: string;
-  reviewPromptTypes: string[];
-  reviewFindingCount: number;
-  missingEvidence: string[];
-  progressOnlyResponse: boolean;
-  rawResponsePreview: string;
-  metadata: RunSummaryCompletionVerifierMetadataView;
-};
-
-type RunSummaryCompletionVerifierPayload = {
-  status?: unknown;
-  reason?: unknown;
-  confidence?: unknown;
-  issues?: unknown;
-  next_action?: unknown;
-  nextAction?: unknown;
-  next_prompt?: unknown;
-  nextPrompt?: unknown;
-  active_task_status?: unknown;
-  activeTaskStatus?: unknown;
-  active_task_detail?: unknown;
-  activeTaskDetail?: unknown;
-  follow_up_workflow?: unknown;
-  followUpWorkflow?: unknown;
-  follow_up_step_id?: unknown;
-  followUpStepId?: unknown;
-  follow_up_step_label?: unknown;
-  followUpStepLabel?: unknown;
-  follow_up_prompt_type?: unknown;
-  followUpPromptType?: unknown;
-  verification_action?: unknown;
-  verificationAction?: unknown;
-  verification_path?: unknown;
-  verificationPath?: unknown;
-  verification_pytest_args?: unknown;
-  verificationPytestArgs?: unknown;
-  verification_required?: unknown;
-  verificationRequired?: unknown;
-  verification_attempted?: unknown;
-  verificationAttempted?: unknown;
-  verification_passed?: unknown;
-  verificationPassed?: unknown;
-  review_required?: unknown;
-  reviewRequired?: unknown;
-  review_attempted?: unknown;
-  reviewAttempted?: unknown;
-  review_passed?: unknown;
-  reviewPassed?: unknown;
-  review_summary?: unknown;
-  reviewSummary?: unknown;
-  review_prompt_types?: unknown;
-  reviewPromptTypes?: unknown;
-  review_finding_count?: unknown;
-  reviewFindingCount?: unknown;
-  missing_evidence?: unknown;
-  missingEvidence?: unknown;
-  progress_only_response?: unknown;
-  progressOnlyResponse?: unknown;
-  raw_response_preview?: unknown;
-  rawResponsePreview?: unknown;
-  metadata?: unknown;
-};
-
-export type RunSummaryCompletionView = {
-  schemaVersion: number;
-  status: string;
-  reason: string;
-  shouldUpdateActiveTask: boolean;
-  verificationRequired: boolean;
-  verificationAttempted: boolean;
-  verificationPassed: boolean;
-  reviewRequired: boolean;
-  reviewAttempted: boolean;
-  reviewPassed: boolean;
-  reviewSummary: string;
-  reviewPromptTypes: string[];
-  reviewFindingCount: number;
-  fileChangeRequired: boolean;
-  missingEvidence: string[];
-  progressOnlyResponse: boolean;
-  confidence: number;
-  issues: string[];
-  nextAction: string;
-  nextPrompt: string;
-  activeTaskStatus: string;
-  activeTaskDetail: string;
-  followUpWorkflow: string;
-  followUpStepId: string;
-  followUpStepLabel: string;
-  followUpPromptType: string;
-  verificationAction: string;
-  verificationPath: string;
-  verificationPytestArgs: string[];
-  verifier: RunSummaryCompletionVerifierView;
-};
-
-type RunSummaryCompletionPayload = {
-  schema_version?: unknown;
-  schemaVersion?: unknown;
-  status?: unknown;
-  reason?: unknown;
-  should_update_active_task?: unknown;
-  shouldUpdateActiveTask?: unknown;
-  verification_required?: unknown;
-  verificationRequired?: unknown;
-  verification_attempted?: unknown;
-  verificationAttempted?: unknown;
-  verification_passed?: unknown;
-  verificationPassed?: unknown;
-  review_required?: unknown;
-  reviewRequired?: unknown;
-  review_attempted?: unknown;
-  reviewAttempted?: unknown;
-  review_passed?: unknown;
-  reviewPassed?: unknown;
-  review_summary?: unknown;
-  reviewSummary?: unknown;
-  review_prompt_types?: unknown;
-  reviewPromptTypes?: unknown;
-  review_finding_count?: unknown;
-  reviewFindingCount?: unknown;
-  file_change_required?: unknown;
-  fileChangeRequired?: unknown;
-  missing_evidence?: unknown;
-  missingEvidence?: unknown;
-  progress_only_response?: unknown;
-  progressOnlyResponse?: unknown;
-  confidence?: unknown;
-  issues?: unknown;
-  next_action?: unknown;
-  nextAction?: unknown;
-  next_prompt?: unknown;
-  nextPrompt?: unknown;
-  active_task_status?: unknown;
-  activeTaskStatus?: unknown;
-  active_task_detail?: unknown;
-  activeTaskDetail?: unknown;
-  follow_up_workflow?: unknown;
-  followUpWorkflow?: unknown;
-  follow_up_step_id?: unknown;
-  followUpStepId?: unknown;
-  follow_up_step_label?: unknown;
-  followUpStepLabel?: unknown;
-  follow_up_prompt_type?: unknown;
-  followUpPromptType?: unknown;
-  verification_action?: unknown;
-  verificationAction?: unknown;
-  verification_path?: unknown;
-  verificationPath?: unknown;
-  verification_pytest_args?: unknown;
-  verificationPytestArgs?: unknown;
-  verifier?: unknown;
-};
-
 export type RunSummaryView = {
   schemaVersion: number;
   runId: string;
@@ -568,13 +323,9 @@ export type RunSummaryView = {
   fileChanges: RunSummaryFileChangeView[];
   diffSummary: DiffSummaryView | null;
   verification: RunSummaryBooleanStatusView;
-  review: RunSummaryReviewView;
   parallelDelegation: RunSummaryParallelDelegationView;
   structuredSubagents: RunSummaryStructuredSubagentsView;
   workflows: RunSummaryWorkflowView;
-  taskScorecard: RunSummaryTaskScorecardView;
-  completion: RunSummaryCompletionView;
-  nextAction: string;
   warnings: string[];
   artifactCounts: RunSummaryArtifactCountsView;
   counts: RunSummaryCountsView;
@@ -602,17 +353,11 @@ export type RunSummaryPayload = {
   diff_summary?: unknown;
   diffSummary?: unknown;
   verification?: unknown;
-  review?: unknown;
   parallel_delegation?: unknown;
   parallelDelegation?: unknown;
   structured_subagents?: unknown;
   structuredSubagents?: unknown;
   workflows?: unknown;
-  task_scorecard?: unknown;
-  taskScorecard?: unknown;
-  completion?: unknown;
-  next_action?: unknown;
-  nextAction?: unknown;
   warnings?: unknown;
   artifact_counts?: unknown;
   artifactCounts?: unknown;
@@ -966,292 +711,6 @@ function normalizeParallelDelegationSummary(payload: unknown): RunSummaryParalle
   };
 }
 
-function toRunSummaryTaskScorecardPayload(value: unknown): RunSummaryTaskScorecardPayload | null {
-  const payload = toPayloadSource<RunSummaryTaskScorecardPayload>(value);
-  return payload
-    ? {
-        present: payload.present,
-        status: payload.status,
-        profile: payload.profile,
-        task_type: payload.task_type,
-        taskType: payload.taskType,
-        sensor_counts: payload.sensor_counts,
-        sensorCounts: payload.sensorCounts,
-        failing_sensors: payload.failing_sensors,
-        failingSensors: payload.failingSensors,
-        warning_sensors: payload.warning_sensors,
-        warningSensors: payload.warningSensors,
-      }
-    : null;
-}
-
-function toRunSummaryTaskScorecardSensorCountsPayload(
-  value: unknown,
-): RunSummaryTaskScorecardSensorCountsPayload | null {
-  const payload = toPayloadSource<RunSummaryTaskScorecardSensorCountsPayload>(value);
-  return payload
-    ? {
-        pass: payload.pass,
-        warn: payload.warn,
-        fail: payload.fail,
-        not_applicable: payload.not_applicable,
-        notApplicable: payload.notApplicable,
-      }
-    : null;
-}
-
-function normalizeTaskScorecardSensorCounts(payload: unknown): RunSummaryTaskScorecardSensorCountsView {
-  const sensorCounts = toRunSummaryTaskScorecardSensorCountsPayload(payload) || {};
-  return {
-    pass: coerceNonNegativeInteger(sensorCounts.pass),
-    warn: coerceNonNegativeInteger(sensorCounts.warn),
-    fail: coerceNonNegativeInteger(sensorCounts.fail),
-    notApplicable: coerceNonNegativeInteger(sensorCounts.not_applicable ?? sensorCounts.notApplicable),
-  };
-}
-
-function normalizeTaskScorecardSummary(payload: unknown): RunSummaryTaskScorecardView {
-  const scorecard = toRunSummaryTaskScorecardPayload(payload);
-  if (!scorecard) {
-    return {
-      present: false,
-      status: "missing",
-      profile: "",
-      taskType: "",
-      sensorCounts: normalizeTaskScorecardSensorCounts(null),
-      failingSensors: [],
-      warningSensors: [],
-    };
-  }
-  const sensorCounts = toRunSummaryTaskScorecardSensorCountsPayload(scorecard.sensor_counts)
-    || toRunSummaryTaskScorecardSensorCountsPayload(scorecard.sensorCounts);
-  return {
-    present: coerceBoolean(scorecard.present),
-    status: String(scorecard.status || "missing").trim() || "missing",
-    profile: String(scorecard.profile || "").trim(),
-    taskType: String(scorecard.task_type || scorecard.taskType || "").trim(),
-    sensorCounts: normalizeTaskScorecardSensorCounts(sensorCounts),
-    failingSensors: coerceStringList(scorecard.failing_sensors || scorecard.failingSensors),
-    warningSensors: coerceStringList(scorecard.warning_sensors || scorecard.warningSensors),
-  };
-}
-
-function toRunSummaryCompletionVerifierMetadataPayload(value: unknown): RunSummaryCompletionVerifierMetadataPayload {
-  const payload = toPayloadSource<RunSummaryCompletionVerifierMetadataPayload>(value);
-  return payload
-    ? {
-        method: payload.method,
-        role: payload.role,
-        repair_attempted: payload.repair_attempted,
-        repairAttempted: payload.repairAttempted,
-        repair_error: payload.repair_error,
-        repairError: payload.repairError,
-      }
-    : {};
-}
-
-function normalizeCompletionVerifierMetadata(payload: unknown): RunSummaryCompletionVerifierMetadataView {
-  const metadata = toRunSummaryCompletionVerifierMetadataPayload(payload);
-  return {
-    method: String(metadata.method || "").trim(),
-    role: String(metadata.role || "").trim(),
-    repairAttempted: coerceBoolean(metadata.repair_attempted ?? metadata.repairAttempted),
-    repairError: String(metadata.repair_error || metadata.repairError || "").trim(),
-  };
-}
-
-function toRunSummaryCompletionVerifierPayload(value: unknown): RunSummaryCompletionVerifierPayload {
-  const payload = toPayloadSource<RunSummaryCompletionVerifierPayload>(value);
-  return payload
-    ? {
-        status: payload.status,
-        reason: payload.reason,
-        confidence: payload.confidence,
-        issues: payload.issues,
-        next_action: payload.next_action,
-        nextAction: payload.nextAction,
-        next_prompt: payload.next_prompt,
-        nextPrompt: payload.nextPrompt,
-        active_task_status: payload.active_task_status,
-        activeTaskStatus: payload.activeTaskStatus,
-        active_task_detail: payload.active_task_detail,
-        activeTaskDetail: payload.activeTaskDetail,
-        follow_up_workflow: payload.follow_up_workflow,
-        followUpWorkflow: payload.followUpWorkflow,
-        follow_up_step_id: payload.follow_up_step_id,
-        followUpStepId: payload.followUpStepId,
-        follow_up_step_label: payload.follow_up_step_label,
-        followUpStepLabel: payload.followUpStepLabel,
-        follow_up_prompt_type: payload.follow_up_prompt_type,
-        followUpPromptType: payload.followUpPromptType,
-        verification_action: payload.verification_action,
-        verificationAction: payload.verificationAction,
-        verification_path: payload.verification_path,
-        verificationPath: payload.verificationPath,
-        verification_pytest_args: payload.verification_pytest_args,
-        verificationPytestArgs: payload.verificationPytestArgs,
-        verification_required: payload.verification_required,
-        verificationRequired: payload.verificationRequired,
-        verification_attempted: payload.verification_attempted,
-        verificationAttempted: payload.verificationAttempted,
-        verification_passed: payload.verification_passed,
-        verificationPassed: payload.verificationPassed,
-        review_required: payload.review_required,
-        reviewRequired: payload.reviewRequired,
-        review_attempted: payload.review_attempted,
-        reviewAttempted: payload.reviewAttempted,
-        review_passed: payload.review_passed,
-        reviewPassed: payload.reviewPassed,
-        review_summary: payload.review_summary,
-        reviewSummary: payload.reviewSummary,
-        review_prompt_types: payload.review_prompt_types,
-        reviewPromptTypes: payload.reviewPromptTypes,
-        review_finding_count: payload.review_finding_count,
-        reviewFindingCount: payload.reviewFindingCount,
-        missing_evidence: payload.missing_evidence,
-        missingEvidence: payload.missingEvidence,
-        progress_only_response: payload.progress_only_response,
-        progressOnlyResponse: payload.progressOnlyResponse,
-        raw_response_preview: payload.raw_response_preview,
-        rawResponsePreview: payload.rawResponsePreview,
-        metadata: payload.metadata,
-      }
-    : {};
-}
-
-function normalizeCompletionVerifier(payload: unknown): RunSummaryCompletionVerifierView {
-  const verifier = toRunSummaryCompletionVerifierPayload(payload);
-  return {
-    status: String(verifier.status || "unknown").trim() || "unknown",
-    reason: String(verifier.reason || "").trim(),
-    confidence: Number.isFinite(Number(verifier.confidence)) ? Number(verifier.confidence) : 0,
-    issues: coerceStringList(verifier.issues),
-    nextAction: String(verifier.next_action || verifier.nextAction || "").trim(),
-    nextPrompt: String(verifier.next_prompt || verifier.nextPrompt || "").trim(),
-    activeTaskStatus: String(verifier.active_task_status || verifier.activeTaskStatus || "").trim(),
-    activeTaskDetail: String(verifier.active_task_detail || verifier.activeTaskDetail || "").trim(),
-    followUpWorkflow: String(verifier.follow_up_workflow || verifier.followUpWorkflow || "").trim(),
-    followUpStepId: String(verifier.follow_up_step_id || verifier.followUpStepId || "").trim(),
-    followUpStepLabel: String(verifier.follow_up_step_label || verifier.followUpStepLabel || "").trim(),
-    followUpPromptType: String(verifier.follow_up_prompt_type || verifier.followUpPromptType || "").trim(),
-    verificationAction: String(verifier.verification_action || verifier.verificationAction || "").trim(),
-    verificationPath: String(verifier.verification_path || verifier.verificationPath || "").trim(),
-    verificationPytestArgs: coerceStringList(verifier.verification_pytest_args || verifier.verificationPytestArgs),
-    verificationRequired: coerceBoolean(verifier.verification_required ?? verifier.verificationRequired),
-    verificationAttempted: coerceBoolean(verifier.verification_attempted ?? verifier.verificationAttempted),
-    verificationPassed: coerceBoolean(verifier.verification_passed ?? verifier.verificationPassed),
-    reviewRequired: coerceBoolean(verifier.review_required ?? verifier.reviewRequired),
-    reviewAttempted: coerceBoolean(verifier.review_attempted ?? verifier.reviewAttempted),
-    reviewPassed: coerceBoolean(verifier.review_passed ?? verifier.reviewPassed),
-    reviewSummary: String(verifier.review_summary || verifier.reviewSummary || "").trim(),
-    reviewPromptTypes: coerceStringList(verifier.review_prompt_types || verifier.reviewPromptTypes),
-    reviewFindingCount: coerceNonNegativeInteger(verifier.review_finding_count ?? verifier.reviewFindingCount),
-    missingEvidence: coerceStringList(verifier.missing_evidence || verifier.missingEvidence),
-    progressOnlyResponse: coerceBoolean(verifier.progress_only_response ?? verifier.progressOnlyResponse),
-    rawResponsePreview: String(verifier.raw_response_preview || verifier.rawResponsePreview || "").trim(),
-    metadata: normalizeCompletionVerifierMetadata(verifier.metadata),
-  };
-}
-
-function toRunSummaryCompletionPayload(value: unknown): RunSummaryCompletionPayload {
-  const payload = toPayloadSource<RunSummaryCompletionPayload>(value);
-  return payload
-    ? {
-        schema_version: payload.schema_version,
-        schemaVersion: payload.schemaVersion,
-        status: payload.status,
-        reason: payload.reason,
-        should_update_active_task: payload.should_update_active_task,
-        shouldUpdateActiveTask: payload.shouldUpdateActiveTask,
-        verification_required: payload.verification_required,
-        verificationRequired: payload.verificationRequired,
-        verification_attempted: payload.verification_attempted,
-        verificationAttempted: payload.verificationAttempted,
-        verification_passed: payload.verification_passed,
-        verificationPassed: payload.verificationPassed,
-        review_required: payload.review_required,
-        reviewRequired: payload.reviewRequired,
-        review_attempted: payload.review_attempted,
-        reviewAttempted: payload.reviewAttempted,
-        review_passed: payload.review_passed,
-        reviewPassed: payload.reviewPassed,
-        review_summary: payload.review_summary,
-        reviewSummary: payload.reviewSummary,
-        review_prompt_types: payload.review_prompt_types,
-        reviewPromptTypes: payload.reviewPromptTypes,
-        review_finding_count: payload.review_finding_count,
-        reviewFindingCount: payload.reviewFindingCount,
-        file_change_required: payload.file_change_required,
-        fileChangeRequired: payload.fileChangeRequired,
-        missing_evidence: payload.missing_evidence,
-        missingEvidence: payload.missingEvidence,
-        progress_only_response: payload.progress_only_response,
-        progressOnlyResponse: payload.progressOnlyResponse,
-        confidence: payload.confidence,
-        issues: payload.issues,
-        next_action: payload.next_action,
-        nextAction: payload.nextAction,
-        next_prompt: payload.next_prompt,
-        nextPrompt: payload.nextPrompt,
-        active_task_status: payload.active_task_status,
-        activeTaskStatus: payload.activeTaskStatus,
-        active_task_detail: payload.active_task_detail,
-        activeTaskDetail: payload.activeTaskDetail,
-        follow_up_workflow: payload.follow_up_workflow,
-        followUpWorkflow: payload.followUpWorkflow,
-        follow_up_step_id: payload.follow_up_step_id,
-        followUpStepId: payload.followUpStepId,
-        follow_up_step_label: payload.follow_up_step_label,
-        followUpStepLabel: payload.followUpStepLabel,
-        follow_up_prompt_type: payload.follow_up_prompt_type,
-        followUpPromptType: payload.followUpPromptType,
-        verification_action: payload.verification_action,
-        verificationAction: payload.verificationAction,
-        verification_path: payload.verification_path,
-        verificationPath: payload.verificationPath,
-        verification_pytest_args: payload.verification_pytest_args,
-        verificationPytestArgs: payload.verificationPytestArgs,
-        verifier: payload.verifier,
-      }
-    : {};
-}
-
-function normalizeCompletionSummary(payload: unknown): RunSummaryCompletionView {
-  const completion = toRunSummaryCompletionPayload(payload);
-  return {
-    schemaVersion: coerceNonNegativeInteger(completion.schema_version ?? completion.schemaVersion),
-    status: String(completion.status || "unknown").trim() || "unknown",
-    reason: String(completion.reason || "").trim(),
-    shouldUpdateActiveTask: coerceBoolean(completion.should_update_active_task ?? completion.shouldUpdateActiveTask),
-    verificationRequired: coerceBoolean(completion.verification_required ?? completion.verificationRequired),
-    verificationAttempted: coerceBoolean(completion.verification_attempted ?? completion.verificationAttempted),
-    verificationPassed: coerceBoolean(completion.verification_passed ?? completion.verificationPassed),
-    reviewRequired: coerceBoolean(completion.review_required ?? completion.reviewRequired),
-    reviewAttempted: coerceBoolean(completion.review_attempted ?? completion.reviewAttempted),
-    reviewPassed: coerceBoolean(completion.review_passed ?? completion.reviewPassed),
-    reviewSummary: String(completion.review_summary || completion.reviewSummary || "").trim(),
-    reviewPromptTypes: coerceStringList(completion.review_prompt_types || completion.reviewPromptTypes),
-    reviewFindingCount: coerceNonNegativeInteger(completion.review_finding_count ?? completion.reviewFindingCount),
-    fileChangeRequired: coerceBoolean(completion.file_change_required ?? completion.fileChangeRequired),
-    missingEvidence: coerceStringList(completion.missing_evidence || completion.missingEvidence),
-    progressOnlyResponse: coerceBoolean(completion.progress_only_response ?? completion.progressOnlyResponse),
-    confidence: Number.isFinite(Number(completion.confidence)) ? Number(completion.confidence) : 0,
-    issues: coerceStringList(completion.issues),
-    nextAction: String(completion.next_action || completion.nextAction || "").trim(),
-    nextPrompt: String(completion.next_prompt || completion.nextPrompt || "").trim(),
-    activeTaskStatus: String(completion.active_task_status || completion.activeTaskStatus || "").trim(),
-    activeTaskDetail: String(completion.active_task_detail || completion.activeTaskDetail || "").trim(),
-    followUpWorkflow: String(completion.follow_up_workflow || completion.followUpWorkflow || "").trim(),
-    followUpStepId: String(completion.follow_up_step_id || completion.followUpStepId || "").trim(),
-    followUpStepLabel: String(completion.follow_up_step_label || completion.followUpStepLabel || "").trim(),
-    followUpPromptType: String(completion.follow_up_prompt_type || completion.followUpPromptType || "").trim(),
-    verificationAction: String(completion.verification_action || completion.verificationAction || "").trim(),
-    verificationPath: String(completion.verification_path || completion.verificationPath || "").trim(),
-    verificationPytestArgs: coerceStringList(completion.verification_pytest_args || completion.verificationPytestArgs),
-    verifier: normalizeCompletionVerifier(completion.verifier),
-  };
-}
-
 function toRunSummaryToolPayload(value: unknown): RunSummaryToolPayload | null {
   const payload = toPayloadSource<RunSummaryToolPayload>(value);
   return payload
@@ -1359,28 +818,6 @@ function normalizeRunSummaryBooleanStatus(
   };
 }
 
-function toRunSummaryReviewPayload(value: unknown): RunSummaryReviewPayload {
-  const payload = toPayloadSource<RunSummaryReviewPayload>(value);
-  return {
-    ...toRunSummaryBooleanStatusPayload(payload),
-    required: payload?.required,
-    prompt_types: payload?.prompt_types,
-    promptTypes: payload?.promptTypes,
-    finding_count: payload?.finding_count,
-    findingCount: payload?.findingCount,
-  };
-}
-
-function normalizeRunSummaryReview(value: unknown): RunSummaryReviewView {
-  const review = toRunSummaryReviewPayload(value);
-  return {
-    ...normalizeRunSummaryBooleanStatus(review, "not_required"),
-    required: coerceBoolean(review.required),
-    promptTypes: coerceStringList(review.prompt_types || review.promptTypes),
-    findingCount: coerceNonNegativeInteger(review.finding_count ?? review.findingCount),
-  };
-}
-
 function toRunSummaryArtifactCountsPayload(value: unknown): RunSummaryArtifactCountsPayload {
   const payload = toPayloadSource<RunSummaryArtifactCountsPayload>(value);
   return payload
@@ -1452,17 +889,11 @@ function toRunSummaryPayload(value: unknown): RunSummaryPayload | null {
         diff_summary: payload.diff_summary,
         diffSummary: payload.diffSummary,
         verification: payload.verification,
-        review: payload.review,
         parallel_delegation: payload.parallel_delegation,
         parallelDelegation: payload.parallelDelegation,
         structured_subagents: payload.structured_subagents,
         structuredSubagents: payload.structuredSubagents,
         workflows: payload.workflows,
-        task_scorecard: payload.task_scorecard,
-        taskScorecard: payload.taskScorecard,
-        completion: payload.completion,
-        next_action: payload.next_action,
-        nextAction: payload.nextAction,
         warnings: payload.warnings,
         artifact_counts: payload.artifact_counts,
         artifactCounts: payload.artifactCounts,
@@ -1480,9 +911,6 @@ export function normalizeRunSummary(payload: unknown): RunSummaryView | null {
   const parallelDelegation = normalizeParallelDelegationSummary(summary.parallel_delegation || summary.parallelDelegation);
   const structuredSubagents = normalizeStructuredSubagentsSummary(summary.structured_subagents || summary.structuredSubagents);
   const workflows = normalizeWorkflowSummary(summary.workflows);
-  const taskScorecard = normalizeTaskScorecardSummary(
-    summary.task_scorecard || summary.taskScorecard,
-  );
   const tools = toPayloadList(summary.tools);
   const fileChanges = toPayloadList(summary.file_changes || summary.fileChanges);
   return {
@@ -1506,13 +934,9 @@ export function normalizeRunSummary(payload: unknown): RunSummaryView | null {
       .filter((change): change is RunSummaryFileChangeView => Boolean(change)),
     diffSummary: normalizeDiffSummary(summary.diff_summary || summary.diffSummary),
     verification: normalizeRunSummaryBooleanStatus(summary.verification, "not_attempted"),
-    review: normalizeRunSummaryReview(summary.review),
     parallelDelegation,
     structuredSubagents,
     workflows,
-    taskScorecard,
-    completion: normalizeCompletionSummary(summary.completion),
-    nextAction: String(summary.next_action || summary.nextAction || "").trim(),
     warnings: coerceStringList(summary.warnings),
     artifactCounts: normalizeRunSummaryArtifactCounts(summary.artifact_counts || summary.artifactCounts),
     counts: normalizeRunSummaryCounts(summary.counts),

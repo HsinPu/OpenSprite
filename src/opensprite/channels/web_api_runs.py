@@ -8,15 +8,22 @@ from aiohttp import web
 
 from .identity import external_chat_id_from_session
 from ..runs.schema import (
+    sanitize_run_metadata,
     serialize_diff_summary,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event_counts,
     serialize_run_events,
-    serialize_run_part,
+    serialize_run_parts,
     serialize_run_summary,
 )
 from ..runs.session_entries import serialize_run_trace_entries
+
+
+def _serialize_run(adapter: Any, run: Any) -> dict[str, Any]:
+    payload = dict(adapter._serialize_run(run))
+    payload["metadata"] = sanitize_run_metadata(payload.get("metadata"))
+    return payload
 
 
 async def handle_run_events(adapter: Any, request: web.Request) -> web.Response:
@@ -50,7 +57,7 @@ async def handle_runs(adapter: Any, request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="session_id is required")
 
     runs = await storage.get_runs(session_id, limit=adapter._coerce_limit(request.query.get("limit")))
-    return web.json_response({"session_id": session_id, "runs": [adapter._serialize_run(run) for run in runs]})
+    return web.json_response({"session_id": session_id, "runs": [_serialize_run(adapter, run) for run in runs]})
 
 
 async def handle_run_trace(adapter: Any, request: web.Request) -> web.Response:
@@ -67,10 +74,10 @@ async def handle_run_trace(adapter: Any, request: web.Request) -> web.Response:
     serialized_events = serialize_run_events(trace.events)
     return web.json_response(
         {
-            "run": adapter._serialize_run(trace.run),
+            "run": _serialize_run(adapter, trace.run),
             "events": serialized_events,
             "event_counts": serialize_run_event_counts(trace.events, serialized_events),
-            "parts": [serialize_run_part(part) for part in trace.parts],
+            "parts": serialize_run_parts(trace.parts),
             "file_changes": [serialize_file_change(change) for change in trace.file_changes],
             "diff_summary": serialize_diff_summary(trace),
             "artifacts": serialize_run_artifacts(trace),

@@ -10,74 +10,30 @@ import sys
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent import media_runtime
-from opensprite.agent.active_task_runtime import task_intent_for_explicit_goal
-from opensprite.agent.completion.auto_continue import (
-    NO_PROGRESS_DURING_CONTINUATION_REASON,
-    REVIEW_EVIDENCE_STILL_MISSING_REASON,
-)
-from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.execution_support.events import ContextCompactionEvent
 from opensprite.runs.trace import RunBusyError
-from opensprite.agent.execution_support.artifacts import TaskArtifact
-from opensprite.agent.task.contract import (
-    EvidenceRequirement,
-    LLM_PLANNER_CONTRACT_SOURCES,
-    PLANNER_INVALID_STATUS,
-    PLANNER_METADATA_REASON_FIELD,
-    PLANNER_METADATA_STATUS_FIELD,
-    PLANNER_VALIDATED_STATUS,
-    TaskContract,
-)
-from opensprite.agent.task.progress import WorkProgressUpdate
-from opensprite.tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
-from opensprite.agent.turn_result_aggregation import aggregate_execution_results
-from opensprite.agent.turn_response_metadata import build_turn_response_metadata
-from opensprite.agent.turn_outcome import (
-    TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD,
-    TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD,
-    TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD,
-    TURN_METADATA_COMPLETION_GATE_FIELD,
-    TURN_METADATA_COMPLETION_STATUS_FIELD,
-    TURN_METADATA_DELEGATED_TASKS_FIELD,
-    TURN_METADATA_TASK_ARTIFACTS_FIELD,
-    TURN_METADATA_TASK_CONTRACT_FIELD,
-    TURN_METADATA_WORK_PROGRESS_FIELD,
-)
-from opensprite.agent.turn_result_updates import apply_runtime_progress, merge_workflow_outcomes
+from opensprite.runs.events import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.agent.turn_result_updates import apply_runtime_file_changes, merge_workflow_outcomes
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
-from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
-    ACTIVE_TASK_COMMAND_APPLIED_EVENT,
-    AUTO_CONTINUE_COMPLETED_EVENT,
-    AUTO_CONTINUE_SCHEDULED_EVENT,
-    AUTO_CONTINUE_SKIPPED_EVENT,
-    COMPLETION_GATE_EVALUATED_EVENT,
     CURATOR_STARTED_EVENT,
     FILE_CHANGED_EVENT,
     LLM_STATUS_EVENT,
-    TASK_CONTEXT_RESOLVED_EVENT,
-    TASK_CHECKLIST_UPDATED_EVENT,
-    TASK_CHECKPOINT_RECORDED_EVENT,
-    TASK_CLARIFICATION_REQUESTED_EVENT,
-    TASK_INTENT_DETECTED_EVENT,
-    TASK_SCORECARD_RECORDED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     VERIFICATION_RESULT_EVENT,
     VERIFICATION_STARTED_EVENT,
-    WORK_PLAN_CREATED_EVENT,
-    WORK_PROGRESS_UPDATED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
-from opensprite.storage.base import StoredMessage, StoredWorkState
+from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
 from opensprite.tools.process_runtime import BackgroundSession
 from opensprite.tools.registry import ToolRegistry
@@ -120,341 +76,24 @@ def _extract_session_id(result: str) -> str:
     raise AssertionError(f"Session ID missing from result: {result}")
 
 
-def _is_planner_call(messages, tools=None) -> bool:
-    if tools:
-        return False
-    first = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "task planner" in first
-
-
-def _is_completion_verifier_call(messages, tools=None) -> bool:
-    if tools:
-        return False
-    first = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "completion verifier" in first or "completion verifier" in first
-
-
-def _is_initial_task_planning_call(messages, tools=None) -> bool:
-    if tools:
-        return False
-    first = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "initial task shape" in first
-
-
-def _initial_task_planning_response(messages) -> LLMResponse:
-    latest_user_text = next(
-        (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
-        "",
-    )
-    try:
-        context = json.loads(latest_user_text.split("Input:\n", 1)[1])
-    except Exception:
-        context = {}
-    current_message = str(context.get("current_message") or "")
-    objective = current_message.split("\n\n[Runtime context]", 1)[0].strip()
-    work_state_summary = str(context.get("work_state_summary") or "")
-    work_state_objective = ""
-    for line in work_state_summary.splitlines():
-        if line.startswith("- Objective:"):
-            work_state_objective = line.split(":", 1)[1].strip()
-            break
-    has_media = bool(context.get("has_images") or context.get("has_audios") or context.get("has_videos"))
-    lowered = objective.lower()
-    active_task = str(context.get("active_task") or "").strip()
-    has_active_context = bool(active_task or work_state_objective)
-    is_continue = lowered.strip() in {"continue", "keep going"} or objective.strip() in {"繼續", "繼續做"}
-    if has_active_context and is_continue:
-        kind = "task"
-        objective = work_state_objective or active_task
-        done_criteria = ["active task is advanced"]
-        lowered = objective.lower()
-    elif not objective and has_media:
-        kind = "media_upload"
-        objective = "Save attached media for later use."
-        done_criteria = ["attached media is saved or referenced for follow-up"]
-    elif objective.startswith("/"):
-        kind = "command"
-        done_criteria = ["command is handled"]
-    elif "review" in lowered:
-        kind = "review"
-        done_criteria = ["review findings are reported"]
-    elif "explain" in lowered or "inspect" in lowered or "analyze" in lowered or "說明" in objective:
-        kind = "analysis"
-        done_criteria = ["requested analysis is provided"]
-    elif objective:
-        kind = "task"
-        done_criteria = ["requested task is handled"]
-    else:
-        kind = "conversation"
-        objective = "Respond to the user."
-        done_criteria = ["user receives a response"]
-    expects_code_change = any(token in lowered for token in ("fix", "update", "change", "edit", "implement", "refactor"))
-    expects_verification = expects_code_change or any(token in lowered for token in ("test", "verify", "run tests"))
-    continuation_type = "continue_active_task" if has_active_context and is_continue else "new_task" if kind != "conversation" else "none"
-    payload = {
-        "task_intent": {
-            "kind": kind,
-            "objective": objective,
-            "constraints": [],
-            "done_criteria": done_criteria,
-            "needs_clarification": False,
-            "long_running": False,
-            "expects_code_change": expects_code_change,
-            "expects_verification": expects_verification,
-            "verification_hint": "run tests" if expects_verification else None,
-        },
-        "task_context": {
-            "is_follow_up": continuation_type == "continue_active_task",
-            "should_inherit_active_task": continuation_type == "continue_active_task",
-            "should_seed_active_task": continuation_type == "new_task",
-            "should_replace_active_task": False,
-            "inherited_task_type": None,
-            "continuation_type": continuation_type,
-            "confidence": 0.8,
-            "reason": "test initial task planning",
-        },
-        "confidence": 0.9,
-        "reason": "test initial task planning",
-    }
-    return LLMResponse(content=json.dumps(payload), model="fake-model")
-
-
-def _completion_verifier_facts(messages) -> dict:
-    latest_user_text = next(
-        (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
-        "",
-    )
-    marker = "Facts:\n"
-    raw = latest_user_text.split(marker, 1)[1] if marker in latest_user_text else "{}"
-    try:
-        parsed = json.loads(raw)
-    except Exception:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
-
-
-def _delegated_task_structured_output(item: dict) -> dict:
-    structured = item.get("structured_output")
-    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
-    if not isinstance(structured, dict):
-        structured = metadata.get("structured_output")
-    return structured if isinstance(structured, dict) else {}
-
-
-def _is_clean_code_review_task(item: dict) -> bool:
-    if item.get("prompt_type") != "code-reviewer":
-        return False
-    structured = _delegated_task_structured_output(item)
-    return str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0
-
-
-def _fake_clean_review_response() -> str:
-    payload = {
-        "schema_version": 1,
-        "contract": "readonly_subagent_result",
-        "prompt_type": "code-reviewer",
-        "status": "ok",
-        "summary": "No major findings.",
-        "sections": [],
-        "questions": [],
-        "residual_risks": [],
-        "sources": [],
-    }
-    return "Review completed without findings.\n\n```json\n" + json.dumps(payload) + "\n```"
-
-
-def _completion_verifier_response(messages) -> LLMResponse:
-    facts = _completion_verifier_facts(messages)
-    response = str(facts.get("assistant_response", {}).get("text") or "")
-    execution = facts.get("execution", {}) if isinstance(facts.get("execution"), dict) else {}
-    contract = facts.get("task_contract", {}) if isinstance(facts.get("task_contract"), dict) else {}
-    intent = facts.get("task_intent", {}) if isinstance(facts.get("task_intent"), dict) else {}
-    objective = str(contract.get("objective") or intent.get("objective") or "")
-    requirements = contract.get("requirements") if isinstance(contract.get("requirements"), list) else []
-    requirement_kinds = {str(item.get("kind") or "") for item in requirements if isinstance(item, dict)}
-    delegated_tasks = facts.get("delegated_tasks") if isinstance(facts.get("delegated_tasks"), list) else []
-    review_attempted = any(
-        isinstance(item, dict) and item.get("prompt_type") in {"code-reviewer", "security-reviewer", "async-concurrency-reviewer"}
-        for item in delegated_tasks
-    )
-    clean_review = any(
-        isinstance(item, dict) and _is_clean_code_review_task(item) for item in delegated_tasks
-    )
-    file_changes = int(execution.get("file_change_count") or 0)
-    verification_passed = bool(execution.get("verification_passed"))
-    verification_attempted = bool(execution.get("verification_attempted"))
-    workflow_outcomes = facts.get("workflow_outcomes") if isinstance(facts.get("workflow_outcomes"), list) else []
-    completed_workflow = next(
-        (item for item in reversed(workflow_outcomes) if isinstance(item, dict) and item.get("status") == "completed"),
-        None,
-    )
-    cancelled_workflow = next(
-        (item for item in reversed(workflow_outcomes) if isinstance(item, dict) and item.get("status") == "cancelled"),
-        None,
-    )
-    if "?" in response or "？" in response:
-        payload = {"status": "waiting_user", "reason": "assistant requested missing information", "active_task_status": "waiting_user", "active_task_detail": response}
-    elif verification_attempted and not verification_passed:
-        payload = {
-            "status": "needs_verification",
-            "reason": "verification did not pass",
-            "active_task_status": "in_progress",
-            "verification_required": True,
-            "verification_attempted": True,
-            "verification_passed": False,
-            "verification_action": "pytest",
-            "verification_path": ".",
-        }
-    elif (
-        completed_workflow
-        and completed_workflow.get("review_passed") is True
-        and ("tests" in objective.lower() or "verify" in objective.lower())
-        and not verification_passed
-    ):
-        payload = {
-            "status": "needs_verification",
-            "reason": "required verification was not recorded",
-            "active_task_status": "in_progress",
-            "verification_required": True,
-            "verification_attempted": False,
-            "verification_passed": False,
-            "verification_action": "pytest",
-            "verification_path": ".",
-        }
-    elif completed_workflow and completed_workflow.get("review_passed") is True:
-        workflow_name = str(completed_workflow.get("workflow") or "workflow")
-        payload = {"status": "complete", "reason": f"workflow {workflow_name} completed with clean review evidence", "active_task_status": "done", "review_attempted": True, "review_passed": True}
-    elif completed_workflow and completed_workflow.get("review_passed") is False:
-        payload = {
-            "status": "needs_review",
-            "reason": "review findings require follow-up",
-            "active_task_status": "in_progress",
-            "review_required": True,
-            "review_attempted": True,
-            "review_passed": False,
-            "review_summary": str(completed_workflow.get("review_summary") or ""),
-            "review_finding_count": int(completed_workflow.get("review_finding_count") or 0),
-            "follow_up_workflow": completed_workflow.get("workflow"),
-            "follow_up_step_id": "implement",
-            "follow_up_step_label": "Address review findings",
-            "follow_up_prompt_type": "implementer",
-        }
-    elif execution.get("had_tool_error"):
-        payload = {"status": "blocked", "reason": response or "tool error", "active_task_status": "blocked", "active_task_detail": response}
-    elif "reviewed outcome" in response:
-        payload = {"status": "complete", "reason": "verifier accepted reviewed workflow outcome", "active_task_status": "done", "review_attempted": True, "review_passed": True}
-    elif cancelled_workflow:
-        payload = {
-            "status": "needs_review",
-            "reason": "workflow follow-up is required",
-            "active_task_status": "in_progress",
-            "follow_up_workflow": cancelled_workflow.get("workflow"),
-            "follow_up_step_id": cancelled_workflow.get("next_step_id"),
-            "follow_up_step_label": cancelled_workflow.get("next_step_label"),
-            "follow_up_prompt_type": cancelled_workflow.get("next_step_prompt_type"),
-        }
-    elif (("file_change" in requirement_kinds) or "refactor" in objective.lower() or "implement" in objective.lower()) and file_changes <= 0:
-        payload = {"status": "incomplete", "reason": "expected code changes were not recorded", "active_task_status": "in_progress"}
-    elif (("verification" in requirement_kinds) or "tests" in objective.lower() or "verify" in objective.lower()) and not verification_passed:
-        payload = {
-            "status": "needs_verification",
-            "reason": "required verification was not recorded",
-            "active_task_status": "in_progress",
-            "verification_required": True,
-            "verification_attempted": verification_attempted,
-            "verification_passed": False,
-            "verification_action": "pytest",
-            "verification_path": ".",
-        }
-    elif file_changes > 0 and not review_attempted:
-        payload = {"status": "needs_review", "reason": "delegated review was not recorded for code changes", "active_task_status": "in_progress", "review_required": True}
-    elif delegated_tasks and any(isinstance(item, dict) and item.get("selected") for item in delegated_tasks):
-        payload = {"status": "incomplete", "reason": "delegated task is active", "active_task_status": "in_progress"}
-    elif review_attempted and not clean_review:
-        payload = {"status": "needs_review", "reason": "review findings require follow-up", "active_task_status": "in_progress", "review_required": True, "review_attempted": True}
-    else:
-        payload = {
-            "status": "complete",
-            "reason": "verifier accepted test response",
-            "active_task_status": "done",
-            "verification_required": "verification" in requirement_kinds,
-            "verification_attempted": verification_attempted,
-            "verification_passed": verification_passed,
-            "review_attempted": review_attempted,
-            "review_passed": clean_review or not review_attempted,
-        }
-    return LLMResponse(content=json.dumps(payload), model="fake-model")
-
-
-def _planner_response(task_type: str = "code_change") -> LLMResponse:
-    if task_type == "code_change":
-        required_tools = ["read_file", "apply_patch"]
-    elif task_type == "planning":
-        required_tools = ["read_file"]
-    else:
-        required_tools = []
-    payload = {
-        "task_type": task_type,
-        "required_tools": required_tools,
-        "allow_no_tool_final": task_type == "pure_answer",
-        "final_answer_required": True,
-        "reason": "test planner contract",
-    }
-    return LLMResponse(content=json.dumps(payload), model="fake-model")
-
-
 class FakeProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_initial_task_planning_call(messages, tools):
-            return _initial_task_planning_response(messages)
-        if _is_planner_call(messages, tools):
-            return _planner_response()
-        if _is_completion_verifier_call(messages, tools):
-            return _completion_verifier_response(messages)
-        raise AssertionError("provider.chat should only be called by the planner in this test")
+    async def chat(self, messages, tools=None, model=None, **kwargs):
+        return LLMResponse(content="assistant reply", model=model or "fake-model")
 
     def get_default_model(self) -> str:
         return "fake-model"
 
 
-class ClarificationOnlyProvider:
-    def __init__(self):
-        self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        self.calls.append({"messages": list(messages), "tools": tools, "model": model, **kwargs})
-        if not _is_initial_task_planning_call(messages, tools):
-            raise AssertionError("low-confidence clarification should not reach planner or main LLM")
-        payload = {
-            "task_intent": {
-                "kind": "task",
-                "objective": "Continue the ambiguous request.",
-                "constraints": [],
-                "done_criteria": ["user clarifies the intended task"],
-                "needs_clarification": False,
-                "long_running": False,
-                "expects_code_change": False,
-                "expects_verification": False,
-                "verification_hint": None,
-            },
-            "task_context": {
-                "is_follow_up": True,
-                "should_inherit_active_task": False,
-                "should_seed_active_task": False,
-                "should_replace_active_task": False,
-                "inherited_task_type": None,
-                "continuation_type": "ambiguous_boundary",
-                "confidence": 0.41,
-                "reason": "The short turn could refer to multiple previous tasks.",
-            },
-            "confidence": 0.41,
-            "reason": "The request is ambiguous.",
-            "clarification_question": "你要我接續上一個修改任務，還是只繼續說明流程？",
-        }
-        return LLMResponse(content=json.dumps(payload), model=model or "fake-model")
 
-    def get_default_model(self) -> str:
-        return "fake-model"
+
+
+
+
+
+
+
+
 
 
 class FakeSpeechProvider:
@@ -462,28 +101,10 @@ class FakeSpeechProvider:
         return "請幫我整理這段語音重點"
 
 
-def test_aggregate_execution_results_keeps_only_latest_stop_reason():
-    aggregate = aggregate_execution_results(
-        [
-            ExecutionResult(
-                content="stopped",
-                executed_tool_calls=1,
-                stop_reason="max_tool_iterations",
-                stop_metadata={"iteration_limit": 1},
-            ),
-            ExecutionResult(content="done", executed_tool_calls=0),
-        ],
-        content="done",
-    )
-
-    assert aggregate.content == "done"
-    assert aggregate.executed_tool_calls == 1
-    assert aggregate.stop_reason is None
-    assert aggregate.stop_metadata == {}
 
 
-def test_apply_runtime_progress_merges_counts_and_paths():
-    result = apply_runtime_progress(
+def test_apply_runtime_file_changes_merges_counts_and_paths():
+    result = apply_runtime_file_changes(
         ExecutionResult(content="ok", file_change_count=1, touched_paths=("a.py",)),
         {"file_change_count": 3, "touched_paths": ("a.py", "b.py", " ")},
     )
@@ -492,206 +113,6 @@ def test_apply_runtime_progress_merges_counts_and_paths():
     assert result.touched_paths == ("a.py", "b.py")
 
 
-def test_build_turn_response_metadata_collects_turn_fields():
-    task_contract = TaskContract(
-        objective="Finish the task",
-        task_type="code_change",
-        requirements=(EvidenceRequirement(kind="file_change"),),
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-    )
-    delegated_task = StoredDelegatedTask(
-        task_id="task-1",
-        prompt_type="implementation",
-        status="running",
-        selected=True,
-        summary="continue implementation",
-    )
-    artifact = TaskArtifact(
-        kind="command_result",
-        source_tool="exec",
-        resource_ids=("cmd-1",),
-        content_preview="pytest passed",
-    )
-    work_progress = WorkProgressUpdate(
-        status="in_progress",
-        pass_index=2,
-        auto_continue_attempts=1,
-        progress_signals=("files_changed",),
-        has_progress=True,
-        file_change_count=1,
-        touched_paths=("src/file.py",),
-        verification_required=True,
-        verification_attempted=True,
-        verification_passed=True,
-        completion_status="incomplete",
-        completion_reason="needs final response",
-        next_action="continue",
-        continuation_budget=1,
-    )
-
-    response_metadata, status_metadata, persisted_metadata = build_turn_response_metadata(
-        response="done",
-        aggregate_result=ExecutionResult(
-            content="done",
-            executed_tool_calls=2,
-            file_change_count=1,
-            delegated_tasks=(delegated_task,),
-            active_delegate_task_id="task-1",
-            active_delegate_prompt_type="implementation",
-            verification_attempted=True,
-            verification_passed=True,
-            stop_reason="max_tool_iterations",
-            stop_metadata={"iteration_limit": 3},
-            context_compactions=1,
-            reasoning_details=[{"summary": "reasoning"}],
-            task_contract=task_contract,
-            task_artifacts=(artifact,),
-        ),
-        completion_result=CompletionGateResult(status="incomplete", reason="needs final response", confidence=0.6),
-        work_progress=work_progress,
-        auto_continue_attempts=1,
-        assistant_metadata={"existing": "value"},
-    )
-
-    assert response_metadata["response_len"] == 4
-    assert response_metadata[TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD] == 1
-    assert response_metadata[TURN_METADATA_COMPLETION_GATE_FIELD]["status"] == "incomplete"
-    assert response_metadata[TURN_METADATA_WORK_PROGRESS_FIELD]["touched_paths"] == ["src/file.py"]
-    assert response_metadata[TURN_METADATA_TASK_CONTRACT_FIELD]["task_type"] == "code_change"
-    assert response_metadata[TURN_METADATA_DELEGATED_TASKS_FIELD][0]["task_id"] == "task-1"
-    assert response_metadata[TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD] == "task-1"
-    assert response_metadata[TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD] == "implementation"
-    assert response_metadata[TURN_METADATA_TASK_ARTIFACTS_FIELD][0]["kind"] == "command_result"
-    assert response_metadata["stop_metadata"] == {"iteration_limit": 3}
-    assert status_metadata[TURN_METADATA_COMPLETION_STATUS_FIELD] == "incomplete"
-    assert status_metadata["stop_reason"] == "max_tool_iterations"
-    assert persisted_metadata == {
-        "existing": "value",
-        "llm_reasoning_details": [{"summary": "reasoning"}],
-    }
-
-
-def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error():
-    valid_contract = TaskContract(
-        objective="Find sources",
-        task_type="web_research",
-        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-    )
-    planning_error = TaskContract(
-        objective="Find sources",
-        task_type="planning_error",
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={
-            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
-            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
-        },
-    )
-
-    aggregate = aggregate_execution_results(
-        [
-            ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
-            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error),
-        ],
-        content="retry answer",
-    )
-
-    assert aggregate.content == "retry answer"
-    assert aggregate.executed_tool_calls == 1
-    assert aggregate.task_contract is valid_contract
-
-
-def test_aggregate_execution_results_keeps_valid_contract_over_retry_planning_error_contract():
-    valid_contract = TaskContract(
-        objective="Find sources",
-        task_type="web_research",
-        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-    )
-    planning_error_contract = TaskContract(
-        objective="Find sources",
-        task_type="planning_error",
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={
-            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
-            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
-        },
-    )
-
-    aggregate = aggregate_execution_results(
-        [
-            ExecutionResult(content="first pass", executed_tool_calls=1, task_contract=valid_contract),
-            ExecutionResult(content="retry answer", executed_tool_calls=0, task_contract=planning_error_contract),
-        ],
-        content="retry answer",
-    )
-
-    assert aggregate.content == "retry answer"
-    assert aggregate.executed_tool_calls == 1
-    assert aggregate.task_contract is valid_contract
-
-
-def test_aggregate_execution_results_keeps_tool_contract_over_auto_continue_pure_answer():
-    web_contract = TaskContract(
-        objective="Find sources",
-        task_type="web_research",
-        requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research")),),
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-    )
-    final_answer_contract = TaskContract(
-        objective="Continue the current task",
-        task_type="pure_answer",
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-    )
-
-    aggregate = aggregate_execution_results(
-        [
-            ExecutionResult(content="", executed_tool_calls=1, task_contract=web_contract),
-            ExecutionResult(content="final answer", executed_tool_calls=0, task_contract=final_answer_contract),
-        ],
-        content="final answer",
-    )
-
-    assert aggregate.content == "final answer"
-    assert aggregate.executed_tool_calls == 1
-    assert aggregate.task_contract is web_contract
-
-
-def test_aggregate_execution_results_does_not_mark_visible_final_as_internal_only():
-    aggregate = aggregate_execution_results(
-        [
-            ExecutionResult(content="first pass", assistant_internal_only_response=False),
-            ExecutionResult(content="", assistant_internal_only_response=True),
-        ],
-        content="first pass",
-    )
-
-    assert aggregate.content == "first pass"
-    assert aggregate.assistant_internal_only_response is False
-
-
-def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract_exists():
-    planning_error = TaskContract(
-        objective="Find sources",
-        task_type="planning_error",
-        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
-        planner_metadata={
-            PLANNER_METADATA_STATUS_FIELD: PLANNER_INVALID_STATUS,
-            PLANNER_METADATA_REASON_FIELD: "invalid JSON",
-        },
-    )
-
-    aggregate = aggregate_execution_results(
-        [ExecutionResult(content="blocked", executed_tool_calls=0, task_contract=planning_error)],
-        content="blocked",
-    )
-
-    assert aggregate.task_contract is planning_error
 
 
 def test_merge_workflow_outcomes_normalizes_workflow_run_ids():
@@ -708,52 +129,6 @@ def test_merge_workflow_outcomes_normalizes_workflow_run_ids():
     )
 
     assert [item["status"] for item in merged] == ["new", "updated"]
-
-
-class WorkflowAuthorityProvider:
-    def __init__(self):
-        self.calls = []
-
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        self.calls.append({"messages": list(messages), "tools": tools})
-        if _is_initial_task_planning_call(messages, tools):
-            return _initial_task_planning_response(messages)
-        if _is_planner_call(messages, tools):
-            payload = {
-                "task_type": "operations",
-                "required_tools": ["run_workflow"],
-                "allow_no_tool_final": False,
-                "final_answer_required": True,
-                "reason": "test planner workflow contract",
-            }
-            return LLMResponse(content=json.dumps(payload), model="fake-model")
-        if _is_completion_verifier_call(messages, tools):
-            return _completion_verifier_response(messages)
-        latest_user_text = next(
-            (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
-            "",
-        )
-        tool_names = [tool.get("function", {}).get("name") for tool in (tools or []) if isinstance(tool, dict)]
-        if "run_workflow" in tool_names and not any(getattr(message, "role", None) == "tool" for message in messages):
-            return LLMResponse(
-                content="run workflow",
-                model="fake-model",
-                tool_calls=[
-                    ToolCall(
-                        id="tc1",
-                        name="run_workflow",
-                        arguments={"workflow": "implement_then_review", "task": latest_user_text},
-                    )
-                ],
-            )
-        if "run_workflow" in tool_names:
-            return LLMResponse(content="Here is the reviewed outcome.", model="fake-model")
-        if "Review the current workspace changes" in latest_user_text:
-            return LLMResponse(content=_fake_clean_review_response(), model="fake-model")
-        return LLMResponse(content="Implemented the requested change.", model="fake-model")
-
-    def get_default_model(self) -> str:
-        return "fake-model"
 
 
 class FakeStorage:
@@ -886,150 +261,6 @@ def test_curator_skill_snapshot_is_session_scoped(tmp_path):
     assert agent._read_skill_snapshot("web:browser-b") == ""
 
 
-def test_agent_loop_uses_configured_continuation_budgets(tmp_path):
-    config = Config.load_agent_template_config(
-        auto_continue_default_budget=2,
-        auto_continue_long_running_budget=6,
-        auto_continue_deterministic_action_budget=7,
-    )
-
-    agent = AgentLoop(
-        config=config,
-        provider=FakeProvider(),
-        storage=FakeStorage(),
-        context_builder=FakeContextBuilder(tmp_path),
-        tools=ToolRegistry(),
-        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-        tools_config=ToolsConfig(),
-        log_config=LogConfig(),
-        search_config=SearchConfig(),
-        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-        **Config.packaged_agent_llm_chat_kwargs(),
-    )
-
-    assert agent.auto_continue.max_auto_continues == 2
-    assert agent.auto_continue.max_deterministic_actions == 7
-    assert agent.work_progress.default_continuation_budget == 2
-    assert agent.work_progress.long_running_continuation_budget == 6
-
-
-def test_agent_low_confidence_initial_planning_asks_clarification_without_main_llm(tmp_path):
-    async def scenario():
-        provider = ClarificationOnlyProvider()
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=provider,
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        response = await agent.process(
-            UserMessage(
-                text="好 繼續",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        runs = await storage.get_runs("web:browser-1")
-        events = await storage.get_run_events("web:browser-1", runs[0].run_id)
-        messages = await storage.get_messages("web:browser-1")
-        return response, provider.calls, events, messages
-
-    response, calls, events, messages = asyncio.run(scenario())
-
-    assert response.text == "你要我接續上一個修改任務，還是只繼續說明流程？"
-    assert len(calls) == 1
-    assert [message.role for message in messages] == ["user", "assistant"]
-    assert messages[-1].content == response.text
-    event_types = [event.event_type for event in events]
-    assert TASK_INTENT_DETECTED_EVENT in event_types
-    assert TASK_CLARIFICATION_REQUESTED_EVENT in event_types
-    assert LLM_STATUS_EVENT not in event_types
-
-
-def test_agent_goal_command_persists_resumable_work_state(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        context_builder = FakeContextBuilder(tmp_path / "workspace")
-        context_builder.app_home = tmp_path / "app_home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        await storage.create_run("web:browser-1", "run-1")
-        session_token = agent._current_session_id.set("web:browser-1")
-        channel_token = agent._current_channel.set("web")
-        transport_token = agent._current_external_chat_id.set("browser-1")
-        run_token = agent._current_run_id.set("run-1")
-        try:
-            rendered = await agent.set_goal_from_text("web:browser-1", "Finish phase two and run tests.")
-        finally:
-            agent._current_run_id.reset(run_token)
-            agent._current_external_chat_id.reset(transport_token)
-            agent._current_channel.reset(channel_token)
-            agent._current_session_id.reset(session_token)
-        return (
-            rendered,
-            await storage.get_work_state("web:browser-1"),
-            await storage.get_run_events("web:browser-1", "run-1"),
-        )
-
-    rendered, work_state, events = asyncio.run(scenario())
-
-    assert rendered is not None
-    assert "- Goal: Finish phase two and run tests." in rendered
-    assert work_state is not None
-    assert work_state.objective == "Finish phase two and run tests."
-    assert work_state.status == "active"
-    assert work_state.long_running is True
-    assert work_state.metadata["source"] == "goal_command"
-    assert work_state.resume_hint.startswith("Resume at current step:")
-    assert [event.event_type for event in events] == [ACTIVE_TASK_COMMAND_APPLIED_EVENT]
-    assert events[0].payload["command"] == "set_goal"
-    assert events[0].payload["work_state_created"] is True
-
-
-def test_agent_goal_intent_uses_explicit_task_kind(tmp_path):
-    agent = AgentLoop(
-        config=Config.load_agent_template_config(),
-        provider=FakeProvider(),
-        storage=FakeStorage(),
-        context_builder=FakeContextBuilder(tmp_path),
-        tools=ToolRegistry(),
-        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-        tools_config=ToolsConfig(),
-        log_config=LogConfig(),
-        search_config=SearchConfig(),
-        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-        **Config.packaged_agent_llm_chat_kwargs(),
-    )
-
-    intent = task_intent_for_explicit_goal(agent, "Please refactor the agent and run tests.")
-
-    assert intent.kind == "task"
-    assert intent.long_running is True
-    assert intent.objective == "Please refactor the agent and run tests."
 
 
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
@@ -1067,10 +298,6 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
             await release_maintenance.wait()
             call_order.append(("profile", session_id))
 
-        async def fake_update_active_task(session_id):
-            await release_maintenance.wait()
-            call_order.append(("active-task", session_id))
-
         async def fake_update_recent_summary(session_id):
             await release_maintenance.wait()
             call_order.append(("recent-summary", session_id))
@@ -1079,7 +306,6 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
         agent._maybe_consolidate_memory = fake_consolidate
         agent._maybe_update_recent_summary = fake_update_recent_summary
         agent._maybe_update_user_profile = fake_update_profile
-        agent._maybe_update_active_task = fake_update_active_task
 
         response = await agent.process(
             UserMessage(
@@ -1114,7 +340,6 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
         ("memory", "telegram:room-1"),
         ("recent-summary", "telegram:room-1"),
         ("profile", "telegram:room-1"),
-        ("active-task", "telegram:room-1"),
     }
     assert response.text == "assistant reply"
     assert response.channel == "telegram"
@@ -1143,11 +368,6 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
             return ExecutionResult(
                 content="assistant reply",
                 executed_tool_calls=0,
-                task_contract=TaskContract(
-                    objective="hello",
-                    task_type="pure_answer",
-                    contract_sources=("test",),
-                ),
                 context_compactions=1,
                 context_compaction_events=[
                     ContextCompactionEvent(
@@ -1161,11 +381,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
                 ],
             )
 
-        async def fake_transition(*args, **kwargs):
-            return None
-
         agent.call_llm = fake_call_llm
-        agent._maybe_apply_immediate_task_transition = fake_transition
         agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
 
         response = await agent.process(
@@ -1190,33 +406,17 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert run.session_id == "web:browser-1"
     assert [event.event_type for event in events] == [
         RUN_STARTED_EVENT,
-        TASK_INTENT_DETECTED_EVENT,
         LLM_STATUS_EVENT,
-        COMPLETION_GATE_EVALUATED_EVENT,
-        WORK_PROGRESS_UPDATED_EVENT,
-        TASK_CHECKPOINT_RECORDED_EVENT,
-        TASK_SCORECARD_RECORDED_EVENT,
         RUN_FINISHED_EVENT,
     ]
     assert events[0].payload["status"] == "running"
-    assert events[1].payload["kind"] == "task"
-    assert events[1].payload["objective"] == "hello"
-    assert events[3].payload["status"] == "complete"
-    assert events[4].payload["next_action"] == "finalize"
-    assert events[5].payload["next_action"] == "finalize"
-    assert events[6].payload["task"]["task_type"] == "pure_answer"
-    assert events[6].payload["completion"]["status"] == "complete"
     assert events[-1].payload["status"] == "completed"
-    assert [part.part_type for part in parts] == ["context_compaction", "task_checkpoint", "task_scorecard", "assistant_message"]
+    assert [part.part_type for part in parts] == ["context_compaction", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
     assert parts[0].metadata["messages_before"] == 8
-    assert parts[1].metadata["task_type"] == "pure_answer"
-    assert parts[1].metadata["next_action"] == "finalize"
-    assert parts[2].metadata["task"]["task_type"] == "pure_answer"
-    assert parts[2].metadata["completion"]["status"] == "complete"
-    assert parts[3].content == "assistant reply"
-    assert parts[3].metadata["executed_tool_calls"] == 0
-    assert parts[3].metadata["context_compactions"] == 1
+    assert parts[1].content == "assistant reply"
+    assert parts[1].metadata["executed_tool_calls"] == 0
+    assert parts[1].metadata["context_compactions"] == 1
 
 
 def test_agent_process_schedules_curator_after_run_finished(tmp_path):
@@ -1247,7 +447,6 @@ def test_agent_process_schedules_curator_after_run_finished(tmp_path):
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         await agent.process(
             UserMessage(
@@ -1581,7 +780,6 @@ def test_agent_process_persists_media_only_message_without_llm(tmp_path):
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         response = await agent.process(
             UserMessage(
@@ -1673,7 +871,6 @@ def test_agent_process_routes_audio_only_message_to_llm(tmp_path):
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         response = await agent.process(
             UserMessage(
@@ -1729,7 +926,6 @@ def test_agent_process_saves_uploaded_audio_without_pretranscribing(tmp_path):
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         response = await agent.process(
             UserMessage(
@@ -1797,7 +993,6 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         response = await agent.process(
             UserMessage(
@@ -1822,1435 +1017,16 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
     assert captured["user_video_files"][0].startswith("videos/inbound-")
 
 
-def test_agent_process_seeds_active_task_from_initial_llm_context(tmp_path):
-    async def scenario():
-        registry = make_tool_registry("read_file", "apply_patch")
-        storage = FakeStorage()
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
 
-        async def fake_execute_messages(*args, **kwargs):
-            return ExecutionResult(content="seeded", executed_tool_calls=0)
 
-        agent._execute_messages = fake_execute_messages
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
 
-        await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests. Keep the public API stable.",
-                channel="telegram",
-                external_chat_id="room-1",
-                session_id="telegram:room-1",
-            )
-        )
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        return store.read_managed_block(), store.read_events()
 
-    task_block, events = asyncio.run(scenario())
 
-    assert "- Status: active" in task_block
-    assert "- Goal: Please refactor the agent and run tests. Keep the public API stable." in task_block
-    assert any(event["event_type"] == "seed" for event in events)
 
 
-def test_agent_process_emits_task_context_resolved_event(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
 
-        async def fake_execute_messages(*args, **kwargs):
-            return ExecutionResult(content="context resolved", executed_tool_calls=0)
 
-        agent._execute_messages = fake_execute_messages
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
 
-        await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-
-        run = next(iter(storage._runs.values()))
-        return await storage.get_run_events("web:browser-1", run.run_id)
-
-    events = asyncio.run(scenario())
-
-    event = next(event for event in events if event.event_type == TASK_CONTEXT_RESOLVED_EVENT)
-    assert event.payload["method"] == "llm"
-    assert event.payload["is_follow_up"] is False
-    assert event.payload["continuation_type"] == "new_task"
-    assert event.payload["confidence"] >= 0.0
-    assert not any(event.event_type == "task.objective.resolved" for event in events)
-
-
-def test_agent_process_emits_completion_gate_needs_verification_after_code_changes(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(
-                content="Completed the refactor.",
-                executed_tool_calls=0,
-                file_change_count=1,
-                touched_paths=("src/agent.py",),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-
-        run = next(iter(storage._runs.values()))
-        return await storage.get_run_events("web:browser-1", run.run_id)
-
-    events = asyncio.run(scenario())
-
-    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
-    assert completion_event.payload["status"] == "needs_verification"
-    assert completion_event.payload["reason"] == "required verification was not recorded"
-
-
-def test_agent_process_emits_completion_gate_needs_review_after_code_changes_without_review_evidence(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(
-                content="Implemented the cleanup successfully.",
-                executed_tool_calls=0,
-                file_change_count=1,
-                touched_paths=("src/cleanup.py",),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        await agent.process(
-            UserMessage(
-                text="Please implement the cleanup.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-
-        run = next(iter(storage._runs.values()))
-        return await storage.get_run_events("web:browser-1", run.run_id)
-
-    events = asyncio.run(scenario())
-
-    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
-    work_progress_event = next(event for event in events if event.event_type == WORK_PROGRESS_UPDATED_EVENT)
-    assert completion_event.payload["status"] == "needs_review"
-    assert completion_event.payload["reason"] == "delegated review was not recorded for code changes"
-    assert completion_event.payload["review_required"] is True
-    assert work_progress_event.payload["next_action"] == "collect_review_evidence"
-
-
-def test_agent_process_workflow_completion_authority_marks_complete_with_clean_review(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=WorkflowAuthorityProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Implement a safe change.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        return response, events
-
-    response, events = asyncio.run(scenario())
-
-    assert response.text == "Here is the reviewed outcome."
-    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
-    run_finished = next(event for event in events if event.event_type == RUN_FINISHED_EVENT)
-    assert completion_event.payload["status"] == "complete"
-    assert completion_event.payload["reason"] == "workflow implement_then_review completed with clean review evidence"
-    assert run_finished.payload["completion_gate"]["status"] == "complete"
-
-
-def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="Completed the refactor.",
-                    executed_tool_calls=0,
-                    task_contract=TaskContract(
-                        objective="Please refactor the agent and run tests.",
-                        task_type="code_change",
-                        requirements=(
-                            EvidenceRequirement(kind="file_change", min_count=1),
-                            EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
-                        ),
-                        allow_no_tool_final=False,
-                        contract_sources=("test",),
-                    ),
-                )
-            return ExecutionResult(
-                content="Verification passed and the refactor is complete.",
-                executed_tool_calls=1,
-                file_change_count=1,
-                touched_paths=("src/opensprite/agent.py",),
-                verification_attempted=True,
-                verification_passed=True,
-                task_contract=TaskContract(
-                    objective="Please refactor the agent and run tests.",
-                    task_type="code_change",
-                    requirements=(
-                        EvidenceRequirement(kind="file_change", min_count=1),
-                        EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
-                    ),
-                    allow_no_tool_final=False,
-                    contract_sources=("test",),
-                ),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        parts = await storage.get_run_parts("web:browser-1", run.run_id)
-        return response, calls, events, parts
-
-    response, calls, events, parts = asyncio.run(scenario())
-
-    assert response.text == "Verification passed and the refactor is complete."
-    assert len(calls) == 2
-    assert "Completion gate reason: expected code changes were not recorded" in calls[1]
-    assert [event.event_type for event in events] == [
-        RUN_STARTED_EVENT,
-        TASK_INTENT_DETECTED_EVENT,
-        LLM_STATUS_EVENT,
-        WORK_PLAN_CREATED_EVENT,
-        COMPLETION_GATE_EVALUATED_EVENT,
-        WORK_PROGRESS_UPDATED_EVENT,
-        TASK_CHECKPOINT_RECORDED_EVENT,
-        TASK_SCORECARD_RECORDED_EVENT,
-        AUTO_CONTINUE_SCHEDULED_EVENT,
-        COMPLETION_GATE_EVALUATED_EVENT,
-        WORK_PROGRESS_UPDATED_EVENT,
-        TASK_CHECKPOINT_RECORDED_EVENT,
-        TASK_SCORECARD_RECORDED_EVENT,
-        AUTO_CONTINUE_COMPLETED_EVENT,
-        AUTO_CONTINUE_SKIPPED_EVENT,
-        TASK_CHECKLIST_UPDATED_EVENT,
-        RUN_FINISHED_EVENT,
-    ]
-    assert events[4].payload["status"] == "incomplete"
-    assert events[4].payload["reason"] == "expected code changes were not recorded"
-    assert events[5].payload["next_action"] == "continue_work"
-    assert events[9].payload["status"] == "needs_review"
-    assert events[9].payload["reason"] == "delegated review was not recorded for code changes"
-    assert events[10].payload["next_action"] == "collect_review_evidence"
-    assert events[11].payload["next_action"] == "collect_review_evidence"
-    assert events[12].payload["completion"]["status"] == "needs_review"
-    assert events[13].payload["completion_status"] == "needs_review"
-    assert events[14].payload["reason"] == REVIEW_EVIDENCE_STILL_MISSING_REASON
-    assert events[-1].payload["status"] == "needs_review"
-    assert events[-1].payload["completion_gate"]["status"] == "needs_review"
-    assert sum(1 for part in parts if part.part_type == "task_checkpoint") == 2
-    assert sum(1 for part in parts if part.part_type == "task_scorecard") == 2
-    assistant_part = next(part for part in parts if part.part_type == "assistant_message")
-    assert assistant_part.metadata["auto_continue_attempts"] == 1
-    assert assistant_part.metadata["verification_passed"] is True
-    assert assistant_part.metadata["work_progress"]["file_change_count"] == 1
-    assert any(part.part_type == "worktree_sandbox" for part in parts)
-    assert any(part.part_type == "task_checklist" for part in parts)
-
-
-def test_agent_process_direct_verify_can_finish_without_second_llm_pass(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        verified = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="Implemented the refactor.",
-                    executed_tool_calls=1,
-                    file_change_count=1,
-                    touched_paths=("src/agent.py",),
-                    delegated_tasks=(
-                        StoredDelegatedTask(
-                            task_id="task_review",
-                            prompt_type="code-reviewer",
-                            status="completed",
-                            summary="No major findings.",
-                            metadata={"structured_output": {"status": "ok", "summary": "No major findings.", "finding_count": 0}},
-                        ),
-                    ),
-                )
-            raise AssertionError("LLM should not be called after deterministic verification already completed the task")
-
-        async def fake_run_verify(action, path, pytest_args=()):
-            verified.append((action, path, tuple(pytest_args)))
-            return ExecutionResult(
-                content="Verification passed: pytest\nCommand: python -m pytest",
-                executed_tool_calls=1,
-                verification_attempted=True,
-                verification_passed=True,
-            )
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_verify = fake_run_verify
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        return response, calls, verified, events
-
-    response, calls, verified, events = asyncio.run(scenario())
-
-    assert response.text == "Verification passed: pytest\nCommand: python -m pytest"
-    assert len(calls) == 1
-    assert verified == [("pytest", ".", ())]
-    scheduled = next(event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT)
-    assert scheduled.payload["direct_verify_action"] == "pytest"
-    assert scheduled.payload["direct_verify_path"] == "."
-
-
-def test_agent_process_full_deterministic_review_and_verification_matrix(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        resumed = []
-        verified = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="Workflow cancelled.",
-                    executed_tool_calls=1,
-                    file_change_count=1,
-                    touched_paths=("src/agent.py",),
-                    workflow_outcomes=(
-                        {
-                            "workflow_run_id": "workflow_initial",
-                            "workflow": "implement_then_review",
-                            "status": "cancelled",
-                            "summary": "Workflow stopped after 1/2 completed step(s).",
-                            "next_step_id": "review",
-                            "next_step_label": "Code review",
-                            "next_step_prompt_type": "code-reviewer",
-                        },
-                    ),
-                )
-            raise AssertionError("LLM should not be called after deterministic review/verify loop covers the task")
-
-        async def fake_run_workflow(workflow, task, start_step=None):
-            resumed.append((workflow, task, start_step))
-            run_id = agent.turn_context.current_run_id()
-            if start_step == "review":
-                agent.run_update_buffer.record_workflow_outcome(
-                    run_id,
-                    {
-                        "workflow_run_id": "workflow_review_resume",
-                        "workflow": workflow,
-                        "status": "completed",
-                        "completed_steps": 2,
-                        "failed_steps": 0,
-                        "total_steps": 2,
-                        "summary": "Completed 2/2 workflow step(s).",
-                        "review_attempted": True,
-                        "review_passed": False,
-                        "review_finding_count": 1,
-                        "review_summary": "One high-risk bug found.",
-                        "review_first_finding": "src/foo.py: Null handling bug: Guard the null path before dereference.",
-                        "verification_attempted": False,
-                        "verification_passed": False,
-                    },
-                )
-                return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-            agent.run_update_buffer.record_workflow_outcome(
-                run_id,
-                {
-                    "workflow_run_id": "workflow_fix_resume",
-                    "workflow": workflow,
-                    "status": "completed",
-                    "completed_steps": 2,
-                    "failed_steps": 0,
-                    "total_steps": 2,
-                    "summary": "Completed 2/2 workflow step(s).",
-                    "review_attempted": True,
-                    "review_passed": True,
-                    "review_finding_count": 0,
-                    "review_summary": "No major findings.",
-                    "verification_attempted": False,
-                    "verification_passed": False,
-                },
-            )
-            return "Workflow: implement_then_review\nStatus: completed\n[1] implementer | completed\n[2] code-reviewer | completed"
-
-        async def fake_run_verify(action, path, pytest_args=()):
-            verified.append((action, path, tuple(pytest_args)))
-            if len(verified) == 1:
-                return ExecutionResult(
-                    content=tool_error_result(
-                        "Verification failed: pytest\n[stderr] failing test",
-                        error_type="VerifyToolError",
-                        category="verification_failed",
-                        metadata={"tool_name": "verify"},
-                    ),
-                    executed_tool_calls=1,
-                    had_tool_error=True,
-                    verification_attempted=True,
-                    verification_passed=False,
-                )
-            return ExecutionResult(
-                content="Verification passed: pytest\nCommand: python -m pytest",
-                executed_tool_calls=1,
-                verification_attempted=True,
-                verification_passed=True,
-            )
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_workflow = fake_run_workflow
-        agent.turn_runner._run_verify = fake_run_verify
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        return response, calls, resumed, verified, events
-
-    response, calls, resumed, verified, events = asyncio.run(scenario())
-
-    assert response.text == "Verification passed: pytest\nCommand: python -m pytest"
-    assert len(calls) == 1
-    assert resumed == [
-        ("implement_then_review", "Please refactor the agent and run tests.", "review"),
-        ("implement_then_review", "Please refactor the agent and run tests.", "implement"),
-    ]
-    assert verified == [
-        ("pytest", ".", ()),
-        ("pytest", ".", ()),
-    ]
-    scheduled = [event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT]
-    assert [event.payload.get("direct_start_step") or event.payload.get("direct_verify_action") for event in scheduled] == [
-        "review",
-        "implement",
-        "pytest",
-        "pytest",
-    ]
-
-
-def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            return ExecutionResult(
-                content="Completed the refactor.",
-                executed_tool_calls=0,
-                task_contract=TaskContract(objective="Please refactor the agent and run tests.", task_type="code_change"),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        return calls, await storage.get_run_events("web:browser-1", run.run_id)
-
-    calls, events = asyncio.run(scenario())
-
-    assert len(calls) == 2
-    assert [event.event_type for event in events].count(AUTO_CONTINUE_SCHEDULED_EVENT) == 1
-    skipped = next(event for event in events if event.event_type == AUTO_CONTINUE_SKIPPED_EVENT)
-    assert skipped.payload["reason"] == NO_PROGRESS_DURING_CONTINUATION_REASON
-    assert skipped.payload["completion_status"] == "incomplete"
-
-
-def test_agent_process_passes_tool_contract_override_to_auto_continue(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        web_contract = TaskContract(
-            objective="Find the OpenRouter API base URL and cite the source.",
-            task_type="web_research",
-            requirements=(EvidenceRequirement(kind="required_tool", tools=("web_search", "web_fetch", "web_research"), min_count=1),),
-            allow_no_tool_final=False,
-            contract_sources=("test",),
-            planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
-        )
-        calls = []
-        completion_calls = 0
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(kwargs)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
-                    executed_tool_calls=1,
-                    task_contract=web_contract,
-                    task_artifacts=(
-                        TaskArtifact(
-                            kind="web_source",
-                            source_tool="web_research",
-                            metadata={
-                                "sources": [
-                                    {
-                                        "title": "OpenRouter docs",
-                                        "url": "https://openrouter.ai/docs",
-                                        "snippet": "API base URL is https://openrouter.ai/api/v1",
-                                        "tool_name": "web_fetch",
-                                        "content_chars": 1200,
-                                        "has_main_content": True,
-                                    }
-                                ]
-                            },
-                        ),
-                    ),
-                )
-            return ExecutionResult(
-                content="OpenRouter API base URL is https://openrouter.ai/api/v1. Source: https://openrouter.ai/docs",
-                executed_tool_calls=0,
-                task_contract=web_contract,
-            )
-
-        async def fake_evaluate_with_verifier(**kwargs):
-            nonlocal completion_calls
-            completion_calls += 1
-            if completion_calls == 1:
-                return CompletionGateResult(
-                    status="incomplete",
-                    reason="research source was gathered but final answer is missing",
-                    missing_evidence=("final answer with cited source",),
-                    progress_only_response=True,
-                )
-            return CompletionGateResult(status="complete", reason="final answer cites gathered source")
-
-        agent.call_llm = fake_call_llm
-        agent.completion_gate.evaluate_with_verifier = fake_evaluate_with_verifier
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        await agent.process(
-            UserMessage(
-                text="Find the OpenRouter API base URL and cite the source.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        return calls
-
-    calls = asyncio.run(scenario())
-
-    assert len(calls) >= 2
-    assert calls[0].get("task_contract_override") is None
-    assert calls[1].get("task_contract_override") is not None
-    assert calls[1]["task_contract_override"].task_type == "web_research"
-
-
-def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        resumed = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="Workflow cancelled.",
-                    executed_tool_calls=1,
-                    workflow_outcomes=(
-                        {
-                            "workflow_run_id": "workflow_abc123",
-                            "workflow": "implement_then_review",
-                            "status": "cancelled",
-                            "summary": "Workflow stopped after 1/2 completed step(s).",
-                            "next_step_id": "review",
-                            "next_step_label": "Code review",
-                            "next_step_prompt_type": "code-reviewer",
-                        },
-                    ),
-                )
-            raise AssertionError("LLM should not be called after a direct workflow resume already completed the task")
-
-        async def fake_run_workflow(workflow, task, start_step=None):
-            resumed.append((workflow, task, start_step))
-            run_id = agent.turn_context.current_run_id()
-            agent.run_update_buffer.record_workflow_outcome(
-                run_id,
-                {
-                    "workflow_run_id": "workflow_resume123",
-                    "workflow": workflow,
-                    "status": "completed",
-                    "completed_steps": 2,
-                    "failed_steps": 0,
-                    "total_steps": 2,
-                    "summary": "Completed 2/2 workflow step(s).",
-                    "review_attempted": True,
-                    "review_passed": True,
-                    "review_finding_count": 0,
-                    "review_summary": "No major findings.",
-                    "verification_attempted": False,
-                    "verification_passed": False,
-                },
-            )
-            return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_workflow = fake_run_workflow
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Please implement the cleanup.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        return response, calls, resumed, events
-
-    response, calls, resumed, events = asyncio.run(scenario())
-
-    assert response.text == "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-    assert resumed == [("implement_then_review", "Please implement the cleanup.", "review")]
-    assert len(calls) == 1
-    scheduled = next(event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT)
-    assert scheduled.payload["direct_workflow"] == "implement_then_review"
-    assert scheduled.payload["direct_start_step"] == "review"
-
-
-def test_agent_process_can_chain_changed_workflow_follow_up_targets(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        resumed = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            if len(calls) == 1:
-                return ExecutionResult(
-                    content="Workflow cancelled.",
-                    executed_tool_calls=1,
-                    workflow_outcomes=(
-                        {
-                            "workflow_run_id": "workflow_initial",
-                            "workflow": "implement_then_review",
-                            "status": "cancelled",
-                            "summary": "Workflow stopped after 1/2 completed step(s).",
-                            "next_step_id": "review",
-                            "next_step_label": "Code review",
-                            "next_step_prompt_type": "code-reviewer",
-                        },
-                    ),
-                )
-            raise AssertionError("LLM should not be called after direct workflow resumes provide enough evidence")
-
-        async def fake_run_workflow(workflow, task, start_step=None):
-            resumed.append((workflow, task, start_step))
-            run_id = agent.turn_context.current_run_id()
-            if start_step == "review":
-                agent.run_update_buffer.record_workflow_outcome(
-                    run_id,
-                    {
-                        "workflow_run_id": "workflow_review_resume",
-                        "workflow": workflow,
-                        "status": "completed",
-                        "completed_steps": 2,
-                        "failed_steps": 0,
-                        "total_steps": 2,
-                        "summary": "Completed 2/2 workflow step(s).",
-                        "review_attempted": True,
-                        "review_passed": False,
-                        "review_finding_count": 1,
-                        "review_summary": "One high-risk bug found.",
-                        "review_first_finding": "src/foo.py: Null handling bug: Guard the null path before dereference.",
-                        "verification_attempted": False,
-                        "verification_passed": False,
-                    },
-                )
-                return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-            agent.run_update_buffer.record_workflow_outcome(
-                run_id,
-                {
-                    "workflow_run_id": "workflow_fix_resume",
-                    "workflow": workflow,
-                    "status": "completed",
-                    "completed_steps": 2,
-                    "failed_steps": 0,
-                    "total_steps": 2,
-                    "summary": "Completed 2/2 workflow step(s).",
-                    "review_attempted": True,
-                    "review_passed": True,
-                    "review_finding_count": 0,
-                    "review_summary": "No major findings.",
-                    "verification_attempted": False,
-                    "verification_passed": False,
-                },
-            )
-            return "Workflow: implement_then_review\nStatus: completed\n[1] implementer | completed\n[2] code-reviewer | completed"
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_workflow = fake_run_workflow
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="Please implement the cleanup.",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        run = next(iter(storage._runs.values()))
-        events = await storage.get_run_events("web:browser-1", run.run_id)
-        return response, calls, resumed, events
-
-    response, calls, resumed, events = asyncio.run(scenario())
-
-    assert response.text == "Workflow: implement_then_review\nStatus: completed\n[1] implementer | completed\n[2] code-reviewer | completed"
-    assert resumed == [
-        ("implement_then_review", "Please implement the cleanup.", "review"),
-        ("implement_then_review", "Please implement the cleanup.", "implement"),
-    ]
-    assert len(calls) == 1
-    scheduled = [event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT]
-    assert [event.payload.get("direct_start_step") for event in scheduled] == ["review", "implement"]
-
-
-def test_agent_process_metadata_resume_follow_up_runs_workflow_before_llm(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        await storage.upsert_work_state(
-            StoredWorkState(
-                session_id="web:browser-1",
-                objective="Please implement the cleanup.",
-                kind="implementation",
-                status="active",
-                steps=("1. inspect relevant code", "2. make the smallest correct change", "3. review the result and finalize"),
-                constraints=(),
-                done_criteria=("requested work is complete",),
-                long_running=True,
-                coding_task=True,
-                expects_code_change=True,
-                expects_verification=False,
-            )
-        )
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        resumed = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            raise AssertionError("LLM should not be called when quick-action workflow resume already completes")
-
-        async def fake_run_workflow(workflow, task, start_step=None):
-            resumed.append((workflow, task, start_step))
-            run_id = agent.turn_context.current_run_id()
-            agent.run_update_buffer.record_workflow_outcome(
-                run_id,
-                {
-                    "workflow_run_id": "workflow_resume_ui",
-                    "workflow": workflow,
-                    "status": "completed",
-                    "completed_steps": 2,
-                    "failed_steps": 0,
-                    "total_steps": 2,
-                    "summary": "Completed 2/2 workflow step(s).",
-                    "review_attempted": True,
-                    "review_passed": True,
-                    "review_finding_count": 0,
-                    "review_summary": "No major findings.",
-                    "verification_attempted": False,
-                    "verification_passed": False,
-                },
-            )
-            return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_workflow = fake_run_workflow
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="continue",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-                metadata={
-                    "quick_action": " resume_follow_up ",
-                    "follow_up_workflow": " implement_then_review ",
-                    "follow_up_step_id": " review ",
-                    "follow_up_step_label": " Code review ",
-                    "follow_up_prompt_type": " code-reviewer ",
-                    "active_task_detail": " Resume with the Code review step in implement_then_review. ",
-                },
-            )
-        )
-
-        return response, calls, resumed
-
-    response, calls, resumed = asyncio.run(scenario())
-
-    assert response.text == "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-    assert resumed == [("implement_then_review", "Please implement the cleanup.", "review")]
-    assert len(calls) == 0
-
-
-def test_agent_process_metadata_run_verification_runs_verify_before_llm(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        calls = []
-        verified = []
-
-        async def fake_call_llm(session_id, current_message, **kwargs):
-            calls.append(current_message)
-            raise AssertionError("LLM should not be called when quick-action verification already completes")
-
-        async def fake_run_verify(action, path, pytest_args=()):
-            verified.append((action, path, tuple(pytest_args)))
-            return ExecutionResult(
-                content="Verification passed: pytest\nCommand: python -m pytest tests/test_ui.py::test_card",
-                executed_tool_calls=1,
-                verification_attempted=True,
-                verification_passed=True,
-            )
-
-        agent.call_llm = fake_call_llm
-        agent.turn_runner._run_verify = fake_run_verify
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        response = await agent.process(
-            UserMessage(
-                text="continue",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-                metadata={
-                    "quick_action": " run_verification ",
-                    "verification_action": " pytest ",
-                    "verification_path": " . ",
-                    "verification_pytest_args": [" tests/test_ui.py::test_card "],
-                },
-            )
-        )
-
-        return response, calls, verified
-
-    response, calls, verified = asyncio.run(scenario())
-
-    assert response.text == "Verification passed: pytest\nCommand: python -m pytest tests/test_ui.py::test_card"
-    assert len(calls) == 0
-    assert verified == [("pytest", ".", ("tests/test_ui.py::test_card",))]
-
-
-def test_agent_process_marks_active_task_done_when_completion_gate_completes(tmp_path):
-    async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
-        storage = FakeStorage()
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        store.write_managed_block(
-            "- Status: active\n"
-            "- Goal: Finish cleanup\n"
-            "- Deliverable: cleanup\n"
-            "- Definition of done:\n"
-            "  - done\n"
-            "- Constraints:\n"
-            "  - none\n"
-            "- Assumptions:\n"
-            "  - none\n"
-            "- Plan:\n"
-            "  1. cleanup\n"
-            "- Current step: 1. cleanup\n"
-            "- Next step: not set\n"
-            "- Completed steps:\n"
-            "  - none\n"
-            "- Open questions:\n"
-            "  - none"
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(
-                content="Implemented the final cleanup successfully.",
-                executed_tool_calls=0,
-                file_change_count=1,
-                touched_paths=("src/cleanup.py",),
-                delegated_tasks=(
-                    StoredDelegatedTask(
-                        task_id="task_review",
-                        prompt_type="code-reviewer",
-                        status="completed",
-                        summary="No major findings.",
-                        metadata={
-                            "structured_output": {
-                                "status": "ok",
-                                "summary": "No major findings.",
-                                "finding_count": 0,
-                            }
-                        },
-                    ),
-                ),
-            )
-
-        agent.call_llm = fake_call_llm
-        await agent.process(
-            UserMessage(
-                text="Please implement the final cleanup.",
-                channel="telegram",
-                external_chat_id="room-1",
-                session_id="telegram:room-1",
-            )
-        )
-        return store.read_managed_block(), store.read_events()
-
-    task_block, events = asyncio.run(scenario())
-
-    assert "- Status: done" in task_block
-    assert any(event["event_type"] == "work_progress" for event in events)
-
-
-def test_agent_process_updates_active_task_with_verification_step_when_work_remains(tmp_path):
-    async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
-        storage = FakeStorage()
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        store.write_managed_block(
-            "- Status: active\n"
-            "- Goal: Finish refactor\n"
-            "- Deliverable: merged refactor\n"
-            "- Definition of done:\n"
-            "  - tests pass\n"
-            "- Constraints:\n"
-            "  - none\n"
-            "- Assumptions:\n"
-            "  - none\n"
-            "- Plan:\n"
-            "  1. inspect\n"
-            "  2. change\n"
-            "  3. verify\n"
-            "- Current step: 2. change\n"
-            "- Next step: 3. verify\n"
-            "- Completed steps:\n"
-            "  - inspect\n"
-            "- Open questions:\n"
-            "  - none"
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(
-                content="Completed the refactor.",
-                executed_tool_calls=1,
-                file_change_count=1,
-                touched_paths=("src/agent.py",),
-                task_contract=TaskContract(
-                    objective="Please refactor the agent and run tests.",
-                    task_type="code_change",
-                    requirements=(
-                        EvidenceRequirement(kind="file_change", min_count=1),
-                        EvidenceRequirement(kind="verification", tools=("verify",), min_count=1),
-                    ),
-                    allow_no_tool_final=False,
-                    contract_sources=("test",),
-                ),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-        await agent.process(
-            UserMessage(
-                text="Please refactor the agent and run tests.",
-                channel="telegram",
-                external_chat_id="room-1",
-                session_id="telegram:room-1",
-            )
-        )
-        return store.read_managed_block(), store.read_events()
-
-    task_block, events = asyncio.run(scenario())
-
-    assert "- Status: active" in task_block
-    assert "- Current step: 3. run focused verification or state the verification gap" in task_block
-    progress_event = next(event for event in reversed(events) if event["event_type"] == "work_progress")
-    assert progress_event["details"]["next_action"] == "stop_budget_exhausted"
-
-
-def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(
-                content="Delegated the implementation task.",
-                executed_tool_calls=1,
-                delegated_tasks=(
-                    StoredDelegatedTask(
-                        task_id="task_abc12345",
-                        prompt_type="implementer",
-                        status="completed",
-                        selected=True,
-                        summary="Delegated the implementation task.",
-                    ),
-                ),
-            )
-
-        agent.call_llm = fake_call_llm
-        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
-
-        await storage.upsert_work_state(
-            StoredWorkState(
-                session_id="web:browser-1",
-                objective="Finish the refactor",
-                kind="task",
-                status="active",
-                steps=("1. inspect", "2. change", "3. verify"),
-                constraints=("Keep the public API stable",),
-                done_criteria=("tests pass",),
-                long_running=True,
-                coding_task=True,
-                expects_code_change=True,
-                expects_verification=True,
-            )
-        )
-        await agent.process(
-            UserMessage(
-                text="continue",
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-            )
-        )
-        return await storage.get_work_state("web:browser-1")
-
-    work_state = asyncio.run(scenario())
-
-    assert work_state is not None
-    assert work_state.objective == "Finish the refactor"
-    assert work_state.active_delegate_task_id == "task_abc12345"
-    assert work_state.active_delegate_prompt_type == "implementer"
-    assert [task.task_id for task in work_state.delegated_tasks] == ["task_abc12345"]
-    assert work_state.resume_hint == "Resume at current step: 2. change"
-
-
-def test_agent_call_llm_uses_read_only_registry_for_planning_contract(tmp_path):
-    async def scenario():
-        class PlanningProvider(FakeProvider):
-            async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-                if _is_planner_call(messages, tools):
-                    return _planner_response("planning")
-                if _is_completion_verifier_call(messages, tools):
-                    return _completion_verifier_response(messages)
-                raise AssertionError("provider.chat should only be called by the planner in this test")
-
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=PlanningProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        captured: dict[str, object] = {}
-
-        async def fake_execute_messages(*args, **kwargs):
-            registry = kwargs.get("tool_registry")
-            captured["tool_names"] = list(registry.tool_names) if registry is not None else None
-            return ExecutionResult(content="planning reply", executed_tool_calls=0)
-
-        agent._execute_messages = fake_execute_messages
-        message = "先規劃不要動手，幫我整理修復方案"
-        await agent.call_llm(
-            "web:browser-1",
-            message,
-            channel="web",
-            allow_tools=True,
-            task_intent=agent.task_intents.classify(message),
-        )
-        return captured
-
-    captured = asyncio.run(scenario())
-
-    assert captured["tool_names"] is not None
-    tool_names = set(captured["tool_names"])
-    assert "read_file" in tool_names
-    assert "write_file" not in tool_names
-    assert "edit_file" not in tool_names
-    assert "apply_patch" not in tool_names
-    assert "exec" not in tool_names
-    assert "verify" not in tool_names
-    assert "delegate" not in tool_names
-
-
-def test_agent_call_llm_returns_to_normal_registry_after_planning_contract(tmp_path):
-    async def scenario():
-        class SequencedPlannerProvider(FakeProvider):
-            def __init__(self):
-                self.task_types = ["planning", "code_change"]
-
-            async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-                if _is_planner_call(messages, tools):
-                    task_type = self.task_types.pop(0) if self.task_types else "code_change"
-                    return _planner_response(task_type)
-                if _is_completion_verifier_call(messages, tools):
-                    return _completion_verifier_response(messages)
-                raise AssertionError("provider.chat should only be called by the planner in this test")
-
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=SequencedPlannerProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        captured: list[set[str]] = []
-
-        async def fake_execute_messages(*args, **kwargs):
-            registry = kwargs.get("tool_registry")
-            if registry is None:
-                captured.append(set(agent.tools.tool_names))
-            else:
-                captured.append(set(registry.tool_names))
-            return ExecutionResult(content="reply", executed_tool_calls=0)
-
-        agent._execute_messages = fake_execute_messages
-        planning_message = "先規劃不要動手，幫我整理修復方案"
-        await agent.call_llm(
-            "web:browser-1",
-            planning_message,
-            channel="web",
-            allow_tools=True,
-            task_intent=agent.task_intents.classify(planning_message),
-        )
-        build_message = "好，現在請直接修掉 tests/test_app.py 的問題"
-        await agent.call_llm(
-            "web:browser-1",
-            build_message,
-            channel="web",
-            allow_tools=True,
-            task_intent=agent.task_intents.classify(build_message),
-        )
-        return captured
-
-    captured = asyncio.run(scenario())
-
-    assert len(captured) == 2
-    planning_tools, normal_tools = captured
-    assert "write_file" not in planning_tools
-    assert "exec" not in planning_tools
-    assert "verify" not in planning_tools
-    assert "read_file" in normal_tools
-    assert "apply_patch" in normal_tools
-    assert "write_file" not in normal_tools
 
 
 def test_agent_process_rejects_overlapping_runs_for_same_session(tmp_path):
@@ -3468,9 +1244,216 @@ def test_agent_process_cancel_request_kills_owned_background_sessions(tmp_path):
     assert session.termination_reason == "killed"
     assert session.owner_session_id == "web:browser-1"
     assert session.owner_run_id is not None
-    cancel_event = next(event for event in events if event.event_type == "run_cancel_requested")
-    assert cancel_event.payload["owned_background_sessions_cancelled"] == 1
-    assert len(cancel_event.payload["owned_background_session_ids"]) == 1
+    event_types = [event.event_type for event in events]
+    assert event_types.index("run_cancel_requested") < event_types.index("run_cancelled")
+
+
+def test_agent_cancel_request_retries_background_cleanup_without_duplicate_event(tmp_path):
+    class FlakyBackgroundProcessManager:
+        def __init__(self):
+            self.calls: list[tuple[str, str | None]] = []
+
+        async def kill_owned_sessions(self, session_id, *, run_id=None):
+            self.calls.append((session_id, run_id))
+            if len(self.calls) == 1:
+                raise RuntimeError("background cleanup interrupted")
+            return []
+
+    async def scenario():
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=MemoryStorage(),
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(
+                **{**Config.load_template_data()["user_profile"], "enabled": False}
+            ),
+            recent_summary_config=RecentSummaryConfig(
+                **{**Config.load_template_data()["recent_summary"], "enabled": False}
+            ),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        manager = FlakyBackgroundProcessManager()
+        agent.background_process_manager = manager
+        emitted_events: list[str] = []
+
+        async def record_event(_session_id, _run_id, event_type, _payload, **_kwargs):
+            emitted_events.append(event_type)
+
+        agent._emit_run_event = record_event
+        agent.run_state.start("web:browser-1", "run-1")
+
+        accepted = await agent.request_run_cancel("web:browser-1", "run-1")
+        return accepted, manager.calls, emitted_events
+
+    accepted, calls, emitted_events = asyncio.run(scenario())
+
+    assert accepted is True
+    assert calls == [
+        ("web:browser-1", "run-1"),
+        ("web:browser-1", "run-1"),
+    ]
+    assert emitted_events == ["run_cancel_requested"]
+
+
+def test_agent_cancel_request_finishes_background_cleanup_when_caller_is_cancelled(tmp_path):
+    class BlockingBackgroundProcessManager:
+        def __init__(self):
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+            self.completed = False
+
+        async def kill_owned_sessions(self, _session_id, *, run_id=None):
+            assert run_id == "run-1"
+            self.started.set()
+            await self.release.wait()
+            self.completed = True
+            return []
+
+    async def scenario():
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=MemoryStorage(),
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(
+                **{**Config.load_template_data()["user_profile"], "enabled": False}
+            ),
+            recent_summary_config=RecentSummaryConfig(
+                **{**Config.load_template_data()["recent_summary"], "enabled": False}
+            ),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        manager = BlockingBackgroundProcessManager()
+        agent.background_process_manager = manager
+        agent.run_state.start("web:browser-1", "run-1")
+
+        request = asyncio.create_task(agent.request_run_cancel("web:browser-1", "run-1"))
+        await manager.started.wait()
+        request.cancel()
+        manager.release.set()
+        try:
+            await request
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("cancel request did not preserve caller cancellation")
+        return manager.completed
+
+    assert asyncio.run(scenario()) is True
+
+
+def test_agent_cancel_request_starts_background_cleanup_before_event_failure(tmp_path):
+    class RecordingBackgroundProcessManager:
+        def __init__(self):
+            self.completed = asyncio.Event()
+
+        async def kill_owned_sessions(self, _session_id, *, run_id=None):
+            assert run_id == "run-1"
+            self.completed.set()
+            return []
+
+    async def scenario():
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=MemoryStorage(),
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(
+                **{**Config.load_template_data()["user_profile"], "enabled": False}
+            ),
+            recent_summary_config=RecentSummaryConfig(
+                **{**Config.load_template_data()["recent_summary"], "enabled": False}
+            ),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        manager = RecordingBackgroundProcessManager()
+        agent.background_process_manager = manager
+        agent.run_state.start("web:browser-1", "run-1")
+
+        async def failing_event(*_args, **_kwargs):
+            raise RuntimeError("event transport unavailable")
+
+        agent._emit_run_event = failing_event
+        accepted = await agent.request_run_cancel("web:browser-1", "run-1")
+        await asyncio.wait_for(manager.completed.wait(), timeout=1)
+        return accepted, manager.completed.is_set()
+
+    assert asyncio.run(scenario()) == (True, True)
+
+
+def test_agent_cancel_request_does_not_orphan_cleanup_when_event_publish_is_cancelled(tmp_path):
+    class RecordingBackgroundProcessManager:
+        def __init__(self):
+            self.completed = asyncio.Event()
+
+        async def kill_owned_sessions(self, _session_id, *, run_id=None):
+            assert run_id == "run-1"
+            self.completed.set()
+            return []
+
+    async def scenario():
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=MemoryStorage(),
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(
+                **{**Config.load_template_data()["user_profile"], "enabled": False}
+            ),
+            recent_summary_config=RecentSummaryConfig(
+                **{**Config.load_template_data()["recent_summary"], "enabled": False}
+            ),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        manager = RecordingBackgroundProcessManager()
+        agent.background_process_manager = manager
+        agent.run_state.start("web:browser-1", "run-1")
+        event_started = asyncio.Event()
+        event_release = asyncio.Event()
+
+        async def blocking_event(*_args, **_kwargs):
+            event_started.set()
+            await event_release.wait()
+
+        agent._emit_run_event = blocking_event
+        request = asyncio.create_task(agent.request_run_cancel("web:browser-1", "run-1"))
+        await asyncio.wait_for(event_started.wait(), timeout=1)
+        await asyncio.wait_for(manager.completed.wait(), timeout=1)
+        request.cancel()
+        try:
+            await request
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("cancel request did not preserve caller cancellation")
+
+        event_release.set()
+        if agent._run_cancel_event_tasks:
+            await asyncio.gather(*tuple(agent._run_cancel_event_tasks))
+        return manager.completed.is_set()
+
+    assert asyncio.run(scenario()) is True
 
 
 def test_agent_process_returns_queued_outbound_media(tmp_path):
@@ -3506,7 +1489,6 @@ def test_agent_process_returns_queued_outbound_media(tmp_path):
         agent._maybe_consolidate_memory = fake_maintenance
         agent._maybe_update_recent_summary = fake_maintenance
         agent._maybe_update_user_profile = fake_maintenance
-        agent._maybe_update_active_task = fake_maintenance
 
         response = await agent.process(
             UserMessage(
@@ -3529,193 +1511,6 @@ def test_agent_process_returns_queued_outbound_media(tmp_path):
     assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
 
 
-def test_mark_active_task_status_updates_processed_index_for_terminal_states(tmp_path):
-    async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
-        storage = HistoryStorage(
-            [
-                StoredMessage(role="user", content="first", timestamp=1.0),
-                StoredMessage(role="assistant", content="second", timestamp=2.0),
-                StoredMessage(role="user", content="third", timestamp=3.0),
-            ]
-        )
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        store.write_managed_block(
-            "- Status: active\n"
-            "- Goal: Keep going\n"
-            "- Deliverable: output\n"
-            "- Definition of done:\n"
-            "  - done\n"
-            "- Constraints:\n"
-            "  - none\n"
-            "- Assumptions:\n"
-            "  - none\n"
-            "- Plan:\n"
-            "  1. inspect\n"
-            "- Current step: 1. inspect\n"
-            "- Next step: 2. verify\n"
-            "- Completed steps:\n"
-            "  - none\n"
-            "- Open questions:\n"
-            "  - none"
-        )
-
-        rendered = await agent.mark_active_task_status("telegram:room-1", "done")
-        return rendered, store.get_processed_index("telegram:room-1")
-
-    rendered, processed_index = asyncio.run(scenario())
-
-    assert rendered is not None
-    assert "- Status: done" in rendered
-    assert processed_index == 3
-
-
-def test_process_moves_active_task_to_waiting_user_when_reply_requests_missing_info(tmp_path):
-    async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
-        storage = FakeStorage()
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        store.write_managed_block(
-            "- Status: active\n"
-            "- Goal: Finish the refactor\n"
-            "- Deliverable: merged refactor\n"
-            "- Definition of done:\n"
-            "  - tests pass\n"
-            "- Constraints:\n"
-            "  - none\n"
-            "- Assumptions:\n"
-            "  - none\n"
-            "- Plan:\n"
-            "  1. inspect\n"
-            "- Current step: 2. apply the fix\n"
-            "- Next step: 3. verify\n"
-            "- Completed steps:\n"
-            "  - inspect\n"
-            "- Open questions:\n"
-            "  - none"
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(content="請問你要用哪個 target branch？", executed_tool_calls=0)
-
-        agent.call_llm = fake_call_llm
-        await agent.process(
-            UserMessage(
-                text="繼續做",
-                channel="telegram",
-                external_chat_id="room-1",
-                session_id="telegram:room-1",
-            )
-        )
-        return store.read_managed_block()
-
-    task_block = asyncio.run(scenario())
-
-    assert "- Status: waiting_user" in task_block
-    assert "請問你要用哪個 target branch？" in task_block
-
-
-def test_process_moves_active_task_to_blocked_when_reply_reports_blocking_error(tmp_path):
-    async def scenario():
-        registry = ToolRegistry()
-        registry.register(DummyTool())
-        storage = FakeStorage()
-        context_builder = FakeContextBuilder(tmp_path)
-        context_builder.app_home = tmp_path / "home"
-        context_builder.tool_workspace = tmp_path / "workspace"
-
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=context_builder,
-            tools=registry,
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-
-        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
-        store.write_managed_block(
-            "- Status: active\n"
-            "- Goal: Finish the refactor\n"
-            "- Deliverable: merged refactor\n"
-            "- Definition of done:\n"
-            "  - tests pass\n"
-            "- Constraints:\n"
-            "  - none\n"
-            "- Assumptions:\n"
-            "  - none\n"
-            "- Plan:\n"
-            "  1. inspect\n"
-            "- Current step: 3. verify\n"
-            "- Next step: not set\n"
-            "- Completed steps:\n"
-            "  - inspect\n"
-            "  - apply fix\n"
-            "- Open questions:\n"
-            "  - none"
-        )
-
-        async def fake_call_llm(*args, **kwargs):
-            return ExecutionResult(content="目前無法繼續，測試環境失敗。", executed_tool_calls=1, had_tool_error=True)
-
-        agent.call_llm = fake_call_llm
-        await agent.process(
-            UserMessage(
-                text="繼續驗證",
-                channel="telegram",
-                external_chat_id="room-1",
-                session_id="telegram:room-1",
-            )
-        )
-        return store.read_managed_block()
-
-    task_block = asyncio.run(scenario())
-
-    assert "- Status: blocked" in task_block
-    assert "目前無法繼續，測試環境失敗。" in task_block
 
 
 def test_background_session_exit_notifier_queues_agent_summary_request(tmp_path):
@@ -3829,7 +1624,6 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
         refresh_system_prompt=None,
         max_tool_iterations=None,
         should_cancel=None,
-        work_state_summary="",
     ):
         captured["messages"] = list(chat_messages)
         return ExecutionResult(content="ok", executed_tool_calls=0, used_configure_skill=False)

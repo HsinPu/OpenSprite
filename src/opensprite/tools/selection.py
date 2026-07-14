@@ -1,4 +1,4 @@
-"""Tool selection resolution for task-required tools."""
+"""Explicit tool-registry overlays used by isolated subagent profiles."""
 
 from __future__ import annotations
 
@@ -19,27 +19,7 @@ class ToolSelectionResolution:
 
 
 class ToolSelectionResolver:
-    """Resolve task-required tools and explicit tool subsets into executable registries."""
-
-    def resolve_required_tools(
-        self,
-        base_registry: ToolRegistry,
-        required_tools: Any,
-        *,
-        metadata_kind: str = "task_contract_required_tools",
-    ) -> ToolSelectionResolution:
-        """Return a registry containing only task-required tools that are registered."""
-        required_tool_names = _normalize_required_tool_names(required_tools)
-        registry = base_registry.filtered(include_names=set(required_tool_names), exposed_only=True)
-        _ensure_batch_tool(registry)
-        metadata = _selection_metadata(
-            base_registry,
-            registry,
-            required_tool_names,
-            metadata_kind=metadata_kind,
-        )
-        registry.tool_selection_metadata = metadata
-        return ToolSelectionResolution(registry=registry, metadata=metadata)
+    """Resolve an explicit tool subset into an executable registry."""
 
     def resolve_overlay(
         self,
@@ -91,27 +71,6 @@ def _selection_metadata(
         "tool_selection": tool_selection,
         "blocked_required_tools": missing_required_tools,
     }
-
-
-def _normalize_required_tool_names(required_tools: Any) -> tuple[str, ...]:
-    if required_tools is None:
-        return ()
-    if isinstance(required_tools, str):
-        values = [required_tools]
-    else:
-        try:
-            values = list(required_tools)
-        except TypeError:
-            return ()
-    names: list[str] = []
-    seen: set[str] = set()
-    for value in values:
-        name = str(value or "").strip()
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        names.append(name)
-    return tuple(names)
 
 
 def _missing_required_tool_metadata(

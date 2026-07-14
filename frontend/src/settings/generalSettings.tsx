@@ -13,7 +13,7 @@ import type { SettingsForm, UpdateStatusView } from "../composables/useSettingsS
 import { SettingsCard, SettingsRow, SettingsSectionTitle, SettingsStatus } from "./settingsPrimitives";
 
 type ValueRef<T> = { value: T };
-type RunPanelKey = "showWorkState" | "showRunHistory" | "showRunTimeline" | "showRunSummary" | "showRunTrace";
+type RunPanelKey = "showRunHistory" | "showRunTimeline" | "showRunSummary" | "showRunTrace";
 
 type SettingsCopyText = {
   title?: string;
@@ -48,7 +48,6 @@ type UpdateCopy = SettingsCopyText & {
 
 type GeneralSettingsCopyView = {
   language?: SettingsOptionCopy;
-  workState?: SettingsCopyText;
   runHistory?: SettingsCopyText;
   runTimeline?: SettingsCopyText;
   runSummary?: SettingsCopyText;
@@ -139,7 +138,6 @@ export function GeneralSettings({ client, clearWebSessions }: { client: GeneralS
     return general.update?.current || "Current";
   })();
   const runPanelRows: RunPanelRow[] = [
-    ["showWorkState", general.workState, form.showWorkState],
     ["showRunHistory", general.runHistory, form.showRunHistory],
     ["showRunTimeline", general.runTimeline, form.showRunTimeline],
     ["showRunSummary", general.runSummary, form.showRunSummary],

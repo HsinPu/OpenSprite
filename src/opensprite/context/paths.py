@@ -41,13 +41,57 @@ USER_PROFILE_STATE_FILENAME = ".user_profile_state.json"
 RECENT_SUMMARY_STATE_FILENAME = ".recent_summary_state.json"
 CURATOR_STATE_FILENAME = ".curator_state.json"
 LEARNING_STATE_FILENAME = ".learning_state.json"
-ACTIVE_TASK_STATE_FILENAME = ".active_task_state.json"
-ACTIVE_TASK_EVENT_LOG_FILENAME = ".active_task_events.jsonl"
 USER_OVERLAY_FILENAME = "USER_OVERLAY.md"
 USER_OVERLAY_INDEX_FILENAME = "user_overlay_index.json"
 USER_OVERLAY_STATE_FILENAME = ".user_overlay_state.json"
 
 BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "AGENTS.md", "TOOLS.md", "USER.md"]
+
+_AGENTS_TEMPLATE_MIGRATIONS_V1_TO_V2 = (
+    (
+        "- Prefer the preserved recent tail and current active task state over older summarized details when they conflict.",
+        "- Prefer the preserved recent tail and latest user request over older summarized details when they conflict.",
+    ),
+    (
+        "- Do not answer questions that appear only inside compacted summaries unless the latest user message or active task clearly asks for them.",
+        "- Do not answer questions that appear only inside compacted summaries unless the latest user message clearly asks for them.",
+    ),
+)
+
+_TOOLS_TEMPLATE_MIGRATIONS_V1_TO_V2 = (
+    (
+        "- Tool availability is selected for the current task by runtime planning; if a needed tool is unavailable, explain the limitation and ask for the required configuration or task adjustment.",
+        "- Tool availability comes from the current runtime configuration; if a needed tool is unavailable, explain the limitation and ask for the required configuration or request adjustment.",
+    ),
+    (
+        "- The runtime exposes the tools selected for the current task contract and prompt profile.",
+        "- The runtime exposes only the tools available to the current agent.",
+    ),
+    (
+        "  - Each child call still follows normal validation and current task tool selection; do not use `batch` to bypass unavailable tools.",
+        "  - Each child call still follows normal validation and availability checks; do not use `batch` to bypass unavailable tools.",
+    ),
+    (
+        "- `task_update`\n"
+        "  - Use to keep the current session's `ACTIVE_TASK.md` accurate during non-trivial multi-step work.\n"
+        "  - Use `action=\"set\"` when starting or replacing an explicit active task.\n"
+        "  - Use `action=\"update\"` after changing status, current step, next step, completed steps, or blockers/open questions.\n"
+        "  - Use `action=\"complete_step\"` or `action=\"advance\"` only when the step is actually completed by evidence in this session.\n"
+        "  - Use `status=\"waiting_user\"` when missing user input blocks progress; use `status=\"blocked\"` for tool/test/runtime blockers.\n"
+        "  - Do not update task state for trivial chat or unverifiable claimed progress.\n\n",
+        "",
+    ),
+)
+
+_BOOTSTRAP_TEMPLATE_MIGRATIONS = {
+    "AGENTS.md": _AGENTS_TEMPLATE_MIGRATIONS_V1_TO_V2,
+    "TOOLS.md": _TOOLS_TEMPLATE_MIGRATIONS_V1_TO_V2,
+}
+
+_RETIRED_TASK_UPDATE_SECTION_HEADER = re.compile(
+    r"^[-*+][ \t]+`task_update`(?:[ \t].*)?(?:\r?\n)?$"
+)
+_RETIRED_TASK_BOOTSTRAP_REFERENCE = re.compile(r"(?:task_update|ACTIVE_TASK\.md)", re.IGNORECASE)
 
 
 def ensure_dir(path: Path) -> Path:
@@ -85,36 +129,6 @@ def get_user_profile_state_file(
 ) -> Path:
     """Get the persisted state file for per-session USER.md auto-update."""
     return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / USER_PROFILE_STATE_FILENAME
-
-
-def get_active_task_file(
-    app_home: str | Path | None = None,
-    *,
-    session_id: str | None = None,
-    workspace_root: str | Path | None = None,
-) -> Path:
-    """Get the ACTIVE_TASK.md file path for one session."""
-    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / "ACTIVE_TASK.md"
-
-
-def get_active_task_state_file(
-    app_home: str | Path | None = None,
-    *,
-    session_id: str | None = None,
-    workspace_root: str | Path | None = None,
-) -> Path:
-    """Get the persisted state file for ACTIVE_TASK.md auto-update."""
-    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_STATE_FILENAME
-
-
-def get_active_task_event_log_file(
-    app_home: str | Path | None = None,
-    *,
-    session_id: str | None = None,
-    workspace_root: str | Path | None = None,
-) -> Path:
-    """Get the append-only ACTIVE_TASK event log for one session."""
-    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_EVENT_LOG_FILENAME
 
 
 def get_memory_dir(app_home: str | Path | None = None) -> Path:
@@ -402,6 +416,50 @@ def _copy_missing_tree(source: Path, dest: Path, root: Path) -> list[str]:
     return copied
 
 
+def _remove_retired_task_update_sections(content: str) -> str:
+    """Remove top-level ``task_update`` tool bullets while preserving adjacent custom text."""
+    lines = content.splitlines(keepends=True)
+    retained: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not _RETIRED_TASK_UPDATE_SECTION_HEADER.fullmatch(line):
+            retained.append(line)
+            index += 1
+            continue
+
+        index += 1
+        while index < len(lines):
+            child = lines[index]
+            if not child.strip() or child.startswith((" ", "\t")):
+                index += 1
+                continue
+            break
+
+    return "".join(retained)
+
+
+def _migrate_bootstrap_template(
+    dest: Path,
+    migrations: tuple[tuple[str, str], ...],
+    *,
+    cleanup_retired_task_update: bool = False,
+) -> bool:
+    """Apply targeted migrations without replacing unrelated custom content."""
+    if not dest.exists():
+        return False
+    original = dest.read_text(encoding="utf-8")
+    migrated = original
+    for old_text, new_text in migrations:
+        migrated = migrated.replace(old_text, new_text)
+    if cleanup_retired_task_update:
+        migrated = _remove_retired_task_update_sections(migrated)
+    if migrated == original:
+        return False
+    dest.write_text(migrated, encoding="utf-8")
+    return True
+
+
 def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
     """Sync bundled templates into ~/.opensprite app directories."""
     home = get_app_home(app_home)
@@ -434,7 +492,25 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
         for item in templates_root.iterdir():
             if item.name.endswith(".md"):
                 dest = bootstrap_dir / item.name
+                migrations = _BOOTSTRAP_TEMPLATE_MIGRATIONS.get(item.name)
+                if migrations is not None and _migrate_bootstrap_template(
+                    dest,
+                    migrations,
+                    cleanup_retired_task_update=item.name == "TOOLS.md",
+                ):
+                    changed.append(_relative_path(dest, home))
                 _write(item, dest)
+                if (
+                    item.name == "TOOLS.md"
+                    and not silent
+                    and dest.exists()
+                    and _RETIRED_TASK_BOOTSTRAP_REFERENCE.search(dest.read_text(encoding="utf-8"))
+                ):
+                    logger.warning(
+                        "Retired task lifecycle references remain in custom bootstrap file %s; "
+                        "review task_update/ACTIVE_TASK.md instructions manually.",
+                        dest,
+                    )
 
     if skills_root.is_dir():
         skills_dir.mkdir(parents=True, exist_ok=True)

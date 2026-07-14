@@ -9,19 +9,18 @@ from typing import Any
 import typer
 
 from ..runs.schema import (
+    sanitize_run_metadata,
     serialize_diff_summary,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_events,
-    serialize_run_part,
+    serialize_run_parts,
     serialize_run_summary,
+    visible_run_events,
+    visible_run_parts,
 )
 from .commands_chat import _json_for_stdout
 from .commands_chat_smoke import DEFAULT_SESSIONS_DB_PATH, load_trace_readonly, summarize_trace
-
-
-def _text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def _run_payload(trace: Any) -> dict[str, Any]:
@@ -33,7 +32,7 @@ def _run_payload(trace: Any) -> dict[str, Any]:
         "created_at": run.created_at,
         "updated_at": run.updated_at,
         "finished_at": run.finished_at,
-        "metadata": dict(run.metadata or {}),
+        "metadata": sanitize_run_metadata(dict(run.metadata or {})),
     }
 
 
@@ -41,6 +40,8 @@ def trace_payload(trace: Any, *, full: bool = False) -> dict[str, Any]:
     """Return a script-friendly trace payload."""
     summary = serialize_run_summary(trace)
     compact = summarize_trace(trace)
+    compact["event_count"] = len(visible_run_events(trace.events))
+    compact["part_count"] = len(visible_run_parts(trace.parts))
     payload: dict[str, Any] = {
         "ok": True,
         "run": _run_payload(trace),
@@ -51,7 +52,7 @@ def trace_payload(trace: Any, *, full: bool = False) -> dict[str, Any]:
         payload.update(
             {
                 "events": serialize_run_events(trace.events),
-                "parts": [serialize_run_part(part) for part in trace.parts],
+                "parts": serialize_run_parts(trace.parts),
                 "file_changes": [serialize_file_change(change) for change in trace.file_changes],
                 "diff_summary": serialize_diff_summary(trace),
                 "artifacts": serialize_run_artifacts(trace),
@@ -76,12 +77,6 @@ def _render_text(payload: dict[str, Any]) -> None:
         f"files={trace.get('file_change_count', 0)} "
         f"tools={trace.get('tool_count', 0)}"
     )
-    typer.echo(f"Profile: {_text(trace.get('profile')) or '-'}")
-    typer.echo(f"Contract: {_text(trace.get('contract')) or '-'}")
-    typer.echo(f"Completion: {_text(trace.get('completion_status')) or '-'}")
-    reason = _text(trace.get("completion_reason"))
-    if reason:
-        typer.echo(f"Reason: {reason}")
     typer.echo(f"Tools: {tools}")
     typer.echo(f"Warnings: {warnings}")
 

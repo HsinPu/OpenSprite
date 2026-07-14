@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile", "active_task")
+CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile")
 CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
 
 

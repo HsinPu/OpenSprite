@@ -1,1 +1,0 @@
-"""Completion gate support modules."""

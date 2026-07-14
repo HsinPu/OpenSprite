@@ -22,6 +22,21 @@ from ..utils.processes import terminate_process_tree
 WorkspaceResolver = Callable[[], Path]
 BackgroundNotificationFactory = Callable[[], SessionExitNotifier | None]
 BackgroundSessionOwnerFactory = Callable[[], dict[str, str | None] | None]
+_CANCEL_CLEANUP_TASKS: set[asyncio.Task[None]] = set()
+
+
+def _track_cancel_cleanup(task: asyncio.Task[None]) -> None:
+    """Keep cancellation cleanup alive if the caller is cancelled again."""
+    _CANCEL_CLEANUP_TASKS.add(task)
+
+    def _consume_result(completed: asyncio.Task[None]) -> None:
+        _CANCEL_CLEANUP_TASKS.discard(completed)
+        try:
+            completed.result()
+        except BaseException:
+            pass
+
+    task.add_done_callback(_consume_result)
 
 
 def _resolve_workspace_root(workspace: Path) -> Path:
@@ -678,17 +693,37 @@ class ExecTool(Tool):
 
     async def _handle_completed_process(
         self,
+        process: asyncio.subprocess.Process,
         read_tasks: list[asyncio.Task[None]],
         output_chunks: list[CapturedOutputChunk],
         *,
         timeout_seconds: int,
     ) -> str:
         drain_timeout = self._output_drain_timeout(timeout_seconds)
+        # The shell leader may exit after spawning descendants whose stdio is
+        # inherited.  Finalize the managed group/job before waiting for those
+        # descendants to close the command's output pipes.
+        await terminate_process_tree(process)
         drained = await drain_process_output(read_tasks, timeout=drain_timeout)
         output = format_captured_output(output_chunks)
         if not drained:
             return _build_pipe_drain_warning_result(output, drain_timeout=drain_timeout)
         return output
+
+    async def _cleanup_cancelled_process(
+        self,
+        process: asyncio.subprocess.Process | None,
+        read_tasks: list[asyncio.Task[None]],
+        *,
+        timeout_seconds: int,
+    ) -> None:
+        if process is not None:
+            await terminate_process_tree(process)
+        if read_tasks:
+            await drain_process_output(
+                read_tasks,
+                timeout=self._output_drain_timeout(timeout_seconds),
+            )
 
     def _start_background_session(
         self,
@@ -842,7 +877,7 @@ class ExecTool(Tool):
                 wait_timeout = min(float(timeout_seconds), yield_timeout_seconds)
                 started_at = asyncio.get_running_loop().time()
                 try:
-                    await asyncio.wait_for(process.wait(), timeout=wait_timeout)
+                    await asyncio.wait_for(asyncio.shield(process.wait()), timeout=wait_timeout)
                 except asyncio.TimeoutError:
                     elapsed = asyncio.get_running_loop().time() - started_at
                     if timeout_was_supplied and elapsed >= float(timeout_seconds):
@@ -870,13 +905,17 @@ class ExecTool(Tool):
                     )
 
                 return await self._handle_completed_process(
+                    process,
                     read_tasks,
                     output_chunks,
                     timeout_seconds=timeout_seconds,
                 )
 
             try:
-                await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
+                # Preserve the subprocess transport's exit waiter when this
+                # tool task is cancelled so terminate_process_tree can still
+                # finish cleanup reliably, especially on Windows.
+                await asyncio.wait_for(asyncio.shield(process.wait()), timeout=timeout_seconds)
             except asyncio.TimeoutError:
                 return await self._handle_timed_out_process(
                     process,
@@ -886,19 +925,27 @@ class ExecTool(Tool):
                 )
 
             return await self._handle_completed_process(
+                process,
                 read_tasks,
                 output_chunks,
                 timeout_seconds=timeout_seconds,
             )
-        except asyncio.CancelledError:
-            if process is not None:
-                await terminate_process_tree(process)
-            if read_tasks:
-                await drain_process_output(
+        except asyncio.CancelledError as cancel_error:
+            cleanup_task = asyncio.create_task(
+                self._cleanup_cancelled_process(
+                    process,
                     read_tasks,
-                    timeout=self._output_drain_timeout(timeout_seconds),
+                    timeout_seconds=timeout_seconds,
                 )
-            raise
+            )
+            _track_cancel_cleanup(cleanup_task)
+            try:
+                await asyncio.shield(cleanup_task)
+            except (asyncio.CancelledError, Exception):
+                # A repeated cancel or cleanup failure must not replace the
+                # original cancellation.  The tracked task keeps running.
+                pass
+            raise cancel_error
         except Exception as e:
             return tool_error_result(
                 str(e),

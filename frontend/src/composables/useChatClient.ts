@@ -4,7 +4,6 @@ import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
 import {
   coerceBoolean,
-  coerceFiniteNumber as numericField,
   coerceNonNegativeInteger,
   coerceStringList,
   coerceText as textField,
@@ -37,17 +36,10 @@ import {
 } from "./chatClientCronPayloads";
 import {
   toLiveRunEventPayloadSource,
-  toNestedWorkProgressPayload,
   toRunPartDeltaPayload,
-  toTaskEventPlannerMetadata,
-  type CompletionGateWorkStatePayload,
   type LiveRunEventPayloadSource,
   type RunEventPayloadInput,
   type RunPartDeltaPayload,
-  type TaskEventPayload,
-  type TaskEventPlannerMetadata,
-  type WorkPlanStatePayload,
-  type WorkProgressStatePayload,
 } from "./chatClientEventPayloads";
 import {
   parseLiveSocketMessage,
@@ -127,7 +119,6 @@ import {
 import { randomToken } from "./chatClientTokens";
 import {
   createRunViewState,
-  formatAutoContinueDetail,
   formatRunFinishDetail,
   formatSubagentDetail,
   formatSubagentGroupDetail,
@@ -135,7 +126,6 @@ import {
   formatWorkflowStepDetail,
   isRunSummaryTriggerEventType,
   isTerminalRunStatus,
-  normalizeAutoContinueDetail,
   normalizeRunFinishDetail,
   normalizeRunTimelinePayload,
   normalizeSubagentDetail,
@@ -150,6 +140,21 @@ import {
   shortRunId,
   statusFromRunEvent,
 } from "./chatClientRunHelpers";
+import {
+  beginRequestGeneration,
+  captureRunTraceWatermark,
+  createSessionHistoryRefreshQueue,
+  createSessionSnapshotFence,
+  enqueueSessionHistoryRefresh,
+  fileChangesRepresentSameOccurrence,
+  isCurrentRequestGeneration,
+  mergeFreshSessionSnapshot,
+  mergeMonotonicRunStatus,
+  mergeRunTraceSnapshot,
+  takePendingSessionHistoryRefresh,
+  type SessionHistoryRefreshRequest,
+  type SessionSnapshotFence,
+} from "./chatClientStateMerges";
 import {
   toRunFileChangeRevertPayload,
   toRunsPayload,
@@ -168,6 +173,7 @@ import {
   type RunSummaryView,
 } from "./runSummaryNormalizers";
 import {
+  applyWorktreeCleanupEvent,
   compactRunEvents,
   findWorktreeSandbox,
   inferRunEventKind,
@@ -178,7 +184,7 @@ import {
   normalizeTraceEventArtifact,
   normalizeTracePart,
   normalizeTracePartMetadata,
-  normalizeWorkState,
+  preserveKnownRemovedWorktreeSandbox,
   type BackgroundProcessEventPayload,
   type RunArtifactMetadata,
   type RunArtifactView,
@@ -195,7 +201,6 @@ import { createSettingsForm, createSettingsState, type CronJobView } from "./use
 type DisplayCopy = ReturnType<typeof getDisplayCopy>;
 type RunEventDescription = { label: string; detail: string; tone: RunTimelineTone };
 type RunEventPayloadView = {
-  classificationReason: string;
   message: string;
   toolName: string;
   argsPreview: string;
@@ -214,27 +219,6 @@ type RunEventPayloadView = {
   status: string;
   error: string;
 };
-type TaskEventDetailView = {
-  method: string;
-  continuationType: string;
-  inheritedTaskType: string;
-  isFollowUp: boolean;
-  shouldInheritActiveTask: boolean;
-  shouldReplaceActiveTask: boolean;
-  shouldSeedActiveTask: boolean;
-  confidence: number | null;
-  reason: string;
-  resolvedObjective: string;
-  shouldUseResolvedObjective: boolean | null;
-  taskType: string;
-  plannerStatus: string;
-  contractReason: string;
-  contractSources: string[];
-  requiredTools: string[];
-  missingEvidence: string[];
-  activeTaskDetail: string;
-  status: string;
-};
 type CurrentRunSummaryView = {
   shortId: string;
   statusLabel: string;
@@ -245,10 +229,14 @@ type ReconnectNotice = string | ((seconds: number) => string);
 
 type EnsureSessionOptions = { allowDeleted?: boolean };
 type LoadRunsOptions = { force?: boolean };
-type MergeHistorySessionOptions = { preserveDetails?: boolean };
+type MergeHistorySessionOptions = {
+  preserveDetails?: boolean;
+  changedSinceRequest?: boolean;
+};
 type MergeHistorySessionsOptions = {
   preserveActiveSession?: boolean;
   pruneMissingHistorySessions?: boolean;
+  sessionRevisionWatermark?: ReadonlyMap<string, number>;
 };
 type LoadSessionHistoryOptions = {
   quiet?: boolean;
@@ -321,7 +309,6 @@ type ChatClientState = {
   wsUrl: string;
   accessToken: string;
   displayName: string;
-  showWorkState: boolean;
   showRunHistory: boolean;
   showRunTimeline: boolean;
   showRunSummary: boolean;
@@ -372,45 +359,6 @@ type RunPartDeltaView = {
   metadata: TracePartMetadata;
   createdAt: number;
 };
-type SessionWorkStateView = NonNullable<ChatSession["workState"]>;
-type SessionWorkStateUpdateField =
-  | "objective"
-  | "kind"
-  | "status"
-  | "steps"
-  | "constraints"
-  | "doneCriteria"
-  | "longRunning"
-  | "codingTask"
-  | "expectsCodeChange"
-  | "expectsVerification"
-  | "currentStep"
-  | "nextStep"
-  | "pendingSteps"
-  | "followUpWorkflow"
-  | "followUpStepId"
-  | "followUpStepLabel"
-  | "followUpPromptType"
-  | "verificationAction"
-  | "verificationPath"
-  | "verificationPytestArgs"
-  | "activeTaskDetail"
-  | "fileChangeCount"
-  | "touchedPaths"
-  | "verificationAttempted"
-  | "verificationPassed"
-  | "lastNextAction"
-  | "lastProgressSignals";
-type SessionWorkStateUpdate = Pick<SessionWorkStateView, "updatedAt">
-  & Partial<Pick<SessionWorkStateView, SessionWorkStateUpdateField>>;
-function optionalBooleanField(...values: unknown[]): boolean | null {
-  for (const value of values) {
-    if (value !== undefined && value !== null && value !== "") {
-      return coerceBoolean(value);
-    }
-  }
-  return null;
-}
 
 function normalizeSessionClearPayload(payload: SessionClearPayload | null): SessionClearResult {
   return {
@@ -537,68 +485,6 @@ function normalizeLiveAssistantMessage(
   };
 }
 
-function normalizeCompletionGateWorkStateUpdate(
-  payload: CompletionGateWorkStatePayload,
-  fallback: SessionWorkStateView,
-  createdAt: number,
-): SessionWorkStateUpdate {
-  const verificationPytestArgs = coerceStringList(payload.verification_pytest_args || payload.verificationPytestArgs);
-  return {
-    followUpWorkflow: textField(payload.follow_up_workflow || payload.followUpWorkflow) || fallback.followUpWorkflow,
-    followUpStepId: textField(payload.follow_up_step_id || payload.followUpStepId) || fallback.followUpStepId,
-    followUpStepLabel: textField(payload.follow_up_step_label || payload.followUpStepLabel) || fallback.followUpStepLabel,
-    followUpPromptType: textField(payload.follow_up_prompt_type || payload.followUpPromptType) || fallback.followUpPromptType,
-    verificationAction: textField(payload.verification_action || payload.verificationAction) || fallback.verificationAction,
-    verificationPath: textField(payload.verification_path || payload.verificationPath) || fallback.verificationPath,
-    verificationPytestArgs: verificationPytestArgs.length ? verificationPytestArgs : fallback.verificationPytestArgs,
-    activeTaskDetail: textField(payload.active_task_detail || payload.activeTaskDetail) || fallback.activeTaskDetail,
-    updatedAt: createdAt,
-  };
-}
-
-function normalizeWorkPlanStateUpdate(payload: WorkPlanStatePayload, createdAt: number): SessionWorkStateUpdate {
-  const steps = coerceStringList(payload.steps);
-  return {
-    objective: textField(payload.objective),
-    kind: textField(payload.kind) || "task",
-    status: "active",
-    steps,
-    constraints: coerceStringList(payload.constraints),
-    doneCriteria: coerceStringList(payload.done_criteria || payload.doneCriteria),
-    longRunning: coerceBoolean(payload.long_running ?? payload.longRunning),
-    codingTask: coerceBoolean(payload.coding_task ?? payload.codingTask),
-    expectsCodeChange: coerceBoolean(payload.expects_code_change ?? payload.expectsCodeChange),
-    expectsVerification: coerceBoolean(payload.expects_verification ?? payload.expectsVerification),
-    currentStep: steps[0] || "not set",
-    nextStep: steps[1] || "not set",
-    pendingSteps: steps,
-    updatedAt: createdAt,
-  };
-}
-
-function normalizeWorkProgressStateUpdate(
-  payload: WorkProgressStatePayload,
-  fallback: SessionWorkStateView,
-  createdAt: number,
-): SessionWorkStateUpdate {
-  const progress = toNestedWorkProgressPayload(payload) || payload;
-  const touchedPaths = [
-    ...fallback.touchedPaths,
-    ...coerceStringList(progress.touched_paths || progress.touchedPaths),
-  ];
-  const progressSignals = coerceStringList(progress.progress_signals || progress.progressSignals);
-  return {
-    status: textField(progress.status) || fallback.status,
-    fileChangeCount: fallback.fileChangeCount + coerceNonNegativeInteger(progress.file_change_count ?? progress.fileChangeCount),
-    touchedPaths: [...new Set(touchedPaths)],
-    verificationAttempted: fallback.verificationAttempted || coerceBoolean(progress.verification_attempted ?? progress.verificationAttempted),
-    verificationPassed: fallback.verificationPassed || coerceBoolean(progress.verification_passed ?? progress.verificationPassed),
-    lastNextAction: textField(progress.next_action || progress.nextAction) || fallback.lastNextAction,
-    lastProgressSignals: progressSignals.length ? progressSignals : fallback.lastProgressSignals,
-    updatedAt: createdAt,
-  };
-}
-
 function settingsErrorStatus(error: unknown): number | null {
   const record = toSettingsErrorPayload(error);
   const status = Number(record?.status);
@@ -617,7 +503,6 @@ function settingsErrorMessage(error: unknown, fallback: string): string {
 function normalizeRunEventPayload(payload: RunEventPayloadInput): RunEventPayloadView {
   const backgroundExitCode = payload.exit_code ?? payload.exitCode;
   return {
-    classificationReason: textField(payload.classification_reason || payload.reason),
     message: textField(payload.message),
     toolName: textField(payload.tool_name || payload.toolName),
     argsPreview: textField(payload.args_preview || payload.argsPreview),
@@ -635,31 +520,6 @@ function normalizeRunEventPayload(payload: RunEventPayloadInput): RunEventPayloa
     hadToolError: Boolean(payload.had_tool_error ?? payload.hadToolError),
     status: textField(payload.status),
     error: textField(payload.error),
-  };
-}
-
-function normalizeTaskEventDetail(payload: TaskEventPayload = {}): TaskEventDetailView {
-  const metadata = toTaskEventPlannerMetadata(payload.planner_metadata || payload.plannerMetadata);
-  return {
-    method: textField(payload.method) || "deterministic",
-    continuationType: textField(payload.continuation_type || payload.continuationType),
-    inheritedTaskType: textField(payload.inherited_task_type || payload.inheritedTaskType),
-    isFollowUp: coerceBoolean(payload.is_follow_up || payload.isFollowUp),
-    shouldInheritActiveTask: coerceBoolean(payload.should_inherit_active_task || payload.shouldInheritActiveTask),
-    shouldReplaceActiveTask: coerceBoolean(payload.should_replace_active_task || payload.shouldReplaceActiveTask),
-    shouldSeedActiveTask: coerceBoolean(payload.should_seed_active_task || payload.shouldSeedActiveTask),
-    confidence: numericField(payload.confidence),
-    reason: textField(payload.reason || metadata.reason),
-    resolvedObjective: textField(payload.resolved_objective || payload.resolvedObjective),
-    shouldUseResolvedObjective: optionalBooleanField(payload.should_use_resolved_objective, payload.shouldUseResolvedObjective),
-    taskType: textField(payload.task_type || payload.taskType),
-    plannerStatus: textField(metadata.planner_status || metadata.plannerStatus),
-    contractReason: textField(metadata.reason || payload.reason),
-    contractSources: coerceStringList(payload.contract_sources || payload.contractSources),
-    requiredTools: coerceStringList(payload.required_tools || payload.requiredTools || metadata.required_tools || metadata.requiredTools),
-    missingEvidence: coerceStringList(payload.missing_evidence || payload.missingEvidence),
-    activeTaskDetail: textField(payload.active_task_detail || payload.activeTaskDetail),
-    status: textField(payload.status),
   };
 }
 
@@ -701,7 +561,6 @@ const STORAGE_KEYS = {
   accessToken: "opensprite:web:accessToken",
   displayName: "opensprite:web:displayName",
   activeExternalChatId: "opensprite:web:activeExternalChatId",
-  showWorkState: "opensprite:web:showWorkState",
   showRunHistory: "opensprite:web:showRunHistory",
   showRunTimeline: "opensprite:web:showRunTimeline",
   showRunSummary: "opensprite:web:showRunSummary",
@@ -742,15 +601,6 @@ function isTerminalPartState(state: string): state is TerminalPartState {
 
 const TIMELINE_EVENT_TYPES = [
   "run_started",
-  "task_context.resolved",
-  "task_objective.resolved",
-  "task_clarification.requested",
-  "task_contract.planning_started",
-  "task_contract.planned",
-  "task_contract.validated",
-  "task_contract.validation_failed",
-  "task_contract.created",
-  "tool_selection.resolved",
   "llm_status",
   "tool_started",
   "file_changed",
@@ -771,10 +621,6 @@ const TIMELINE_EVENT_TYPES = [
   "workflow.completed",
   "workflow.failed",
   "execution.stopped",
-  "completion_gate.evaluated",
-  "auto_continue.scheduled",
-  "auto_continue.completed",
-  "auto_continue.skipped",
   "background_process.started",
   "background_process.completed",
   "background_process.lost",
@@ -861,52 +707,7 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
   const lifecyclePayload = payload;
 
   if (eventType === "run_started") {
-    return { label: copy.run.runStarted, detail: copy.run.preparingTask, tone: "running" };
-  }
-
-  if (eventType === "task_context.resolved") {
-    const detail = normalizeTaskEventDetail(payload);
-    return {
-      label: copy.run.taskContextResolved || "Task context resolved",
-      detail: formatTaskContextDetail(detail),
-      tone: detail.method === "fallback" ? "warning" : "running",
-    };
-  }
-
-  if (eventType === "task_objective.resolved") {
-    const detail = normalizeTaskEventDetail(payload);
-    return {
-      label: copy.run.taskObjectiveResolved || "Task objective resolved",
-      detail: formatTaskObjectiveDetail(detail),
-      tone: detail.method === "fallback" ? "warning" : "running",
-    };
-  }
-
-  if (eventType === "task_clarification.requested") {
-    return {
-      label: copy.run.taskClarificationRequested || "Clarification requested",
-      detail: eventDetail.classificationReason,
-      tone: "warning",
-    };
-  }
-
-  if (eventType.startsWith("task_contract.")) {
-    const detail = normalizeTaskEventDetail(payload);
-    return {
-      label: taskContractLabel(eventType, copy),
-      detail: formatTaskContractDetail(detail),
-      tone: eventType === "task_contract.planning_started" ? "running" : "neutral",
-    };
-  }
-
-  if (eventType === "completion_gate.evaluated") {
-    const detail = normalizeTaskEventDetail(payload);
-    const complete = detail.status === "complete";
-    return {
-      label: complete ? copy.run.completionGatePassed || "Completion gate passed" : copy.run.completionGateNeedsWork || "Completion gate needs work",
-      detail: formatCompletionGateDetail(detail),
-      tone: complete ? "success" : "warning",
-    };
+    return { label: copy.run.runStarted, detail: copy.run.preparingRequest, tone: "running" };
   }
 
   if (eventType === "llm_status") {
@@ -1095,29 +896,10 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
     };
   }
 
-  if (eventType === "auto_continue.scheduled") {
-    const detail = normalizeAutoContinueDetail(lifecyclePayload);
+  if (eventType === "execution.stopped") {
     return {
-      label: copy.run.autoContinueScheduled,
-      detail: formatAutoContinueDetail(detail),
-      tone: "running",
-    };
-  }
-
-  if (eventType === "auto_continue.completed") {
-    const detail = normalizeAutoContinueDetail(lifecyclePayload);
-    return {
-      label: copy.run.autoContinueCompleted,
-      detail: formatAutoContinueDetail(detail),
-      tone: "success",
-    };
-  }
-
-  if (eventType === "auto_continue.skipped") {
-    const detail = normalizeAutoContinueDetail(lifecyclePayload);
-    return {
-      label: copy.run.autoContinueSkipped,
-      detail: formatAutoContinueDetail(detail),
+      label: copy.run.statusLabels.stopped || copy.run.stopped,
+      detail: eventDetail.message || eventDetail.error || copy.run.stopped,
       tone: "warning",
     };
   }
@@ -1152,6 +934,27 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
   }
 
   if (eventType === "run_finished") {
+    if (eventDetail.status === "stopped") {
+      return {
+        label: copy.run.statusLabels.stopped || copy.run.stopped,
+        detail: eventDetail.message || eventDetail.error || copy.run.stopped,
+        tone: "warning",
+      };
+    }
+    if (eventDetail.status === "failed") {
+      return {
+        label: copy.run.failed,
+        detail: eventDetail.error || copy.run.failed,
+        tone: "error",
+      };
+    }
+    if (eventDetail.status === "cancelled") {
+      return {
+        label: copy.run.cancelled,
+        detail: eventDetail.error || copy.run.cancelled,
+        tone: "warning",
+      };
+    }
     const detail = normalizeRunFinishDetail(lifecyclePayload);
     return {
       label: eventDetail.hadToolError ? copy.run.completedWithWarnings : copy.run.completed,
@@ -1164,7 +967,7 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
     const cancelled = eventDetail.status === "cancelled";
     return {
       label: cancelled ? copy.run.cancelled : copy.run.failed,
-      detail: eventDetail.error || copy.run.stopped,
+      detail: eventDetail.error || (cancelled ? copy.run.cancelled : copy.run.failed),
       tone: cancelled ? "warning" : "error",
     };
   }
@@ -1172,7 +975,7 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
   if (eventType === "run_cancelled") {
     return {
       label: copy.run.cancelled,
-      detail: eventDetail.error || copy.run.stopped,
+      detail: eventDetail.error || copy.run.cancelled,
       tone: "warning",
     };
   }
@@ -1186,64 +989,6 @@ function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: 
   }
 
   return null;
-}
-
-function formatTaskContextDetail(detail: TaskEventDetailView): string {
-  const flags = [
-    detail.isFollowUp ? "follow-up" : "",
-    detail.shouldInheritActiveTask ? "inherit active" : "",
-    detail.shouldReplaceActiveTask ? "replace active" : "",
-    detail.shouldSeedActiveTask ? "seed active" : "",
-  ].filter(Boolean).join(", ");
-  const confidenceText = detail.confidence !== null ? `confidence ${detail.confidence.toFixed(2)}` : "";
-  return [detail.method, detail.continuationType, detail.inheritedTaskType, flags, confidenceText, detail.reason].filter(Boolean).join(" · ");
-}
-
-function formatTaskObjectiveDetail(detail: TaskEventDetailView): string {
-  const confidenceText = detail.confidence !== null ? `confidence ${detail.confidence.toFixed(2)}` : "";
-  const objectiveText = detail.resolvedObjective ? previewText(detail.resolvedObjective) : "";
-  const useText = detail.shouldUseResolvedObjective === true
-    ? "use resolved objective"
-    : detail.shouldUseResolvedObjective === false
-      ? "keep original objective"
-      : "";
-  return [detail.method, useText, confidenceText, objectiveText, detail.reason].filter(Boolean).join(" · ");
-}
-
-
-function formatTaskContractDetail(detail: TaskEventDetailView): string {
-  return [
-    detail.plannerStatus ? `planner ${detail.plannerStatus}` : "",
-    detail.taskType,
-    detail.requiredTools.length ? `tools ${detail.requiredTools.join(", ")}` : "",
-    detail.contractSources.length ? `source ${detail.contractSources.join(", ")}` : "",
-    detail.contractReason,
-  ].filter(Boolean).join(" | ");
-}
-
-function taskContractLabel(eventType: string, copy: DisplayCopy): string {
-  if (eventType === "task_contract.planning_started") {
-    return copy.run.taskContractPlanning || "Planning task contract";
-  }
-  if (eventType === "task_contract.planned") {
-    return copy.run.taskContractPlanned || "Task contract planned";
-  }
-  if (eventType === "task_contract.validated") {
-    return copy.run.taskContractValidated || "Task contract validated";
-  }
-  if (eventType === "task_contract.validation_failed") {
-    return copy.run.taskContractValidationFailed || "Task contract validation failed";
-  }
-  return copy.run.taskContractCreated || "Task contract created";
-}
-
-function formatCompletionGateDetail(detail: TaskEventDetailView): string {
-  const missingText = detail.missingEvidence.length ? `missing evidence: ${detail.missingEvidence.map(previewText).join("; ")}` : "";
-  return [
-    missingText,
-    detail.reason,
-    detail.activeTaskDetail ? previewText(detail.activeTaskDetail) : "",
-  ].filter(Boolean).join(" · ");
 }
 
 export function formatEventTime(timestamp: string | number | Date): string {
@@ -1298,7 +1043,6 @@ export function useChatClient() {
     wsUrl: readStoredValue(STORAGE_KEYS.wsUrl, DEFAULT_WS_URL),
     accessToken: readStoredValue(STORAGE_KEYS.accessToken, ""),
     displayName: readStoredValue(STORAGE_KEYS.displayName, "Local browser"),
-    showWorkState: readStoredBoolean(STORAGE_KEYS.showWorkState, true),
     showRunHistory: readStoredBoolean(STORAGE_KEYS.showRunHistory, true),
     showRunTimeline: readStoredBoolean(STORAGE_KEYS.showRunTimeline, true),
     showRunSummary: readStoredBoolean(STORAGE_KEYS.showRunSummary, true),
@@ -1350,10 +1094,16 @@ export function useChatClient() {
   let autoReconnectEnabled = true;
   let gatewayReconnectTimer: number | null = null;
   let sessionHistoryRefreshTimer: number | null = null;
-  let sessionHistoryRefreshing = false;
+  let sessionHistoryRefreshPromise: Promise<void> | null = null;
+  let resolveSessionHistoryRefresh: (() => void) | null = null;
   let boundMessageStage: HTMLElement | null = null;
   const runSummaryTimers = new Map<string, number>();
   const runBackfillTimes = new Map<string, number>();
+  const sessionLiveRevisions = new WeakMap<ChatSession, number>();
+  const sessionSnapshotFences = new WeakMap<ChatSession, SessionSnapshotFence>();
+  const sessionHistoryRefreshQueue = createSessionHistoryRefreshQueue();
+  const runSummaryRequestGenerations = new WeakMap<RunViewState, number>();
+  const runTraceRequestGenerations = new WeakMap<RunViewState, number>();
   let toastId = 0;
   const toastTimers = new Map<string, number>();
   const deletedSessionTombstones = new Map<string, number>();
@@ -1421,8 +1171,6 @@ export function useChatClient() {
   });
 
   const webSessionCount = computed(() => state.sessions.filter((session) => !session.channel || session.channel === "web").length);
-
-  const currentWorkState = computed(() => currentSession.value?.workState || null);
 
   const currentMessages = computed(() => currentSession.value?.messages || []);
 
@@ -1563,18 +1311,15 @@ export function useChatClient() {
   }
 
   function saveRunPanelVisibilitySettings(
-    showWorkState: boolean,
     showRunHistory: boolean,
     showRunTimeline: boolean,
     showRunSummary: boolean,
     showRunTrace: boolean,
   ): void {
-    state.showWorkState = Boolean(showWorkState);
     state.showRunHistory = Boolean(showRunHistory);
     state.showRunTimeline = Boolean(showRunTimeline);
     state.showRunSummary = Boolean(showRunSummary);
     state.showRunTrace = Boolean(showRunTrace);
-    writeStoredValue(STORAGE_KEYS.showWorkState, String(state.showWorkState));
     writeStoredValue(STORAGE_KEYS.showRunHistory, String(state.showRunHistory));
     writeStoredValue(STORAGE_KEYS.showRunTimeline, String(state.showRunTimeline));
     writeStoredValue(STORAGE_KEYS.showRunSummary, String(state.showRunSummary));
@@ -1661,14 +1406,13 @@ export function useChatClient() {
 
   watch(
     () => [
-      settingsForm.showWorkState,
       settingsForm.showRunHistory,
       settingsForm.showRunTimeline,
       settingsForm.showRunSummary,
       settingsForm.showRunTrace,
     ],
-    ([showWorkState, showRunHistory, showRunTimeline, showRunSummary, showRunTrace]) => {
-      saveRunPanelVisibilitySettings(showWorkState, showRunHistory, showRunTimeline, showRunSummary, showRunTrace);
+    ([showRunHistory, showRunTimeline, showRunSummary, showRunTrace]) => {
+      saveRunPanelVisibilitySettings(showRunHistory, showRunTimeline, showRunSummary, showRunTrace);
     },
   );
 
@@ -1693,6 +1437,28 @@ export function useChatClient() {
 
   function sortSessions(): void {
     state.sessions.sort((left, right) => right.updatedAt - left.updatedAt);
+  }
+
+  function sessionLiveRevision(session: ChatSession): number {
+    return sessionLiveRevisions.get(session) || 0;
+  }
+
+  function markSessionLiveMutation(session: ChatSession): void {
+    sessionLiveRevisions.set(session, sessionLiveRevision(session) + 1);
+  }
+
+  function captureSessionRevisionWatermark(): Map<string, number> {
+    return new Map(state.sessions.map((session) => [session.externalChatId, sessionLiveRevision(session)]));
+  }
+
+  function snapshotFenceForSession(session: ChatSession): SessionSnapshotFence {
+    const existing = sessionSnapshotFences.get(session);
+    if (existing) {
+      return existing;
+    }
+    const created = createSessionSnapshotFence();
+    sessionSnapshotFences.set(session, created);
+    return created;
   }
 
   function getSessionDisplayId(session: ChatSession | null | undefined): string {
@@ -1792,11 +1558,14 @@ export function useChatClient() {
     session.channel = channel;
     session.transportExternalChatId = transportExternalChatId;
     const nextStatus = normalizeLiveSessionStatus(payload);
-    session.status = nextStatus;
-    if (session.status.status !== "idle") {
-      session.updatedAt = session.status.updatedAt;
+    if (nextStatus.updatedAt >= Number(session.status.updatedAt || 0)) {
+      session.status = nextStatus;
+    }
+    if (nextStatus.status !== "idle") {
+      session.updatedAt = Math.max(Number(session.updatedAt || 0), nextStatus.updatedAt);
       sortSessions();
     }
+    markSessionLiveMutation(session);
     persistLocalDraftSessions();
   }
 
@@ -1845,10 +1614,11 @@ export function useChatClient() {
     if (session.entries.length) {
       session.entries.push(makeLiveEntry(message));
     }
-    session.updatedAt = message.createdAt;
+    session.updatedAt = Math.max(Number(session.updatedAt || 0), message.createdAt);
     if (message.role === "user" && session.title === "New chat") {
       session.title = summarizeTitle(message.text);
     }
+    markSessionLiveMutation(session);
     sortSessions();
     persistLocalDraftSessions();
     return session;
@@ -1867,68 +1637,6 @@ export function useChatClient() {
     run.sessionId = run.sessionId || session.sessionId || "";
     session.activeRunId = runId;
     return run;
-  }
-
-  function mergeSessionWorkState(session: ChatSession | null | undefined, updates: SessionWorkStateUpdate | null | undefined): void {
-    if (!session || !updates) {
-      return;
-    }
-    const normalized = normalizeWorkState({
-      ...(session.workState || {}),
-      ...updates,
-    });
-    if (normalized) {
-      session.workState = normalized;
-    }
-  }
-
-  function applyCompletionGateEvent(
-    session: ChatSession | null | undefined,
-    payload: CompletionGateWorkStatePayload,
-    createdAt: number,
-  ): void {
-    if (!session?.workState) {
-      return;
-    }
-    mergeSessionWorkState(session, normalizeCompletionGateWorkStateUpdate(payload, session.workState, createdAt));
-  }
-
-  function applyWorkPlanEvent(
-    session: ChatSession | null | undefined,
-    payload: WorkPlanStatePayload,
-    createdAt: number,
-  ): void {
-    mergeSessionWorkState(session, normalizeWorkPlanStateUpdate(payload, createdAt));
-  }
-
-  function applyWorkProgressEvent(
-    session: ChatSession | null | undefined,
-    payload: WorkProgressStatePayload,
-    createdAt: number,
-  ): void {
-    if (!session?.workState) {
-      return;
-    }
-    mergeSessionWorkState(session, normalizeWorkProgressStateUpdate(payload, session.workState, createdAt));
-  }
-
-  function applyWorkStateFromRunEvent(
-    session: ChatSession | null | undefined,
-    eventType: string,
-    payload: LiveRunEventPayloadSource,
-    createdAt: number,
-  ): void {
-    if (eventType === "work_plan.created") {
-      applyWorkPlanEvent(session, payload, createdAt);
-      return;
-    }
-    if (eventType === "work_progress.updated") {
-      applyWorkProgressEvent(session, payload, createdAt);
-      return;
-    }
-    if (eventType === "completion_gate.evaluated") {
-      applyCompletionGateEvent(session, payload, createdAt);
-    }
   }
 
   function upsertRunArtifact(run: RunViewState, artifact: unknown): RunArtifactView | null {
@@ -1987,16 +1695,7 @@ export function useChatClient() {
     if (!normalized || normalizedKind !== "file" || !normalizedPath) {
       return;
     }
-    const normalizedAction = String(normalized.action || "").trim();
     const normalizedSourceId = String(normalized.sourceId || "").trim();
-    const existingIndex = run.fileChanges.findIndex((change) => {
-      const changeId = String(change.changeId || "").trim();
-      if (normalizedSourceId && changeId) {
-        return changeId === normalizedSourceId;
-      }
-      return String(change.path || "").trim() === normalizedPath
-        && (!normalizedAction || String(change.action || "").trim() === normalizedAction);
-    });
     const previewChangeId = normalized.sourceId || normalized.artifactId;
     const previewStatus = normalized.status || "completed";
     const preview: TraceFileChangeView = {
@@ -2020,8 +1719,29 @@ export function useChatClient() {
       revertSupported: false,
       createdAt: normalized.createdAt,
     };
+    const existingIndex = run.fileChanges.findIndex((change) => {
+      const existingId = String(change.changeId || change.sourceId || "").trim();
+      if (normalizedSourceId && existingId === normalizedSourceId) {
+        return true;
+      }
+      const isDurableChange = change.revertSupported || change.artifact?.source === "file_change";
+      return isDurableChange && fileChangesRepresentSameOccurrence(change, preview);
+    });
     if (existingIndex >= 0) {
-      run.fileChanges[existingIndex] = { ...run.fileChanges[existingIndex], ...preview };
+      const existing = run.fileChanges[existingIndex];
+      const isDurableChange = existing.revertSupported || existing.artifact?.source === "file_change";
+      run.fileChanges[existingIndex] = isDurableChange
+        ? {
+            ...preview,
+            ...existing,
+            diffPreview: existing.diffPreview || preview.diffPreview,
+            artifact: existing.artifact || preview.artifact,
+            snapshotsAvailable: {
+              before: existing.snapshotsAvailable.before || preview.snapshotsAvailable.before,
+              after: existing.snapshotsAvailable.after || preview.snapshotsAvailable.after,
+            },
+          }
+        : { ...existing, ...preview };
       return;
     }
     run.fileChanges.push(preview);
@@ -2039,7 +1759,6 @@ export function useChatClient() {
     }
     const liveEvent = normalizeLiveRunEvent(payload);
     const run = findOrCreateRun(session, liveEvent.runId, liveEvent.createdAt);
-    applyWorkStateFromRunEvent(session, liveEvent.eventType, liveEvent.payload, liveEvent.createdAt);
     const nextStatus = statusFromRunEvent(
       liveEvent.eventType,
       liveEvent.payload,
@@ -2049,12 +1768,11 @@ export function useChatClient() {
     run.rawEvents.push(rawEvent);
     run.rawEvents = compactRunEvents(run.rawEvents);
     updateLiveTraceEventCounts(run, rawEvent);
-
-    if (nextStatus) {
-      run.status = nextStatus;
-    } else if (!isTerminalRunStatus(run.status)) {
-      run.status = "running";
+    if (run.worktreeSandbox) {
+      run.worktreeSandbox = applyWorktreeCleanupEvent(run.worktreeSandbox, rawEvent);
     }
+
+    run.status = mergeMonotonicRunStatus(run.status, nextStatus || "running");
 
     const description = describeRunEvent(liveEvent.eventType, liveEvent.payload, copy.value);
     if (description) {
@@ -2079,8 +1797,9 @@ export function useChatClient() {
 
     applyRunEventArtifact(run, liveEvent.artifact);
 
-    run.updatedAt = liveEvent.createdAt;
-    session.updatedAt = liveEvent.createdAt;
+    run.updatedAt = Math.max(Number(run.updatedAt || 0), liveEvent.createdAt);
+    session.updatedAt = Math.max(Number(session.updatedAt || 0), liveEvent.createdAt);
+    markSessionLiveMutation(session);
     session.runs.sort((left, right) => right.updatedAt - left.updatedAt);
     sortSessions();
     if (isTerminalRunStatus(run.status) || isRunSummaryTriggerEventType(liveEvent.eventType)) {
@@ -2365,7 +2084,6 @@ export function useChatClient() {
     settingsForm.wsUrl = state.wsUrl;
     settingsForm.displayName = state.displayName;
     settingsForm.externalChatId = currentSession.value?.externalChatId || "";
-    settingsForm.showWorkState = state.showWorkState;
     settingsForm.showRunHistory = state.showRunHistory;
     settingsForm.showRunTimeline = state.showRunTimeline;
     settingsForm.showRunSummary = state.showRunSummary;
@@ -2638,17 +2356,24 @@ export function useChatClient() {
     }
 
     clearRunSummaryTimer(sessionId, run.runId);
+    const requestGeneration = beginRequestGeneration(runSummaryRequestGenerations, run);
     run.summaryLoading = true;
     run.summaryError = "";
     try {
       const summary = normalizeRunSummary(await requestSettingsJson(buildRunSummaryPath(run.runId, sessionId)));
+      if (clientDisposed || !isCurrentRequestGeneration(runSummaryRequestGenerations, run, requestGeneration)) {
+        return;
+      }
       if (summary) {
         run.summary = summary;
-        run.status = String(summary.status || run.status);
+        run.status = mergeMonotonicRunStatus(run.status, summary.status);
         run.summaryNotFoundAttempts = 0;
         maybeLoadRunTraceForSession(session);
       }
     } catch (error: unknown) {
+      if (clientDisposed || !isCurrentRequestGeneration(runSummaryRequestGenerations, run, requestGeneration)) {
+        return;
+      }
       if (settingsErrorStatus(error) === 404) {
         run.summaryNotFoundAttempts = coerceNonNegativeInteger(run.summaryNotFoundAttempts) + 1;
         run.summaryError = "";
@@ -2659,7 +2384,9 @@ export function useChatClient() {
       }
       run.summaryError = settingsErrorMessage(error, copy.value.notices.runSummaryLoadFailed);
     } finally {
-      run.summaryLoading = false;
+      if (isCurrentRequestGeneration(runSummaryRequestGenerations, run, requestGeneration)) {
+        run.summaryLoading = false;
+      }
     }
   }
 
@@ -2692,27 +2419,50 @@ export function useChatClient() {
 
     run.traceLoading = true;
     run.traceError = "";
+    const requestGeneration = beginRequestGeneration(runTraceRequestGenerations, run);
+    const traceWatermark = captureRunTraceWatermark(run);
     try {
       const trace = normalizeRunTracePayload(
         toRunTracePayload(await requestSettingsJson(buildRunTracePath(run.runId, sessionId))),
       );
+      if (clientDisposed || !isCurrentRequestGeneration(runTraceRequestGenerations, run, requestGeneration)) {
+        return;
+      }
       const { rawEvents, fileChanges, parts, artifacts } = trace;
-      run.rawEvents = rawEvents;
-      run.eventCounts = trace.eventCounts;
-      run.events = localizeRawRunEvents(rawEvents);
-      run.parts = parts;
-      run.artifacts = artifacts.length
+      const snapshotArtifacts = artifacts.length
         ? artifacts.slice(-MAX_RUN_ARTIFACTS)
         : collectRunTraceFallbackArtifacts(rawEvents, parts, fileChanges).slice(-MAX_RUN_ARTIFACTS);
+      const mergedTrace = mergeRunTraceSnapshot(
+        { rawEvents, eventCounts: trace.eventCounts, parts, artifacts: snapshotArtifacts, fileChanges },
+        run,
+        traceWatermark,
+      );
+      run.rawEvents = compactRunEvents(mergedTrace.rawEvents);
+      run.eventCounts = {
+        ...mergedTrace.eventCounts,
+        returned: run.rawEvents.length,
+        compacted: Math.max(mergedTrace.eventCounts.compacted, mergedTrace.eventCounts.total - run.rawEvents.length),
+      };
+      run.events = localizeRawRunEvents(run.rawEvents);
+      run.parts = mergedTrace.parts.slice(-MAX_RUN_ARTIFACTS);
+      run.artifacts = mergedTrace.artifacts.slice(-MAX_RUN_ARTIFACTS);
       run.artifacts.forEach((artifact) => applyToolArtifactToParts(run, artifact));
-      run.fileChanges = fileChanges;
+      run.fileChanges = mergedTrace.fileChanges;
       run.diffSummary = trace.diffSummary;
-      run.worktreeSandbox = findWorktreeSandbox(parts, run.artifacts);
+      run.worktreeSandbox = preserveKnownRemovedWorktreeSandbox(
+        run.worktreeSandbox,
+        findWorktreeSandbox(run.parts, run.artifacts, run.rawEvents),
+      );
       run.traceLoaded = true;
     } catch (error: unknown) {
+      if (clientDisposed || !isCurrentRequestGeneration(runTraceRequestGenerations, run, requestGeneration)) {
+        return;
+      }
       run.traceError = settingsErrorMessage(error, copy.value.notices.runTraceLoadFailed);
     } finally {
-      run.traceLoading = false;
+      if (isCurrentRequestGeneration(runTraceRequestGenerations, run, requestGeneration)) {
+        run.traceLoading = false;
+      }
     }
   }
 
@@ -2726,6 +2476,7 @@ export function useChatClient() {
     }
 
     clearRunSummaryTimer(sessionId, run.runId);
+    beginRequestGeneration(runSummaryRequestGenerations, run);
     run.summaryError = "";
     run.summaryLoading = true;
     const key = runSummaryTimerKey(sessionId, run.runId);
@@ -2918,11 +2669,16 @@ export function useChatClient() {
     for (const run of runs) {
       const existing = existingRuns.get(run.runId);
       if (existing) {
+        const existingUpdatedAt = Number(existing.updatedAt || 0);
+        const incomingUpdatedAt = Number(run.updatedAt || 0);
+        const incomingIsCurrent = incomingUpdatedAt >= existingUpdatedAt;
         existing.sessionId = existing.sessionId || run.sessionId;
-        existing.status = run.status || existing.status;
         existing.createdAt = run.createdAt || existing.createdAt;
-        existing.updatedAt = Math.max(Number(existing.updatedAt || 0), Number(run.updatedAt || 0));
-        existing.finishedAt = run.finishedAt || existing.finishedAt;
+        if (incomingIsCurrent) {
+          existing.status = mergeMonotonicRunStatus(existing.status, run.status);
+          existing.finishedAt = run.finishedAt || existing.finishedAt;
+        }
+        existing.updatedAt = Math.max(existingUpdatedAt, incomingUpdatedAt);
         mergedRuns.push(existing);
         existingRuns.delete(run.runId);
       } else {
@@ -2998,7 +2754,6 @@ export function useChatClient() {
     session.entries = normalizeHistoryEntries(payload.entries || []);
     session.runs = normalizeHistoryRuns(payload.runs || []);
     session.activeRunId = session.runs[0]?.runId || null;
-    session.workState = normalizeWorkState(payload.work_state);
     session.status = normalizeHistorySessionStatus(payload.status || {});
     return session;
   }
@@ -3023,32 +2778,20 @@ export function useChatClient() {
   function mergeHistorySession(
     existing: ChatSession,
     incoming: ChatSession,
-    { preserveDetails = false }: MergeHistorySessionOptions = {},
+    { preserveDetails = false, changedSinceRequest = false }: MergeHistorySessionOptions = {},
   ): ChatSession {
-    existing.channel = incoming.channel;
-    existing.hiddenFromBrowserHistory = incoming.hiddenFromBrowserHistory;
-    existing.transportExternalChatId = incoming.transportExternalChatId;
-    existing.sessionId = incoming.sessionId;
-    existing.title = incoming.title;
-    existing.updatedAt = incoming.updatedAt;
-    existing.status = incoming.status;
-    if (preserveDetails) {
-      return existing;
-    }
-    existing.messages = incoming.messages;
-    existing.entries = incoming.entries;
-    existing.runs = incoming.runs;
-    existing.activeRunId = incoming.activeRunId;
-    existing.workState = incoming.workState;
-    existing.runsLoaded = incoming.runsLoaded;
-    existing.runsLoading = incoming.runsLoading;
-    existing.runsError = incoming.runsError;
-    return existing;
+    return mergeFreshSessionSnapshot(existing, incoming, {
+      preserveDetails,
+      changedSinceRequest,
+      snapshotFence: snapshotFenceForSession(existing),
+      mergeRuns: (target, snapshot) => mergeSessionRuns(target, snapshot.runs),
+    });
   }
 
   function mergeHistorySessions(historySessions: ChatSession[], options: MergeHistorySessionsOptions = {}): void {
     const preserveActiveSession = Boolean(options?.preserveActiveSession);
     const pruneMissingHistorySessions = Boolean(options?.pruneMissingHistorySessions);
+    const revisionWatermark = options?.sessionRevisionWatermark;
     const visibleHistorySessions = historySessions.filter((session) => !isDeletedSessionTombstoned(session));
     const historySessionIds = new Set(visibleHistorySessions.map((session) => session.sessionId).filter(isNonEmptyString));
 
@@ -3064,6 +2807,9 @@ export function useChatClient() {
         historySession.externalChatId,
         mergeHistorySession(existingSession, historySession, {
           preserveDetails: preserveActiveSession && historySession.externalChatId === state.activeExternalChatId,
+          changedSinceRequest: Boolean(revisionWatermark)
+            && (revisionWatermark.get(historySession.externalChatId) === undefined
+              || revisionWatermark.get(historySession.externalChatId) !== sessionLiveRevision(existingSession)),
         }),
       );
     }
@@ -3109,15 +2855,12 @@ export function useChatClient() {
     persistLocalDraftSessions();
   }
 
-  async function loadSessionHistory(options: LoadSessionHistoryOptions = {}): Promise<void> {
-    const quiet = Boolean(options?.quiet);
-    if (sessionHistoryRefreshing) {
-      return;
-    }
-    sessionHistoryRefreshing = true;
+  async function performSessionHistoryRefresh(request: SessionHistoryRefreshRequest): Promise<void> {
+    const quiet = request.quiet;
+    const sessionRevisionWatermark = quiet ? captureSessionRevisionWatermark() : undefined;
     try {
       const params = new URLSearchParams({ channel: "all", limit: "50", messages: "50" });
-      if (showHiddenSessions.value) {
+      if (request.includeHiddenSessions) {
         params.set("include_cli", "true");
       }
       const history = normalizeSessionHistoryPayload(
@@ -3128,7 +2871,8 @@ export function useChatClient() {
       state.sessionHistory.channelTotals = history.channelTotals;
       mergeHistorySessions(history.sessions, {
         preserveActiveSession: quiet,
-        pruneMissingHistorySessions: Boolean(options?.pruneMissingHistorySessions),
+        pruneMissingHistorySessions: request.pruneMissingHistorySessions,
+        sessionRevisionWatermark,
       });
       if (!quiet) {
         scrollMessagesToBottom({ force: true });
@@ -3137,9 +2881,39 @@ export function useChatClient() {
       if (!quiet) {
         setNotice(copy.value.notices.historyLoadFailed, "warning");
       }
-    } finally {
-      sessionHistoryRefreshing = false;
     }
+  }
+
+  async function drainSessionHistoryRefreshQueue(): Promise<void> {
+    try {
+      let request = takePendingSessionHistoryRefresh(sessionHistoryRefreshQueue);
+      while (request) {
+        await performSessionHistoryRefresh(request);
+        request = takePendingSessionHistoryRefresh(sessionHistoryRefreshQueue);
+      }
+    } finally {
+      const resolve = resolveSessionHistoryRefresh;
+      sessionHistoryRefreshPromise = null;
+      resolveSessionHistoryRefresh = null;
+      resolve?.();
+    }
+  }
+
+  async function loadSessionHistory(options: LoadSessionHistoryOptions = {}): Promise<void> {
+    enqueueSessionHistoryRefresh(sessionHistoryRefreshQueue, {
+      quiet: Boolean(options.quiet),
+      pruneMissingHistorySessions: Boolean(options.pruneMissingHistorySessions),
+      includeHiddenSessions: showHiddenSessions.value,
+    });
+    let refreshPromise = sessionHistoryRefreshPromise;
+    if (!refreshPromise) {
+      refreshPromise = new Promise<void>((resolve) => {
+        resolveSessionHistoryRefresh = resolve;
+      });
+      sessionHistoryRefreshPromise = refreshPromise;
+      void drainSessionHistoryRefreshQueue();
+    }
+    await refreshPromise;
   }
 
   async function loadCronJobs(): Promise<void> {
@@ -3276,6 +3050,7 @@ export function useChatClient() {
       if (!state.activeExternalChatId) {
         state.activeExternalChatId = session.externalChatId;
       }
+      markSessionLiveMutation(session);
       persistActiveSession();
       setNotice(copy.value.notices.liveSessionReady(sessionId), "success");
       if (shouldBackfillSessionRuns(session)) {
@@ -3644,7 +3419,6 @@ export function useChatClient() {
     state.accessToken = nextAccessToken;
     state.displayName = settingsForm.displayName.trim() || "Local browser";
     saveRunPanelVisibilitySettings(
-      settingsForm.showWorkState,
       settingsForm.showRunHistory,
       settingsForm.showRunTimeline,
       settingsForm.showRunSummary,
@@ -3767,6 +3541,9 @@ export function useChatClient() {
       setNotice(copy.value.notices.worktreeCleanupUnavailable, "warning");
       return null;
     }
+    if (sandbox.cleanupPending) {
+      return null;
+    }
     if (typeof window !== "undefined" && !window.confirm(copy.value.runSummary.confirmCleanupSandbox(sandboxPath))) {
       return null;
     }
@@ -3868,14 +3645,6 @@ export function useChatClient() {
   function submitMessage(event: ComposerSubmitEvent): void {
     event.preventDefault();
     sendMessageText(messageText.value, { clearComposer: true });
-  }
-
-  function resumeFollowUp(text: string): void {
-    sendMessageText(text, { clearComposer: false });
-  }
-
-  function runVerification(text: string): void {
-    sendMessageText(text, { clearComposer: false });
   }
 
   function handleComposerKeydown(event: ComposerKeyboardEvent): void {
@@ -3990,7 +3759,6 @@ export function useChatClient() {
     toasts,
     currentEntries,
     currentMessages,
-    currentWorkState,
     currentRuns,
     currentRunsLoading,
     currentRunsError,
@@ -4084,8 +3852,6 @@ export function useChatClient() {
     cleanupWorktreeSandbox,
     toggleSettingsConnection,
     submitMessage,
-    resumeFollowUp,
-    runVerification,
     handleComposerKeydown,
     applyPrompt,
     applyCommandHint,

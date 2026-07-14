@@ -4,6 +4,7 @@ from pathlib import Path
 
 from opensprite.runs.trace import RunFileChangeService
 from opensprite.runs.events import (
+    FILE_CHANGED_EVENT,
     FILE_REVERT_APPLIED_EVENT,
     FILE_REVERT_PREVIEWED_EVENT,
     FILE_REVERT_SKIPPED_EVENT,
@@ -27,6 +28,41 @@ def _service(storage: MemoryStorage, workspace_root: Path, events: list[tuple] |
         emit_run_event=emit_run_event,
         format_log_preview=lambda content, max_chars=160: str(content or "")[:max_chars],
     )
+
+
+def test_file_change_event_uses_the_durable_change_id(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        events = []
+        service = _service(storage, tmp_path, events)
+        await storage.create_run("chat-1", "run-1")
+        await service.record_changes(
+            "edit_file",
+            [
+                {
+                    "path": "notes.txt",
+                    "action": "update",
+                    "before_content": "old\n",
+                    "after_content": "new\n",
+                    "diff": "-old\n+new",
+                }
+            ],
+            session_id="chat-1",
+            run_id="run-1",
+            channel="web",
+            external_chat_id="browser-1",
+        )
+        changes = await storage.get_run_file_changes("chat-1", "run-1")
+        return changes, events
+
+    changes, events = asyncio.run(scenario())
+
+    assert len(changes) == 1
+    assert len(events) == 1
+    args, kwargs = events[0]
+    assert args[2] == FILE_CHANGED_EVENT
+    assert args[3]["change_id"] == changes[0].change_id
+    assert kwargs == {"channel": "web", "external_chat_id": "browser-1"}
 
 
 def test_file_change_service_can_preview_and_apply_safe_revert(tmp_path):

@@ -44,11 +44,9 @@ class CuratorMaintenanceServices:
     maybe_consolidate_memory: SessionRunner
     maybe_update_recent_summary: SessionRunner
     maybe_update_user_profile: SessionRunner
-    maybe_update_active_task: SessionRunner
     read_memory_snapshot: SnapshotReader
     read_recent_summary_snapshot: SnapshotReader
     read_user_profile_snapshot: SnapshotReader
-    read_active_task_snapshot: SnapshotReader
 
     def jobs(self) -> tuple[CuratorJob, ...]:
         """Return maintenance jobs in the canonical post-turn order."""
@@ -65,11 +63,5 @@ class CuratorMaintenanceServices:
                 "user profile",
                 self.read_user_profile_snapshot,
                 self.maybe_update_user_profile,
-            ),
-            CuratorJob(
-                "active_task",
-                "active task",
-                self.read_active_task_snapshot,
-                self.maybe_update_active_task,
             ),
         )

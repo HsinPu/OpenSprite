@@ -16,7 +16,7 @@ from ..tool_names import (
     READ_SKILL_TOOL_NAME,
     WORKSPACE_WRITE_TOOL_NAMES,
 )
-from ..tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
+from ..tool_names import WEB_SOURCE_TOOL_NAMES
 from . import load_metadata
 
 TOOL_PROFILE_METADATA_FIELD = "tool_profile"
@@ -55,7 +55,7 @@ READ_ONLY_TOOLS = frozenset(
         HISTORY_SEARCH_TOOL_NAME,
     }
 )
-WEB_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS
+WEB_TOOLS = WEB_SOURCE_TOOL_NAMES
 WRITE_TOOLS = WORKSPACE_WRITE_TOOL_NAMES
 EXEC_TOOLS = EXECUTION_TOOL_NAMES
 

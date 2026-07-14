@@ -99,27 +99,11 @@
       "prompt is too long",
       "reduce the length"
     ],
-    "auto_continue_default_budget": 1,
-    "auto_continue_long_running_budget": 3,
-    "auto_continue_deterministic_action_budget": 4,
     "subagent_max_tool_iterations": 100,
-    "task_context_llm": {
-      "max_tokens": 500
-    },
-    "task_objective_llm": {
-      "max_tokens": 500
-    },
-    "task_planner_llm": {
-      "max_tokens": 400
-    },
-    "completion_verifier_llm": {
-      "max_tokens": 700
-    },
     "skill_review_enabled": true,
     "skill_review_min_tool_calls": 5,
     "skill_review_max_tool_iterations": 6,
-    "skill_review_transcript_messages": 50,
-    "worktree_sandbox_enabled": false
+    "skill_review_transcript_messages": 50
   },
   "memory": {
     "threshold": 80,
@@ -132,14 +116,6 @@
     "enabled": true,
     "threshold": 40,
     "lookback_messages": 80,
-    "llm": {
-      "max_tokens": 1200
-    }
-  },
-  "active_task": {
-    "enabled": true,
-    "threshold": 2,
-    "lookback_messages": 40,
     "llm": {
       "max_tokens": 1200
     }

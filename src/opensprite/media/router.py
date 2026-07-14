@@ -2,13 +2,6 @@
 
 from __future__ import annotations
 
-from .artifacts import (
-    MEDIA_ARTIFACT_KINDS,
-    MediaArtifactLike,
-    count_media_artifacts,
-    is_media_artifact_kind,
-    media_artifact_gap_follow_up_instruction,
-)
 from .audio_input import AudioInputPreprocessResult, AudioInputPreprocessor
 from .base import ImageAnalysisProvider, SpeechToTextProvider, VideoAnalysisProvider
 from .outbound import (

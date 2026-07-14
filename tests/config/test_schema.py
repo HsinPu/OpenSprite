@@ -657,18 +657,103 @@ def test_config_load_reads_messages_from_external_file(tmp_path):
     assert config.messages.agent.llm_not_configured == "請先設定模型"
     assert config.messages.queue.stop_idle == "目前沒有任務"
     assert config.messages.telegram.empty_message_fallback == MessagesConfig().telegram.empty_message_fallback
+    assert (
+        config.messages.agent.media_persistence_failed
+        == MessagesConfig().agent.media_persistence_failed
+    )
+    assert (
+        config.messages.agent.media_persistence_partial_failure
+        == MessagesConfig().agent.media_persistence_partial_failure
+    )
     assert config.messages_file == "messages.json"
+
+
+def test_config_load_prunes_retired_messages_without_overwriting_current_custom_values(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    messages_path = tmp_path / "messages.json"
+    messages_path.write_text(
+        json.dumps(
+            {
+                "agent": {"empty_response_fallback": "Custom fallback"},
+                "task": {"help_text": "Custom legacy task help"},
+                "curator": {
+                    "help_text": (
+                        "Custom header\n"
+                        "/curator run [maintenance|active_task|skills]\n"
+                        "Keep [maintenance|active_task_notes|skills] and "
+                        "[maintenance|myactive_task|skills] unchanged\n"
+                        "Custom footer"
+                    ),
+                    "error_run_usage": "Custom usage: [active_task|memory]; keep active_task_notes|memory",
+                },
+                "custom_current_section": {"keep": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    original_messages_text = messages_path.read_text(encoding="utf-8")
+    Config.ensure_messages_file(config_path, {"messages_file": "messages.json"})
+    config = Config.from_json(config_path)
+
+    assert config.messages.agent.empty_response_fallback == "Custom fallback"
+    assert config.messages.curator.help_text == (
+        "Custom header\n"
+        "/curator run [maintenance|skills]\n"
+        "Keep [maintenance|active_task_notes|skills] and "
+        "[maintenance|myactive_task|skills] unchanged\n"
+        "Custom footer"
+    )
+    assert config.messages.curator.error_run_usage == (
+        "Custom usage: [memory]; keep active_task_notes|memory"
+    )
+    assert not hasattr(config.messages, "task")
+    assert messages_path.read_text(encoding="utf-8") == original_messages_text
+
+    config.save(config_path)
+    saved = json.loads(messages_path.read_text(encoding="utf-8"))
+    assert "task" not in saved
+    assert saved["custom_current_section"] == {"keep": True}
+    assert "active_task_notes" in saved["curator"]["help_text"]
+    assert "myactive_task" in saved["curator"]["help_text"]
+    assert saved["curator"]["error_run_usage"].endswith("active_task_notes|memory")
+
+
+def test_messages_config_preserves_unknown_keys_in_known_sections_across_roundtrip(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    messages_path = tmp_path / "messages.json"
+    custom_values = {
+        "agent": {"custom_agent": {"enabled": True}},
+        "queue": {"custom_queue": ["keep"]},
+        "cron": {"custom_cron": 17},
+        "curator": {"custom_curator": "keep"},
+        "telegram": {"custom_telegram": {"locale": "custom"}},
+    }
+    messages_path.write_text(
+        json.dumps({**custom_values, "custom_current_section": {"keep": True}}),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(config_path)
+    dumped = config.messages.model_dump()
+
+    for section, custom_data in custom_values.items():
+        assert {key: dumped[section][key] for key in custom_data} == custom_data
+    assert dumped["custom_current_section"] == {"keep": True}
+
+    config.save(config_path)
+    saved = json.loads(messages_path.read_text(encoding="utf-8"))
+    for section, custom_data in custom_values.items():
+        assert {key: saved[section][key] for key in custom_data} == custom_data
+    assert saved["custom_current_section"] == {"keep": True}
 
 
 def test_messages_config_includes_repeated_invalid_tool_call_fallback():
     config = MessagesConfig()
 
     assert "{result}" in config.agent.repeated_invalid_tool_call_fallback
-    assert config.agent.completion_blocker_intro
-    assert config.agent.completion_blocker_reason_prefix
-    assert config.agent.completion_blocker_detail_header
-    assert config.agent.completion_blocker_missing_evidence_header
-    assert config.agent.completion_blocker_stop_notice
 
 
 def test_search_embedding_config_requires_model_when_enabled():
@@ -768,11 +853,8 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.context_compaction_strategy == "deterministic"
     assert config.agent.context_compaction_llm.max_tokens == 4096
     assert "maximum context length" in config.agent.context_overflow_error_markers
-    assert config.agent.auto_continue_default_budget == 1
-    assert config.agent.auto_continue_long_running_budget == 3
-    assert config.agent.auto_continue_deterministic_action_budget == 4
     assert config.agent.subagent_max_tool_iterations == 100
-    assert config.agent.worktree_sandbox_enabled is False
+    assert not hasattr(config.agent, "worktree_sandbox_enabled")
     assert config.tools.exec_tool.timeout == 60
     assert config.tools.web_search.provider == "duckduckgo"
     assert config.tools.web_search.freshness == "auto"
@@ -782,6 +864,85 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.tools.web_search.searxng_categories == []
     assert config.tools.web_fetch.timeout == 30
     assert config.tools.cron.default_timezone == "UTC"
+
+
+def test_config_load_ignores_removed_task_lifecycle_settings(tmp_path):
+    path = tmp_path / "opensprite.json"
+    path.write_text(
+        json.dumps(
+            {
+                "llm": {},
+                "storage": {"type": "memory", "path": "memory.db"},
+                "channels": {"instances": {"web": {"type": "web", "enabled": True}}},
+                "agent": {
+                    "worktree_sandbox_enabled": True,
+                    "auto_continue_default_budget": 99,
+                    "auto_continue_long_running_budget": 99,
+                    "auto_continue_deterministic_action_budget": 99,
+                    "task_context_llm": {"max_tokens": 99},
+                    "task_objective_llm": {"max_tokens": 99},
+                    "task_planner_llm": {"max_tokens": 99},
+                    "completion_verifier_llm": {"max_tokens": 99},
+                },
+                "active_task": {
+                    "enabled": True,
+                    "threshold": 2,
+                    "lookback_messages": 40,
+                    "llm": {"max_tokens": 1200},
+                },
+                "messages": {
+                    "task": {"help_text": "legacy task help"},
+                    "agent": {
+                        "completion_blocker_intro": "legacy blocker",
+                        "completion_blocker_reason_prefix": "legacy reason",
+                        "completion_blocker_detail_header": "legacy details",
+                        "completion_blocker_missing_evidence_header": "legacy evidence",
+                        "completion_blocker_stop_notice": "legacy stop",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(path)
+
+    for field_name in (
+        "auto_continue_default_budget",
+        "auto_continue_long_running_budget",
+        "auto_continue_deterministic_action_budget",
+        "task_context_llm",
+        "task_objective_llm",
+        "task_planner_llm",
+        "completion_verifier_llm",
+        "worktree_sandbox_enabled",
+    ):
+        assert not hasattr(config.agent, field_name)
+    assert not hasattr(config, "active_task")
+    assert not hasattr(config.messages, "task")
+    assert not hasattr(config.messages.agent, "completion_blocker_intro")
+
+    config.save(path)
+
+    saved_main = json.loads(path.read_text(encoding="utf-8"))
+    saved_messages = json.loads(
+        Config.get_messages_file_path(path, messages_file=config.messages_file).read_text(encoding="utf-8")
+    )
+    assert "active_task" not in saved_main
+    assert not set(saved_main["agent"]).intersection(
+        {
+            "auto_continue_default_budget",
+            "auto_continue_long_running_budget",
+            "auto_continue_deterministic_action_budget",
+            "task_context_llm",
+            "task_objective_llm",
+            "task_planner_llm",
+            "completion_verifier_llm",
+            "worktree_sandbox_enabled",
+        }
+    )
+    assert "task" not in saved_messages
+    assert not any(key.startswith("completion_blocker_") for key in saved_messages["agent"])
 
 
 def test_config_load_reads_channels_from_external_file(tmp_path):

@@ -10,18 +10,30 @@ import sys
 import time
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from uuid import uuid4
 
-from aiohttp import ClientError, ClientSession, WSMsgType
+from aiohttp import ClientError, ClientSession, ClientWSTimeout, WSMsgType
 import typer
 
 from ..agent.factory import create_agent
+from ..bus.message import (
+    CLIENT_TURN_ID_METADATA_KEY,
+    RESPONSE_KIND_METADATA_KEY,
+    SESSION_COMMAND_RESPONSE_KIND,
+)
 from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
 from ..context.paths import get_session_workspace, get_tool_workspace
 from ..agent.turn_input import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
 from ..network_environment import apply_network_environment
 from ..runs.events import TOOL_STARTED_EVENT
-from ..runs.lifecycle import RUN_CANCELLED_EVENT, RUN_FAILED_EVENT, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
+from ..runs.lifecycle import (
+    RUN_CANCELLED_EVENT,
+    RUN_COMPLETED_STATUS,
+    RUN_FAILED_EVENT,
+    RUN_STARTED_EVENT,
+    TERMINAL_RUN_EVENTS,
+)
 from ..runtime_lifecycle import stop_background_task
 from ..search.queue_worker import start_search_queue_worker
 from ..utils.log import setup_log
@@ -49,6 +61,30 @@ _SNAPSHOT_IGNORES = {
     "test-results",
     "tmp",
 }
+
+
+def _run_succeeded(status: Any) -> bool:
+    """Return whether a run reached the one successful terminal status."""
+    return str(status or "").strip().lower() == RUN_COMPLETED_STATUS
+
+
+def _frame_client_turn_id(frame: dict[str, Any]) -> str:
+    """Read request correlation from a run-event or assistant-message frame."""
+    for container in (frame.get("payload"), frame.get("metadata"), frame):
+        if not isinstance(container, dict):
+            continue
+        value = str(container.get(CLIENT_TURN_ID_METADATA_KEY) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _is_session_command_response(value: Any) -> bool:
+    """Return whether a response acknowledges a session command, not an agent run."""
+    metadata = value.get("metadata") if isinstance(value, dict) else getattr(value, "metadata", None)
+    return isinstance(metadata, dict) and (
+        metadata.get(RESPONSE_KIND_METADATA_KEY) == SESSION_COMMAND_RESPONSE_KIND
+    )
 
 
 def build_ws_url(
@@ -214,14 +250,19 @@ async def run_web_chat(
     run_events: list[dict[str, Any]] = []
     reply_text = ""
     terminal_run_seen = False
-    terminal_reply_deadline: float | None = None
+    session_command_response_seen = False
+    client_turn_id = f"turn_{uuid4().hex}"
+    correlation_confirmed = False
     resolved_session_id = session_id or ""
     resolved_external_chat_id = external_chat_id
     snapshot_metadata: dict[str, Any] | None = None
 
     try:
         async with ClientSession() as session:
-            async with session.ws_connect(socket_url, timeout=timeout_seconds) as ws:
+            async with session.ws_connect(
+                socket_url,
+                timeout=ClientWSTimeout(ws_close=timeout_seconds),
+            ) as ws:
                 first = await ws.receive_json(timeout=min(timeout_seconds, 10.0))
                 if not isinstance(first, dict) or first.get("type") != "session":
                     raise RuntimeError(f"Expected session frame, got: {first}")
@@ -241,6 +282,7 @@ async def run_web_chat(
                         TURN_SOURCE_METADATA_KEY: CLI_VIA_WEB_TURN_SOURCE,
                         "gateway_url": gateway_url,
                         "ws_url": socket_url,
+                        CLIENT_TURN_ID_METADATA_KEY: client_turn_id,
                     },
                 }
                 if snapshot_metadata is not None:
@@ -251,10 +293,7 @@ async def run_web_chat(
 
                 while True:
                     now = time.monotonic()
-                    effective_deadline = deadline
-                    if terminal_reply_deadline is not None:
-                        effective_deadline = min(effective_deadline, terminal_reply_deadline)
-                    remaining = effective_deadline - now
+                    remaining = deadline - now
                     if remaining <= 0:
                         if terminal_run_seen and reply_text:
                             break
@@ -278,7 +317,14 @@ async def run_web_chat(
                     if frame.get("type") == "run_event":
                         event_type = str(frame.get("event_type") or "")
                         frame_run_id = str(frame.get("run_id") or "") or None
+                        frame_turn_id = _frame_client_turn_id(frame)
+                        if frame_turn_id and frame_turn_id != client_turn_id:
+                            continue
+                        if frame_turn_id == client_turn_id:
+                            correlation_confirmed = True
                         if run_id is None:
+                            if frame_turn_id != client_turn_id:
+                                continue
                             if event_type not in {RUN_STARTED_EVENT, RUN_FAILED_EVENT, RUN_CANCELLED_EVENT}:
                                 continue
                             run_id = frame_run_id
@@ -290,32 +336,26 @@ async def run_web_chat(
                             run_status = str(frame.get("status") or "")
                             if not run_status and isinstance(frame.get("payload"), dict):
                                 run_status = str(frame["payload"].get("status") or "")
-                            if reply_text:
-                                terminal_reply_deadline = time.monotonic() + 1.0
                     elif frame.get("type") == "message":
+                        frame_turn_id = _frame_client_turn_id(frame)
+                        if frame_turn_id and frame_turn_id != client_turn_id:
+                            continue
+                        if frame_turn_id == client_turn_id:
+                            correlation_confirmed = True
+                        elif correlation_confirmed:
+                            continue
                         frame_run_id = str(frame.get("run_id") or "") or None
                         if frame_run_id and run_id and frame_run_id != run_id:
                             continue
-                        if run_id is None:
+                        if run_id is None and frame_turn_id != client_turn_id:
                             continue
                         reply_text = str(frame.get("text") or "")
+                        session_command_response_seen = _is_session_command_response(frame)
+                        if session_command_response_seen:
+                            break
                         if terminal_run_seen:
                             break
     except (ClientError, asyncio.TimeoutError, TimeoutError, OSError, RuntimeError) as exc:
-        if reply_text and run_id and isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
-            return _web_chat_payload(
-                ok=True,
-                gateway_url=gateway_url,
-                socket_url=socket_url,
-                resolved_session_id=resolved_session_id,
-                resolved_external_chat_id=resolved_external_chat_id,
-                run_id=run_id,
-                run_status=run_status,
-                reply_text=reply_text,
-                run_events=run_events,
-                started=started,
-                workspace_snapshot=snapshot_metadata,
-            )
         return _web_chat_payload(
             ok=False,
             gateway_url=gateway_url,
@@ -332,8 +372,8 @@ async def run_web_chat(
             workspace_snapshot=snapshot_metadata,
         )
 
-    terminal_status = run_status.strip().lower()
-    ok = terminal_status not in {"failed", "incomplete", "needs_verification", "cancelled", "canceled", "error"}
+    ok = session_command_response_seen or _run_succeeded(run_status)
+    status_error = f"Web gateway run ended with status: {run_status or '<missing>'}"
     return _web_chat_payload(
         ok=ok,
         gateway_url=gateway_url,
@@ -345,7 +385,7 @@ async def run_web_chat(
         reply_text=reply_text,
         run_events=run_events,
         started=started,
-        error=("Web gateway run ended with status: " + run_status) if not ok else "",
+        error=status_error if not ok else "",
         error_type="RunStatusError" if not ok else "",
         workspace_snapshot=snapshot_metadata,
     )
@@ -425,7 +465,9 @@ async def run_cli_chat(
 def result_payload(result: CliChatResult, trace_summary: dict[str, Any]) -> dict[str, Any]:
     """Convert a chat result into stable JSON for scripts."""
     return {
-        "ok": not bool(result.error),
+        "ok": not bool(result.error) and (
+            _is_session_command_response(result.response) or _run_succeeded(result.run_status)
+        ),
         "mode": "cli",
         "session_id": result.response.session_id,
         "external_chat_id": result.response.external_chat_id,
@@ -528,7 +570,10 @@ def chat_command(
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
+    payload = result_payload(result, trace_summary)
     if json_output:
-        _echo_json(result_payload(result, trace_summary))
-        return
-    _render_text(result, trace_summary)
+        _echo_json(payload)
+    else:
+        _render_text(result, trace_summary)
+    if not payload["ok"]:
+        raise typer.Exit(code=1)

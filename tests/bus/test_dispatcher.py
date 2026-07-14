@@ -1,5 +1,4 @@
 import asyncio
-import json
 from dataclasses import dataclass
 
 from opensprite.bus.events import RunEvent
@@ -11,10 +10,8 @@ from opensprite.cron.types import CronJob, CronSchedule
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
     RUN_PART_DELTA_EVENT,
-    TASK_INTENT_DETECTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
-    WORK_PROGRESS_UPDATED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.storage import MemoryStorage
@@ -39,17 +36,6 @@ class FakeAgent:
 
 class ReplyProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        system_text = _message_content(messages[0]) if messages else ""
-        if "initial task shape" in system_text:
-            return LLMResponse(content=_initial_task_planning_content(messages), model="fake-model")
-        if "OpenSprite task planner" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"task_type":"pure_answer","required_tools":[],"final_answer_required":true,'
-                    '"allow_no_tool_final":true,"reason":"test planner contract"}'
-                ),
-                model="fake-model",
-            )
         return LLMResponse(content="trace pong", model="fake-model")
 
     def get_default_model(self) -> str:
@@ -73,62 +59,10 @@ class ToolReplyProvider:
         ]
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        system_text = _message_content(messages[0]) if messages else ""
-        if "initial task shape" in system_text:
-            return LLMResponse(content=_initial_task_planning_content(messages), model="fake-model")
-        if "OpenSprite task planner" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"task_type":"task","required_tools":["dummy"],"final_answer_required":true,'
-                    '"allow_no_tool_final":false,"reason":"test planner tool trace contract"}'
-                ),
-                model="fake-model",
-            )
         return self.responses.pop(0)
 
     def get_default_model(self) -> str:
         return "fake-model"
-
-
-def _message_content(message) -> str:
-    return str(getattr(message, "content", "") or "")
-
-
-def _initial_task_planning_content(messages) -> str:
-    prompt_text = "\n".join(_message_content(message) for message in messages)
-    prompt_lower = prompt_text.lower()
-    objective = "handle message"
-    kind = "conversation"
-    if "dummy" in prompt_lower or "tool" in prompt_lower:
-        objective = "use the dummy tool"
-        kind = "task"
-    return json.dumps(
-        {
-            "task_intent": {
-                "kind": kind,
-                "objective": objective,
-                "constraints": [],
-                "done_criteria": ["the request is handled"],
-                "needs_clarification": False,
-                "long_running": False,
-                "expects_code_change": False,
-                "expects_verification": False,
-                "verification_hint": None,
-            },
-            "task_context": {
-                "is_follow_up": False,
-                "should_inherit_active_task": False,
-                "should_seed_active_task": False,
-                "should_replace_active_task": False,
-                "inherited_task_type": None,
-                "continuation_type": "none",
-                "confidence": 0.8,
-                "reason": "test initial task planning",
-            },
-            "confidence": 0.9,
-            "reason": "test initial task planning",
-        }
-    )
 
 
 async def _run_queue_once(agent_channel: str, inbound_channel: str):
@@ -152,6 +86,11 @@ async def _run_queue_once(agent_channel: str, inbound_channel: str):
     try:
         await queue.enqueue_raw(content="ping", external_chat_id="chat-1", channel=inbound_channel)
         await asyncio.wait_for(event.wait(), timeout=2)
+        for _ in range(20):
+            if f"{inbound_channel}:chat-1" not in queue._active_tasks:
+                break
+            await asyncio.sleep(0)
+        assert f"{inbound_channel}:chat-1" not in queue._active_tasks
     finally:
         await queue.stop()
         await asyncio.wait_for(processor, timeout=2)
@@ -178,8 +117,6 @@ def test_command_detection_ignores_empty_text():
     assert MessageQueue.is_stop_command("   ") is False
     assert MessageQueue.is_reset_command("") is False
     assert MessageQueue.is_cron_command("") is False
-    assert MessageQueue.is_task_command("") is False
-    assert MessageQueue.is_goal_command("") is False
 
 
 def test_help_command_detection_supports_mentions_and_args():
@@ -468,7 +405,7 @@ def test_curator_run_command_replies_immediately_without_running_agent_loop():
                 "running": True,
                 "queued": False,
                 "rerun_pending": False,
-                "jobs": ["memory", "recent_summary", "user_profile", "active_task", "skills"],
+                "jobs": ["memory", "recent_summary", "user_profile", "skills"],
                 "run_id": "run-123",
                 "scheduled": True,
             }
@@ -500,7 +437,7 @@ def test_curator_run_command_replies_immediately_without_running_agent_loop():
     assert responses == [
         (
             "telegram:same-chat",
-            "已排入背景整理。\n\nCurator 狀態:\n- 狀態: running\n- 已暫停: no\n- 執行次數: 0\n- 上次執行: never\n- 上次摘要: none\n- 待補跑: no\n- 工作: memory, recent_summary, user_profile, active_task, skills\n- 關聯 run: run-123",
+            "已排入背景整理。\n\nCurator 狀態:\n- 狀態: running\n- 已暫停: no\n- 執行次數: 0\n- 上次執行: never\n- 上次摘要: none\n- 待補跑: no\n- 工作: memory, recent_summary, user_profile, skills\n- 關聯 run: run-123",
         )
     ]
 
@@ -573,7 +510,7 @@ def test_curator_run_command_rejects_invalid_scope():
 
     assert seen_messages == []
     assert responses == [
-        "Unknown curator scope: nope. Valid scopes: maintenance, skills, memory, recent_summary, user_profile, active_task"
+        "Unknown curator scope: nope. Valid scopes: maintenance, skills, memory, recent_summary, user_profile"
     ]
 
 
@@ -848,25 +785,13 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type=WORK_PROGRESS_UPDATED_EVENT,
-                payload={"status": "waiting_user"},
-            )
-        )
-        waiting_user = queue.session_status.get("web:browser-1")
-
-        await queue._set_session_status_from_run_event(
-            RunEvent(
-                channel="web",
-                external_chat_id="browser-1",
-                session_id="web:browser-1",
-                run_id="run-1",
                 event_type=RUN_FINISHED_EVENT,
             )
         )
         idle = queue.session_status.get("web:browser-1")
-        return thinking, streaming, tool_running, retry, waiting_user, idle
+        return thinking, streaming, tool_running, retry, idle
 
-    thinking, streaming, tool_running, retry, waiting_user, idle = asyncio.run(scenario())
+    thinking, streaming, tool_running, retry, idle = asyncio.run(scenario())
 
     assert thinking.status == "thinking"
     assert thinking.metadata["run_id"] == "run-1"
@@ -875,7 +800,6 @@ def test_message_queue_maps_run_events_to_granular_session_status():
     assert tool_running.metadata["tool_name"] == "demo"
     assert retry.status == "retry"
     assert retry.metadata["message"] == "provider busy"
-    assert waiting_user.status == "waiting_user"
     assert idle.status == "idle"
 
 
@@ -927,6 +851,206 @@ def test_message_queue_cancel_session_requests_active_run_cancel_first():
     assert cancel_calls == [("telegram:cancel-chat", "run-active", "telegram", "cancel-chat")]
 
 
+def test_message_queue_counts_successful_cooperative_cancel_even_when_task_finishes_late():
+    class FinishingAgent(FakeAgent):
+        def get_active_run(self, _session_id):
+            return FakeActiveRun("run-active")
+
+        async def request_run_cancel(self, *args, **kwargs):
+            return True
+
+    async def finish_after_cancel(started):
+        started.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            return "completed"
+
+    async def scenario():
+        started = asyncio.Event()
+        queue = MessageQueue(FinishingAgent(response_channel="telegram"))
+        task = asyncio.create_task(finish_after_cancel(started))
+        queue._active_tasks["telegram:cancel-chat"] = [task]
+        await started.wait()
+        cancelled = await queue.cancel_session("telegram:cancel-chat")
+        return cancelled, task.result(), queue.session_status.get("telegram:cancel-chat")
+
+    cancelled, result, status = asyncio.run(scenario())
+
+    assert cancelled == 1
+    assert result == "completed"
+    assert status.status == "idle"
+
+
+def test_message_queue_stop_fences_messages_still_waiting_in_inbound_queue():
+    async def scenario():
+        agent = FakeAgent(response_channel="telegram")
+        queue = MessageQueue(agent)
+        received = asyncio.Event()
+
+        async def handler(*_args):
+            received.set()
+
+        queue.register_response_handler("telegram", handler)
+        await queue.enqueue_raw(content="stale", external_chat_id="stop-chat", channel="telegram")
+        cancelled = await queue.cancel_session("telegram:stop-chat")
+
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="fresh", external_chat_id="stop-chat", channel="telegram")
+            await asyncio.wait_for(received.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+        return cancelled, [message.text for message in agent.seen_messages]
+
+    cancelled, seen = asyncio.run(scenario())
+
+    assert cancelled == 1
+    assert seen == ["fresh"]
+
+
+def test_message_queue_cancels_all_session_tails_before_any_later_tail_can_start():
+    class TailAgent(FakeAgent):
+        def __init__(self):
+            super().__init__(response_channel="telegram")
+            self.first_started = asyncio.Event()
+
+        async def process(self, user_message):
+            self.seen_messages.append(user_message)
+            if user_message.text == "first":
+                self.first_started.set()
+                try:
+                    await asyncio.Future()
+                except asyncio.CancelledError:
+                    return AssistantMessage(
+                        text="finished during cancellation",
+                        channel="telegram",
+                        external_chat_id=user_message.external_chat_id,
+                        session_id=user_message.session_id,
+                    )
+            return AssistantMessage(
+                text="unexpected later tail",
+                channel="telegram",
+                external_chat_id=user_message.external_chat_id,
+                session_id=user_message.session_id,
+            )
+
+    async def scenario():
+        agent = TailAgent()
+        queue = MessageQueue(agent)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="first", external_chat_id="tail-chat", channel="telegram")
+            await asyncio.wait_for(agent.first_started.wait(), timeout=2)
+            await queue.enqueue_raw(content="second", external_chat_id="tail-chat", channel="telegram")
+            await queue.enqueue_raw(content="third", external_chat_id="tail-chat", channel="telegram")
+            for _ in range(50):
+                if len(queue._active_tasks.get("telegram:tail-chat", [])) == 3:
+                    break
+                await asyncio.sleep(0)
+            cancelled = await queue.cancel_session("telegram:tail-chat")
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+        return cancelled, [message.text for message in agent.seen_messages]
+
+    cancelled, seen = asyncio.run(scenario())
+
+    assert cancelled == 3
+    assert seen == ["first"]
+
+
+def test_message_queue_waits_for_cancelled_tail_cleanup_before_starting_fresh_generation():
+    class CleanupRaceAgent(FakeAgent):
+        def __init__(self):
+            super().__init__(response_channel="telegram")
+            self.first_started = asyncio.Event()
+            self.cancellation_seen = asyncio.Event()
+            self.release_cleanup = asyncio.Event()
+            self.fresh_attempted = asyncio.Event()
+            self.run_active = False
+
+        def get_active_run(self, _session_id):
+            return FakeActiveRun(run_id="run-1") if self.run_active else None
+
+        async def request_run_cancel(self, *_args, **_kwargs):
+            return True
+
+        async def process(self, user_message):
+            if user_message.text == "first":
+                self.run_active = True
+                self.first_started.set()
+                try:
+                    await asyncio.Future()
+                except asyncio.CancelledError:
+                    self.cancellation_seen.set()
+                    await self.release_cleanup.wait()
+                    self.run_active = False
+                    raise
+
+            self.fresh_attempted.set()
+            if self.run_active:
+                raise RuntimeError("run is still active")
+            self.seen_messages.append(user_message)
+            return AssistantMessage(
+                text="fresh pong",
+                channel="telegram",
+                external_chat_id=user_message.external_chat_id,
+                session_id=user_message.session_id,
+            )
+
+    async def scenario():
+        agent = CleanupRaceAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        response_received = asyncio.Event()
+
+        async def handler(message, *_args):
+            responses.append(message.text)
+            response_received.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        cancel_task = None
+        try:
+            await queue.enqueue_raw(content="first", external_chat_id="race-chat", channel="telegram")
+            await asyncio.wait_for(agent.first_started.wait(), timeout=2)
+
+            cancel_task = asyncio.create_task(queue.cancel_session("telegram:race-chat"))
+            await asyncio.wait_for(agent.cancellation_seen.wait(), timeout=2)
+            await queue.enqueue_raw(content="fresh", external_chat_id="race-chat", channel="telegram")
+
+            try:
+                await asyncio.wait_for(agent.fresh_attempted.wait(), timeout=0.1)
+                started_before_cleanup = True
+            except asyncio.TimeoutError:
+                started_before_cleanup = False
+
+            agent.release_cleanup.set()
+            cancelled = await asyncio.wait_for(cancel_task, timeout=2)
+            await asyncio.wait_for(response_received.wait(), timeout=2)
+            return (
+                cancelled,
+                started_before_cleanup,
+                [message.text for message in agent.seen_messages],
+                responses,
+            )
+        finally:
+            agent.release_cleanup.set()
+            if cancel_task is not None and not cancel_task.done():
+                await asyncio.wait_for(cancel_task, timeout=2)
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+    cancelled, started_before_cleanup, seen, responses = asyncio.run(scenario())
+
+    assert cancelled == 1
+    assert started_before_cleanup is False
+    assert seen == ["fresh"]
+    assert responses == ["fresh pong"]
+
+
 def test_message_queue_persists_run_trace_for_telegram_message(tmp_path):
     async def scenario():
         storage = MemoryStorage()
@@ -965,17 +1089,13 @@ def test_message_queue_persists_run_trace_for_telegram_message(tmp_path):
     assert run.metadata["external_chat_id"] == "trace-chat"
     event_types = [event.event_type for event in events]
     assert RUN_STARTED_EVENT in event_types
-    assert TASK_INTENT_DETECTED_EVENT in event_types
     assert RUN_FINISHED_EVENT in event_types
     assert events[0].payload["status"] == "running"
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == [
         "llm_step",
-        "task_checkpoint",
-        "task_scorecard",
         "assistant_message",
     ]
-    assert parts[1].metadata["task_type"] == "pure_answer"
     assert parts[-1].content == "trace pong"
 
 
@@ -1021,9 +1141,6 @@ def test_message_queue_persists_tool_trace_for_telegram_message(tmp_path):
     assert [event.payload["tool_name"] for event in tool_events] == ["dummy", "dummy"]
     part_types = [part.part_type for part in parts]
     assert part_types[:4] == ["tool_call", "tool_result", "llm_step", "llm_step"]
-    assert "task_checkpoint" in part_types
-    assert "task_scorecard" in part_types
-    assert "task_checklist" in part_types
     assert any(part.part_type == "assistant_message" and part.content == "tool trace pong" for part in parts)
     tool_parts = [part for part in parts if part.part_type in {"tool_call", "tool_result"}]
     assert [part.tool_name for part in tool_parts] == ["dummy", "dummy"]
@@ -1846,913 +1963,3 @@ def test_cron_command_reports_invalid_add_usage(tmp_path):
 
     assert len(responses) == 1
     assert "Error: every requires an integer number of seconds" in responses[0][1]
-
-
-def test_task_set_command_replies_immediately_without_running_agent_loop():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = None
-
-        async def show_active_task(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            self.current_task = f"# Active Task\n\n- Status: active\n- Goal: {task_text}"
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            if self.current_task is None:
-                return None
-            self.current_task = f"# Active Task\n\n- Status: {status}\n- Goal: existing"
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task set Refactor the agent carefully", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses, agent.seen_messages
-
-    responses, seen_messages = asyncio.run(scenario())
-
-    assert responses == [
-        ("telegram:same-chat", "已設定目前任務。\n\n# Active Task\n\n- Status: active\n- Goal: Refactor the agent carefully")
-    ]
-    assert seen_messages == []
-
-
-def test_goal_command_replies_immediately_without_running_agent_loop():
-    class GoalAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.goal_text = None
-
-        async def set_goal_from_text(self, session_id, goal_text):
-            self.goal_text = goal_text
-            return f"# Active Task\n\n- Status: active\n- Goal: {goal_text}"
-
-    async def scenario():
-        agent = GoalAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/goal Finish phase two", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses, agent.seen_messages, agent.goal_text
-
-    responses, seen_messages, goal_text = asyncio.run(scenario())
-
-    assert responses == [
-        ("telegram:same-chat", "已設定目前目標。\n\n# Active Task\n\n- Status: active\n- Goal: Finish phase two")
-    ]
-    assert seen_messages == []
-    assert goal_text == "Finish phase two"
-
-
-def test_task_show_and_done_commands_use_current_task_state_immediately():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"
-
-        async def show_active_task(self, session_id):
-            return "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"
-
-        async def show_active_task_full(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            self.current_task = f"# Active Task\n\n- Status: active\n- Goal: {task_text}"
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            if self.current_task is None:
-                return None
-            self.current_task = f"# Active Task\n\n- Status: {status}\n- Goal: Keep the agent on task"
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            if len(responses) == 2:
-                event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task show", external_chat_id="same-chat", channel="telegram")
-            await queue.enqueue_raw(content="/task done", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        ("telegram:same-chat", "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"),
-        ("telegram:same-chat", "已將目前任務標記為完成。\n\n# Active Task\n\n- Status: done\n- Goal: Keep the agent on task"),
-    ]
-
-
-def test_task_show_full_returns_full_task_block():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: inspect\n- Next step: verify"
-
-        async def show_active_task(self, session_id):
-            return "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"
-
-        async def show_active_task_full(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task show full", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        (
-            "telegram:same-chat",
-            "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: inspect\n- Next step: verify",
-        )
-    ]
-
-
-def test_task_show_reports_no_active_task_when_empty():
-    class TaskAgent(FakeAgent):
-        async def show_active_task(self, session_id):
-            return None
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return None
-
-        async def mark_active_task_status(self, session_id, status):
-            return None
-
-        async def reset_active_task(self, session_id):
-            return None
-
-        async def activate_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def block_active_task(self, session_id, reason):
-            return None
-
-        async def wait_on_active_task(self, session_id, question):
-            return None
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return None
-
-        async def advance_active_task(self, session_id):
-            return None
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task show", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [("telegram:same-chat", "目前沒有進行中的任務。")]
-
-
-def test_task_history_returns_recent_task_events_immediately():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.history = "# Active Task History\n\n- [2026-04-24 10:00:00] set (user)\n  - status: active"
-
-        async def show_active_task(self, session_id):
-            return None
-
-        async def show_active_task_history(self, session_id, *, limit=10):
-            return self.history
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return None
-
-        async def mark_active_task_status(self, session_id, status):
-            return None
-
-        async def reset_active_task(self, session_id):
-            return None
-
-        async def activate_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def block_active_task(self, session_id, reason):
-            return None
-
-        async def wait_on_active_task(self, session_id, question):
-            return None
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return None
-
-        async def advance_active_task(self, session_id):
-            return None
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task history", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        ("telegram:same-chat", "# Active Task History\n\n- [2026-04-24 10:00:00] set (user)\n  - status: active")
-    ]
-
-
-def test_task_history_respects_optional_limit_argument():
-    class TaskAgent(FakeAgent):
-        async def show_active_task(self, session_id):
-            return None
-
-        async def show_active_task_history(self, session_id, *, limit=10):
-            return f"# Active Task History\n\n- limit: {limit}"
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return None
-
-        async def mark_active_task_status(self, session_id, status):
-            return None
-
-        async def reset_active_task(self, session_id):
-            return None
-
-        async def activate_active_task(self, session_id):
-            return None
-
-        async def reopen_active_task(self, session_id):
-            return None
-
-        async def block_active_task(self, session_id, reason):
-            return None
-
-        async def wait_on_active_task(self, session_id, question):
-            return None
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return None
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return None
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return None
-
-        async def advance_active_task(self, session_id):
-            return None
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task history 1", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [("telegram:same-chat", "# Active Task History\n\n- limit: 1")]
-
-
-def test_task_block_command_marks_task_blocked_immediately():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"
-
-        async def show_active_task(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            self.current_task = f"# Active Task\n\n- Status: blocked\n- Goal: Keep the agent on task\n- Open questions:\n  - {reason}"
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task block waiting for test environment", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        (
-            "telegram:same-chat",
-            "已將目前任務標記為阻塞。\n\n# Active Task\n\n- Status: blocked\n- Goal: Keep the agent on task\n- Open questions:\n  - waiting for test environment",
-        )
-    ]
-
-
-def test_task_next_without_argument_advances_existing_next_step():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: inspect\n- Next step: verify"
-
-        async def show_active_task(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            self.current_task = f"# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: inspect\n- Next step: {step_text}"
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: verify\n- Next step: not set"
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task next", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        (
-            "telegram:same-chat",
-            "已將下一步提升為目前步驟。\n\n# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: verify\n- Next step: not set",
-        )
-    ]
-
-
-def test_task_complete_marks_current_step_complete_immediately():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task\n- Current step: verify\n- Next step: not set"
-
-        async def show_active_task(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            self.current_task = "# Active Task\n\n- Status: done\n- Goal: Keep the agent on task\n- Current step: not set\n- Next step: not set"
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task complete", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        (
-            "telegram:same-chat",
-            "已完成目前步驟。\n\n# Active Task\n\n- Status: done\n- Goal: Keep the agent on task\n- Current step: not set\n- Next step: not set",
-        )
-    ]
-
-
-def test_task_reopen_reactivates_terminal_task():
-    class TaskAgent(FakeAgent):
-        def __init__(self):
-            super().__init__()
-            self.current_task = "# Active Task\n\n- Status: done\n- Goal: Keep the agent on task"
-
-        async def show_active_task(self, session_id):
-            return self.current_task
-
-        async def show_active_task_history(self, session_id):
-            return None
-
-        async def set_active_task_from_text(self, session_id, task_text):
-            return self.current_task
-
-        async def mark_active_task_status(self, session_id, status):
-            return self.current_task
-
-        async def reset_active_task(self, session_id):
-            self.current_task = None
-
-        async def activate_active_task(self, session_id):
-            return self.current_task
-
-        async def reopen_active_task(self, session_id):
-            self.current_task = "# Active Task\n\n- Status: active\n- Goal: Keep the agent on task"
-            return self.current_task
-
-        async def block_active_task(self, session_id, reason):
-            return self.current_task
-
-        async def wait_on_active_task(self, session_id, question):
-            return self.current_task
-
-        async def set_active_task_current_step(self, session_id, step_text):
-            return self.current_task
-
-        async def complete_active_task_step(self, session_id, next_step_override=None):
-            return self.current_task
-
-        async def set_active_task_next_step(self, session_id, step_text):
-            return self.current_task
-
-        async def advance_active_task(self, session_id):
-            return self.current_task
-
-    async def scenario():
-        agent = TaskAgent()
-        queue = MessageQueue(agent)
-        responses = []
-        event = asyncio.Event()
-
-        async def handler(message, channel, external_chat_id):
-            responses.append((message.session_id, message.text))
-            event.set()
-
-        queue.register_response_handler("telegram", handler)
-        processor = asyncio.create_task(queue.process_queue())
-        try:
-            await queue.enqueue_raw(content="/task reopen", external_chat_id="same-chat", channel="telegram")
-            await asyncio.wait_for(event.wait(), timeout=2)
-        finally:
-            await queue.stop()
-            await asyncio.wait_for(processor, timeout=2)
-
-        return responses
-
-    responses = asyncio.run(scenario())
-
-    assert responses == [
-        (
-            "telegram:same-chat",
-            "已重新開啟目前任務。\n\n# Active Task\n\n- Status: active\n- Goal: Keep the agent on task",
-        )
-    ]

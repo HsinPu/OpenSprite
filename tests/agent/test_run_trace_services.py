@@ -1,26 +1,22 @@
 import asyncio
-import subprocess
 from types import SimpleNamespace
 
-from opensprite.agent.task.contract import (
-    PLANNER_METADATA_REASON_FIELD,
-    PLANNER_METADATA_STATUS_FIELD,
-    PLANNER_VALIDATED_STATUS,
-)
+import pytest
+
 from opensprite.runs.trace import RunHookService
+from opensprite.runs.session_entries import serialize_message_entry
 from opensprite.agent.execution_support.events import LlmStepEvent
 from opensprite.runs.trace import (
     RUN_PART_CONTENT_MAX_CHARS,
+    RunEventPersistenceError,
     RunEventSink,
     RunTraceRecorder,
-    WorktreeSandboxInspector,
     truncate_run_part_content,
 )
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
-    COMPLETION_GATE_EVALUATED_EVENT,
+    FILE_CHANGED_EVENT,
     RUN_PART_DELTA_EVENT,
-    TASK_SCORECARD_RECORDED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     VERIFICATION_RESULT_EVENT,
@@ -34,24 +30,26 @@ from opensprite.runs.lifecycle import (
     RUN_FINISHED_EVENT,
     RUN_RUNNING_STATUS,
     RUN_STARTED_EVENT,
+    RUN_STOPPED_STATUS,
 )
 from opensprite.runs.schema import (
-    RUN_SUMMARY_STATUS_NOT_ATTEMPTED,
     RUN_SUMMARY_STATUS_PASSED,
     RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC,
-    RUN_WARNING_TASK_SCORECARD_PREFIX,
     RUN_WARNING_PARALLEL_DELEGATION_FAILED,
-    RUN_WARNING_REVIEW_NOT_PASSED,
     compact_run_events,
+    is_retired_lifecycle_event,
+    is_retired_lifecycle_part,
+    sanitize_run_metadata,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
     serialize_run_event_counts,
     serialize_run_events,
     serialize_run_part,
+    serialize_run_parts,
     serialize_run_summary,
 )
-from opensprite.storage import MemoryStorage, StoredWorkState
+from opensprite.storage import MemoryStorage, StorageProvider
 
 
 def test_run_trace_lifecycle_markers_are_stable():
@@ -62,6 +60,172 @@ def test_run_trace_lifecycle_markers_are_stable():
     assert RUN_FINISHED_EVENT == "run_finished"
     assert RUN_FAILED_EVENT == "run_failed"
     assert RUN_CANCELLED_EVENT == "run_cancelled"
+
+
+def test_run_trace_recorder_rejects_missing_durable_create_result():
+    class MissingCreateStorage(MemoryStorage):
+        async def create_run(self, *args, **kwargs):
+            return None
+
+    async def scenario():
+        recorder = RunTraceRecorder(storage=MissingCreateStorage(), message_bus_getter=lambda: None)
+        with pytest.raises(RuntimeError, match="did not create"):
+            await recorder.create_run("web:browser-1", "run-missing")
+
+    asyncio.run(scenario())
+
+
+def test_run_trace_recorder_rejects_missing_durable_update_result():
+    class MissingUpdateStorage(MemoryStorage):
+        async def update_run_status(self, *args, **kwargs):
+            return None
+
+    async def scenario():
+        storage = MissingUpdateStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await storage.create_run("web:browser-1", "run-1")
+        with pytest.raises(RuntimeError, match="did not update"):
+            await recorder.update_run_status("web:browser-1", "run-1", "completed")
+
+    asyncio.run(scenario())
+
+
+def test_run_trace_recorder_does_not_emit_completed_when_durable_update_is_missing():
+    class MissingUpdateStorage(MemoryStorage):
+        async def update_run_status(self, *args, **kwargs):
+            return None
+
+    async def scenario():
+        storage = MissingUpdateStorage()
+        bus = MessageBus()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: bus)
+        await storage.create_run("web:browser-1", "run-1")
+        with pytest.raises(RuntimeError, match="did not update"):
+            await recorder.complete_run(
+                "web:browser-1",
+                "run-1",
+                event_payload={"status": "completed"},
+                channel="web",
+                external_chat_id="browser-1",
+            )
+        return await storage.get_run("web:browser-1", "run-1"), bus.run_events_size
+
+    run, live_event_count = asyncio.run(scenario())
+
+    assert run is not None
+    assert run.status == "running"
+    assert live_event_count == 0
+
+
+def test_cancelled_run_commit_survives_repeated_caller_cancellation():
+    class BlockingCancelStorage(MemoryStorage):
+        def __init__(self):
+            super().__init__()
+            self.cancel_update_started = asyncio.Event()
+            self.release_cancel_update = asyncio.Event()
+
+        async def update_run_status(self, session_id, run_id, status, **kwargs):
+            if status == RUN_CANCELLED_STATUS:
+                self.cancel_update_started.set()
+                await self.release_cancel_update.wait()
+            return await super().update_run_status(session_id, run_id, status, **kwargs)
+
+    async def scenario():
+        storage = BlockingCancelStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await storage.create_run("web:browser-1", "run-cancelled")
+        commit = asyncio.create_task(
+            recorder.fail_run(
+                "web:browser-1",
+                "run-cancelled",
+                status=RUN_CANCELLED_STATUS,
+                event_payload={"reason": "cancelled"},
+            )
+        )
+        await storage.cancel_update_started.wait()
+        commit.cancel()
+        await asyncio.sleep(0)
+        storage.release_cancel_update.set()
+        await commit
+        run = await storage.get_run("web:browser-1", "run-cancelled")
+        events = await storage.get_run_events("web:browser-1", "run-cancelled")
+        return run, events, commit.cancelled()
+
+    run, events, was_cancelled = asyncio.run(scenario())
+
+    assert run is not None
+    assert run.status == RUN_CANCELLED_STATUS
+    assert run.finished_at is not None
+    assert events[-1].event_type == RUN_CANCELLED_EVENT
+    assert was_cancelled is False
+
+
+def test_run_trace_recorder_accepts_legacy_storage_without_optional_run_api():
+    class LegacyStorage(StorageProvider):
+        def __init__(self):
+            self.messages = {}
+            self.consolidated = {}
+
+        async def get_messages(self, session_id, limit=None):
+            messages = list(self.messages.get(session_id, []))
+            return messages[-limit:] if limit else messages
+
+        async def add_message(self, session_id, message):
+            self.messages.setdefault(session_id, []).append(message)
+
+        async def clear_messages(self, session_id):
+            self.messages.pop(session_id, None)
+
+        async def get_consolidated_index(self, session_id):
+            return self.consolidated.get(session_id, 0)
+
+        async def set_consolidated_index(self, session_id, index):
+            self.consolidated[session_id] = index
+
+        async def get_all_sessions(self):
+            return sorted(self.messages)
+
+    async def scenario():
+        storage = LegacyStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await recorder.create_run("web:browser-1", "run-legacy")
+        await recorder.update_run_status("web:browser-1", "run-legacy", "completed")
+        return await storage.get_run("web:browser-1", "run-legacy")
+
+    assert asyncio.run(scenario()) is None
+
+
+def test_run_trace_recorder_rejects_partial_optional_run_contract():
+    class PartialRunStorage(StorageProvider):
+        async def get_messages(self, session_id, limit=None):
+            return []
+
+        async def add_message(self, session_id, message):
+            return None
+
+        async def clear_messages(self, session_id):
+            return None
+
+        async def get_consolidated_index(self, session_id):
+            return 0
+
+        async def set_consolidated_index(self, session_id, index):
+            return None
+
+        async def get_all_sessions(self):
+            return []
+
+        async def create_run(self, *args, **kwargs):
+            return SimpleNamespace(run_id="run-partial")
+
+    async def scenario():
+        recorder = RunTraceRecorder(storage=PartialRunStorage(), message_bus_getter=lambda: None)
+        with pytest.raises(RuntimeError, match="implement create_run and update_run_status together"):
+            await recorder.create_run("web:browser-1", "run-partial")
+        with pytest.raises(RuntimeError, match="implement create_run and update_run_status together"):
+            await recorder.update_run_status("web:browser-1", "run-partial", "completed")
+
+    asyncio.run(scenario())
 
 
 def test_truncate_run_part_content_bounds_large_payloads():
@@ -96,36 +260,6 @@ def test_run_trace_recorder_persists_bounded_parts():
     assert len(parts[0].content) <= RUN_PART_CONTENT_MAX_CHARS
     assert parts[0].content.endswith("THE-END")
     assert parts[0].metadata["content_truncated"] is True
-
-
-def test_run_trace_recorder_persists_task_checklist_part():
-    async def scenario():
-        storage = MemoryStorage()
-        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-        await storage.create_run("web:browser-1", "run-1")
-        todos = await recorder.record_task_checklist_part(
-            "web:browser-1",
-            "run-1",
-            StoredWorkState(
-                session_id="web:browser-1",
-                objective="Ship task artifacts",
-                kind="implementation",
-                current_step="build artifact",
-                next_step="verify artifact",
-                completed_steps=("inspect state",),
-                updated_at=123.0,
-            ),
-        )
-        return todos, await storage.get_run_parts("web:browser-1", "run-1")
-
-    todos, parts = asyncio.run(scenario())
-
-    assert [item["status"] for item in todos] == ["completed", "in_progress", "pending"]
-    assert len(parts) == 1
-    assert parts[0].part_type == "task_checklist"
-    assert "[in_progress] build artifact" in parts[0].content
-    assert parts[0].metadata["objective"] == "Ship task artifacts"
-    assert parts[0].metadata["todos"] == todos
 
 
 def test_run_trace_recorder_persists_operation_audit_part():
@@ -191,127 +325,6 @@ def test_run_trace_recorder_persists_llm_step_part():
     assert serialize_run_part(parts[0])["artifact"]["kind"] == "llm"
 
 
-def test_run_trace_recorder_persists_task_checkpoint_part():
-    async def scenario():
-        storage = MemoryStorage()
-        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-        await storage.create_run("web:browser-1", "run-1")
-        await recorder.record_task_checkpoint_part(
-            "web:browser-1",
-            "run-1",
-            {
-                "schema_version": 1,
-                "pass_index": 1,
-                "task_type": "code_change",
-                "completion": {"status": "incomplete", "reason": "verification_missing"},
-                "next_action": "continue_work",
-            },
-        )
-        return await storage.get_run_parts("web:browser-1", "run-1")
-
-    parts = asyncio.run(scenario())
-
-    assert len(parts) == 1
-    assert parts[0].part_type == "task_checkpoint"
-    assert "task=code_change" in parts[0].content
-    assert "completion=incomplete" in parts[0].content
-    assert "next=continue_work" in parts[0].content
-    assert parts[0].metadata["completion"]["reason"] == "verification_missing"
-    serialized = serialize_run_part(parts[0])
-    assert serialized["kind"] == "task"
-    assert serialized["artifact"]["title"] == "Task checkpoint"
-
-
-def test_run_trace_recorder_persists_task_scorecard_part():
-    async def scenario():
-        storage = MemoryStorage()
-        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-        await storage.create_run("web:browser-1", "run-1")
-        await recorder.record_task_scorecard_part(
-            "web:browser-1",
-            "run-1",
-            {
-                "schema_version": 1,
-                "kind": "task_scorecard",
-                "task": {"task_type": "code_change"},
-                "contract": {"task_type": "code_change"},
-                "completion": {"status": "incomplete"},
-                "trace_health": {"status": "fail", "sensor_counts": {"pass": 1, "warn": 1, "fail": 2}},
-            },
-        )
-        return await storage.get_run_parts("web:browser-1", "run-1")
-
-    parts = asyncio.run(scenario())
-
-    assert len(parts) == 1
-    assert parts[0].part_type == "task_scorecard"
-    assert "task=code_change" in parts[0].content
-    assert "completion=incomplete" in parts[0].content
-    assert "trace=fail" in parts[0].content
-    assert "sensors=1 pass/1 warn/2 fail" in parts[0].content
-    assert parts[0].metadata["task"]["task_type"] == "code_change"
-    serialized = serialize_run_part(parts[0])
-    assert serialized["kind"] == "task"
-    assert serialized["artifact"]["title"] == "Task scorecard"
-
-
-def test_worktree_sandbox_inspector_reports_disabled(tmp_path):
-    metadata = WorktreeSandboxInspector(enabled=False, workspace_root=tmp_path).inspect().to_payload()
-
-    assert metadata["enabled"] is False
-    assert metadata["status"] == "disabled"
-    assert metadata["workspace_root"] == str(tmp_path.resolve())
-
-
-def test_worktree_sandbox_creates_and_cleans_git_worktree(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
-    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True)
-    (repo / "README.md").write_text("hello\n", encoding="utf-8")
-    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
-
-    metadata = WorktreeSandboxInspector(enabled=True, workspace_root=repo).create(
-        session_id="web:browser-1",
-        run_id="run-1",
-    ).to_payload()
-
-    sandbox_path = metadata["sandbox_path"]
-    assert metadata["status"] == "created"
-    assert metadata["created"] is True
-    assert metadata["cleanup_supported"] is True
-    assert sandbox_path is not None
-    assert (tmp_path / "repo.opensprite-worktrees" / "web_browser-1" / "run-1" / "README.md").exists()
-
-    cleanup = WorktreeSandboxInspector.cleanup(sandbox_path)
-
-    assert cleanup["ok"] is True
-    assert cleanup["status"] == "removed"
-    assert not (tmp_path / "repo.opensprite-worktrees" / "web_browser-1" / "run-1").exists()
-
-
-def test_run_trace_recorder_persists_worktree_sandbox_part():
-    async def scenario():
-        storage = MemoryStorage()
-        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-        await storage.create_run("web:browser-1", "run-1")
-        await recorder.record_worktree_sandbox_part(
-            "web:browser-1",
-            "run-1",
-            {"enabled": True, "status": "ready", "base_branch": "main", "base_commit": "abc123"},
-        )
-        return await storage.get_run_parts("web:browser-1", "run-1")
-
-    parts = asyncio.run(scenario())
-
-    assert len(parts) == 1
-    assert parts[0].part_type == "worktree_sandbox"
-    assert parts[0].metadata["base_branch"] == "main"
-    assert serialize_run_part(parts[0])["artifact"]["kind"] == "work"
-
-
 def test_run_event_sink_persists_and_publishes_safe_payloads():
     async def scenario():
         storage = MemoryStorage()
@@ -341,6 +354,46 @@ def test_run_event_sink_persists_and_publishes_safe_payloads():
     assert bus_event.payload == stored_events[0].payload
     assert bus_event.channel == "web"
     assert bus_event.external_chat_id == "browser-1"
+
+
+def test_run_event_sink_can_require_durable_persistence():
+    class FailingEventStorage(MemoryStorage):
+        async def add_run_event(self, *args, **kwargs):
+            raise OSError("storage unavailable")
+
+    async def scenario():
+        sink = RunEventSink(storage=FailingEventStorage(), message_bus_getter=lambda: MessageBus())
+        await sink.emit(
+            "web:browser-1",
+            "run-1",
+            TOOL_RESULT_EVENT,
+            {"tool_name": "demo"},
+            channel="web",
+            external_chat_id="browser-1",
+            require_persistence=True,
+        )
+
+    with pytest.raises(RunEventPersistenceError, match="Failed to persist run event"):
+        asyncio.run(scenario())
+
+
+def test_run_event_sink_rejects_unavailable_required_persistence():
+    class UnsupportedEventStorage(MemoryStorage):
+        async def add_run_event(self, *args, **kwargs):
+            return None
+
+    async def scenario():
+        sink = RunEventSink(storage=UnsupportedEventStorage(), message_bus_getter=lambda: None)
+        await sink.emit(
+            "web:browser-1",
+            "run-1",
+            TOOL_RESULT_EVENT,
+            {"tool_name": "demo"},
+            require_persistence=True,
+        )
+
+    with pytest.raises(RunEventPersistenceError, match="persistence is unavailable"):
+        asyncio.run(scenario())
 
 
 def test_serialize_run_event_builds_stable_envelope():
@@ -416,129 +469,6 @@ def test_serialize_run_event_projects_tool_trace_metadata():
         "returned_items": 0,
         "error": "403 Forbidden",
     }
-
-
-def test_serialize_run_event_projects_task_artifact_summary():
-    event = SimpleNamespace(
-        event_id=44,
-        run_id="run-1",
-        session_id="web:browser-1",
-        event_type="task_artifacts.recorded",
-        payload={
-            "status": "completed",
-            "count": 1,
-            "artifacts": [
-                {
-                    "kind": "web_source",
-                    "source_tool": "web_search",
-                    "metadata": {
-                        "sources": [
-                            {
-                                "url": "https://www.reddit.com/dev/api/",
-                                "title": "Reddit API docs",
-                                "snippet": "Official Reddit API documentation.",
-                            }
-                        ]
-                    },
-                }
-            ],
-        },
-        created_at=12.8,
-    )
-
-    payload = serialize_run_event(event)
-
-    assert payload["kind"] == "work"
-    assert payload["status"] == "completed"
-    assert payload["artifact"] == {
-        "schema_version": 1,
-        "artifact_id": "task_artifacts",
-        "artifact_type": "task_artifacts",
-        "kind": "task",
-        "status": "completed",
-        "title": "Task artifacts",
-        "detail": "1 task artifact(s) · 1 source(s)",
-        "metadata": {
-            "status": "completed",
-            "count": 1,
-            "artifacts": [
-                {
-                    "kind": "web_source",
-                    "source_tool": "web_search",
-                    "metadata": {
-                        "sources": [
-                            {
-                                "url": "https://www.reddit.com/dev/api/",
-                                "title": "Reddit API docs",
-                                "snippet": "Official Reddit API documentation.",
-                            }
-                        ]
-                    },
-                }
-            ],
-        },
-    }
-
-
-def test_serialize_run_event_classifies_planned_contract_event():
-    event = SimpleNamespace(
-        event_id=45,
-        run_id="run-1",
-        session_id="web:browser-1",
-        event_type="task_contract.planned",
-        payload={
-            "task_type": "web_research",
-            "requirements": [{"kind": "required_tool", "tools": ["web_search"]}],
-            "planner_metadata": {PLANNER_METADATA_REASON_FIELD: "Current stock price needs web evidence."},
-        },
-        created_at=12.9,
-    )
-
-    payload = serialize_run_event(event)
-
-    assert payload["kind"] == "work"
-    assert payload["status"] == "completed"
-    assert payload["artifact"] is None
-
-
-def test_serialize_run_events_preserves_planned_contract_routes():
-    events = []
-    routes = (
-        ("web_research", "web_search"),
-        ("workspace_read", "read_file"),
-        ("history_retrieval", "search_history"),
-    )
-    for event_id, (task_type, required_tool) in enumerate(routes, start=1):
-        events.append(
-            SimpleNamespace(
-                event_id=event_id,
-                run_id="run-1",
-                session_id="web:browser-1",
-                event_type="task_contract.planned",
-                payload={
-                    "task_type": task_type,
-                    "requirements": [{"kind": "required_tool", "tools": [required_tool]}],
-                    "planner_metadata": {
-                        PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS,
-                        PLANNER_METADATA_REASON_FIELD: f"Route to {task_type}.",
-                    },
-                },
-                created_at=12.0 + event_id,
-            )
-        )
-
-    payload = serialize_run_events(events)
-
-    assert [event["kind"] for event in payload] == ["work", "work", "work"]
-    assert [event["payload"]["requirements"][0]["tools"][0] for event in payload] == [
-        "web_search",
-        "read_file",
-        "search_history",
-    ]
-    assert all(
-        event["payload"]["planner_metadata"][PLANNER_METADATA_STATUS_FIELD] == PLANNER_VALIDATED_STATUS
-        for event in payload
-    )
 
 
 def test_serialize_run_event_projects_curator_artifact():
@@ -976,6 +906,192 @@ def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
     }
 
 
+def test_serialize_file_changed_event_projects_the_durable_change_identity():
+    event = SimpleNamespace(
+        event_id=43,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type=FILE_CHANGED_EVENT,
+        payload={
+            "change_id": 3,
+            "tool_name": "apply_patch",
+            "path": "notes.txt",
+            "action": "modify",
+            "diff_len": 9,
+            "diff_preview": "-old +new",
+        },
+        created_at=12.75,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["payload"]["change_id"] == 3
+    assert payload["artifact"]["artifact_id"] == "file_change:3"
+    assert payload["artifact"]["source_id"] == "3"
+
+
+def test_run_serializers_hide_retired_lifecycle_rows_without_mutating_history():
+    retired_event_types = [
+        "task_contract.created",
+        "completion_gate.evaluated",
+        "auto_continue.completed",
+        "work_plan.created",
+        "work_progress.updated",
+        "task_artifacts.recorded",
+        "task_checkpoint.recorded",
+        "task_scorecard.recorded",
+        "task_intent.detected",
+        "task_context.resolved",
+        "active_task.seeded",
+        "tool_selection.resolved",
+    ]
+    events = [
+        SimpleNamespace(
+            event_id=index,
+            run_id="run-1",
+            session_id="web:browser-1",
+            event_type=event_type,
+            payload={"status": "completed", "legacy": True},
+            created_at=float(index),
+        )
+        for index, event_type in enumerate(retired_event_types, start=1)
+    ]
+    current_event = SimpleNamespace(
+        event_id=99,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type=RUN_FINISHED_EVENT,
+        payload={
+            "status": "completed",
+            "response_len": 12,
+            "task_contract": {"task_type": "coding"},
+            "completion_gate": {"status": "complete"},
+            "auto_continue_attempts": 2,
+            "work_progress": {"next_action": "legacy"},
+            "task_artifacts": [{"kind": "file"}],
+            "delegated_tasks": [{"task_id": "task-current"}],
+            "workflow_outcomes": [{"task_contract": "domain data must stay"}],
+        },
+        created_at=99.0,
+    )
+    events.append(current_event)
+
+    parts = [
+        SimpleNamespace(part_type="task_checklist"),
+        SimpleNamespace(part_type="task_checkpoint"),
+        SimpleNamespace(part_type="task_scorecard"),
+        SimpleNamespace(
+            part_id=4,
+            run_id="run-1",
+            session_id="web:browser-1",
+            part_type="assistant_message",
+            tool_name=None,
+            content="done",
+            metadata={
+                "response_len": 4,
+                "completion_status": "complete",
+                "delegated_tasks": [{"task_id": "task-current"}],
+            },
+            created_at=100.0,
+        ),
+    ]
+
+    serialized_events = serialize_run_events(events)
+    serialized_parts = serialize_run_parts(parts)
+
+    assert all(is_retired_lifecycle_event(event_type) for event_type in retired_event_types)
+    assert all(is_retired_lifecycle_part(part_type) for part_type in ("task_checklist", "task_checkpoint", "task_scorecard"))
+    assert [event["event_type"] for event in serialized_events] == [RUN_FINISHED_EVENT]
+    assert serialized_events[0]["payload"] == {
+        "status": "completed",
+        "response_len": 12,
+        "delegated_tasks": [{"task_id": "task-current"}],
+        "workflow_outcomes": [{"task_contract": "domain data must stay"}],
+    }
+    assert serialize_run_event_counts(events, serialized_events)["total"] == 1
+    assert len(serialized_parts) == 1
+    assert serialized_parts[0]["metadata"] == {
+        "response_len": 4,
+        "delegated_tasks": [{"task_id": "task-current"}],
+    }
+    assert current_event.payload["task_contract"] == {"task_type": "coding"}
+    assert parts[-1].metadata["completion_status"] == "complete"
+
+
+def test_sanitize_run_metadata_keeps_current_and_nested_domain_data():
+    metadata = {
+        "objective": "ship",
+        "task_contract": {"task_type": "coding"},
+        "completion_status": "complete",
+        "tool_evidence": [{"tool": "pytest"}],
+        "quick_action": "resume_follow_up",
+        "follow_up_workflow": "implement_then_review",
+        "follow_up_step_id": "review",
+        "follow_up_step_label": "Code review",
+        "follow_up_prompt_type": "code-reviewer",
+        "delegated_tasks": [{"task_id": "task-current"}],
+        "structured_output": {
+            "work_state": "a user-defined result",
+            "tool_evidence": "nested domain data",
+            "quick_action": "nested domain data",
+            "follow_up_workflow": "nested domain data",
+            "follow_up_step_id": "nested domain data",
+            "follow_up_prompt_type": "nested domain data",
+        },
+    }
+
+    assert sanitize_run_metadata(metadata) == {
+        "objective": "ship",
+        "delegated_tasks": [{"task_id": "task-current"}],
+        "structured_output": {
+            "work_state": "a user-defined result",
+            "tool_evidence": "nested domain data",
+            "quick_action": "nested domain data",
+            "follow_up_workflow": "nested domain data",
+            "follow_up_step_id": "nested domain data",
+            "follow_up_prompt_type": "nested domain data",
+        },
+    }
+
+
+def test_sanitize_run_metadata_keeps_similar_custom_top_level_keys():
+    metadata = {
+        "task_contextual_note": "keep",
+        "active_tasker": "keep",
+        "work_stateful_label": "keep",
+        "completion_status_page": "keep",
+        "quick_actionable": "keep",
+        "task_contract.version": 1,
+        "task_contract_source": "legacy",
+    }
+
+    assert sanitize_run_metadata(metadata) == {
+        "task_contextual_note": "keep",
+        "active_tasker": "keep",
+        "work_stateful_label": "keep",
+        "completion_status_page": "keep",
+        "quick_actionable": "keep",
+    }
+
+
+def test_message_entry_hides_retired_lifecycle_metadata():
+    message = SimpleNamespace(
+        role="assistant",
+        timestamp=1.0,
+        content="done",
+        metadata={
+            "completion_status": "complete",
+            "task_contract": {"task_type": "coding"},
+            "delegated_tasks": [{"task_id": "task-current"}],
+        },
+        tool_name=None,
+    )
+
+    entry = serialize_message_entry(message)
+
+    assert entry["metadata"] == {"delegated_tasks": [{"task_id": "task-current"}]}
+
+
 def test_llm_delta_hook_emits_empty_completion_marker():
     calls = []
 
@@ -1277,14 +1393,6 @@ def test_serialize_run_summary_builds_stable_card_payload():
                 event_id=3,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={"status": "complete"},
-                created_at=15.0,
-            ),
-            SimpleNamespace(
-                event_id=4,
-                run_id="run-1",
-                session_id="web:browser-1",
                 event_type="subagent.group.completed",
                 payload={
                     "status": "completed",
@@ -1349,15 +1457,6 @@ def test_serialize_run_summary_builds_stable_card_payload():
         "name": "pytest",
         "summary": "ok",
     }
-    assert summary["review"] == {
-        "required": False,
-        "attempted": False,
-        "passed": False,
-        "status": "not_required",
-        "summary": "",
-        "prompt_types": [],
-        "finding_count": 0,
-    }
     assert summary["structured_subagents"] == {
         "total": 0,
         "by_prompt_type": {},
@@ -1391,9 +1490,8 @@ def test_serialize_run_summary_builds_stable_card_payload():
         ],
     }
     assert summary["artifact_counts"] == {"total": 4, "tool": 1, "file": 1, "verification": 1}
-    assert summary["completion"] == {"status": "complete"}
     assert summary["warnings"] == []
-    assert summary["counts"] == {"events": 4, "parts": 1, "tool_calls": 1, "file_changes": 1}
+    assert summary["counts"] == {"events": 3, "parts": 1, "tool_calls": 1, "file_changes": 1}
 
 
 def test_serialize_run_summary_warns_on_external_http_exec():
@@ -1433,51 +1531,25 @@ def test_serialize_run_summary_warns_on_external_http_exec():
     assert RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC in summary["warnings"]
 
 
-def test_serialize_run_summary_includes_task_scorecard_health():
+def test_serialize_run_summary_warns_when_run_stopped():
     trace = SimpleNamespace(
         run=SimpleNamespace(
-            run_id="run-task",
+            run_id="run-stopped",
             session_id="web:browser-1",
-            status="completed",
-            metadata={"objective": "Research"},
+            status=RUN_STOPPED_STATUS,
+            metadata={"objective": "Long task"},
             created_at=10.0,
             updated_at=11.0,
-            finished_at=11.0,
+            finished_at=12.0,
         ),
-        events=[
-            SimpleNamespace(
-                event_id=1,
-                run_id="run-task",
-                session_id="web:browser-1",
-                event_type=TASK_SCORECARD_RECORDED_EVENT,
-                payload={
-                    "task": {"task_type": "web_research"},
-                    "contract": {"task_type": "web_research"},
-                    "trace_health": {"status": "warn", "sensor_counts": {"pass": 2, "warn": 1, "fail": 0}},
-                    "sensors": [
-                        {"sensor_id": "research.source_coverage", "status": "pass"},
-                        {"sensor_id": "research.freshness", "status": "warn"},
-                    ],
-                },
-                created_at=10.5,
-            )
-        ],
+        events=[],
         parts=[],
         file_changes=[],
     )
 
     summary = serialize_run_summary(trace)
 
-    assert summary["task_scorecard"] == {
-        "present": True,
-        "status": "warn",
-        "profile": "",
-        "task_type": "web_research",
-        "sensor_counts": {"pass": 2, "warn": 1, "fail": 0, "not_applicable": 0},
-        "failing_sensors": [],
-        "warning_sensors": ["research.freshness"],
-    }
-    assert f"{RUN_WARNING_TASK_SCORECARD_PREFIX}warn" in summary["warnings"]
+    assert summary["warnings"] == [RUN_STOPPED_STATUS]
 
 
 def test_serialize_run_summary_collects_structured_subagent_results():
@@ -1528,14 +1600,6 @@ def test_serialize_run_summary_collects_structured_subagent_results():
                     },
                 },
                 created_at=22.0,
-            ),
-            SimpleNamespace(
-                event_id=2,
-                run_id="run-structured",
-                session_id="web:browser-structured",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={"status": "complete"},
-                created_at=23.0,
             ),
         ],
         parts=[],
@@ -1685,52 +1749,6 @@ def test_serialize_run_summary_collects_failed_workflow_follow_up_detail():
     }
 
 
-def test_serialize_run_summary_preserves_completion_follow_up_target():
-    trace = SimpleNamespace(
-        run=SimpleNamespace(
-            run_id="run-follow-up",
-            session_id="web:browser-follow-up",
-            status="completed",
-            metadata={"objective": "Workflow follow-up"},
-            created_at=40.0,
-            updated_at=45.0,
-            finished_at=46.0,
-        ),
-        events=[
-            SimpleNamespace(
-                event_id=1,
-                run_id="run-follow-up",
-                session_id="web:browser-follow-up",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={
-                    "status": "incomplete",
-                    "reason": "workflow implement_then_review did not complete successfully",
-                    "active_task_detail": "Resume with the Code review step in implement_then_review. Workflow stopped after 1/2 completed step(s).",
-                    "follow_up_workflow": "implement_then_review",
-                    "follow_up_step_id": "review",
-                    "follow_up_step_label": "Code review",
-                    "follow_up_prompt_type": "code-reviewer",
-                },
-                created_at=44.0,
-            ),
-        ],
-        parts=[],
-        file_changes=[],
-    )
-
-    summary = serialize_run_summary(trace)
-
-    assert summary["completion"] == {
-        "status": "incomplete",
-        "reason": "workflow implement_then_review did not complete successfully",
-        "active_task_detail": "Resume with the Code review step in implement_then_review. Workflow stopped after 1/2 completed step(s).",
-        "follow_up_workflow": "implement_then_review",
-        "follow_up_step_id": "review",
-        "follow_up_step_label": "Code review",
-        "follow_up_prompt_type": "code-reviewer",
-    }
-
-
 def test_serialize_run_summary_marks_parallel_delegation_warnings():
     trace = SimpleNamespace(
         run=SimpleNamespace(
@@ -1765,14 +1783,6 @@ def test_serialize_run_summary_marks_parallel_delegation_warnings():
                 },
                 created_at=12.5,
             ),
-            SimpleNamespace(
-                event_id=2,
-                run_id="run-2",
-                session_id="web:browser-2",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={"status": "complete"},
-                created_at=12.75,
-            ),
         ],
         parts=[],
         file_changes=[],
@@ -1782,54 +1792,6 @@ def test_serialize_run_summary_marks_parallel_delegation_warnings():
 
     assert summary["parallel_delegation"]["group_count"] == 1
     assert summary["warnings"] == [RUN_WARNING_PARALLEL_DELEGATION_FAILED]
-
-
-def test_serialize_run_summary_marks_review_warning_when_required_review_missing():
-    trace = SimpleNamespace(
-        run=SimpleNamespace(
-            run_id="run-review",
-            session_id="web:browser-review",
-            status="completed",
-            metadata={"objective": "Review-gated completion"},
-            created_at=10.0,
-            updated_at=12.0,
-            finished_at=13.0,
-        ),
-        events=[
-            SimpleNamespace(
-                event_id=1,
-                run_id="run-review",
-                session_id="web:browser-review",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={
-                    "status": "needs_review",
-                    "reason": "delegated review was not recorded for code changes",
-                    "review_required": True,
-                    "review_attempted": False,
-                    "review_passed": False,
-                    "review_summary": "",
-                    "review_prompt_types": [],
-                    "review_finding_count": 0,
-                },
-                created_at=12.5,
-            ),
-        ],
-        parts=[],
-        file_changes=[],
-    )
-
-    summary = serialize_run_summary(trace)
-
-    assert summary["review"] == {
-        "required": True,
-        "attempted": False,
-        "passed": False,
-        "status": RUN_SUMMARY_STATUS_NOT_ATTEMPTED,
-        "summary": "",
-        "prompt_types": [],
-        "finding_count": 0,
-    }
-    assert summary["warnings"] == [RUN_WARNING_REVIEW_NOT_PASSED]
 
 
 def test_serialize_run_summary_includes_structured_subagents():
@@ -1880,14 +1842,6 @@ def test_serialize_run_summary_includes_structured_subagents():
                     },
                 },
                 created_at=22.0,
-            ),
-            SimpleNamespace(
-                event_id=2,
-                run_id="run-3",
-                session_id="web:browser-3",
-                event_type=COMPLETION_GATE_EVALUATED_EVENT,
-                payload={"status": "complete"},
-                created_at=23.0,
             ),
         ],
         parts=[],

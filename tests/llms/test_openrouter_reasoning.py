@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from opensprite.llms import ChatMessage
 from opensprite.llms.openrouter import OpenRouterLLM
 from opensprite.llms.request_log_fields import request_param_log_fields
-from opensprite.llms.request_modes import LLMRequestMode
 
 
 def _openrouter_response(content="final answer", model="anthropic/claude-sonnet-4.6"):
@@ -96,39 +95,20 @@ def test_openrouter_chat_sends_reasoning_enabled_by_default():
     ]
 
 
-def test_openrouter_json_planning_enforces_json_without_disabling_reasoning():
+def test_openrouter_honors_explicit_json_format_without_disabling_reasoning():
     completions = RecordingCompletions()
     provider = _make_provider(completions, default_model="deepseek/deepseek-v4-flash")
 
     response = asyncio.run(
         provider.chat(
             [ChatMessage(role="user", content='Return {"ok": true}')],
-            request_mode=LLMRequestMode.JSON_PLANNING,
+            response_format={"type": "json_object"},
         )
     )
 
     assert response.content == "final answer"
     assert completions.calls[0]["extra_body"] == {"reasoning": {"enabled": True}}
     assert completions.calls[0]["response_format"] == {"type": "json_object"}
-
-
-def test_openrouter_completion_verifier_enforces_json_with_reasoning_configured():
-    completions = RecordingCompletions()
-    provider = _make_provider(completions, default_model="deepseek/deepseek-v4-flash")
-    provider.reasoning_effort = "high"
-    provider.reasoning_config = {"enabled": True, "effort": "high"}
-
-    response = asyncio.run(
-        provider.chat(
-            [ChatMessage(role="user", content='Return {"complete": true}')],
-            request_mode=LLMRequestMode.COMPLETION_VERIFIER,
-        )
-    )
-
-    assert response.content == "final answer"
-    assert completions.calls[0]["extra_body"] == {"reasoning": {"enabled": True, "effort": "high"}}
-    assert completions.calls[0]["response_format"] == {"type": "json_object"}
-
 
 def test_openrouter_chat_sends_max_tokens_only_when_set():
     completions = RecordingCompletions()

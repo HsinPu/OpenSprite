@@ -4,6 +4,7 @@ from __future__ import annotations
 
 RUN_RUNNING_STATUS = "running"
 RUN_COMPLETED_STATUS = "completed"
+RUN_STOPPED_STATUS = "stopped"
 RUN_CANCELLED_STATUS = "cancelled"
 
 RUN_STARTED_EVENT = "run_started"

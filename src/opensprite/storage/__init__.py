@@ -9,7 +9,6 @@ from .base import (
     StoredRunFileChange,
     StoredRunPart,
     StoredRunTrace,
-    StoredWorkState,
 )
 from .memory import MemoryStorage
 from .sqlite import SQLiteStorage
@@ -23,7 +22,6 @@ __all__ = [
     "StoredRunFileChange",
     "StoredRunPart",
     "StoredRunTrace",
-    "StoredWorkState",
     "MemoryStorage",
     "SQLiteStorage",
 ]

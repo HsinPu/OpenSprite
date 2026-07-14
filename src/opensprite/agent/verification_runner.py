@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..tools.evidence import VERIFICATION_TOOL_NAME
+from ..tool_names import VERIFICATION_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..tools.verify import classify_verification_result
 from .execution import ExecutionResult

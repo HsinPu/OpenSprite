@@ -14,7 +14,6 @@ interface ClientSettingsSource {
   accessToken: string;
   displayName: string;
   activeExternalChatId: string;
-  showWorkState: boolean;
   showRunHistory: boolean;
   showRunTimeline: boolean;
   showRunSummary: boolean;
@@ -28,7 +27,6 @@ export interface SettingsForm {
   accessToken: string;
   displayName: string;
   externalChatId: string;
-  showWorkState: boolean;
   showRunHistory: boolean;
   showRunTimeline: boolean;
   showRunSummary: boolean;
@@ -330,7 +328,6 @@ export function createSettingsForm(state: ClientSettingsSource): SettingsForm {
     accessToken: state.accessToken,
     displayName: state.displayName,
     externalChatId: state.activeExternalChatId,
-    showWorkState: state.showWorkState,
     showRunHistory: state.showRunHistory,
     showRunTimeline: state.showRunTimeline,
     showRunSummary: state.showRunSummary,

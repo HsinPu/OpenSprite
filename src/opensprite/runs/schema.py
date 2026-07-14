@@ -4,15 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from .events import (
-    AUTO_CONTINUE_COMPLETED_EVENT,
-    AUTO_CONTINUE_EVENTS,
-    AUTO_CONTINUE_SCHEDULED_EVENT,
     BACKGROUND_PROCESS_COMPLETED_EVENT,
     BACKGROUND_PROCESS_LOST_EVENT,
     BACKGROUND_PROCESS_STARTED_EVENT,
-    COMPLETION_GATE_EVALUATED_EVENT,
     CURATOR_COMPLETED_EVENT,
     CURATOR_EVENTS,
     CURATOR_FAILED_EVENT,
@@ -31,19 +26,7 @@ from .events import (
     REASONING_DELTA_EVENT,
     RUN_EVENT_PREFIX,
     RUN_PART_DELTA_EVENT,
-    TASK_ARTIFACTS_RECORDED_EVENT,
-    TASK_CHECKLIST_UPDATED_EVENT,
-    TASK_CHECKPOINT_RECORDED_EVENT,
-    TASK_CONTRACT_CREATED_EVENT,
-    TASK_CONTRACT_PLANNED_EVENT,
-    TASK_CONTRACT_PLANNING_STARTED_EVENT,
-    TASK_CONTRACT_VALIDATED_EVENT,
-    TASK_CONTRACT_VALIDATION_FAILED_EVENT,
-    TASK_INTENT_DETECTED_EVENT,
-    TASK_SCORECARD_RECORDED_EVENT,
     TEXT_DELTA_EVENTS,
-    TASK_EVENT_PREFIX,
-    TOOL_SELECTION_RESOLVED_EVENT,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_EVENT_PREFIX,
     TOOL_INPUT_DELTA_EVENT,
@@ -51,7 +34,9 @@ from .events import (
     TOOL_STARTED_EVENT,
     TERMINAL_WORKFLOW_EVENTS,
     VERIFICATION_EVENTS,
+    VERIFICATION_NAME_METADATA_FIELD,
     VERIFICATION_RESULT_EVENT,
+    VERIFICATION_STATUS_METADATA_FIELD,
     VERIFICATION_STARTED_EVENT,
     WORKFLOW_COMPLETED_EVENT,
     WORKFLOW_COMPLETED_EVENTS,
@@ -65,10 +50,7 @@ from .events import (
     WORKTREE_CLEANUP_COMPLETED_EVENT,
     WORKTREE_CLEANUP_FAILED_EVENT,
     WORKTREE_CLEANUP_STARTED_EVENT,
-    WORK_PLAN_CREATED_EVENT,
-    WORK_PROGRESS_UPDATED_EVENT,
     VERIFICATION_EVENT_PREFIX,
-    WORK_EVENT_PREFIX,
     SUBAGENT_CANCELLED_EVENT,
     SUBAGENT_CANCELLED_EVENTS,
     SUBAGENT_COMPLETED_EVENT,
@@ -93,27 +75,88 @@ from .lifecycle import (
     RUN_FINISHED_EVENT,
     RUN_RUNNING_STATUS,
     RUN_STARTED_EVENT,
+    RUN_STOPPED_STATUS,
 )
 from ..utils.json_safe import json_safe_payload
 
 RUN_SCHEMA_VERSION = 1
 RUN_WARNING_TOOL_ERROR = "tool_error"
 RUN_WARNING_VERIFICATION_NOT_PASSED = "verification_not_passed"
-RUN_WARNING_REVIEW_NOT_PASSED = "review_not_passed"
 RUN_WARNING_PARALLEL_DELEGATION_FAILED = "parallel_delegation_failed"
 RUN_WARNING_PARALLEL_DELEGATION_CANCELLED = "parallel_delegation_cancelled"
 RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC = "external_http_via_exec"
-RUN_WARNING_TASK_SCORECARD_PREFIX = "task_scorecard_"
-RUN_WARNING_TASK_SCORECARD_STATUSES = frozenset({"warn", "fail"})
 RUN_FAILED_STATUSES = frozenset({"failed", "error"})
 RUN_CANCELLED_STATUSES = frozenset({"cancelled", "cancelling"})
-RUN_STATUS_WARNING_STATUSES = frozenset({"failed", "cancelled"})
+RUN_STATUS_WARNING_STATUSES = frozenset({"failed", "cancelled", RUN_STOPPED_STATUS})
 RUN_SUMMARY_STATUS_NOT_ATTEMPTED = "not_attempted"
-RUN_SUMMARY_STATUS_NOT_REQUIRED = "not_required"
 RUN_SUMMARY_STATUS_PASSED = "passed"
 RUN_SUMMARY_STATUS_FAILED = "failed"
 MAX_SERIALIZED_RUN_EVENTS = 80
 MAX_SERIALIZED_TEXT_EVENTS = 24
+
+# These names were persisted by the retired task-planning/completion lifecycle.
+# Keep the rows in storage, but do not expose them through current trace surfaces.
+RETIRED_LIFECYCLE_EVENT_PREFIXES = (
+    "active_task.",
+    "auto_continue.",
+    "completion_gate.",
+    "direct_verification.",
+    "direct_workflow_resume.",
+    "planning_mode.",
+    "retrieval.proactive_",
+    "task_artifacts.",
+    "task_checklist.",
+    "task_checkpoint.",
+    "task_clarification.",
+    "task_context.",
+    "task_contract.",
+    "task_intent.",
+    "task_objective.",
+    "task_scorecard.",
+    "tool_selection.",
+    "work_plan.",
+    "work_progress.",
+)
+RETIRED_LIFECYCLE_PART_TYPES = frozenset(
+    {
+        "task_checklist",
+        "task_checkpoint",
+        "task_scorecard",
+    }
+)
+_RETIRED_LIFECYCLE_METADATA_NAMESPACES = (
+    "active_task",
+    "auto_continue",
+    "completion_gate",
+    "follow_up_step",
+    "task_artifact",
+    "task_artifacts",
+    "task_checklist",
+    "task_checkpoint",
+    "task_context",
+    "task_contract",
+    "task_intent",
+    "task_objective",
+    "task_scorecard",
+    "work_plan",
+    "work_progress",
+    "work_state",
+)
+_RETIRED_LIFECYCLE_METADATA_KEYS = frozenset(
+    {
+        "completion_reason",
+        "completion_status",
+        "follow_up_prompt_type",
+        "follow_up_workflow",
+        "quick_action",
+        "tool_evidence",
+    }
+)
+_RETIRED_LIFECYCLE_METADATA_NAMESPACE_PREFIXES = tuple(
+    f"{namespace}{separator}"
+    for namespace in _RETIRED_LIFECYCLE_METADATA_NAMESPACES
+    for separator in (".", "_", "-")
+)
 
 
 _EVENT_KINDS = {
@@ -124,15 +167,6 @@ _EVENT_KINDS = {
     RUN_CANCEL_REQUESTED_EVENT: "run",
     LLM_STATUS_EVENT: "llm",
     REASONING_DELTA_EVENT: "llm",
-    TASK_INTENT_DETECTED_EVENT: "work",
-    WORK_PLAN_CREATED_EVENT: "work",
-    WORK_PROGRESS_UPDATED_EVENT: "work",
-    TASK_CHECKLIST_UPDATED_EVENT: "work",
-    TASK_ARTIFACTS_RECORDED_EVENT: "work",
-    TASK_CONTRACT_PLANNING_STARTED_EVENT: "work",
-    TASK_CONTRACT_PLANNED_EVENT: "work",
-    TASK_CONTRACT_VALIDATED_EVENT: "work",
-    TASK_CONTRACT_VALIDATION_FAILED_EVENT: "work",
     CURATOR_STARTED_EVENT: "work",
     CURATOR_JOB_STARTED_EVENT: "work",
     CURATOR_JOB_COMPLETED_EVENT: "work",
@@ -157,17 +191,10 @@ _EVENT_KINDS = {
     WORKTREE_CLEANUP_STARTED_EVENT: "work",
     WORKTREE_CLEANUP_COMPLETED_EVENT: "work",
     WORKTREE_CLEANUP_FAILED_EVENT: "work",
-    COMPLETION_GATE_EVALUATED_EVENT: "completion",
-    TASK_CONTRACT_CREATED_EVENT: "work",
-    TASK_CHECKPOINT_RECORDED_EVENT: "work",
-    TASK_SCORECARD_RECORDED_EVENT: "work",
     EXECUTION_STOPPED_EVENT: "llm",
-    AUTO_CONTINUE_SCHEDULED_EVENT: "run",
-    AUTO_CONTINUE_COMPLETED_EVENT: "run",
     BACKGROUND_PROCESS_STARTED_EVENT: "process",
     BACKGROUND_PROCESS_COMPLETED_EVENT: "process",
     BACKGROUND_PROCESS_LOST_EVENT: "process",
-    TOOL_SELECTION_RESOLVED_EVENT: "tool",
     TOOL_STARTED_EVENT: "tool",
     TOOL_RESULT_EVENT: "tool",
     VERIFICATION_STARTED_EVENT: "verification",
@@ -189,6 +216,59 @@ def _non_negative_int(value: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, number)
+
+
+def _normalized_metadata_key(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _is_retired_lifecycle_metadata_key(value: Any) -> bool:
+    key = _normalized_metadata_key(value)
+    return (
+        key in _RETIRED_LIFECYCLE_METADATA_KEYS
+        or key in _RETIRED_LIFECYCLE_METADATA_NAMESPACES
+        or key.startswith(_RETIRED_LIFECYCLE_METADATA_NAMESPACE_PREFIXES)
+    )
+
+
+def sanitize_retired_lifecycle_data(value: Any) -> Any:
+    """Remove retired top-level task-lifecycle fields from one boundary value."""
+    if isinstance(value, dict):
+        return {
+            str(key): item
+            for key, item in value.items()
+            if not _is_retired_lifecycle_metadata_key(key)
+        }
+    return value
+
+
+def sanitize_run_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    """Return current run metadata without mutating its persisted representation."""
+    sanitized = sanitize_retired_lifecycle_data(json_safe_payload(metadata))
+    return sanitized if isinstance(sanitized, dict) else {}
+
+
+def is_retired_lifecycle_event(event: Any) -> bool:
+    """Return whether a stored event belongs to the removed task lifecycle."""
+    event_type = event if isinstance(event, str) else getattr(event, "event_type", "")
+    normalized = _text(event_type)
+    return any(normalized.startswith(prefix) for prefix in RETIRED_LIFECYCLE_EVENT_PREFIXES)
+
+
+def is_retired_lifecycle_part(part: Any) -> bool:
+    """Return whether a stored part belongs to the removed task lifecycle."""
+    part_type = part if isinstance(part, str) else getattr(part, "part_type", "")
+    return _text(part_type) in RETIRED_LIFECYCLE_PART_TYPES
+
+
+def visible_run_events(events: list[Any] | tuple[Any, ...] | None) -> list[Any]:
+    """Filter retired historical events while leaving storage untouched."""
+    return [event for event in list(events or []) if not is_retired_lifecycle_event(event)]
+
+
+def visible_run_parts(parts: list[Any] | tuple[Any, ...] | None) -> list[Any]:
+    """Filter retired historical parts while leaving storage untouched."""
+    return [part for part in list(parts or []) if not is_retired_lifecycle_part(part)]
 
 
 def _tool_artifact_id(tool_name: str, data: dict[str, Any]) -> str | None:
@@ -237,9 +317,7 @@ def run_event_kind(event_type: str) -> str:
         return "verification"
     if normalized.startswith(LLM_EVENT_PREFIX):
         return "llm"
-    if normalized.startswith(WORK_EVENT_PREFIX) or normalized.startswith(TASK_EVENT_PREFIX):
-        return "work"
-    if normalized.startswith(RUN_EVENT_PREFIX) or normalized in AUTO_CONTINUE_EVENTS:
+    if normalized.startswith(RUN_EVENT_PREFIX):
         return "run"
     return "other"
 
@@ -285,7 +363,7 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "running"
     if normalized == EXECUTION_STOPPED_EVENT:
         return explicit or "stopped"
-    if normalized.endswith("_started") or normalized == LLM_STATUS_EVENT or normalized == AUTO_CONTINUE_SCHEDULED_EVENT:
+    if normalized.endswith("_started") or normalized == LLM_STATUS_EVENT:
         return explicit or "running"
     if explicit:
         return explicit
@@ -304,7 +382,8 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
         path = _text(data.get("path"))
         if not path:
             return None
-        return {
+        change_id = _text(data.get("change_id"))
+        artifact = {
             "schema_version": RUN_SCHEMA_VERSION,
             "artifact_type": "file_change",
             "kind": "file",
@@ -315,6 +394,10 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "diff_len": _non_negative_int(data.get("diff_len")),
             "diff_preview": _text(data.get("diff_preview")),
         }
+        if change_id:
+            artifact["artifact_id"] = f"file_change:{change_id}"
+            artifact["source_id"] = change_id
+        return artifact
 
     if normalized in TOOL_LIFECYCLE_EVENTS:
         tool_name = _text(data.get("tool_name"))
@@ -346,39 +429,6 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "status": status,
             "title": _text(data.get(VERIFICATION_NAME_METADATA_FIELD) or data.get("action") or "verification"),
             "detail": _text(data.get("result_preview") or data.get("path")),
-        }
-
-    if normalized == TASK_CHECKLIST_UPDATED_EVENT:
-        todos = data.get("todos") if isinstance(data.get("todos"), list) else []
-        completed = sum(1 for item in todos if isinstance(item, dict) and item.get("status") == "completed")
-        total = len(todos)
-        return {
-            "schema_version": RUN_SCHEMA_VERSION,
-            "artifact_id": "task_checklist",
-            "artifact_type": "task_checklist",
-            "kind": "task",
-            "status": status,
-            "title": "Task checklist",
-            "detail": f"{completed}/{total} completed" if total else "No task steps",
-            "metadata": data,
-        }
-
-    if normalized == TASK_ARTIFACTS_RECORDED_EVENT:
-        artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), list) else []
-        count = _non_negative_int(data.get("count") or len(artifacts))
-        source_count = _task_artifact_source_count(artifacts)
-        detail = f"{count} task artifact(s)"
-        if source_count:
-            detail += f" · {source_count} source(s)"
-        return {
-            "schema_version": RUN_SCHEMA_VERSION,
-            "artifact_id": "task_artifacts",
-            "artifact_type": "task_artifacts",
-            "kind": "task",
-            "status": status,
-            "title": "Task artifacts",
-            "detail": detail,
-            "metadata": data,
         }
 
     if normalized in CURATOR_EVENTS:
@@ -512,21 +562,9 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
     return None
 
 
-def _task_artifact_source_count(artifacts: list[Any]) -> int:
-    count = 0
-    for artifact in artifacts:
-        if not isinstance(artifact, dict):
-            continue
-        metadata = artifact.get("metadata") if isinstance(artifact.get("metadata"), dict) else {}
-        sources = metadata.get("sources") if isinstance(metadata, dict) else None
-        if isinstance(sources, list):
-            count += sum(1 for source in sources if isinstance(source, dict))
-    return count
-
-
 def run_event_envelope(event_type: str, payload: dict[str, Any] | None) -> dict[str, Any]:
     """Build the stable event envelope shared by live sockets and history APIs."""
-    safe_payload = json_safe_payload(payload)
+    safe_payload = sanitize_run_metadata(payload)
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "kind": run_event_kind(event_type),
@@ -559,7 +597,7 @@ def serialize_run_event(
     if include_event_id:
         serialized["event_id"] = getattr(event, "event_id", None)
     if extra:
-        serialized.update(json_safe_payload(extra))
+        serialized.update(sanitize_run_metadata(extra))
     return serialized
 
 
@@ -577,7 +615,7 @@ def compact_run_events(
     kept: list[Any] = []
     text_count = 0
     other_count = 0
-    for event in reversed(events):
+    for event in reversed(visible_run_events(events)):
         if _is_text_delta_event(event):
             if text_count >= max_text_events:
                 continue
@@ -598,7 +636,7 @@ def serialize_run_events(events: list[Any]) -> list[dict[str, Any]]:
 
 def serialize_run_event_counts(events: list[Any], serialized_events: list[dict[str, Any]]) -> dict[str, Any]:
     """Describe trace event retention so clients can show compacted payloads honestly."""
-    original = list(events or [])
+    original = visible_run_events(events)
     text_total = sum(1 for event in original if _is_text_delta_event(event))
     text_returned = sum(
         1
@@ -624,52 +662,11 @@ def run_part_kind(part_type: str) -> str:
         return "tool"
     if normalized == "context_compaction":
         return "system"
-    if normalized == "task_checklist":
-        return "task"
-    if normalized in {"task_checkpoint", "task_scorecard"}:
-        return "task"
     if normalized == "llm_step":
         return "llm"
     if normalized == "worktree_sandbox":
         return "work"
     return "other"
-
-
-def serialize_work_state_todos(state: Any) -> list[dict[str, Any]]:
-    """Project StoredWorkState steps into a stable session task checklist."""
-    if state is None:
-        return []
-
-    todos: list[dict[str, Any]] = []
-    seen: set[str] = set()
-
-    def add(content: Any, status: str, *, priority: str = "medium") -> None:
-        text = _text(content)
-        if not text or text == "not set" or text in seen:
-            return
-        seen.add(text)
-        todos.append(
-            {
-                "id": f"task:{len(todos) + 1}",
-                "content": text,
-                "status": status,
-                "priority": priority,
-                "updated_at": getattr(state, "updated_at", None),
-            }
-        )
-
-    for step in getattr(state, "completed_steps", ()) or ():
-        add(step, "completed")
-    add(getattr(state, "current_step", ""), "in_progress", priority="high")
-    add(getattr(state, "next_step", ""), "pending")
-    for step in getattr(state, "pending_steps", ()) or ():
-        add(step, "pending")
-    for step in getattr(state, "steps", ()) or ():
-        add(step, "pending")
-    for blocker in getattr(state, "blockers", ()) or ():
-        add(blocker, "cancelled", priority="high")
-
-    return todos
 
 
 def run_part_state(part_type: str, metadata: dict[str, Any] | None) -> str:
@@ -690,42 +687,20 @@ def run_part_artifact(
     tool_name: str | None,
     content: str,
     metadata: dict[str, Any] | None,
-) -> dict[str, Any]:
-    safe_metadata = json_safe_payload(metadata)
+) -> dict[str, Any] | None:
+    if is_retired_lifecycle_part(part_type):
+        return None
+    safe_metadata = sanitize_run_metadata(metadata)
     kind = run_part_kind(part_type)
     state = run_part_state(part_type, safe_metadata)
     title = _text(tool_name) or _text(part_type) or "part"
     detail = _text(safe_metadata.get("result_preview") or safe_metadata.get("args_preview"))
-    if part_type == "task_checklist":
-        todos = safe_metadata.get("todos") if isinstance(safe_metadata.get("todos"), list) else []
-        completed = sum(1 for item in todos if isinstance(item, dict) and item.get("status") == "completed")
-        total = len(todos)
-        detail = f"{completed}/{total} completed" if total else "No task steps"
     if part_type == "llm_step":
         title = _text(safe_metadata.get("model")) or "LLM step"
         detail = f"attempt {safe_metadata.get('attempt')} · {safe_metadata.get('estimated_input_tokens')} input tokens"
     if part_type == "worktree_sandbox":
         title = "Worktree sandbox"
         detail = _text(safe_metadata.get("status") or safe_metadata.get("reason"))
-    if part_type == "task_checkpoint":
-        completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
-        title = "Task checkpoint"
-        detail = _text(
-            content
-            or " 繚 ".join(
-                item
-                for item in (
-                    safe_metadata.get("next_action"),
-                    completion.get("status"),
-                    completion.get("reason"),
-                )
-                if item
-            )
-        )
-    if part_type == "task_scorecard":
-        completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
-        title = "Task scorecard"
-        detail = _text(content or completion.get("status"))
     if not detail and kind == "text":
         detail = str(content or "")[:240]
     artifact_id = f"part:{part_id}" if part_id is not None else None
@@ -749,7 +724,7 @@ def run_part_artifact(
 
 def serialize_run_part(part: Any) -> dict[str, Any]:
     """Serialize one durable run part using the shared artifact projection."""
-    metadata = json_safe_payload(dict(getattr(part, "metadata", {}) or {}))
+    metadata = sanitize_run_metadata(dict(getattr(part, "metadata", {}) or {}))
     part_type = str(getattr(part, "part_type", "") or "")
     tool_name = getattr(part, "tool_name", None)
     content = str(getattr(part, "content", "") or "")
@@ -776,8 +751,13 @@ def serialize_run_part(part: Any) -> dict[str, Any]:
     }
 
 
+def serialize_run_parts(parts: list[Any] | tuple[Any, ...] | None) -> list[dict[str, Any]]:
+    """Serialize current run parts while hiding retired historical task parts."""
+    return [serialize_run_part(part) for part in visible_run_parts(parts)]
+
+
 def file_change_artifact(change: Any) -> dict[str, Any]:
-    metadata = json_safe_payload(dict(getattr(change, "metadata", {}) or {}))
+    metadata = sanitize_run_metadata(dict(getattr(change, "metadata", {}) or {}))
     diff = str(getattr(change, "diff", "") or "")
     return {
         "schema_version": RUN_SCHEMA_VERSION,
@@ -799,7 +779,7 @@ def file_change_artifact(change: Any) -> dict[str, Any]:
 
 def serialize_file_change(change: Any) -> dict[str, Any]:
     """Serialize one durable file change using the shared artifact projection."""
-    metadata = json_safe_payload(dict(getattr(change, "metadata", {}) or {}))
+    metadata = sanitize_run_metadata(dict(getattr(change, "metadata", {}) or {}))
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "change_id": getattr(change, "change_id", None),
@@ -838,7 +818,7 @@ def serialize_run_artifacts(trace: Any) -> list[dict[str, Any]]:
             sources.append(source)
         artifacts_by_key[key] = {**existing, **item, "sources": [entry for entry in sources if entry]}
 
-    for event in getattr(trace, "events", None) or []:
+    for event in visible_run_events(getattr(trace, "events", None)):
         serialized = serialize_run_event(event)
         artifact = serialized.get("artifact")
         if not isinstance(artifact, dict):
@@ -852,7 +832,7 @@ def serialize_run_artifacts(trace: Any) -> list[dict[str, Any]]:
                 "created_at": serialized.get("created_at"),
             }
         )
-    for part in getattr(trace, "parts", None) or []:
+    for part in visible_run_parts(getattr(trace, "parts", None)):
         serialized = serialize_run_part(part)
         artifact = serialized.get("artifact")
         if not isinstance(artifact, dict):
@@ -901,17 +881,6 @@ def _latest_event_payload(events: list[Any], event_type: str) -> dict[str, Any] 
     for event in reversed(events):
         if getattr(event, "event_type", None) == event_type:
             return dict(getattr(event, "payload", {}) or {})
-    return None
-
-
-def _latest_work_progress(events: list[Any]) -> dict[str, Any] | None:
-    for event in reversed(events):
-        payload = dict(getattr(event, "payload", {}) or {})
-        event_type = getattr(event, "event_type", None)
-        if event_type == WORK_PROGRESS_UPDATED_EVENT:
-            return payload
-        if event_type == RUN_FINISHED_EVENT and isinstance(payload.get("work_progress"), dict):
-            return dict(payload["work_progress"])
     return None
 
 
@@ -1021,34 +990,6 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
         "status": status,
         "name": name,
         "summary": summary,
-    }
-
-
-def _summarize_review(completion: dict[str, Any]) -> dict[str, Any]:
-    required = bool(completion.get("review_required"))
-    attempted = bool(completion.get("review_attempted"))
-    passed = bool(completion.get("review_passed"))
-    status = RUN_SUMMARY_STATUS_NOT_REQUIRED
-    if required:
-        if passed:
-            status = RUN_SUMMARY_STATUS_PASSED
-        elif attempted:
-            status = RUN_SUMMARY_STATUS_FAILED
-        else:
-            status = RUN_SUMMARY_STATUS_NOT_ATTEMPTED
-    prompt_types = [
-        str(item).strip()
-        for item in (completion.get("review_prompt_types") if isinstance(completion.get("review_prompt_types"), list) else [])
-        if str(item).strip()
-    ]
-    return {
-        "required": required,
-        "attempted": attempted,
-        "passed": passed,
-        "status": status,
-        "summary": _text(completion.get("review_summary")),
-        "prompt_types": prompt_types,
-        "finding_count": _non_negative_int(completion.get("review_finding_count")),
     }
 
 
@@ -1235,19 +1176,14 @@ def _workflow_result_summary(payload: dict[str, Any], *, status: str) -> str:
 def serialize_run_summary(trace: Any) -> dict[str, Any]:
     """Serialize the compact run summary used by Web inspector cards."""
     run = trace.run
-    events = list(getattr(trace, "events", None) or [])
-    parts = list(getattr(trace, "parts", None) or [])
+    events = visible_run_events(getattr(trace, "events", None))
+    parts = visible_run_parts(getattr(trace, "parts", None))
     file_changes = list(getattr(trace, "file_changes", None) or [])
-    run_metadata = dict(getattr(run, "metadata", {}) or {})
-    task_intent = _latest_event_payload(events, TASK_INTENT_DETECTED_EVENT) or {}
-    completion = _latest_event_payload(events, COMPLETION_GATE_EVALUATED_EVENT) or {}
-    work_progress = _latest_work_progress(events) or {}
+    run_metadata = sanitize_run_metadata(dict(getattr(run, "metadata", {}) or {}))
     verification = _summarize_verification(run_metadata, events)
-    review = _summarize_review(completion)
     parallel_delegation = _summarize_parallel_delegation(events)
     structured_subagents = _summarize_structured_subagents(events)
     workflows = _summarize_workflows(events)
-    task_scorecard = _summarize_task_scorecard(events, parts)
     artifacts = serialize_run_artifacts(trace)
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
@@ -1255,14 +1191,10 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         warnings.append(RUN_WARNING_TOOL_ERROR)
     if verification["attempted"] and not verification["passed"]:
         warnings.append(RUN_WARNING_VERIFICATION_NOT_PASSED)
-    if review["required"] and not review["passed"]:
-        warnings.append(RUN_WARNING_REVIEW_NOT_PASSED)
     if any(str(group.get("status") or "") in RUN_FAILED_STATUSES for group in parallel_delegation.get("groups", [])):
         warnings.append(RUN_WARNING_PARALLEL_DELEGATION_FAILED)
     if any(str(group.get("status") or "") in RUN_CANCELLED_STATUSES for group in parallel_delegation.get("groups", [])):
         warnings.append(RUN_WARNING_PARALLEL_DELEGATION_CANCELLED)
-    if task_scorecard.get("status") in RUN_WARNING_TASK_SCORECARD_STATUSES:
-        warnings.append(f"{RUN_WARNING_TASK_SCORECARD_PREFIX}{task_scorecard['status']}")
     if getattr(run, "status", None) in RUN_STATUS_WARNING_STATUSES:
         warnings.append(run.status)
     if _has_external_http_exec_artifact(artifacts):
@@ -1272,7 +1204,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     if getattr(run, "finished_at", None) is not None:
         duration_seconds = max(0.0, float(run.finished_at) - float(run.created_at))
 
-    objective = str(task_intent.get("objective") or run_metadata.get("objective") or "").strip()
+    objective = str(run_metadata.get("objective") or "").strip()
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "run_id": getattr(run, "run_id", None),
@@ -1287,19 +1219,15 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         "file_changes": _summarize_file_changes(file_changes),
         "diff_summary": serialize_diff_summary(trace),
         "verification": verification,
-        "review": review,
         "parallel_delegation": parallel_delegation,
         "structured_subagents": structured_subagents,
         "workflows": workflows,
-        "task_scorecard": task_scorecard,
         "artifact_counts": {
             "total": len(artifacts),
             "tool": sum(1 for artifact in artifacts if artifact.get("kind") == "tool"),
             "file": sum(1 for artifact in artifacts if artifact.get("kind") == "file"),
             "verification": sum(1 for artifact in artifacts if artifact.get("kind") == "verification"),
         },
-        "completion": json_safe_payload(completion),
-        "next_action": work_progress.get("next_action"),
         "warnings": warnings,
         "counts": {
             "events": len(events),
@@ -1310,54 +1238,6 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     }
 
 
-def _summarize_task_scorecard(events: list[Any], parts: list[Any]) -> dict[str, Any]:
-    payload = _latest_event_payload(events, TASK_SCORECARD_RECORDED_EVENT) or {}
-    if not payload:
-        for part in reversed(parts):
-            if getattr(part, "part_type", None) == "task_scorecard":
-                payload = dict(getattr(part, "metadata", {}) or {})
-                break
-    if not payload:
-        return {
-            "present": False,
-            "status": "missing",
-            "profile": "",
-            "task_type": "",
-            "sensor_counts": {"pass": 0, "warn": 0, "fail": 0, "not_applicable": 0},
-            "failing_sensors": [],
-            "warning_sensors": [],
-        }
-    task = payload.get("task") if isinstance(payload.get("task"), dict) else {}
-    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
-    contract = payload.get("contract") if isinstance(payload.get("contract"), dict) else {}
-    trace_health = payload.get("trace_health") if isinstance(payload.get("trace_health"), dict) else {}
-    sensor_counts = trace_health.get("sensor_counts") if isinstance(trace_health.get("sensor_counts"), dict) else {}
-    sensors = payload.get("sensors") if isinstance(payload.get("sensors"), list) else []
-    return {
-        "present": True,
-        "status": _text(trace_health.get("status") or "unknown"),
-        "profile": _text(profile.get("name")),
-        "task_type": _text(task.get("task_type") or contract.get("task_type") or profile.get("task_type")),
-        "sensor_counts": {
-            "pass": _non_negative_int(sensor_counts.get("pass")),
-            "warn": _non_negative_int(sensor_counts.get("warn")),
-            "fail": _non_negative_int(sensor_counts.get("fail")),
-            "not_applicable": _non_negative_int(sensor_counts.get("not_applicable")),
-        },
-        "failing_sensors": _sensor_ids_by_status(sensors, "fail"),
-        "warning_sensors": _sensor_ids_by_status(sensors, "warn"),
-    }
-
-
-def _sensor_ids_by_status(sensors: list[Any], status: str) -> list[str]:
-    ids: list[str] = []
-    for sensor in sensors:
-        if not isinstance(sensor, dict) or sensor.get("status") != status:
-            continue
-        sensor_id = _text(sensor.get("sensor_id"))
-        if sensor_id:
-            ids.append(sensor_id)
-    return ids
 
 
 def _has_external_http_exec_artifact(artifacts: list[dict[str, Any]]) -> bool:
@@ -1366,4 +1246,3 @@ def _has_external_http_exec_artifact(artifacts: list[dict[str, Any]]) -> bool:
         if isinstance(metadata, dict) and metadata.get("external_http_via_exec"):
             return True
     return False
-    REASONING_DELTA_EVENT,

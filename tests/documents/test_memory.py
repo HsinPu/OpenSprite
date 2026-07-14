@@ -177,4 +177,4 @@ def test_save_memory_tool_reports_size_and_delta(tmp_path):
 def test_save_memory_tool_describes_memory_boundaries():
     assert "chat-continuity" in SaveMemoryTool.description
     assert "USER.md" in SaveMemoryTool.description
-    assert "ACTIVE_TASK.md" in SaveMemoryTool.description
+    assert "RECENT_SUMMARY.md" in SaveMemoryTool.description

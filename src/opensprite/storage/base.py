@@ -151,42 +151,6 @@ class StoredDelegatedTask:
         }
 
 
-@dataclass
-class StoredWorkState:
-    """Persisted structured task state for one session."""
-
-    session_id: str
-    objective: str
-    kind: str
-    status: str = "active"
-    steps: tuple[str, ...] = ()
-    constraints: tuple[str, ...] = ()
-    done_criteria: tuple[str, ...] = ()
-    long_running: bool = False
-    coding_task: bool = False
-    expects_code_change: bool = False
-    expects_verification: bool = False
-    current_step: str = "not set"
-    next_step: str = "not set"
-    completed_steps: tuple[str, ...] = ()
-    pending_steps: tuple[str, ...] = ()
-    blockers: tuple[str, ...] = ()
-    verification_targets: tuple[str, ...] = ()
-    resume_hint: str = ""
-    last_progress_signals: tuple[str, ...] = ()
-    file_change_count: int = 0
-    touched_paths: tuple[str, ...] = ()
-    verification_attempted: bool = False
-    verification_passed: bool = False
-    last_next_action: str = ""
-    delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
-    active_delegate_task_id: str | None = None
-    active_delegate_prompt_type: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: float = 0.0
-    updated_at: float = 0.0
-
-
 def coerce_stored_delegated_task(value: Any) -> StoredDelegatedTask | None:
     """Normalize one delegated-task payload into a StoredDelegatedTask."""
     if isinstance(value, StoredDelegatedTask):
@@ -343,7 +307,7 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRun | None:
-        """Persist the start of a user-facing execution run when supported."""
+        """Optionally persist a run; overrides must pair with update_run_status and return StoredRun."""
         return None
 
     async def update_run_status(
@@ -355,7 +319,7 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         finished_at: float | None = None,
     ) -> StoredRun | None:
-        """Update a persisted run status when supported."""
+        """Optionally update a run; overrides must pair with create_run and return StoredRun."""
         return None
 
     async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
@@ -476,18 +440,6 @@ class StorageProvider(ABC):
         """Return persisted background processes from newest to oldest when supported."""
         return []
 
-    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
-        """Return persisted structured work state for one chat when supported."""
-        return None
-
-    async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState | None:
-        """Create or replace the persisted work state for one chat when supported."""
-        return None
-
-    async def clear_work_state(self, session_id: str) -> None:
-        """Remove persisted structured work state for one chat when supported."""
-        return None
-
     async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
         """Return known session ids from newest to oldest when supported."""
         session_ids = await self.get_all_sessions()
@@ -527,26 +479,3 @@ async def get_storage_messages_slice(
         return list(await getter(session_id, start_index=max(0, start_index), end_index=end_index))
     messages = await storage.get_messages(session_id)
     return list(messages[max(0, start_index):end_index])
-
-
-async def get_storage_work_state(storage: Any, session_id: str) -> StoredWorkState | None:
-    """Compatibility helper for storages that may not implement work-state APIs yet."""
-    getter = getattr(storage, "get_work_state", None)
-    if callable(getter):
-        return await getter(session_id)
-    return None
-
-
-async def upsert_storage_work_state(storage: Any, state: StoredWorkState) -> StoredWorkState | None:
-    """Compatibility helper for storages that may not implement work-state APIs yet."""
-    setter = getattr(storage, "upsert_work_state", None)
-    if callable(setter):
-        return await setter(state)
-    return None
-
-
-async def clear_storage_work_state(storage: Any, session_id: str) -> None:
-    """Compatibility helper for storages that may not implement work-state APIs yet."""
-    clearer = getattr(storage, "clear_work_state", None)
-    if callable(clearer):
-        await clearer(session_id)

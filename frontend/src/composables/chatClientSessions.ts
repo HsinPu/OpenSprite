@@ -3,7 +3,7 @@ import {
   isExternalChannelSessionId,
 } from "./chatClientSessionIds";
 import type { RunViewState } from "./chatClientRunHelpers";
-import type { RunArtifactView, WorkStateView } from "./runTraceNormalizers";
+import type { RunArtifactView } from "./runTraceNormalizers";
 import { randomToken } from "./chatClientTokens";
 import { toPayloadSource } from "./payloadBoundary";
 
@@ -86,7 +86,6 @@ export interface ChatSession {
   entries: LiveEntry[];
   hiddenFromBrowserHistory: boolean;
   status: ChatSessionStatus;
-  workState: WorkStateView | null;
   activeRunId: string | null;
   runs: RunViewState[];
   runsLoaded: boolean;
@@ -162,7 +161,6 @@ export function createSession(externalChatId?: string): ChatSession {
     entries: [],
     hiddenFromBrowserHistory: false,
     status: { status: "idle", updatedAt: Date.now(), metadata: {} },
-    workState: null,
     activeRunId: null,
     runs: [],
     runsLoaded: false,

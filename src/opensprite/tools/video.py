@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
-from .evidence import ToolEvidence, indexed_resource_id
 from .saved_media import resolve_media_items
 from .validation import NON_EMPTY_STRING_PATTERN
 
@@ -98,16 +97,4 @@ class AnalyzeVideoTool(Tool):
             instruction=instruction,
             videos=videos,
             video_index=effective_index,
-        )
-
-    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
-        args = params if isinstance(params, dict) else {}
-        video_path = str(args.get("video_path") or "").strip().replace("\\", "/")
-        resource_id = f"video:{video_path}" if video_path else indexed_resource_id("video_index", args.get("video_index"))
-        return ToolEvidence(
-            name=self.name,
-            args=dict(args or {}),
-            ok=ok,
-            resource_ids=(resource_id,),
-            result_preview=str(result or "")[:240],
         )

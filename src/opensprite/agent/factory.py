@@ -45,7 +45,6 @@ async def create_agent(config: Config):
         search_store=search_store,
         search_config=config.search,
         user_profile_config=config.user_profile,
-        active_task_config=config.active_task,
         recent_summary_config=config.recent_summary,
         cron_manager=None,
         media_router=media_router,

@@ -1,11 +1,10 @@
 import asyncio
+import sqlite3
 
 from opensprite.runs.lifecycle import RUN_STARTED_EVENT
 from opensprite.storage.base import (
     StoredBackgroundProcess,
-    StoredDelegatedTask,
     StoredMessage,
-    StoredWorkState,
 )
 from opensprite.storage.sqlite import SQLiteStorage
 
@@ -108,53 +107,10 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
         file_changes = await storage.get_run_file_changes("chat-1", "run-1")
         single_change = await storage.get_run_file_change("chat-1", "run-1", file_change.change_id)
         trace = await storage.get_run_trace("chat-1", "run-1")
-        work_state = await storage.upsert_work_state(
-            StoredWorkState(
-                session_id="chat-1",
-                objective="Finish the refactor",
-                kind="refactor",
-                status="active",
-                steps=("1. inspect", "2. change", "3. verify"),
-                constraints=("Keep the API stable",),
-                done_criteria=("tests pass",),
-                long_running=True,
-                coding_task=True,
-                expects_code_change=True,
-                expects_verification=True,
-                current_step="2. change",
-                next_step="3. verify",
-                completed_steps=("1. inspect",),
-                pending_steps=("2. change", "3. verify"),
-                blockers=(),
-                verification_targets=("tests pass",),
-                resume_hint="Resume at current step: 2. change",
-                last_progress_signals=("file_changes",),
-                file_change_count=1,
-                touched_paths=("src/app.py",),
-                verification_attempted=False,
-                verification_passed=False,
-                last_next_action="continue_verification",
-                delegated_tasks=(
-                    StoredDelegatedTask(
-                        task_id="task_abc12345",
-                        prompt_type="implementer",
-                        status="completed",
-                        selected=True,
-                        summary="Delegated the implementation task.",
-                    ),
-                ),
-                metadata={"source": "test"},
-                created_at=9.0,
-                updated_at=13.0,
-            )
-        )
-        loaded_work_state = await storage.get_work_state("chat-1")
-        await storage.clear_work_state("chat-1")
-        cleared_work_state = await storage.get_work_state("chat-1")
         chats = await storage.get_all_sessions()
-        return created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, work_state, loaded_work_state, cleared_work_state, chats
+        return created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, chats
 
-    created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, work_state, loaded_work_state, cleared_work_state, chats = asyncio.run(scenario())
+    created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, chats = asyncio.run(scenario())
 
     assert created is not None
     assert created.status == "running"
@@ -197,20 +153,41 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert [entry.event_type for entry in trace.events] == [RUN_STARTED_EVENT]
     assert [entry.part_type for entry in trace.parts] == ["tool_call"]
     assert [entry.path for entry in trace.file_changes] == ["notes.txt"]
-    assert work_state is not None
-    assert work_state.objective == "Finish the refactor"
-    assert work_state.active_delegate_task_id == "task_abc12345"
-    assert loaded_work_state is not None
-    assert loaded_work_state.constraints == ("Keep the API stable",)
-    assert loaded_work_state.touched_paths == ("src/app.py",)
-    assert loaded_work_state.active_delegate_prompt_type == "implementer"
-    assert [task.task_id for task in loaded_work_state.delegated_tasks] == ["task_abc12345"]
-    assert loaded_work_state.pending_steps == ("2. change", "3. verify")
-    assert loaded_work_state.verification_targets == ("tests pass",)
-    assert loaded_work_state.resume_hint == "Resume at current step: 2. change"
-    assert loaded_work_state.metadata == {"source": "test"}
-    assert cleared_work_state is None
     assert chats == ["chat-1"]
+
+
+def test_sqlite_storage_does_not_create_work_states_for_new_databases(tmp_path):
+    db_path = tmp_path / "new.db"
+    SQLiteStorage(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        table = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_states'"
+        ).fetchone()
+
+    assert table is None
+
+
+def test_sqlite_storage_preserves_existing_work_states_data(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "CREATE TABLE work_states (session_id TEXT PRIMARY KEY, objective TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO work_states (session_id, objective) VALUES (?, ?)",
+            ("chat-legacy", "Keep this historical row"),
+        )
+
+    SQLiteStorage(db_path)
+
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT session_id, objective FROM work_states WHERE session_id = ?",
+            ("chat-legacy",),
+        ).fetchone()
+
+    assert row == ("chat-legacy", "Keep this historical row")
 
 
 def test_sqlite_storage_persists_background_processes(tmp_path):

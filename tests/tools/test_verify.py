@@ -1,6 +1,7 @@
 import asyncio
 import sys
 
+from opensprite.tools import verify as verify_module
 from opensprite.tools.verify import VerifyCommandResult, VerifyTool, classify_verification_result
 from opensprite.tools.result_status import classify_tool_result_status
 
@@ -277,3 +278,79 @@ def test_verify_web_smoke_uses_package_json_smoke_script(tmp_path):
     assert captured["cwd"] == package_dir.resolve(strict=False)
     assert captured["timeout"] == 11
     assert result.startswith("Verification passed: web_smoke")
+
+
+def test_verify_reports_managed_process_startup_failure(tmp_path, monkeypatch):
+    async def failing_start_exec_process(_command, *, cwd):
+        assert cwd == str(tmp_path)
+        raise RuntimeError("Unable to attach Windows command launcher to a Job Object")
+
+    monkeypatch.setattr(verify_module, "start_exec_process", failing_start_exec_process)
+    tool = VerifyTool(workspace=tmp_path)
+
+    result = asyncio.run(tool._run_command(["verify-command"], tmp_path, 1))
+
+    assert result.exit_code is None
+    assert "Could not start verification command" in result.output
+    assert "Windows command launcher" in result.output
+
+
+def test_verify_command_cancellation_keeps_process_cleanup_alive(tmp_path, monkeypatch):
+    async def scenario():
+        communicate_started = asyncio.Event()
+        communicate_finished = asyncio.Event()
+        cleanup_started = asyncio.Event()
+        cleanup_release = asyncio.Event()
+        cleanup_finished = asyncio.Event()
+        terminate_calls = []
+
+        class BlockingProcess:
+            returncode = None
+
+            async def communicate(self):
+                communicate_started.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    communicate_finished.set()
+
+        process = BlockingProcess()
+
+        async def fake_start_exec_process(_command, *, cwd):
+            assert cwd == str(tmp_path)
+            return process
+
+        async def fake_terminate_process_tree(candidate):
+            terminate_calls.append(candidate)
+            cleanup_started.set()
+            await cleanup_release.wait()
+            cleanup_finished.set()
+
+        monkeypatch.setattr(verify_module, "start_exec_process", fake_start_exec_process)
+        monkeypatch.setattr(verify_module, "terminate_process_tree", fake_terminate_process_tree)
+        monkeypatch.setattr(verify_module, "_VERIFY_PROCESS_CLEANUP_TASKS", set())
+        tool = VerifyTool(workspace=tmp_path)
+
+        command_task = asyncio.create_task(tool._run_command(["verify-command"], tmp_path, 30))
+        await asyncio.wait_for(communicate_started.wait(), timeout=1)
+        command_task.cancel()
+        await asyncio.wait_for(cleanup_started.wait(), timeout=1)
+        command_task.cancel()
+        try:
+            await command_task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("verify cancellation was not preserved")
+
+        assert cleanup_finished.is_set() is False
+        cleanup_release.set()
+        await asyncio.wait_for(cleanup_finished.wait(), timeout=1)
+        await asyncio.sleep(0)
+        return terminate_calls, communicate_finished.is_set(), verify_module._VERIFY_PROCESS_CLEANUP_TASKS
+
+    terminate_calls, communicate_finished, cleanup_tasks = asyncio.run(scenario())
+
+    assert len(terminate_calls) == 1
+    assert communicate_finished is True
+    assert cleanup_tasks == set()

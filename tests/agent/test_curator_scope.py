@@ -27,9 +27,9 @@ def test_resolve_curator_scope_rejects_unknown_scopes():
 
 
 def test_ordered_maintenance_job_keys_keeps_canonical_order():
-    assert _ordered_maintenance_job_keys(["active_task", "memory", "missing", "memory"]) == (
+    assert _ordered_maintenance_job_keys(["user_profile", "memory", "missing", "memory"]) == (
         "memory",
-        "active_task",
+        "user_profile",
     )
 
 

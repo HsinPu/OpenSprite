@@ -2,7 +2,6 @@
 
 from .base import Tool
 from .registry import ToolRegistry
-from .active_task import TaskUpdateTool
 from .audio import TranscribeAudioTool
 from .batch import BatchTool
 from .browser import (
@@ -50,7 +49,6 @@ from .workflow import RunWorkflowTool
 __all__ = [
     "Tool",
     "ToolRegistry",
-    "TaskUpdateTool",
     "BatchTool",
     "BrowserBackTool",
     "BrowserClickTool",

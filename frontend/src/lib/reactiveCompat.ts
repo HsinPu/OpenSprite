@@ -14,6 +14,7 @@ type StoreListener = () => void;
 type StoreSubscription = () => void;
 type Scheduler = (callback: StoreListener) => void;
 type ProxyCache = WeakMap<object, object>;
+type ProxyTargetCache = WeakMap<object, object>;
 
 type LifecycleContext = {
   readonly mounted: LifecycleCallback[];
@@ -23,6 +24,7 @@ type LifecycleContext = {
   version: number;
   pending: boolean;
   readonly proxyCache: ProxyCache;
+  readonly rawByProxy: ProxyTargetCache;
   readonly notify: () => void;
   readonly subscribe: (listener: StoreListener) => StoreSubscription;
   readonly getSnapshot: () => number;
@@ -44,6 +46,7 @@ function createLifecycleContext(): LifecycleContext {
     version: 0,
     pending: false,
     proxyCache: new WeakMap(),
+    rawByProxy: new WeakMap(),
     notify() {
       if (context.pending) {
         return;
@@ -132,6 +135,9 @@ function isRegisteredCleanup(value: Cleanup): value is RegisteredCleanup {
 
 function proxied<T extends object>(target: T, context: LifecycleContext): T;
 function proxied(target: object, context: LifecycleContext): object {
+  if (context.rawByProxy.has(target)) {
+    return target;
+  }
   const cached = context.proxyCache.get(target);
   if (cached) {
     return cached;
@@ -162,6 +168,7 @@ function proxied(target: object, context: LifecycleContext): object {
   });
 
   context.proxyCache.set(target, proxy);
+  context.rawByProxy.set(proxy, target);
   return proxy;
 }
 

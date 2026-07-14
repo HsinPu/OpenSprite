@@ -5,14 +5,7 @@ from opensprite.llms.reasoning import (
     reasoning_config_from_effort,
 )
 from opensprite.llms.request_log_fields import request_param_log_fields
-from opensprite.llms.request_modes import (
-    JSON_OBJECT_RESPONSE_FORMAT,
-    JSON_PLANNING_MIN_OUTPUT_TOKENS,
-    LLMRequestMode,
-    request_kwargs_for_mode,
-    request_mode_requires_json_response,
-    resolve_response_format,
-)
+from opensprite.llms.request_modes import LLMRequestMode, resolve_response_format
 from opensprite.llms.request_builder import (
     OPENAI_CHAT_REQUEST_PROFILE,
     OPENAI_RESPONSES_REQUEST_PROFILE,
@@ -128,26 +121,11 @@ def test_reasoning_effort_helpers_normalize_supported_modes():
     assert reasoning_config_from_effort("low") == {"enabled": True, "effort": "low"}
 
 
-def test_request_mode_json_planning_enforces_minimum_output_tokens():
-    kwargs = request_kwargs_for_mode({"max_tokens": 12}, LLMRequestMode.JSON_PLANNING)
-
-    assert kwargs["request_mode"] == "json_planning"
-    assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
-    assert kwargs["response_format"] == JSON_OBJECT_RESPONSE_FORMAT
-
-
-def test_json_only_request_modes_require_provider_json_response():
-    assert request_mode_requires_json_response(LLMRequestMode.JSON_PLANNING) is True
-    assert request_mode_requires_json_response(LLMRequestMode.COMPLETION_VERIFIER) is True
-    assert request_mode_requires_json_response("json_planning") is True
-    assert request_mode_requires_json_response(LLMRequestMode.MAIN_CHAT) is False
-
-
-def test_resolve_response_format_prefers_explicit_format_over_mode_policy():
+def test_resolve_response_format_uses_explicit_format_only():
     explicit = {"type": "json_schema", "name": "custom"}
 
-    assert resolve_response_format(explicit, LLMRequestMode.JSON_PLANNING) is explicit
-    assert resolve_response_format(None, LLMRequestMode.JSON_PLANNING) == JSON_OBJECT_RESPONSE_FORMAT
+    assert resolve_response_format(explicit, LLMRequestMode.MAIN_CHAT) is explicit
+    assert resolve_response_format(explicit, "custom") is explicit
     assert resolve_response_format(None, LLMRequestMode.MAIN_CHAT) is None
 
 
@@ -162,11 +140,11 @@ def test_request_param_log_fields_are_sanitized_and_provider_neutral():
             "max_output_tokens": 321,
             "reasoning": {"effort": "high"},
         },
-        request_mode=LLMRequestMode.COMPLETION_VERIFIER,
+        request_mode=LLMRequestMode.MAIN_CHAT,
     )
 
     assert fields == {
-        "mode": "completion_verifier",
+        "mode": "main_chat",
         "model": "test-model",
         "messages": 1,
         "tools": 1,

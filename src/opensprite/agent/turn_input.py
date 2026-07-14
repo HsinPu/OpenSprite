@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ..bus.message import UserMessage
+from ..bus.message import CLIENT_TURN_ID_METADATA_KEY, UserMessage
 from ..media import (
     AgentMediaService,
     INBOUND_AUDIO_EXTENSIONS,
@@ -16,23 +16,12 @@ from ..utils.log import logger
 from ..utils.url import join_url_path
 
 
-QUICK_ACTION_METADATA_KEY = "quick_action"
 TURN_SOURCE_METADATA_KEY = "source"
 CLI_VIA_WEB_TURN_SOURCE = "cli_via_web"
-RESUME_FOLLOW_UP_QUICK_ACTION = "resume_follow_up"
-RUN_VERIFICATION_QUICK_ACTION = "run_verification"
 
 
 def metadata_is_cli_via_web(metadata: dict[str, Any]) -> bool:
     return metadata_value_matches(metadata, TURN_SOURCE_METADATA_KEY, CLI_VIA_WEB_TURN_SOURCE)
-
-
-def metadata_requests_follow_up_resume(metadata: dict[str, Any]) -> bool:
-    return metadata_value_matches(metadata, QUICK_ACTION_METADATA_KEY, RESUME_FOLLOW_UP_QUICK_ACTION)
-
-
-def metadata_requests_direct_verification(metadata: dict[str, Any]) -> bool:
-    return metadata_value_matches(metadata, QUICK_ACTION_METADATA_KEY, RUN_VERIFICATION_QUICK_ACTION)
 
 
 def normalized_policy_text(value: Any) -> str:
@@ -74,9 +63,14 @@ class TurnInputPreparer:
         self.media_service = media_service
         self._format_log_preview = format_log_preview
 
+    @staticmethod
+    def resolve_session_id(user_message: UserMessage) -> str:
+        """Resolve the session before any media persistence side effects occur."""
+        return user_message.session_id or user_message.external_chat_id or "default"
+
     def prepare(self, user_message: UserMessage) -> PreparedTurnInput:
         """Prepare all process input fields derived directly from the inbound message."""
-        session_id = user_message.session_id or user_message.external_chat_id or "default"
+        session_id = self.resolve_session_id(user_message)
         channel = user_message.channel or None
 
         if ":" not in session_id:
@@ -136,6 +130,7 @@ class TurnInputPreparer:
         assistant_metadata = {
             "channel": channel,
             "external_chat_id": user_message.external_chat_id,
+            CLIENT_TURN_ID_METADATA_KEY: user_metadata.get(CLIENT_TURN_ID_METADATA_KEY),
         }
         assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
         external_chat_id = str(user_message.external_chat_id) if user_message.external_chat_id is not None else None

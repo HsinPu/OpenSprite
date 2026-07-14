@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from ..utils.log import logger
-from .evidence import ToolEvidence, build_tool_evidence
 from .result_status import tool_error_result
 from .validation import format_param_preview, validate_tool_params
 
@@ -72,11 +71,6 @@ class Tool(ABC):
     def sanitize_input_delta_for_display(self, delta: str) -> str:
         """Return streamed tool-input chunks safe for run trace displays."""
         return delta
-
-    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
-        """Return completion-check evidence for this tool execution."""
-        safe_params = params if isinstance(params, dict) else {}
-        return build_tool_evidence(self.name, safe_params, result, ok=ok)
 
     @abstractmethod
     async def _execute(self, **kwargs: Any) -> str:

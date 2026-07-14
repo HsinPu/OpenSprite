@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Literal
 
-from ..bus.message import AssistantMessage
+from ..bus.message import CLIENT_TURN_ID_METADATA_KEY, AssistantMessage
 from ..config import LogConfig
+from ..runs.lifecycle import RUN_STOPPED_STATUS
 from ..runs.trace import RunTraceRecorder
 from ..utils.log import logger
 
@@ -98,8 +99,16 @@ class AgentResponseFinalizer:
         log_prefix: str = "",
         log_before_record: bool = False,
         after_save: Callable[[], Awaitable[None]] | None = None,
+        terminal_status: Literal["completed", "failed", "stopped"] = "completed",
     ) -> AssistantMessage:
         """Finalize a visible assistant response for one user turn."""
+        client_turn_id = str(assistant_metadata.get(CLIENT_TURN_ID_METADATA_KEY) or "").strip()
+        event_payload = dict(run_event_payload)
+        terminal_status_metadata = dict(status_metadata or {})
+        if client_turn_id:
+            event_payload[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+            terminal_status_metadata[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+
         if log_before_record:
             self._log_outbound(session_id, response, prefix=log_prefix)
 
@@ -124,14 +133,34 @@ class AgentResponseFinalizer:
         if after_save is not None:
             await after_save()
 
-        await self.run_trace.complete_run(
-            session_id,
-            run_id,
-            event_payload=run_event_payload,
-            status_metadata=status_metadata,
-            channel=channel,
-            external_chat_id=external_chat_id,
-        )
+        if terminal_status == "failed":
+            await self.run_trace.fail_run(
+                session_id,
+                run_id,
+                status="failed",
+                event_payload={**event_payload, "status": "failed"},
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
+        elif terminal_status == RUN_STOPPED_STATUS:
+            await self.run_trace.finish_run(
+                session_id,
+                run_id,
+                status=RUN_STOPPED_STATUS,
+                event_payload=event_payload,
+                status_metadata=terminal_status_metadata,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
+        else:
+            await self.run_trace.complete_run(
+                session_id,
+                run_id,
+                event_payload=event_payload,
+                status_metadata=terminal_status_metadata,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
 
         return AssistantMessage(
             text=response,

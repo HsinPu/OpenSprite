@@ -5,9 +5,17 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from ..bus import RunEvent, SessionStatusEvent
-from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
+from ..bus.message import (
+    CLIENT_TURN_ID_METADATA_KEY,
+    RESPONSE_KIND_METADATA_KEY,
+    SESSION_COMMAND_RESPONSE_KIND,
+    AssistantMessage,
+    MessageAdapter,
+    UserMessage,
+)
 from ..runs.events import TOOL_STARTED_EVENT
 from ..runs.lifecycle import TERMINAL_RUN_EVENTS
 from .identity import build_session_id, normalize_identifier
@@ -51,11 +59,13 @@ class CliAdapter(MessageAdapter):
         self.sender_name = sender_name
         self._response: AssistantMessage | None = None
         self._response_event = asyncio.Event()
+        self._terminal_event = asyncio.Event()
         self._run_id: str | None = None
         self._run_status = ""
         self._run_events: list[RunEvent] = []
         self._statuses: list[SessionStatusEvent] = []
         self._error = ""
+        self._client_turn_id: str | None = None
 
     async def to_user_message(self, raw_message: Any) -> UserMessage:
         payload = dict(raw_message) if isinstance(raw_message, dict) else {"text": str(raw_message or "")}
@@ -75,26 +85,61 @@ class CliAdapter(MessageAdapter):
         self._response_event.set()
 
     async def _on_response(self, message: AssistantMessage, channel: str, external_chat_id: str | None) -> None:
-        _ = channel, external_chat_id
+        _ = channel
+        if str(message.session_id or "") != self.session_id:
+            return
+        if external_chat_id and str(external_chat_id) != self.external_chat_id:
+            return
+        if self._client_turn_id is not None:
+            response_turn_id = str(
+                (message.metadata or {}).get(CLIENT_TURN_ID_METADATA_KEY) or ""
+            ).strip()
+            if response_turn_id != self._client_turn_id:
+                return
         await self.send(message)
 
     async def _on_run_event(self, event: RunEvent) -> None:
+        if str(event.session_id or "") != self.session_id:
+            return
+        event_run_id = str(event.run_id or "").strip()
+        if not event_run_id:
+            return
+        if self._client_turn_id is not None:
+            event_turn_id = str(
+                (event.payload or {}).get(CLIENT_TURN_ID_METADATA_KEY) or ""
+            ).strip()
+            if event_turn_id and event_turn_id != self._client_turn_id:
+                return
+            if self._run_id is None and event_turn_id != self._client_turn_id:
+                return
+        if self._run_id is not None and event_run_id != self._run_id:
+            return
         self._run_events.append(event)
-        if event.run_id and self._run_id is None:
-            self._run_id = event.run_id
+        if self._run_id is None:
+            self._run_id = event_run_id
         if event.event_type in TERMINAL_RUN_EVENTS:
             status = ""
             if not status and isinstance(event.payload, dict):
                 status = str(event.payload.get("status") or "")
             self._run_status = status or event.event_type
+            self._terminal_event.set()
 
     async def _on_session_status(self, event: SessionStatusEvent) -> None:
+        if str(event.session_id or "") != self.session_id:
+            return
         self._statuses.append(event)
 
     async def _on_error(self, session_id: str, error: str) -> None:
-        _ = session_id
+        if str(session_id or "") != self.session_id:
+            return
         self._error = error
         self._response_event.set()
+
+    def _has_session_command_response(self) -> bool:
+        return self._response is not None and (
+            (self._response.metadata or {}).get(RESPONSE_KIND_METADATA_KEY)
+            == SESSION_COMMAND_RESPONSE_KIND
+        )
 
     def register(self) -> None:
         self.mq.register_response_handler(self.channel_instance_id, self._on_response)
@@ -110,6 +155,15 @@ class CliAdapter(MessageAdapter):
 
     async def run_once(self, text: str, *, timeout: float = 120.0, metadata: dict[str, Any] | None = None) -> CliChatResult:
         """Send one CLI message through the queue and wait for the assistant response."""
+        self._response = None
+        self._response_event.clear()
+        self._terminal_event.clear()
+        self._run_id = None
+        self._run_status = ""
+        self._run_events.clear()
+        self._statuses.clear()
+        self._error = ""
+        self._client_turn_id = f"turn_{uuid4().hex}"
         self.register()
         try:
             user_message = await self.to_user_message(
@@ -119,11 +173,50 @@ class CliAdapter(MessageAdapter):
                     "session_id": self.session_id,
                     "sender_id": self.sender_id,
                     "sender_name": self.sender_name,
-                    "metadata": {"source": "cli", **dict(metadata or {})},
+                    "metadata": {
+                        "source": "cli",
+                        **dict(metadata or {}),
+                        CLIENT_TURN_ID_METADATA_KEY: self._client_turn_id,
+                    },
                 }
             )
             await self.mq.enqueue(user_message)
-            await asyncio.wait_for(self._response_event.wait(), timeout=timeout)
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + timeout
+            while self._response is None or (
+                not self._terminal_event.is_set() and not self._has_session_command_response()
+            ):
+                if self._error:
+                    raise RuntimeError(self._error)
+                now = loop.time()
+                remaining = deadline - now
+                if remaining <= 0:
+                    if self._terminal_event.is_set():
+                        raise RuntimeError("CLI chat run ended without an assistant response")
+                    raise TimeoutError(f"Timed out waiting for CLI chat terminal state after {timeout:g}s")
+
+                waiters = []
+                if self._response is None:
+                    waiters.append(asyncio.create_task(self._response_event.wait()))
+                if not self._terminal_event.is_set():
+                    waiters.append(asyncio.create_task(self._terminal_event.wait()))
+                try:
+                    done, pending = await asyncio.wait(
+                        waiters,
+                        timeout=remaining,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                except BaseException:
+                    for waiter in waiters:
+                        waiter.cancel()
+                    await asyncio.gather(*waiters, return_exceptions=True)
+                    raise
+                for waiter in pending:
+                    waiter.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                if not done:
+                    continue
             if self._response is None:
                 raise RuntimeError(self._error or "CLI chat did not receive an assistant response")
             return CliChatResult(

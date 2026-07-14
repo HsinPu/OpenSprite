@@ -6,13 +6,13 @@ import asyncio
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import subprocess
 import time
 from collections.abc import Iterable
 from contextlib import AsyncExitStack
 from typing import Any, Awaitable, Callable
 
 from ..bus.events import OutboundMessage, RunEvent
+from ..bus.message import CLIENT_TURN_ID_METADATA_KEY
 from ..config import Config, ToolsConfig
 from ..runs.events import (
     FILE_CHANGED_EVENT,
@@ -28,7 +28,9 @@ from ..runs.events import (
     TOOL_INPUT_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    VERIFICATION_NAME_METADATA_FIELD,
     VERIFICATION_RESULT_EVENT,
+    VERIFICATION_STATUS_METADATA_FIELD,
     VERIFICATION_STARTED_EVENT,
 )
 from ..runs.lifecycle import (
@@ -40,8 +42,6 @@ from ..runs.lifecycle import (
     RUN_RUNNING_STATUS,
     RUN_STARTED_EVENT,
 )
-from ..utils.processes import windows_hidden_process_kwargs
-from ..runs.schema import serialize_work_state_todos
 from ..storage import StorageProvider, StoredRunFileChange
 from ..tool_names import (
     DELEGATE_MANY_TOOL_NAME,
@@ -50,7 +50,7 @@ from ..tool_names import (
     RUN_WORKFLOW_TOOL_NAME,
 )
 from ..tools import ToolRegistry
-from ..tools.evidence import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD, is_verification_tool_name
+from ..tool_names import is_verification_tool_name
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils.json_safe import json_safe_payload
@@ -59,18 +59,12 @@ from ..utils.text_changes import format_unified_diff, text_sha256
 
 
 RUN_PART_CONTENT_MAX_CHARS = 20_000
+TERMINAL_EVENT_DELIVERY_TIMEOUT_SECONDS = 5.0
 RUN_FILE_REVERT_DIFF_MAX_CHARS = 12_000
 TRACE_PROFILE_FIELD = "profile"
-TRACE_TASK_FIELD = "task"
 TRACE_POLICY_FIELD = "policy"
-TRACE_CONTRACT_FIELD = "contract"
-TRACE_COMPLETION_FIELD = "completion"
-TRACE_TRACE_HEALTH_FIELD = "trace_health"
-TRACE_SENSOR_COUNTS_FIELD = "sensor_counts"
 TRACE_STATUS_FIELD = "status"
 TRACE_NAME_FIELD = "name"
-TRACE_TASK_TYPE_FIELD = "task_type"
-TRACE_NEXT_ACTION_FIELD = "next_action"
 TRACE_SUMMARY_FIELD = "summary"
 TRACE_KIND_FIELD = "kind"
 TRACE_OK_FIELD = "ok"
@@ -81,216 +75,10 @@ TRACE_TOTAL_CHECKS_FIELD = "total_checks"
 TRACE_OPERATION_TYPE_FIELD = "operation_type"
 TRACE_TARGET_FIELD = "target"
 TRACE_ROLLBACK_AVAILABLE_FIELD = "rollback_available"
-TRACE_SENSOR_FAIL_FIELD = "fail"
-TRACE_SENSOR_WARN_FIELD = "warn"
-TRACE_SENSOR_PASS_FIELD = "pass"
 WorkspaceForSession = Callable[[str], Path]
 EventEmitter = Callable[..., Awaitable[None]]
 PreviewFormatter = Callable[[str | list[dict[str, Any]] | None, int], str]
 FileChangeRecorder = Callable[[str], None]
-SANDBOX_MARKER = ".opensprite-worktree.json"
-WORKTREE_SANDBOX_DISABLED_REASON = "worktree sandbox is disabled"
-WORKSPACE_NOT_GIT_REPOSITORY_REASON = "workspace is not inside a git repository"
-WORKTREE_SANDBOX_EXISTS_REASON = "worktree sandbox already exists"
-GIT_WORKTREE_ADD_FAILED_REASON = "git worktree add failed"
-MISSING_WORKTREE_MARKER_REASON = "missing OpenSprite worktree marker"
-WORKTREE_MARKER_NOT_MANAGED_REASON = "worktree marker is not managed by OpenSprite"
-REPOSITORY_ROOT_MISSING_REASON = "repository root no longer exists"
-GIT_WORKTREE_REMOVE_FAILED_REASON = "git worktree remove failed"
-GIT_COMMAND_FAILED_REASON = "git command failed"
-
-
-@dataclass
-class WorktreeSandboxMetadata:
-    enabled: bool
-    status: str
-    workspace_root: str
-    repository_root: str | None = None
-    base_branch: str | None = None
-    base_commit: str | None = None
-    sandbox_path: str | None = None
-    created: bool = False
-    cleanup_supported: bool = False
-    reason: str | None = None
-
-    def to_payload(self) -> dict[str, Any]:
-        return {
-            "enabled": self.enabled,
-            "status": self.status,
-            "workspace_root": self.workspace_root,
-            "repository_root": self.repository_root,
-            "base_branch": self.base_branch,
-            "base_commit": self.base_commit,
-            "sandbox_path": self.sandbox_path,
-            "created": self.created,
-            "cleanup_supported": self.cleanup_supported,
-            "reason": self.reason,
-        }
-
-
-class WorktreeSandboxInspector:
-    """Collect non-destructive git metadata for future isolated worktree runs."""
-
-    def __init__(self, *, enabled: bool, workspace_root: Path):
-        self.enabled = enabled
-        self.workspace_root = Path(workspace_root).expanduser().resolve(strict=False)
-
-    def inspect(self) -> WorktreeSandboxMetadata:
-        if not self.enabled:
-            return WorktreeSandboxMetadata(
-                enabled=False,
-                status="disabled",
-                workspace_root=str(self.workspace_root),
-                reason=WORKTREE_SANDBOX_DISABLED_REASON,
-            )
-
-        repository_root = self._git("rev-parse", "--show-toplevel")
-        if repository_root is None:
-            return WorktreeSandboxMetadata(
-                enabled=True,
-                status="unavailable",
-                workspace_root=str(self.workspace_root),
-                reason=WORKSPACE_NOT_GIT_REPOSITORY_REASON,
-            )
-
-        return WorktreeSandboxMetadata(
-            enabled=True,
-            status="ready",
-            workspace_root=str(self.workspace_root),
-            repository_root=repository_root,
-            base_branch=self._git("rev-parse", "--abbrev-ref", "HEAD"),
-            base_commit=self._git("rev-parse", "HEAD"),
-        )
-
-    def create(self, *, session_id: str, run_id: str) -> WorktreeSandboxMetadata:
-        metadata = self.inspect()
-        if metadata.status != "ready" or metadata.repository_root is None or metadata.base_commit is None:
-            return metadata
-
-        repository_root = Path(metadata.repository_root).resolve(strict=False)
-        sandbox_path = self._sandbox_path(repository_root, session_id=session_id, run_id=run_id)
-        if sandbox_path.exists():
-            return WorktreeSandboxMetadata(
-                enabled=True,
-                status="exists",
-                workspace_root=str(self.workspace_root),
-                repository_root=str(repository_root),
-                base_branch=metadata.base_branch,
-                base_commit=metadata.base_commit,
-                sandbox_path=str(sandbox_path),
-                cleanup_supported=self._marker_path(sandbox_path).exists(),
-                reason=WORKTREE_SANDBOX_EXISTS_REASON,
-            )
-
-        sandbox_path.parent.mkdir(parents=True, exist_ok=True)
-        result = self._run_git(
-            "worktree",
-            "add",
-            "--detach",
-            str(sandbox_path),
-            metadata.base_commit,
-            cwd=repository_root,
-            timeout=20,
-        )
-        if result.returncode != 0:
-            return WorktreeSandboxMetadata(
-                enabled=True,
-                status="create_failed",
-                workspace_root=str(self.workspace_root),
-                repository_root=str(repository_root),
-                base_branch=metadata.base_branch,
-                base_commit=metadata.base_commit,
-                sandbox_path=str(sandbox_path),
-                reason=(result.stderr or result.stdout).strip() or GIT_WORKTREE_ADD_FAILED_REASON,
-            )
-
-        marker = {
-            "managed_by": "opensprite",
-            "repository_root": str(repository_root),
-            "base_branch": metadata.base_branch,
-            "base_commit": metadata.base_commit,
-            "session_id": session_id,
-            "run_id": run_id,
-        }
-        self._marker_path(sandbox_path).write_text(json.dumps(marker, sort_keys=True), encoding="utf-8")
-        return WorktreeSandboxMetadata(
-            enabled=True,
-            status="created",
-            workspace_root=str(self.workspace_root),
-            repository_root=str(repository_root),
-            base_branch=metadata.base_branch,
-            base_commit=metadata.base_commit,
-            sandbox_path=str(sandbox_path),
-            created=True,
-            cleanup_supported=True,
-        )
-
-    @classmethod
-    def cleanup(cls, sandbox_path: str | Path) -> dict[str, Any]:
-        path = Path(sandbox_path).expanduser().resolve(strict=False)
-        marker_path = cls._marker_path(path)
-        if not marker_path.exists():
-            return {"ok": False, "status": "refused", "reason": MISSING_WORKTREE_MARKER_REASON, "sandbox_path": str(path)}
-        try:
-            marker = json.loads(marker_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            return {"ok": False, "status": "refused", "reason": f"invalid worktree marker: {exc}", "sandbox_path": str(path)}
-        if marker.get("managed_by") != "opensprite":
-            return {"ok": False, "status": "refused", "reason": WORKTREE_MARKER_NOT_MANAGED_REASON, "sandbox_path": str(path)}
-        repository_root = Path(str(marker.get("repository_root") or "")).expanduser().resolve(strict=False)
-        if not repository_root.exists():
-            return {"ok": False, "status": "refused", "reason": REPOSITORY_ROOT_MISSING_REASON, "sandbox_path": str(path)}
-
-        result = cls._run_git("worktree", "remove", str(path), cwd=repository_root, timeout=20)
-        if result.returncode != 0:
-            return {
-                "ok": False,
-                "status": "remove_failed",
-                "reason": (result.stderr or result.stdout).strip() or GIT_WORKTREE_REMOVE_FAILED_REASON,
-                "sandbox_path": str(path),
-                "repository_root": str(repository_root),
-            }
-        try:
-            marker_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        return {"ok": True, "status": "removed", "sandbox_path": str(path), "repository_root": str(repository_root)}
-
-    @staticmethod
-    def _slug(value: str) -> str:
-        return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in value)[:80] or "sandbox"
-
-    @classmethod
-    def _sandbox_path(cls, repository_root: Path, *, session_id: str, run_id: str) -> Path:
-        root = repository_root.parent / f"{repository_root.name}.opensprite-worktrees"
-        return root / cls._slug(session_id) / cls._slug(run_id)
-
-    @staticmethod
-    def _marker_path(sandbox_path: Path) -> Path:
-        return sandbox_path.with_name(f"{sandbox_path.name}{SANDBOX_MARKER}")
-
-    def _git(self, *args: str) -> str | None:
-        result = self._run_git(*args, cwd=self.workspace_root, timeout=5)
-        if result.returncode != 0:
-            return None
-        return result.stdout.strip() or None
-
-    @staticmethod
-    def _run_git(*args: str, cwd: Path, timeout: int) -> subprocess.CompletedProcess[str]:
-        try:
-            return subprocess.run(
-                ["git", *args],
-                cwd=cwd,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=timeout,
-                **windows_hidden_process_kwargs(),
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return subprocess.CompletedProcess(["git", *args], 1, stdout="", stderr=GIT_COMMAND_FAILED_REASON)
-
-
 def truncate_run_part_content(
     content: str,
     max_chars: int = RUN_PART_CONTENT_MAX_CHARS,
@@ -306,6 +94,10 @@ def truncate_run_part_content(
     head_chars = max(0, max_chars - tail_chars - len(marker))
     truncated = text[:head_chars].rstrip() + marker + text[-tail_chars:].lstrip()
     return truncated, {"content_truncated": True, "content_original_len": original_len}
+
+
+class RunEventPersistenceError(RuntimeError):
+    """Raised when a caller requires an event to be durably stored."""
 
 
 class RunEventSink:
@@ -329,16 +121,32 @@ class RunEventSink:
         *,
         channel: str | None = None,
         external_chat_id: str | None = None,
+        require_persistence: bool = False,
     ) -> None:
         """Persist and publish one structured run event."""
         created_at = time.time()
         safe_payload = json_safe_payload(payload)
         add_event = getattr(self.storage, "add_run_event", None)
+        stored_event = None
         if callable(add_event):
             try:
-                await add_event(session_id, run_id, event_type, payload=safe_payload, created_at=created_at)
+                stored_event = await add_event(
+                    session_id,
+                    run_id,
+                    event_type,
+                    payload=safe_payload,
+                    created_at=created_at,
+                )
             except Exception as e:
                 logger.warning("[{}] run.event.persist.failed | run_id={} type={} error={}", session_id, run_id, event_type, e)
+                if require_persistence:
+                    raise RunEventPersistenceError(
+                        f"Failed to persist run event {event_type!r} for run {run_id!r}"
+                    ) from e
+        if require_persistence and stored_event is None:
+            raise RunEventPersistenceError(
+                f"Run event persistence is unavailable for event {event_type!r} on run {run_id!r}"
+            )
 
         message_bus = self._message_bus_getter()
         if message_bus is None or not channel or external_chat_id is None:
@@ -416,7 +224,7 @@ class RunFileChangeService:
             metadata = json_safe_payload(raw_metadata if isinstance(raw_metadata, dict) else {})
             metadata.setdefault("diff_len", len(diff))
             try:
-                await add_change(
+                stored_change = await add_change(
                     session_id,
                     run_id,
                     tool_name,
@@ -440,19 +248,23 @@ class RunFileChangeService:
                 )
                 continue
 
+            event_payload = {
+                "tool_name": tool_name,
+                "path": path,
+                "action": action,
+                "before_sha256": raw_change.get("before_sha256"),
+                "after_sha256": raw_change.get("after_sha256"),
+                "diff_len": len(diff),
+                "diff_preview": self._format_log_preview(diff, 240),
+            }
+            change_id = getattr(stored_change, "change_id", None)
+            if change_id is not None:
+                event_payload["change_id"] = change_id
             await self._emit_run_event(
                 session_id,
                 run_id,
                 FILE_CHANGED_EVENT,
-                {
-                    "tool_name": tool_name,
-                    "path": path,
-                    "action": action,
-                    "before_sha256": raw_change.get("before_sha256"),
-                    "after_sha256": raw_change.get("after_sha256"),
-                    "diff_len": len(diff),
-                    "diff_preview": self._format_log_preview(diff, 240),
-                },
+                event_payload,
                 channel=channel,
                 external_chat_id=external_chat_id,
             )
@@ -778,6 +590,21 @@ class RunTraceRecorder:
         self.storage = storage
         self._message_bus_getter = message_bus_getter
         self.events = RunEventSink(storage=storage, message_bus_getter=message_bus_getter)
+        create_supported = self._overrides_optional_storage_method("create_run")
+        update_supported = self._overrides_optional_storage_method("update_run_status")
+        self._run_persistence_supported = create_supported and update_supported
+        self._run_persistence_contract_error = create_supported != update_supported
+
+    def _overrides_optional_storage_method(self, method_name: str) -> bool:
+        method = getattr(self.storage, method_name, None)
+        implementation = getattr(method, "__func__", method)
+        return callable(method) and implementation is not getattr(StorageProvider, method_name, None)
+
+    def _require_consistent_run_persistence_contract(self) -> None:
+        if self._run_persistence_contract_error:
+            raise RuntimeError(
+                "Run storage must implement create_run and update_run_status together, or inherit both optional defaults."
+            )
 
     async def create_run(
         self,
@@ -788,13 +615,15 @@ class RunTraceRecorder:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Create a durable run record when the configured storage supports it."""
+        self._require_consistent_run_persistence_contract()
+        if not self._run_persistence_supported:
+            return
         creator = getattr(self.storage, "create_run", None)
         if not callable(creator):
             return
-        try:
-            await creator(session_id, run_id, status=status, metadata=metadata)
-        except Exception as e:
-            logger.warning("[{}] run.create.failed | run_id={} error={}", session_id, run_id, e)
+        created = await creator(session_id, run_id, status=status, metadata=metadata)
+        if created is None:
+            raise RuntimeError(f"Run storage did not create {run_id!r} for session {session_id!r}.")
 
     async def update_run_status(
         self,
@@ -805,14 +634,21 @@ class RunTraceRecorder:
         metadata: dict[str, Any] | None = None,
         finished_at: float | None = None,
     ) -> None:
-        """Update a durable run record when the configured storage supports it."""
+        """Update a durable run record when the configured storage supports it.
+
+        Terminal status is the source of truth for CLI, Web, and smoke clients,
+        so persistence failures must propagate instead of creating a false
+        successful terminal event while the durable row remains ``running``.
+        """
+        self._require_consistent_run_persistence_contract()
+        if not self._run_persistence_supported:
+            return
         updater = getattr(self.storage, "update_run_status", None)
         if not callable(updater):
             return
-        try:
-            await updater(session_id, run_id, status, metadata=metadata, finished_at=finished_at)
-        except Exception as e:
-            logger.warning("[{}] run.update.failed | run_id={} status={} error={}", session_id, run_id, status, e)
+        updated = await updater(session_id, run_id, status, metadata=metadata, finished_at=finished_at)
+        if updated is None:
+            raise RuntimeError(f"Run storage did not update {run_id!r} for session {session_id!r}.")
 
     async def add_part(
         self,
@@ -852,6 +688,7 @@ class RunTraceRecorder:
         *,
         channel: str | None = None,
         external_chat_id: str | None = None,
+        require_persistence: bool = False,
     ) -> None:
         """Persist and publish one structured run event."""
         await self.events.emit(
@@ -861,6 +698,7 @@ class RunTraceRecorder:
             payload,
             channel=channel,
             external_chat_id=external_chat_id,
+            require_persistence=require_persistence,
         )
 
     async def start_turn_run(
@@ -876,6 +714,7 @@ class RunTraceRecorder:
         images: list[str] | None,
         audios: list[str] | None,
         videos: list[str] | None,
+        client_turn_id: str | None = None,
     ) -> None:
         """Create a run and emit the initial user-turn run_started event."""
         run_metadata = {
@@ -883,20 +722,24 @@ class RunTraceRecorder:
             "external_chat_id": external_chat_id,
             "sender_id": sender_id,
             "sender_name": sender_name,
+            CLIENT_TURN_ID_METADATA_KEY: client_turn_id,
         }
         run_metadata = {key: value for key, value in run_metadata.items() if value is not None}
         await self.create_run(session_id, run_id, status=RUN_RUNNING_STATUS, metadata=run_metadata)
+        start_payload = {
+            "status": RUN_RUNNING_STATUS,
+            "text_len": len(text or ""),
+            "images_count": len(images or []),
+            "audios_count": len(audios or []),
+            "videos_count": len(videos or []),
+        }
+        if client_turn_id:
+            start_payload[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
         await self.emit_event(
             session_id,
             run_id,
             RUN_STARTED_EVENT,
-            {
-                "status": RUN_RUNNING_STATUS,
-                "text_len": len(text or ""),
-                "images_count": len(images or []),
-                "audios_count": len(audios or []),
-                "videos_count": len(videos or []),
-            },
+            start_payload,
             channel=channel,
             external_chat_id=external_chat_id,
         )
@@ -961,70 +804,6 @@ class RunTraceRecorder:
                 metadata=metadata,
             )
 
-    async def record_task_checkpoint_part(
-        self,
-        session_id: str,
-        run_id: str,
-        checkpoint: dict[str, Any],
-    ) -> None:
-        """Persist the latest task state as a durable run part."""
-        contract = checkpoint.get(TRACE_CONTRACT_FIELD) if isinstance(checkpoint, dict) else {}
-        completion = checkpoint.get(TRACE_COMPLETION_FIELD) if isinstance(checkpoint, dict) else {}
-        task_type = checkpoint.get(TRACE_TASK_TYPE_FIELD) if isinstance(checkpoint, dict) else ""
-        if not task_type and isinstance(contract, dict):
-            task_type = contract.get(TRACE_TASK_TYPE_FIELD)
-        content = " 繚 ".join(
-            item
-            for item in (
-                f"task={task_type}" if task_type else "",
-                f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
-                f"next={checkpoint.get(TRACE_NEXT_ACTION_FIELD)}" if isinstance(checkpoint, dict) and checkpoint.get(TRACE_NEXT_ACTION_FIELD) else "",
-            )
-            if item
-        )
-        await self.add_part(
-            session_id,
-            run_id,
-            "task_checkpoint",
-            content=content,
-            metadata=checkpoint,
-        )
-
-    async def record_task_scorecard_part(
-        self,
-        session_id: str,
-        run_id: str,
-        scorecard: dict[str, Any],
-    ) -> None:
-        """Persist the latest task scorecard as a durable run part."""
-        task = scorecard.get(TRACE_TASK_FIELD) if isinstance(scorecard, dict) else {}
-        contract = scorecard.get(TRACE_CONTRACT_FIELD) if isinstance(scorecard, dict) else {}
-        completion = scorecard.get(TRACE_COMPLETION_FIELD) if isinstance(scorecard, dict) else {}
-        trace_health = scorecard.get(TRACE_TRACE_HEALTH_FIELD) if isinstance(scorecard, dict) else {}
-        sensor_counts = trace_health.get(TRACE_SENSOR_COUNTS_FIELD) if isinstance(trace_health, dict) else {}
-        task_type = ""
-        if isinstance(task, dict):
-            task_type = task.get(TRACE_TASK_TYPE_FIELD) or ""
-        if not task_type and isinstance(contract, dict):
-            task_type = contract.get(TRACE_TASK_TYPE_FIELD) or ""
-        content = " 繚 ".join(
-            item
-            for item in (
-                f"task={task_type}" if task_type else "",
-                f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
-                f"trace={trace_health.get(TRACE_STATUS_FIELD)}" if isinstance(trace_health, dict) and trace_health.get(TRACE_STATUS_FIELD) else "",
-                _scorecard_sensor_summary(sensor_counts),
-            )
-            if item
-        )
-        await self.add_part(
-            session_id,
-            run_id,
-            "task_scorecard",
-            content=content,
-            metadata=scorecard,
-        )
-
     async def record_operation_audit_part(
         self,
         session_id: str,
@@ -1049,40 +828,121 @@ class RunTraceRecorder:
             metadata=audit,
         )
 
-    async def record_task_checklist_part(
+    async def _emit_terminal_event_after_commit(
         self,
         session_id: str,
         run_id: str,
-        work_state: Any,
-    ) -> list[dict[str, Any]]:
-        """Persist the current session task checklist as a run artifact."""
-        todos = serialize_work_state_todos(work_state)
-        await self.add_part(
-            session_id,
-            run_id,
-            "task_checklist",
-            content="\n".join(f"[{item['status']}] {item['content']}" for item in todos),
-            metadata={
-                "status": getattr(work_state, "status", "active"),
-                "objective": getattr(work_state, "objective", ""),
-                "todos": todos,
-            },
-        )
-        return todos
-
-    async def record_worktree_sandbox_part(
-        self,
-        session_id: str,
-        run_id: str,
-        metadata: dict[str, Any],
+        event_type: str,
+        payload: dict[str, Any],
+        *,
+        channel: str | None,
+        external_chat_id: str | None,
     ) -> None:
-        """Persist worktree sandbox readiness metadata for one run."""
-        await self.add_part(
+        """Finish terminal event delivery even if the caller is cancelled late."""
+        emit_task = asyncio.create_task(
+            asyncio.wait_for(
+                self.emit_event(
+                    session_id,
+                    run_id,
+                    event_type,
+                    payload,
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                ),
+                timeout=TERMINAL_EVENT_DELIVERY_TIMEOUT_SECONDS,
+            )
+        )
+        cancellation_seen = False
+        while not emit_task.done():
+            try:
+                await asyncio.shield(emit_task)
+            except asyncio.CancelledError:
+                cancellation_seen = True
+            except Exception:
+                break
+        try:
+            emit_task.result()
+        except asyncio.CancelledError:
+            logger.warning(
+                "[{}] run.terminal_event.cancelled | run_id={} type={}",
+                session_id,
+                run_id,
+                event_type,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[{}] run.terminal_event.delivery_failed | run_id={} type={} error={}",
+                session_id,
+                run_id,
+                event_type,
+                exc,
+            )
+        if cancellation_seen:
+            logger.info(
+                "[{}] run.cancellation_ignored_after_terminal_commit | run_id={}",
+                session_id,
+                run_id,
+            )
+
+    async def _commit_terminal_status_after_cancellation(
+        self,
+        session_id: str,
+        run_id: str,
+        status: str,
+        *,
+        finished_at: float,
+    ) -> None:
+        """Finish a failure/cancellation commit even if cleanup is cancelled again."""
+        commit_task = asyncio.create_task(
+            self.update_run_status(
+                session_id,
+                run_id,
+                status,
+                finished_at=finished_at,
+            )
+        )
+        cancellation_seen = False
+        while not commit_task.done():
+            try:
+                await asyncio.shield(commit_task)
+            except asyncio.CancelledError:
+                cancellation_seen = True
+        commit_task.result()
+        if cancellation_seen:
+            logger.info(
+                "[{}] run.cancellation_ignored_during_terminal_commit | run_id={} status={}",
+                session_id,
+                run_id,
+                status,
+            )
+
+    async def finish_run(
+        self,
+        session_id: str,
+        run_id: str,
+        *,
+        status: str,
+        event_payload: dict[str, Any],
+        status_metadata: dict[str, Any] | None = None,
+        channel: str | None = None,
+        external_chat_id: str | None = None,
+    ) -> None:
+        """Persist a non-error terminal status and then publish run_finished."""
+        finished_at = time.time()
+        await self.update_run_status(
             session_id,
             run_id,
-            "worktree_sandbox",
-            content=str(metadata.get(TRACE_STATUS_FIELD) or "unknown"),
-            metadata=metadata,
+            status,
+            metadata=status_metadata,
+            finished_at=finished_at,
+        )
+        await self._emit_terminal_event_after_commit(
+            session_id,
+            run_id,
+            RUN_FINISHED_EVENT,
+            {**event_payload, "status": status},
+            channel=channel,
+            external_chat_id=external_chat_id,
         )
 
     async def complete_run(
@@ -1095,22 +955,15 @@ class RunTraceRecorder:
         channel: str | None = None,
         external_chat_id: str | None = None,
     ) -> None:
-        """Emit run_finished and mark the durable run completed."""
-        finished_at = time.time()
-        await self.emit_event(
+        """Persist and publish a successfully completed run."""
+        await self.finish_run(
             session_id,
             run_id,
-            RUN_FINISHED_EVENT,
-            event_payload,
+            status=RUN_COMPLETED_STATUS,
+            event_payload=event_payload,
+            status_metadata=status_metadata,
             channel=channel,
             external_chat_id=external_chat_id,
-        )
-        await self.update_run_status(
-            session_id,
-            run_id,
-            RUN_COMPLETED_STATUS,
-            metadata=status_metadata,
-            finished_at=finished_at,
         )
 
     async def fail_run(
@@ -1123,29 +976,24 @@ class RunTraceRecorder:
         channel: str | None = None,
         external_chat_id: str | None = None,
     ) -> None:
-        """Emit a terminal run event and mark the durable run with the supplied status."""
+        """Persist an error/cancel terminal status and then publish its event."""
         finished_at = time.time()
         event_type = RUN_CANCELLED_EVENT if status == RUN_CANCELLED_STATUS else RUN_FAILED_EVENT
-        await self.emit_event(
+        await self._commit_terminal_status_after_cancellation(
+            session_id,
+            run_id,
+            status,
+            finished_at=finished_at,
+        )
+        await self._emit_terminal_event_after_commit(
             session_id,
             run_id,
             event_type,
-            event_payload,
+            {**event_payload, "status": status},
             channel=channel,
             external_chat_id=external_chat_id,
         )
-        await self.update_run_status(session_id, run_id, status, finished_at=finished_at)
 
-
-def _scorecard_sensor_summary(sensor_counts: Any) -> str:
-    if not isinstance(sensor_counts, dict):
-        return ""
-    fail_count = int(sensor_counts.get(TRACE_SENSOR_FAIL_FIELD) or 0)
-    warn_count = int(sensor_counts.get(TRACE_SENSOR_WARN_FIELD) or 0)
-    pass_count = int(sensor_counts.get(TRACE_SENSOR_PASS_FIELD) or 0)
-    if fail_count or warn_count:
-        return f"sensors={pass_count} pass/{warn_count} warn/{fail_count} fail"
-    return f"sensors={pass_count} pass" if pass_count else ""
 
 MCP_TOOL_NAME_PREFIX = "mcp_"
 PROGRESS_NOTICE_TOOL_NAMES = frozenset(
@@ -1214,6 +1062,8 @@ class McpLifecycleService:
         self._emit_run_event = emit_run_event
         self.servers = dict(tools_config.mcp_servers)
         self.tool_names: set[str] = set()
+        self.connected_server_names: set[str] = set()
+        self.failed_server_names: set[str] = set()
         self.stack: AsyncExitStack | None = None
         self.connected = False
         self.connecting = False
@@ -1251,77 +1101,172 @@ class McpLifecycleService:
         )
         self.context_builder.set_runtime_mcp_tools(mcp_tools)
 
+    async def _record_connection_failure(
+        self,
+        *,
+        attempted_server_names: set[str],
+        failure_messages: dict[str, str],
+    ) -> None:
+        self.connect_failures += 1
+        retry_delay = min(
+            self.INITIAL_RETRY_BACKOFF_SECONDS * (2 ** (self.connect_failures - 1)),
+            self.MAX_RETRY_BACKOFF_SECONDS,
+        )
+        self.retry_after = time.monotonic() + retry_delay
+        error = "; ".join(
+            f"{name}: {failure_messages.get(name, 'unknown connection failure')}"
+            for name in sorted(attempted_server_names)
+        )
+        logger.error(
+            "agent.mcp.connect.error | error={} retry_in_s={} failures={}",
+            error,
+            retry_delay,
+            self.connect_failures,
+        )
+        await self._emit_event(
+            MCP_CONNECTION_FAILED_EVENT,
+            {
+                "server_count": len(self.servers),
+                "attempted_server_count": len(attempted_server_names),
+                "connected_server_count": len(self.connected_server_names),
+                "failed_server_names": sorted(attempted_server_names),
+                "error": error,
+                "connect_failures": self.connect_failures,
+                "retry_in_seconds": retry_delay,
+            },
+        )
+
     async def connect(self) -> None:
-        """Connect configured MCP servers once and register their tools."""
-        now = time.monotonic()
-        if self.connected or self.connecting or not self.servers or now < self.retry_after:
+        """Connect pending MCP servers, sharing one in-flight attempt between callers."""
+        if not self.servers:
             return
 
         async with self._connect_lock:
+            configured_server_names = set(self.servers)
+            self.connected_server_names.intersection_update(configured_server_names)
+            pending_server_names = configured_server_names - self.connected_server_names
             now = time.monotonic()
-            if self.connected or self.connecting or not self.servers or now < self.retry_after:
+            if not pending_server_names:
+                self.connected = bool(configured_server_names)
+                self.failed_server_names.clear()
+                return
+            if now < self.retry_after:
                 return
 
             self.connecting = True
-            stack: AsyncExitStack | None = None
-            preexisting_tool_names = set(self.tools.tool_names)
+            attempt_stack: AsyncExitStack | None = None
+            preexisting_registry_tool_names = set(self.tools.tool_names)
+            previous_tool_names = set(self.tool_names)
+            previous_connected_server_names = set(self.connected_server_names)
+            previous_failed_server_names = set(self.failed_server_names)
+            previous_connect_failures = self.connect_failures
+            previous_retry_after = self.retry_after
             try:
                 from ..tools.mcp import connect_mcp_servers
 
-                stack = AsyncExitStack()
-                await stack.__aenter__()
-                await connect_mcp_servers(self.servers, self.tools, stack)
-                self.stack = stack
-                self.connected = True
-                self.connect_failures = 0
-                self.retry_after = 0.0
-                self.tool_names = {
+                attempt_stack = AsyncExitStack()
+                await attempt_stack.__aenter__()
+                summary = await connect_mcp_servers(
+                    {name: self.servers[name] for name in sorted(pending_server_names)},
+                    self.tools,
+                    attempt_stack,
+                )
+                connected_this_attempt = set(summary.connected_server_names) & pending_server_names
+                reported_failures = set(summary.failed_server_names) & pending_server_names
+                failed_this_attempt = pending_server_names - connected_this_attempt
+                failure_messages = dict(summary.failure_messages)
+                for name in failed_this_attempt - reported_failures:
+                    failure_messages[name] = "no connection result returned"
+
+                new_tool_names = {
                     name for name in self.tools.tool_names
-                    if is_mcp_tool_name(name) and name not in preexisting_tool_names
+                    if is_mcp_tool_name(name) and name not in preexisting_registry_tool_names
                 }
+
+                if not connected_this_attempt:
+                    for name in new_tool_names:
+                        self.tools.unregister(name)
+                    await attempt_stack.aclose()
+                    attempt_stack = None
+                    self.failed_server_names = configured_server_names - self.connected_server_names
+                    await self._record_connection_failure(
+                        attempted_server_names=failed_this_attempt,
+                        failure_messages=failure_messages,
+                    )
+                    return
+
+                self.connected_server_names.update(connected_this_attempt)
+                self.failed_server_names = configured_server_names - self.connected_server_names
+                self.connected = True
+                self.tool_names.update(new_tool_names)
                 self.sync_runtime_tools_context()
                 await self._emit_event(
                     MCP_CONNECTED_EVENT,
                     {
                         "server_count": len(self.servers),
+                        "connected_server_count": len(self.connected_server_names),
+                        "connected_server_names": sorted(self.connected_server_names),
+                        "failed_server_names": sorted(self.failed_server_names),
                         "tool_names": sorted(self.tool_names),
                         "registered_tool_count": len(self.tool_names),
                     },
                 )
+                if failed_this_attempt:
+                    await self._record_connection_failure(
+                        attempted_server_names=failed_this_attempt,
+                        failure_messages=failure_messages,
+                    )
+                else:
+                    self.connect_failures = 0
+                    self.retry_after = 0.0
+
+                if self.stack is None:
+                    self.stack = attempt_stack
+                else:
+                    self.stack.push_async_callback(attempt_stack.aclose)
+                attempt_stack = None
                 logger.info("agent.{} | tools={}", MCP_CONNECTED_EVENT, ", ".join(self.tools.tool_names))
-            except BaseException as exc:
+            except asyncio.CancelledError:
                 for name in list(self.tools.tool_names):
-                    if is_mcp_tool_name(name) and name not in preexisting_tool_names:
+                    if is_mcp_tool_name(name) and name not in preexisting_registry_tool_names:
                         self.tools.unregister(name)
-                self.connected = False
-                self.tool_names.clear()
-                self.connect_failures += 1
-                retry_delay = min(
-                    self.INITIAL_RETRY_BACKOFF_SECONDS * (2 ** (self.connect_failures - 1)),
-                    self.MAX_RETRY_BACKOFF_SECONDS,
-                )
-                self.retry_after = time.monotonic() + retry_delay
-                logger.error(
-                    "agent.mcp.connect.error | error={} retry_in_s={} failures={}",
-                    exc,
-                    retry_delay,
-                    self.connect_failures,
-                )
-                await self._emit_event(
-                    MCP_CONNECTION_FAILED_EVENT,
-                    {
-                        "server_count": len(self.servers),
-                        "error": str(exc),
-                        "connect_failures": self.connect_failures,
-                        "retry_in_seconds": retry_delay,
-                    },
-                )
-                if stack is not None:
+                self.tool_names = previous_tool_names
+                self.connected_server_names = previous_connected_server_names
+                self.failed_server_names = previous_failed_server_names
+                self.connected = bool(previous_connected_server_names)
+                self.connect_failures = previous_connect_failures
+                self.retry_after = previous_retry_after
+                self.sync_runtime_tools_context()
+                if attempt_stack is not None:
                     try:
-                        await stack.aclose()
-                    except Exception:
-                        pass
-                self.stack = None
+                        await attempt_stack.aclose()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as cleanup_exc:
+                        logger.warning("agent.mcp.cancel.cleanup.error | error={}", cleanup_exc)
+                raise
+            except Exception as exc:
+                for name in list(self.tools.tool_names):
+                    if is_mcp_tool_name(name) and name not in preexisting_registry_tool_names:
+                        self.tools.unregister(name)
+                if attempt_stack is not None:
+                    try:
+                        await attempt_stack.aclose()
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as cleanup_exc:
+                        logger.warning("agent.mcp.connect.cleanup.error | error={}", cleanup_exc)
+                self.tool_names = previous_tool_names
+                self.connected_server_names = previous_connected_server_names
+                self.failed_server_names = configured_server_names - previous_connected_server_names
+                self.connected = bool(previous_connected_server_names)
+                self.connect_failures = previous_connect_failures
+                self.retry_after = previous_retry_after
+                self.sync_runtime_tools_context()
+                await self._record_connection_failure(
+                    attempted_server_names=pending_server_names,
+                    failure_messages={name: f"{type(exc).__name__}: {exc}" for name in pending_server_names},
+                )
             finally:
                 self.connecting = False
 
@@ -1332,6 +1277,10 @@ class McpLifecycleService:
             self.stack = None
             self.connected = False
             self.connecting = False
+            self.connected_server_names.clear()
+            self.failed_server_names.clear()
+            self.connect_failures = 0
+            self.retry_after = 0.0
             for tool_name in list(self.tool_names):
                 self.tools.unregister(tool_name)
             self.tool_names.clear()
@@ -1369,6 +1318,10 @@ class McpLifecycleService:
         if not self.connected:
             return "MCP configuration reloaded, but no MCP servers connected successfully."
 
+        if self.failed_server_names:
+            failed_servers = ", ".join(sorted(self.failed_server_names))
+            return f"MCP configuration reloaded partially. Retry scheduled for: {failed_servers}"
+
         connected_tools = ", ".join(sorted(self.tool_names)) or "(none)"
         return f"MCP configuration reloaded. Connected tools: {connected_tools}"
 
@@ -1397,6 +1350,14 @@ class AgentRunStateService:
 
     def __init__(self):
         self._active_by_session: dict[str, ActiveRunState] = {}
+
+    def ensure_available(self, session_id: str) -> None:
+        """Reject a new turn before it performs any input side effects."""
+        existing = self._active_by_session.get(session_id)
+        if existing is not None:
+            raise RunBusyError(
+                f"Session '{session_id}' is already processing run '{existing.run_id}'."
+            )
 
     def start(self, session_id: str, run_id: str) -> ActiveRunState:
         existing = self._active_by_session.get(session_id)

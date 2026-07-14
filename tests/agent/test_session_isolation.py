@@ -1,5 +1,4 @@
 import asyncio
-import json
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.bus.message import UserMessage
@@ -35,55 +34,11 @@ class RecordingProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_prompt = str(messages[0].content)
-        if "initial task shape" in system_prompt:
-            return LLMResponse(content=json.dumps(_initial_task_planning_payload()), model="fake-model")
-        if "OpenSprite task planner" in system_prompt:
-            return LLMResponse(
-                content=(
-                    '{"task_type":"pure_answer","required_tools":[],"final_answer_required":true,'
-                    '"allow_no_tool_final":true,"reason":"test planner contract"}'
-                ),
-                model="fake-model",
-            )
-        if "OpenSprite's completion verifier" in system_prompt or "OpenSprite's completion verifier" in system_prompt:
-            return LLMResponse(
-                content='{"status":"complete","reason":"test verifier accepted the response"}',
-                model="fake-model",
-            )
         self.system_prompts.append(system_prompt)
         return LLMResponse(content=f"reply-{len(self.system_prompts)}", model="fake-model")
 
     def get_default_model(self) -> str:
         return "fake-model"
-
-
-def _initial_task_planning_payload():
-    return {
-        "task_intent": {
-            "kind": "conversation",
-            "objective": "hello",
-            "constraints": [],
-            "done_criteria": ["user receives a response"],
-            "needs_clarification": False,
-            "long_running": False,
-            "expects_code_change": False,
-            "expects_verification": False,
-            "verification_hint": None,
-        },
-        "task_context": {
-            "is_follow_up": False,
-            "should_inherit_active_task": False,
-            "should_seed_active_task": False,
-            "should_replace_active_task": False,
-            "inherited_task_type": None,
-            "continuation_type": "none",
-            "confidence": 0.8,
-            "reason": "test initial task planning",
-        },
-        "confidence": 0.9,
-        "reason": "test initial task planning",
-    }
-
 
 def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(tmp_path):
     async def scenario():

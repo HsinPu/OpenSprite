@@ -11,7 +11,6 @@ from ..cron import CronManager
 from ..documents.memory import MemoryStore
 from ..media import MediaRouter, outbound_media_error_result
 from ..search.base import SearchStore
-from .active_task import TaskUpdateTool
 from .audio import TranscribeAudioTool
 from .batch import BatchTool
 from .browser import (
@@ -103,23 +102,6 @@ def register_memory_tool(
 ) -> None:
     """Register the long-term memory update tool."""
     registry.register(SaveMemoryTool(memory_store, get_session_id))
-
-
-def register_task_tools(
-    registry: ToolRegistry,
-    *,
-    get_session_id: Callable[[], str | None],
-    active_task_store_factory: Callable[[str], Any | None] | None = None,
-    get_message_count: Callable[[str], Awaitable[int]] | None = None,
-) -> None:
-    """Register explicit active-task state management tools."""
-    registry.register(
-        TaskUpdateTool(
-            get_session_id=get_session_id,
-            active_task_store_factory=active_task_store_factory,
-            get_message_count=get_message_count,
-        )
-    )
 
 
 def register_run_trace_tools(
@@ -515,8 +497,6 @@ def register_default_tools(
     background_notification_factory: Callable[[], Any | None] | None = None,
     background_session_owner_factory: Callable[[], dict[str, str | None] | None] | None = None,
     process_manager_callback: Callable[[Any], None] | None = None,
-    active_task_store_factory: Callable[[str], Any | None] | None = None,
-    get_message_count: Callable[[str], Awaitable[int]] | None = None,
     file_change_recorder: Callable[[str, list[dict[str, Any]]], Awaitable[None]] | None = None,
     storage: Any = None,
     preview_run_file_change_revert: Callable[[str, str, int], Awaitable[dict[str, Any]]] | None = None,
@@ -534,12 +514,6 @@ def register_default_tools(
         registry,
         skills_loader=skills_loader,
         workspace_resolver=workspace_resolver,
-    )
-    register_task_tools(
-        registry,
-        get_session_id=get_session_id,
-        active_task_store_factory=active_task_store_factory,
-        get_message_count=get_message_count,
     )
     if storage is not None and preview_run_file_change_revert is not None:
         register_run_trace_tools(

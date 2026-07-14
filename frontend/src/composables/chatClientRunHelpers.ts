@@ -12,7 +12,7 @@ import type { DiffSummaryView, RunSummaryView } from "./runSummaryNormalizers";
 import { coerceNonNegativeInteger } from "./chatClientCoercion";
 import { toPayloadSource } from "./payloadBoundary";
 
-const TERMINAL_RUN_STATUSES = ["completed", "failed", "cancelled"] as const;
+const TERMINAL_RUN_STATUSES = ["completed", "failed", "cancelled", "stopped"] as const;
 type TerminalRunStatus = (typeof TERMINAL_RUN_STATUSES)[number];
 const TERMINAL_RUN_STATUS_SET: ReadonlySet<string> = new Set<string>(TERMINAL_RUN_STATUSES);
 
@@ -64,21 +64,9 @@ export type RunLifecycleEventPayload = {
   taskPreview?: unknown;
   workflow?: unknown;
   label?: unknown;
-  direct_workflow?: unknown;
-  directWorkflow?: unknown;
-  direct_start_step?: unknown;
-  directStartStep?: unknown;
-  direct_verify_action?: unknown;
-  directVerifyAction?: unknown;
-  direct_verify_path?: unknown;
-  directVerifyPath?: unknown;
-  reason?: unknown;
-  completion_reason?: unknown;
-  completionReason?: unknown;
 };
 
 type RunTimelineDetailPayload = {
-  classification_reason?: unknown;
   tool_name?: unknown;
   toolName?: unknown;
   args_preview?: unknown;
@@ -99,36 +87,6 @@ type RunTimelineDetailPayload = {
   processSessionId?: unknown;
   exit_code?: unknown;
   exitCode?: unknown;
-  planner_metadata?: unknown;
-  plannerMetadata?: unknown;
-  method?: unknown;
-  continuation_type?: unknown;
-  continuationType?: unknown;
-  inherited_task_type?: unknown;
-  inheritedTaskType?: unknown;
-  is_follow_up?: unknown;
-  isFollowUp?: unknown;
-  should_inherit_active_task?: unknown;
-  shouldInheritActiveTask?: unknown;
-  should_replace_active_task?: unknown;
-  shouldReplaceActiveTask?: unknown;
-  should_seed_active_task?: unknown;
-  shouldSeedActiveTask?: unknown;
-  confidence?: unknown;
-  resolved_objective?: unknown;
-  resolvedObjective?: unknown;
-  should_use_resolved_objective?: unknown;
-  shouldUseResolvedObjective?: unknown;
-  task_type?: unknown;
-  taskType?: unknown;
-  contract_sources?: unknown;
-  contractSources?: unknown;
-  required_tools?: unknown;
-  requiredTools?: unknown;
-  missing_evidence?: unknown;
-  missingEvidence?: unknown;
-  active_task_detail?: unknown;
-  activeTaskDetail?: unknown;
 };
 
 export type RunTimelinePayload = RunLifecycleEventPayload & RunTimelineDetailPayload;
@@ -137,7 +95,6 @@ export function normalizeRunTimelinePayload(value: unknown): RunTimelinePayload 
   const payload = toPayloadSource<RunTimelinePayload>(value) || {};
   return {
     ...normalizeRunLifecycleEventPayload(payload),
-    classification_reason: payload.classification_reason,
     tool_name: payload.tool_name,
     toolName: payload.toolName,
     args_preview: payload.args_preview,
@@ -158,36 +115,6 @@ export function normalizeRunTimelinePayload(value: unknown): RunTimelinePayload 
     processSessionId: payload.processSessionId,
     exit_code: payload.exit_code,
     exitCode: payload.exitCode,
-    planner_metadata: payload.planner_metadata,
-    plannerMetadata: payload.plannerMetadata,
-    method: payload.method,
-    continuation_type: payload.continuation_type,
-    continuationType: payload.continuationType,
-    inherited_task_type: payload.inherited_task_type,
-    inheritedTaskType: payload.inheritedTaskType,
-    is_follow_up: payload.is_follow_up,
-    isFollowUp: payload.isFollowUp,
-    should_inherit_active_task: payload.should_inherit_active_task,
-    shouldInheritActiveTask: payload.shouldInheritActiveTask,
-    should_replace_active_task: payload.should_replace_active_task,
-    shouldReplaceActiveTask: payload.shouldReplaceActiveTask,
-    should_seed_active_task: payload.should_seed_active_task,
-    shouldSeedActiveTask: payload.shouldSeedActiveTask,
-    confidence: payload.confidence,
-    resolved_objective: payload.resolved_objective,
-    resolvedObjective: payload.resolvedObjective,
-    should_use_resolved_objective: payload.should_use_resolved_objective,
-    shouldUseResolvedObjective: payload.shouldUseResolvedObjective,
-    task_type: payload.task_type,
-    taskType: payload.taskType,
-    contract_sources: payload.contract_sources,
-    contractSources: payload.contractSources,
-    required_tools: payload.required_tools,
-    requiredTools: payload.requiredTools,
-    missing_evidence: payload.missing_evidence,
-    missingEvidence: payload.missingEvidence,
-    active_task_detail: payload.active_task_detail,
-    activeTaskDetail: payload.activeTaskDetail,
   };
 }
 
@@ -214,17 +141,6 @@ export function normalizeRunLifecycleEventPayload(value: unknown): RunLifecycleE
     taskPreview: payload.taskPreview,
     workflow: payload.workflow,
     label: payload.label,
-    direct_workflow: payload.direct_workflow,
-    directWorkflow: payload.directWorkflow,
-    direct_start_step: payload.direct_start_step,
-    directStartStep: payload.directStartStep,
-    direct_verify_action: payload.direct_verify_action,
-    directVerifyAction: payload.directVerifyAction,
-    direct_verify_path: payload.direct_verify_path,
-    directVerifyPath: payload.directVerifyPath,
-    reason: payload.reason,
-    completion_reason: payload.completion_reason,
-    completionReason: payload.completionReason,
   };
 }
 
@@ -253,13 +169,6 @@ export type WorkflowDetailView = {
   message: string;
   workflow: string;
   label: string;
-};
-export type AutoContinueDetailView = {
-  workflow: string;
-  startStep: string;
-  verifyAction: string;
-  verifyPath: string;
-  reason: string;
 };
 export type RunTimelineEventView = {
   id: string;
@@ -376,6 +285,9 @@ export function runTone(status: string, fallbackTone: RunTimelineTone = "running
   if (terminalStatus === "cancelled") {
     return "warning";
   }
+  if (terminalStatus === "stopped") {
+    return "warning";
+  }
   return fallbackTone;
 }
 
@@ -482,24 +394,4 @@ export function formatWorkflowDetail(detail: WorkflowDetailView): string {
 
 export function formatWorkflowStepDetail(detail: WorkflowDetailView): string {
   return detail.summary || detail.error || detail.taskPreview || detail.label;
-}
-
-export function normalizeAutoContinueDetail(payload: RunLifecycleEventPayload): AutoContinueDetailView {
-  return {
-    workflow: fieldText(payload.direct_workflow || payload.directWorkflow),
-    startStep: fieldText(payload.direct_start_step || payload.directStartStep),
-    verifyAction: fieldText(payload.direct_verify_action || payload.directVerifyAction),
-    verifyPath: fieldText(payload.direct_verify_path || payload.directVerifyPath),
-    reason: fieldText(payload.reason || payload.completion_reason || payload.completionReason),
-  };
-}
-
-export function formatAutoContinueDetail(detail: AutoContinueDetailView): string {
-  if (detail.workflow && detail.startStep) {
-    return `workflow resume: ${detail.workflow} -> ${detail.startStep}`;
-  }
-  if (detail.verifyAction) {
-    return detail.verifyPath ? `verification: ${detail.verifyAction} (${detail.verifyPath})` : `verification: ${detail.verifyAction}`;
-  }
-  return detail.reason;
 }

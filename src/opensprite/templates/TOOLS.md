@@ -11,7 +11,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Before non-trivial tool use, check whether a relevant skill exists and read it first when appropriate.
 - Stay within the active workspace unless the user clearly asks for something external.
 - Some tools are optional and may not appear at runtime; use only the tools that are actually available.
-- Tool availability is selected for the current task by runtime planning; if a needed tool is unavailable, explain the limitation and ask for the required configuration or task adjustment.
+- Tool availability comes from the current runtime configuration; if a needed tool is unavailable, explain the limitation and ask for the required configuration or request adjustment.
 - If another tool call would materially improve correctness or completion, do not stop at a partial answer.
 - Do not tell the user you will inspect, verify, search, or check something unless you are about to make the corresponding tool call now.
 - When reporting tool outcomes, mention only tools actually called in the current run or clearly retrieved from prior trace/history. Do not list uncalled tools as failed, blocked, or successful.
@@ -20,7 +20,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 ## Tool Selection
 
-- The runtime exposes the tools selected for the current task contract and prompt profile.
+- The runtime exposes only the tools available to the current agent.
 - Never try to bypass an unavailable tool by using another tool for the same effect.
 - If a required tool is unavailable, state what is missing and continue only with work that can be completed using the available tools.
 
@@ -50,7 +50,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use to run multiple read-only lookups concurrently when exploring a workspace or retrieving related context.
   - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, and `search_history`.
   - Do not use it for writes, edits, shell commands, delegation, scheduling, media sending, config changes, or MCP tools.
-  - Each child call still follows normal validation and current task tool selection; do not use `batch` to bypass unavailable tools.
+  - Each child call still follows normal validation and availability checks; do not use `batch` to bypass unavailable tools.
 
 - `apply_patch`
   - Use for code edits, especially when changing multiple files or multiple locations.
@@ -215,14 +215,6 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use to update durable session-specific continuity in `memory/{session_id}/MEMORY.md`.
   - Save only information likely to matter again later.
   - Do not save secrets, temporary noise, or one-turn details.
-
-- `task_update`
-  - Use to keep the current session's `ACTIVE_TASK.md` accurate during non-trivial multi-step work.
-  - Use `action="set"` when starting or replacing an explicit active task.
-  - Use `action="update"` after changing status, current step, next step, completed steps, or blockers/open questions.
-  - Use `action="complete_step"` or `action="advance"` only when the step is actually completed by evidence in this session.
-  - Use `status="waiting_user"` when missing user input blocks progress; use `status="blocked"` for tool/test/runtime blockers.
-  - Do not update task state for trivial chat or unverifiable claimed progress.
 
 - `search_history`
   - Use to retrieve prior conversation details from the current chat.

@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
-from .evidence import ToolEvidence, indexed_resource_id
 from .saved_media import resolve_media_items
 from .validation import NON_EMPTY_STRING_PATTERN
 
@@ -33,22 +32,6 @@ def _resolve_images(
         media_path=image_path,
         media_label="image",
         supported_mime_types=SUPPORTED_IMAGE_MIME_TYPES,
-    )
-
-
-def _image_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok: bool) -> ToolEvidence:
-    resource_ids: list[str] = []
-    image_path = str(args.get("image_path") or "").strip().replace("\\", "/")
-    if image_path:
-        resource_ids.append(f"image:{image_path}")
-    else:
-        resource_ids.append(indexed_resource_id("image_index", args.get("image_index")))
-    return ToolEvidence(
-        name=tool_name,
-        args=dict(args or {}),
-        ok=ok,
-        resource_ids=tuple(dict.fromkeys(resource_ids)),
-        result_preview=str(result or "")[:240],
     )
 
 
@@ -115,11 +98,6 @@ class AnalyzeImageTool(Tool):
             images=images,
             image_index=effective_index,
         )
-
-    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
-        args = params if isinstance(params, dict) else {}
-        return _image_tool_evidence(self.name, args, result, ok=ok)
-
 
 class OCRImageTool(Tool):
     """Tool to extract visible text from images attached to the current user turn."""
@@ -190,7 +168,3 @@ class OCRImageTool(Tool):
             images=images,
             image_index=effective_index,
         )
-
-    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
-        args = params if isinstance(params, dict) else {}
-        return _image_tool_evidence(self.name, args, result, ok=ok)

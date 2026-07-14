@@ -392,10 +392,37 @@ def test_exec_timeout_terminates_descendant_processes(tmp_path):
     assert not marker.exists()
 
 
+def test_exec_parent_exit_terminates_descendant_that_keeps_pipes_open(tmp_path):
+    from opensprite.tools.shell import ExecTool
+
+    marker = Path(tmp_path) / "orphan-survived.txt"
+    child_code = (
+        "import pathlib, time; "
+        "time.sleep(1); "
+        f"pathlib.Path({str(marker)!r}).write_text('child survived', encoding='utf-8')"
+    )
+    parent_code = (
+        "import subprocess, sys; "
+        f"subprocess.Popen([sys.executable, '-u', '-c', {child_code!r}], "
+        "stdin=subprocess.DEVNULL); "
+        "print('parent exited', flush=True)"
+    )
+
+    tool = ExecTool(workspace=Path(tmp_path), timeout=3)
+    tool._output_drain_timeout = lambda timeout_seconds: 0.2
+    result = asyncio.run(tool.execute(command=_python_shell_command(parent_code)))
+
+    assert "parent exited" in result
+    assert "output pipes did not close" not in result
+    time.sleep(1.2)
+    assert not marker.exists()
+
+
 def test_exec_warns_when_output_readers_linger_after_process_exit(tmp_path, monkeypatch):
     import opensprite.tools.shell as shell_module
 
     class _FinishedProcess:
+        pid = 123
         returncode = 0
 
         async def wait(self):
@@ -415,6 +442,12 @@ def test_exec_warns_when_output_readers_linger_after_process_exit(tmp_path, monk
         return _FinishedProcess(), [asyncio.create_task(sleeper())]
 
     monkeypatch.setattr(shell_module, "start_shell_process", fake_start_shell_process)
+    terminated = []
+
+    async def fake_terminate_process_tree(process, *, wait_timeout=5):
+        terminated.append(process.pid)
+
+    monkeypatch.setattr(shell_module, "terminate_process_tree", fake_terminate_process_tree)
 
     tool = shell_module.ExecTool(workspace=Path(tmp_path), timeout=1)
     tool._output_drain_timeout = lambda timeout_seconds: 0.1
@@ -423,6 +456,7 @@ def test_exec_warns_when_output_readers_linger_after_process_exit(tmp_path, monk
     assert "parent exiting" in result
     assert "child still attached" in result
     assert "output pipes did not close within 0.1s after the shell exited" in result
+    assert terminated == [123]
 
 
 def test_build_timeout_result_appends_pipe_warning_when_not_drained():

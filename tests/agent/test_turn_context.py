@@ -13,7 +13,7 @@ def _make_context_service() -> TurnContextService:
         current_videos=ContextVar("test_current_videos", default=None),
         current_outbound_media=ContextVar("test_current_outbound_media", default=None),
         current_run_id=ContextVar("test_current_run_id", default=None),
-        current_work_progress=ContextVar("test_current_work_progress", default=None),
+        current_file_changes=ContextVar("test_current_file_changes", default=None),
     )
 
 
@@ -52,13 +52,13 @@ def test_turn_context_activate_sets_values_and_resets_after_exit():
         service.note_file_change(" src/app.py ")
         service.note_file_change("src/app.py")
         service.note_file_change("")
-        assert service.snapshot_work_progress() == {
+        assert service.snapshot_file_changes() == {
             "file_change_count": 3,
             "touched_paths": ("src/app.py",),
         }
 
-        service.reset_work_progress()
-        assert service.snapshot_work_progress() == {
+        service.reset_file_changes()
+        assert service.snapshot_file_changes() == {
             "file_change_count": 0,
             "touched_paths": (),
         }

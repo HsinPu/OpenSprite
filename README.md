@@ -10,7 +10,7 @@ OpenSprite 是一個本機優先的個人 AI assistant gateway。它提供 Pytho
 - Web chat：瀏覽器聊天、設定、Trace、run history 與測試檢視。
 - LLM provider 管理：可在 Web 設定頁連接 provider、選模型與設定 credential。
 - Channel：內建 Web channel，並支援 Telegram bot channel。
-- 記憶與歷史：SQLite storage/search、recent summary、long-term memory、active task context。
+- 記憶與歷史：SQLite storage/search、recent summary、long-term memory、run traces。
 - 工具與排程：MCP servers、內建工具、cron-style scheduled jobs。
 - 跨平台安裝：Linux shell installer、Windows PowerShell/CMD installer，也可手動開發安裝。
 
@@ -218,10 +218,10 @@ npm run build
 ```text
 src/opensprite/
   cli/              # Typer CLI
-  agent/            # Agent loop, execution, completion gates
+  agent/            # Agent loop and direct tool execution
   channels/         # Web and Telegram channel wiring
   config/           # Config schema and templates
-  context/          # Memory/history/task context resolution
+  context/          # Memory, history, and prompt context assembly
   cron/             # Scheduled jobs
   llms/             # LLM providers
   media/            # Media routing

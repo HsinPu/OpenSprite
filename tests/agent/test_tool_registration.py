@@ -5,7 +5,6 @@ from opensprite.config.schema import SearchConfig, ToolsConfig, WebSearchToolCon
 from opensprite.skills import SkillsLoader
 from opensprite.storage import MemoryStorage
 from opensprite.tools.cron import CronTool
-from opensprite.tools.active_task import TaskUpdateTool
 from opensprite.tools.batch import BatchTool
 from opensprite.tools.mcp_config import ConfigureMCPTool
 from opensprite.tools.process import ProcessTool
@@ -77,7 +76,6 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "list_dir",
         "read_skill",
         "configure_skill",
-        "task_update",
         "configure_mcp",
         "configure_subagent",
         "credential_store",
@@ -100,7 +98,6 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "batch",
     ]
     assert isinstance(registry.get("configure_skill"), ConfigureSkillTool)
-    assert isinstance(registry.get("task_update"), TaskUpdateTool)
     assert isinstance(registry.get("configure_subagent"), ConfigureSubagentTool)
     assert isinstance(registry.get("send_media"), SendMediaTool)
     assert isinstance(registry.get("batch"), BatchTool)
@@ -131,7 +128,6 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "write_file",
         "edit_file",
         "list_dir",
-        "task_update",
         "configure_mcp",
         "configure_subagent",
         "credential_store",

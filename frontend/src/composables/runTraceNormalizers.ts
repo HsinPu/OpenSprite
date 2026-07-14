@@ -2,7 +2,6 @@ import { randomToken } from "./chatClientTokens";
 import {
   coerceBoolean,
   coerceNonNegativeInteger,
-  coerceStringList,
   normalizeEventTimestamp,
   previewText,
 } from "./chatClientCoercion";
@@ -22,61 +21,7 @@ type TraceEventCountsPayload = {
   max_text_events?: unknown;
   maxTextEvents?: unknown;
 };
-type NamedItemPayload = { name?: unknown };
-type ToolSelectionDecisionPayload = {
-  selected_tools?: unknown;
-  selectedTools?: unknown;
-  missing_required_tools?: unknown;
-  missingRequiredTools?: unknown;
-};
-type CompletionDecisionPayload = {
-  status?: unknown;
-  reason?: unknown;
-};
-type WorkProgressDecisionPayload = {
-  next_action?: unknown;
-  nextAction?: unknown;
-};
-type TaskTypeDecisionPayload = {
-  task_type?: unknown;
-  taskType?: unknown;
-};
-type TraceHealthDecisionPayload = { status?: unknown };
-type DecisionEventPayload = {
-  tool_selection?: unknown;
-  toolSelection?: unknown;
-  blocked_required_tools?: unknown;
-  blockedRequiredTools?: unknown;
-  required_tools?: unknown;
-  requiredTools?: unknown;
-  task_type?: unknown;
-  taskType?: unknown;
-  requirements?: unknown;
-  acceptance_criteria?: unknown;
-  acceptanceCriteria?: unknown;
-  contract_sources?: unknown;
-  contractSources?: unknown;
-  missing_evidence?: unknown;
-  missingEvidence?: unknown;
-  next_action?: unknown;
-  nextAction?: unknown;
-  confidence?: unknown;
-  auto_continue_attempts?: unknown;
-  autoContinueAttempts?: unknown;
-  attempt?: unknown;
-  attempts?: unknown;
-  completion?: unknown;
-  work_progress?: unknown;
-  workProgress?: unknown;
-  task_artifact_count?: unknown;
-  taskArtifactCount?: unknown;
-  task?: unknown;
-  contract?: unknown;
-  trace_health?: unknown;
-  traceHealth?: unknown;
-  sensors?: unknown;
-};
-export type TraceEventPayload = DecisionEventPayload & {
+export type TraceEventPayload = {
   action?: unknown;
   artifact?: unknown;
   command?: unknown;
@@ -93,6 +38,8 @@ export type TraceEventPayload = DecisionEventPayload & {
   ok?: unknown;
   path?: unknown;
   reason?: unknown;
+  sandbox_path?: unknown;
+  sandboxPath?: unknown;
   state?: unknown;
   status?: unknown;
   summary?: unknown;
@@ -179,35 +126,8 @@ export type BackgroundProcessEventPayload = {
   outputPath?: unknown;
 };
 
-export const RUN_EVENT_KINDS = ["run", "llm", "tool", "verification", "work", "completion", "file", "process", "text", "system", "other"] as const;
+export const RUN_EVENT_KINDS = ["run", "llm", "tool", "verification", "work", "file", "process", "text", "system", "other"] as const;
 export type RunEventKind = (typeof RUN_EVENT_KINDS)[number];
-export const DECISION_DETAIL_TONES = ["neutral", "info", "success", "warning", "error"] as const;
-export type DecisionDetailTone = (typeof DECISION_DETAIL_TONES)[number];
-export const DECISION_DETAIL_LABEL_KEYS = [
-  "requiredTools",
-  "selectedTools",
-  "missingRequiredTools",
-  "taskType",
-  "requirements",
-  "criteria",
-  "sources",
-  "status",
-  "reason",
-  "nextAction",
-  "confidence",
-  "missingEvidence",
-  "attempts",
-  "artifacts",
-  "traceHealth",
-  "sensors",
-] as const;
-export type DecisionDetailLabelKey = (typeof DECISION_DETAIL_LABEL_KEYS)[number];
-export const DECISION_TIMELINE_PHASES = ["tools", "contract", "completion", "checkpoint"] as const;
-export type DecisionTimelinePhase = (typeof DECISION_TIMELINE_PHASES)[number];
-export const DECISION_TIMELINE_STATUSES = ["success", "failed", "blocked", "warning", "info"] as const;
-export type DecisionTimelineStatus = (typeof DECISION_TIMELINE_STATUSES)[number];
-export const DECISION_TIMELINE_TITLE_KEYS = ["toolSelection", "taskContract", "completionGate", "autoContinue", "checkpoint", "scorecard"] as const;
-export type DecisionTimelineTitleKey = (typeof DECISION_TIMELINE_TITLE_KEYS)[number];
 
 export type TraceEventCountsView = {
   total: number;
@@ -228,25 +148,6 @@ export type TraceEventView = {
   createdAt: number;
   payload: TraceEventPayload;
   artifact: RunArtifactView | null;
-};
-
-export type DecisionDetailView = {
-  labelKey: DecisionDetailLabelKey;
-  value: string;
-  tone: DecisionDetailTone;
-};
-
-export type DecisionTimelineItem = {
-  id: string;
-  eventIds: string[];
-  phase: DecisionTimelinePhase;
-  status: DecisionTimelineStatus;
-  titleKey: DecisionTimelineTitleKey;
-  title: string;
-  summary: string;
-  reason: string;
-  createdAt: number;
-  details: DecisionDetailView[];
 };
 
 type MetadataTimestamp = string | number;
@@ -386,154 +287,6 @@ type TraceFileChangePayload = {
   createdAt?: unknown;
 };
 
-export type DelegatedTaskMetadata = {
-  [key: string]: unknown;
-};
-type DelegatedTaskMetadataPayload = {
-  [key: string]: unknown;
-};
-
-export interface DelegatedTaskView {
-  taskId: string;
-  promptType: string | null;
-  status: string;
-  selected: boolean;
-  summary: string;
-  error: string;
-  childSessionId: string | null;
-  lastChildRunId: string | null;
-  metadata: DelegatedTaskMetadata;
-  createdAt: number;
-  updatedAt: number;
-}
-type DelegatedTaskPayload = {
-  task_id?: unknown;
-  taskId?: unknown;
-  prompt_type?: unknown;
-  promptType?: unknown;
-  status?: unknown;
-  selected?: unknown;
-  summary?: unknown;
-  error?: unknown;
-  child_session_id?: unknown;
-  childSessionId?: unknown;
-  last_child_run_id?: unknown;
-  lastChildRunId?: unknown;
-  metadata?: unknown;
-  created_at?: unknown;
-  createdAt?: unknown;
-  updated_at?: unknown;
-  updatedAt?: unknown;
-};
-
-type WorkStatePayload = {
-  session_id?: unknown;
-  sessionId?: unknown;
-  objective?: unknown;
-  kind?: unknown;
-  status?: unknown;
-  steps?: unknown;
-  constraints?: unknown;
-  done_criteria?: unknown;
-  doneCriteria?: unknown;
-  long_running?: unknown;
-  longRunning?: unknown;
-  coding_task?: unknown;
-  codingTask?: unknown;
-  expects_code_change?: unknown;
-  expectsCodeChange?: unknown;
-  expects_verification?: unknown;
-  expectsVerification?: unknown;
-  current_step?: unknown;
-  currentStep?: unknown;
-  next_step?: unknown;
-  nextStep?: unknown;
-  completed_steps?: unknown;
-  completedSteps?: unknown;
-  pending_steps?: unknown;
-  pendingSteps?: unknown;
-  blockers?: unknown;
-  verification_targets?: unknown;
-  verificationTargets?: unknown;
-  resume_hint?: unknown;
-  resumeHint?: unknown;
-  last_progress_signals?: unknown;
-  lastProgressSignals?: unknown;
-  file_change_count?: unknown;
-  fileChangeCount?: unknown;
-  touched_paths?: unknown;
-  touchedPaths?: unknown;
-  verification_attempted?: unknown;
-  verificationAttempted?: unknown;
-  verification_passed?: unknown;
-  verificationPassed?: unknown;
-  follow_up_workflow?: unknown;
-  followUpWorkflow?: unknown;
-  follow_up_step_id?: unknown;
-  followUpStepId?: unknown;
-  follow_up_step_label?: unknown;
-  followUpStepLabel?: unknown;
-  follow_up_prompt_type?: unknown;
-  followUpPromptType?: unknown;
-  verification_action?: unknown;
-  verificationAction?: unknown;
-  verification_path?: unknown;
-  verificationPath?: unknown;
-  verification_pytest_args?: unknown;
-  verificationPytestArgs?: unknown;
-  active_task_detail?: unknown;
-  activeTaskDetail?: unknown;
-  last_next_action?: unknown;
-  lastNextAction?: unknown;
-  delegated_tasks?: unknown;
-  delegatedTasks?: unknown;
-  active_delegate_task_id?: unknown;
-  activeDelegateTaskId?: unknown;
-  active_delegate_prompt_type?: unknown;
-  activeDelegatePromptType?: unknown;
-  updated_at?: unknown;
-  updatedAt?: unknown;
-};
-
-export interface WorkStateView {
-  sessionId: string | null;
-  objective: string;
-  kind: string;
-  status: string;
-  steps: string[];
-  constraints: string[];
-  doneCriteria: string[];
-  longRunning: boolean;
-  codingTask: boolean;
-  expectsCodeChange: boolean;
-  expectsVerification: boolean;
-  currentStep: string;
-  nextStep: string;
-  completedSteps: string[];
-  pendingSteps: string[];
-  blockers: string[];
-  verificationTargets: string[];
-  resumeHint: string;
-  lastProgressSignals: string[];
-  fileChangeCount: number;
-  touchedPaths: string[];
-  verificationAttempted: boolean;
-  verificationPassed: boolean;
-  followUpWorkflow: string | null;
-  followUpStepId: string | null;
-  followUpStepLabel: string | null;
-  followUpPromptType: string | null;
-  verificationAction: string | null;
-  verificationPath: string | null;
-  verificationPytestArgs: string[];
-  activeTaskDetail: string;
-  lastNextAction: string;
-  delegatedTasks: DelegatedTaskView[];
-  activeDelegateTaskId: string | null;
-  activeDelegatePromptType: string | null;
-  updatedAt: number;
-}
-
 export type WorktreeSandboxMetadataPayload = {
   sandbox_path?: unknown;
   sandboxPath?: unknown;
@@ -584,15 +337,6 @@ export interface WorktreeSandboxView {
 type TraceEventCountTarget = {
   eventCounts: TraceEventCountsView;
   rawEvents: TraceEventView[];
-};
-
-type DecisionEventContext = {
-  id?: unknown;
-  eventId?: unknown;
-  event_id?: unknown;
-  eventType: string;
-  event_type?: unknown;
-  createdAt: number;
 };
 
 export function normalizeRunArtifactMetadata(value: unknown): RunArtifactMetadata {
@@ -672,10 +416,6 @@ export function normalizeTracePartMetadata(value: unknown): TracePartMetadata {
     metadata.streaming = coerceBoolean(payload.streaming);
   }
   return metadata;
-}
-
-export function normalizeDelegatedTaskMetadata(value: unknown): DelegatedTaskMetadata {
-  return toPayloadSource<DelegatedTaskMetadataPayload>(value) || {};
 }
 
 function toWorktreeSandboxMetadataPayload(value: unknown): WorktreeSandboxMetadataPayload | null {
@@ -774,14 +514,6 @@ function isRunEventKind(value: string): value is RunEventKind {
   return RUN_EVENT_KIND_SET.has(value);
 }
 
-function compactJoin(values: unknown[], separator = " · "): string {
-  return values.map((value) => String(value || "").trim()).filter(Boolean).join(separator);
-}
-
-function countItems(value: unknown): number {
-  return Array.isArray(value) ? value.length : 0;
-}
-
 function coerceText(value: unknown): string {
   return String(value || "").trim();
 }
@@ -792,16 +524,6 @@ function normalizeOptionalContent(value: unknown): string | null {
 
 function normalizeArtifactIteration(value: unknown): string {
   return value === undefined || value === null ? "" : String(value);
-}
-
-function formatShortList(value: unknown, maxItems = 3): string {
-  const items = coerceStringList(value);
-  if (!items.length) {
-    return "";
-  }
-  const visible = items.slice(0, maxItems).join(", ");
-  const remaining = items.length - maxItems;
-  return remaining > 0 ? `${visible} +${remaining}` : visible;
 }
 
 export function coerceEventPayload(value: unknown): TraceEventPayload {
@@ -818,7 +540,7 @@ export function inferRunEventKind(eventType: unknown): RunEventKind {
   if (normalized === "run_part_delta" || normalized === "message_part_delta") {
     return "text";
   }
-  if (normalized.startsWith("run_") || normalized.startsWith("auto_continue.")) {
+  if (normalized.startsWith("run_")) {
     return "run";
   }
   if (normalized.startsWith("llm_") || normalized === "reasoning_delta" || normalized === "execution.stopped") {
@@ -830,17 +552,8 @@ export function inferRunEventKind(eventType: unknown): RunEventKind {
   if (normalized.startsWith("verification_")) {
     return "verification";
   }
-  if (normalized.startsWith("task_contract.") || normalized.startsWith("task_checkpoint.") || normalized.startsWith("task_scorecard.")) {
-    return "work";
-  }
-  if (normalized.startsWith("work_") || normalized.startsWith("task_")) {
-    return "work";
-  }
   if (normalized === "file_changed") {
     return "file";
-  }
-  if (normalized === "completion_gate.evaluated") {
-    return "completion";
   }
   if (normalized.startsWith("background_process.")) {
     return "process";
@@ -860,7 +573,7 @@ export function inferRunEventStatus(eventType: unknown, payload: TraceEventPaylo
   if (normalized === "execution.stopped") {
     return "stopped";
   }
-  if (normalized === "run_started" || normalized.endsWith("_started") || normalized === "llm_status" || normalized === "auto_continue.scheduled") {
+  if (normalized === "run_started" || normalized.endsWith("_started") || normalized === "llm_status") {
     return "running";
   }
   if (normalized === "run_failed") {
@@ -991,232 +704,6 @@ export function normalizeRunArtifact(artifact: unknown, fallback: RunArtifactFal
   };
 }
 
-function namedItems(value: unknown): unknown[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((item) => {
-    const record = toPayloadSource<NamedItemPayload>(item);
-    return record ? record.name || item : item;
-  });
-}
-
-function normalizeDecisionStatus(status: unknown): DecisionTimelineStatus {
-  const normalized = coerceText(status).toLowerCase();
-  if (["completed", "complete", "passed", "pass", "success", "ok", "ready"].includes(normalized)) {
-    return "success";
-  }
-  if (["failed", "fail", "error"].includes(normalized)) {
-    return "failed";
-  }
-  if (["blocked", "denied", "cancelled", "canceled"].includes(normalized)) {
-    return "blocked";
-  }
-  if (["running", "scheduled", "incomplete", "waiting", "waiting_user", "cancelling"].includes(normalized)) {
-    return "warning";
-  }
-  return "info";
-}
-
-function decisionDetail(labelKey: DecisionDetailLabelKey, value: unknown, tone: DecisionDetailTone = "neutral"): DecisionDetailView | null {
-  const normalized = value === null || value === undefined ? "" : String(value).trim();
-  if (!normalized) {
-    return null;
-  }
-  return { labelKey, value: normalized, tone };
-}
-
-function compactDetails(items: Array<DecisionDetailView | null>): DecisionDetailView[] {
-  return items.filter((item): item is DecisionDetailView => Boolean(item));
-}
-
-function decisionId(event: DecisionEventContext, index: number): string {
-  return `decision:${event.id || event.eventId || event.event_id || event.eventType || event.event_type || "event"}:${index}`;
-}
-
-function decisionEventId(event: DecisionEventContext): string[] {
-  const eventId = event?.id || event?.eventId || event?.event_id;
-  return eventId ? [String(eventId)] : [];
-}
-
-function toolSelectionDecision(payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  const toolSelection = toPayloadSource<ToolSelectionDecisionPayload>(payload.tool_selection || payload.toolSelection) || {};
-  const selectedTools = toolSelection.selected_tools || toolSelection.selectedTools || [];
-  const missingRequired = payload.blocked_required_tools || payload.blockedRequiredTools || toolSelection.missing_required_tools || toolSelection.missingRequiredTools || [];
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "tools",
-    status: countItems(missingRequired) > 0 ? "warning" : "success",
-    titleKey: "toolSelection",
-    title: "Tool selection",
-    summary: compactJoin([
-      `${countItems(payload.required_tools || payload.requiredTools)} required`,
-      `${countItems(selectedTools)} selected`,
-      countItems(missingRequired) ? `${countItems(missingRequired)} missing` : "",
-    ]),
-    reason: "",
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("requiredTools", formatShortList(payload.required_tools || payload.requiredTools, 6)),
-      decisionDetail("selectedTools", formatShortList(selectedTools, 6)),
-      decisionDetail("missingRequiredTools", formatShortList(namedItems(missingRequired), 6), countItems(missingRequired) ? "warning" : "neutral"),
-    ]),
-  };
-}
-
-function taskContractDecision(payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "contract",
-    status: "success",
-    titleKey: "taskContract",
-    title: "Task contract",
-    summary: compactJoin([
-      payload.task_type || payload.taskType,
-      `${countItems(payload.requirements)} requirements`,
-      `${countItems(payload.acceptance_criteria || payload.acceptanceCriteria)} criteria`,
-    ]),
-    reason: "",
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("taskType", payload.task_type || payload.taskType),
-      decisionDetail("requirements", countItems(payload.requirements)),
-      decisionDetail("criteria", countItems(payload.acceptance_criteria || payload.acceptanceCriteria)),
-      decisionDetail("sources", formatShortList(payload.contract_sources || payload.contractSources, 5)),
-    ]),
-  };
-}
-
-function completionGateDecision(payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  const missingEvidence = payload.missing_evidence || payload.missingEvidence;
-  const nextAction = payload.next_action || payload.nextAction;
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "completion",
-    status: normalizeDecisionStatus(payload.status || (payload.ok === false ? "failed" : "completed")),
-    titleKey: "completionGate",
-    title: "Completion gate",
-    summary: compactJoin([payload.status, payload.reason, nextAction, countItems(missingEvidence) ? `${countItems(missingEvidence)} missing` : ""]),
-    reason: coerceText(payload.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("status", payload.status),
-      decisionDetail("reason", payload.reason),
-      decisionDetail("nextAction", nextAction),
-      decisionDetail("confidence", payload.confidence),
-      decisionDetail("missingEvidence", formatShortList(missingEvidence, 4), countItems(missingEvidence) ? "warning" : "neutral"),
-      decisionDetail("attempts", payload.auto_continue_attempts ?? payload.autoContinueAttempts),
-    ]),
-  };
-}
-
-function autoContinueDecision(eventType: string, payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  const action = eventType.replace("auto_continue.", "");
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "completion",
-    status: action === "scheduled" ? "warning" : action === "skipped" ? "blocked" : "success",
-    titleKey: "autoContinue",
-    title: "Auto-continue",
-    summary: compactJoin([action, payload.reason]),
-    reason: coerceText(payload.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("status", action),
-      decisionDetail("reason", payload.reason),
-      decisionDetail("attempts", payload.attempt ?? payload.attempts ?? payload.auto_continue_attempts ?? payload.autoContinueAttempts),
-    ]),
-  };
-}
-
-function checkpointDecision(payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  const completion = toPayloadSource<CompletionDecisionPayload>(payload.completion) || {};
-  const progress = toPayloadSource<WorkProgressDecisionPayload>(payload.work_progress || payload.workProgress) || {};
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "checkpoint",
-    status: "success",
-    titleKey: "checkpoint",
-    title: "Checkpoint recorded",
-    summary: compactJoin([payload.next_action || payload.nextAction || progress.next_action || progress.nextAction, completion.status]),
-    reason: coerceText(completion.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("nextAction", payload.next_action || payload.nextAction || progress.next_action || progress.nextAction),
-      decisionDetail("status", completion.status),
-      decisionDetail("reason", completion.reason),
-      decisionDetail("artifacts", payload.task_artifact_count ?? payload.taskArtifactCount),
-      decisionDetail("attempts", payload.auto_continue_attempts ?? payload.autoContinueAttempts),
-    ]),
-  };
-}
-
-function scorecardDecision(payload: TraceEventPayload, event: DecisionEventContext, index: number): DecisionTimelineItem {
-  const task = toPayloadSource<TaskTypeDecisionPayload>(payload.task) || {};
-  const contract = toPayloadSource<TaskTypeDecisionPayload>(payload.contract) || {};
-  const completion = toPayloadSource<CompletionDecisionPayload>(payload.completion) || {};
-  const traceHealth = toPayloadSource<TraceHealthDecisionPayload>(payload.trace_health || payload.traceHealth) || {};
-  const sensors = Array.isArray(payload.sensors) ? payload.sensors : [];
-  return {
-    id: decisionId(event, index),
-    eventIds: decisionEventId(event),
-    phase: "checkpoint",
-    status: traceHealth.status === "fail" ? "failed" : traceHealth.status === "warn" ? "warning" : "success",
-    titleKey: "scorecard",
-    title: "Task scorecard",
-    summary: compactJoin([task.task_type || task.taskType || contract.task_type || contract.taskType, completion.status, traceHealth.status]),
-    reason: coerceText(completion.reason),
-    createdAt: event.createdAt,
-    details: compactDetails([
-      decisionDetail("taskType", task.task_type || task.taskType || contract.task_type || contract.taskType),
-      decisionDetail("status", completion.status),
-      decisionDetail("reason", completion.reason),
-      decisionDetail("traceHealth", traceHealth.status),
-      decisionDetail("sensors", sensors.length),
-    ]),
-  };
-}
-
-export function deriveDecisionTimelineItems(events: unknown = []): DecisionTimelineItem[] {
-  if (!Array.isArray(events)) {
-    return [];
-  }
-  const items: DecisionTimelineItem[] = [];
-  for (const event of events) {
-    const eventRecord = toTraceEventEnvelopePayload(event);
-    const eventType = coerceText(eventRecord.eventType || eventRecord.event_type);
-    const payload = coerceEventPayload(eventRecord.payload);
-    const eventWithTimestamp: DecisionEventContext = {
-      ...eventRecord,
-      eventType,
-      createdAt: normalizeEventTimestamp(eventRecord.createdAt ?? eventRecord.created_at),
-    };
-    let item: DecisionTimelineItem | null = null;
-    if (eventType === "tool_selection.resolved") {
-      item = toolSelectionDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "task_contract.created" || eventType === "task_contract.planning_started" || eventType === "task_contract.planned" || eventType === "task_contract.validated" || eventType === "task_contract.validation_failed") {
-      item = taskContractDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "completion_gate.evaluated") {
-      item = completionGateDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType.startsWith("auto_continue.")) {
-      item = autoContinueDecision(eventType, payload, eventWithTimestamp, items.length);
-    } else if (eventType === "task_checkpoint.recorded") {
-      item = checkpointDecision(payload, eventWithTimestamp, items.length);
-    } else if (eventType === "task_scorecard.recorded") {
-      item = scorecardDecision(payload, eventWithTimestamp, items.length);
-    }
-    if (item) {
-      items.push(item);
-    }
-  }
-  return items;
-}
-
 function normalizeBackgroundProcessArtifact(
   eventType: unknown,
   payload: BackgroundProcessEventPayload,
@@ -1318,98 +805,93 @@ function normalizeWorktreeSandbox(payload: unknown): WorktreeSandboxView | null 
   };
 }
 
-export function findWorktreeSandbox(parts: unknown[] = [], artifacts: unknown[] = []): WorktreeSandboxView | null {
+export function applyWorktreeCleanupEvent(
+  sandbox: WorktreeSandboxView,
+  event: TraceEventView,
+): WorktreeSandboxView {
+  if (event.eventType !== "worktree_cleanup.completed") {
+    return sandbox;
+  }
+  const eventPath = coerceText(event.payload.sandbox_path ?? event.payload.sandboxPath);
+  if (eventPath && eventPath !== sandbox.sandboxPath) {
+    return sandbox;
+  }
+  const status = coerceText(event.payload.status);
+  if (!coerceBoolean(event.payload.ok) && status !== "removed") {
+    return sandbox;
+  }
+  return {
+    ...sandbox,
+    status: status || "removed",
+    cleanupSupported: false,
+    cleanupPending: false,
+    cleanupResult: event.payload,
+  };
+}
+
+export function preserveKnownRemovedWorktreeSandbox(
+  previous: WorktreeSandboxView | null | undefined,
+  incoming: WorktreeSandboxView | null,
+): WorktreeSandboxView | null {
+  if (!previous || previous.status.trim().toLowerCase() !== "removed") {
+    return incoming;
+  }
+  if (!incoming) {
+    return {
+      ...previous,
+      cleanupSupported: false,
+      cleanupPending: false,
+    };
+  }
+  if (incoming.sandboxPath !== previous.sandboxPath) {
+    return incoming;
+  }
+  return {
+    ...incoming,
+    status: "removed",
+    cleanupSupported: false,
+    cleanupPending: false,
+    cleanupResult: previous.cleanupResult ?? incoming.cleanupResult,
+  };
+}
+
+function applyWorktreeCleanupEvents(
+  sandbox: WorktreeSandboxView,
+  events: TraceEventView[],
+): WorktreeSandboxView {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const updated = applyWorktreeCleanupEvent(sandbox, events[index]);
+    if (updated !== sandbox) {
+      return updated;
+    }
+  }
+  return sandbox;
+}
+
+export function findWorktreeSandbox(
+  parts: unknown[] = [],
+  artifacts: unknown[] = [],
+  events: TraceEventView[] = [],
+): WorktreeSandboxView | null {
   for (const part of parts) {
     const partRecord = toTracePartPayload(part);
     if (partRecord?.partType === "worktree_sandbox") {
-      return normalizeWorktreeSandbox(partRecord.metadata);
+      const sandbox = normalizeWorktreeSandbox(partRecord.metadata);
+      if (sandbox) {
+        return applyWorktreeCleanupEvents(sandbox, events);
+      }
     }
   }
   for (const artifact of artifacts) {
     const artifactRecord = toPayloadSource<RunArtifactPayload>(artifact);
     if (artifactRecord?.artifactType === "worktree_sandbox" || artifactRecord?.kind === "work") {
-      return normalizeWorktreeSandbox(artifactRecord);
+      const sandbox = normalizeWorktreeSandbox(artifactRecord);
+      if (sandbox) {
+        return applyWorktreeCleanupEvents(sandbox, events);
+      }
     }
   }
   return null;
-}
-
-function normalizeDelegatedTask(payload: unknown): DelegatedTaskView | null {
-  const record = toPayloadSource<DelegatedTaskPayload>(payload);
-  if (!record) {
-    return null;
-  }
-  const taskId = String(record.task_id || record.taskId || "").trim();
-  if (!taskId) {
-    return null;
-  }
-  return {
-    taskId,
-    promptType: String(record.prompt_type || record.promptType || "").trim() || null,
-    status: String(record.status || "unknown").trim() || "unknown",
-    selected: coerceBoolean(record.selected),
-    summary: String(record.summary || "").trim(),
-    error: String(record.error || "").trim(),
-    childSessionId: String(record.child_session_id || record.childSessionId || "").trim() || null,
-    lastChildRunId: String(record.last_child_run_id || record.lastChildRunId || "").trim() || null,
-    metadata: normalizeDelegatedTaskMetadata(record.metadata),
-    createdAt: normalizeEventTimestamp(record.created_at ?? record.createdAt),
-    updatedAt: normalizeEventTimestamp(record.updated_at ?? record.updatedAt),
-  };
-}
-
-export function normalizeWorkState(payload: unknown): WorkStateView | null {
-  const record = toPayloadSource<WorkStatePayload>(payload);
-  if (!record) {
-    return null;
-  }
-  const objective = String(record.objective || "").trim();
-  if (!objective) {
-    return null;
-  }
-  const rawDelegatedTasks = record.delegated_tasks || record.delegatedTasks;
-  const delegatedTasks = Array.isArray(rawDelegatedTasks)
-    ? rawDelegatedTasks.map(normalizeDelegatedTask).filter((task): task is DelegatedTaskView => Boolean(task))
-    : [];
-  const selectedDelegatedTask = delegatedTasks.find((task) => task.selected) || null;
-  return {
-    sessionId: String(record.session_id || record.sessionId || "").trim() || null,
-    objective,
-    kind: String(record.kind || "task").trim() || "task",
-    status: String(record.status || "active").trim() || "active",
-    steps: coerceStringList(record.steps),
-    constraints: coerceStringList(record.constraints),
-    doneCriteria: coerceStringList(record.done_criteria || record.doneCriteria),
-    longRunning: coerceBoolean(record.long_running ?? record.longRunning),
-    codingTask: coerceBoolean(record.coding_task ?? record.codingTask),
-    expectsCodeChange: coerceBoolean(record.expects_code_change ?? record.expectsCodeChange),
-    expectsVerification: coerceBoolean(record.expects_verification ?? record.expectsVerification),
-    currentStep: String(record.current_step || record.currentStep || "not set").trim() || "not set",
-    nextStep: String(record.next_step || record.nextStep || "not set").trim() || "not set",
-    completedSteps: coerceStringList(record.completed_steps || record.completedSteps),
-    pendingSteps: coerceStringList(record.pending_steps || record.pendingSteps),
-    blockers: coerceStringList(record.blockers),
-    verificationTargets: coerceStringList(record.verification_targets || record.verificationTargets),
-    resumeHint: String(record.resume_hint || record.resumeHint || "").trim(),
-    lastProgressSignals: coerceStringList(record.last_progress_signals || record.lastProgressSignals),
-    fileChangeCount: coerceNonNegativeInteger(record.file_change_count ?? record.fileChangeCount),
-    touchedPaths: coerceStringList(record.touched_paths || record.touchedPaths),
-    verificationAttempted: coerceBoolean(record.verification_attempted ?? record.verificationAttempted),
-    verificationPassed: coerceBoolean(record.verification_passed ?? record.verificationPassed),
-    followUpWorkflow: String(record.follow_up_workflow || record.followUpWorkflow || "").trim() || null,
-    followUpStepId: String(record.follow_up_step_id || record.followUpStepId || "").trim() || null,
-    followUpStepLabel: String(record.follow_up_step_label || record.followUpStepLabel || "").trim() || null,
-    followUpPromptType: String(record.follow_up_prompt_type || record.followUpPromptType || "").trim() || null,
-    verificationAction: String(record.verification_action || record.verificationAction || "").trim() || null,
-    verificationPath: String(record.verification_path || record.verificationPath || "").trim() || null,
-    verificationPytestArgs: coerceStringList(record.verification_pytest_args || record.verificationPytestArgs),
-    activeTaskDetail: String(record.active_task_detail || record.activeTaskDetail || "").trim(),
-    lastNextAction: String(record.last_next_action || record.lastNextAction || "").trim(),
-    delegatedTasks,
-    activeDelegateTaskId: String(record.active_delegate_task_id || record.activeDelegateTaskId || "").trim() || selectedDelegatedTask?.taskId || null,
-    activeDelegatePromptType: String(record.active_delegate_prompt_type || record.activeDelegatePromptType || "").trim() || selectedDelegatedTask?.promptType || null,
-    updatedAt: normalizeEventTimestamp(record.updated_at ?? record.updatedAt),
-  };
 }
 
 function toTraceEventEnvelopePayload(value: unknown): TraceEventEnvelopePayload {

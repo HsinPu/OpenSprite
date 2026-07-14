@@ -170,8 +170,6 @@ async def serialize_session_summary(adapter: Any, storage: Any, session_id: str,
         trace = await get_run_trace(session_id, run.run_id) if callable(get_run_trace) else None
         if trace is not None:
             latest_traces.append(trace)
-    get_work_state = getattr(storage, "get_work_state", None)
-    work_state = await get_work_state(session_id) if callable(get_work_state) else None
     external_chat_id = external_chat_id_from_session(session_id)
     fallback_title = external_chat_id or session_id
     return {
@@ -186,5 +184,4 @@ async def serialize_session_summary(adapter: Any, storage: Any, session_id: str,
         "runs": [adapter._serialize_run(run) for run in latest_runs],
         "entries": serialize_session_entries(display_messages, latest_traces),
         "diff_summary": serialize_diff_summary(latest_traces[0]) if latest_traces else None,
-        "work_state": adapter._serialize_work_state(work_state),
     }

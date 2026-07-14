@@ -15,6 +15,8 @@ from .outbound import queue_outbound_media, queued_outbound_media
 
 
 MEDIA_ONLY_HISTORY_MARKER = "[Media-only message saved to workspace]"
+MEDIA_ONLY_HISTORY_FAILURE_MARKER = "[Media-only message could not be saved]"
+MEDIA_ONLY_HISTORY_PARTIAL_FAILURE_MARKER = "[Some media attachments could not be saved]"
 INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON = "unsupported-payload"
 
 INBOUND_IMAGE_EXTENSIONS = {
@@ -245,6 +247,30 @@ class AgentMediaService:
         if video_files:
             lines.append("Videos: " + ", ".join(video_files))
         return "\n".join(lines)
+
+    @staticmethod
+    def format_failed_media_history_content() -> str:
+        """Format a media-only history entry when no attachment was persisted."""
+        return MEDIA_ONLY_HISTORY_FAILURE_MARKER
+
+    @staticmethod
+    def format_partially_saved_media_history_content(
+        *,
+        image_files: list[str],
+        audio_files: list[str],
+        video_files: list[str],
+        failed_count: int,
+    ) -> str:
+        """Format saved paths and the number of attachments that were lost."""
+        saved = AgentMediaService.format_saved_media_history_content(
+            image_files=image_files,
+            audio_files=audio_files,
+            video_files=video_files,
+        )
+        return (
+            f"{saved}\n{MEDIA_ONLY_HISTORY_PARTIAL_FAILURE_MARKER}\n"
+            f"Unsaved attachments: {max(0, int(failed_count))}"
+        )
 
     @staticmethod
     def queue_outbound_media(

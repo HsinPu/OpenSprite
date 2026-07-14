@@ -2,9 +2,7 @@
 import json
 from datetime import datetime
 
-from opensprite.agent.execution import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
-from opensprite.tools.evidence import ToolEvidence, build_tool_evidence
 from opensprite.tools.web_search_payloads import format_results as _format_results
 from opensprite.tools.web_research import WebResearchTool
 
@@ -1363,75 +1361,3 @@ def test_web_research_marks_blocked_fetches_as_low_quality():
     assert payload["failed_sources"][0]["blocked_or_challenge"] is True
     assert payload["failed_sources"][0]["has_main_content"] is False
     assert payload["failed_sources"][0]["quality_score"] <= 0.35
-
-
-def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
-    result = json.dumps(
-        {
-            "type": "web_research",
-            "query": "sqlite",
-            "provider": "duckduckgo",
-            "backend": "ddgs",
-            "coverage": {
-                "target_fetch_count": 2,
-                "target_met": False,
-                "queries_without_successful_fetch": ["sqlite pricing"],
-            },
-            "sources": [
-                {
-                    "tool_name": "web_fetch",
-                    "title": "SQLite Docs",
-                    "url": "https://sqlite.org/fts5.html",
-                    "content": "SQLite FTS5 documentation " * 40,
-                    "content_chars": 1000,
-                    "has_main_content": True,
-                    "blocked_or_challenge": False,
-                    "quality_score": 0.95,
-                    "is_too_short": False,
-                    "min_content_chars": 800,
-                    "extractor": "trafilatura",
-                    "search_backend": "ddgs",
-                }
-            ],
-        },
-        ensure_ascii=False,
-    )
-
-    evidence = build_tool_evidence("web_research", {"query": "sqlite"}, result, ok=True)
-    artifact = build_task_artifact(evidence)
-
-    assert evidence.metadata["source_count"] == 1
-    assert evidence.metadata["sources"][0]["tool_name"] == "web_fetch"
-    assert evidence.metadata["sources"][0]["quality_score"] == 0.95
-    assert evidence.metadata["sources"][0]["search_backend"] == "ddgs"
-    assert artifact is not None
-    assert artifact.kind == "web_source"
-    assert artifact.source_tool == "web_research"
-    assert artifact.metadata["coverage"]["target_met"] is False
-    assert artifact.metadata["coverage"]["queries_without_successful_fetch"] == ["sqlite pricing"]
-
-
-def test_web_research_evidence_without_sources_builds_no_web_source_artifact():
-    result = json.dumps(
-        {
-            "type": "web_research",
-            "query": "sqlite",
-            "sources": [],
-            "fetched_sources": [],
-            "source_count": 0,
-            "fetched_count": 0,
-            "coverage": {"target_fetch_count": 2, "target_met": False, "fetched_count": 0},
-        },
-        ensure_ascii=False,
-    )
-
-    evidence = build_tool_evidence("web_research", {"query": "sqlite"}, result, ok=True)
-
-    assert evidence.ok is False
-    assert build_task_artifact(evidence) is None
-
-
-def test_web_source_artifact_requires_traceable_source_metadata():
-    evidence = ToolEvidence(name="web_research", ok=True, metadata={"source_count": 0})
-
-    assert build_task_artifact(evidence) is None

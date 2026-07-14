@@ -17,9 +17,6 @@ from .base import (
     StoredRunEvent,
     StoredRunFileChange,
     StoredRunPart,
-    StoredWorkState,
-    coerce_stored_delegated_tasks,
-    selected_delegated_task,
 )
 
 
@@ -39,7 +36,6 @@ class MemoryStorage(StorageProvider):
         self._run_events: dict[tuple[str, str], list[StoredRunEvent]] = defaultdict(list)
         self._run_file_changes: dict[tuple[str, str], list[StoredRunFileChange]] = defaultdict(list)
         self._run_parts: dict[tuple[str, str], list[StoredRunPart]] = defaultdict(list)
-        self._work_states: dict[str, StoredWorkState] = {}
         self._background_processes: dict[str, StoredBackgroundProcess] = {}
     
     async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
@@ -88,7 +84,6 @@ class MemoryStorage(StorageProvider):
                 self._run_events.pop((session_id, run_id), None)
                 self._run_file_changes.pop((session_id, run_id), None)
                 self._run_parts.pop((session_id, run_id), None)
-        self._work_states.pop(session_id, None)
         for process_id, process in list(self._background_processes.items()):
             if process.owner_session_id == session_id:
                 self._background_processes.pop(process_id, None)
@@ -107,7 +102,6 @@ class MemoryStorage(StorageProvider):
         """
         session_ids = set(self._messages.keys())
         session_ids.update(run.session_id for run in self._runs.values())
-        session_ids.update(self._work_states.keys())
         session_ids.update(process.owner_session_id for process in self._background_processes.values())
         return sorted(session_ids)
 
@@ -229,52 +223,6 @@ class MemoryStorage(StorageProvider):
         if run is None or run.session_id != session_id:
             return None
         return run
-
-    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
-        return self._work_states.get(session_id)
-
-    async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState:
-        existing = self._work_states.get(state.session_id)
-        created_at = existing.created_at if existing is not None and existing.created_at else float(state.created_at or time.time())
-        delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks)
-        selected_task = selected_delegated_task(delegated_tasks)
-        updated = StoredWorkState(
-            session_id=state.session_id,
-            objective=state.objective,
-            kind=state.kind,
-            status=state.status,
-            steps=tuple(state.steps),
-            constraints=tuple(state.constraints),
-            done_criteria=tuple(state.done_criteria),
-            long_running=bool(state.long_running),
-            coding_task=bool(state.coding_task),
-            expects_code_change=bool(state.expects_code_change),
-            expects_verification=bool(state.expects_verification),
-            current_step=state.current_step,
-            next_step=state.next_step,
-            completed_steps=tuple(state.completed_steps),
-            pending_steps=tuple(state.pending_steps),
-            blockers=tuple(state.blockers),
-            verification_targets=tuple(state.verification_targets),
-            resume_hint=state.resume_hint,
-            last_progress_signals=tuple(state.last_progress_signals),
-            file_change_count=int(state.file_change_count),
-            touched_paths=tuple(state.touched_paths),
-            verification_attempted=bool(state.verification_attempted),
-            verification_passed=bool(state.verification_passed),
-            last_next_action=state.last_next_action,
-            delegated_tasks=delegated_tasks,
-            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
-            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
-            metadata=dict(state.metadata or {}),
-            created_at=created_at,
-            updated_at=float(state.updated_at or time.time()),
-        )
-        self._work_states[state.session_id] = updated
-        return updated
-
-    async def clear_work_state(self, session_id: str) -> None:
-        self._work_states.pop(session_id, None)
 
     async def add_run_event(
         self,

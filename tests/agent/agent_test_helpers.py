@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -49,54 +48,10 @@ class FakeContextBuilder:
 
 class NoCallProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "initial task shape" in system_text:
-            return type("FakeInitialTaskResponse", (), {"content": json.dumps(_initial_task_planning_payload())})()
-        if "OpenSprite task planner" in system_text:
-            return type(
-                "FakePlannerResponse",
-                (),
-                {
-                    "content": (
-                        '{"task_type":"media_extraction","required_tools":["analyze_image"],'
-                        '"final_answer_required":true,"allow_no_tool_final":false,'
-                        '"reason":"test planner media contract"}'
-                    )
-                },
-            )()
         raise AssertionError("provider.chat should not be called in this test")
 
     def get_default_model(self) -> str:
         return "fake-model"
-
-
-def _initial_task_planning_payload() -> dict[str, Any]:
-    return {
-        "task_intent": {
-            "kind": "conversation",
-            "objective": "hello",
-            "constraints": [],
-            "done_criteria": ["user receives a response"],
-            "needs_clarification": False,
-            "long_running": False,
-            "expects_code_change": False,
-            "expects_verification": False,
-            "verification_hint": None,
-        },
-        "task_context": {
-            "is_follow_up": False,
-            "should_inherit_active_task": False,
-            "should_seed_active_task": False,
-            "should_replace_active_task": False,
-            "inherited_task_type": None,
-            "continuation_type": "none",
-            "confidence": 0.8,
-            "reason": "test initial task planning",
-        },
-        "confidence": 0.9,
-        "reason": "test initial task planning",
-    }
-
 
 class SavedMessageStorage:
     def __init__(self, messages: dict[str, list[StoredMessage]] | None = None):

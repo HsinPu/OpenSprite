@@ -15,14 +15,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from ..utils.processes import detached_process_kwargs, terminate_process_tree
+from ..utils.processes import terminate_process_tree
 from .base import Tool
 from .result_status import classify_tool_result_status, tool_error_result
+from .shell_runtime import start_exec_process
 from .validation import NON_EMPTY_STRING_PATTERN
 from .verification_output_policy import pytest_collected_no_tests
 
 
 WorkspaceResolver = Callable[[], Path]
+_VERIFY_PROCESS_CLEANUP_TASKS: set[asyncio.Task[None]] = set()
 
 _EXCLUDED_PYTHON_DIRS = frozenset(
     {
@@ -158,10 +160,6 @@ def _command_display(command: list[str]) -> str:
     return shlex.join(command)
 
 
-def _process_creation_kwargs() -> dict[str, Any]:
-    return detached_process_kwargs()
-
-
 def _format_streams(stdout: bytes | None, stderr: bytes | None, *, max_chars: int = 6000) -> str:
     parts: list[str] = []
     stdout_text = (stdout or b"").decode("utf-8", errors="replace").strip()
@@ -174,6 +172,27 @@ def _format_streams(stdout: bytes | None, stderr: bytes | None, *, max_chars: in
     if len(output) > max_chars:
         return output[:max_chars] + f"\n... (truncated, total {len(output)} chars)"
     return output
+
+
+def _track_verify_process_cleanup(task: asyncio.Task[None]) -> None:
+    """Keep command cleanup alive across repeated caller cancellation."""
+    _VERIFY_PROCESS_CLEANUP_TASKS.add(task)
+
+    def consume(completed: asyncio.Task[None]) -> None:
+        _VERIFY_PROCESS_CLEANUP_TASKS.discard(completed)
+        with contextlib.suppress(BaseException):
+            completed.result()
+
+    task.add_done_callback(consume)
+
+
+async def _terminate_and_drain_verify_process(
+    process: asyncio.subprocess.Process,
+    communicate_task: asyncio.Task[tuple[bytes | None, bytes | None]],
+) -> None:
+    await terminate_process_tree(process)
+    communicate_task.cancel()
+    await asyncio.gather(communicate_task, return_exceptions=True)
 
 
 class VerifyTool(Tool):
@@ -434,22 +453,24 @@ class VerifyTool(Tool):
         return shutil.which(preferred) or shutil.which("npm")
 
     async def _run_command(self, command: list[str], cwd: Path, timeout: int) -> VerifyCommandResult:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            cwd=str(cwd),
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            **_process_creation_kwargs(),
-        )
+        try:
+            process = await start_exec_process(command, cwd=str(cwd))
+        except (OSError, RuntimeError, ValueError) as exc:
+            return VerifyCommandResult(
+                command=command,
+                cwd=cwd,
+                exit_code=None,
+                output=f"Could not start verification command: {exc}",
+            )
         communicate_task = asyncio.create_task(process.communicate())
         try:
             stdout, stderr = await asyncio.wait_for(communicate_task, timeout=timeout)
         except asyncio.TimeoutError:
-            await terminate_process_tree(process)
-            communicate_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await communicate_task
+            cleanup_task = asyncio.create_task(
+                _terminate_and_drain_verify_process(process, communicate_task)
+            )
+            _track_verify_process_cleanup(cleanup_task)
+            await asyncio.shield(cleanup_task)
             return VerifyCommandResult(
                 command=command,
                 cwd=cwd,
@@ -457,6 +478,18 @@ class VerifyTool(Tool):
                 output=f"Command timed out after {timeout}s.",
                 timed_out=True,
             )
+        except asyncio.CancelledError as cancel_error:
+            cleanup_task = asyncio.create_task(
+                _terminate_and_drain_verify_process(process, communicate_task)
+            )
+            _track_verify_process_cleanup(cleanup_task)
+            try:
+                await asyncio.shield(cleanup_task)
+            except BaseException:
+                # Preserve the original cancellation. The tracked task keeps
+                # enforcing process-tree cleanup after repeated cancellation.
+                pass
+            raise cancel_error
 
         return VerifyCommandResult(
             command=command,

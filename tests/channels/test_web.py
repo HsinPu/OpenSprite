@@ -2,15 +2,18 @@ import asyncio
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from aiohttp import ClientSession, WSServerHandshakeError, web
 
 from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.events import RunEvent, SessionStatusEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
+from opensprite.channels.web_api_control import handle_worktree_cleanup
 import opensprite.channels.web_settings_handlers_tools as web_settings_handlers_tools
 from opensprite.channels.web_routes import register_web_routes
 from opensprite.config import Config, ProviderConfig
@@ -19,15 +22,14 @@ import opensprite.auth.codex as codex_module
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
 from opensprite.runs.events import (
-    COMPLETION_GATE_EVALUATED_EVENT,
-    TASK_INTENT_DETECTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
     WORKTREE_CLEANUP_COMPLETED_EVENT,
+    WORKTREE_CLEANUP_FAILED_EVENT,
     WORKTREE_CLEANUP_STARTED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
-from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
+from opensprite.storage import MemoryStorage, StoredMessage
 from opensprite.tools.registry import ToolRegistry
 from opensprite.storage.base import StoredBackgroundProcess
 from opensprite.tools.process_runtime import BackgroundProcessManager
@@ -478,8 +480,8 @@ async def _run_web_command_catalog_api():
 
         commands = {item["name"]: item for item in payload["commands"]}
         assert commands["help"]["usage"] == "/help [command]"
-        assert commands["goal"]["usage"] == "/goal <objective>"
-        assert commands["goal"]["category"] == "Work"
+        assert "task" not in commands
+        assert "goal" not in commands
         assert commands["curator"]["subcommands"] == ["status", "history", "run", "pause", "resume", "help"]
         assert commands["curator"]["category"] == "Maintenance"
     finally:
@@ -1536,22 +1538,15 @@ async def _run_web_run_events_api():
         "web:browser-1",
         "run-1",
         status="completed",
-        metadata={"objective": Path("notes.txt")},
+        metadata={
+            "objective": Path("notes.txt"),
+            "task_contract": {"task_type": "coding"},
+            "completion_gate": {"status": "complete"},
+            "auto_continue_attempts": 2,
+            "work_progress": {"next_action": "legacy"},
+            "task_artifacts": [{"kind": "file"}],
+        },
         created_at=100.0,
-    )
-    await storage.add_run_event(
-        "web:browser-1",
-        "run-1",
-        TASK_INTENT_DETECTED_EVENT,
-        payload={"objective": "inspect run timeline", "path": Path("notes.txt")},
-        created_at=101.0,
-    )
-    await storage.add_run_event(
-        "web:browser-1",
-        "run-1",
-        COMPLETION_GATE_EVALUATED_EVENT,
-        payload={"status": "complete"},
-        created_at=102.0,
     )
     await storage.add_run_event(
         "web:browser-1",
@@ -1567,6 +1562,17 @@ async def _run_web_run_events_api():
         payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "ok": True, "result_preview": "done"},
         created_at=102.75,
     )
+    for offset, event_type in enumerate(
+        ("task_contract.created", "completion_gate.evaluated", "auto_continue.completed", "work_progress.updated"),
+        start=1,
+    ):
+        await storage.add_run_event(
+            "web:browser-1",
+            "run-1",
+            event_type,
+            payload={"status": "completed", "legacy": True},
+            created_at=102.75 + (offset / 100),
+        )
     await storage.add_run_part(
         "web:browser-1",
         "run-1",
@@ -1575,6 +1581,14 @@ async def _run_web_run_events_api():
         tool_name="apply_patch",
         metadata={"path": Path("notes.txt"), "tool_call_id": "call-1"},
         created_at=102.25,
+    )
+    await storage.add_run_part(
+        "web:browser-1",
+        "run-1",
+        "task_checkpoint",
+        content="legacy checkpoint",
+        metadata={"completion_status": "complete"},
+        created_at=103.0,
     )
     await storage.add_run_file_change(
         "web:browser-1",
@@ -1679,8 +1693,8 @@ async def _run_web_run_events_api():
             assert payload["run_id"] == "run-1"
             assert payload["session_id"] == "web:browser-1"
             assert payload["event_counts"] == {
-                "total": 4,
-                "returned": 4,
+                "total": 2,
+                "returned": 2,
                 "compacted": 0,
                 "text_total": 0,
                 "text_returned": 0,
@@ -1688,21 +1702,14 @@ async def _run_web_run_events_api():
                 "max_text_events": 24,
             }
             assert [event["event_type"] for event in payload["events"]] == [
-                TASK_INTENT_DETECTED_EVENT,
-                COMPLETION_GATE_EVALUATED_EVENT,
                 TOOL_STARTED_EVENT,
                 TOOL_RESULT_EVENT,
             ]
             assert payload["events"][0]["event_id"] == 1
-            assert payload["events"][0]["payload"] == {
-                "objective": "inspect run timeline",
-                "path": "notes.txt",
-            }
-            assert payload["events"][1]["created_at"] == 102.0
-            assert payload["events"][2]["artifact"]["artifact_id"] == "tool:call-1"
-            assert payload["events"][2]["artifact"]["status"] == "running"
-            assert payload["events"][3]["artifact"]["artifact_id"] == "tool:call-1"
-            assert payload["events"][3]["artifact"]["status"] == "completed"
+            assert payload["events"][0]["artifact"]["artifact_id"] == "tool:call-1"
+            assert payload["events"][0]["artifact"]["status"] == "running"
+            assert payload["events"][1]["artifact"]["artifact_id"] == "tool:call-1"
+            assert payload["events"][1]["artifact"]["status"] == "completed"
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",
@@ -1742,12 +1749,10 @@ async def _run_web_run_events_api():
 
             assert trace_payload["run"]["run_id"] == "run-1"
             assert trace_payload["run"]["metadata"] == {"objective": "notes.txt"}
-            assert trace_payload["event_counts"]["total"] == 4
-            assert trace_payload["event_counts"]["returned"] == 4
+            assert trace_payload["event_counts"]["total"] == 2
+            assert trace_payload["event_counts"]["returned"] == 2
             assert trace_payload["event_counts"]["compacted"] == 0
             assert [event["event_type"] for event in trace_payload["events"]] == [
-                TASK_INTENT_DETECTED_EVENT,
-                COMPLETION_GATE_EVALUATED_EVENT,
                 TOOL_STARTED_EVENT,
                 TOOL_RESULT_EVENT,
             ]
@@ -1831,6 +1836,12 @@ async def _run_web_run_events_api():
                 }
             ]
 
+            stored_run = await storage.get_run("web:browser-1", "run-1")
+            assert stored_run is not None
+            assert stored_run.metadata["task_contract"] == {"task_type": "coding"}
+            assert len(await storage.get_run_events("web:browser-1", "run-1")) == 6
+            assert len(await storage.get_run_parts("web:browser-1", "run-1")) == 2
+
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
                 params={"session_id": "web:browser-1"},
@@ -1843,7 +1854,7 @@ async def _run_web_run_events_api():
                 "run_id": "run-1",
                 "session_id": "web:browser-1",
                 "status": "completed",
-                "objective": "inspect run timeline",
+                "objective": "notes.txt",
                 "created_at": 100.0,
                 "updated_at": 100.0,
                 "finished_at": None,
@@ -1875,15 +1886,6 @@ async def _run_web_run_events_api():
                     "status": "not_attempted",
                     "name": None,
                     "summary": "",
-                },
-                "review": {
-                    "required": False,
-                    "attempted": False,
-                    "passed": False,
-                    "status": "not_required",
-                    "summary": "",
-                    "prompt_types": [],
-                    "finding_count": 0,
                 },
                 "structured_subagents": {
                     "total": 0,
@@ -1924,20 +1926,9 @@ async def _run_web_run_events_api():
                     "file": 1,
                     "verification": 0,
                 },
-                "task_scorecard": {
-                    "present": False,
-                    "status": "missing",
-                    "profile": "",
-                    "task_type": "",
-                    "sensor_counts": {"pass": 0, "warn": 0, "fail": 0, "not_applicable": 0},
-                    "failing_sensors": [],
-                    "warning_sensors": [],
-                },
-                "completion": {"status": "complete"},
-                "next_action": None,
                 "warnings": [],
                 "counts": {
-                    "events": 4,
+                    "events": 2,
                     "parts": 1,
                     "tool_calls": 1,
                     "file_changes": 1,
@@ -1998,49 +1989,20 @@ async def _run_web_sessions_api():
     )
     await storage.add_message(
         "web:browser-new",
-        StoredMessage(role="user", content="new hello", timestamp=200.0, metadata={"sender_name": "Tester"}),
-    )
-    await storage.upsert_work_state(
-        StoredWorkState(
-            session_id="web:browser-new",
-            objective="ship session work card",
-            kind="implementation",
-            status="active",
-            steps=("inspect", "build", "verify"),
-            current_step="build",
-            next_step="verify",
-            pending_steps=("build", "verify"),
-            file_change_count=2,
-            touched_paths=("frontend/src/App.tsx",),
-            verification_attempted=True,
-            verification_passed=False,
-            delegated_tasks=(
-                StoredDelegatedTask(
-                    task_id="task_abc12345",
-                    prompt_type="implementer",
-                    status="completed",
-                    selected=True,
-                    summary="Delegated the UI update.",
-                    child_session_id="web:browser-new:subagent:task_abc12345",
-                    last_child_run_id="run_child_1",
-                    created_at=195.0,
-                    updated_at=200.0,
-                ),
-            ),
-            resume_hint="Continue with frontend validation.",
+        StoredMessage(
+            role="user",
+            content="new hello",
+            timestamp=200.0,
             metadata={
+                "sender_name": "Tester",
+                "tool_evidence": [{"tool": "pytest"}],
+                "quick_action": "resume_follow_up",
                 "follow_up_workflow": "implement_then_review",
                 "follow_up_step_id": "review",
-                "follow_up_step_label": "Code review",
                 "follow_up_prompt_type": "code-reviewer",
-                "verification_action": "pytest",
-                "verification_path": ".",
-                "verification_pytest_args": ["tests/test_ui.py::test_card"],
-                "active_task_detail": "Resume with the Code review step in implement_then_review.",
+                "structured_output": {"tool_evidence": "nested domain data"},
             },
-            created_at=190.0,
-            updated_at=201.0,
-        )
+        ),
     )
     await storage.create_run(
         "web:browser-new",
@@ -2258,98 +2220,16 @@ async def _run_web_sessions_api():
                 "metadata": {"objective": "ship session work card"},
             }
         ]
-        assert payload["sessions"][0]["work_state"] == {
-            "session_id": "web:browser-new",
-            "objective": "ship session work card",
-            "kind": "implementation",
-            "status": "active",
-            "steps": ["inspect", "build", "verify"],
-            "constraints": [],
-            "done_criteria": [],
-            "long_running": False,
-            "coding_task": False,
-            "expects_code_change": False,
-            "expects_verification": False,
-            "current_step": "build",
-            "next_step": "verify",
-            "completed_steps": [],
-            "pending_steps": ["build", "verify"],
-            "blockers": [],
-            "verification_targets": [],
-            "resume_hint": "Continue with frontend validation.",
-            "last_progress_signals": [],
-            "file_change_count": 2,
-            "touched_paths": ["frontend/src/App.tsx"],
-            "verification_attempted": True,
-            "verification_passed": False,
-            "follow_up_workflow": "implement_then_review",
-            "follow_up_step_id": "review",
-            "follow_up_step_label": "Code review",
-            "follow_up_prompt_type": "code-reviewer",
-            "verification_action": "pytest",
-            "verification_path": ".",
-            "verification_pytest_args": ["tests/test_ui.py::test_card"],
-            "active_task_detail": "Resume with the Code review step in implement_then_review.",
-            "last_next_action": "",
-            "delegated_tasks": [
-                {
-                    "task_id": "task_abc12345",
-                    "prompt_type": "implementer",
-                    "status": "completed",
-                    "selected": True,
-                    "summary": "Delegated the UI update.",
-                    "error": "",
-                    "child_session_id": "web:browser-new:subagent:task_abc12345",
-                    "last_child_run_id": "run_child_1",
-                    "metadata": {},
-                    "created_at": 195.0,
-                    "updated_at": 200.0,
-                }
-            ],
-            "active_delegate_task_id": "task_abc12345",
-            "active_delegate_prompt_type": "implementer",
-            "metadata": {
-                "follow_up_workflow": "implement_then_review",
-                "follow_up_step_id": "review",
-                "follow_up_step_label": "Code review",
-                "follow_up_prompt_type": "code-reviewer",
-                "verification_action": "pytest",
-                "verification_path": ".",
-                "verification_pytest_args": ["tests/test_ui.py::test_card"],
-                "active_task_detail": "Resume with the Code review step in implement_then_review.",
-            },
-            "todos": [
-                {
-                    "id": "task:1",
-                    "content": "build",
-                    "status": "in_progress",
-                    "priority": "high",
-                    "updated_at": 201.0,
-                },
-                {
-                    "id": "task:2",
-                    "content": "verify",
-                    "status": "pending",
-                    "priority": "medium",
-                    "updated_at": 201.0,
-                },
-                {
-                    "id": "task:3",
-                    "content": "inspect",
-                    "status": "pending",
-                    "priority": "medium",
-                    "updated_at": 201.0,
-                },
-            ],
-            "created_at": 190.0,
-            "updated_at": 201.0,
-        }
+        assert "work_state" not in payload["sessions"][0]
         assert payload["sessions"][0]["messages"] == [
             {
                 "role": "user",
                 "content": "new hello",
                 "tool_name": None,
-                "metadata": {"sender_name": "Tester"},
+                "metadata": {
+                    "sender_name": "Tester",
+                    "structured_output": {"tool_evidence": "nested domain data"},
+                },
                 "created_at": 200.0,
             }
         ]
@@ -2589,11 +2469,14 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
     marker_dir.mkdir()
     (marker_dir / ".opensprite-worktree.json").write_text("{}", encoding="utf-8")
     cleanup_calls = []
+    cleanup_thread_ids = []
     trace_events = []
+    event_loop_thread_id = threading.get_ident()
 
     class WorktreeAgent(EchoAgent):
-        def cleanup_worktree_sandbox(self, sandbox_path):
-            cleanup_calls.append(sandbox_path)
+        def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
+            cleanup_calls.append((sandbox_path, session_id, run_id))
+            cleanup_thread_ids.append(threading.get_ident())
             return {"ok": True, "status": "removed", "sandbox_path": sandbox_path}
 
         async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
@@ -2628,15 +2511,31 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
             async with session.post(f"http://127.0.0.1:{port}/api/worktrees/cleanup", json={}) as resp:
                 assert resp.status == 400
 
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/worktrees/cleanup",
+                json={"sandbox_path": str(marker_dir)},
+            ) as resp:
+                assert resp.status == 400
+                assert await resp.text() == "session_id is required"
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/worktrees/cleanup",
+                json={"sandbox_path": str(marker_dir), "session_id": "web:browser-1"},
+            ) as resp:
+                assert resp.status == 400
+                assert await resp.text() == "run_id is required"
+
         assert payload == {
             "ok": True,
             "cleanup": {"ok": True, "status": "removed", "sandbox_path": str(marker_dir)},
         }
-        assert cleanup_calls == [str(marker_dir)]
+        assert cleanup_calls == [(str(marker_dir), "web:browser-1", "run-1")]
+        assert cleanup_thread_ids and cleanup_thread_ids[0] != event_loop_thread_id
         assert [(event[0], event[1], event[2]) for event in trace_events] == [
             ("web:browser-1", "run-1", WORKTREE_CLEANUP_STARTED_EVENT),
             ("web:browser-1", "run-1", WORKTREE_CLEANUP_COMPLETED_EVENT),
         ]
+        assert all(event[4]["require_persistence"] is True for event in trace_events)
         assert trace_events[-1][3]["sandbox_path"] == str(marker_dir)
         assert trace_events[-1][3]["ok"] is True
     finally:
@@ -2649,6 +2548,176 @@ async def _run_web_worktree_cleanup_api(tmp_path: Path):
 
 def test_web_adapter_exposes_worktree_cleanup_api(tmp_path):
     asyncio.run(_run_web_worktree_cleanup_api(tmp_path))
+
+
+def test_worktree_cleanup_handler_can_retry_after_terminal_trace_failure():
+    async def scenario():
+        cleanup_statuses = iter(("removed", "already_removed"))
+        cleanup_calls = []
+        trace_events = []
+        completion_attempts = 0
+
+        class RetryAgent:
+            def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
+                status = next(cleanup_statuses)
+                cleanup_calls.append((sandbox_path, session_id, run_id, status))
+                return {"ok": True, "status": status, "sandbox_path": sandbox_path}
+
+            async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
+                nonlocal completion_attempts
+                trace_events.append((event_type, kwargs.get("require_persistence")))
+                if event_type == WORKTREE_CLEANUP_COMPLETED_EVENT:
+                    completion_attempts += 1
+                    if completion_attempts == 1:
+                        raise RuntimeError("trace persistence failed")
+
+        class Request:
+            query = {}
+
+        class Adapter:
+            channel_instance_id = "web"
+
+            def __init__(self):
+                self.agent = RetryAgent()
+
+            def _get_agent(self):
+                return self.agent
+
+            async def _read_json_body(self, request):
+                return {
+                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
+                    "session_id": "web:browser-1",
+                    "run_id": "run-1",
+                }
+
+            @staticmethod
+            def _coerce_optional_text(value):
+                normalized = str(value or "").strip()
+                return normalized or None
+
+            @staticmethod
+            def _json_safe(value):
+                return value
+
+        adapter = Adapter()
+        with pytest.raises(RuntimeError, match="trace persistence failed"):
+            await handle_worktree_cleanup(adapter, Request())
+
+        response = await handle_worktree_cleanup(adapter, Request())
+        payload = json.loads(response.text)
+
+        assert payload["ok"] is True
+        assert payload["cleanup"]["status"] == "already_removed"
+        assert cleanup_calls == [
+            (
+                "C:/repo.opensprite-worktrees/web_browser-1/run-1",
+                "web:browser-1",
+                "run-1",
+                "removed",
+            ),
+            (
+                "C:/repo.opensprite-worktrees/web_browser-1/run-1",
+                "web:browser-1",
+                "run-1",
+                "already_removed",
+            ),
+        ]
+        assert trace_events == [
+            (WORKTREE_CLEANUP_STARTED_EVENT, True),
+            (WORKTREE_CLEANUP_COMPLETED_EVENT, True),
+            (WORKTREE_CLEANUP_STARTED_EVENT, True),
+            (WORKTREE_CLEANUP_COMPLETED_EVENT, True),
+        ]
+
+    asyncio.run(scenario())
+
+
+def test_worktree_cleanup_handler_persists_terminal_event_once_when_cancelled():
+    async def scenario():
+        cleanup_entered = threading.Event()
+        cleanup_release = threading.Event()
+        cleanup_finished = threading.Event()
+        terminal_persisted = asyncio.Event()
+        trace_events = []
+
+        class CancellationAgent:
+            def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
+                cleanup_entered.set()
+                if not cleanup_release.wait(timeout=2):
+                    raise TimeoutError("cleanup release was not signalled")
+                cleanup_finished.set()
+                return {"ok": True, "status": "removed", "sandbox_path": sandbox_path}
+
+            async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
+                trace_events.append((event_type, payload, kwargs.get("require_persistence")))
+                if event_type in {
+                    WORKTREE_CLEANUP_COMPLETED_EVENT,
+                    WORKTREE_CLEANUP_FAILED_EVENT,
+                }:
+                    terminal_persisted.set()
+
+        class Request:
+            query = {}
+
+        class Adapter:
+            channel_instance_id = "web"
+
+            def __init__(self):
+                self.agent = CancellationAgent()
+
+            def _get_agent(self):
+                return self.agent
+
+            async def _read_json_body(self, request):
+                return {
+                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
+                    "session_id": "web:browser-1",
+                    "run_id": "run-1",
+                }
+
+            @staticmethod
+            def _coerce_optional_text(value):
+                normalized = str(value or "").strip()
+                return normalized or None
+
+            @staticmethod
+            def _json_safe(value):
+                return value
+
+        handler_task = asyncio.create_task(handle_worktree_cleanup(Adapter(), Request()))
+        entered = await asyncio.wait_for(asyncio.to_thread(cleanup_entered.wait, 1), timeout=2)
+        assert entered is True
+
+        handler_task.cancel()
+        await asyncio.sleep(0)
+        assert cleanup_finished.is_set() is False
+        cleanup_release.set()
+
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(handler_task, timeout=2)
+        await asyncio.wait_for(terminal_persisted.wait(), timeout=1)
+        await asyncio.sleep(0)
+
+        assert cleanup_finished.is_set() is True
+        terminal_events = [
+            event
+            for event in trace_events
+            if event[0] != WORKTREE_CLEANUP_STARTED_EVENT
+        ]
+        assert terminal_events == [
+            (
+                WORKTREE_CLEANUP_COMPLETED_EVENT,
+                {
+                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
+                    "status": "removed",
+                    "ok": True,
+                    "reason": None,
+                },
+                True,
+            )
+        ]
+
+    asyncio.run(scenario())
 
 
 async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):

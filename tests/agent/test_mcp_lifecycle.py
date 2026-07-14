@@ -3,11 +3,28 @@ import asyncio
 from agent_test_helpers import DummyTool, make_agent_loop
 from opensprite.bus.message import UserMessage
 from opensprite.config.schema import ToolsConfig
+from opensprite.tools.mcp import MCPConnectionSummary, MCPServerConnectionResult
 from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _make_agent(tmp_path, tools_config: ToolsConfig | None = None):
     return make_agent_loop(tmp_path, tools_config=tools_config)
+
+
+def _connection_summary(
+    *,
+    connected: tuple[str, ...] = (),
+    failed: tuple[str, ...] = (),
+) -> MCPConnectionSummary:
+    return MCPConnectionSummary(
+        server_results=(
+            *(MCPServerConnectionResult(server_name=name, connected=True) for name in connected),
+            *(
+                MCPServerConnectionResult(server_name=name, connected=False, error="boom")
+                for name in failed
+            ),
+        )
+    )
 
 
 def test_reload_mcp_from_config_reports_missing_config_path(tmp_path):
@@ -29,6 +46,7 @@ def test_connect_mcp_registers_tools_once(tmp_path, monkeypatch):
     async def fake_connect(servers, registry, stack):
         calls.append(sorted(servers.keys()))
         registry.register(DummyTool("mcp_demo_echo"))
+        return _connection_summary(connected=("demo",))
 
     monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
 
@@ -78,14 +96,159 @@ def test_connect_mcp_uses_retry_backoff_after_failure(tmp_path, monkeypatch):
     assert agent.mcp_lifecycle.connect_failures == 2
 
 
-def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
+def test_connect_mcp_treats_zero_success_summary_as_retryable_failure(tmp_path, monkeypatch):
+    async def fake_connect(servers, registry, stack):
+        return _connection_summary(failed=("demo",))
+
+    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+
+    agent = _make_agent(
+        tmp_path,
+        ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
+    )
+
+    asyncio.run(agent.connect_mcp())
+
+    assert agent.mcp_lifecycle.connected is False
+    assert agent.mcp_lifecycle.connected_server_names == set()
+    assert agent.mcp_lifecycle.failed_server_names == {"demo"}
+    assert agent.mcp_lifecycle.connect_failures == 1
+    assert agent.mcp_lifecycle.retry_after > 0
+
+
+def test_connect_mcp_retries_only_failed_servers_after_partial_success(tmp_path, monkeypatch):
+    calls = []
+    clock = {"now": 100.0}
+
+    async def fake_connect(servers, registry, stack):
+        server_names = tuple(sorted(servers))
+        calls.append(server_names)
+        if server_names == ("bad", "good"):
+            registry.register(DummyTool("mcp_good_echo"))
+            return _connection_summary(connected=("good",), failed=("bad",))
+        registry.register(DummyTool("mcp_bad_echo"))
+        return _connection_summary(connected=("bad",))
+
+    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.runs.trace.time.monotonic", lambda: clock["now"])
+
+    agent = _make_agent(
+        tmp_path,
+        ToolsConfig(
+            mcp_servers={
+                "good": {"command": "npx", "args": ["good-mcp"]},
+                "bad": {"command": "npx", "args": ["bad-mcp"]},
+            }
+        ),
+    )
+
+    asyncio.run(agent.connect_mcp())
+
+    assert calls == [("bad", "good")]
+    assert agent.mcp_lifecycle.connected is True
+    assert agent.mcp_lifecycle.connected_server_names == {"good"}
+    assert agent.mcp_lifecycle.failed_server_names == {"bad"}
+    assert agent.mcp_lifecycle.connect_failures == 1
+    assert "mcp_good_echo" in agent.tools.tool_names
+
+    clock["now"] = agent.mcp_lifecycle.retry_after
+    asyncio.run(agent.connect_mcp())
+
+    assert calls == [("bad", "good"), ("bad",)]
+    assert agent.mcp_lifecycle.connected_server_names == {"good", "bad"}
+    assert agent.mcp_lifecycle.failed_server_names == set()
+    assert agent.mcp_lifecycle.connect_failures == 0
+    assert agent.mcp_lifecycle.retry_after == 0.0
+    assert {"mcp_good_echo", "mcp_bad_echo"} <= set(agent.tools.tool_names)
+
+
+def test_concurrent_first_connect_waits_for_single_attempt(tmp_path, monkeypatch):
+    async def scenario():
+        started = asyncio.Event()
+        release = asyncio.Event()
+        calls = []
+
+        async def fake_connect(servers, registry, stack):
+            calls.append(tuple(sorted(servers)))
+            started.set()
+            await release.wait()
+            registry.register(DummyTool("mcp_demo_echo"))
+            return _connection_summary(connected=("demo",))
+
+        monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+        agent = _make_agent(
+            tmp_path,
+            ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
+        )
+
+        first = asyncio.create_task(agent.connect_mcp())
+        await started.wait()
+        second = asyncio.create_task(agent.connect_mcp())
+        await asyncio.sleep(0)
+        assert second.done() is False
+
+        release.set()
+        await asyncio.gather(first, second)
+        return agent, calls
+
+    agent, calls = asyncio.run(scenario())
+
+    assert calls == [("demo",)]
+    assert agent.mcp_lifecycle.connected is True
+    assert "mcp_demo_echo" in agent.tools.tool_names
+
+
+def test_connect_mcp_cancellation_cleans_partial_tools_and_stack(tmp_path, monkeypatch):
+    async def scenario():
+        started = asyncio.Event()
+        cleanup_calls = []
+
+        async def fake_connect(servers, registry, stack):
+            async def mark_closed():
+                cleanup_calls.append("closed")
+
+            stack.push_async_callback(mark_closed)
+            registry.register(DummyTool("mcp_demo_echo"))
+            started.set()
+            await asyncio.Future()
+
+        monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+        agent = _make_agent(
+            tmp_path,
+            ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
+        )
+
+        task = asyncio.create_task(agent.connect_mcp())
+        await started.wait()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("MCP connect cancellation must propagate")
+        return agent, task, cleanup_calls
+
+    agent, task, cleanup_calls = asyncio.run(scenario())
+
+    assert task.cancelled() is True
+    assert cleanup_calls == ["closed"]
+    assert agent.mcp_lifecycle.connected is False
+    assert agent.mcp_lifecycle.stack is None
+    assert agent.mcp_lifecycle.connect_failures == 0
+    assert "mcp_demo_echo" not in agent.tools.tool_names
+
+
+def test_process_saves_input_before_connecting_mcp_and_calling_llm(tmp_path):
     async def scenario():
         agent = _make_agent(tmp_path)
         order = []
 
         async def fake_connect_mcp():
             order.append("connect")
-            assert agent.storage.saved == []
+            assert [(role, content) for _, role, content, *_ in agent.storage.saved] == [
+                ("user", "hello")
+            ]
 
         async def fake_call_llm(session_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
             from opensprite.agent.execution import ExecutionResult
@@ -100,9 +263,6 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
         async def fake_update_profile(session_id):
             order.append("profile")
 
-        async def fake_update_active_task(session_id):
-            order.append("active-task")
-
         async def fake_update_recent_summary(session_id):
             order.append("recent-summary")
 
@@ -111,7 +271,6 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
         agent._maybe_consolidate_memory = fake_consolidate
         agent._maybe_update_recent_summary = fake_update_recent_summary
         agent._maybe_update_user_profile = fake_update_profile
-        agent._maybe_update_active_task = fake_update_active_task
 
         response = await agent.process(
             UserMessage(
@@ -127,7 +286,7 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
     response, order = asyncio.run(scenario())
 
     assert order[:2] == ["connect", "call_llm"]
-    assert set(order[2:]) == {"memory", "recent-summary", "profile", "active-task"}
+    assert set(order[2:]) == {"memory", "recent-summary", "profile"}
     assert response.text == "assistant reply"
 
 
@@ -143,7 +302,7 @@ def test_close_mcp_resets_state_and_closes_stack(tmp_path, monkeypatch):
             self.closed = True
 
     async def fake_connect(servers, registry, stack):
-        return None
+        return _connection_summary(connected=("demo",))
 
     monkeypatch.setattr("opensprite.runs.trace.AsyncExitStack", FakeStack)
     monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
@@ -184,6 +343,7 @@ def test_reload_mcp_from_config_replaces_registered_mcp_tools(tmp_path, monkeypa
     async def fake_connect(servers, registry, stack):
         for server_name in sorted(servers):
             registry.register(DummyTool(f"mcp_{server_name}_echo"))
+        return _connection_summary(connected=tuple(sorted(servers)))
 
     monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
 

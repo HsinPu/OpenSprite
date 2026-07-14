@@ -21,9 +21,16 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 import shlex
+import time
 from typing import Any, Awaitable, Callable
 from . import MessageBus, InboundMessage, OutboundMessage, RunEvent, SessionStatusEvent
-from .message import UserMessage, AssistantMessage
+from .message import (
+    CLIENT_TURN_ID_METADATA_KEY,
+    RESPONSE_KIND_METADATA_KEY,
+    SESSION_COMMAND_RESPONSE_KIND,
+    UserMessage,
+    AssistantMessage,
+)
 from .session_commands import (
     CommandDef,
     first_command_token,
@@ -62,6 +69,9 @@ ResponseHandler = Callable[[AssistantMessage, str, str | None], Awaitable[None]]
 RunEventHandler = Callable[[RunEvent], Awaitable[None]]
 SessionStatusHandler = Callable[[SessionStatusEvent], Awaitable[None]]
 ErrorHandler = Callable[[str, str], Awaitable[None]]
+
+
+_QUEUE_GENERATION_METADATA_KEY = "_opensprite_queue_generation"
 
 
 class MessageQueue:
@@ -106,9 +116,12 @@ class MessageQueue:
         self.messages = messages_config or getattr(agent, "messages", None) or MessagesConfig()
         self.conversations: dict[str, Conversation] = {}  # session_id -> Conversation
         self.running = False
-        # 追蹤所有 active tasks: session_id -> list of tasks
+        # Track in-flight asyncio tasks for cancellation: session_id -> task list.
         self._active_tasks: dict[str, list[asyncio.Task]] = {}
         self._session_tails: dict[str, asyncio.Task] = {}
+        self._session_queue_generations: dict[str, int] = {}
+        self._pending_inbound_counts: dict[tuple[str, int], int] = {}
+        self._session_queue_fenced_at: dict[str, float] = {}
         self._response_handlers: dict[str, ResponseHandler] = {}
         self._run_event_handlers: dict[str, RunEventHandler] = {}
         self._session_status_handlers: dict[str, SessionStatusHandler] = {}
@@ -122,6 +135,56 @@ class MessageQueue:
     def normalize_channel(channel: str | None) -> str:
         """Normalize channel names for routing."""
         return (channel or "unknown").strip() or "unknown"
+
+    def _queue_generation(self, session_id: str) -> int:
+        return self._session_queue_generations.get(session_id, 0)
+
+    def _track_pending_inbound(self, session_id: str, generation: int, delta: int) -> int:
+        key = (session_id, generation)
+        remaining = max(0, self._pending_inbound_counts.get(key, 0) + delta)
+        if remaining:
+            self._pending_inbound_counts[key] = remaining
+        else:
+            self._pending_inbound_counts.pop(key, None)
+        return remaining
+
+    def _fence_session_queue(self, session_id: str) -> int:
+        """Invalidate work queued before this cancellation boundary."""
+        generation = self._queue_generation(session_id)
+        self._session_queue_generations[session_id] = generation + 1
+        self._session_queue_fenced_at[session_id] = time.time()
+        return self._pending_inbound_counts.pop((session_id, generation), 0)
+
+    def _discard_active_task(self, session_id: str, task: asyncio.Task) -> None:
+        """Remove completed task bookkeeping, including the empty session bucket."""
+        tasks = self._active_tasks.get(session_id)
+        if tasks is None:
+            return
+        if task in tasks:
+            tasks.remove(task)
+        if not tasks and self._active_tasks.get(session_id) is tasks:
+            self._active_tasks.pop(session_id, None)
+
+    def _inbound_generation(self, inbound: InboundMessage, session_id: str) -> tuple[int, bool]:
+        """Return the inbound generation and whether a cancellation fence retired it."""
+        raw_generation = inbound.metadata.get(_QUEUE_GENERATION_METADATA_KEY)
+        if raw_generation is not None:
+            try:
+                generation = int(raw_generation)
+            except (TypeError, ValueError):
+                generation = self._queue_generation(session_id)
+            self._track_pending_inbound(session_id, generation, -1)
+            return generation, generation != self._queue_generation(session_id)
+
+        # Direct MessageBus publishers cannot attach our generation. Their
+        # creation timestamp still lets /stop retire messages that predate it.
+        fence_time = self._session_queue_fenced_at.get(session_id)
+        try:
+            created_at = inbound.timestamp.timestamp()
+        except (AttributeError, OSError, OverflowError, ValueError):
+            created_at = time.time()
+        stale = fence_time is not None and created_at <= fence_time
+        return self._queue_generation(session_id), stale
     
     def get_or_create_conversation(self, session_id: str) -> Conversation:
         """
@@ -202,18 +265,6 @@ class MessageQueue:
         return command is not None and command.name == "cron"
 
     @staticmethod
-    def is_task_command(text: str | None) -> bool:
-        """Return whether a message should use immediate task command handling."""
-        command = resolve_session_command(first_command_token(text))
-        return command is not None and command.name == "task"
-
-    @staticmethod
-    def is_goal_command(text: str | None) -> bool:
-        """Return whether a message should set the persistent session goal."""
-        command = resolve_session_command(first_command_token(text))
-        return command is not None and command.name == "goal"
-
-    @staticmethod
     def _command_help_lines(command: CommandDef) -> list[str]:
         """Render one short help block for a single command."""
         lines = [render_command_usage(command), command.description]
@@ -236,8 +287,6 @@ class MessageQueue:
         """Return detailed help text for one command."""
         if command.name == "cron":
             return self._cron_help_text()
-        if command.name == "task":
-            return self._task_help_text()
         if command.name == "curator":
             return self.messages.curator.help_text
         return "\n".join(self._command_help_lines(command))
@@ -288,10 +337,6 @@ class MessageQueue:
     def _cron_help_text(self) -> str:
         """Return the built-in cron command help text."""
         return self.messages.cron.help_text
-
-    def _task_help_text(self) -> str:
-        """Return the built-in task command help text."""
-        return self.messages.task.help_text
 
     def _cron_default_timezone(self) -> str:
         tools_config = getattr(self.agent, "tools_config", None)
@@ -449,209 +494,6 @@ class MessageQueue:
             return self.messages.cron.job_not_found.format(job_id=job_id)
 
         return self._cron_help_text()
-
-    @staticmethod
-    def _parse_task_command(text: str | None) -> tuple[str, list[str]]:
-        """Parse the task command into an action and remaining args."""
-        try:
-            parts = shlex.split((text or "").strip())
-        except ValueError:
-            return "error", []
-        if not parts:
-            return "help", []
-        args = parts[1:]
-        if not args:
-            return "help", []
-        return args[0].lower(), args[1:]
-
-    async def _handle_task_command(self, session_id: str, text: str | None) -> str:
-        """Handle immediate task management commands for the active session."""
-        action, args = self._parse_task_command(text)
-        if action == "error":
-            return self._task_help_text()
-        if action in {"help", "--help", "-h"}:
-            return self._task_help_text()
-
-        show_task = getattr(self.agent, "show_active_task", None)
-        show_task_full = getattr(self.agent, "show_active_task_full", None)
-        show_history = getattr(self.agent, "show_active_task_history", None)
-        set_task = getattr(self.agent, "set_active_task_from_text", None)
-        mark_status = getattr(self.agent, "mark_active_task_status", None)
-        reset_task = getattr(self.agent, "reset_active_task", None)
-        activate_task = getattr(self.agent, "activate_active_task", None)
-        block_task = getattr(self.agent, "block_active_task", None)
-        wait_task = getattr(self.agent, "wait_on_active_task", None)
-        reopen_task = getattr(self.agent, "reopen_active_task", None)
-        current_step_task = getattr(self.agent, "set_active_task_current_step", None)
-        complete_step_task = getattr(self.agent, "complete_active_task_step", None)
-        next_step_task = getattr(self.agent, "set_active_task_next_step", None)
-        advance_task = getattr(self.agent, "advance_active_task", None)
-
-        if action in {"show", "status"}:
-            if not callable(show_task):
-                return self.messages.task.unavailable
-            if args and args[0].lower() in {"full", "raw"}:
-                if not callable(show_task_full):
-                    return self.messages.task.unavailable
-                rendered = await show_task_full(session_id)
-            else:
-                rendered = await show_task(session_id)
-            return rendered or self.messages.task.no_active_task
-
-        if action in {"history", "log"}:
-            if not callable(show_history):
-                return self.messages.task.unavailable
-            limit = 10
-            if args:
-                try:
-                    limit = int(args[0])
-                except ValueError:
-                    return self.messages.task.error_history_limit
-                if limit <= 0:
-                    return self.messages.task.error_history_limit
-            rendered = await show_history(session_id, limit=limit)
-            return rendered or self.messages.task.no_history
-
-        if action in {"reset", "clear"}:
-            if not callable(show_task) or not callable(reset_task):
-                return self.messages.task.unavailable
-            rendered = await show_task(session_id)
-            if not rendered:
-                return self.messages.task.no_active_task
-            await reset_task(session_id)
-            return self.messages.task.reset_done
-
-        if action == "done":
-            if not callable(mark_status):
-                return self.messages.task.unavailable
-            rendered = await mark_status(session_id, "done")
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.marked_done}\n\n{rendered}"
-
-        if action in {"activate", "resume"}:
-            if not callable(activate_task):
-                return self.messages.task.unavailable
-            rendered = await activate_task(session_id)
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.marked_active}\n\n{rendered}"
-
-        if action == "reopen":
-            if not callable(reopen_task):
-                return self.messages.task.unavailable
-            rendered = await reopen_task(session_id)
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.reopened}\n\n{rendered}"
-
-        if action in {"cancel", "cancelled"}:
-            if not callable(mark_status):
-                return self.messages.task.unavailable
-            rendered = await mark_status(session_id, "cancelled")
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.marked_cancelled}\n\n{rendered}"
-
-        if action == "block":
-            if not callable(block_task):
-                return self.messages.task.unavailable
-            reason = " ".join(args).strip()
-            if not reason:
-                return self.messages.task.error_block_usage
-            rendered = await block_task(session_id, reason)
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.marked_blocked}\n\n{rendered}"
-
-        if action == "wait":
-            if not callable(wait_task):
-                return self.messages.task.unavailable
-            question = " ".join(args).strip()
-            if not question:
-                return self.messages.task.error_wait_usage
-            rendered = await wait_task(session_id, question)
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.marked_waiting}\n\n{rendered}"
-
-        if action == "step":
-            if not callable(current_step_task):
-                return self.messages.task.unavailable
-            step_text = " ".join(args).strip()
-            if not step_text:
-                return self.messages.task.error_step_usage
-            rendered = await current_step_task(session_id, step_text)
-            if not rendered:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.updated_current_step}\n\n{rendered}"
-
-        if action == "complete":
-            if not callable(complete_step_task):
-                return self.messages.task.unavailable
-            next_step_override = " ".join(args).strip() or None
-            rendered = await complete_step_task(session_id, next_step_override)
-            if rendered is None:
-                return self.messages.task.no_active_task
-            return f"{self.messages.task.completed_current_step}\n\n{rendered}"
-
-        if action == "next":
-            if args:
-                if not callable(next_step_task):
-                    return self.messages.task.unavailable
-                step_text = " ".join(args).strip()
-                rendered = await next_step_task(session_id, step_text)
-                if not rendered:
-                    return self.messages.task.no_active_task
-                return f"{self.messages.task.updated_next_step}\n\n{rendered}"
-            if not callable(advance_task):
-                return self.messages.task.unavailable
-            rendered = await advance_task(session_id)
-            if rendered is None:
-                if not callable(show_task):
-                    return self.messages.task.unavailable
-                current = await show_task(session_id)
-                if current is None:
-                    return self.messages.task.no_active_task
-                return self.messages.task.no_next_step
-            return f"{self.messages.task.advanced_to_next_step}\n\n{rendered}"
-
-        if action == "set":
-            if not callable(set_task):
-                return self.messages.task.unavailable
-            task_text = " ".join(args).strip()
-            if not task_text:
-                return self.messages.task.error_set_usage
-            rendered = await set_task(session_id, task_text)
-            if not rendered:
-                return self.messages.task.error_set_usage
-            return f"{self.messages.task.set_done}\n\n{rendered}"
-
-        return self._task_help_text()
-
-    @staticmethod
-    def _parse_goal_command(text: str | None) -> tuple[str, bool]:
-        """Parse `/goal <objective>` into a user objective."""
-        try:
-            parts = shlex.split((text or "").strip())
-        except ValueError:
-            return "", False
-        if len(parts) < 2:
-            return "", True
-        return " ".join(parts[1:]).strip(), True
-
-    async def _handle_goal_command(self, session_id: str, text: str | None) -> str:
-        """Handle persistent goal setup without invoking the LLM loop."""
-        goal_text, parsed = self._parse_goal_command(text)
-        if not parsed or not goal_text:
-            return "Error: goal objective is required. Usage: /goal <objective>"
-        set_goal = getattr(self.agent, "set_goal_from_text", None)
-        if not callable(set_goal):
-            return self.messages.task.unavailable
-        rendered = await set_goal(session_id, goal_text)
-        if not rendered:
-            return "Error: goal objective is required. Usage: /goal <objective>"
-        return f"已設定目前目標。\n\n{rendered}"
 
     @staticmethod
     def _parse_curator_command(text: str | None) -> tuple[str, list[str]]:
@@ -813,6 +655,7 @@ class MessageQueue:
         external_chat_id: str,
         session_id: str,
         cancelled: int,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Publish the acknowledgement for an immediate stop command."""
         content = self.messages.queue.stop_cancelled if cancelled > 0 else self.messages.queue.stop_idle
@@ -822,6 +665,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
+                metadata=self._session_command_response_metadata(metadata),
             )
         )
 
@@ -832,6 +676,7 @@ class MessageQueue:
         external_chat_id: str,
         session_id: str,
         cancelled: int,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Publish the acknowledgement for an immediate reset command."""
         content = (
@@ -845,6 +690,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
+                metadata=self._session_command_response_metadata(metadata),
             )
         )
 
@@ -855,6 +701,7 @@ class MessageQueue:
         external_chat_id: str,
         session_id: str,
         content: str,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Publish one immediate command response without entering agent history."""
         await self.bus.publish_outbound(
@@ -863,8 +710,17 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
+                metadata=self._session_command_response_metadata(metadata),
             )
         )
+
+    @staticmethod
+    def _session_command_response_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+        client_turn_id = str((metadata or {}).get(CLIENT_TURN_ID_METADATA_KEY) or "").strip()
+        response_metadata = {RESPONSE_KIND_METADATA_KEY: SESSION_COMMAND_RESPONSE_KIND}
+        if client_turn_id:
+            response_metadata[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+        return response_metadata
 
     async def _dispatch_session_command(
         self,
@@ -874,6 +730,7 @@ class MessageQueue:
         external_chat_id: str,
         session_id: str,
         text: str | None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Run one known session command immediately and publish its response."""
         if command.name == "stop":
@@ -883,6 +740,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 cancelled=cancelled,
+                metadata=metadata,
             )
             return
 
@@ -894,6 +752,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 cancelled=cancelled,
+                metadata=metadata,
             )
             return
 
@@ -903,6 +762,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=self._handle_help_command(text),
+                metadata=metadata,
             )
             return
 
@@ -913,26 +773,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=response_text,
-            )
-            return
-
-        if command.name == "task":
-            response_text = await self._handle_task_command(session_id, text)
-            await self._publish_text_response(
-                channel=channel,
-                external_chat_id=external_chat_id,
-                session_id=session_id,
-                content=response_text,
-            )
-            return
-
-        if command.name == "goal":
-            response_text = await self._handle_goal_command(session_id, text)
-            await self._publish_text_response(
-                channel=channel,
-                external_chat_id=external_chat_id,
-                session_id=session_id,
-                content=response_text,
+                metadata=metadata,
             )
             return
 
@@ -948,6 +789,7 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=response_text,
+                metadata=metadata,
             )
             return
 
@@ -1043,9 +885,12 @@ class MessageQueue:
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 text=user_message.text,
+                metadata=metadata,
             )
             return
 
+        generation = self._queue_generation(session_id)
+        metadata[_QUEUE_GENERATION_METADATA_KEY] = generation
         inbound = InboundMessage(
             channel=channel,
             sender_id=user_message.sender_id or user_message.sender or "unknown",
@@ -1059,7 +904,12 @@ class MessageQueue:
             metadata=metadata,
             raw=user_message.raw,
         )
-        await self.bus.publish_inbound(inbound)
+        self._track_pending_inbound(session_id, generation, 1)
+        try:
+            await self.bus.publish_inbound(inbound)
+        except BaseException:
+            self._track_pending_inbound(session_id, generation, -1)
+            raise
     
     async def enqueue_raw(
         self,
@@ -1111,6 +961,7 @@ class MessageQueue:
         external_chat_id = inbound.external_chat_id
         session_id = inbound.session_id or self.build_session_id(inbound.channel, external_chat_id)
         metadata = dict(inbound.metadata)
+        metadata.pop(_QUEUE_GENERATION_METADATA_KEY, None)
         suppress_outbound = bool(metadata.pop("_suppress_outbound", False))
         await self._set_session_status(
             session_id,
@@ -1146,19 +997,25 @@ class MessageQueue:
             
             # 放到 outbound queue（而不是直接發送）
             if not suppress_outbound:
+                response_metadata = dict(response.metadata or {})
+                client_turn_id = str(metadata.get(CLIENT_TURN_ID_METADATA_KEY) or "").strip()
+                if client_turn_id:
+                    response_metadata.setdefault(CLIENT_TURN_ID_METADATA_KEY, client_turn_id)
                 outbound = OutboundMessage(
                     channel=response_channel,
                     external_chat_id=response.external_chat_id or external_chat_id,
                     session_id=response.session_id or session_id,
                     content=response.text,
-                    metadata=dict(response.metadata or {}),
+                    metadata=response_metadata,
                     raw=response.raw,
                 )
                 await self.bus.publish_outbound(outbound)
                 
         except asyncio.CancelledError:
-            # Task 被取消時優雅退出
-            pass
+            # Preserve cancellation on the session task so callers can
+            # distinguish a real cancellation from a late, already-committed
+            # run that completed normally.
+            raise
         except Exception as e:
             logger.exception(f"[{session_id}] 處理訊息時發生錯誤: {e}")
             # 發送錯誤訊息到 outbound
@@ -1166,7 +1023,12 @@ class MessageQueue:
                 channel=inbound.channel,
                 external_chat_id=external_chat_id,
                 session_id=session_id,
-                content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}"
+                content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}",
+                metadata={
+                    CLIENT_TURN_ID_METADATA_KEY: metadata[CLIENT_TURN_ID_METADATA_KEY]
+                }
+                if metadata.get(CLIENT_TURN_ID_METADATA_KEY)
+                else {},
             )
             await self.bus.publish_outbound(outbound)
             error_handler = self._error_handlers.get(self.normalize_channel(inbound.channel))
@@ -1180,8 +1042,11 @@ class MessageQueue:
         inbound: InboundMessage,
         session_id: str,
         previous_task: asyncio.Task | None,
+        generation: int,
     ) -> None:
         """Serialize processing within one session while keeping sessions concurrent."""
+        if generation != self._queue_generation(session_id):
+            return
         if previous_task is not None:
             try:
                 await previous_task
@@ -1190,6 +1055,8 @@ class MessageQueue:
             except Exception as exc:
                 logger.warning("Previous session task failed before continuing session {}: {}", session_id, exc)
 
+        if generation != self._queue_generation(session_id):
+            return
         await self._process_message(inbound)
     
     async def _consume_outbound(self) -> None:
@@ -1293,6 +1160,9 @@ class MessageQueue:
                     continue
                 
                 session_id = inbound.session_id or self.build_session_id(inbound.channel, inbound.external_chat_id)
+                generation, stale = self._inbound_generation(inbound, session_id)
+                if stale:
+                    continue
 
                 previous_task = self._session_tails.get(session_id)
                 if previous_task is not None and not previous_task.done():
@@ -1304,7 +1174,9 @@ class MessageQueue:
                             "external_chat_id": inbound.external_chat_id,
                         },
                     )
-                task = asyncio.create_task(self._run_session_message(inbound, session_id, previous_task))
+                task = asyncio.create_task(
+                    self._run_session_message(inbound, session_id, previous_task, generation)
+                )
                 self._session_tails[session_id] = task
 
                 # 追蹤這個 session_id 的 tasks
@@ -1314,8 +1186,7 @@ class MessageQueue:
                 
                 # Task 完成後自動清理
                 task.add_done_callback(
-                    lambda t, cid=session_id: self._active_tasks.get(cid, []).remove(t)
-                    if t in self._active_tasks.get(cid, []) else None
+                    lambda t, cid=session_id: self._discard_active_task(cid, t)
                 )
                 task.add_done_callback(
                     lambda t, cid=session_id: self._session_tails.pop(cid, None)
@@ -1339,38 +1210,48 @@ class MessageQueue:
             int: 被取消的任務數量
         """
         session_id = self.resolve_session_id(session_or_external_chat_id, channel)
+        invalidated_pending = self._fence_session_queue(session_id)
         active_run = getattr(self.agent, "get_active_run", lambda _session_id: None)(session_id)
         request_run_cancel = getattr(self.agent, "request_run_cancel", None)
+        tasks = self._active_tasks.pop(session_id, [])
+        # Keep the old tail as a cancellation barrier. A message enqueued in the
+        # fresh generation must not enter agent.process() until the cancelled
+        # turn has finished unwinding and released its active run.
+        cancellable_tasks = [task for task in tasks if not task.done()]
+        if invalidated_pending or cancellable_tasks or active_run is not None:
+            await self._set_session_status(session_id, "cancelling")
+
+        cooperative_cancel_requested = False
         if active_run is not None and callable(request_run_cancel):
             event_channel, external_chat_id = (
                 session_id.split(":", 1) if ":" in session_id else (channel or "unknown", session_id)
             )
             try:
-                await request_run_cancel(
+                cooperative_cancel_requested = bool(await request_run_cancel(
                     session_id,
                     active_run.run_id,
                     channel=event_channel,
                     external_chat_id=external_chat_id,
-                )
+                ))
             except Exception as exc:
                 logger.warning("[{}] run.cancel.request.failed | run_id={} error={}", session_id, active_run.run_id, exc)
 
-        tasks = self._active_tasks.pop(session_id, [])
-        cancelled = 0
-        cancellable_tasks = [task for task in tasks if not task.done()]
+        # Signal every task before yielding. Awaiting tasks one by one lets a
+        # later session tail enter process() after its predecessor exits.
+        for task in cancellable_tasks:
+            task.cancel()
         if cancellable_tasks:
-            await self._set_session_status(session_id, "cancelling")
-        for task in tasks:
-            if not task.done():
-                task.cancel()
-                cancelled += 1
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-        if cancelled == 0:
+            results = await asyncio.gather(*cancellable_tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+                    logger.warning("[{}] cancelled session task exited with error: {}", session_id, result)
+
+        affected = invalidated_pending + len(cancellable_tasks)
+        if cooperative_cancel_requested:
+            affected = max(1, affected)
+        if not any(not task.done() for task in self._active_tasks.get(session_id, [])):
             await self._set_session_status(session_id, "idle")
-        return cancelled
+        return affected
     
     async def cancel_all(self) -> int:
         """
@@ -1379,11 +1260,11 @@ class MessageQueue:
         回傳：
             int: 被取消的任務數量
         """
-        total = 0
-        session_ids = list(self._active_tasks.keys())
-        for session_id in session_ids:
-            total += await self.cancel_session(session_id)
-        return total
+        session_ids = set(self._active_tasks)
+        session_ids.update(session_id for session_id, _generation in self._pending_inbound_counts)
+        if not session_ids:
+            return 0
+        return sum(await asyncio.gather(*(self.cancel_session(session_id) for session_id in session_ids)))
     
     async def stop(self) -> None:
         """停止處理並取消所有進行中的任務"""

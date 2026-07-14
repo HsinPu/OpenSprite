@@ -36,7 +36,7 @@ export function runStatusColor(status: string) {
   if (["running", "thinking", "tool_running", "streaming"].includes(status)) {
     return "blue";
   }
-  if (["cancelled", "cancelling"].includes(status)) {
+  if (["cancelled", "cancelling", "stopped"].includes(status)) {
     return "orange";
   }
   return "default";

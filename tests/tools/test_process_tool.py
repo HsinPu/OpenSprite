@@ -27,6 +27,21 @@ def _extract_session_id(result: str) -> str:
     raise AssertionError(f"Session ID missing from result: {result}")
 
 
+async def _wait_for_session_exit(
+    manager: BackgroundProcessManager,
+    session_id: str,
+    *,
+    timeout: float = 3.0,
+):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        session = await manager.get_session(session_id)
+        if session is not None and session.state == "exited":
+            return session
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"background session did not exit within {timeout}s: {session_id}")
+
+
 def test_process_poll_missing_session_returns_structured_error():
     async def run() -> None:
         process_tool = ProcessTool(BackgroundProcessManager())
@@ -174,7 +189,7 @@ def test_process_inspect_returns_metadata_without_output_sections(tmp_path):
             timeout_seconds=5,
         )
         session_id = _extract_session_id(started)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, session_id)
 
         inspected = await process_tool.execute(action="inspect", session_id=session_id)
 
@@ -213,7 +228,7 @@ def test_process_tool_shows_run_ownership_metadata(tmp_path):
             timeout_seconds=5,
         )
         session_id = _extract_session_id(started)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, session_id)
 
         listed = await process_tool.execute(action="list")
         inspected = await process_tool.execute(action="inspect", session_id=session_id)
@@ -243,7 +258,7 @@ def test_process_log_and_clear_handle_exited_session(tmp_path):
         )
 
         session_id = _extract_session_id(started)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, session_id)
 
         logged = await process_tool.execute(action="log", session_id=session_id)
         assert "Started: " in logged
@@ -288,7 +303,7 @@ def test_background_session_exit_notifier_runs_on_natural_completion(tmp_path):
             timeout_seconds=5,
         )
         session_id = _extract_session_id(started)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, session_id)
 
         assert notifications == [(session_id, "exit", "notify done")]
 
@@ -392,12 +407,12 @@ def test_background_session_quiet_success_does_not_notify_by_default(tmp_path):
             background_notification_factory=lambda: notify,
         )
 
-        await exec_tool.execute(
+        started = await exec_tool.execute(
             command=_python_shell_command("pass"),
             background=True,
             timeout_seconds=5,
         )
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, _extract_session_id(started))
 
         assert notifications == []
 
@@ -426,7 +441,7 @@ def test_background_session_quiet_success_can_notify_when_enabled(tmp_path):
             notify_on_exit_empty_success=True,
         )
         session_id = _extract_session_id(started)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, session_id)
 
         assert notifications == [(session_id, "exit", 0)]
 
@@ -448,12 +463,12 @@ def test_background_session_non_success_notifies_even_without_output(tmp_path):
             background_notification_factory=lambda: notify,
         )
 
-        await exec_tool.execute(
+        started = await exec_tool.execute(
             command=_python_shell_command("import sys; sys.exit(2)"),
             background=True,
             timeout_seconds=5,
         )
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, _extract_session_id(started))
 
         assert notifications == [("exit", 2)]
 
@@ -510,7 +525,7 @@ def test_process_clear_without_session_id_removes_only_exited_sessions(tmp_path)
 
         finished_id = _extract_session_id(finished)
         running_id = _extract_session_id(running)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, finished_id)
 
         cleared = await process_tool.execute(action="clear")
         assert cleared == "Cleared 1 exited background session(s)."
@@ -535,7 +550,7 @@ def test_background_manager_prunes_old_exited_sessions(tmp_path):
             timeout_seconds=5,
         )
         first_id = _extract_session_id(first)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, first_id)
 
         second = await exec_tool.execute(
             command=_python_shell_command("print('second', flush=True)"),
@@ -543,7 +558,7 @@ def test_background_manager_prunes_old_exited_sessions(tmp_path):
             timeout_seconds=5,
         )
         second_id = _extract_session_id(second)
-        await asyncio.sleep(0.2)
+        await _wait_for_session_exit(manager, second_id)
 
         sessions = await manager.list_sessions()
         session_ids = [session.session_id for session in sessions]
@@ -577,6 +592,60 @@ def test_exec_cancellation_terminates_foreground_process(tmp_path, monkeypatch):
             pass
 
         assert terminated_pids
+
+    asyncio.run(run())
+
+
+def test_repeated_exec_cancellation_keeps_process_cleanup_running(tmp_path, monkeypatch):
+    async def run() -> None:
+        process_waiting = asyncio.Event()
+        process_exited = asyncio.Event()
+        cleanup_entered = asyncio.Event()
+        cleanup_release = asyncio.Event()
+        cleanup_finished = asyncio.Event()
+
+        class FakeProcess:
+            pid = 777
+            returncode = None
+
+            async def wait(self):
+                process_waiting.set()
+                await process_exited.wait()
+                return self.returncode
+
+        process = FakeProcess()
+
+        async def fake_start_shell_process(command, *, cwd, output_chunks):
+            return process, []
+
+        async def blocking_terminate(process_to_stop, *, wait_timeout=5):
+            assert process_to_stop is process
+            cleanup_entered.set()
+            await cleanup_release.wait()
+            process.returncode = -9
+            process_exited.set()
+            cleanup_finished.set()
+
+        monkeypatch.setattr(shell_module, "start_shell_process", fake_start_shell_process)
+        monkeypatch.setattr(shell_module, "terminate_process_tree", blocking_terminate)
+
+        tool = ExecTool(workspace=Path(tmp_path), timeout=30)
+        task = asyncio.create_task(tool.execute(command="echo simulated", timeout_seconds=30))
+        await asyncio.wait_for(process_waiting.wait(), timeout=1)
+
+        task.cancel()
+        await asyncio.wait_for(cleanup_entered.wait(), timeout=1)
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=1)
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("CancelledError was not raised")
+
+        assert cleanup_finished.is_set() is False
+        cleanup_release.set()
+        await asyncio.wait_for(cleanup_finished.wait(), timeout=1)
 
     asyncio.run(run())
 

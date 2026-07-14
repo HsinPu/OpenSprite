@@ -9,7 +9,6 @@ from opensprite.context.paths import (
     get_session_skills_dir,
     get_session_workspace,
 )
-from opensprite.documents.active_task import create_active_task_store
 from opensprite.documents.user_profile import create_user_profile_store
 from opensprite.documents.recent_summary import RecentSummaryStore
 from opensprite.storage.base import StoredMessage
@@ -49,14 +48,6 @@ def test_reset_history_only_clears_target_session(tmp_path):
         summary_store.set_processed_index("telegram:user-b", 7)
         agent.memory.write("telegram:user-a", "memory a")
         agent.memory.write("telegram:user-b", "memory b")
-        task_a = create_active_task_store(agent.app_home, "telegram:user-a", workspace_root=agent.tool_workspace)
-        task_b = create_active_task_store(agent.app_home, "telegram:user-b", workspace_root=agent.tool_workspace)
-        task_a.write_managed_block(
-            "- Status: active\n- Goal: Fix chat A\n- Deliverable: patch\n- Definition of done:\n  - done\n- Constraints:\n  - none\n- Assumptions:\n  - none\n- Plan:\n  1. inspect\n- Current step: 1. inspect\n- Next step: 1. inspect\n- Completed steps:\n  - none\n- Open questions:\n  - none"
-        )
-        task_b.write_managed_block(
-            "- Status: active\n- Goal: Keep chat B\n- Deliverable: notes\n- Definition of done:\n  - done\n- Constraints:\n  - none\n- Assumptions:\n  - none\n- Plan:\n  1. inspect\n- Current step: 1. inspect\n- Next step: 1. inspect\n- Completed steps:\n  - none\n- Open questions:\n  - none"
-        )
         profile_a = create_user_profile_store(agent.app_home, "telegram:user-a", workspace_root=agent.tool_workspace)
         profile_b = create_user_profile_store(agent.app_home, "telegram:user-b", workspace_root=agent.tool_workspace)
         profile_a.write_managed_block("- likes pytest")
@@ -85,8 +76,6 @@ def test_reset_history_only_clears_target_session(tmp_path):
             "messages_b": messages_b,
             "cleared": search_store.cleared,
             "summary_store": summary_store,
-            "task_a": task_a,
-            "task_b": task_b,
             "workspace_a_exists": workspace_a_exists,
             "workspace_b_exists": workspace_b_exists,
             "memory_a": get_session_memory_file("telegram:user-a", app_home=agent.app_home, workspace_root=agent.tool_workspace),

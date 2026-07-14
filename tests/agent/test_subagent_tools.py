@@ -11,7 +11,7 @@ from opensprite.agent.subagent_run import (
     build_subagent_tool_registry,
 )
 from opensprite.subagent_prompts.profiles import RESEARCH_PROFILE
-from opensprite.tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
+from opensprite.tool_names import WEB_SOURCE_TOOL_NAMES
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
@@ -102,7 +102,7 @@ def test_subagent_group_summary_uses_shared_workflow_status_helpers():
 
 
 def test_research_subagent_profile_uses_shared_web_tool_policy():
-    assert WEB_SOURCE_EVIDENCE_TOOLS.issubset(RESEARCH_PROFILE.allowed_tools)
+    assert WEB_SOURCE_TOOL_NAMES.issubset(RESEARCH_PROFILE.allowed_tools)
     assert "browser_snapshot" not in RESEARCH_PROFILE.allowed_tools
 
 
@@ -199,7 +199,6 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     registry.register(DummyTool("configure_mcp"))
     registry.register(DummyTool("configure_skill"))
     registry.register(DummyTool("configure_subagent"))
-    registry.register(DummyTool("task_update"))
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
         provider=provider,
@@ -234,7 +233,6 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     assert "configure_mcp" not in tool_names
     assert "configure_skill" not in tool_names
     assert "configure_subagent" not in tool_names
-    assert "task_update" not in tool_names
     child_session_id = next(session_id for session_id in storage.messages if ":subagent:task_" in session_id)
     assert child_session_id.startswith("telegram:user-a:subagent:task_")
     assert storage.saved[0][0:4] == (child_session_id, "user", "do the task", None)

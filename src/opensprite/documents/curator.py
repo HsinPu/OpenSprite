@@ -25,7 +25,6 @@ from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
 from ..utils.log import logger
-from .active_task import ActiveTaskConsolidator
 from .coalescing_scheduler import CoalescingTaskScheduler
 from .curator_jobs import (
     CuratorJob,
@@ -259,22 +258,6 @@ class RecentSummaryUpdateService:
             logger.error(f"[{session_id}] recent_summary.update.error | error={exc}")
 
 
-class ActiveTaskUpdateService:
-    """Wrap optional ACTIVE_TASK.md updates behind a stable interface."""
-
-    def __init__(self, consolidator: ActiveTaskConsolidator | None = None):
-        self.consolidator = consolidator
-
-    async def maybe_update(self, session_id: str) -> None:
-        if self.consolidator is None:
-            return
-
-        try:
-            await self.consolidator.maybe_update(session_id)
-        except Exception as exc:
-            logger.error(f"[{session_id}] active_task.update.error | error={exc}")
-
-
 class CuratorService:
     """Coordinate background maintenance and skill review for one session."""
 
@@ -284,13 +267,11 @@ class CuratorService:
         maybe_consolidate_memory: SessionRunner,
         maybe_update_recent_summary: SessionRunner,
         maybe_update_user_profile: SessionRunner,
-        maybe_update_active_task: SessionRunner,
         run_skill_review: SessionRunner,
         should_run_skill_review: SkillReviewDecider,
         read_memory_snapshot: SnapshotReader,
         read_recent_summary_snapshot: SnapshotReader,
         read_user_profile_snapshot: SnapshotReader,
-        read_active_task_snapshot: SnapshotReader,
         read_skill_snapshot: SnapshotReader,
         emit_run_event: RunEventEmitter,
         record_learning: LearningRecorder | None = None,
@@ -301,11 +282,9 @@ class CuratorService:
             maybe_consolidate_memory=maybe_consolidate_memory,
             maybe_update_recent_summary=maybe_update_recent_summary,
             maybe_update_user_profile=maybe_update_user_profile,
-            maybe_update_active_task=maybe_update_active_task,
             read_memory_snapshot=read_memory_snapshot,
             read_recent_summary_snapshot=read_recent_summary_snapshot,
             read_user_profile_snapshot=read_user_profile_snapshot,
-            read_active_task_snapshot=read_active_task_snapshot,
         )
         self._skill_review_runner = run_skill_review
         self._should_run_skill_review = should_run_skill_review
@@ -649,7 +628,6 @@ class CuratorService:
                 "memory": "Updated session memory.",
                 "recent_summary": "Updated recent summary.",
                 "user_profile": "Updated session user profile.",
-                "active_task": "Updated active task.",
             }.get(job_key, f"Updated {job_key}.")
             self._record_learning(
                 request.session_id,

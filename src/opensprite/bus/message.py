@@ -13,6 +13,11 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
+CLIENT_TURN_ID_METADATA_KEY = "client_turn_id"
+RESPONSE_KIND_METADATA_KEY = "response_kind"
+SESSION_COMMAND_RESPONSE_KIND = "session_command"
+
+
 @dataclass
 class UserMessage:
     """

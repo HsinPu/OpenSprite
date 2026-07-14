@@ -2,17 +2,15 @@ import { RunHistorySelector } from "./runHistorySelector";
 import { RunSummaryCard } from "./runSummaryCard";
 import { RunTimeline } from "./runTimeline";
 import { RunTraceViewer } from "./runTraceViewer";
-import { WorkStateCard } from "./workStateCard";
 import type { RunSummaryCopy } from "./runSummaryCard";
 import type { RunTimelineCopy } from "./runTimeline";
 import type { RunTraceCopy } from "./runTraceViewer";
 import type { RunTimelineEventView, RunViewState } from "../composables/chatClientRunHelpers";
-import type { TraceFileChangeView, WorkStateView } from "../composables/runTraceNormalizers";
+import type { TraceFileChangeView } from "../composables/runTraceNormalizers";
 
 type ValueRef<T> = { value: T };
 
 export type RunInspectorStateView = {
-  showWorkState: boolean;
   showRunHistory: boolean;
   showRunSummary: boolean;
   showRunTimeline: boolean;
@@ -35,13 +33,6 @@ export type RunInspectorCopy = RunSummaryCopy &
     runSummary: RunSummaryCopy["runSummary"] & {
       objective?: string;
     };
-    workState?: {
-      currentTask?: string;
-      continue?: string;
-      continuePrompt?: string;
-      verify?: string;
-      verifyPrompt?: string;
-    };
   };
 
 export type RunInspectorClient = {
@@ -51,11 +42,8 @@ export type RunInspectorClient = {
   currentRuns: ValueRef<RunViewState[]>;
   currentRunsLoading: ValueRef<boolean>;
   currentRunsError: ValueRef<string>;
-  currentWorkState: ValueRef<WorkStateView | null>;
   currentRunTimeline: ValueRef<RunTimelineEventView[]>;
   selectRun: (runId: string) => void;
-  resumeFollowUp: (prompt: string) => void;
-  runVerification: (prompt: string) => void;
   cleanupWorktreeSandbox: (run: RunViewState) => void;
   cancelRun: (run: RunViewState) => void;
   revertRunFileChange: (run: RunViewState, change: TraceFileChangeView) => void;
@@ -69,11 +57,6 @@ export function RunInspector({ client }: { client: RunInspectorClient }) {
   return (
     <div className="trace-sidebar__body">
       <RunHistorySelector client={client} run={run} runs={runs} />
-
-      {client.state.showWorkState && client.currentWorkState.value ? (
-        <WorkStateCard client={client} workState={client.currentWorkState.value} />
-      ) : null}
-
       <RunDetailsPanel client={client} run={run} />
     </div>
   );

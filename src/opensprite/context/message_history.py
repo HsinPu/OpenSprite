@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable
 
 from ..llms import CHAT_ROLE_ASSISTANT, CHAT_ROLE_TOOL, CHAT_ROLE_USER, ChatMessage
 from ..runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
-from ..search.base import SearchHit, SearchStore
+from ..search.base import SearchStore
 from ..storage import StorageProvider, StoredMessage
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
@@ -22,9 +22,6 @@ from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrieval
 from ..utils.log import logger
 
 HISTORY_SEARCH_TOOL_NAME = "search_history"
-HISTORY_RESULT_COUNT_METADATA_KEYS = ("result_count", "hit_count", "hits", "count")
-HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON = "assistant did not provide enough recalled items"
-TASK_CONTEXT_HISTORY_RETRIEVAL_TYPE = "history_retrieval"
 LEARNING_LEDGER_SCHEMA_VERSION = 1
 LEARNING_LEDGER_LIMIT = 200
 LEARNING_RELEVANT_LIMIT = 4
@@ -34,13 +31,11 @@ _KIND_LABELS = {
     "memory": "Memory",
     "user_profile": "User profile",
     "recent_summary": "Recent summary",
-    "active_task": "Active task",
 }
 _TARGET_LABELS = {
     "memory": "Session memory",
     "user_profile": "Session profile",
     "recent_summary": "Recent summary",
-    "active_task": "Active task",
 }
 
 
@@ -66,15 +61,6 @@ class PromptMemoryDocument:
         if not content:
             return ""
         return f"# {self.title}\n\n{PromptMemoryDocumentService.size_hint(content)}\n\n{content}"
-
-
-@dataclass(frozen=True)
-class TaskContextRetrievalResult:
-    """Prompt context selected from prior chat by task-context resolution."""
-
-    context: str
-    should_retrieve: bool
-    decision_source: str
 
 
 class PromptMemoryDocumentService:
@@ -445,60 +431,6 @@ class RelevantLearningContextService:
         return self.learning_ledger.build_relevant_context(session_id, current_message)
 
 
-def is_history_retrieval_tool_name(tool_name: str | None) -> bool:
-    """Return whether a tool name represents chat-history retrieval."""
-    return str(tool_name or "").strip() == HISTORY_SEARCH_TOOL_NAME
-
-
-def history_retrieval_metadata_reports_empty(metadata: dict[str, Any] | None) -> bool:
-    """Return whether search-history metadata explicitly reports zero matches."""
-    if not isinstance(metadata, dict):
-        return False
-    saw_count_field = False
-    for key in HISTORY_RESULT_COUNT_METADATA_KEYS:
-        if key not in metadata:
-            continue
-        value = metadata.get(key)
-        if _metadata_value_has_results(value):
-            return False
-        saw_count_field = True
-    return saw_count_field
-
-
-def history_retrieval_metadata_has_results(metadata: dict[str, Any] | None) -> bool:
-    """Return whether search-history metadata explicitly reports one or more matches."""
-    if not isinstance(metadata, dict):
-        return False
-    return any(
-        _metadata_value_has_results(metadata.get(key))
-        for key in HISTORY_RESULT_COUNT_METADATA_KEYS
-        if key in metadata
-    )
-
-
-def _metadata_value_has_results(value: object) -> bool:
-    if isinstance(value, list):
-        return len(value) > 0
-    return _coerce_int(value, default=0) > 0
-
-
-def _coerce_int(value: object, *, default: int) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped:
-            try:
-                return int(float(stripped))
-            except ValueError:
-                return default
-    return default
-
-
 def _reasoning_details_from_metadata(metadata: dict[str, Any]) -> list[dict[str, Any]] | None:
     details = metadata.get("llm_reasoning_details")
     return details if isinstance(details, list) else None
@@ -720,97 +652,3 @@ class HistoryResetService:
             await self.search_store.clear_session(session_id)
         except Exception as e:
             logger.warning("[{}] Failed to clear search index: {}", session_id, e)
-
-
-class TaskContextRetrievalService:
-    """Fetch compact prior context when the task-context resolver asks for it."""
-
-    def __init__(
-        self,
-        *,
-        search_store: SearchStore | None,
-        history_retrieval_task_type: str = TASK_CONTEXT_HISTORY_RETRIEVAL_TYPE,
-    ):
-        self.search_store = search_store
-        self.history_retrieval_task_type = str(history_retrieval_task_type or "").strip()
-
-    def should_retrieve_from_decision(self, task_context_decision: Any | None) -> bool | None:
-        """Return whether the resolver selected structured prior-chat retrieval."""
-        if task_context_decision is None:
-            return None
-        inherited_task_type = str(getattr(task_context_decision, "inherited_task_type", "") or "").strip()
-        return inherited_task_type == self.history_retrieval_task_type
-
-    async def resolve(
-        self,
-        *,
-        session_id: str,
-        current_message: str,
-        task_context_decision: Any | None = None,
-        should_retrieve: bool | None = None,
-    ) -> TaskContextRetrievalResult:
-        """Return retrieval context plus the resolver-derived decision metadata."""
-        decision = (
-            should_retrieve
-            if should_retrieve is not None
-            else self.should_retrieve_from_decision(task_context_decision)
-        )
-        context = await self.build_context(
-            session_id=session_id,
-            current_message=current_message,
-            should_retrieve=decision,
-        )
-        return TaskContextRetrievalResult(
-            context=context,
-            should_retrieve=bool(decision),
-            decision_source="task_context" if task_context_decision is not None else "none",
-        )
-
-    async def build_context(
-        self,
-        *,
-        session_id: str,
-        current_message: str,
-        should_retrieve: bool | None = None,
-    ) -> str:
-        if self.search_store is None or not bool(should_retrieve):
-            return ""
-
-        history_hits = await self.search_store.search_history(session_id=session_id, query=current_message, limit=3)
-        if not history_hits:
-            return ""
-
-        sections = [
-            "# Proactive Retrieval Context",
-            "The task-context resolver selected prior chat retrieval. Use the snippets below before asking the user to restate information.",
-            "",
-            "## Retrieved History",
-            *self._format_history_hits(history_hits),
-        ]
-        return "\n".join(sections).strip()
-
-    @staticmethod
-    def _format_time(created_at: float) -> str:
-        if not created_at:
-            return "unknown"
-        return datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M")
-
-    @staticmethod
-    def _truncate(text: str, limit: int = 180) -> str:
-        normalized = " ".join(str(text or "").split())
-        if len(normalized) <= limit:
-            return normalized
-        return normalized[: limit - 3] + "..."
-
-    def _format_history_hits(self, hits: list[SearchHit]) -> list[str]:
-        lines: list[str] = []
-        for index, hit in enumerate(hits, start=1):
-            label = hit.role or "message"
-            if hit.tool_name:
-                label = f"{label}:{hit.tool_name}"
-            lines.append(f"{index}. [{label}] {self._format_time(hit.created_at)}")
-            lines.append(f"   {self._truncate(hit.content)}")
-        return lines
-
-
-ProactiveRetrievalService = TaskContextRetrievalService

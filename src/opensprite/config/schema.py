@@ -1,5 +1,6 @@
 """opensprite/config/schema.py - 設定檔定義"""
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -104,7 +105,7 @@ class LLMsConfig(BaseModel):
 
 
 class DocumentLlmConfig(BaseModel):
-    """LLM request options for internal document and planning calls."""
+    """LLM request options for internal document and compaction calls."""
 
     max_tokens: int
 
@@ -132,20 +133,12 @@ class AgentConfig(BaseModel):
     context_overflow_error_markers: list[str] = Field(
         default_factory=lambda: list(DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS)
     )
-    auto_continue_default_budget: int = Field(default=1, ge=0, le=100)
-    auto_continue_long_running_budget: int = Field(default=3, ge=0, le=100)
-    auto_continue_deterministic_action_budget: int = Field(default=4, ge=0, le=100)
     subagent_max_tool_iterations: int = Field(default=100, ge=1, le=100)
-    task_context_llm: DocumentLlmConfig
-    task_objective_llm: DocumentLlmConfig
-    task_planner_llm: DocumentLlmConfig
-    completion_verifier_llm: DocumentLlmConfig
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
     skill_review_enabled: bool
     skill_review_min_tool_calls: int = Field(ge=1)
     skill_review_max_tool_iterations: int = Field(ge=1, le=100)
     skill_review_transcript_messages: int = Field(ge=5, le=500)
-    worktree_sandbox_enabled: bool = False
 
 
 class StorageConfig(BaseModel):
@@ -162,23 +155,28 @@ class ChannelsConfig(BaseModel):
 
 
 class AgentMessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     repeated_invalid_tool_call_fallback: str = (
         "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。\n\n"
         "最後一次工具錯誤：\n{result}"
     )
-    completion_blocker_intro: str = "目前還不能可靠完成這次請求。"
-    completion_blocker_reason_prefix: str = "原因："
-    completion_blocker_detail_header: str = "仍缺的部分："
-    completion_blocker_missing_evidence_header: str = "缺少的證據："
-    completion_blocker_stop_notice: str = "我已停止自動重試，避免用不足資訊硬回答。"
     empty_response_fallback: str = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
     llm_not_configured: str = (
         "尚未設定 LLM，請在 OpenSprite Web UI 的 Settings > Providers / Models 設定後再試。"
     )
     media_saved_ack: str = "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
+    media_persistence_failed: str = (
+        "我收到媒體附件，但無法保存到工作區。請重新上傳或確認附件格式。"
+    )
+    media_persistence_partial_failure: str = (
+        "部分媒體附件已保存，但仍有附件無法保存。請重新上傳失敗的附件。"
+    )
 
 
 class QueueMessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     stop_cancelled: str = "已停止目前這段對話。"
     stop_idle: str = "目前沒有正在執行的對話可停止。"
     reset_done: str = "已重置目前這段對話。"
@@ -186,6 +184,8 @@ class QueueMessagesConfig(BaseModel):
 
 
 class CronMessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     help_text: str = (
         "排程命令:\n"
         "/cron add every <seconds> <message> [--no-deliver]\n"
@@ -232,62 +232,21 @@ class CronMessagesConfig(BaseModel):
     job_not_found_or_enabled: str = "Job {job_id} not found or already enabled"
 
 
-class TaskMessagesConfig(BaseModel):
-    help_text: str = (
-        "任務命令:\n"
-        "/task show [full]\n"
-        "/task history [limit]\n"
-        "/task set <task description>\n"
-        "/task activate\n"
-        "/task reopen\n"
-        "/task block <reason>\n"
-        "/task wait <question>\n"
-        "/task step <current step>\n"
-        "/task complete [next step]\n"
-        "/task next [next step]\n"
-        "/task done\n"
-        "/task cancel\n"
-        "/task reset\n"
-        "/task help"
-    )
-    unavailable: str = "任務追蹤功能目前不可用。"
-    no_active_task: str = "目前沒有進行中的任務。"
-    no_history: str = "目前沒有任務歷程。"
-    set_done: str = "已設定目前任務。"
-    reset_done: str = "已清除目前的任務狀態。"
-    marked_done: str = "已將目前任務標記為完成。"
-    marked_cancelled: str = "已將目前任務標記為取消。"
-    marked_blocked: str = "已將目前任務標記為阻塞。"
-    marked_waiting: str = "已將目前任務標記為等待使用者。"
-    marked_active: str = "已重新啟用目前任務。"
-    reopened: str = "已重新開啟目前任務。"
-    updated_current_step: str = "已更新目前步驟。"
-    updated_next_step: str = "已更新下一步。"
-    advanced_to_next_step: str = "已將下一步提升為目前步驟。"
-    completed_current_step: str = "已完成目前步驟。"
-    progress_continue_current_step: str = "2. execute the highest-value next step toward the goal"
-    progress_verify_current_step: str = "3. verify the result"
-    error_set_usage: str = "Error: task description is required. Usage: /task set <task description>"
-    error_block_usage: str = "Error: reason is required. Usage: /task block <reason>"
-    error_wait_usage: str = "Error: question is required. Usage: /task wait <question>"
-    error_step_usage: str = "Error: current step is required. Usage: /task step <current step>"
-    error_history_limit: str = "Error: limit must be a positive integer. Usage: /task history [limit]"
-    no_next_step: str = "目前沒有可前進的下一步。"
-
-
 class CuratorMessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     help_text: str = (
         "背景整理命令:\n"
         "/curator status\n"
         "/curator history [limit]\n"
-        "/curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]\n"
+        "/curator run [maintenance|skills|memory|recent_summary|user_profile]\n"
         "/curator pause\n"
         "/curator resume\n"
         "/curator help"
     )
     unavailable: str = "背景整理功能目前不可用。"
     error_history_limit: str = "Error: limit must be a positive integer. Usage: /curator history [limit]"
-    error_run_usage: str = "Usage: /curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]"
+    error_run_usage: str = "Usage: /curator run [maintenance|skills|memory|recent_summary|user_profile]"
     invalid_scope: str = "Unknown curator scope: {scope}. Valid scopes: {scopes}"
     run_scheduled: str = "已排入背景整理。"
     run_rerun_scheduled: str = "背景整理目前執行中，已排入下一輪。"
@@ -315,16 +274,66 @@ class CuratorMessagesConfig(BaseModel):
 
 
 class TelegramMessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     empty_message_fallback: str = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
 
 
+_RETIRED_ACTIVE_TASK_PIPE_TOKEN = re.compile(
+    r"(?<![\w.-])active_task[ \t]*\|[ \t]*|\|[ \t]*active_task(?![\w.-])"
+)
+_RETIRED_AGENT_MESSAGE_KEYS = (
+    "completion_blocker_intro",
+    "completion_blocker_reason_prefix",
+    "completion_blocker_detail_header",
+    "completion_blocker_missing_evidence_header",
+    "completion_blocker_stop_notice",
+)
+
+
+def _prune_retired_messages_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Remove retired task messages while preserving current custom sections."""
+    migrated = dict(data)
+    migrated.pop("task", None)
+
+    agent = data.get("agent")
+    if isinstance(agent, dict):
+        migrated_agent = dict(agent)
+        for key in _RETIRED_AGENT_MESSAGE_KEYS:
+            migrated_agent.pop(key, None)
+        if migrated_agent != agent:
+            migrated["agent"] = migrated_agent
+
+    curator = data.get("curator")
+    if isinstance(curator, dict):
+        migrated_curator = dict(curator)
+        for key in ("help_text", "error_run_usage"):
+            value = migrated_curator.get(key)
+            if isinstance(value, str):
+                migrated_value = _RETIRED_ACTIVE_TASK_PIPE_TOKEN.sub("", value)
+                if migrated_value != value:
+                    migrated_curator[key] = migrated_value
+        if migrated_curator != curator:
+            migrated["curator"] = migrated_curator
+
+    return migrated
+
+
 class MessagesConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     agent: AgentMessagesConfig = Field(default_factory=AgentMessagesConfig)
     queue: QueueMessagesConfig = Field(default_factory=QueueMessagesConfig)
     cron: CronMessagesConfig = Field(default_factory=CronMessagesConfig)
-    task: TaskMessagesConfig = Field(default_factory=TaskMessagesConfig)
     curator: CuratorMessagesConfig = Field(default_factory=CuratorMessagesConfig)
     telegram: TelegramMessagesConfig = Field(default_factory=TelegramMessagesConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def prune_retired_sections(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        return _prune_retired_messages_data(data)
 
 
 class LogConfig(BaseModel):
@@ -534,15 +543,6 @@ class RecentSummaryConfig(BaseModel):
     llm: DocumentLlmConfig
 
 
-class ActiveTaskConfig(BaseModel):
-    """Per-chat ACTIVE_TASK.md update configuration."""
-
-    enabled: bool
-    threshold: int
-    lookback_messages: int
-    llm: DocumentLlmConfig
-
-
 class SearchEmbeddingConfig(BaseModel):
     """Embedding and hybrid reranking configuration."""
 
@@ -581,7 +581,6 @@ class Config:
                   memory: MemoryConfig | None = None, search: SearchConfig | None = None,
                  user_profile: UserProfileConfig | None = None, vision: VisionConfig | None = None,
                  ocr: OcrConfig | None = None, speech: SpeechConfig | None = None, video: VideoConfig | None = None,
-                 active_task: ActiveTaskConfig | None = None,
                  recent_summary: RecentSummaryConfig | None = None, source_path: str | Path | None = None,
                  channels_file: str = DEFAULT_CHANNELS_FILE, search_file: str = DEFAULT_SEARCH_FILE, media_file: str = DEFAULT_MEDIA_FILE,
                  messages: MessagesConfig | None = None, messages_file: str = DEFAULT_MESSAGES_FILE):
@@ -598,9 +597,6 @@ class Config:
         self.search = search or SearchConfig()
         self.user_profile = user_profile or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
-        )
-        self.active_task = active_task or ActiveTaskConfig(
-            **Config._merge_document_section({}, Config.load_template_data().get("active_task", {}))
         )
         self.recent_summary = recent_summary or RecentSummaryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("recent_summary", {}))
@@ -742,7 +738,11 @@ class Config:
         if not isinstance(data, dict):
             raise ValueError(f"Messages 設定檔必須是 JSON object：{path}")
 
-        return data
+        return cls._prune_retired_messages_data(data)
+
+    @staticmethod
+    def _prune_retired_messages_data(data: dict[str, Any]) -> dict[str, Any]:
+        return _prune_retired_messages_data(data)
 
     @classmethod
     def _load_llm_providers_data(cls, path: Path) -> dict[str, Any]:
@@ -1082,6 +1082,7 @@ class Config:
             if isinstance(messages_data, dict):
                 cls._write_json_file(target_path, messages_data)
 
+        cls._load_messages_data(target_path)
         return target_path
 
     @classmethod
@@ -1199,9 +1200,6 @@ class Config:
             search=SearchConfig(**merged_search) if (merged_search or "search" in data or search_path is not None) else None,
             user_profile=UserProfileConfig(
                 **cls._merge_document_section(dict(data.get("user_profile", {})), template_data.get("user_profile", {}))
-            ),
-            active_task=ActiveTaskConfig(
-                **cls._merge_document_section(dict(data.get("active_task", {})), template_data.get("active_task", {}))
             ),
             recent_summary=RecentSummaryConfig(
                 **cls._merge_document_section(
@@ -1456,19 +1454,11 @@ class Config:
                 "context_compaction_strategy": self.agent.context_compaction_strategy,
                 "context_compaction_llm": self.agent.context_compaction_llm.model_dump(),
                 "context_overflow_error_markers": list(self.agent.context_overflow_error_markers),
-                "auto_continue_default_budget": self.agent.auto_continue_default_budget,
-                "auto_continue_long_running_budget": self.agent.auto_continue_long_running_budget,
-                "auto_continue_deterministic_action_budget": self.agent.auto_continue_deterministic_action_budget,
                 "subagent_max_tool_iterations": self.agent.subagent_max_tool_iterations,
-                "task_context_llm": self.agent.task_context_llm.model_dump(),
-                "task_objective_llm": self.agent.task_objective_llm.model_dump(),
-                "task_planner_llm": self.agent.task_planner_llm.model_dump(),
-                "completion_verifier_llm": self.agent.completion_verifier_llm.model_dump(),
                 "skill_review_enabled": self.agent.skill_review_enabled,
                 "skill_review_min_tool_calls": self.agent.skill_review_min_tool_calls,
                 "skill_review_max_tool_iterations": self.agent.skill_review_max_tool_iterations,
                 "skill_review_transcript_messages": self.agent.skill_review_transcript_messages,
-                "worktree_sandbox_enabled": self.agent.worktree_sandbox_enabled,
             },
             "memory": {
                 "threshold": self.memory.threshold,
@@ -1480,12 +1470,6 @@ class Config:
                 "threshold": self.user_profile.threshold,
                 "lookback_messages": self.user_profile.lookback_messages,
                 "llm": self.user_profile.llm.model_dump(),
-            },
-            "active_task": {
-                "enabled": self.active_task.enabled,
-                "threshold": self.active_task.threshold,
-                "lookback_messages": self.active_task.lookback_messages,
-                "llm": self.active_task.llm.model_dump(),
             },
             "recent_summary": {
                 "enabled": self.recent_summary.enabled,

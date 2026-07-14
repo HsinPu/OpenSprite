@@ -33,8 +33,6 @@ def reload_agent_llm_from_config(agent: Any, config: Config) -> dict[str, Any]:
     agent.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
     agent.llm_context_window_tokens = llm_runtime.context_window_tokens
     agent.llm_configured = config.is_llm_configured
-    agent.task_planner.llm_config = config.agent.task_planner_llm
-    agent.completion_gate.llm_config = config.agent.completion_verifier_llm
 
     agent.prompt_budget.provider = provider
     agent.execution_engine.provider = provider
@@ -45,7 +43,6 @@ def reload_agent_llm_from_config(agent: Any, config: Config) -> dict[str, Any]:
     agent.memory_consolidation.provider = provider
     refresh_consolidator_llm(agent.user_profile_update.consolidator, provider)
     refresh_consolidator_llm(agent.recent_summary_update.consolidator, provider)
-    refresh_consolidator_llm(agent.active_task_update.consolidator, provider)
 
     logger.info(
         "LLM runtime reloaded | provider={} model={} configured={}",

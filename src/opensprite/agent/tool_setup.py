@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..storage.base import get_storage_message_count
 from ..tools import ToolRegistry
 from ..tools.registration import register_default_tools
 from ..utils.log import logger
@@ -49,8 +48,6 @@ def register_default_agent_tools(agent: Any) -> None:
         background_notification_factory=agent._make_background_session_exit_notifier,
         background_session_owner_factory=agent._current_background_session_owner,
         process_manager_callback=agent._set_background_process_manager,
-        active_task_store_factory=agent._get_active_task_store,
-        get_message_count=lambda session_id: get_storage_message_count(agent.storage, session_id),
         file_change_recorder=agent._record_file_changes,
         storage=agent.storage,
         preview_run_file_change_revert=agent.preview_run_file_change_revert,

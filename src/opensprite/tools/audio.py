@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
-from .evidence import ToolEvidence, indexed_resource_id
 from .saved_media import resolve_media_items
 
 
@@ -98,16 +97,4 @@ class TranscribeAudioTool(Tool):
             audios,
             audio_index=effective_index,
             language=language,
-        )
-
-    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
-        args = params if isinstance(params, dict) else {}
-        audio_path = str(args.get("audio_path") or "").strip().replace("\\", "/")
-        resource_id = f"audio:{audio_path}" if audio_path else indexed_resource_id("audio_index", args.get("audio_index"))
-        return ToolEvidence(
-            name=self.name,
-            args=dict(args or {}),
-            ok=ok,
-            resource_ids=(resource_id,),
-            result_preview=str(result or "")[:240],
         )

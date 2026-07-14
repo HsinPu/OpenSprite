@@ -5,29 +5,18 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from ...config import AgentConfig
-from ...context.message_history import PreparedPromptHistory, TaskContextRetrievalResult
-from ...llms import CHAT_ROLE_SYSTEM, ChatMessage
+from ...context.message_history import PreparedPromptHistory
+from ...llms import ChatMessage
 from ...runs.events import (
     HISTORY_LOADED_EVENT,
     MCP_TOOLS_SYNCED_EVENT,
-    PLANNING_MODE_SELECTED_EVENT,
     PROMPT_BUILT_EVENT,
     PROMPT_TOKENS_ESTIMATED_EVENT,
-    RETRIEVAL_PROACTIVE_CHECKED_EVENT,
 )
 from ...runs.trace import mcp_tool_names as list_mcp_tool_names
 from ...tools import ToolRegistry
 from ...utils.log import logger
 from ..execution import ExecutionResult
-from ..task.contract import TaskContract
-from ..task.resolution import TaskContextDecision
-from ..task.intent import TaskIntent
-from ..task.planning_mode import resolve_planning_mode
-from ..task.planning import TurnPlanningService
-from .task_guidance import (
-    build_task_contract_guidance,
-    should_answer_contract_without_tools,
-)
 
 
 class LlmCallService:
@@ -37,7 +26,6 @@ class LlmCallService:
         self,
         *,
         config: AgentConfig,
-        maybe_seed_active_task: Callable[..., Awaitable[None]],
         load_prompt_history: Callable[[str, str], Awaitable[PreparedPromptHistory]],
         get_current_audios: Callable[[], list[str] | None],
         get_current_videos: Callable[[], list[str] | None],
@@ -51,12 +39,7 @@ class LlmCallService:
         build_messages: Callable[..., list[dict[str, Any]]],
         build_system_prompt: Callable[[str], str],
         log_prepared_messages: Callable[[str, list[dict[str, Any]]], None],
-        get_work_state_summary: Callable[[str], Awaitable[str]],
-        read_active_task_snapshot: Callable[[str], str],
-        plan_task: Callable[..., Awaitable[TaskContract]],
-        resolve_tool_selection: Callable[[ToolRegistry, TaskContract], Any],
         emit_run_event: Callable[..., Awaitable[None]],
-        resolve_task_context_retrieval: Callable[..., Awaitable[TaskContextRetrievalResult]],
         get_tool_registry: Callable[[], ToolRegistry],
         get_current_run_id: Callable[[], str | None],
         should_cancel_run: Callable[[str, str | None], bool],
@@ -72,6 +55,7 @@ class LlmCallService:
         self._load_prompt_history = load_prompt_history
         self._get_current_audios = get_current_audios
         self._get_current_videos = get_current_videos
+        self._augment_message_for_media = augment_message_for_media
         self._estimate_tool_schema_tokens = estimate_tool_schema_tokens
         self._trim_history_to_token_budget = trim_history_to_token_budget
         self._effective_context_token_budget = effective_context_token_budget
@@ -81,17 +65,7 @@ class LlmCallService:
         self._build_messages = build_messages
         self._build_system_prompt = build_system_prompt
         self._log_prepared_messages = log_prepared_messages
-        self._get_work_state_summary = get_work_state_summary
-        self._read_active_task_snapshot = read_active_task_snapshot
-        self._turn_planning = TurnPlanningService(
-            plan_task=plan_task,
-            resolve_tool_selection=resolve_tool_selection,
-            maybe_seed_active_task=maybe_seed_active_task,
-            augment_message_for_media=augment_message_for_media,
-            emit_run_event=emit_run_event,
-        )
         self._emit_run_event = emit_run_event
-        self._resolve_task_context_retrieval = resolve_task_context_retrieval
         self._get_tool_registry = get_tool_registry
         self._get_current_run_id = get_current_run_id
         self._should_cancel_run = should_cancel_run
@@ -116,14 +90,13 @@ class LlmCallService:
         *,
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
-        task_intent: TaskIntent | None = None,
-        task_context_decision: TaskContextDecision | None = None,
-        task_contract_override: TaskContract | None = None,
+        history_current_message: str | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
         run_id = self._get_current_run_id()
         logger.info(f"[{session_id}] history.load | requested=true")
-        prompt_history = await self._load_prompt_history(session_id, current_message)
+        history_message = current_message if history_current_message is None else history_current_message
+        prompt_history = await self._load_prompt_history(session_id, history_message)
         history_dicts = prompt_history.messages
         loaded_history_count = prompt_history.loaded_messages
         filtered_tool_messages = prompt_history.filtered_tool_messages
@@ -144,8 +117,6 @@ class LlmCallService:
                 channel=channel,
                 external_chat_id=external_chat_id,
             )
-        work_state_summary = await self._get_work_state_summary(session_id)
-        active_task_snapshot = self._read_active_task_snapshot(session_id)
         if run_id is not None:
             await self._emit_run_event(
                 session_id,
@@ -157,82 +128,22 @@ class LlmCallService:
                     "images": len(user_images or []),
                     "audio_files": len(user_audio_files or []),
                     "video_files": len(user_video_files or []),
-                    "has_work_state_summary": bool(work_state_summary),
-                    "has_active_task_snapshot": bool(active_task_snapshot),
                 },
                 channel=channel,
                 external_chat_id=external_chat_id,
             )
         current_audios = self._get_current_audios()
         current_videos = self._get_current_videos()
-        base_tool_registry = self._get_tool_registry()
-        planning = await self._turn_planning.plan(
-            session_id=session_id,
-            run_id=run_id,
-            channel=channel,
-            external_chat_id=external_chat_id,
-            current_message=current_message,
-            history=history_dicts,
-            task_intent=task_intent,
-            task_context_decision=task_context_decision,
-            task_contract_override=task_contract_override,
-            active_task_snapshot=active_task_snapshot,
-            work_state_summary=work_state_summary,
-            user_images=user_images,
-            current_audios=current_audios,
-            current_videos=current_videos,
+        prompt_message = self._augment_message_for_media(
+            current_message,
+            user_images,
+            current_audios,
+            current_videos,
             user_image_files=user_image_files,
             user_audio_files=user_audio_files,
             user_video_files=user_video_files,
-            base_tool_registry=base_tool_registry,
         )
-        task_context_decision = planning.task_context_decision
-        effective_current_message = planning.effective_current_message
-        prompt_message = planning.prompt_message
-        task_contract = planning.task_contract
-        task_tool_registry = planning.task_tool_registry
-        if task_contract is not None:
-            guidance = build_task_contract_guidance(task_contract)
-            if guidance:
-                prompt_message = f"{prompt_message}\n\n{guidance}"
-            logger.info(
-                f"[{session_id}] task.contract | type={task_contract.task_type} "
-                f"requirements={len(task_contract.requirements)} resources={len(task_contract.selected_resources)} "
-                f"acceptance_criteria={len(task_contract.acceptance_criteria)} "
-                f"allow_no_tool_final={task_contract.allow_no_tool_final}"
-            )
-        planning_mode = resolve_planning_mode(
-            base_registry=task_tool_registry or base_tool_registry,
-            task_contract=task_contract,
-        )
-        selected_tool_registry = planning_mode.tool_registry or task_tool_registry
-        if (
-            not planning_mode.enabled
-            and task_contract is not None
-            and should_answer_contract_without_tools(task_contract)
-        ):
-            selected_tool_registry = ToolRegistry()
-            selected_tool_registry.tool_selection_metadata = getattr(
-                task_tool_registry or base_tool_registry,
-                "tool_selection_metadata",
-                None,
-            )
-        if planning_mode.enabled and selected_tool_registry is not None:
-            logger.info(
-                f"[{session_id}] prompt.mode | planning_mode=true allowed_tools={','.join(selected_tool_registry.tool_names)}"
-            )
-        if run_id is not None:
-            await self._emit_run_event(
-                session_id,
-                run_id,
-                PLANNING_MODE_SELECTED_EVENT,
-                {
-                    "enabled": bool(planning_mode.enabled),
-                    "tool_names": list(selected_tool_registry.tool_names) if selected_tool_registry is not None else [],
-                },
-                channel=channel,
-                external_chat_id=external_chat_id,
-            )
+        selected_tool_registry = self._get_tool_registry()
         tool_schema_tokens = self._estimate_tool_schema_tokens(
             allow_tools=allow_tools,
             tool_registry=selected_tool_registry,
@@ -244,28 +155,6 @@ class LlmCallService:
             session_id=session_id,
             tool_schema_tokens=tool_schema_tokens,
         )
-        task_context_retrieval = await self._resolve_task_context_retrieval(
-            session_id=session_id,
-            current_message=effective_current_message,
-            task_context_decision=task_context_decision,
-        )
-        proactive_retrieval_context = task_context_retrieval.context
-        if run_id is not None:
-            await self._emit_run_event(
-                session_id,
-                run_id,
-                RETRIEVAL_PROACTIVE_CHECKED_EVENT,
-                {
-                    "should_retrieve": task_context_retrieval.should_retrieve,
-                    "applied": bool(proactive_retrieval_context),
-                    "context_len": len(proactive_retrieval_context or ""),
-                    "decision_source": task_context_retrieval.decision_source,
-                },
-                channel=channel,
-                external_chat_id=external_chat_id,
-            )
-        if proactive_retrieval_context:
-            history_dicts = [{"role": CHAT_ROLE_SYSTEM, "content": proactive_retrieval_context}, *history_dicts]
         effective_context_budget = self._effective_context_token_budget()
         logger.info(
             f"[{session_id}] prompt.tokens | budget={effective_context_budget} "
@@ -385,12 +274,7 @@ class LlmCallService:
             "on_reasoning_delta": on_reasoning_delta if reasoning_hook is not None else None,
             "refresh_system_prompt": lambda: self._build_system_prompt(session_id),
             "should_cancel": lambda: self._should_cancel_run(session_id, run_id),
-            "work_state_summary": work_state_summary,
         }
         if on_tool_after_execute is not None:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
-        result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
-        result.task_contract = task_contract
-        tool_selection = getattr(selected_tool_registry, "tool_selection_metadata", None)
-        result.tool_selection = dict(tool_selection) if isinstance(tool_selection, dict) else None
-        return result
+        return await self._execute_messages(session_id, chat_messages, **execute_kwargs)
