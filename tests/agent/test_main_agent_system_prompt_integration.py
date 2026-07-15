@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.llms.base import LLMResponse
@@ -112,7 +112,7 @@ def _agent(provider: CapturingProvider, context_builder: FileContextBuilder, reg
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(),
         log_config=LogConfig(log_system_prompt=False),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )

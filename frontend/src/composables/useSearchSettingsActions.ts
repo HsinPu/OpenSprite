@@ -1,6 +1,5 @@
 import {
   DEFAULT_FRESHNESS_OPTIONS,
-  DEFAULT_DUCKDUCKGO_MAX_PAGES,
   DEFAULT_SEARCH_FRESHNESS,
   DEFAULT_SEARCH_MAX_RESULTS,
   DEFAULT_SEARCH_PROVIDER,
@@ -16,7 +15,7 @@ import { toPayloadSource } from "./payloadBoundary";
 
 type RequestSettingsJson = (pathname: string, options?: RequestInit) => Promise<unknown>;
 type SearchSettingsPayload = {
-  search?: unknown;
+  web_search?: unknown;
 };
 type SearchDataPayload = {
   provider?: unknown;
@@ -24,14 +23,12 @@ type SearchDataPayload = {
   freshness?: unknown;
   freshness_options?: unknown;
   max_results?: unknown;
-  duckduckgo_max_pages?: unknown;
   searxng_max_pages?: unknown;
   searxng_url?: unknown;
   searxng_engines?: unknown;
   searxng_categories?: unknown;
   searxng_options?: unknown;
-  proxy?: unknown;
-  jina_api_key_configured?: unknown;
+  searxng_proxy?: unknown;
 };
 type SearxngOptionsPayload = {
   searxng?: unknown;
@@ -93,7 +90,7 @@ function toSearchSettingsPayload(value: unknown): SearchSettingsPayload {
     return {};
   }
   return {
-    search: payload.search,
+    web_search: payload.web_search,
   };
 }
 
@@ -108,14 +105,12 @@ function toSearchDataPayload(value: unknown): SearchDataPayload | null {
     freshness: payload.freshness,
     freshness_options: payload.freshness_options,
     max_results: payload.max_results,
-    duckduckgo_max_pages: payload.duckduckgo_max_pages,
     searxng_max_pages: payload.searxng_max_pages,
     searxng_url: payload.searxng_url,
     searxng_engines: payload.searxng_engines,
     searxng_categories: payload.searxng_categories,
     searxng_options: payload.searxng_options,
-    proxy: payload.proxy,
-    jina_api_key_configured: payload.jina_api_key_configured,
+    searxng_proxy: payload.searxng_proxy,
   };
 }
 
@@ -207,14 +202,12 @@ function normalizeSearchSettings(search: unknown = {}): SearchState {
     freshness: String(payload.freshness || DEFAULT_SEARCH_FRESHNESS),
     freshness_options: freshnessOptions.length ? freshnessOptions : DEFAULT_FRESHNESS_OPTIONS,
     max_results: Number(payload.max_results || DEFAULT_SEARCH_MAX_RESULTS),
-    duckduckgo_max_pages: Number(payload.duckduckgo_max_pages || DEFAULT_DUCKDUCKGO_MAX_PAGES),
     searxng_max_pages: Number(payload.searxng_max_pages || DEFAULT_SEARXNG_MAX_PAGES),
     searxng_url: String(payload.searxng_url || DEFAULT_SEARXNG_URL),
     searxng_engines: normalizeTextList(payload.searxng_engines),
     searxng_categories: normalizeTextList(payload.searxng_categories),
     searxng_options: normalizeSearxngOptions(payload.searxng_options),
-    proxy: String(payload.proxy || ""),
-    jina_api_key_configured: payload.jina_api_key_configured === true,
+    searxng_proxy: String(payload.searxng_proxy || ""),
   };
 }
 
@@ -222,20 +215,11 @@ function syncSearchForm(settingsState: SearchSettingsState): void {
   settingsState.searchForm.provider = settingsState.search.provider;
   settingsState.searchForm.freshness = settingsState.search.freshness;
   settingsState.searchForm.maxResults = settingsState.search.max_results;
-  settingsState.searchForm.duckduckgoMaxPages = settingsState.search.duckduckgo_max_pages;
   settingsState.searchForm.searxngMaxPages = settingsState.search.searxng_max_pages;
   settingsState.searchForm.searxngUrl = settingsState.search.searxng_url;
   settingsState.searchForm.searxngEngines = normalizeTextList(settingsState.search.searxng_engines);
   settingsState.searchForm.searxngCategories = normalizeTextList(settingsState.search.searxng_categories);
-  settingsState.searchForm.proxy = settingsState.search.proxy;
-  settingsState.searchForm.jinaApiKey = "";
-}
-
-function secretPayload(form: SearchForm): Record<string, string> {
-  const payload: Record<string, string> = {};
-  const jinaApiKey = String(form.jinaApiKey || "").trim();
-  if (jinaApiKey) payload.jina_api_key = jinaApiKey;
-  return payload;
+  settingsState.searchForm.searxngProxy = settingsState.search.searxng_proxy;
 }
 
 export function useSearchSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }: SettingsActionContext) {
@@ -243,8 +227,8 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
     settingsState.searchLoading = true;
     settingsState.searchError = "";
     try {
-      const payload = toSearchSettingsPayload(await requestSettingsJson("/api/settings/search"));
-      settingsState.search = normalizeSearchSettings(payload.search);
+      const payload = toSearchSettingsPayload(await requestSettingsJson("/api/settings/web-search"));
+      settingsState.search = normalizeSearchSettings(payload.web_search);
       syncSearchForm(settingsState);
     } catch (error: unknown) {
       settingsState.searchError = errorMessage(error) || copy.value.notices.searchLoadFailed;
@@ -260,7 +244,7 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
     try {
       const searxngUrl = String(settingsState.searchForm.searxngUrl || settingsState.search.searxng_url || "").trim();
       const suffix = searxngUrl ? `?url=${encodeURIComponent(searxngUrl)}` : "";
-      const payload = toSearxngOptionsPayload(await requestSettingsJson(`/api/settings/search/searxng-options${suffix}`));
+      const payload = toSearxngOptionsPayload(await requestSettingsJson(`/api/settings/web-search/searxng-options${suffix}`));
       const searxngOptions = normalizeSearxngOptions(payload.searxng);
       settingsState.search.searxng_options = searxngOptions;
       settingsState.searchOptionsNotice = searxngOptions.fallback
@@ -279,22 +263,20 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
     settingsState.searchNotice = "";
     try {
       const form = settingsState.searchForm;
-      const payload = toSearchSettingsPayload(await requestSettingsJson("/api/settings/search", {
+      const payload = toSearchSettingsPayload(await requestSettingsJson("/api/settings/web-search", {
         method: "PUT",
         body: JSON.stringify({
           provider: form.provider,
           freshness: form.freshness,
           max_results: form.maxResults,
-          duckduckgo_max_pages: form.duckduckgoMaxPages,
           searxng_max_pages: form.searxngMaxPages,
           searxng_url: form.searxngUrl,
           searxng_engines: normalizeTextList(form.searxngEngines),
           searxng_categories: normalizeTextList(form.searxngCategories),
-          proxy: form.proxy,
-          ...secretPayload(form),
+          searxng_proxy: form.searxngProxy,
         }),
       }));
-      settingsState.search = normalizeSearchSettings(payload.search);
+      settingsState.search = normalizeSearchSettings(payload.web_search);
       syncSearchForm(settingsState);
       setSettingsSuccess("searchNotice", copy.value.notices.searchSaved);
     } catch (error: unknown) {

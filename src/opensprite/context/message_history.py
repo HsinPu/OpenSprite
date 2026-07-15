@@ -14,14 +14,13 @@ from typing import Any, Awaitable, Callable
 
 from ..llms import CHAT_ROLE_ASSISTANT, CHAT_ROLE_TOOL, CHAT_ROLE_USER, ChatMessage
 from ..runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
-from ..search.base import SearchStore
+from ..search.base import HISTORY_SEARCH_TOOL_NAME, SearchStore
 from ..storage import StorageProvider, StoredMessage
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrievalPlanner
 from ..utils.log import logger
 
-HISTORY_SEARCH_TOOL_NAME = "search_history"
 LEARNING_LEDGER_SCHEMA_VERSION = 1
 LEARNING_LEDGER_LIMIT = 200
 LEARNING_RELEVANT_LIMIT = 4
@@ -443,12 +442,12 @@ class MessageHistoryService:
         self,
         *,
         storage: StorageProvider,
-        search_store: SearchStore | None,
+        history_search_store: SearchStore | None,
         max_history_getter: Callable[[], int],
         emit_index_failure: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
     ):
         self.storage = storage
-        self.search_store = search_store
+        self.history_search_store = history_search_store
         self._max_history_getter = max_history_getter
         self._emit_index_failure = emit_index_failure
 
@@ -563,11 +562,13 @@ class MessageHistoryService:
                 metadata=dict(metadata or {}),
             ),
         )
-        if self.search_store is None:
+        if role == CHAT_ROLE_TOOL and tool_name == HISTORY_SEARCH_TOOL_NAME:
+            return
+        if self.history_search_store is None:
             return
 
         try:
-            await self.search_store.index_message(
+            await self.history_search_store.index_message(
                 session_id=session_id,
                 role=role,
                 content=content,
@@ -626,11 +627,11 @@ class HistoryResetService:
         self,
         *,
         storage: StorageProvider,
-        search_store: SearchStore | None,
+        history_search_store: SearchStore | None,
         clear_session_artifacts: Callable[[str], Awaitable[None]],
     ):
         self.storage = storage
-        self.search_store = search_store
+        self.history_search_store = history_search_store
         self._clear_session_artifacts = clear_session_artifacts
 
     async def reset(self, session_id: str | None = None) -> None:
@@ -646,9 +647,9 @@ class HistoryResetService:
     async def _clear_one(self, session_id: str) -> None:
         await self.storage.clear_messages(session_id)
         await self._clear_session_artifacts(session_id)
-        if self.search_store is None:
+        if self.history_search_store is None:
             return
         try:
-            await self.search_store.clear_session(session_id)
+            await self.history_search_store.clear_session(session_id)
         except Exception as e:
             logger.warning("[{}] Failed to clear search index: {}", session_id, e)

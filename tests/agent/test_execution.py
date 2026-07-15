@@ -483,14 +483,12 @@ def test_execution_engine_records_unavailable_tool_call_as_tool_error():
     assert "not available in this turn" in provider.calls[1]["messages"][-1].content
 
 
-def test_tool_result_failure_detection_allows_partial_web_research_payload():
+def test_tool_result_failure_detection_allows_successful_web_search_payload():
     payload = {
-        "type": "web_research",
+        "type": "web_search",
+        "ok": True,
         "query": "Qwen latest model",
-        "fetched_count": 2,
-        "sources": [{"title": "Qwen", "url": "https://qwen.ai/research/"}],
-        "failed_sources": [{"title": "Candidate", "reason": "Search failed for exact query"}],
-        "coverage": {"target_met": True, "fetched_count": 2, "failed_count": 1},
+        "items": [{"title": "Qwen", "url": "https://qwen.ai/research/"}],
     }
 
     assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is False
@@ -1064,7 +1062,7 @@ def test_execution_engine_retries_when_generic_xml_text_tool_call_is_visible_con
         [
             LLMResponse(
                 content=(
-                    '<tool_call name="web_research">\n'
+                    '<tool_call name="web_search">\n'
                     '{"query": "台積電 今日股價"}\n'
                     "</tool_call>"
                 ),
@@ -1119,7 +1117,7 @@ def test_execution_engine_retries_when_direct_tool_tag_text_call_is_visible_cont
             LLMResponse(
                 content=(
                     "<search_history>\n"
-                    "<query>AMD stock price 2026-05-28 web research</query>\n"
+                    "<query>AMD stock price 2026-05-28 market update</query>\n"
                     "<limit>10</limit>\n"
                     "</search_history>"
                 ),

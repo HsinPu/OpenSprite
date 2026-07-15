@@ -9,6 +9,19 @@ class EmptySearchStore:
         return []
 
 
+def test_search_history_limit_schema_is_bounded():
+    tool = SearchHistoryTool(
+        EmptySearchStore(),
+        get_session_id=lambda: "chat-1",
+        default_limit=5,
+    )
+
+    limit_schema = tool.parameters["properties"]["limit"]
+
+    assert limit_schema["minimum"] == 1
+    assert limit_schema["maximum"] == 20
+
+
 def test_search_history_missing_session_returns_structured_error():
     tool = SearchHistoryTool(EmptySearchStore(), get_session_id=lambda: None, default_limit=5)
 

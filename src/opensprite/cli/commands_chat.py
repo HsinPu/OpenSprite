@@ -35,7 +35,6 @@ from ..runs.lifecycle import (
     TERMINAL_RUN_EVENTS,
 )
 from ..runtime_lifecycle import stop_background_task
-from ..search.queue_worker import start_search_queue_worker
 from ..utils.log import setup_log
 
 
@@ -414,7 +413,6 @@ async def run_cli_chat(
 
     started = time.monotonic()
     agent, mq, cron_manager = await create_agent(config)
-    search_queue_worker = start_search_queue_worker(getattr(agent, "search_store", None))
     processor = asyncio.create_task(mq.process_queue())
     trace_summary: dict[str, Any] = {}
 
@@ -452,7 +450,6 @@ async def run_cli_chat(
     finally:
         await mq.stop()
         await stop_background_task(processor, name="message queue processor")
-        await stop_background_task(search_queue_worker, name="search embedding queue worker")
         await cron_manager.stop()
         await agent.close_background_maintenance()
         await agent.close_background_skill_reviews()

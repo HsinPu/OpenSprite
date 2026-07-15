@@ -31,11 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-]
-vector = [
-    "sqlite-vec>=0.1.10-alpha.3",
-]
+dev = []
 
 [project.scripts]
 opensprite = "opensprite.cli.commands:app"

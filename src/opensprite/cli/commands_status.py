@@ -52,7 +52,10 @@ def build_config_validate_payload(
         ("main", config_path),
         ("llm.providers", Config.get_llm_providers_file_path(config_path, raw_data.get("llm", {}))),
         ("channels", Config.get_channels_file_path(config_path, raw_data)),
-        ("search", Config.get_search_file_path(config_path, raw_data)),
+        (
+            "history_search",
+            Config.get_history_search_file_path(config_path, raw_data),
+        ),
         ("media", Config.get_media_file_path(config_path, raw_data)),
         ("messages", Config.get_messages_file_path(config_path, raw_data)),
         ("mcp_servers", Config.get_mcp_servers_file_path(config_path, raw_data.get("tools", {}))),
@@ -104,7 +107,7 @@ def build_config_validate_payload(
             "valid": True,
             "llm_default": loaded.llm.default,
             "enabled_channels": [name for name, enabled in iter_channel_status(loaded) if enabled],
-            "search_enabled": loaded.search.enabled,
+            "history_search_enabled": loaded.history_search.enabled,
             "mcp_servers": sorted(loaded.tools.mcp_servers),
         }
     )
@@ -140,7 +143,10 @@ def emit_config_validate(
         typer.echo(f"LLM default: {payload.get('llm_default') or '<unset>'}")
         enabled_channels = payload.get("enabled_channels") or []
         typer.echo("Enabled channels: " + (", ".join(enabled_channels) if enabled_channels else "none"))
-        typer.echo(f"Search enabled: {format_presence(bool(payload.get('search_enabled')))}")
+        typer.echo(
+            "History search enabled: "
+            f"{format_presence(bool(payload.get('history_search_enabled')))}"
+        )
         typer.echo("MCP servers: " + (", ".join(payload.get("mcp_servers") or []) or "none"))
         return
 
@@ -193,7 +199,7 @@ def emit_status(
 
     provider = payload["provider"]
     storage = payload["storage"]
-    search = payload["search"]
+    history_search = payload["history_search"]
     channels = payload["channels"]
     enabled_channels = [name for name, enabled in channels.items() if enabled]
 
@@ -207,10 +213,10 @@ def emit_status(
     typer.echo(f"Model: {provider['model']}")
     typer.echo(f"Storage: {storage['type']} -> {storage['path']}")
     typer.echo(
-        "Search: "
-        f"enabled={format_presence(bool(search['enabled']))} "
-        f"backend={search['backend']} "
-        f"(history_top_k={search['history_top_k']})"
+        "History search: "
+        f"enabled={format_presence(bool(history_search['enabled']))} "
+        f"backend={history_search['backend']} "
+        f"(history_top_k={history_search['history_top_k']})"
     )
     typer.echo("Channels: " + (", ".join(enabled_channels) if enabled_channels else "none enabled"))
 
@@ -313,10 +319,10 @@ def status_command(
                 "type": loaded.storage.type,
                 "path": str(storage_path),
             },
-            "search": {
-                "enabled": loaded.search.enabled,
-                "backend": loaded.search.backend,
-                "history_top_k": loaded.search.history_top_k,
+            "history_search": {
+                "enabled": loaded.history_search.enabled,
+                "backend": loaded.history_search.backend,
+                "history_top_k": loaded.history_search.history_top_k,
             },
             "channels": channels,
         }

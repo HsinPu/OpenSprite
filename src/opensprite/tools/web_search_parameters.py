@@ -23,7 +23,7 @@ def web_search_parameters(*, max_results: int, freshness: str) -> dict[str, Any]
             "freshness": {
                 "type": "string",
                 "enum": list(FRESHNESS_VALUES),
-                "description": "Recency filter. auto uses the configured default recent window; none searches all time; fixed windows are respected.",
+                "description": "Recency filter. none searches all time; fixed windows limit results by age.",
                 "default": freshness,
             },
         },

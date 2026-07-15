@@ -52,7 +52,7 @@ from ..tool_names import (
     PROCESS_TOOL_NAME,
 )
 from ..utils.log import logger
-from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, RecentSummaryConfig, MessagesConfig, Config
+from ..config import AgentConfig, Config, HistorySearchConfig, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, ToolsConfig, UserProfileConfig
 from ..documents.curator import (
     CuratorService,
     MemoryConsolidationService,
@@ -264,8 +264,8 @@ class AgentLoop:
         memory_config: MemoryConfig | None = None,
         tools_config: ToolsConfig | None = None,
         log_config: LogConfig | None = None,
-        search_store: SearchStore | None = None,
-        search_config: SearchConfig | None = None,
+        history_search_store: SearchStore | None = None,
+        history_search_config: HistorySearchConfig | None = None,
         user_profile_config: UserProfileConfig | None = None,
         recent_summary_config: RecentSummaryConfig | None = None,
         cron_manager: Any | None = None,
@@ -289,14 +289,14 @@ class AgentLoop:
         )
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
-        self.search_config = search_config or SearchConfig()
+        self.history_search_config = history_search_config or HistorySearchConfig()
         self.user_profile_config = user_profile_config or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
         )
         self.recent_summary_config = recent_summary_config or RecentSummaryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("recent_summary", {}))
         )
-        self.search_store = search_store
+        self.history_search_store = history_search_store
         self.cron_manager = cron_manager
         self.media_router = media_router or MediaRouter()
         self.provider = provider
@@ -356,7 +356,7 @@ class AgentLoop:
         self.storage = self._setup_storage(storage)
         self.message_history = MessageHistoryService(
             storage=self.storage,
-            search_store=self.search_store,
+            history_search_store=self.history_search_store,
             max_history_getter=lambda: self.config.max_history,
             emit_index_failure=self._emit_search_index_failure,
         )
@@ -364,7 +364,7 @@ class AgentLoop:
         self.learning_ledger = self._setup_learning_ledger()
         self.history_reset = HistoryResetService(
             storage=self.storage,
-            search_store=self.search_store,
+            history_search_store=self.history_search_store,
             clear_session_artifacts=self._clear_session_artifacts,
         )
         self.run_trace = RunTraceRecorder(

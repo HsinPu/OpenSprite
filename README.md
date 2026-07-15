@@ -95,12 +95,6 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-若要測 optional vector search backend：
-
-```bash
-python -m pip install -e ".[dev,vector]"
-```
-
 ## 常用命令
 
 ```bash
@@ -133,7 +127,7 @@ http://127.0.0.1:8765/
 ~/.opensprite/opensprite.json
 ~/.opensprite/llm.providers.json
 ~/.opensprite/channels.json
-~/.opensprite/search.json
+~/.opensprite/history_search.json
 ~/.opensprite/media.json
 ~/.opensprite/messages.json
 ~/.opensprite/mcp_servers.json
@@ -225,7 +219,7 @@ src/opensprite/
   cron/             # Scheduled jobs
   llms/             # LLM providers
   media/            # Media routing
-  search/           # SQLite search and embeddings
+  search/           # SQLite FTS conversation-history search
   storage/          # Storage backends
   tools/            # Built-in tools and MCP integration
   runtime.py        # Gateway wiring

@@ -122,12 +122,15 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_put("/api/settings/schedule", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_schedule_update))
     router.add_get("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network))
     router.add_put("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network_update))
-    router.add_get("/api/settings/search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search))
+    router.add_get("/api/settings/web-search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_web_search))
     router.add_get(
-        "/api/settings/search/searxng-options",
-        _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search_searxng_options),
+        "/api/settings/web-search/searxng-options",
+        _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_web_search_searxng_options),
     )
-    router.add_put("/api/settings/search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_search_update))
+    router.add_put(
+        "/api/settings/web-search",
+        _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_web_search_update),
+    )
     router.add_get("/api/settings/browser", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser))
     router.add_put("/api/settings/browser", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_update))
     router.add_post("/api/settings/browser/test", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_browser_test))

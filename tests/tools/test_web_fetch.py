@@ -243,43 +243,6 @@ def test_web_fetcher_uses_jina_fallback_for_403(monkeypatch):
     assert result["text"] == "Fallback content from reader."
 
 
-def test_web_fetcher_uses_openrouter_full_docs_when_docs_index_is_shell(monkeypatch):
-    calls = []
-
-    def fake_fetch_url(url, *args, **kwargs):
-        calls.append(url)
-        if url.endswith("/docs/llms.txt"):
-            return (
-                "text/plain; charset=utf-8",
-                (
-                    "# OpenRouter documentation index\n\n"
-                    "Authentication uses the Authorization header with a Bearer token, "
-                    "for example Authorization: Bearer $OPENROUTER_API_KEY.\n"
-                ).encode(),
-                200,
-                url,
-            )
-        return (
-            "text/html; charset=utf-8",
-            b"<html><body>No models found Models Fusion Chat Rankings Apps Enterprise Pricing Docs</body></html>",
-            200,
-            "https://openrouter.ai/docs.md",
-        )
-
-    monkeypatch.setattr("opensprite.tools.web_fetch.fetch_url", fake_fetch_url)
-    fetcher = WebFetcher(max_chars=5000)
-
-    result = fetcher.fetch("https://openrouter.ai/docs")
-
-    assert calls == [
-        "https://openrouter.ai/docs",
-        "https://openrouter.ai/docs/llms.txt",
-    ]
-    assert result["url"] == "https://openrouter.ai/docs/llms.txt"
-    assert result["finalUrl"] == "https://openrouter.ai/docs/llms.txt"
-    assert "Authorization: Bearer" in result["text"]
-
-
 @pytest.mark.parametrize(
     "url",
     [

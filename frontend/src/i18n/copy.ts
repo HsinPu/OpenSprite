@@ -541,18 +541,16 @@ export const DISPLAY_COPY = {
         title: "Web search",
         provider: {
           title: "Search provider",
-          description: "選擇 web_search 與 web_research 使用的搜尋來源。",
+          description: "選擇 web_search 使用的外部搜尋來源。",
         },
         providers: {
           duckduckgo: "DuckDuckGo",
           searxng: "SearXNG",
-          jina: "Jina",
         },
         freshness: {
           title: "Freshness",
-          description: "預設套用的搜尋時間範圍；Auto 會依照最新、目前等查詢意圖自動收窄時間。",
+          description: "預設套用的搜尋時間範圍；不限時間或選擇固定區間。",
           options: {
-            auto: "Auto",
             none: "不限時間",
             day: "過去一天",
             week: "過去一週",
@@ -563,10 +561,6 @@ export const DISPLAY_COPY = {
         maxResults: {
           title: "Max results",
           description: "單次 tool call 可要求的搜尋結果上限。",
-        },
-        duckduckgoMaxPages: {
-          title: "DuckDuckGo pages",
-          description: "DuckDuckGo fallback 最多翻頁數。",
         },
         searxngMaxPages: {
           title: "SearXNG pages",
@@ -598,21 +592,13 @@ export const DISPLAY_COPY = {
           emptyCategories: "尚未載入 categories，或此 instance 沒有提供 categories metadata。",
           configuredOnly: "已設定但目前清單未提供",
         },
-        proxy: {
-          title: "Search proxy",
-          description: "只套用在 web search HTTP requests；留空使用 network/system 設定。",
+        searxngProxy: {
+          title: "SearXNG proxy",
+          description: "只套用在 SearXNG HTTP requests；留空不指定 proxy。",
           placeholder: "http://proxy-host:port",
         },
         currentTitle: "目前設定",
         summary: (provider, freshness, count) => `${provider} · ${freshness} · 最多 ${count} 筆`,
-        credentialsTitle: "Provider API keys",
-        credentials: {
-          configured: "已設定",
-          notConfigured: "未設定",
-          placeholder: "留空保留既有 key",
-          description: (status) => `${status}。輸入新 key 後儲存即可更新；既有 key 不會顯示。`,
-          jina: { title: "Jina API key" },
-        },
         save: "儲存搜尋設定",
       },
       browser: {
@@ -1457,18 +1443,16 @@ export const DISPLAY_COPY = {
         title: "Web search",
         provider: {
           title: "Search provider",
-          description: "Choose the search source used by web_search and web_research.",
+          description: "Choose the external search source used by web_search.",
         },
         providers: {
           duckduckgo: "DuckDuckGo",
           searxng: "SearXNG",
-          jina: "Jina",
         },
         freshness: {
           title: "Freshness",
-          description: "Default recency window for searches. Auto infers a tighter window for latest/current queries.",
+          description: "Default recency window for searches. Choose any time or a fixed interval.",
           options: {
-            auto: "Auto",
             none: "Any time",
             day: "Past day",
             week: "Past week",
@@ -1479,10 +1463,6 @@ export const DISPLAY_COPY = {
         maxResults: {
           title: "Max results",
           description: "Maximum search results a single tool call can request.",
-        },
-        duckduckgoMaxPages: {
-          title: "DuckDuckGo pages",
-          description: "Maximum pages for the DuckDuckGo fallback to inspect.",
         },
         searxngMaxPages: {
           title: "SearXNG pages",
@@ -1514,21 +1494,13 @@ export const DISPLAY_COPY = {
           emptyCategories: "No categories loaded yet, or this instance did not expose category metadata.",
           configuredOnly: "Configured but not listed by this instance",
         },
-        proxy: {
-          title: "Search proxy",
-          description: "Only applies to web search HTTP requests. Leave blank to use network/system settings.",
+        searxngProxy: {
+          title: "SearXNG proxy",
+          description: "Only applies to SearXNG HTTP requests. Leave blank to use no explicit proxy.",
           placeholder: "http://proxy-host:port",
         },
         currentTitle: "Current setting",
         summary: (provider, freshness, count) => `${provider} · ${freshness} · up to ${count} result${count === 1 ? "" : "s"}`,
-        credentialsTitle: "Provider API keys",
-        credentials: {
-          configured: "Configured",
-          notConfigured: "Not configured",
-          placeholder: "Leave blank to keep existing key",
-          description: (status) => `${status}. Enter a new key and save to update it; existing keys are never shown.`,
-          jina: { title: "Jina API key" },
-        },
         save: "Save search settings",
       },
       browser: {

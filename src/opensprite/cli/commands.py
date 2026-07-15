@@ -471,9 +471,8 @@ def search_status(
     commands_search.search_status_command(
         config=config,
         session_id=session_id,
-        load_sqlite_search_store=_load_sqlite_search_store,
+        load_history_search_store=_load_sqlite_history_search_store,
         handle_search_error=_handle_search_error,
-        format_presence=_format_presence,
     )
 
 
@@ -500,9 +499,12 @@ def _resolve_workspace_root() -> Path:
     return get_tool_workspace()
 
 
-def _load_sqlite_search_store(config: str | None = None):
-    """Load the configured SQLite search store or fail with a clear message."""
-    return commands_search.load_sqlite_search_store(config, resolve_config_path=_resolve_config_path)
+def _load_sqlite_history_search_store(config: str | None = None):
+    """Load the configured SQLite history-search store."""
+    return commands_search.load_sqlite_history_search_store(
+        config,
+        resolve_config_path=_resolve_config_path,
+    )
 
 
 def _get_cron_service(session: str) -> CronService:

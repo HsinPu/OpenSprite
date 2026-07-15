@@ -21,7 +21,7 @@ def _write_split_config(root):
                 },
                 "storage": {"type": "memory", "path": "memory.db"},
                 "channels_file": "channels.json",
-                "search_file": "search.json",
+                "history_search_file": "history_search.json",
                 "media_file": "media.json",
                 "messages_file": "messages.json",
                 "log": {
@@ -63,24 +63,12 @@ def _write_split_config(root):
         ),
         encoding="utf-8",
     )
-    (root / "search.json").write_text(
+    (root / "history_search.json").write_text(
         json.dumps(
             {
                 "enabled": False,
                 "history_top_k": 5,
-                "embedding": {
-                    "enabled": False,
-                    "provider": "openai",
-                    "api_key": "",
-                    "model": "",
-                    "base_url": None,
-                    "batch_size": 16,
-                    "candidate_count": 20,
-                    "candidate_strategy": "vector",
-                    "vector_backend": "auto",
-                    "vector_candidate_count": 50,
-                    "retry_failed_on_startup": False,
-                },
+                "backend": "sqlite",
             },
             indent=2,
         ),
@@ -183,7 +171,7 @@ def test_config_validate_reports_missing_external_file(tmp_path):
 
 def test_config_validate_json_output_includes_error_details(tmp_path):
     config_path = _write_split_config(tmp_path)
-    (tmp_path / "search.json").write_text("[]", encoding="utf-8")
+    (tmp_path / "history_search.json").write_text("[]", encoding="utf-8")
 
     result = runner.invoke(app, ["config", "validate", "--config", str(config_path), "--json"])
 
@@ -191,7 +179,10 @@ def test_config_validate_json_output_includes_error_details(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["valid"] is False
     assert payload["config_exists"] is True
-    assert any(entry["name"] == "search" and entry["valid_json"] is False for entry in payload["files"])
+    assert any(
+        entry["name"] == "history_search" and entry["valid_json"] is False
+        for entry in payload["files"]
+    )
     assert "JSON root must be an object" in payload["error"]
 
 

@@ -173,7 +173,6 @@ import socket
 import asyncio
 import gzip
 import zlib
-from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.error import URLError, HTTPError
@@ -185,24 +184,6 @@ from .web_blocking import looks_blocked_or_challenge
 from ..utils.log import logger
 
 WEB_FETCH_MIN_CONTENT_CHARS = 800
-
-
-@dataclass(frozen=True)
-class DocsFallbackRule:
-    domain: str
-    index_path: str
-    index_fallback_path: str
-    index_shell_markers: tuple[str, ...]
-    fallback_title: str
-
-
-_OPENROUTER_DOCS_FALLBACK_RULE = DocsFallbackRule(
-    domain="openrouter.ai",
-    index_path="/docs",
-    index_fallback_path="/docs/llms.txt",
-    index_shell_markers=("no models found", "full documentation content"),
-    fallback_title="OpenRouter full documentation",
-)
 
 
 # 嘗試引入 trafilatura
@@ -858,55 +839,7 @@ class WebFetcher:
         else:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
 
-        index_fallback_url = _openrouter_docs_index_fallback_url(url, result.get('finalUrl') or final_url, result.get('text') or '')
-        if index_fallback_url:
-            try:
-                content_type, content, status, final_url = fetch_url(
-                    index_fallback_url,
-                    self.timeout,
-                    self.retry_on_403,
-                    self.max_response_size,
-                )
-            except Exception:
-                pass
-            else:
-                fallback_text = decode_content(content, content_type)
-                result.update(
-                    {
-                        'url': index_fallback_url,
-                        'finalUrl': final_url,
-                        'status': status,
-                        'contentType': content_type,
-                        'title': _OPENROUTER_DOCS_FALLBACK_RULE.fallback_title,
-                        'extractor': 'raw',
-                    }
-                )
-                result['text'], result['truncated'] = truncate_text(fallback_text, self.max_chars)
-        
         return result
-
-
-def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:
-    normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
-    if len(normalized) >= WEB_FETCH_MIN_CONTENT_CHARS:
-        return None
-    rule = _OPENROUTER_DOCS_FALLBACK_RULE
-    if not any(marker in normalized for marker in rule.index_shell_markers):
-        return None
-    for candidate in (final_url, url):
-        try:
-            parsed = urlparse(str(candidate or ""))
-        except Exception:
-            continue
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != rule.domain:
-            continue
-        path = parsed.path
-        if path.endswith(".md"):
-            path = path[:-3]
-        if path.rstrip("/") != rule.index_path:
-            continue
-        return parsed._replace(path=rule.index_fallback_path, query="", fragment="").geturl()
-    return None
 
 
 class WebFetchTool(Tool):
@@ -934,7 +867,7 @@ class WebFetchTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Fetch and extract readable content from a URL. Prefer this after selecting a specific source from web_search or web_research."
+        return "Fetch and extract readable content from a URL. Prefer this after selecting a specific source from web_search."
 
     @property
     def parameters(self) -> dict:

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 DEFAULT_WEB_SEARCH_PROVIDER = "duckduckgo"
-WEB_SEARCH_PROVIDERS = ("duckduckgo", "searxng", "jina")
-DEFAULT_WEB_SEARCH_FRESHNESS = "auto"
-WEB_SEARCH_FRESHNESS_OPTIONS = ("auto", "none", "day", "week", "month", "year")
+WEB_SEARCH_PROVIDERS = ("duckduckgo", "searxng")
+DEFAULT_WEB_SEARCH_FRESHNESS = "none"
+WEB_SEARCH_FRESHNESS_OPTIONS = ("none", "day", "week", "month", "year")
 DEFAULT_SEARXNG_URL = "https://searx.be"
 DEFAULT_WEB_SEARCH_MAX_RESULTS = 25
-DEFAULT_DUCKDUCKGO_MAX_PAGES = 10
 DEFAULT_SEARXNG_MAX_PAGES = 5
 
 DEFAULT_BROWSER_BACKEND = "agent-browser"
@@ -37,7 +36,7 @@ DEFAULT_CRON_TIMEZONE = "UTC"
 
 DEFAULT_LLM_PROVIDERS_FILE = "llm.providers.json"
 DEFAULT_CHANNELS_FILE = "channels.json"
-DEFAULT_SEARCH_FILE = "search.json"
+DEFAULT_HISTORY_SEARCH_FILE = "history_search.json"
 DEFAULT_MEDIA_FILE = "media.json"
 DEFAULT_MESSAGES_FILE = "messages.json"
 DEFAULT_MCP_SERVERS_FILE = "mcp_servers.json"

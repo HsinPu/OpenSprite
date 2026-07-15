@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from opensprite.config.schema import SearchConfig, ToolsConfig, WebSearchToolConfig
+from opensprite.config.schema import HistorySearchConfig, ToolsConfig, WebSearchToolConfig
 from opensprite.skills import SkillsLoader
 from opensprite.storage import MemoryStorage
 from opensprite.tools.cron import CronTool
@@ -15,7 +15,6 @@ from opensprite.tools.verify import VerifyTool
 from opensprite.tools.search import SearchHistoryTool
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_research import WebResearchTool
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.registration import (
@@ -61,8 +60,8 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         skills_loader=SkillsLoader(skills_root=tmp_path / "skills"),
-        search_store=FakeSearchStore(),
-        search_config=SearchConfig(history_top_k=7),
+        history_search_store=FakeSearchStore(),
+        history_search_config=HistorySearchConfig(history_top_k=7),
     )
 
     assert registry.tool_names == [
@@ -84,7 +83,6 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "verify",
         "web_search",
         "web_fetch",
-        "web_research",
         "analyze_image",
         "ocr_image",
         "transcribe_audio",
@@ -136,7 +134,6 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "verify",
         "web_search",
         "web_fetch",
-        "web_research",
         "analyze_image",
         "ocr_image",
         "transcribe_audio",
@@ -170,7 +167,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
                     "notify_on_exit": False,
                     "notify_on_exit_empty_success": True,
                 },
-                "web_search": {"provider": "jina", "max_results": 7},
+                "web_search": {"provider": "searxng", "max_results": 7},
                 "web_fetch": {
                     "max_chars": 1234,
                     "max_response_size": 2048,
@@ -187,7 +184,6 @@ def test_register_default_tools_applies_typed_tools_config_values():
     verify_tool = registry.get("verify")
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
-    web_research_tool = registry.get("web_research")
     cron_tool = registry.get("cron")
     configure_mcp_tool = registry.get("configure_mcp")
 
@@ -198,58 +194,33 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert isinstance(configure_mcp_tool, ConfigureMCPTool)
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
-    assert isinstance(web_research_tool, WebResearchTool)
     assert exec_tool.timeout == 12
     assert exec_tool.notify_on_exit is False
     assert exec_tool.notify_on_exit_empty_success is True
     assert "UTC" in cron_tool.description
-    assert web_search_tool.provider == "jina"
+    assert web_search_tool.provider == "searxng"
     assert web_search_tool.max_results == 7
     assert web_fetch_tool.fetcher.max_chars == 1234
     assert web_fetch_tool.fetcher.max_response_size == 2048
     assert web_fetch_tool.fetcher.timeout == 9
     assert web_fetch_tool.fetcher.prefer_trafilatura is False
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
-    assert web_research_tool.search_tool.provider == "jina"
-    assert web_research_tool.fetch_tool.fetcher.max_chars == 1234
 
 
-def test_reload_web_search_tools_updates_default_research_tool():
+def test_reload_web_search_tools_updates_registered_tool():
     registry = ToolRegistry()
     register_web_tools(registry)
 
     result = reload_web_search_tools(
         registry,
-        WebSearchToolConfig(provider="jina", max_results=7),
+        WebSearchToolConfig(provider="searxng", max_results=7),
     )
 
     web_search_tool = registry.get("web_search")
-    web_research_tool = registry.get("web_research")
-    assert result == {"tool_updated": True, "research_tool_updated": True}
+    assert result == {"tool_updated": True}
     assert isinstance(web_search_tool, WebSearchTool)
-    assert isinstance(web_research_tool, WebResearchTool)
-    assert web_search_tool.provider == "jina"
-    assert web_research_tool.search_config.provider == "jina"
-    assert web_research_tool.search_tool.provider == "jina"
-    assert web_research_tool.search_tool.max_results == 7
-
-
-def test_reload_web_search_tools_preserves_custom_research_search_tool():
-    registry = ToolRegistry()
-    custom_search_tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
-    registry.register(WebResearchTool(search_tool=custom_search_tool))
-
-    result = reload_web_search_tools(
-        registry,
-        WebSearchToolConfig(provider="jina", max_results=7),
-    )
-
-    web_research_tool = registry.get("web_research")
-    assert result == {"tool_updated": True, "research_tool_updated": True}
-    assert isinstance(web_research_tool, WebResearchTool)
-    assert web_research_tool.search_config.provider == "jina"
-    assert web_research_tool.search_tool is custom_search_tool
-    assert web_research_tool.search_tool.provider == "duckduckgo"
+    assert web_search_tool.provider == "searxng"
+    assert web_search_tool.max_results == 7
 
 
 async def _fake_preview_run_file_change_revert(session_id: str, run_id: str, change_id: int):
@@ -277,7 +248,7 @@ def test_register_default_tools_includes_run_trace_tools_when_storage_is_availab
     assert isinstance(registry.get("preview_run_file_change_revert"), PreviewRunFileChangeRevertTool)
 
 
-def test_search_and_web_tools_describe_current_research_behavior():
+def test_search_and_web_tools_describe_current_behavior():
     registry = ToolRegistry()
 
     register_default_tools(
@@ -290,23 +261,17 @@ def test_search_and_web_tools_describe_current_research_behavior():
         workflow_catalog_getter=lambda: {"implement_then_review": "Run implementer then reviewer."},
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
-        search_store=FakeSearchStore(),
-        search_config=SearchConfig(history_top_k=7),
+        history_search_store=FakeSearchStore(),
+        history_search_config=HistorySearchConfig(history_top_k=7),
     )
 
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
-    web_research_tool = registry.get("web_research")
     search_history_tool = registry.get("search_history")
 
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
-    assert isinstance(web_research_tool, WebResearchTool)
     assert isinstance(search_history_tool, SearchHistoryTool)
-    assert "search_knowledge" not in registry.tool_names
-    assert "search_knowledge" not in web_search_tool.description.lower()
-    assert "search_knowledge" not in web_fetch_tool.description.lower()
-    assert "instead of separate web_search + web_fetch" in web_research_tool.description.lower()
     assert "conversation history" in search_history_tool.description.lower()
 
 

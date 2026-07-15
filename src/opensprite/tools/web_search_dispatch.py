@@ -19,26 +19,9 @@ def web_search_provider(
     *,
     duckduckgo: WebSearchProvider,
     searxng: WebSearchProvider,
-    jina: WebSearchProvider,
 ) -> WebSearchProvider | None:
     """Return the configured provider callable, if supported."""
     return {
         "duckduckgo": duckduckgo,
         "searxng": searxng,
-        "jina": jina,
     }.get(normalize_web_search_provider(provider))
-
-
-def web_search_provider_order(
-    configured_provider: str | None,
-    *,
-    searxng_available: bool = False,
-    jina_available: bool = False,
-) -> list[str]:
-    candidates = [
-        normalize_web_search_provider(configured_provider),
-        "searxng" if searxng_available else "",
-        "duckduckgo",
-        "jina" if jina_available else "",
-    ]
-    return list(dict.fromkeys(provider for provider in candidates if provider))

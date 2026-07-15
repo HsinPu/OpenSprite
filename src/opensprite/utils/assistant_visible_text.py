@@ -20,7 +20,7 @@ FUNCTION_CALLS_TAG_RE = re.compile(r"<\s*(/?)\s*function_calls\b[^<>]*>", re.IGN
 DSML_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*｜+DSML｜+\s*(/?)\s*tool_calls\b[^<>]*>", re.IGNORECASE)
 BRACKET_TOOL_CALL_RE = re.compile(r"\[\s*(/?)\s*tool_call\s*\]", re.IGNORECASE)
 DIRECT_TOOL_TAG_RE = re.compile(
-    r"<\s*(/?)\s*(?:search_history|web_search|web_fetch|web_research|read_file|list_dir|glob_files|grep_files|"
+    r"<\s*(/?)\s*(?:search_history|web_search|web_fetch|read_file|list_dir|glob_files|grep_files|"
     r"code_navigation|apply_patch|write_file|edit_file|exec|process|verify|"
     r"delegate|delegate_many|run_workflow|batch)\b[^<>]*>",
     re.IGNORECASE,

@@ -6,7 +6,6 @@ from pathlib import Path
 from .agent.factory import create_agent
 from .config import Config
 from .network_environment import apply_network_environment
-from .search.queue_worker import start_search_queue_worker
 from .runtime_lifecycle import (
     await_shutdown_step,
     install_shutdown_signal_handlers,
@@ -42,7 +41,6 @@ async def run(config_path: str | Path | None = None) -> None:
     
     # 建立 Agent + MessageQueue
     agent, mq, cron_manager = await create_agent(config)
-    search_queue_worker = start_search_queue_worker(getattr(agent, "search_store", None))
     background_process_manager = getattr(agent, "background_process_manager", None)
     if background_process_manager is not None:
         await background_process_manager.mark_lost_persisted_sessions()
@@ -75,7 +73,6 @@ async def run(config_path: str | Path | None = None) -> None:
             await await_shutdown_step(channel_manager.stop_all(), name="channel manager")
         await await_shutdown_step(mq.stop(), name="message queue")
         await stop_background_task(processor, name="message queue processor")
-        await stop_background_task(search_queue_worker, name="search embedding queue worker")
         await await_shutdown_step(cron_manager.stop(), name="cron manager")
         await await_shutdown_step(agent.close_background_maintenance(), name="background maintenance")
         await await_shutdown_step(agent.close_background_skill_reviews(), name="background skill reviews")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, Callable
 
 from ..config import Config
@@ -12,7 +11,6 @@ from ..config.defaults import (
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
     DEFAULT_BROWSER_LAUNCH_ARGS,
     DEFAULT_BROWSER_SESSION_TIMEOUT,
-    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
     DEFAULT_LOG_ENABLED,
@@ -82,7 +80,6 @@ def web_search_payload(
     default_freshness: str = DEFAULT_WEB_SEARCH_FRESHNESS,
     freshness_values: tuple[str, ...] | list[str] = WEB_SEARCH_FRESHNESS_OPTIONS,
     default_max_results: int = DEFAULT_WEB_SEARCH_MAX_RESULTS,
-    default_duckduckgo_max_pages: int = DEFAULT_DUCKDUCKGO_MAX_PAGES,
     default_searxng_max_pages: int = DEFAULT_SEARXNG_MAX_PAGES,
     default_searxng_url: str = DEFAULT_SEARXNG_URL,
     coerce_text_list_fn: Callable[..., list[str]] = coerce_text_list,
@@ -94,13 +91,11 @@ def web_search_payload(
         "freshness": str(getattr(search, "freshness", default_freshness) or default_freshness),
         "freshness_options": list(freshness_values),
         "max_results": int(getattr(search, "max_results", default_max_results) or default_max_results),
-        "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", default_duckduckgo_max_pages) or default_duckduckgo_max_pages),
         "searxng_max_pages": int(getattr(search, "searxng_max_pages", default_searxng_max_pages) or default_searxng_max_pages),
         "searxng_url": str(getattr(search, "searxng_url", default_searxng_url) or default_searxng_url),
         "searxng_engines": coerce_text_list_fn(getattr(search, "searxng_engines", []), field="searxng_engines", default=[]),
         "searxng_categories": coerce_text_list_fn(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
-        "proxy": str(getattr(search, "proxy", "") or ""),
-        "jina_api_key_configured": bool(getattr(search, "jina_api_key", "") or os.environ.get("JINA_API_KEY", "")),
+        "searxng_proxy": str(getattr(search, "searxng_proxy", "") or ""),
     }
 
 

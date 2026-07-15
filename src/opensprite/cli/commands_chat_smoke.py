@@ -19,7 +19,7 @@ from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, Store
 from .commands_chat import _json_for_stdout, run_web_chat
 
 
-WEB_TOOL_NAMES = {"web_search", "web_fetch", "web_research"}
+WEB_TOOL_NAMES = {"web_search", "web_fetch"}
 
 
 @dataclass(frozen=True)
@@ -38,11 +38,6 @@ DEFAULT_SMOKE_CASES: tuple[SmokeCase, ...] = (
     SmokeCase("direct-debug", "請幫我 debug Python ModuleNotFoundError 的常見原因，不要讀檔、不要上網。", expect_web_tools=False),
     SmokeCase("trace-metric", "請用一個表格列出 CLI chat trace 最重要的三個欄位。不要讀檔、不要上網。", expect_web_tools=False),
     SmokeCase("web-search", "請務必使用 web_search 搜尋 OpenAI 2026 最新消息，回覆一個來源網址即可。", expect_web_tools=True),
-    SmokeCase(
-        "web-research",
-        "請務必使用 web_research 搜尋 2026 AI agent tools market trends，整理兩點並列出來源網址。",
-        expect_web_tools=True,
-    ),
     SmokeCase(
         "current-source",
         "請上網查詢 2026 AI agent tools market trends，最多整理三個來源網址。",

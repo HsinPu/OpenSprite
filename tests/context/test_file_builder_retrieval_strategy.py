@@ -16,9 +16,8 @@ def test_file_builder_includes_retrieval_strategy_in_system_prompt(tmp_path):
     prompt = builder.build_system_prompt("telegram:room-1")
 
     assert "## External Knowledge Tools" in prompt
-    assert "Use `web_research` for broad, current, comparative, ambiguous, or public-information questions" in prompt
-    assert "search_knowledge" not in prompt
-    assert "Use the optional `queries` argument" in prompt
+    assert "Use `web_search` only to discover candidate URLs or fresh source leads" in prompt
+    assert "Use `web_fetch` when the URL, API endpoint, documentation page, article, filing, or official source is already known" in prompt
 
 
 def test_file_builder_includes_available_subagents_in_system_prompt(tmp_path):

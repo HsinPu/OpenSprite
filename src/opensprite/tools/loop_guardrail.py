@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
+from ..search.base import HISTORY_SEARCH_TOOL_NAME
 from ..tool_names import (
     BATCH_TOOL_NAME,
     CONFIGURE_MCP_TOOL_NAME,

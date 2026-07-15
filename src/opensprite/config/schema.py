@@ -29,9 +29,8 @@ from .defaults import (
     DEFAULT_MEDIA_FILE,
     DEFAULT_MESSAGES_FILE,
     DEFAULT_NO_PROXY,
-    DEFAULT_SEARCH_FILE,
+    DEFAULT_HISTORY_SEARCH_FILE,
     DEFAULT_SEARXNG_URL,
-    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_MAX_RESULTS,
     DEFAULT_WEB_SEARCH_FRESHNESS,
@@ -400,16 +399,14 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["duckduckgo", "searxng", "jina"] = DEFAULT_WEB_SEARCH_PROVIDER
-    freshness: Literal["auto", "none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
-    jina_api_key: str = ""
+    provider: Literal["duckduckgo", "searxng"] = DEFAULT_WEB_SEARCH_PROVIDER
+    freshness: Literal["none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
     searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)
     searxng_categories: list[str] = Field(default_factory=list)
     max_results: int = Field(default=DEFAULT_WEB_SEARCH_MAX_RESULTS, ge=1)
-    duckduckgo_max_pages: int = Field(default=DEFAULT_DUCKDUCKGO_MAX_PAGES, ge=1)
     searxng_max_pages: int = Field(default=DEFAULT_SEARXNG_MAX_PAGES, ge=1)
-    proxy: str | None = None
+    searxng_proxy: str | None = None
 
 
 class WebFetchToolConfig(BaseModel):
@@ -494,47 +491,39 @@ class RecentSummaryConfig(BaseModel):
     llm: DocumentLlmConfig
 
 
-class SearchEmbeddingConfig(BaseModel):
-    """Embedding and hybrid reranking configuration."""
-
-    enabled: bool = False
-    provider: Literal["openai", "openrouter", "minimax"] = "openai"
-    api_key: str = ""
-    model: str = ""
-    base_url: str | None = None
-    batch_size: int = Field(default=16, ge=1, le=128)
-    candidate_count: int = Field(default=20, ge=1, le=200)
-    candidate_strategy: Literal["fts", "vector"] = "vector"
-    vector_backend: Literal["exact", "sqlite_vec", "auto"] = "auto"
-    vector_candidate_count: int = Field(default=50, ge=1, le=500)
-    retry_failed_on_startup: bool = False
-
-    @model_validator(mode="after")
-    def validate_enabled_fields(self) -> "SearchEmbeddingConfig":
-        if self.enabled and not self.model:
-            raise ValueError("search.embedding.model is required when enabled=true")
-        return self
-
-
-class SearchConfig(BaseModel):
-    """Search index configuration."""
+class HistorySearchConfig(BaseModel):
+    """SQLite full-text search configuration for local conversation history."""
 
     enabled: bool = True
     backend: Literal["sqlite"] = "sqlite"
-    history_top_k: int = Field(default=5, ge=1)
-    embedding: SearchEmbeddingConfig = Field(default_factory=SearchEmbeddingConfig)
+    history_top_k: int = Field(default=5, ge=1, le=20)
 
 
 class Config:
-    def __init__(self, llm: LLMsConfig, agent: AgentConfig, storage: StorageConfig,
-                  channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None,
-                  network: NetworkConfig | None = None,
-                  memory: MemoryConfig | None = None, search: SearchConfig | None = None,
-                 user_profile: UserProfileConfig | None = None, vision: VisionConfig | None = None,
-                 ocr: OcrConfig | None = None, speech: SpeechConfig | None = None, video: VideoConfig | None = None,
-                 recent_summary: RecentSummaryConfig | None = None, source_path: str | Path | None = None,
-                 channels_file: str = DEFAULT_CHANNELS_FILE, search_file: str = DEFAULT_SEARCH_FILE, media_file: str = DEFAULT_MEDIA_FILE,
-                 messages: MessagesConfig | None = None, messages_file: str = DEFAULT_MESSAGES_FILE):
+    def __init__(
+        self,
+        llm: LLMsConfig,
+        agent: AgentConfig,
+        storage: StorageConfig,
+        channels: ChannelsConfig,
+        log: LogConfig | None = None,
+        tools: ToolsConfig | None = None,
+        network: NetworkConfig | None = None,
+        memory: MemoryConfig | None = None,
+        history_search: HistorySearchConfig | None = None,
+        user_profile: UserProfileConfig | None = None,
+        vision: VisionConfig | None = None,
+        ocr: OcrConfig | None = None,
+        speech: SpeechConfig | None = None,
+        video: VideoConfig | None = None,
+        recent_summary: RecentSummaryConfig | None = None,
+        source_path: str | Path | None = None,
+        channels_file: str = DEFAULT_CHANNELS_FILE,
+        history_search_file: str = DEFAULT_HISTORY_SEARCH_FILE,
+        media_file: str = DEFAULT_MEDIA_FILE,
+        messages: MessagesConfig | None = None,
+        messages_file: str = DEFAULT_MESSAGES_FILE,
+    ):
         self.llm = llm
         self.agent = agent
         self.storage = storage
@@ -545,7 +534,7 @@ class Config:
         self.memory = memory or MemoryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("memory", {}))
         )
-        self.search = search or SearchConfig()
+        self.history_search = history_search or HistorySearchConfig()
         self.user_profile = user_profile or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
         )
@@ -559,7 +548,7 @@ class Config:
         self.messages = messages or MessagesConfig()
         self.source_path = Path(source_path).expanduser().resolve() if source_path is not None else None
         self.channels_file = channels_file
-        self.search_file = search_file
+        self.history_search_file = history_search_file
         self.media_file = media_file
         self.messages_file = messages_file
 
@@ -587,11 +576,11 @@ class Config:
         return candidate
 
     @staticmethod
-    def _resolve_search_file(config_path: Path, search_file: str | None) -> Path | None:
-        if not search_file:
+    def _resolve_history_search_file(config_path: Path, history_search_file: str | None) -> Path | None:
+        if not history_search_file:
             return None
 
-        candidate = Path(search_file).expanduser()
+        candidate = Path(history_search_file).expanduser()
         if not candidate.is_absolute():
             candidate = (config_path.parent / candidate).resolve()
         return candidate
@@ -653,7 +642,7 @@ class Config:
         return data
 
     @classmethod
-    def _load_search_data(cls, path: Path) -> dict[str, Any]:
+    def _load_history_search_data(cls, path: Path) -> dict[str, Any]:
         if not path.exists():
             return {}
 
@@ -744,8 +733,8 @@ class Config:
         return config_path.parent / DEFAULT_CHANNELS_FILE
 
     @classmethod
-    def _build_default_search_path(cls, config_path: Path) -> Path:
-        return config_path.parent / DEFAULT_SEARCH_FILE
+    def _build_default_history_search_path(cls, config_path: Path) -> Path:
+        return config_path.parent / DEFAULT_HISTORY_SEARCH_FILE
 
     @classmethod
     def _build_default_media_path(cls, config_path: Path) -> Path:
@@ -796,20 +785,20 @@ class Config:
         return target_path
 
     @classmethod
-    def get_search_file_path(
+    def get_history_search_file_path(
         cls,
         config_path: str | Path,
         config_data: dict[str, Any] | None = None,
-        search_file: str | None = None,
+        history_search_file: str | None = None,
     ) -> Path:
         resolved_config_path = Path(config_path).expanduser().resolve()
-        configured_path = search_file
+        configured_path = history_search_file
         if configured_path is None and isinstance(config_data, dict):
-            configured_path = config_data.get("search_file")
+            configured_path = config_data.get("history_search_file")
 
-        target_path = cls._resolve_search_file(resolved_config_path, configured_path)
+        target_path = cls._resolve_history_search_file(resolved_config_path, configured_path)
         if target_path is None:
-            target_path = cls._build_default_search_path(resolved_config_path)
+            target_path = cls._build_default_history_search_path(resolved_config_path)
         return target_path
 
     @classmethod
@@ -873,7 +862,7 @@ class Config:
         default_siblings = (
             root,
             cls._build_default_channels_path(root),
-            cls._build_default_search_path(root),
+            cls._build_default_history_search_path(root),
             cls._build_default_media_path(root),
             cls._build_default_messages_path(root),
             cls._build_default_mcp_servers_path(root),
@@ -902,7 +891,10 @@ class Config:
 
         for p in (
             cls.get_channels_file_path(root, channels_file=config.channels_file),
-            cls.get_search_file_path(root, search_file=config.search_file),
+            cls.get_history_search_file_path(
+                root,
+                history_search_file=config.history_search_file,
+            ),
             cls.get_media_file_path(root, media_file=config.media_file),
             cls.get_messages_file_path(root, messages_file=config.messages_file),
             cls.get_mcp_servers_file_path(root, config.tools),
@@ -949,26 +941,30 @@ class Config:
         return target_path
 
     @classmethod
-    def write_search_file(
+    def write_history_search_file(
         cls,
         config_path: str | Path,
-        search_data: dict[str, Any],
+        history_search_data: dict[str, Any],
         config_data: dict[str, Any] | None = None,
-        search_file: str | None = None,
+        history_search_file: str | None = None,
     ) -> Path:
-        target_path = cls.get_search_file_path(config_path, config_data, search_file)
-        cls._write_json_file(target_path, search_data)
+        target_path = cls.get_history_search_file_path(config_path, config_data, history_search_file)
+        cls._write_json_file(target_path, history_search_data)
         return target_path
 
     @classmethod
-    def ensure_search_file(cls, config_path: str | Path, config_data: dict[str, Any] | None = None) -> Path:
-        search_data = config_data.get("search") if isinstance(config_data, dict) else None
-        target_path = cls.get_search_file_path(config_path, config_data)
+    def ensure_history_search_file(
+        cls,
+        config_path: str | Path,
+        config_data: dict[str, Any] | None = None,
+    ) -> Path:
+        history_search_data = config_data.get("history_search") if isinstance(config_data, dict) else None
+        target_path = cls.get_history_search_file_path(config_path, config_data)
 
         if not target_path.exists():
-            cls._copy_external_template(target_path, "search")
-            if isinstance(search_data, dict):
-                cls._write_json_file(target_path, search_data)
+            cls._copy_external_template(target_path, "history_search")
+            if isinstance(history_search_data, dict):
+                cls._write_json_file(target_path, history_search_data)
 
         return target_path
 
@@ -1096,11 +1092,22 @@ class Config:
         merged_channels.update(external_channels)
         if not merged_channels:
             raise ValueError("設定檔缺少必要區塊：channels 或 channels_file")
-        inline_search = data.get("search", {})
-        search_path = cls._resolve_search_file(path, data.get("search_file"))
-        external_search = cls._load_search_data(search_path) if search_path is not None else {}
-        merged_search = dict(inline_search) if isinstance(inline_search, dict) else {}
-        merged_search.update(external_search)
+        inline_history_search = data.get("history_search", {})
+        history_search_path = cls._resolve_history_search_file(
+            path,
+            data.get("history_search_file"),
+        )
+        external_history_search = (
+            cls._load_history_search_data(history_search_path)
+            if history_search_path is not None
+            else {}
+        )
+        merged_history_search = (
+            dict(inline_history_search)
+            if isinstance(inline_history_search, dict)
+            else {}
+        )
+        merged_history_search.update(external_history_search)
         media_path = cls._resolve_media_file(path, data.get("media_file"))
         external_media = cls._load_media_data(media_path) if media_path is not None else {}
         media_categories = ("vision", "ocr", "speech", "video")
@@ -1144,7 +1151,15 @@ class Config:
             memory=MemoryConfig(
                 **cls._merge_document_section(dict(data.get("memory", {})), template_data.get("memory", {}))
             ),
-            search=SearchConfig(**merged_search) if (merged_search or "search" in data or search_path is not None) else None,
+            history_search=(
+                HistorySearchConfig(**merged_history_search)
+                if (
+                    merged_history_search
+                    or "history_search" in data
+                    or history_search_path is not None
+                )
+                else None
+            ),
             user_profile=UserProfileConfig(
                 **cls._merge_document_section(dict(data.get("user_profile", {})), template_data.get("user_profile", {}))
             ),
@@ -1160,7 +1175,9 @@ class Config:
             video=media_config("video", VideoConfig),
             source_path=path,
             channels_file=data.get("channels_file") or DEFAULT_CHANNELS_FILE,
-            search_file=data.get("search_file") or DEFAULT_SEARCH_FILE,
+            history_search_file=(
+                data.get("history_search_file") or DEFAULT_HISTORY_SEARCH_FILE
+            ),
             media_file=data.get("media_file") or DEFAULT_MEDIA_FILE,
             messages_file=data.get("messages_file") or DEFAULT_MESSAGES_FILE,
         )
@@ -1310,7 +1327,7 @@ class Config:
         if template_path.exists():
             shutil.copy2(template_path, path)
             cls.ensure_channels_file(path, cls.load_template_data())
-            cls.ensure_search_file(path, cls.load_template_data())
+            cls.ensure_history_search_file(path, cls.load_template_data())
             cls.ensure_media_file(path, cls.load_template_data())
             cls.ensure_messages_file(path, cls.load_template_data())
             cls.ensure_llm_providers_file(path, cls.load_template_data())
@@ -1328,10 +1345,10 @@ class Config:
             {"instances": {key: dict(value) for key, value in self.channels.instances.items()}},
             channels_file=self.channels_file,
         )
-        self.write_search_file(
+        self.write_history_search_file(
             path,
-            self.search.model_dump(),
-            search_file=self.search_file,
+            self.history_search.model_dump(),
+            history_search_file=self.history_search_file,
         )
         self.write_media_file(
             path,
@@ -1367,7 +1384,7 @@ class Config:
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels_file": self.channels_file,
-            "search_file": self.search_file,
+            "history_search_file": self.history_search_file,
             "media_file": self.media_file,
             "messages_file": self.messages_file,
             "log": {

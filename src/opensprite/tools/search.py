@@ -62,7 +62,13 @@ class SearchHistoryTool(Tool):
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "What to search for in this session history", "pattern": NON_EMPTY_STRING_PATTERN},
-                "limit": {"type": "integer", "description": "Maximum matches to return", "default": self.default_limit},
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum matches to return",
+                    "default": self.default_limit,
+                    "minimum": 1,
+                    "maximum": 20,
+                },
             },
             "required": ["query"],
         }
@@ -73,7 +79,12 @@ class SearchHistoryTool(Tool):
         if not session_id:
             return self._missing_chat_response()
 
-        hits = await self.store.search_history(session_id=session_id, query=query, limit=limit or self.default_limit)
+        requested_limit = self.default_limit if limit is None else limit
+        hits = await self.store.search_history(
+            session_id=session_id,
+            query=query,
+            limit=requested_limit,
+        )
         if not hits:
             return f"No history matches found for '{query}' in this session."
 

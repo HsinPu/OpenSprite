@@ -1297,7 +1297,6 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 "searxng_engines": list(search.searxng_engines),
                 "searxng_categories": list(search.searxng_categories),
                 "tool_updated": True,
-                "research_tool_updated": True,
             }
 
     agent = SearchReloadAgent()
@@ -1323,28 +1322,27 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert port is not None
 
         async with ClientSession() as session:
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/search") as resp:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/web-search") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload["search"]["provider"] == "duckduckgo"
-                assert payload["search"]["freshness"] == "auto"
-                assert payload["search"]["providers"] == ["duckduckgo", "searxng", "jina"]
-                assert payload["search"]["searxng_max_pages"] == 5
-                assert payload["search"]["searxng_engines"] == []
-                assert payload["search"]["searxng_categories"] == []
+                assert payload["web_search"]["provider"] == "duckduckgo"
+                assert payload["web_search"]["freshness"] == "none"
+                assert payload["web_search"]["providers"] == ["duckduckgo", "searxng"]
+                assert payload["web_search"]["searxng_max_pages"] == 5
+                assert payload["web_search"]["searxng_engines"] == []
+                assert payload["web_search"]["searxng_categories"] == []
 
             async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/search",
+                f"http://127.0.0.1:{port}/api/settings/web-search",
                 json={
                     "provider": "searxng",
                     "freshness": "week",
                     "max_results": 12,
-                    "duckduckgo_max_pages": 3,
                     "searxng_max_pages": 4,
                     "searxng_url": "https://search.example.test",
                     "searxng_engines": ["google", "bing", "google"],
                     "searxng_categories": "general, news",
-                    "proxy": "http://proxy.local:8080",
+                    "searxng_proxy": "http://proxy.local:8080",
                 },
             ) as resp:
                 assert resp.status == 200
@@ -1359,18 +1357,16 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                     "searxng_engines": ["google", "bing"],
                     "searxng_categories": ["general", "news"],
                     "tool_updated": True,
-                    "research_tool_updated": True,
                 }
-                assert payload["search"]["provider"] == "searxng"
-                assert payload["search"]["freshness"] == "week"
-                assert payload["search"]["max_results"] == 12
-                assert payload["search"]["duckduckgo_max_pages"] == 3
-                assert payload["search"]["searxng_max_pages"] == 4
-                assert payload["search"]["searxng_engines"] == ["google", "bing"]
-                assert payload["search"]["searxng_categories"] == ["general", "news"]
+                assert payload["web_search"]["provider"] == "searxng"
+                assert payload["web_search"]["freshness"] == "week"
+                assert payload["web_search"]["max_results"] == 12
+                assert payload["web_search"]["searxng_max_pages"] == 4
+                assert payload["web_search"]["searxng_engines"] == ["google", "bing"]
+                assert payload["web_search"]["searxng_categories"] == ["general", "news"]
 
             async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/search",
+                f"http://127.0.0.1:{port}/api/settings/web-search",
                 json={"provider": "unknown"},
             ) as resp:
                 assert resp.status == 400
@@ -1379,12 +1375,11 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.web_search.provider == "searxng"
         assert loaded.tools.web_search.freshness == "week"
         assert loaded.tools.web_search.max_results == 12
-        assert loaded.tools.web_search.duckduckgo_max_pages == 3
         assert loaded.tools.web_search.searxng_max_pages == 4
         assert loaded.tools.web_search.searxng_engines == ["google", "bing"]
         assert loaded.tools.web_search.searxng_categories == ["general", "news"]
         assert loaded.tools.web_search.searxng_url == "https://search.example.test"
-        assert loaded.tools.web_search.proxy == "http://proxy.local:8080"
+        assert loaded.tools.web_search.searxng_proxy == "http://proxy.local:8080"
         assert agent.reloads[-1].provider == "searxng"
         assert agent.reloads[-1].freshness == "week"
     finally:
@@ -1397,8 +1392,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         await asyncio.wait_for(processor, timeout=2)
 
 
-def test_web_adapter_search_settings_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.delenv("JINA_API_KEY", raising=False)
+def test_web_adapter_search_settings_roundtrip(tmp_path):
     asyncio.run(_run_web_search_settings_roundtrip(tmp_path))
 
 
@@ -1429,7 +1423,7 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
         assert port is not None
 
         async with ClientSession() as session:
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/search/searxng-options?url=https://searx.test/search") as resp:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options?url=https://searx.test/search") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
                 assert payload["searxng"]["url"] == "https://searx.test/search"
@@ -1491,7 +1485,7 @@ async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: 
         assert port is not None
 
         async with ClientSession() as session:
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/search/searxng-options?url=https://searx.be") as resp:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options?url=https://searx.be") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
                 assert payload["searxng"]["fallback"] is True

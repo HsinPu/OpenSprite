@@ -8,14 +8,6 @@ type SettingsCopyText = {
   placeholder?: string;
 };
 
-type SearchCredentialsCopy = {
-  configured?: string;
-  notConfigured?: string;
-  description?: (status: string) => string;
-  placeholder?: string;
-  jina?: SettingsCopyText;
-};
-
 export type SearchSettingsCopyView = {
   loading?: string;
   title?: string;
@@ -25,7 +17,6 @@ export type SearchSettingsCopyView = {
     options?: Record<string, string>;
   };
   maxResults?: SettingsCopyText;
-  duckduckgoMaxPages?: SettingsCopyText;
   searxngMaxPages?: SettingsCopyText;
   searxngUrl?: SettingsCopyText;
   searxngOptions?: SettingsCopyText & {
@@ -41,11 +32,9 @@ export type SearchSettingsCopyView = {
   };
   searxngEngines?: SettingsCopyText;
   searxngCategories?: SettingsCopyText;
-  proxy?: SettingsCopyText;
+  searxngProxy?: SettingsCopyText;
   currentTitle?: string;
   save?: string;
-  credentialsTitle?: string;
-  credentials?: SearchCredentialsCopy;
   summary?: (providerLabel: string, freshnessLabel: string, maxResults: number) => string;
 };
 
@@ -163,13 +152,13 @@ export function webSearchFreshnessLabel(copy: SearchSettingsCopy, freshness: str
 
 export function webSearchProviderOptions(copy: SearchSettingsCopy, state: SearchSettingsStateLike): SearchSelectOption[] {
   const providers = state.search?.providers;
-  const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "searxng", "jina"];
+  const values = Array.isArray(providers) && providers.length ? providers : ["duckduckgo", "searxng"];
   return values.map((id) => ({ id, label: webSearchProviderLabel(copy, id) }));
 }
 
 export function webSearchFreshnessOptions(copy: SearchSettingsCopy, state: SearchSettingsStateLike): SearchSelectOption[] {
   const freshnessOptions = state.search?.freshness_options;
-  const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["auto", "none", "day", "week", "month", "year"];
+  const values = Array.isArray(freshnessOptions) && freshnessOptions.length ? freshnessOptions : ["none", "day", "week", "month", "year"];
   return values.map((id) => ({ id, label: webSearchFreshnessLabel(copy, id) }));
 }
 
@@ -212,22 +201,16 @@ export function searxngEngineMeta(copy: SearchSettingsCopy, option: SearchOption
   return parts.join(" - ");
 }
 
-export function webSearchCredentialStatus(copy: SearchSettingsCopy, state: SearchSettingsStateLike, provider: string): string {
-  const configured = state.search?.[`${provider}_api_key_configured`] === true;
-  const credentials = searchCopyFor(copy).credentials;
-  return configured ? credentials?.configured || "Configured" : credentials?.notConfigured || "Not configured";
-}
-
 export function webSearchSummary(copy: SearchSettingsCopy, state: SearchSettingsStateLike): string {
   const form = state.searchForm || {};
   const searchCopy = searchCopyFor(copy);
   return typeof searchCopy.summary === "function"
     ? searchCopy.summary(
       webSearchProviderLabel(copy, form.provider || "searxng"),
-      webSearchFreshnessLabel(copy, form.freshness || "auto"),
+      webSearchFreshnessLabel(copy, form.freshness || "none"),
       Number(form.maxResults || 25),
     )
-    : `${form.provider || "searxng"} - ${form.freshness || "auto"} - ${Number(form.maxResults || 25)}`;
+    : `${form.provider || "searxng"} - ${form.freshness || "none"} - ${Number(form.maxResults || 25)}`;
 }
 
 export function browserBackendOptions(copy: BrowserSettingsCopy, state: BrowserSettingsStateLike): SearchSelectOption[] {

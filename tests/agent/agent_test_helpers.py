@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
 from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
@@ -127,7 +127,7 @@ def make_agent_loop(
     context_builder: Any | None = None,
     tools: ToolRegistry | None = None,
     tools_config: ToolsConfig | None = None,
-    search_store: Any | None = None,
+    history_search_store: Any | None = None,
     config_path: str | Path | None = None,
     include_images: bool = False,
     app_home: Path | None = None,
@@ -149,9 +149,9 @@ def make_agent_loop(
         memory_config=agent_kwargs.pop("memory_config", MemoryConfig(**Config.load_template_data()["memory"])),
         tools_config=tools_config or ToolsConfig(),
         log_config=agent_kwargs.pop("log_config", LogConfig()),
-        search_config=agent_kwargs.pop("search_config", SearchConfig()),
+        history_search_config=agent_kwargs.pop("history_search_config", HistorySearchConfig()),
         user_profile_config=agent_kwargs.pop("user_profile_config", disabled_user_profile_config()),
-        search_store=search_store,
+        history_search_store=history_search_store,
         config_path=config_path,
         **Config.packaged_agent_llm_chat_kwargs(),
         **agent_kwargs,

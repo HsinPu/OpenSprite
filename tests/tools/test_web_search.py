@@ -7,7 +7,6 @@ import types
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.web_search_freshness import (
-    effective_freshness as _effective_freshness,
     freshness_params as _freshness_params,
     normalize_freshness as _normalize_freshness,
 )
@@ -19,7 +18,11 @@ from opensprite.tools.web_search_payloads import (
 
 class _FakeSearxngResponse:
     def __init__(self, results=None):
-        self.results = results or [{"title": "One", "url": "https://example.com/one", "content": "First"}]
+        self.results = (
+            results
+            if results is not None
+            else [{"title": "One", "url": "https://example.com/one", "content": "First"}]
+        )
 
     def raise_for_status(self):
         return None
@@ -41,6 +44,24 @@ class _FakeSearxngClient:
     async def get(self, url, params=None, timeout=None):
         self.requests.append((url, params))
         return _FakeSearxngResponse()
+
+
+class _FakeEmptySearxngClient(_FakeSearxngClient):
+    async def get(self, url, params=None, timeout=None):
+        self.requests.append((url, params))
+        return _FakeSearxngResponse([])
+
+
+class _FakeMalformedSearxngClient(_FakeSearxngClient):
+    async def get(self, url, params=None, timeout=None):
+        self.requests.append((url, params))
+        return _FakeSearxngResponse(
+            [
+                {"title": "", "url": "https://example.com/no-title", "content": "bad"},
+                {"title": "No URL", "url": "", "content": "bad"},
+                None,
+            ]
+        )
 
 
 class _FakePagedSearxngClient:
@@ -110,12 +131,14 @@ def test_format_results_returns_structured_json_payload():
         ],
         5,
         provider="duckduckgo",
+        backend="ddgs",
     )
 
     parsed = json.loads(payload)
 
     assert parsed == {
         "type": "web_search",
+        "ok": True,
         "query": "sqlite fts5",
         "url": "",
         "final_url": "",
@@ -123,6 +146,7 @@ def test_format_results_returns_structured_json_payload():
         "content": "",
         "summary": "Search results for: sqlite fts5",
         "provider": "duckduckgo",
+        "backend": "ddgs",
         "extractor": "search",
         "status": None,
         "truncated": False,
@@ -173,8 +197,8 @@ def test_web_search_count_limit_comes_from_config():
     assert count_schema["maximum"] == 25
     assert count_schema["default"] == 25
     assert count_schema["description"] == "Results (1-25)"
-    assert freshness_schema["default"] == "auto"
-    assert freshness_schema["enum"] == ["auto", "none", "day", "week", "month", "year"]
+    assert freshness_schema["default"] == "none"
+    assert freshness_schema["enum"] == ["none", "day", "week", "month", "year"]
 
 
 def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
@@ -183,13 +207,13 @@ def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
 
     async def fake_search(query, n, freshness):
         requested_counts.append((n, freshness))
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
     asyncio.run(tool._execute("sqlite", count=50))
 
-    assert requested_counts == [(25, "month")]
+    assert requested_counts == [(25, "none")]
 
 
 def test_web_search_execute_allows_freshness_override(monkeypatch):
@@ -198,7 +222,7 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
 
     async def fake_search(query, n, freshness):
         requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
@@ -207,43 +231,13 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
     assert requested_freshness == ["none"]
 
 
-def test_web_search_execute_uses_auto_freshness_default_for_latest_query(monkeypatch):
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
-    requested_freshness = []
-
-    async def fake_search(query, n, freshness):
-        requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
-
-    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
-
-    asyncio.run(tool._execute("Qwen latest model 2026"))
-
-    assert requested_freshness == ["month"]
-
-
-def test_web_search_execute_uses_auto_freshness_default_for_chinese_query(monkeypatch):
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
-    requested_freshness = []
-
-    async def fake_search(query, n, freshness):
-        requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
-
-    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
-
-    asyncio.run(tool._execute("現在寫 code 最好的語言模型"))
-
-    assert requested_freshness == ["month"]
-
-
 def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="none"))
     requested_freshness = []
 
     async def fake_search(query, n, freshness):
         requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
@@ -252,18 +246,9 @@ def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
     assert requested_freshness == ["none"]
 
 
-def test_web_search_freshness_aliases_and_provider_params():
-    assert _normalize_freshness("latest", "year") == "month"
-    assert _normalize_freshness("all", "year") == "none"
-    assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
-    assert _effective_freshness(None, "auto", query="現在寫 code 最好的語言模型") == "month"
-    assert _effective_freshness(None, "auto", query="sqlite docs") == "month"
-    assert _effective_freshness("year", "auto", query="latest Qwen models") == "year"
-    assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"
-    assert _effective_freshness("none", "auto", query="latest Qwen models") == "none"
-    assert _effective_freshness("none", "auto", query="sqlite docs") == "none"
-    assert _effective_freshness("none", "year", query="sqlite docs") == "none"
-    assert _freshness_params("duckduckgo", "week") == {"df": "w"}
+def test_web_search_freshness_values_and_provider_params():
+    assert _normalize_freshness("month", "year") == "month"
+    assert _normalize_freshness("latest", "year") == "year"
     assert _freshness_params("searxng", "year") == {"time_range": "year"}
     assert _freshness_params("searxng", "none") == {}
 
@@ -331,6 +316,42 @@ def test_searxng_search_respects_configured_page_limit(monkeypatch):
 
     assert [item["title"] for item in payload["items"]] == ["One"]
     assert [request[1]["pageno"] for request in fake_client.requests] == [1]
+
+
+def test_searxng_search_reports_empty_results(monkeypatch):
+    fake_client = _FakeEmptySearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("no matches", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["provider"] == "searxng"
+    assert payload["backend"] == "searxng"
+    assert payload["items"] == []
+    assert payload["error"] == "SearXNG returned no results for 'no matches'."
+
+
+def test_searxng_search_rejects_untraceable_results(monkeypatch):
+    fake_client = _FakeMalformedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("malformed", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["items"] == []
+    assert payload["error"] == "SearXNG returned no results for 'malformed'."
 
 
 def test_duckduckgo_search_prefers_ddgs_package(monkeypatch):

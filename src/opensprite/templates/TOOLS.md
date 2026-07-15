@@ -48,7 +48,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 - `batch`
   - Use to run multiple read-only lookups concurrently when exploring a workspace or retrieving related context.
-  - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, and `search_history`.
+  - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, and `read_skill`.
   - Do not use it for writes, edits, shell commands, delegation, scheduling, media sending, config changes, or MCP tools.
   - Each child call still follows normal validation and availability checks; do not use `batch` to bypass unavailable tools.
 
@@ -96,8 +96,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 ## External Knowledge Tools
 
-- Use `web_research`, `web_search`, and `web_fetch` for external HTTP information gathering; do not use `exec` with `curl`, `wget`, Python HTTP clients, PowerShell web requests, or similar shell-based HTTP fetches unless the user explicitly asks for that transport or a web tool is unavailable and you explain the limitation.
-- Use `web_research` for broad, current, comparative, ambiguous, or public-information questions where both discovery and inspected sources are needed.
+- Use `web_search` and `web_fetch` for external HTTP information gathering; do not use `exec` with `curl`, `wget`, Python HTTP clients, PowerShell web requests, or similar shell-based HTTP fetches unless the user explicitly asks for that transport or a web tool is unavailable and you explain the limitation.
 - Use `web_search` only to discover candidate URLs or fresh source leads when you do not yet know which source to inspect.
 - Use `web_fetch` when the URL, API endpoint, documentation page, article, filing, or official source is already known or selected.
 - If `web_fetch` fails with `403`, returns too little content, or appears blocked by JavaScript rendering, you may use browser tools as a public-page rendering fallback only when normal browser access is appropriate; do not use browser tools to bypass CAPTCHA, login, paywall, Cloudflare challenge, robots/ToS restrictions, or other access controls.
@@ -108,19 +107,9 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use when you need fresh external sources, candidate URLs, or current information.
   - Prefer this before `web_fetch` when you do not yet know which page to read.
 
-- `web_research`
-  - Use when the user asks for current external information and you need both search results and inspected source pages.
-  - Prefer this over manually chaining `web_search` and `web_fetch` for normal web research tasks.
-  - It searches, deduplicates candidate URLs, fetches substantive pages, and returns traceable source metadata.
-  - Do not lower `count` from the configured search maximum unless the user explicitly asks for fewer results; if the user asks for "up to N" sources/results, pass that number as `count`.
-  - For current/latest/now/recent requests, keep recency words and the current year in the search query when helpful, and leave `freshness` as `auto` unless the user requests all-time results.
-  - Use the optional `queries` argument for broad, ambiguous, comparative, current, or contested topics where one search phrase may miss important angles.
-  - Keep `query` as the main user-facing question and add 1-4 focused `queries` variants for complementary angles, such as official docs, release notes, pricing, reviews, limitations, or regional policy terms.
-  - Do not add extra `queries` for simple lookups or user-provided URLs.
-
 - `web_fetch`
   - Use to retrieve readable content from a specific URL.
-  - Prefer this after `web_search`, for a specific source selected from `web_research`, or when the user already provided a URL.
+  - Prefer this after `web_search` or when the user already provided a URL.
 
 - Browser tools (`browser_navigate`, `browser_snapshot`, and related interaction tools)
   - Use for interaction, authenticated user-approved workflows, UI inspection, JavaScript-rendered public pages, scrolling, clicking, forms, screenshots, console state, or DOM/browser-state checks.

@@ -20,7 +20,15 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str, **metadata: Any) -> str:
+def format_results(
+    query: str,
+    items: list[dict[str, Any]],
+    n: int,
+    *,
+    provider: str,
+    backend: str,
+    **metadata: Any,
+) -> str:
     """Format search results into the shared web payload schema."""
     normalized_items: list[dict[str, str]] = []
     for item in items[:n]:
@@ -33,6 +41,7 @@ def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider:
         )
     payload = {
         "type": "web_search",
+        "ok": True,
         "query": query,
         "url": "",
         "final_url": "",
@@ -40,6 +49,7 @@ def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider:
         "content": "",
         "summary": f"Search results for: {query}",
         "provider": provider,
+        "backend": backend,
         "extractor": "search",
         "status": None,
         "truncated": False,

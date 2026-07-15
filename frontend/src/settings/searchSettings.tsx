@@ -9,7 +9,6 @@ import {
   type SearchSettingsCopy,
   type SearchSettingsCopyView,
   type SearchSettingsStateLike,
-  webSearchCredentialStatus,
   webSearchFreshnessOptions,
   webSearchProviderOptions,
   webSearchSummary,
@@ -64,9 +63,6 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
         </SettingsRow>
         <SettingsRow title={searchCopy.maxResults?.title || "Max results"} description={searchCopy.maxResults?.description || ""} className="settings-row--field">
           <InputNumber className="settings-control" value={Number(form.maxResults || 25)} min={1} max={100} disabled={state.searchLoading} onChange={(value) => (form.maxResults = Number(value || 25))} />
-        </SettingsRow>
-        <SettingsRow title={searchCopy.duckduckgoMaxPages?.title || "DuckDuckGo max pages"} description={searchCopy.duckduckgoMaxPages?.description || ""} className="settings-row--field">
-          <InputNumber className="settings-control" value={Number(form.duckduckgoMaxPages || 10)} min={1} max={50} disabled={state.searchLoading} onChange={(value) => (form.duckduckgoMaxPages = Number(value || 10))} />
         </SettingsRow>
         <SettingsRow title={searchCopy.searxngMaxPages?.title || "SearXNG max pages"} description={searchCopy.searxngMaxPages?.description || ""} className="settings-row--field">
           <InputNumber className="settings-control" value={Number(form.searxngMaxPages || 5)} min={1} max={50} disabled={state.searchLoading} onChange={(value) => (form.searxngMaxPages = Number(value || 5))} />
@@ -131,26 +127,13 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
           </div>
         ) : null}
 
-        <SettingsRow title={searchCopy.proxy?.title || "Search proxy"} description={searchCopy.proxy?.description || ""} className="settings-row--field">
-          <Input value={form.proxy} placeholder={searchCopy.proxy?.placeholder || "http://proxy-host:port"} disabled={state.searchLoading} onChange={(event) => (form.proxy = event.target.value)} />
+        <SettingsRow title={searchCopy.searxngProxy?.title || "SearXNG proxy"} description={searchCopy.searxngProxy?.description || ""} className="settings-row--field">
+          <Input value={form.searxngProxy} placeholder={searchCopy.searxngProxy?.placeholder || "http://proxy-host:port"} disabled={state.searchLoading} onChange={(event) => (form.searxngProxy = event.target.value)} />
         </SettingsRow>
         <SettingsRow title={searchCopy.currentTitle || "Current setting"} description={summary}>
           <Button icon={<SaveOutlined />} loading={state.searchLoading} disabled={state.searchLoading} onClick={client.saveSearchSettings}>
             {searchCopy.save || "Save search settings"}
           </Button>
-        </SettingsRow>
-      </SettingsCard>
-
-      <SettingsSectionTitle>{searchCopy.credentialsTitle || "Provider API keys"}</SettingsSectionTitle>
-      <SettingsCard className="settings-card--form">
-        <SettingsRow
-          title={searchCopy.credentials?.jina?.title || "Jina API key"}
-          description={typeof searchCopy.credentials?.description === "function"
-            ? searchCopy.credentials.description(webSearchCredentialStatus(copy, state, "jina"))
-            : webSearchCredentialStatus(copy, state, "jina")}
-          className="settings-row--field"
-        >
-          <Input.Password value={form.jinaApiKey} autoComplete="new-password" placeholder={searchCopy.credentials?.placeholder || "Leave blank to keep existing key"} disabled={state.searchLoading} onChange={(event) => (form.jinaApiKey = event.target.value)} />
         </SettingsRow>
       </SettingsCard>
     </section>

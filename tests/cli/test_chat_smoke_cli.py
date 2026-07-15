@@ -48,7 +48,7 @@ def test_summarize_trace_extracts_run_and_tool_results():
                 run_id="run-1",
                 session_id="web:smoke",
                 event_type=TOOL_STARTED_EVENT,
-                payload={"tool_name": "web_research"},
+                payload={"tool_name": "web_search"},
             ),
             StoredRunEvent(
                 run_id="run-1",
@@ -66,7 +66,7 @@ def test_summarize_trace_extracts_run_and_tool_results():
     assert summary["persisted"] is True
     assert summary["event_count"] == 2
     assert summary["tool_count"] == 1
-    assert summary["tools"] == ["web_research"]
+    assert summary["tools"] == ["web_search"]
     assert summary["failed_tool_count"] == 1
     assert summary["failed_tools"] == ["web_fetch"]
 

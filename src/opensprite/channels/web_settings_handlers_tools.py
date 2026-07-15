@@ -68,17 +68,17 @@ def _browser_payload(adapter: Any, config: Config) -> dict[str, Any]:
     )
 
 
-async def handle_settings_search(adapter: Any, request: web.Request) -> web.Response:
+async def handle_settings_web_search(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
-    return web.json_response({"search": web_settings_payloads.web_search_payload(config)})
+    return web.json_response({"web_search": web_settings_payloads.web_search_payload(config)})
 
 
-async def handle_settings_search_searxng_options(adapter: Any, request: web.Request) -> web.Response:
+async def handle_settings_web_search_searxng_options(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
     search = config.tools.web_search
     searxng_url = adapter._coerce_optional_text(request.query.get("url"), default=search.searxng_url) or adapter.DEFAULT_CONFIG.get("searxng_url", "") or "https://searx.be/search"
     try:
-        async with httpx.AsyncClient(proxy=search.proxy) as client:
+        async with httpx.AsyncClient(proxy=search.searxng_proxy) as client:
             response = await client.get(
                 web_settings_coercion.searxng_config_url(searxng_url),
                 headers={"Accept": "application/json", "User-Agent": SEARXNG_OPTIONS_USER_AGENT},
@@ -94,7 +94,7 @@ async def handle_settings_search_searxng_options(adapter: Any, request: web.Requ
     return web.json_response({"searxng": web_settings_coercion.searxng_options_payload(payload, url=searxng_url)})
 
 
-async def handle_settings_search_update(adapter: Any, request: web.Request) -> web.Response:
+async def handle_settings_web_search_update(adapter: Any, request: web.Request) -> web.Response:
     body = await adapter._read_json_body(request)
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
@@ -102,7 +102,6 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
     search.provider = web_settings_coercion.coerce_web_search_provider(body.get("provider", search.provider))
     search.freshness = web_settings_coercion.coerce_web_search_freshness(body.get("freshness", search.freshness))
     search.max_results = web_settings_coercion.coerce_positive_int(body.get("max_results"), field="max_results", default=search.max_results, minimum=1, maximum=100)
-    search.duckduckgo_max_pages = web_settings_coercion.coerce_positive_int(body.get("duckduckgo_max_pages"), field="duckduckgo_max_pages", default=search.duckduckgo_max_pages, minimum=1, maximum=50)
     search.searxng_max_pages = web_settings_coercion.coerce_positive_int(body.get("searxng_max_pages"), field="searxng_max_pages", default=search.searxng_max_pages, minimum=1, maximum=50)
     if "searxng_url" in body:
         search.searxng_url = adapter._coerce_optional_text(body.get("searxng_url"), default="") or adapter.DEFAULT_CONFIG.get("searxng_url", "")
@@ -110,12 +109,10 @@ async def handle_settings_search_update(adapter: Any, request: web.Request) -> w
         search.searxng_engines = web_settings_coercion.coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
     if "searxng_categories" in body:
         search.searxng_categories = web_settings_coercion.coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
-    if "proxy" in body:
-        search.proxy = adapter._coerce_optional_text(body.get("proxy"), default="") or None
-    for field in ("jina_api_key",):
-        web_settings_coercion.apply_optional_secret_field(search, body, field)
+    if "searxng_proxy" in body:
+        search.searxng_proxy = adapter._coerce_optional_text(body.get("searxng_proxy"), default="") or None
     config.save(config_path)
-    payload = {"search": web_settings_payloads.web_search_payload(config), "restart_required": True}
+    payload = {"web_search": web_settings_payloads.web_search_payload(config), "restart_required": True}
     payload = web_settings_reload.reload_web_search_from_config(adapter, payload, logger=logger)
     return web.json_response(payload)
 

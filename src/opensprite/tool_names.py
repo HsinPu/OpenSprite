@@ -25,7 +25,6 @@ DELEGATE_MANY_TOOL_NAME = "delegate_many"
 RUN_WORKFLOW_TOOL_NAME = "run_workflow"
 WEB_SEARCH_TOOL_NAME = "web_search"
 WEB_FETCH_TOOL_NAME = "web_fetch"
-WEB_RESEARCH_TOOL_NAME = "web_research"
 VERIFICATION_TOOL_NAME = "verify"
 LIST_RUN_FILE_CHANGES_TOOL_NAME = "list_run_file_changes"
 PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME = "preview_run_file_change_revert"
@@ -74,9 +73,7 @@ MEDIA_ANALYSIS_TOOL_NAMES = frozenset(
     }
 )
 MEDIA_TOOL_NAMES = frozenset({*MEDIA_ANALYSIS_TOOL_NAMES, SEND_MEDIA_TOOL_NAME})
-WEB_SOURCE_TOOL_NAMES = frozenset(
-    {WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME, WEB_RESEARCH_TOOL_NAME}
-)
+WEB_SOURCE_TOOL_NAMES = frozenset({WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME})
 
 
 def is_verification_tool_name(tool_name: str | None) -> bool:

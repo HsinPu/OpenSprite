@@ -7,7 +7,7 @@ def test_chunk_text_normalizes_and_splits_overlap():
     assert chunks == ["alpha beta g", "ta gamma del", "delta"]
 
 
-def test_build_history_chunks_marks_message_source():
+def test_build_history_chunks_keeps_only_message_metadata():
     chunks = build_history_chunks(
         role="assistant",
         content="Earlier we fixed the cleanup path.",
@@ -16,6 +16,6 @@ def test_build_history_chunks_marks_message_source():
     )
 
     assert len(chunks) == 1
-    assert chunks[0].source_type == "history"
     assert chunks[0].role == "assistant"
     assert chunks[0].content == "Earlier we fixed the cleanup path."
+    assert chunks[0].chunk_index == 0
