@@ -32,7 +32,8 @@ from ..config.defaults import (
     DEFAULT_LOG_SYSTEM_PROMPT,
     DEFAULT_LOG_SYSTEM_PROMPT_LINES,
 )
-from ..runs.schema import sanitize_run_metadata, serialize_run_event
+from ..runs.schema import serialize_run_event
+from ..utils.json_safe import json_safe_payload
 from ..utils.log import logger
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
@@ -242,7 +243,7 @@ class WebAdapter(MessageAdapter):
             "created_at": run.created_at,
             "updated_at": run.updated_at,
             "finished_at": run.finished_at,
-            "metadata": sanitize_run_metadata(dict(run.metadata or {})),
+            "metadata": json_safe_payload(dict(run.metadata or {})),
         }
 
     def _serialize_message(self, message: Any) -> dict[str, Any]:
@@ -251,7 +252,7 @@ class WebAdapter(MessageAdapter):
             "role": str(getattr(message, "role", "assistant") or "assistant"),
             "content": str(getattr(message, "content", "") or ""),
             "tool_name": getattr(message, "tool_name", None),
-            "metadata": sanitize_run_metadata(dict(metadata or {})),
+            "metadata": json_safe_payload(dict(metadata or {})),
             "created_at": float(getattr(message, "timestamp", 0) or 0),
         }
 

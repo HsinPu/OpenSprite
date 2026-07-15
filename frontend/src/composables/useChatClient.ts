@@ -3,12 +3,9 @@ import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
 import {
-  coerceBoolean,
   coerceNonNegativeInteger,
-  coerceStringList,
   coerceText as textField,
   normalizeEventTimestamp,
-  previewText,
 } from "./chatClientCoercion";
 import {
   toCommandCatalogItemPayload,
@@ -76,7 +73,6 @@ import {
   buildRunsPath,
   buildSessionDeletePath,
   buildSessionsClearPath,
-  buildWorktreeCleanupPath,
 } from "./chatClientPaths";
 import {
   DEFAULT_COLOR_SCHEME,
@@ -159,23 +155,14 @@ import {
   toRunFileChangeRevertPayload,
   toRunsPayload,
   toRunTracePayload,
-  toWorktreeCleanupPayload,
   type RunFileChangeRevertPayload,
   type RunFileChangeRevertRecord,
   type RunsPayload,
   type RunTracePayload,
-  type WorktreeCleanupRecord,
-  type WorktreeCleanupPayload,
 } from "./chatClientRunPayloads";
+import { normalizeRunSummary } from "./runSummaryNormalizers";
 import {
-  normalizeRunSummary,
-  type RunSummaryFileChangeView,
-  type RunSummaryView,
-} from "./runSummaryNormalizers";
-import {
-  applyWorktreeCleanupEvent,
   compactRunEvents,
-  findWorktreeSandbox,
   inferRunEventKind,
   inferRunEventStatus,
   normalizeRunArtifact,
@@ -184,8 +171,6 @@ import {
   normalizeTraceEventArtifact,
   normalizeTracePart,
   normalizeTracePartMetadata,
-  preserveKnownRemovedWorktreeSandbox,
-  type BackgroundProcessEventPayload,
   type RunArtifactMetadata,
   type RunArtifactView,
   type RunEventKind,
@@ -374,19 +359,6 @@ function normalizeRunFileChangeRevertPayload(payload: RunFileChangeRevertPayload
   };
 }
 
-function normalizeWorktreeCleanupPayload(payload: WorktreeCleanupPayload | null): WorktreeCleanupPayload {
-  return payload || {
-    ok: false,
-    cleanup: null,
-    reason: "",
-    status: "",
-  };
-}
-
-function normalizeRunSummaryFileChanges(summary: RunSummaryView | null | undefined): RunSummaryFileChangeView[] {
-  return Array.isArray(summary?.fileChanges) ? summary.fileChanges : [];
-}
-
 function normalizeRunTracePayload(payload: RunTracePayload | null): RunTracePayload {
   return payload || {
     rawEvents: [],
@@ -533,29 +505,6 @@ function normalizeLiveSessionIdentity(payload: LiveSessionIdentityPayload): Live
   };
 }
 
-function liveSessionId(payload: LiveSessionIdentityPayload): string {
-  return normalizeLiveSessionIdentity(payload).sessionId;
-}
-
-function liveChannel(payload: LiveSessionIdentityPayload, sessionId?: string): string {
-  const identity = normalizeLiveSessionIdentity(payload);
-  const resolvedSessionId = sessionId ?? identity.sessionId;
-  if (resolvedSessionId === identity.sessionId) {
-    return identity.channel;
-  }
-  return textField(payload.channel || channelFromSessionId(resolvedSessionId) || "web") || "web";
-}
-
-function liveTransportExternalChatId(payload: LiveSessionIdentityPayload, sessionId?: string): string {
-  const identity = normalizeLiveSessionIdentity(payload);
-  const resolvedSessionId = sessionId ?? identity.sessionId;
-  if (resolvedSessionId === identity.sessionId) {
-    return identity.transportExternalChatId;
-  }
-  return textField(payload.external_chat_id || payload.externalChatId)
-    || externalChatIdFromSessionId(resolvedSessionId);
-}
-
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
   accessToken: "opensprite:web:accessToken",
@@ -694,8 +643,8 @@ function shouldLoadRunTrace(run: RunViewState | null | undefined): boolean {
   if (!run || run.traceLoading) {
     return false;
   }
-  const summaryFileChanges = normalizeRunSummaryFileChanges(run.summary);
-  const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !summaryFileChanges.length;
+  const summaryHasFileChanges = Boolean(run.summary?.fileChangeCount);
+  const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !summaryHasFileChanges;
   return !(run.traceLoaded && hasNeededFileChanges);
 }
 
@@ -1768,10 +1717,6 @@ export function useChatClient() {
     run.rawEvents.push(rawEvent);
     run.rawEvents = compactRunEvents(run.rawEvents);
     updateLiveTraceEventCounts(run, rawEvent);
-    if (run.worktreeSandbox) {
-      run.worktreeSandbox = applyWorktreeCleanupEvent(run.worktreeSandbox, rawEvent);
-    }
-
     run.status = mergeMonotonicRunStatus(run.status, nextStatus || "running");
 
     const description = describeRunEvent(liveEvent.eventType, liveEvent.payload, copy.value);
@@ -2449,10 +2394,6 @@ export function useChatClient() {
       run.artifacts.forEach((artifact) => applyToolArtifactToParts(run, artifact));
       run.fileChanges = mergedTrace.fileChanges;
       run.diffSummary = trace.diffSummary;
-      run.worktreeSandbox = preserveKnownRemovedWorktreeSandbox(
-        run.worktreeSandbox,
-        findWorktreeSandbox(run.parts, run.artifacts, run.rawEvents),
-      );
       run.traceLoaded = true;
     } catch (error: unknown) {
       if (clientDisposed || !isCurrentRequestGeneration(runTraceRequestGenerations, run, requestGeneration)) {
@@ -3534,54 +3475,6 @@ export function useChatClient() {
     }
   }
 
-  async function cleanupWorktreeSandbox(run: RunViewState | null | undefined): Promise<WorktreeCleanupRecord | null> {
-    const sandbox = run?.worktreeSandbox;
-    const sandboxPath = String(sandbox?.sandboxPath || "").trim();
-    if (!sandbox || !sandboxPath || !sandbox.cleanupSupported) {
-      setNotice(copy.value.notices.worktreeCleanupUnavailable, "warning");
-      return null;
-    }
-    if (sandbox.cleanupPending) {
-      return null;
-    }
-    if (typeof window !== "undefined" && !window.confirm(copy.value.runSummary.confirmCleanupSandbox(sandboxPath))) {
-      return null;
-    }
-
-    sandbox.cleanupPending = true;
-    try {
-      const payload = toWorktreeCleanupPayload(
-        await requestSettingsJson(buildWorktreeCleanupPath(), {
-          method: "POST",
-          body: JSON.stringify({
-            sandbox_path: sandboxPath,
-            session_id: run?.sessionId || currentSession.value?.sessionId || "",
-            run_id: run?.runId || "",
-          }),
-        }),
-      );
-      const cleanupResult = normalizeWorktreeCleanupPayload(payload);
-      const cleanup = cleanupResult.cleanup;
-      sandbox.cleanupResult = cleanup;
-      if (!cleanupResult.ok) {
-        setNotice(cleanupResult.reason || copy.value.notices.worktreeCleanupFailed, "warning");
-        return cleanup;
-      }
-      sandbox.status = cleanupResult.status || "removed";
-      sandbox.cleanupSupported = false;
-      setNotice(copy.value.notices.worktreeCleanupApplied, "success");
-      if (currentSession.value) {
-        await loadRunTrace(currentSession.value, run);
-      }
-      return cleanup;
-    } catch (error: unknown) {
-      setNotice(settingsErrorMessage(error, copy.value.notices.worktreeCleanupFailed), "error");
-      return null;
-    } finally {
-      sandbox.cleanupPending = false;
-    }
-  }
-
   function normalizeOutgoingMessage(rawValue: unknown): OutgoingMessagePayload {
     const rawRecord = toOutgoingMessageInputPayload(rawValue);
     if (rawRecord) {
@@ -3849,7 +3742,6 @@ export function useChatClient() {
     clearWebSessions,
     cancelRun,
     revertRunFileChange,
-    cleanupWorktreeSandbox,
     toggleSettingsConnection,
     submitMessage,
     handleComposerKeydown,

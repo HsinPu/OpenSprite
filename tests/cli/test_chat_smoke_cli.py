@@ -311,7 +311,7 @@ def test_trace_payload_can_include_full_serialized_trace():
             status="completed",
             created_at=1.0,
             updated_at=2.0,
-            metadata={"objective": "keep", "task_contract": {"task_type": "legacy"}},
+            metadata={"objective": "keep"},
         ),
         events=[
             StoredRunEvent(
@@ -320,12 +320,6 @@ def test_trace_payload_can_include_full_serialized_trace():
                 event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "web_search"},
             ),
-            StoredRunEvent(
-                run_id="run-1",
-                session_id="web:smoke",
-                event_type="completion_gate.evaluated",
-                payload={"status": "complete"},
-            ),
         ],
         parts=[
             StoredRunPart(
@@ -333,13 +327,7 @@ def test_trace_payload_can_include_full_serialized_trace():
                 session_id="web:smoke",
                 part_type="assistant_message",
                 content="pong",
-                metadata={"response_len": 4, "auto_continue_attempts": 1},
-            ),
-            StoredRunPart(
-                run_id="run-1",
-                session_id="web:smoke",
-                part_type="task_scorecard",
-                content="legacy",
+                metadata={"response_len": 4},
             ),
         ],
     )

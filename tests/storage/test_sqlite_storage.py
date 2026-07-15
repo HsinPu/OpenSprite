@@ -1,5 +1,4 @@
 import asyncio
-import sqlite3
 
 from opensprite.runs.lifecycle import RUN_STARTED_EVENT
 from opensprite.storage.base import (
@@ -154,40 +153,6 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert [entry.part_type for entry in trace.parts] == ["tool_call"]
     assert [entry.path for entry in trace.file_changes] == ["notes.txt"]
     assert chats == ["chat-1"]
-
-
-def test_sqlite_storage_does_not_create_work_states_for_new_databases(tmp_path):
-    db_path = tmp_path / "new.db"
-    SQLiteStorage(db_path)
-
-    with sqlite3.connect(db_path) as conn:
-        table = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_states'"
-        ).fetchone()
-
-    assert table is None
-
-
-def test_sqlite_storage_preserves_existing_work_states_data(tmp_path):
-    db_path = tmp_path / "legacy.db"
-    with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            "CREATE TABLE work_states (session_id TEXT PRIMARY KEY, objective TEXT NOT NULL)"
-        )
-        conn.execute(
-            "INSERT INTO work_states (session_id, objective) VALUES (?, ?)",
-            ("chat-legacy", "Keep this historical row"),
-        )
-
-    SQLiteStorage(db_path)
-
-    with sqlite3.connect(db_path) as conn:
-        row = conn.execute(
-            "SELECT session_id, objective FROM work_states WHERE session_id = ?",
-            ("chat-legacy",),
-        ).fetchone()
-
-    assert row == ("chat-legacy", "Keep this historical row")
 
 
 def test_sqlite_storage_persists_background_processes(tmp_path):

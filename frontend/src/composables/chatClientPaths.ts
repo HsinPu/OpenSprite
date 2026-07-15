@@ -10,10 +10,6 @@ export function buildRunFileChangeRevertPath(runId: string, sessionId: string, c
   return `/api/runs/${encodeURIComponent(runId)}/file-changes/${encodeURIComponent(changeId)}/revert?session_id=${encodeURIComponent(sessionId)}`;
 }
 
-export function buildWorktreeCleanupPath(): string {
-  return "/api/worktrees/cleanup";
-}
-
 export function buildRunsPath(sessionId: string, limit: number): string {
   return `/api/runs?session_id=${encodeURIComponent(sessionId)}&limit=${limit}`;
 }

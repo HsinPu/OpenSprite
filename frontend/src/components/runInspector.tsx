@@ -30,9 +30,6 @@ export type RunInspectorCopy = RunSummaryCopy &
       select?: string;
       unavailable: string;
     };
-    runSummary: RunSummaryCopy["runSummary"] & {
-      objective?: string;
-    };
   };
 
 export type RunInspectorClient = {
@@ -44,13 +41,11 @@ export type RunInspectorClient = {
   currentRunsError: ValueRef<string>;
   currentRunTimeline: ValueRef<RunTimelineEventView[]>;
   selectRun: (runId: string) => void;
-  cleanupWorktreeSandbox: (run: RunViewState) => void;
   cancelRun: (run: RunViewState) => void;
   revertRunFileChange: (run: RunViewState, change: TraceFileChangeView) => void;
 };
 
 export function RunInspector({ client }: { client: RunInspectorClient }) {
-  const copy = client.copy.value;
   const run = client.currentRun.value;
   const runs = client.currentRuns.value || [];
 
@@ -69,8 +64,8 @@ function RunDetailsPanel({ client, run }: { client: RunInspectorClient; run: Run
   }
 
   return (
-    <div className="run-details-panel">
-      {client.state.showRunSummary ? <RunSummaryCard copy={copy} run={run} cleanupWorktreeSandbox={client.cleanupWorktreeSandbox} /> : null}
+    <div>
+      {client.state.showRunSummary ? <RunSummaryCard copy={copy} run={run} /> : null}
       {client.state.showRunTimeline ? <RunTimeline copy={copy} events={client.currentRunTimeline.value || []} /> : null}
       {client.state.showRunTrace ? (
         <RunTraceViewer

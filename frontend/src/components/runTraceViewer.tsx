@@ -18,7 +18,7 @@ export type RunTraceCopy = {
     diffSummary?: string;
   };
   runFileInspector?: {
-    revert?: string;
+    revertAction?: string;
   };
 };
 
@@ -124,7 +124,7 @@ export function RunTraceViewer({
               actions={[
                 Boolean(change.revertSupported) ? (
                   <Button size="small" onClick={() => revertFileChange(run, change)}>
-                    {copy.runFileInspector?.revert || "Revert"}
+                    {copy.runFileInspector?.revertAction || "Revert"}
                   </Button>
                 ) : null,
               ].filter(Boolean)}

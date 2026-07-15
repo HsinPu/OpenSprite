@@ -46,7 +46,6 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_get("/api/runs/{run_id}/events", api.handle_run_events)
     router.add_post("/api/runs/{run_id}/cancel", api.handle_run_cancel)
     router.add_post("/api/runs/{run_id}/file-changes/{change_id}/revert", api.handle_run_file_change_revert)
-    router.add_post("/api/worktrees/cleanup", api.handle_worktree_cleanup)
     router.add_get("/api/settings/channels", _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channels))
     router.add_post("/api/settings/channels", _bind_adapter(adapter, web_settings_handlers_core.handle_settings_channel_create))
     router.add_put(

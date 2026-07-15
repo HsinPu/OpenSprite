@@ -6,7 +6,7 @@ from typing import Any
 
 from aiohttp import web
 
-from . import web_api_control, web_api_runs, web_api_sessions
+from . import web_api_runs, web_api_sessions
 from .identity import channel_from_session, external_chat_id_from_session
 from ..bus.session_commands import session_command_catalog
 from ..runs.schema import (
@@ -160,10 +160,6 @@ class WebApiHandlers:
 
     async def handle_run_file_change_revert(self, request: web.Request) -> web.Response:
         return await web_api_runs.handle_run_file_change_revert(self.adapter, request)
-
-    async def handle_worktree_cleanup(self, request: web.Request) -> web.Response:
-        return await web_api_control.handle_worktree_cleanup(self.adapter, request)
-
 
 def _coerce_states(raw: str | None) -> tuple[str, ...] | None:
     if raw is None:

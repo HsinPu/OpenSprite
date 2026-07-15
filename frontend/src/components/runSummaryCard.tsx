@@ -1,4 +1,4 @@
-import { Button, Descriptions, Tag } from "antd";
+import { Descriptions, Tag } from "antd";
 import { runStatusColor } from "./displayHelpers";
 import type { RunViewState } from "../composables/chatClientRunHelpers";
 
@@ -9,11 +9,10 @@ export type RunSummaryCopy = {
   runSummary: {
     status: string;
     duration: string;
+    durationSeconds: (seconds: number) => string;
     tools: string;
     title?: string;
-    fallbackObjective: string;
-    cleanupSandbox?: string;
-    cleanupRunning?: string;
+    headline: string;
     loading?: string;
   };
 };
@@ -22,29 +21,19 @@ function text(value: unknown, fallback = ""): string {
   return String(value || fallback).trim();
 }
 
-type RunSummary = NonNullable<RunViewState["summary"]>;
-
-function summaryTitle(summary: RunSummary | null | undefined, fallback = ""): string {
-  return text(summary?.objective || summary?.title, fallback);
-}
-
-function summaryResult(summary: RunSummary | null | undefined): string {
-  return text(summary?.result || summary?.finalAnswer);
-}
-
 export function RunSummaryCard({
   copy,
   run,
-  cleanupWorktreeSandbox,
 }: {
   copy: RunSummaryCopy;
   run: RunViewState;
-  cleanupWorktreeSandbox: (run: RunViewState) => void;
 }) {
   const summary = run.summary;
   const statusText = text(summary?.status, run.status);
-  const durationText = text(summary?.duration);
-  const resultText = summaryResult(summary);
+  const durationText =
+    summary?.durationSeconds === null || summary?.durationSeconds === undefined
+      ? ""
+      : copy.runSummary.durationSeconds(summary.durationSeconds);
   const metricItems = [
     {
       key: "status",
@@ -60,12 +49,12 @@ export function RunSummaryCard({
           },
         ]
       : []),
-    ...(Array.isArray(summary?.tools)
+    ...(summary
       ? [
           {
             key: "tools",
             label: copy.runSummary.tools,
-            children: summary.tools.length,
+            children: summary.toolCount,
           },
         ]
       : []),
@@ -76,34 +65,18 @@ export function RunSummaryCard({
       <header className="run-summary-card__header">
         <div className="run-summary-card__title">
           <span className="run-summary-card__eyebrow">{copy.runSummary.title || "Run Summary"}</span>
-          <strong>{summaryTitle(summary, copy.runSummary.fallbackObjective)}</strong>
+          <strong>{copy.runSummary.headline}</strong>
         </div>
         <div className="run-summary-card__actions">
           <Tag className="run-summary-card__status" color={runStatusColor(run.status)} data-status={run.status || "unknown"}>
             {copy.run.statusLabels?.[run.status] || run.status}
           </Tag>
-          {Boolean(run.worktreeSandbox?.cleanupSupported) ? (
-            <Button
-              className="run-summary-card__copy"
-              size="small"
-              loading={Boolean(run.worktreeSandbox?.cleanupPending)}
-              disabled={Boolean(run.worktreeSandbox?.cleanupPending)}
-              onClick={() => cleanupWorktreeSandbox(run)}
-            >
-              {run.worktreeSandbox?.cleanupPending
-                ? (copy.runSummary.cleanupRunning || "Cleaning up...")
-                : (copy.runSummary.cleanupSandbox || "Cleanup sandbox")}
-            </Button>
-          ) : null}
         </div>
       </header>
       <div className="run-summary-card__body">
         {run.summaryLoading ? <div className="run-summary-card__message">{copy.runSummary.loading || "Loading..."}</div> : null}
         {run.summaryError ? <div className="run-summary-card__message" data-tone="error">{run.summaryError}</div> : null}
         <Descriptions className="run-summary-card__metrics" size="small" column={1} items={metricItems} />
-        {resultText ? (
-          <p className="run-summary-card__note">{resultText}</p>
-        ) : null}
       </div>
     </section>
   );

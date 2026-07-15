@@ -161,16 +161,6 @@ class FakeProvider:
         self.tool_arguments = tool_arguments or {"value": "abc"}
 
     async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task planner" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"task_type":"code_change","required_tools":["read_file","apply_patch"],'
-                    '"final_answer_required":true,"allow_no_tool_final":false,'
-                    '"reason":"test planner contract"}'
-                ),
-                model="fake-model",
-            )
         self.calls.append({"messages": list(messages), "tools": tools})
         if len(self.calls) == 1:
             return LLMResponse(
@@ -722,16 +712,6 @@ class ModelRoutingProvider:
         self.calls = []
 
     async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
-        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task planner" in system_text:
-            return LLMResponse(
-                content=(
-                    '{"task_type":"code_change","required_tools":["read_file","apply_patch"],'
-                    '"final_answer_required":true,"allow_no_tool_final":false,'
-                    '"reason":"test planner contract"}'
-                ),
-                model="fake-model",
-            )
         self.calls.append({"messages": list(messages), "tools": tools, "model": model, "max_tokens": max_tokens})
         return LLMResponse(content="routed result", model=model or "fake-model")
 

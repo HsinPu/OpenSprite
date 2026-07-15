@@ -167,7 +167,7 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         llm_configured: bool,
     ) -> AssistantMessage:
-        """Start telemetry and run one user turn without task planning."""
+        """Start telemetry and run one user turn."""
         try:
             run = await self.run_lifecycle.start_turn(user_message=user_message, turn=turn)
         except RunBusyError:

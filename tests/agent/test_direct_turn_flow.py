@@ -10,14 +10,7 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ExecutionResult
 from opensprite.bus.message import CLIENT_TURN_ID_METADATA_KEY, UserMessage
 from opensprite.config import AgentMessagesConfig, MessagesConfig
-from opensprite.context.file_builder import FileContextBuilder
-from opensprite.context.paths import get_session_workspace, sync_templates
 from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.runs.schema import (
-    is_retired_lifecycle_event,
-    is_retired_lifecycle_part,
-    sanitize_run_metadata,
-)
 from opensprite.runs.trace import RunBusyError
 from opensprite.storage import MemoryStorage
 from opensprite.tools.registry import ToolRegistry
@@ -128,54 +121,29 @@ def test_agent_process_calls_main_llm_directly_once(tmp_path):
     assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
 
 
-def test_task_shaped_request_uses_direct_turn_without_retired_lifecycle(tmp_path):
+def test_direct_execution_request_completes_in_one_turn(tmp_path):
     async def scenario():
-        app_home = tmp_path / "opensprite-home"
-        tool_workspace = tmp_path / "workspace"
-        sync_templates(app_home, silent=True)
-        context_builder = FileContextBuilder(app_home=app_home, tool_workspace=tool_workspace)
         provider = DirectProvider([LLMResponse(content="implemented and verified", model="fake-model")])
         storage = MemoryStorage()
         agent = make_agent_loop(
             tmp_path,
             provider=provider,
             storage=storage,
-            context_builder=context_builder,
-            app_home=app_home,
-            tool_workspace=tool_workspace,
         )
-        session_workspace = get_session_workspace("test:room-1", workspace_root=tool_workspace)
-        active_task_file = session_workspace / "ACTIVE_TASK.md"
-        assert not active_task_file.exists()
         try:
             response = await agent.process(
                 _message("Fix the failing tests, verify the result, and continue until the work is complete.")
             )
             run = (await storage.get_runs("test:room-1"))[0]
-            events = await storage.get_run_events("test:room-1", run.run_id)
-            parts = await storage.get_run_parts("test:room-1", run.run_id)
-            tool_names = set(agent.tools.tool_names)
-            return response, provider, run, events, parts, tool_names, active_task_file
+            return response, provider, run
         finally:
             await _close_agent(agent)
 
-    response, provider, run, events, parts, tool_names, active_task_file = asyncio.run(scenario())
+    response, provider, run = asyncio.run(scenario())
 
     assert response.text == "implemented and verified"
     assert len(provider.calls) == 1
     assert run.status == "completed"
-    assert sanitize_run_metadata(run.metadata) == run.metadata
-    assert not any(is_retired_lifecycle_event(event) for event in events)
-    assert not any(is_retired_lifecycle_part(part) for part in parts)
-    assert "task_update" not in tool_names
-    assert not active_task_file.exists()
-    prompt_text = "\n".join(
-        str(getattr(message, "content", ""))
-        for call in provider.calls
-        for message in call["messages"]
-    )
-    assert "task_update" not in prompt_text
-    assert "ACTIVE_TASK.md" not in prompt_text
 
 
 def test_agent_process_propagates_client_turn_id_to_run_events_and_response(tmp_path):
@@ -206,7 +174,7 @@ def test_agent_process_propagates_client_turn_id_to_run_events_and_response(tmp_
     assert events[-1].payload[CLIENT_TURN_ID_METADATA_KEY] == "turn-current"
 
 
-def test_agent_process_uses_registered_tools_without_task_contract(tmp_path):
+def test_agent_process_uses_registered_tools_directly(tmp_path):
     async def scenario():
         tool = DummyTool(name="demo_tool", echo_value=True)
         provider = DirectProvider(

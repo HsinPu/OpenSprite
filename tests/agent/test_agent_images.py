@@ -78,7 +78,6 @@ def test_call_llm_passes_media_files_directly_to_the_normal_prompt(tmp_path):
     assert "Please inspect this image and summarize it." in content
     assert "User attached 1 image(s)." in content
     assert "Saved inbound image file(s) under the session workspace: images/a.jpg." in content
-    assert "Runtime Task Contract" not in content
 
 
 def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):

@@ -1,6 +1,5 @@
 """opensprite/config/schema.py - 設定檔定義"""
 import json
-import re
 from pathlib import Path
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -279,46 +278,6 @@ class TelegramMessagesConfig(BaseModel):
     empty_message_fallback: str = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
 
 
-_RETIRED_ACTIVE_TASK_PIPE_TOKEN = re.compile(
-    r"(?<![\w.-])active_task[ \t]*\|[ \t]*|\|[ \t]*active_task(?![\w.-])"
-)
-_RETIRED_AGENT_MESSAGE_KEYS = (
-    "completion_blocker_intro",
-    "completion_blocker_reason_prefix",
-    "completion_blocker_detail_header",
-    "completion_blocker_missing_evidence_header",
-    "completion_blocker_stop_notice",
-)
-
-
-def _prune_retired_messages_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Remove retired task messages while preserving current custom sections."""
-    migrated = dict(data)
-    migrated.pop("task", None)
-
-    agent = data.get("agent")
-    if isinstance(agent, dict):
-        migrated_agent = dict(agent)
-        for key in _RETIRED_AGENT_MESSAGE_KEYS:
-            migrated_agent.pop(key, None)
-        if migrated_agent != agent:
-            migrated["agent"] = migrated_agent
-
-    curator = data.get("curator")
-    if isinstance(curator, dict):
-        migrated_curator = dict(curator)
-        for key in ("help_text", "error_run_usage"):
-            value = migrated_curator.get(key)
-            if isinstance(value, str):
-                migrated_value = _RETIRED_ACTIVE_TASK_PIPE_TOKEN.sub("", value)
-                if migrated_value != value:
-                    migrated_curator[key] = migrated_value
-        if migrated_curator != curator:
-            migrated["curator"] = migrated_curator
-
-    return migrated
-
-
 class MessagesConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -327,14 +286,6 @@ class MessagesConfig(BaseModel):
     cron: CronMessagesConfig = Field(default_factory=CronMessagesConfig)
     curator: CuratorMessagesConfig = Field(default_factory=CuratorMessagesConfig)
     telegram: TelegramMessagesConfig = Field(default_factory=TelegramMessagesConfig)
-
-    @model_validator(mode="before")
-    @classmethod
-    def prune_retired_sections(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        return _prune_retired_messages_data(data)
-
 
 class LogConfig(BaseModel):
     enabled: bool = DEFAULT_LOG_ENABLED
@@ -738,11 +689,7 @@ class Config:
         if not isinstance(data, dict):
             raise ValueError(f"Messages 設定檔必須是 JSON object：{path}")
 
-        return cls._prune_retired_messages_data(data)
-
-    @staticmethod
-    def _prune_retired_messages_data(data: dict[str, Any]) -> dict[str, Any]:
-        return _prune_retired_messages_data(data)
+        return data
 
     @classmethod
     def _load_llm_providers_data(cls, path: Path) -> dict[str, Any]:

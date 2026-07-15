@@ -11,7 +11,7 @@ def _builder(tmp_path):
     )
 
 
-def test_build_messages_does_not_classify_code_keywords(tmp_path):
+def test_build_messages_uses_standard_context_for_code_request(tmp_path):
     builder = _builder(tmp_path)
 
     messages = builder.build_messages(
@@ -22,11 +22,10 @@ def test_build_messages_does_not_classify_code_keywords(tmp_path):
     )
 
     assert [message["role"] for message in messages] == ["system", "user", "user"]
-    assert "# Workspace Task Guidance" not in messages[0]["content"]
     assert "# Workspace Operating Policy" in messages[0]["content"]
 
 
-def test_build_messages_does_not_classify_history_keywords(tmp_path):
+def test_build_messages_uses_standard_context_for_follow_up_request(tmp_path):
     builder = _builder(tmp_path)
 
     messages = builder.build_messages(
@@ -37,19 +36,4 @@ def test_build_messages_does_not_classify_history_keywords(tmp_path):
     )
 
     assert [message["role"] for message in messages] == ["system", "user", "user"]
-    assert "# Retrieval Guidance" not in messages[0]["content"]
-
-
-def test_system_prompt_does_not_read_existing_active_task_file(tmp_path):
-    builder = _builder(tmp_path)
-    session_workspace = builder.get_session_workspace("telegram:room-1")
-    session_workspace.mkdir(parents=True, exist_ok=True)
-    (session_workspace / "ACTIVE_TASK.md").write_text(
-        "sentinel legacy active task content",
-        encoding="utf-8",
-    )
-
-    prompt = builder.build_system_prompt("telegram:room-1")
-
-    assert "sentinel legacy active task content" not in prompt
-    assert "Active task:" not in prompt
+    assert "# Workspace Operating Policy" in messages[0]["content"]

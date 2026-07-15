@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import subprocess
-import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,7 +12,6 @@ from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.events import RunEvent, SessionStatusEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
-from opensprite.channels.web_api_control import handle_worktree_cleanup
 import opensprite.channels.web_settings_handlers_tools as web_settings_handlers_tools
 from opensprite.channels.web_routes import register_web_routes
 from opensprite.config import Config, ProviderConfig
@@ -24,9 +22,6 @@ from opensprite.cron import CronManager, CronSchedule, CronService
 from opensprite.runs.events import (
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
-    WORKTREE_CLEANUP_COMPLETED_EVENT,
-    WORKTREE_CLEANUP_FAILED_EVENT,
-    WORKTREE_CLEANUP_STARTED_EVENT,
 )
 from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.storage import MemoryStorage, StoredMessage
@@ -321,9 +316,8 @@ async def _run_web_roundtrip():
                     "external_chat_id": "browser-2",
                     "text": "continue",
                     "metadata": {
-                        "quick_action": "resume_follow_up",
-                        "follow_up_workflow": "implement_then_review",
-                        "follow_up_step_id": "review",
+                        "source": "command_palette",
+                        "view_hint": "review",
                     },
                 })
                 third_reply = await receive_message_frame()
@@ -331,9 +325,8 @@ async def _run_web_roundtrip():
 
         seen_sessions = [message.session_id for message in agent.seen_messages]
         assert seen_sessions == [session_frame["session_id"], "web:browser-2", "web:browser-2"]
-        assert agent.seen_messages[2].metadata["quick_action"] == "resume_follow_up"
-        assert agent.seen_messages[2].metadata["follow_up_workflow"] == "implement_then_review"
-        assert agent.seen_messages[2].metadata["follow_up_step_id"] == "review"
+        assert agent.seen_messages[2].metadata["source"] == "command_palette"
+        assert agent.seen_messages[2].metadata["view_hint"] == "review"
     finally:
         adapter_task.cancel()
         try:
@@ -480,8 +473,6 @@ async def _run_web_command_catalog_api():
 
         commands = {item["name"]: item for item in payload["commands"]}
         assert commands["help"]["usage"] == "/help [command]"
-        assert "task" not in commands
-        assert "goal" not in commands
         assert commands["curator"]["subcommands"] == ["status", "history", "run", "pause", "resume", "help"]
         assert commands["curator"]["category"] == "Maintenance"
     finally:
@@ -1538,14 +1529,7 @@ async def _run_web_run_events_api():
         "web:browser-1",
         "run-1",
         status="completed",
-        metadata={
-            "objective": Path("notes.txt"),
-            "task_contract": {"task_type": "coding"},
-            "completion_gate": {"status": "complete"},
-            "auto_continue_attempts": 2,
-            "work_progress": {"next_action": "legacy"},
-            "task_artifacts": [{"kind": "file"}],
-        },
+        metadata={"objective": Path("notes.txt")},
         created_at=100.0,
     )
     await storage.add_run_event(
@@ -1562,17 +1546,6 @@ async def _run_web_run_events_api():
         payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "ok": True, "result_preview": "done"},
         created_at=102.75,
     )
-    for offset, event_type in enumerate(
-        ("task_contract.created", "completion_gate.evaluated", "auto_continue.completed", "work_progress.updated"),
-        start=1,
-    ):
-        await storage.add_run_event(
-            "web:browser-1",
-            "run-1",
-            event_type,
-            payload={"status": "completed", "legacy": True},
-            created_at=102.75 + (offset / 100),
-        )
     await storage.add_run_part(
         "web:browser-1",
         "run-1",
@@ -1581,14 +1554,6 @@ async def _run_web_run_events_api():
         tool_name="apply_patch",
         metadata={"path": Path("notes.txt"), "tool_call_id": "call-1"},
         created_at=102.25,
-    )
-    await storage.add_run_part(
-        "web:browser-1",
-        "run-1",
-        "task_checkpoint",
-        content="legacy checkpoint",
-        metadata={"completion_status": "complete"},
-        created_at=103.0,
     )
     await storage.add_run_file_change(
         "web:browser-1",
@@ -1838,9 +1803,8 @@ async def _run_web_run_events_api():
 
             stored_run = await storage.get_run("web:browser-1", "run-1")
             assert stored_run is not None
-            assert stored_run.metadata["task_contract"] == {"task_type": "coding"}
-            assert len(await storage.get_run_events("web:browser-1", "run-1")) == 6
-            assert len(await storage.get_run_parts("web:browser-1", "run-1")) == 2
+            assert len(await storage.get_run_events("web:browser-1", "run-1")) == 2
+            assert len(await storage.get_run_parts("web:browser-1", "run-1")) == 1
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
@@ -1995,12 +1959,9 @@ async def _run_web_sessions_api():
             timestamp=200.0,
             metadata={
                 "sender_name": "Tester",
-                "tool_evidence": [{"tool": "pytest"}],
-                "quick_action": "resume_follow_up",
-                "follow_up_workflow": "implement_then_review",
-                "follow_up_step_id": "review",
-                "follow_up_prompt_type": "code-reviewer",
-                "structured_output": {"tool_evidence": "nested domain data"},
+                "source": "web",
+                "view_hint": "review",
+                "structured_output": {"evidence_label": "nested domain data"},
             },
         ),
     )
@@ -2220,7 +2181,6 @@ async def _run_web_sessions_api():
                 "metadata": {"objective": "ship session work card"},
             }
         ]
-        assert "work_state" not in payload["sessions"][0]
         assert payload["sessions"][0]["messages"] == [
             {
                 "role": "user",
@@ -2228,7 +2188,9 @@ async def _run_web_sessions_api():
                 "tool_name": None,
                 "metadata": {
                     "sender_name": "Tester",
-                    "structured_output": {"tool_evidence": "nested domain data"},
+                    "source": "web",
+                    "view_hint": "review",
+                    "structured_output": {"evidence_label": "nested domain data"},
                 },
                 "created_at": 200.0,
             }
@@ -2464,260 +2426,6 @@ def test_web_adapter_exposes_file_change_revert_api():
     asyncio.run(_run_web_file_change_revert_api())
 
 
-async def _run_web_worktree_cleanup_api(tmp_path: Path):
-    marker_dir = tmp_path / "sandbox"
-    marker_dir.mkdir()
-    (marker_dir / ".opensprite-worktree.json").write_text("{}", encoding="utf-8")
-    cleanup_calls = []
-    cleanup_thread_ids = []
-    trace_events = []
-    event_loop_thread_id = threading.get_ident()
-
-    class WorktreeAgent(EchoAgent):
-        def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
-            cleanup_calls.append((sandbox_path, session_id, run_id))
-            cleanup_thread_ids.append(threading.get_ident())
-            return {"ok": True, "status": "removed", "sandbox_path": sandbox_path}
-
-        async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
-            trace_events.append((session_id, run_id, event_type, payload, kwargs))
-
-    queue = MessageQueue(WorktreeAgent())
-    adapter = WebAdapter(
-        mq=queue,
-        config={
-            "host": "127.0.0.1",
-            "port": 0,
-            "path": "/ws",
-            "health_path": "/healthz",
-            "frontend_auto_build": False,
-        },
-    )
-    adapter_task = asyncio.create_task(adapter.run())
-
-    try:
-        await adapter.wait_until_started()
-        port = adapter.bound_port
-        assert port is not None
-
-        async with ClientSession() as session:
-            async with session.post(
-                f"http://127.0.0.1:{port}/api/worktrees/cleanup",
-                json={"sandbox_path": str(marker_dir), "session_id": "web:browser-1", "run_id": "run-1"},
-            ) as resp:
-                assert resp.status == 200
-                payload = await resp.json()
-
-            async with session.post(f"http://127.0.0.1:{port}/api/worktrees/cleanup", json={}) as resp:
-                assert resp.status == 400
-
-            async with session.post(
-                f"http://127.0.0.1:{port}/api/worktrees/cleanup",
-                json={"sandbox_path": str(marker_dir)},
-            ) as resp:
-                assert resp.status == 400
-                assert await resp.text() == "session_id is required"
-
-            async with session.post(
-                f"http://127.0.0.1:{port}/api/worktrees/cleanup",
-                json={"sandbox_path": str(marker_dir), "session_id": "web:browser-1"},
-            ) as resp:
-                assert resp.status == 400
-                assert await resp.text() == "run_id is required"
-
-        assert payload == {
-            "ok": True,
-            "cleanup": {"ok": True, "status": "removed", "sandbox_path": str(marker_dir)},
-        }
-        assert cleanup_calls == [(str(marker_dir), "web:browser-1", "run-1")]
-        assert cleanup_thread_ids and cleanup_thread_ids[0] != event_loop_thread_id
-        assert [(event[0], event[1], event[2]) for event in trace_events] == [
-            ("web:browser-1", "run-1", WORKTREE_CLEANUP_STARTED_EVENT),
-            ("web:browser-1", "run-1", WORKTREE_CLEANUP_COMPLETED_EVENT),
-        ]
-        assert all(event[4]["require_persistence"] is True for event in trace_events)
-        assert trace_events[-1][3]["sandbox_path"] == str(marker_dir)
-        assert trace_events[-1][3]["ok"] is True
-    finally:
-        adapter_task.cancel()
-        try:
-            await adapter_task
-        except asyncio.CancelledError:
-            pass
-
-
-def test_web_adapter_exposes_worktree_cleanup_api(tmp_path):
-    asyncio.run(_run_web_worktree_cleanup_api(tmp_path))
-
-
-def test_worktree_cleanup_handler_can_retry_after_terminal_trace_failure():
-    async def scenario():
-        cleanup_statuses = iter(("removed", "already_removed"))
-        cleanup_calls = []
-        trace_events = []
-        completion_attempts = 0
-
-        class RetryAgent:
-            def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
-                status = next(cleanup_statuses)
-                cleanup_calls.append((sandbox_path, session_id, run_id, status))
-                return {"ok": True, "status": status, "sandbox_path": sandbox_path}
-
-            async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
-                nonlocal completion_attempts
-                trace_events.append((event_type, kwargs.get("require_persistence")))
-                if event_type == WORKTREE_CLEANUP_COMPLETED_EVENT:
-                    completion_attempts += 1
-                    if completion_attempts == 1:
-                        raise RuntimeError("trace persistence failed")
-
-        class Request:
-            query = {}
-
-        class Adapter:
-            channel_instance_id = "web"
-
-            def __init__(self):
-                self.agent = RetryAgent()
-
-            def _get_agent(self):
-                return self.agent
-
-            async def _read_json_body(self, request):
-                return {
-                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
-                    "session_id": "web:browser-1",
-                    "run_id": "run-1",
-                }
-
-            @staticmethod
-            def _coerce_optional_text(value):
-                normalized = str(value or "").strip()
-                return normalized or None
-
-            @staticmethod
-            def _json_safe(value):
-                return value
-
-        adapter = Adapter()
-        with pytest.raises(RuntimeError, match="trace persistence failed"):
-            await handle_worktree_cleanup(adapter, Request())
-
-        response = await handle_worktree_cleanup(adapter, Request())
-        payload = json.loads(response.text)
-
-        assert payload["ok"] is True
-        assert payload["cleanup"]["status"] == "already_removed"
-        assert cleanup_calls == [
-            (
-                "C:/repo.opensprite-worktrees/web_browser-1/run-1",
-                "web:browser-1",
-                "run-1",
-                "removed",
-            ),
-            (
-                "C:/repo.opensprite-worktrees/web_browser-1/run-1",
-                "web:browser-1",
-                "run-1",
-                "already_removed",
-            ),
-        ]
-        assert trace_events == [
-            (WORKTREE_CLEANUP_STARTED_EVENT, True),
-            (WORKTREE_CLEANUP_COMPLETED_EVENT, True),
-            (WORKTREE_CLEANUP_STARTED_EVENT, True),
-            (WORKTREE_CLEANUP_COMPLETED_EVENT, True),
-        ]
-
-    asyncio.run(scenario())
-
-
-def test_worktree_cleanup_handler_persists_terminal_event_once_when_cancelled():
-    async def scenario():
-        cleanup_entered = threading.Event()
-        cleanup_release = threading.Event()
-        cleanup_finished = threading.Event()
-        terminal_persisted = asyncio.Event()
-        trace_events = []
-
-        class CancellationAgent:
-            def cleanup_worktree_sandbox(self, sandbox_path, *, session_id, run_id):
-                cleanup_entered.set()
-                if not cleanup_release.wait(timeout=2):
-                    raise TimeoutError("cleanup release was not signalled")
-                cleanup_finished.set()
-                return {"ok": True, "status": "removed", "sandbox_path": sandbox_path}
-
-            async def _emit_run_event(self, session_id, run_id, event_type, payload, **kwargs):
-                trace_events.append((event_type, payload, kwargs.get("require_persistence")))
-                if event_type in {
-                    WORKTREE_CLEANUP_COMPLETED_EVENT,
-                    WORKTREE_CLEANUP_FAILED_EVENT,
-                }:
-                    terminal_persisted.set()
-
-        class Request:
-            query = {}
-
-        class Adapter:
-            channel_instance_id = "web"
-
-            def __init__(self):
-                self.agent = CancellationAgent()
-
-            def _get_agent(self):
-                return self.agent
-
-            async def _read_json_body(self, request):
-                return {
-                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
-                    "session_id": "web:browser-1",
-                    "run_id": "run-1",
-                }
-
-            @staticmethod
-            def _coerce_optional_text(value):
-                normalized = str(value or "").strip()
-                return normalized or None
-
-            @staticmethod
-            def _json_safe(value):
-                return value
-
-        handler_task = asyncio.create_task(handle_worktree_cleanup(Adapter(), Request()))
-        entered = await asyncio.wait_for(asyncio.to_thread(cleanup_entered.wait, 1), timeout=2)
-        assert entered is True
-
-        handler_task.cancel()
-        await asyncio.sleep(0)
-        assert cleanup_finished.is_set() is False
-        cleanup_release.set()
-
-        with pytest.raises(asyncio.CancelledError):
-            await asyncio.wait_for(handler_task, timeout=2)
-        await asyncio.wait_for(terminal_persisted.wait(), timeout=1)
-        await asyncio.sleep(0)
-
-        assert cleanup_finished.is_set() is True
-        terminal_events = [
-            event
-            for event in trace_events
-            if event[0] != WORKTREE_CLEANUP_STARTED_EVENT
-        ]
-        assert terminal_events == [
-            (
-                WORKTREE_CLEANUP_COMPLETED_EVENT,
-                {
-                    "sandbox_path": "C:/repo.opensprite-worktrees/web_browser-1/run-1",
-                    "status": "removed",
-                    "ok": True,
-                    "reason": None,
-                },
-                True,
-            )
-        ]
-
-    asyncio.run(scenario())
 
 
 async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):

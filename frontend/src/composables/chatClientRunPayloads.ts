@@ -62,30 +62,6 @@ export type RunFileChangeRevertPayload = {
   reason: string;
 };
 
-type WorktreeCleanupSourcePayload = {
-  reason?: unknown;
-  status?: unknown;
-  ok?: unknown;
-  cleanup?: unknown;
-};
-
-type WorktreeCleanupRecordSourcePayload = {
-  reason?: unknown;
-  status?: unknown;
-};
-
-export type WorktreeCleanupRecord = {
-  reason: string;
-  status: string;
-};
-
-export type WorktreeCleanupPayload = {
-  ok: boolean;
-  cleanup: WorktreeCleanupRecord | null;
-  reason: string;
-  status: string;
-};
-
 export function toRunsPayload(value: unknown): RunsPayload | null {
   const payload = toPayloadSource<RunsPayload>(value);
   if (!payload) {
@@ -150,16 +126,6 @@ export function toRunTracePayload(value: unknown): RunTracePayload | null {
   };
 }
 
-function normalizeWorktreeCleanupRecord(value: unknown): WorktreeCleanupRecord | null {
-  const record = toPayloadSource<WorktreeCleanupRecordSourcePayload>(value);
-  return record
-    ? {
-        reason: textField(record.reason),
-        status: textField(record.status),
-      }
-    : null;
-}
-
 function normalizeRunFileChangeRevertRecord(
   value: unknown,
   fallback: RunFileChangeRevertRecordSourcePayload,
@@ -181,19 +147,5 @@ export function toRunFileChangeRevertPayload(value: unknown): RunFileChangeRever
     revert,
     applied: revert.applied,
     reason: revert.reason || textField(payload.reason),
-  };
-}
-
-export function toWorktreeCleanupPayload(value: unknown): WorktreeCleanupPayload | null {
-  const payload = toPayloadSource<WorktreeCleanupSourcePayload>(value);
-  if (!payload) {
-    return null;
-  }
-  const cleanup = normalizeWorktreeCleanupRecord(payload.cleanup);
-  return {
-    ok: coerceBoolean(payload.ok),
-    cleanup,
-    reason: cleanup?.reason || textField(payload.reason),
-    status: cleanup?.status || textField(payload.status),
   };
 }

@@ -8,7 +8,6 @@ from aiohttp import web
 
 from .identity import external_chat_id_from_session
 from ..runs.schema import (
-    sanitize_run_metadata,
     serialize_diff_summary,
     serialize_file_change,
     serialize_run_artifacts,
@@ -21,9 +20,7 @@ from ..runs.session_entries import serialize_run_trace_entries
 
 
 def _serialize_run(adapter: Any, run: Any) -> dict[str, Any]:
-    payload = dict(adapter._serialize_run(run))
-    payload["metadata"] = sanitize_run_metadata(payload.get("metadata"))
-    return payload
+    return dict(adapter._serialize_run(run))
 
 
 async def handle_run_events(adapter: Any, request: web.Request) -> web.Response:

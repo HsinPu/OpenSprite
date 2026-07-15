@@ -668,58 +668,6 @@ def test_config_load_reads_messages_from_external_file(tmp_path):
     assert config.messages_file == "messages.json"
 
 
-def test_config_load_prunes_retired_messages_without_overwriting_current_custom_values(tmp_path):
-    config_path = tmp_path / "opensprite.json"
-    Config.copy_template(config_path)
-    messages_path = tmp_path / "messages.json"
-    messages_path.write_text(
-        json.dumps(
-            {
-                "agent": {"empty_response_fallback": "Custom fallback"},
-                "task": {"help_text": "Custom legacy task help"},
-                "curator": {
-                    "help_text": (
-                        "Custom header\n"
-                        "/curator run [maintenance|active_task|skills]\n"
-                        "Keep [maintenance|active_task_notes|skills] and "
-                        "[maintenance|myactive_task|skills] unchanged\n"
-                        "Custom footer"
-                    ),
-                    "error_run_usage": "Custom usage: [active_task|memory]; keep active_task_notes|memory",
-                },
-                "custom_current_section": {"keep": True},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    original_messages_text = messages_path.read_text(encoding="utf-8")
-    Config.ensure_messages_file(config_path, {"messages_file": "messages.json"})
-    config = Config.from_json(config_path)
-
-    assert config.messages.agent.empty_response_fallback == "Custom fallback"
-    assert config.messages.curator.help_text == (
-        "Custom header\n"
-        "/curator run [maintenance|skills]\n"
-        "Keep [maintenance|active_task_notes|skills] and "
-        "[maintenance|myactive_task|skills] unchanged\n"
-        "Custom footer"
-    )
-    assert config.messages.curator.error_run_usage == (
-        "Custom usage: [memory]; keep active_task_notes|memory"
-    )
-    assert not hasattr(config.messages, "task")
-    assert messages_path.read_text(encoding="utf-8") == original_messages_text
-
-    config.save(config_path)
-    saved = json.loads(messages_path.read_text(encoding="utf-8"))
-    assert "task" not in saved
-    assert saved["custom_current_section"] == {"keep": True}
-    assert "active_task_notes" in saved["curator"]["help_text"]
-    assert "myactive_task" in saved["curator"]["help_text"]
-    assert saved["curator"]["error_run_usage"].endswith("active_task_notes|memory")
-
-
 def test_messages_config_preserves_unknown_keys_in_known_sections_across_roundtrip(tmp_path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
@@ -854,7 +802,6 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.context_compaction_llm.max_tokens == 4096
     assert "maximum context length" in config.agent.context_overflow_error_markers
     assert config.agent.subagent_max_tool_iterations == 100
-    assert not hasattr(config.agent, "worktree_sandbox_enabled")
     assert config.tools.exec_tool.timeout == 60
     assert config.tools.web_search.provider == "duckduckgo"
     assert config.tools.web_search.freshness == "auto"
@@ -864,85 +811,6 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.tools.web_search.searxng_categories == []
     assert config.tools.web_fetch.timeout == 30
     assert config.tools.cron.default_timezone == "UTC"
-
-
-def test_config_load_ignores_removed_task_lifecycle_settings(tmp_path):
-    path = tmp_path / "opensprite.json"
-    path.write_text(
-        json.dumps(
-            {
-                "llm": {},
-                "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"instances": {"web": {"type": "web", "enabled": True}}},
-                "agent": {
-                    "worktree_sandbox_enabled": True,
-                    "auto_continue_default_budget": 99,
-                    "auto_continue_long_running_budget": 99,
-                    "auto_continue_deterministic_action_budget": 99,
-                    "task_context_llm": {"max_tokens": 99},
-                    "task_objective_llm": {"max_tokens": 99},
-                    "task_planner_llm": {"max_tokens": 99},
-                    "completion_verifier_llm": {"max_tokens": 99},
-                },
-                "active_task": {
-                    "enabled": True,
-                    "threshold": 2,
-                    "lookback_messages": 40,
-                    "llm": {"max_tokens": 1200},
-                },
-                "messages": {
-                    "task": {"help_text": "legacy task help"},
-                    "agent": {
-                        "completion_blocker_intro": "legacy blocker",
-                        "completion_blocker_reason_prefix": "legacy reason",
-                        "completion_blocker_detail_header": "legacy details",
-                        "completion_blocker_missing_evidence_header": "legacy evidence",
-                        "completion_blocker_stop_notice": "legacy stop",
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    config = Config.from_json(path)
-
-    for field_name in (
-        "auto_continue_default_budget",
-        "auto_continue_long_running_budget",
-        "auto_continue_deterministic_action_budget",
-        "task_context_llm",
-        "task_objective_llm",
-        "task_planner_llm",
-        "completion_verifier_llm",
-        "worktree_sandbox_enabled",
-    ):
-        assert not hasattr(config.agent, field_name)
-    assert not hasattr(config, "active_task")
-    assert not hasattr(config.messages, "task")
-    assert not hasattr(config.messages.agent, "completion_blocker_intro")
-
-    config.save(path)
-
-    saved_main = json.loads(path.read_text(encoding="utf-8"))
-    saved_messages = json.loads(
-        Config.get_messages_file_path(path, messages_file=config.messages_file).read_text(encoding="utf-8")
-    )
-    assert "active_task" not in saved_main
-    assert not set(saved_main["agent"]).intersection(
-        {
-            "auto_continue_default_budget",
-            "auto_continue_long_running_budget",
-            "auto_continue_deterministic_action_budget",
-            "task_context_llm",
-            "task_objective_llm",
-            "task_planner_llm",
-            "completion_verifier_llm",
-            "worktree_sandbox_enabled",
-        }
-    )
-    assert "task" not in saved_messages
-    assert not any(key.startswith("completion_blocker_") for key in saved_messages["agent"])
 
 
 def test_config_load_reads_channels_from_external_file(tmp_path):

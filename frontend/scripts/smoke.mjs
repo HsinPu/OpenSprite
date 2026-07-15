@@ -2069,7 +2069,6 @@ assertIncludes(runInspector, "RunHistorySelector", "run inspector delegates run 
 assertIncludes(runInspector, "RunSummaryCard", "run inspector delegates run summary card");
 assertIncludes(runInspector, "RunTimeline", "run inspector delegates run timeline");
 assertIncludes(runInspector, "RunTraceViewer", "run inspector delegates run trace viewer");
-assertNotIncludes(runInspector, "WorkStateCard", "run inspector excludes retired work state card");
 assertIncludes(runInspector, "currentRunTimeline: ValueRef<RunTimelineEventView[]>;", "run inspector types timeline events");
 assertIncludes(settingsModal, "SettingsNav", "settings modal uses the parity sidebar nav");
 assertIncludes(settingsModal, "className=\"settings-nav__menu\"", "settings nav uses Ant menu");
@@ -2090,11 +2089,30 @@ assertIncludes(styles, ".settings-page--loading", "settings deferred loading sta
 assertIncludes(styles, ".settings-nav__menu .ant-menu-item-selected", "settings nav selected state is styled through Ant");
 assertRegex(runHistorySelector, /className=\"run-history__select\"[\s\S]+<Select[\s\S]+client\.selectRun\(value\)/, "run history selector changes active run");
 assertIncludes(runSummaryCard, "className=\"run-summary-card\"", "run summary card keeps card class");
-assertIncludes(runSummaryCard, "cleanupWorktreeSandbox(run)", "run summary card keeps cleanup sandbox action");
-assertIncludes(runSummaryCard, "loading={Boolean(run.worktreeSandbox?.cleanupPending)}", "run summary card exposes cleanup progress");
-assertIncludes(runSummaryCard, "disabled={Boolean(run.worktreeSandbox?.cleanupPending)}", "run summary card prevents duplicate cleanup clicks");
+const runInspectorClassPattern = /(?:run-(?:history|summary-card|timeline|trace)|trace-sidebar)(?:__[a-z0-9-]+)?/g;
+const runInspectorRuntimeClasses = new Set([
+  ...(runHistorySelector.match(runInspectorClassPattern) || []),
+  ...(runSummaryCard.match(runInspectorClassPattern) || []),
+  ...(runTimeline.match(runInspectorClassPattern) || []),
+  ...(runTraceViewer.match(runInspectorClassPattern) || []),
+  ...(runInspector.match(runInspectorClassPattern) || []),
+  ...(traceSidebar.match(runInspectorClassPattern) || []),
+]);
+const runInspectorStyleClasses = new Set(styles.match(runInspectorClassPattern) || []);
+for (const className of runInspectorStyleClasses) {
+  if (!runInspectorRuntimeClasses.has(className)) {
+    throw new Error(`run inspector styles exclude orphaned selectors: ${className}`);
+  }
+}
+for (const className of runInspectorRuntimeClasses) {
+  if (!runInspectorStyleClasses.has(className)) {
+    throw new Error(`run inspector runtime classes remain styled: ${className}`);
+  }
+}
 assertIncludes(runSummaryCard, "const statusText = text(summary?.status, run.status);", "run summary card keeps typed status fallback");
-assertIncludes(runSummaryCard, "function summaryResult(summary: RunSummary | null | undefined): string", "run summary card keeps typed result fallback");
+assertIncludes(runSummaryCard, "copy.runSummary.durationSeconds(summary.durationSeconds)", "run summary card formats backend duration seconds");
+assertIncludes(runSummaryCard, "<strong>{copy.runSummary.headline}</strong>", "run summary card uses a static main-run headline");
+assertIncludes(runSummaryCard, "children: summary.toolCount,", "run summary card renders the normalized tool count");
 assertIncludes(runSummaryCard, "run.summaryError", "run summary card keeps summary error state");
 assertIncludes(runTimeline, "className=\"run-timeline\"", "run timeline keeps card class");
 assertIncludes(runTimeline, "copy.timeline?.title || copy.runHistory.title", "run timeline keeps fallback title");
@@ -2124,6 +2142,7 @@ assertIncludes(runTraceViewer, "children: <pre>{JSON.stringify(event.payload, nu
 assertNotIncludes(runTraceViewer, "events.slice(-120).map((event: RunJsonObject", "trace viewer avoids generic raw event rendering");
 assertNotIncludes(runTraceViewer, "run.rawEvents || run.events || []", "trace viewer avoids mixing raw events with timeline events");
 assertIncludes(runTraceViewer, "revertFileChange(run, change)", "trace viewer keeps file revert action");
+assertIncludes(runTraceViewer, "copy.runFileInspector?.revertAction || \"Revert\"", "trace viewer uses the localized file revert label");
 assertIncludes(runTraceViewer, "cancelRun(run)", "trace viewer keeps cancel action");
 assertIncludes(runTraceViewer, "defaultActiveKey={[\"artifacts\"]}", "trace viewer keeps default section");
 assertIncludes(runTraceViewer, "run: RunViewState;", "trace viewer accepts typed run view state");
@@ -2153,45 +2172,13 @@ assertIncludes(runInspector, "revertRunFileChange: (run: RunViewState, change: T
 assertNotIncludes(runInspector, "revertRunFileChange: (run: RunViewState, change: RunJsonObject) => void;", "run inspector avoids generic file revert input");
 assertIncludes(runInspector, "export type RunInspectorCopy = RunSummaryCopy &", "run inspector types shared copy boundary");
 assertNotIncludes(runInspector, "Record<string, any>", "run inspector avoids broad dynamic records");
-for (const [source, moduleName] of [
-  [chatClient, "chat client"],
-  [chatClientEventPayloads, "event payload adapter"],
-  [chatClientRunHelpers, "run helper"],
-  [runTraceNormalizers, "trace normalizer"],
-]) {
-  for (const retiredEventName of [
-    "task_contract.",
-    "completion_gate.",
-    "auto_continue.",
-    "work_plan.created",
-    "work_progress.updated",
-  ]) {
-    assertNotIncludes(source, retiredEventName, `${moduleName} excludes retired lifecycle event ${retiredEventName}`);
-  }
-}
-for (const retiredType of ["TaskEventDetailView", "WorkStateView", "SessionWorkState", "taskScorecard"]) {
-  assertNotIncludes(chatClient, retiredType, `chat client excludes retired lifecycle type ${retiredType}`);
-  assertNotIncludes(runTraceNormalizers, retiredType, `trace normalizer excludes retired lifecycle type ${retiredType}`);
-  assertNotIncludes(runSummaryNormalizers, retiredType, `summary normalizer excludes retired lifecycle type ${retiredType}`);
-}
-assertNotIncludes(chatClientHistoryPayloads, "work_state", "history payload adapter excludes retired work-state persistence");
-assertNotIncludes(useSettingsState, "showWorkState", "settings state excludes retired work-state visibility");
-assertNotIncludes(generalSettings, "showWorkState", "general settings excludes retired work-state visibility");
-assertNotIncludes(displayCopy, "workState:", "display copy excludes retired work-state UI copy");
-assertNotIncludes(displayCopy, "Task artifacts", "display copy excludes retired task-artifact section copy");
-assertNotIncludes(displayCopy, "Work state", "display copy excludes retired work-state artifact copy");
 assertIncludes(displayCopy, "stopped: \"已停止\"", "Traditional Chinese copy labels stopped runs");
 assertIncludes(displayCopy, "stopped: \"Stopped\"", "English copy labels stopped runs");
-assertNotIncludes(styles, ".work-state-card", "styles exclude retired work-state card selectors");
-assertNotIncludes(styles, ".run-trace__decision", "styles exclude retired decision timeline selectors");
-assertNotIncludes(styles, ".run-trace__task", "styles exclude retired task dashboard selectors");
-assertNotIncludes(runTraceNormalizers, "startsWith(\"work_\")", "trace normalizer does not classify retired work lifecycle events");
-assertNotIncludes(runTraceNormalizers, "startsWith(\"task_\")", "trace normalizer does not classify retired task lifecycle events");
 assertIncludes(runHistorySelector, "run: RunViewState | null;", "run history selector accepts typed selected run");
 assertIncludes(runHistorySelector, "runs: RunViewState[];", "run history selector accepts typed run list");
 assertIncludes(runSummaryCard, "run: RunViewState;", "run summary card accepts typed run view state");
 assertIncludes(runSummaryCard, "type RunSummaryCopy = {", "run summary card types copy boundary");
-assertIncludes(runSummaryCard, "type RunSummary = NonNullable<RunViewState[\"summary\"]>;", "run summary card derives typed summary view");
+assertNotIncludes(runSummaryCard, "type RunSummary =", "run summary card excludes the unused summary helper type");
 assertNotIncludes(runSummaryCard, "fieldText(summary,", "run summary card avoids dynamic summary field reads");
 assertNotIncludes(runSummaryCard, "RunJsonObject, RunViewState", "run summary card avoids generic run JSON summary import");
 assertNotIncludes(runSummaryCard, "type AnyRecord", "run summary card avoids dynamic AnyRecord alias");
@@ -2261,7 +2248,6 @@ assertNotIncludes(chatClient, "const TIMELINE_EVENT_TYPES = new Set([", "chat cl
 assertIncludes(chatClient, "type CurrentRunSummaryView = {", "chat client types current run summary view");
 assertIncludes(chatClient, "tone: RunTimelineTone;", "chat client current run summary tone is typed");
 assertNotIncludes(chatClient, "function runEventDetail", "chat client avoids duplicating scalar text coercion for run events");
-assertNotIncludes(chatClient, "classificationReason", "chat client excludes retired task classification details");
 assertIncludes(chatClient, "tone: runTone(run.status, latestEvent.tone),", "chat client keeps current run summary tone typed");
 assertIncludes(chatClient, "run.status = mergeMonotonicRunStatus(run.status, nextStatus || \"running\");", "chat client applies the executable monotonic status merge to live events");
 assertIncludes(chatClient, "const incomingIsCurrent = incomingUpdatedAt >= existingUpdatedAt;", "run history only applies status snapshots that are at least as current as live state");
@@ -2326,19 +2312,17 @@ assertIncludes(chatClient, "function buildRunCancelUrl(wsUrl: string, runId: str
 assertIncludes(chatClient, "function getActiveRun(session: ChatSession | null | undefined): RunViewState | null", "chat client types active run lookup");
 assertIncludes(chatClient, "function shouldLoadRunSummary({ showRunSummary }: { showRunSummary: boolean }, run: RunViewState | null | undefined): boolean", "chat client types run summary load predicate");
 assertIncludes(chatClient, "function shouldLoadRunTrace(run: RunViewState | null | undefined): boolean", "chat client types run trace load predicate");
-assertIncludes(chatClient, "function normalizeRunSummaryFileChanges(summary: RunSummaryView | null | undefined): RunSummaryFileChangeView[]", "chat client normalizes run summary file changes before trace load decisions");
 assertIncludes(chatClient, "function runSummaryTimerKey(sessionId: string, runId: string): string", "chat client types run summary timer keys");
 assertIncludes(chatClient, "function clearRunSummaryTimer(sessionId: string, runId: string): void", "chat client types run summary timer clearing");
 assertIncludes(chatClient, "function maybeLoadRunSummaryForSession(session: ChatSession | null | undefined): void", "chat client types summary load entrypoint side effect");
 assertIncludes(chatClient, "function maybeLoadRunTraceForSession(session: ChatSession | null | undefined): void", "chat client types trace load entrypoint side effect");
-assertIncludes(chatClient, "const summaryFileChanges = normalizeRunSummaryFileChanges(run.summary);", "chat client narrows run summary file changes before length checks");
-assertNotIncludes(chatClient, "const summaryFileChanges = Array.isArray(run.summary?.fileChanges) ? run.summary.fileChanges : [];", "chat client avoids raw run summary file change reads inside trace predicate");
+assertIncludes(chatClient, "const summaryHasFileChanges = Boolean(run.summary?.fileChangeCount);", "chat client reads the normalized summary file-change count");
+assertIncludes(chatClient, "const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !summaryHasFileChanges;", "chat client uses the summary count only to decide whether trace details are needed");
 assertIncludes(chatClientEventPayloads, "export type RunEventPayloadInput = {", "event payload adapter owns the run event input boundary");
 assertIncludes(chatClient, "type RunEventPayloadView = {", "chat client gives core run event payloads a typed view");
 assertIncludes(chatClientEventPayloads, "export function toRunEventPayloadInput(value: unknown): RunEventPayloadInput", "event payload adapter narrows run event timeline inputs");
 assertIncludes(chatClient, "function describeRunEvent(eventType: string, payload: RunTimelinePayload, copy: DisplayCopy): RunEventDescription | null", "chat client describes only finite normalized timeline payloads");
 assertIncludes(chatClient, "function normalizeRunEventPayload(payload: RunEventPayloadInput): RunEventPayloadView", "chat client normalizes core run event payloads before timeline formatting");
-assertNotIncludes(chatClientEventPayloads, "type RunEventPayloadInput = TaskEventPayload & {", "event payload adapter avoids carrying run event inputs through task records");
 assertNotIncludes(chatClientEventPayloads, "type RunEventPayloadInput = {\n  [key: string]: unknown;", "event payload adapter avoids open-ended run event input indexes");
 assertNotIncludes(chatClient, "function describeRunEvent(eventType: string, payload: RunJsonObject, copy: DisplayCopy): RunEventDescription | null", "chat client avoids generic run event description payloads");
 assertNotIncludes(chatClient, "function normalizeRunEventPayload(payload: RunJsonObject): RunEventPayloadView", "chat client avoids generic run event payload normalization inputs");
@@ -2349,7 +2333,6 @@ assertIncludes(chatClient, "label: eventDetail.backgroundSucceeded", "chat clien
 assertIncludes(chatClient, "label: eventDetail.hadToolError ? copy.run.completedWithWarnings : copy.run.completed", "chat client derives run finished warning labels from normalized payload view state");
 assertIncludes(chatClient, "normalizeSubagentDetail,", "chat client imports normalized subagent detail helper");
 assertIncludes(chatClient, "normalizeWorkflowDetail,", "chat client imports normalized workflow detail helper");
-assertNotIncludes(chatClient, "normalizeAutoContinueDetail", "chat client excludes retired auto-continue detail helper");
 assertNotIncludes(chatClient, "normalizeRunLifecycleEventPayload,", "chat client does not own lifecycle payload projection");
 assertIncludes(chatClient, "normalizeRunFinishDetail,", "chat client imports normalized run finish detail helper");
 assertIncludes(chatClient, "const lifecyclePayload = payload;", "chat client reuses the already-projected timeline lifecycle fields for detail formatting");
@@ -2363,7 +2346,6 @@ assertNotIncludes(chatClient, "formatSubagentGroupDetail(payload)", "chat client
 assertNotIncludes(chatClient, "formatSubagentDetail(payload)", "chat client avoids raw subagent payload formatting");
 assertNotIncludes(chatClient, "formatWorkflowDetail(payload)", "chat client avoids raw workflow payload formatting");
 assertNotIncludes(chatClient, "formatWorkflowStepDetail(payload)", "chat client avoids raw workflow step payload formatting");
-assertNotIncludes(chatClient, "formatAutoContinueDetail", "chat client excludes retired auto-continue formatting");
 assertNotIncludes(chatClient, "formatRunFinishDetail(payload, copy)", "chat client avoids raw run finish payload formatting");
 assertNotIncludes(chatClient, "const message = String(payload.message || copy.run.thinking);", "chat client avoids raw llm status message reads inside event formatter");
 assertNotIncludes(chatClient, "if (payload.tool_name === \"verify\")", "chat client avoids raw tool name checks inside event formatter");
@@ -2371,10 +2353,6 @@ assertNotIncludes(chatClient, "const ok = payload.ok !== false;", "chat client a
 assertNotIncludes(chatClient, "const exitCode = payload.exit_code ?? payload.exitCode;", "chat client avoids raw background exit code reads inside event formatter");
 assertNotIncludes(chatClient, "label: payload.had_tool_error ? copy.run.completedWithWarnings : copy.run.completed,", "chat client avoids raw run finished warning labels inside event formatter");
 assertNotIncludes(chatClient, "const cancelled = payload.status === \"cancelled\";", "chat client avoids raw run failed status checks inside event formatter");
-assertNotIncludes(chatClient, "TaskEventDetailView", "chat client excludes retired task event detail view");
-assertNotIncludes(chatClientEventPayloads, "TaskEventPayload", "event payload adapter excludes retired task event payloads");
-assertNotIncludes(chatClient, "formatTaskContractDetail", "chat client excludes retired task-contract formatting");
-assertNotIncludes(chatClient, "formatCompletionGateDetail", "chat client excludes retired completion-gate formatting");
 assertIncludes(chatClient, "tone: runTone(run.status, latestEvent.tone),", "chat client narrows timeline event tone before status styling");
 assertIncludes(chatClient, "const eventPayload = normalizeRunTimelinePayload(event.payload);", "chat client narrows raw run event payloads through the timeline payload boundary");
 assertIncludes(chatClient, "describeRunEvent(eventType, eventPayload, copy.value)", "chat client passes already-normalized timeline payloads into event descriptions");
@@ -2560,7 +2538,6 @@ assertNotIncludes(chatClientHistoryPayloads, "HistorySessionRunsPayload", "histo
 assertIncludes(chatClientHistoryPayloads, "export type HistorySessionStatusPayload = {", "history payload adapter owns the field-aware session status boundary");
 assertNotIncludes(chatClientHistoryPayloads, "type HistorySessionApiRecord", "history payload adapter keeps one session payload boundary");
 assertNotIncludes(chatClientHistoryPayloads, "Record<string, unknown> &", "history payload adapter avoids generic payload intersections");
-assertNotIncludes(chatClientHistoryPayloads, "work_state", "history payload adapter excludes retired work state");
 assertIncludes(chatClientHistoryPayloads, "function toHistorySessionPayload(value: unknown): HistorySessionPayload | null", "history payload adapter privately narrows history sessions");
 assertNotIncludes(chatClientHistoryPayloads, "export function toHistorySessionPayload", "history payload adapter exposes only collection-level session parsing");
 assertIncludes(chatClientHistoryPayloads, "session_id: payload.session_id,\n    channel: payload.channel,\n    external_chat_id: payload.external_chat_id,\n    hidden_from_browser_history: payload.hidden_from_browser_history,\n    hiddenFromBrowserHistory: payload.hiddenFromBrowserHistory,\n    title: payload.title,\n    updated_at: payload.updated_at,\n    messages: toHistoryMessagePayloadList(payload.messages),\n    entries: toHistoryEntryPayloadList(payload.entries),\n    runs: toHistoryRunPayloadList(payload.runs),\n    status: toHistorySessionStatusPayload(payload.status),", "history payload adapter projects every nested session collection before returning it");
@@ -2620,8 +2597,6 @@ for (const payloadType of [
   "RunTraceSourcePayload",
   "RunFileChangeRevertSourcePayload",
   "RunFileChangeRevertRecordSourcePayload",
-  "WorktreeCleanupSourcePayload",
-  "WorktreeCleanupRecordSourcePayload",
 ]) {
   assertIncludes(chatClientRunPayloads, `toPayloadSource<${payloadType}>(value)`, `run payload adapter limits ${payloadType} source reads to known fields`);
 }
@@ -2644,8 +2619,6 @@ assertIncludes(chatClientCronPayloads, "toPayloadSource<CronJobStateSourcePayloa
 assertIncludes(chatClientCronPayloads, "toPayloadSource<CronJobSourcePayload>(value)", "cron payload adapter limits job source reads to known fields");
 assertIncludes(chatClientHistoryPayloads, "type SessionHistoryChannelTotalsSource = Record<string, unknown>;", "history payload adapter isolates dynamic channel names at the raw boundary");
 assertIncludes(chatClientMessagePayloads, "export function toLiveEntryMetadata(value: unknown): LiveEntryMetadata", "message payload adapter normalizes finite live entry metadata");
-assertNotIncludes(chatClientEventPayloads, "TaskEventPayload", "event payload adapter excludes retired task-event payloads");
-assertNotIncludes(chatClientEventPayloads, "planner_metadata", "event payload adapter excludes retired planner metadata");
 assertIncludes(chatClientApiPayloads, "export type CommandCatalogPayload = { commands?: unknown };", "API payload adapter types command catalog response fields");
 assertNotIncludes(chatClient, "type CommandCatalogPayload = { commands?: unknown };", "chat client delegates command catalog payload ownership to the adapter");
 assertNotIncludes(chatClientApiPayloads, "type CommandCatalogItemsPayload", "API payload adapter avoids a duplicate command list wrapper");
@@ -2692,10 +2665,6 @@ assertNotRegex(
   /^\s*(?:export\s+)?(?:async\s+)?function\s+\w+\([^)]*(?:value|payload): unknown/m,
   "chat client delegates unknown value and payload boundaries to adapters",
 );
-assertIncludes(chatClientRunPayloads, "export type WorktreeCleanupPayload = {", "run payload adapter owns the worktree cleanup response boundary");
-assertNotIncludes(chatClientRunPayloads, "type WorktreeCleanupApiPayload", "run payload adapter keeps one worktree cleanup boundary");
-assertIncludes(chatClientRunPayloads, "export type WorktreeCleanupRecord = {", "run payload adapter owns normalized worktree cleanup records");
-assertNotIncludes(chatClient, "type WorktreeCleanupResult = {", "chat client reuses the normalized worktree cleanup payload");
 assertIncludes(chatClient, "type ComposerSubmitEvent = { preventDefault: () => void };", "chat client types composer submit events structurally");
 assertIncludes(chatClient, "type ComposerKeyboardEvent = ComposerSubmitEvent & {", "chat client types composer key events structurally");
 assertIncludes(chatClient, "./chatClientMessagePayloads", "chat client imports the dedicated message payload boundary");
@@ -2748,18 +2717,12 @@ assertIncludes(chatClientLiveSocket, "const LIVE_SOCKET_TYPES = [\"session\", \"
 assertIncludes(chatClientLiveSocket, "type LiveSocketType = (typeof LIVE_SOCKET_TYPES)[number];", "live socket adapter derives its private event type union from constants");
 assertNotIncludes(chatClientLiveSocket, "export type LiveSocketType", "live socket adapter exposes the routed event union instead of its internal type guard union");
 assertIncludes(chatClientLiveSocket, "export type LiveSocketMessageParseResult =\n  | { kind: \"invalid\" }\n  | { kind: \"unsupported\" }\n  | { kind: \"event\"; event: LiveSocketEvent };", "live socket adapter exposes a finite parse result boundary");
-assertNotIncludes(chatClient, "SessionWorkState", "chat client excludes retired work-state update types");
 assertNotIncludes(chatClient, "type JsonRecord = Record<string, unknown>;", "chat client avoids a shared generic JSON record alias");
 assertNotIncludes(chatClient, "function toJsonRecord(value: unknown): JsonRecord | null", "chat client avoids a shared generic JSON record converter");
-assertNotIncludes(chatClientEventPayloads, "CompletionGateWorkStatePayload", "event payload adapter excludes retired completion-gate state");
-assertNotIncludes(chatClientEventPayloads, "WorkPlanStatePayload", "event payload adapter excludes retired work-plan state");
-assertNotIncludes(chatClientEventPayloads, "WorkProgressStatePayload", "event payload adapter excludes retired work-progress state");
-assertNotIncludes(chatClientEventPayloads, "[key: string]: unknown;", "event payload adapter avoids open-ended work-state indexes");
-assertNotIncludes(chatClientEventPayloads, "WorkStateEventPayload & {", "event payload adapter avoids shared work-state aliases");
+assertNotIncludes(chatClientEventPayloads, "[key: string]: unknown;", "event payload adapter avoids open-ended event payload indexes");
 assertNotIncludes(chatClientEventPayloads, "TraceEventPayload & {", "event payload adapter avoids trace event inheritance");
 assertNotIncludes(chatClientEventPayloads, "JsonRecord", "event payload adapter avoids open-ended JSON records");
 assertNotIncludes(chatClient, "normalizeRunLifecycleEventPayload,", "chat client leaves live lifecycle payload projection inside the event adapter");
-assertIncludes(chatClient, "type BackgroundProcessEventPayload,", "chat client imports shared background process event payload records");
 assertNotIncludes(chatClient, "type TraceEventPayload,", "chat client no longer imports trace event payloads for live run event records");
 assertIncludes(chatClientEventPayloads, "import {\n  normalizeRunTimelinePayload,\n  type RunTimelinePayload,\n} from \"./chatClientRunHelpers\";", "event payload adapter reuses the finite timeline payload projection");
 assertIncludes(chatClientEventPayloads, "export type LiveRunEventPayloadSource =\n  RunTimelinePayload\n  & RunPartDeltaPayload;", "event payload adapter composes one finite live run event source");
@@ -2772,7 +2735,6 @@ assertNotIncludes(chatClient, "type LiveSessionStatusView = {", "chat client avo
 assertNotIncludes(chatClient, "type LiveSessionMetadata = JsonRecord;", "chat client avoids duplicating the shared session status metadata");
 assertNotIncludes(chatClient, "type RunLifecycleEventPayload = {", "chat client avoids duplicating the shared run lifecycle payload shape");
 assertNotIncludes(chatClient, "type BackgroundProcessEventPayload = {", "chat client avoids duplicating the shared background process payload shape");
-assertNotIncludes(chatClient, "WorkState", "chat client excludes retired work-state flow");
 assertIncludes(chatClient, "payload: LiveRunEventPayloadSource;", "chat client keeps run event payloads behind the adapter-owned finite boundary");
 assertIncludes(chatClientLiveSocket, "const payload = toPayloadSource<LiveSocketPayload>(value);", "live socket adapter guards parsed envelope objects");
 assertIncludes(chatClientLiveSocket, "function toLiveSocketPayload(value: unknown): LiveSocketPayload | null", "live socket adapter narrows parsed payloads through a named private boundary");
@@ -2824,9 +2786,6 @@ assertNotIncludes(chatClient, "function toOutgoingMessageMetadata", "chat client
 assertIncludes(chatClientMessagePayloads, "export function toOutgoingMessageInputPayload(value: unknown): OutgoingMessageInputPayload | null", "message payload adapter narrows outgoing message inputs");
 assertIncludes(chatClientMessagePayloads, "text: String(payload.text || \"\").trim(),\n    metadata: toOutgoingMessageMetadata(payload.metadata),", "message payload adapter normalizes outgoing message fields");
 assertNotIncludes(chatClient, "function toOutgoingMessageInputPayload", "chat client delegates outgoing message input projection to the adapter");
-assertNotIncludes(chatClientEventPayloads, "toCompletionGateWorkStatePayload", "event payload adapter excludes retired completion-gate projection");
-assertNotIncludes(chatClientEventPayloads, "toWorkPlanStatePayload", "event payload adapter excludes retired work-plan projection");
-assertNotIncludes(chatClientEventPayloads, "toWorkProgressStatePayload", "event payload adapter excludes retired work-progress projection");
 assertIncludes(chatClientEventPayloads, "export function toLiveRunEventPayloadSource(value: unknown): LiveRunEventPayloadSource", "event payload adapter owns the nested live run event boundary");
 assertIncludes(chatClientEventPayloads, "...normalizeRunTimelinePayload(value),\n    ...toRunPartDeltaPayload(value),", "event payload adapter preserves timeline and streaming fields");
 assertNotIncludes(chatClient, "function toLiveEventPayload", "chat client does not project unknown nested live event payloads");
@@ -2846,15 +2805,11 @@ assertIncludes(chatClientLiveSocket, "error: payload.error,\n    text: payload.t
 assertNotIncludes(chatClientLiveSocket, "function toLiveSocketErrorPayload(payload: LiveSocketPayload): LiveSocketErrorPayload {\n  return payload;\n}", "live socket adapter avoids passing whole envelopes through the error converter");
 assertNotIncludes(chatClient, "function toLiveAssistantMessagePayload", "chat client delegates message projection to the adapter");
 assertNotIncludes(chatClient, "function toLiveSocketErrorPayload", "chat client delegates error projection to the adapter");
-assertNotIncludes(chatClient, "normalizeCompletionGateWorkStateUpdate", "chat client excludes retired completion-gate state normalization");
-assertNotIncludes(chatClient, "normalizeWorkPlanStateUpdate", "chat client excludes retired work-plan state normalization");
-assertNotIncludes(chatClient, "normalizeWorkProgressStateUpdate", "chat client excludes retired work-progress state normalization");
 assertIncludes(chatClient, "function resolveDefaultWsUrl(): string", "chat client types default websocket URL resolution");
 assertIncludes(chatClient, "function applySessionStatus(payload: LiveSessionStatusPayload): void", "chat client session status accepts typed live payloads");
 assertIncludes(chatClient, "const identity = normalizeLiveSessionIdentity(payload);\n    const { sessionId, channel } = identity;", "chat client applies session status from normalized live identity");
 assertIncludes(chatClient, "const nextStatus = normalizeLiveSessionStatus(payload);\n    if (nextStatus.updatedAt >= Number(session.status.updatedAt || 0)) {\n      session.status = nextStatus;\n    }", "chat client applies normalized live session status without accepting an older status snapshot");
 assertNotIncludes(chatClient, "status: String(payload?.status || \"idle\").trim() || \"idle\"", "chat client avoids raw live status reads in session status assignment");
-assertNotIncludes(chatClient, "applyWorkStateFromRunEvent", "chat client excludes retired work-state event routing");
 assertIncludes(chatClient, "function handleRunEvent(payload: LiveRunEventPayload): void", "chat client run events accept typed live payloads");
 assertIncludes(chatClient, "const session = ensureSession(externalChatId, identity.sessionId);", "chat client creates run event sessions from normalized live identity");
 assertIncludes(chatClient, "const liveEvent = normalizeLiveRunEvent(payload);", "chat client normalizes live run events before state updates");
@@ -2961,8 +2916,6 @@ assertIncludes(chatClient, "function normalizeSessionClearPayload(payload: Sessi
 assertIncludes(chatClient, "deleted: coerceNonNegativeInteger(payload?.deleted ?? payload?.deleted_count ?? payload?.deletedCount),", "chat client keeps malformed session clear responses at zero deleted sessions");
 assertIncludes(chatClientRunPayloads, "export function toRunFileChangeRevertPayload(value: unknown): RunFileChangeRevertPayload | null", "run payload adapter narrows file revert payloads");
 assertIncludes(chatClient, "function normalizeRunFileChangeRevertPayload(payload: RunFileChangeRevertPayload | null): RunFileChangeRevertPayload", "chat client only supplies a typed fallback for invalid file revert roots");
-assertIncludes(chatClientRunPayloads, "export function toWorktreeCleanupPayload(value: unknown): WorktreeCleanupPayload | null", "run payload adapter narrows worktree cleanup payloads");
-assertIncludes(chatClient, "function normalizeWorktreeCleanupPayload(payload: WorktreeCleanupPayload | null): WorktreeCleanupPayload", "chat client only supplies a typed fallback for invalid cleanup roots");
 assertIncludes(chatClient, "channelTotals: {},", "chat client initializes session history channel totals through typed root state");
 assertNotIncludes(chatClient, "channelTotals: {} as SessionHistoryChannelTotals,", "chat client avoids assertion-based session history channel totals initialization");
 assertIncludes(chatClient, "const total = state.sessionHistory.channelTotals[key] ?? state.sessionHistory.total;", "chat client reads numeric session history totals without late coercion");
@@ -3092,39 +3045,20 @@ assertNotIncludes(chatClient, "const payload = await requestSettingsJson<RunFile
 assertIncludes(chatClientRunPayloads, "const payload = toPayloadSource<RunFileChangeRevertSourcePayload>(value);\n  if (!payload) {\n    return null;\n  }", "run payload adapter rejects non-object file revert responses");
 assertIncludes(chatClientRunPayloads, "const revert = normalizeRunFileChangeRevertRecord(payload.revert, payload);", "run payload adapter normalizes nested revert records before output");
 assertIncludes(chatClientRunPayloads, "revert,\n    applied: revert.applied,\n    reason: revert.reason || textField(payload.reason),", "run payload adapter exposes a fully normalized file revert result");
-assertIncludes(chatClient, "const payload = toWorktreeCleanupPayload(\n        await requestSettingsJson(buildWorktreeCleanupPath(), {", "chat client keeps worktree cleanup API data unknown until projection");
-assertNotIncludes(chatClient, "requestSettingsJson<WorktreeCleanupPayload>(buildWorktreeCleanupPath()", "chat client avoids trusting an unchecked worktree cleanup response generic");
-assertNotIncludes(chatClient, "const payload = await requestSettingsJson<WorktreeCleanupPayload>(buildWorktreeCleanupPath(), {", "chat client avoids direct worktree cleanup response normalization");
-assertIncludes(chatClientRunPayloads, "const payload = toPayloadSource<WorktreeCleanupSourcePayload>(value);\n  if (!payload) {\n    return null;\n  }", "run payload adapter rejects non-object worktree cleanup responses");
-assertIncludes(chatClientRunPayloads, "const cleanup = normalizeWorktreeCleanupRecord(payload.cleanup);", "run payload adapter normalizes nested cleanup records before output");
-assertIncludes(chatClientRunPayloads, "ok: coerceBoolean(payload.ok),\n    cleanup,\n    reason: cleanup?.reason || textField(payload.reason),\n    status: cleanup?.status || textField(payload.status),", "run payload adapter exposes a fully normalized cleanup result");
 assertIncludes(chatClientRunPayloads, "type RunFileChangeRevertRecordSourcePayload = {", "run payload adapter owns the raw nested file revert boundary");
 assertNotIncludes(chatClientRunPayloads, "type RunFileChangeRevertApiRecord", "run payload adapter keeps one nested file revert boundary");
-assertIncludes(chatClientRunPayloads, "type WorktreeCleanupRecordSourcePayload = {", "run payload adapter owns the raw nested worktree cleanup boundary");
-assertNotIncludes(chatClientRunPayloads, "type WorktreeCleanupApiRecord", "run payload adapter keeps one nested worktree cleanup boundary");
 assertIncludes(chatClientRunPayloads, "export type RunFileChangeRevertRecord = {\n  applied: boolean;\n  reason: string;\n};", "run payload adapter exposes the normalized file revert record");
 assertNotIncludes(chatClient, "type RunFileChangeRevertRecord = {", "chat client reuses the adapter-owned file revert record");
-assertIncludes(chatClientRunPayloads, "export type WorktreeCleanupRecord = {\n  reason: string;\n  status: string;\n};", "run payload adapter exposes the normalized worktree cleanup record");
-assertNotIncludes(chatClient, "type WorktreeCleanupRecord = {", "chat client reuses the adapter-owned worktree cleanup record");
 assertIncludes(chatClientRunPayloads, "function normalizeRunFileChangeRevertRecord(\n  value: unknown,\n  fallback: RunFileChangeRevertRecordSourcePayload,\n): RunFileChangeRevertRecord", "run payload adapter narrows and normalizes nested file revert records");
 assertIncludes(chatClientRunPayloads, "applied: coerceBoolean(source.applied),\n    reason: textField(source.reason),", "run payload adapter normalizes nested file revert scalar fields");
-assertIncludes(chatClientRunPayloads, "function normalizeWorktreeCleanupRecord(value: unknown): WorktreeCleanupRecord | null", "run payload adapter narrows and normalizes nested cleanup records");
-assertIncludes(chatClientRunPayloads, "reason: textField(record.reason),\n        status: textField(record.status),", "run payload adapter normalizes nested cleanup scalar fields");
 assertNotIncludes(chatClient, "function toRunFileChangeRevertRecordPayload", "chat client delegates nested file revert projection to the adapter");
-assertNotIncludes(chatClient, "function toWorktreeCleanupRecordPayload", "chat client delegates nested worktree cleanup projection to the adapter");
 assertNotIncludes(chatClient, "function normalizeRunFileChangeRevertRecord", "chat client delegates nested file revert normalization to the run adapter");
-assertNotIncludes(chatClient, "function normalizeWorktreeCleanupRecord", "chat client delegates nested cleanup normalization to the run adapter");
 assertIncludes(chatClient, "return payload || {\n    revert: null,\n    applied: false,\n    reason: \"\",", "chat client keeps malformed file revert roots unsuccessful");
-assertIncludes(chatClient, "return payload || {\n    ok: false,\n    cleanup: null,\n    reason: \"\",\n    status: \"\",", "chat client keeps malformed worktree cleanup roots unsuccessful");
 assertNotIncludes(chatClient, "type RunFileChangeRevertRecord = RunJsonObject & {", "chat client avoids generic file revert result intersections");
-assertNotIncludes(chatClient, "type WorktreeCleanupRecord = RunJsonObject & {", "chat client avoids generic worktree cleanup result intersections");
 assertNotIncludes(chatClient, "const revertRecord = toJsonRecord(payload.revert);", "chat client avoids inline nested file revert payload records");
-assertNotIncludes(chatClient, "const cleanupRecord = toJsonRecord(payload.cleanup);", "chat client avoids inline nested worktree cleanup payload records");
 assertNotIncludes(chatClient, "function normalizeSessionClearPayload(value: unknown): SessionClearResult {\n  const payload = toJsonRecord(value) || {};", "chat client avoids inline session clear payload records");
 assertNotIncludes(chatClient, "function normalizeRunFileChangeRevertPayload(value: unknown)", "chat client avoids unknown file revert normalization");
-assertNotIncludes(chatClient, "function normalizeWorktreeCleanupPayload(value: unknown)", "chat client avoids unknown worktree cleanup normalization");
 assertNotIncludes(chatClient, "...(revertRecord || {}),", "chat client avoids carrying raw file revert fields into UI state");
-assertNotIncludes(chatClient, "...cleanupRecord,", "chat client avoids carrying raw worktree cleanup fields into UI state");
 assertIncludes(chatClient, "function toggleSettingsConnection(shouldConnect: boolean)", "chat client types settings connection toggle input");
 assertIncludes(chatClient, "async function cancelRun(run: RunViewState | null | undefined): Promise<void>", "chat client types run cancellation input");
 assertIncludes(chatClient, "setNotice(settingsErrorMessage(error, copy.value.notices.cancelFailed), \"error\");", "chat client narrows cancel run errors");
@@ -3137,16 +3071,6 @@ assertIncludes(chatClient, "setNotice(revertResult.reason || copy.value.runFileI
 assertNotIncludes(chatClient, "const revert = payload.revert || null;", "chat client avoids raw file revert result reads");
 assertNotIncludes(chatClient, "if (!revert?.applied)", "chat client avoids late coercion of file revert applied flag");
 assertIncludes(chatClient, "setNotice(settingsErrorMessage(error, copy.value.runFileInspector.revertFailed), \"error\");", "chat client narrows file revert errors");
-assertIncludes(chatClient, "async function cleanupWorktreeSandbox(run: RunViewState | null | undefined): Promise<WorktreeCleanupRecord | null>", "chat client types worktree cleanup input");
-assertIncludes(chatClient, "const sandboxPath = String(sandbox?.sandboxPath || \"\").trim();", "chat client narrows worktree cleanup sandbox paths");
-assertIncludes(chatClient, "const cleanupResult = normalizeWorktreeCleanupPayload(payload);", "chat client normalizes worktree cleanup response before state updates");
-assertIncludes(chatClient, "if (!cleanupResult.ok) {", "chat client checks normalized worktree cleanup result");
-assertIncludes(chatClient, "if (sandbox.cleanupPending) {", "chat client ignores duplicate worktree cleanup requests");
-assertIncludes(chatClient, "sandbox.status = cleanupResult.status || \"removed\";", "chat client uses normalized worktree cleanup status");
-assertIncludes(chatClient, "findWorktreeSandbox(run.parts, run.artifacts, run.rawEvents)", "chat client applies durable cleanup events to the merged trace state");
-assertNotIncludes(chatClient, "if (!payload.ok)", "chat client avoids raw worktree cleanup ok checks");
-assertNotIncludes(chatClient, "cleanup?.reason || copy.value.notices.worktreeCleanupFailed", "chat client avoids late coercion of worktree cleanup reason");
-assertIncludes(chatClient, "setNotice(settingsErrorMessage(error, copy.value.notices.worktreeCleanupFailed), \"error\");", "chat client narrows worktree cleanup errors");
 assertIncludes(chatClient, "function normalizeOutgoingMessage(rawValue: unknown): OutgoingMessagePayload", "chat client types outgoing message normalization boundary");
 assertIncludes(chatClient, "const rawRecord = toOutgoingMessageInputPayload(rawValue);", "chat client routes outgoing message inputs through the named boundary");
 assertNotIncludes(chatClient, "const rawRecord = toJsonRecord(rawValue);", "chat client avoids inline outgoing message input records");
@@ -3155,8 +3079,6 @@ assertNotIncludes(chatClient, "metadata: toOutgoingMessageMetadata(rawRecord.met
 assertIncludes(chatClient, "function sendMessageText(rawText: unknown, { clearComposer = false }: SendMessageOptions = {}): boolean", "chat client types send message input and result");
 assertIncludes(chatClient, "const outgoingMetadata: OutgoingMessageMetadata = {", "chat client keeps outgoing metadata behind the named boundary");
 assertIncludes(chatClient, "function submitMessage(event: ComposerSubmitEvent): void", "chat client types composer submit handler");
-assertNotIncludes(chatClient, "resumeFollowUp", "chat client excludes retired follow-up shortcut");
-assertNotIncludes(chatClient, "runVerification", "chat client excludes retired verification-prompt shortcut");
 assertIncludes(chatClient, "function handleComposerKeydown(event: ComposerKeyboardEvent): void", "chat client types composer key handler");
 assertIncludes(chatClient, "function applyPrompt(text: string): void", "chat client types prompt application text");
 assertIncludes(chatClient, "function applyCommandHint(command: CommandCatalogItem): void", "chat client applies typed command hints");
@@ -3200,8 +3122,6 @@ assertNotIncludes(chatClient, "type RunsPayload = { runs?: unknown[] };", "chat 
 assertIncludes(chatClient, "function cancelProviderConnect(): void", "chat client types provider connect reset helper");
 assertIncludes(chatClient, "function toggleSettingsConnection(shouldConnect: boolean): void", "chat client types settings connection toggle");
 assertIncludes(chatClient, "async function initializeClient(): Promise<void>", "chat client types initialization flow");
-assertNotIncludes(chatClientEventPayloads, "TaskEventPlannerMetadata", "event payload adapter excludes retired planner metadata");
-assertNotIncludes(chatClient, "normalizeTaskEventDetail", "chat client excludes retired task event normalization");
 assertIncludes(chatClientHistoryPayloads, "metadata?: HistoryMessageMetadata;", "history payload adapter exposes projected message metadata");
 assertIncludes(chatClientHistoryPayloads, "export type HistoryMessagePayload = {", "history payload adapter owns the message boundary");
 assertNotIncludes(chatClientHistoryPayloads, "type HistoryMessageApiRecord", "history payload adapter keeps one message boundary");
@@ -3279,7 +3199,6 @@ assertNotIncludes(chatClient, "Number(state.sessionHistory.channelTotals", "chat
 assertIncludes(chatClient, "function mergeSessionRuns(session: ChatSession, runs: RunViewState[]): void", "chat client merges typed run state");
 assertIncludes(chatClient, "filter(isChatSession)", "chat client filters session history with a type guard");
 assertIncludes(chatClient, "STORAGE_KEYS.showRunHistory", "run history preference retained");
-assertNotIncludes(chatClient, "showWorkState", "work-state preference is retired");
 assertIncludes(chatClient, "deferSettingsWork", "settings loads are deferred after opening");
 assertIncludes(chatClient, "window.requestAnimationFrame", "settings deferred work yields after user interaction");
 assertNotIncludes(chatClient, "/api/background-processes", "background process polling remains removed");
@@ -3380,7 +3299,6 @@ assertNotIncludes(useSettingsState, "browserInstallResult: JsonRecord | null;", 
 assertIncludes(chatClientCoercion, "export function coerceNonNegativeInteger(value: unknown): number", "chat client coercion helpers are typed");
 assertIncludes(chatClientCoercion, "export function coerceText(value: unknown): string", "chat client coercion owns shared scalar text normalization");
 assertIncludes(chatClientCoercion, "export function coerceFiniteNumber(value: unknown): number | null", "chat client coercion owns shared finite-number normalization");
-assertNotIncludes(chatClient, "coerceFiniteNumber as numericField", "chat client drops the task-only numeric-field alias");
 assertIncludes(chatClient, "coerceText as textField,", "chat client aliases shared text coercion for field semantics");
 assertIncludes(chatClientCronPayloads, "coerceText as textField", "cron adapter reuses shared text coercion");
 assertIncludes(chatClientRunPayloads, "coerceText as textField", "run adapter reuses shared text coercion");
@@ -3398,10 +3316,8 @@ assertNotIncludes(chatClientRunHelpers, "type RunTimelineSourcePayload", "chat c
 assertNotIncludes(chatClientRunHelpers, "function toRunTimelinePayloadRecord", "chat client run helpers avoid a duplicate timeline object guard");
 assertIncludes(chatClientRunHelpers, "export function normalizeRunTimelinePayload(value: unknown): RunTimelinePayload", "chat client run helpers normalize timeline payloads at the named boundary");
 assertIncludes(chatClientRunHelpers, "const payload = toPayloadSource<RunTimelinePayload>(value) || {};\n  return {\n    ...normalizeRunLifecycleEventPayload(payload),", "chat client run helpers guard timeline inputs before projecting lifecycle fields");
-assertNotIncludes(chatClientRunHelpers, "classification_reason", "chat client run helpers exclude retired task classification fields");
 assertNotIncludes(chatClientRunHelpers, "type RunLifecycleEventSourcePayload", "chat client run helpers avoid a duplicate lifecycle source type");
 assertIncludes(chatClientRunHelpers, "const payload = toPayloadSource<RunLifecycleEventPayload>(value) || {};", "chat client run helpers guard lifecycle inputs with the shared finite payload boundary");
-assertNotIncludes(chatClientRunHelpers, "planner_metadata", "chat client run helpers exclude retired planner metadata");
 assertNotIncludes(chatClientRunHelpers, "export type RunTimelinePayload = {\n  [key: string]: unknown;\n};", "chat client run helpers avoid open-ended timeline payload indexes");
 assertNotIncludes(chatClientRunHelpers, "value as RunTimelinePayload", "chat client run helpers avoid casting raw timeline payloads wholesale");
 assertNotIncludes(chatClientRunHelpers, "export type RunTimelinePayload = TraceEventPayload;", "chat client run helpers avoid carrying timeline payloads through trace event payloads");
@@ -3428,7 +3344,6 @@ assertNotIncludes(chatClientRunHelpers, "fileChanges: RunJsonObject[];", "chat c
 assertIncludes(chatClientRunHelpers, "type RunEventKind,", "chat client run helpers import typed run event kind");
 assertNotIncludes(chatClientRunHelpers, "type TraceEventPayload,", "chat client run helpers no longer imports trace event payload for helper-local payloads");
 assertIncludes(chatClientRunHelpers, "type TraceEventCountsView,", "chat client run helpers import typed trace event counts");
-assertIncludes(chatClientRunHelpers, "type WorktreeSandboxView,", "chat client run helpers import typed worktree sandbox view");
 assertIncludes(chatClientRunHelpers, "export type RunLifecycleEventPayload = {", "chat client run helper exports typed lifecycle payload boundary");
 assertNotIncludes(chatClientRunHelpers, "export type RunLifecycleEventPayload = {\n  [key: string]: unknown;", "chat client run helper avoids open-ended lifecycle payload indexes");
 assertNotIncludes(chatClientRunHelpers, "export type RunLifecycleEventPayload = TraceEventPayload & {", "chat client run helpers avoid carrying lifecycle events through trace event payloads");
@@ -3437,7 +3352,6 @@ assertIncludes(chatClientRunHelpers, "export function normalizeRunLifecycleEvent
 assertNotIncludes(chatClientRunHelpers, "type RunEventPayload = {", "chat client run helpers avoid private duplicate lifecycle payload shapes");
 assertNotIncludes(chatClientRunHelpers, "type RunEventPayload = Record<string, unknown>;", "chat client run event helper avoids bare unknown record payloads");
 assertIncludes(chatClientRunHelpers, "executed_tool_calls?: unknown;", "chat client run event helper lists run finish payload aliases");
-assertNotIncludes(chatClientRunHelpers, "direct_verify_path", "chat client run helper excludes retired auto-continue payload aliases");
 assertIncludes(chatClientRunHelpers, "export type RunEventCounts = TraceEventCountsView;", "chat client run event counts use explicit trace count view");
 assertIncludes(chatClientRunHelpers, "export type RunTimelineTone = \"running\" | \"neutral\" | \"warning\" | \"success\" | \"error\";", "chat client run helpers expose typed timeline tones");
 assertIncludes(chatClientRunHelpers, "const TERMINAL_RUN_STATUSES = [\"completed\", \"failed\", \"cancelled\", \"stopped\"] as const;", "chat client run helpers keep all terminal run statuses as a typed array");
@@ -3477,7 +3391,6 @@ assertIncludes(chatClientRunHelpers, "detail: string;", "chat client run timelin
 assertIncludes(chatClientRunHelpers, "tone: RunTimelineTone;", "chat client run timeline event tones are typed");
 assertIncludes(chatClientRunHelpers, "eventCounts: RunEventCounts;", "chat client run view state keeps typed event counts");
 assertIncludes(chatClientRunHelpers, "events: RunTimelineEventView[];", "chat client run view state keeps typed timeline events");
-assertIncludes(chatClientRunHelpers, "worktreeSandbox: WorktreeSandboxView | null;", "chat client run view state keeps typed worktree sandbox");
 assertIncludes(chatClientRunHelpers, "cancelPending: boolean;", "chat client run view state tracks typed cancel pending flag");
 assertIncludes(chatClientRunHelpers, "export function createRunViewState({", "chat client run view state factory remains exported");
 assertIncludes(chatClientRunHelpers, "eventCounts: normalizeTraceEventCounts(null, [])", "chat client run view state preserves initial trace event counts");
@@ -3511,247 +3424,36 @@ assertIncludes(chatClientRunHelpers, "export function formatSubagentDetail(detai
 assertIncludes(chatClientRunHelpers, "export function formatWorkflowDetail(detail: WorkflowDetailView): string", "chat client workflow formatter consumes normalized detail view");
 assertNotIncludes(chatClientRunHelpers, "export function formatSubagentDetail(payload: RunLifecycleEventPayload): string", "chat client subagent formatter avoids raw payload input");
 assertNotIncludes(chatClientRunHelpers, "export function formatWorkflowDetail(payload: RunLifecycleEventPayload): string", "chat client workflow formatter avoids raw payload input");
-assertNotIncludes(chatClientRunHelpers, "AutoContinueDetailView", "chat client run helpers exclude retired auto-continue detail view");
 assertIncludes(chatClientRunHelpers, "return fallbackTone === \"warning\" ? \"warning\" : \"success\";", "chat client run tone preserves completed warning fallback");
 assertIncludes(runSummaryNormalizers, "export type DiffSummaryView = {", "run summary normalizers expose typed diff summary view");
 assertIncludes(runSummaryNormalizers, "import { toPayloadList, toPayloadSource } from \"./payloadBoundary\";", "run summary normalizers reuse shared object and list payload guards");
-for (const payloadListCall of [
-  "toPayloadList(summary.paths)",
-  "toPayloadList(workflowSummary.results)",
-  "toPayloadList(subagentSummary.results)",
-  "toPayloadList(group.tasks)",
-  "toPayloadList(delegationSummary.groups)",
-  "toPayloadList(summary.tools)",
-  "toPayloadList(summary.file_changes || summary.fileChanges)",
-]) {
-  assertIncludes(runSummaryNormalizers, payloadListCall, `run summary normalizers narrow array payload through ${payloadListCall}`);
-}
+assertIncludes(runSummaryNormalizers, "toPayloadList(summary.paths)", "run summary normalizers narrow diff paths through the shared list boundary");
+assertIncludes(runSummaryNormalizers, "toPayloadList(value)", "run summary normalizers count summary collections through the shared list boundary");
 assertNotIncludes(runSummaryNormalizers, "Array.isArray(", "run summary normalizers delegate array validation to the shared payload boundary");
 assertNotIncludes(runSummaryNormalizers, "as unknown[]", "run summary normalizers avoid asserting raw payload arrays");
 assertIncludes(runSummaryNormalizers, "type DiffSummaryActionsPayload = {\n  [action: string]: unknown;\n};", "run summary normalizers name dynamic diff action map boundary");
 assertIncludes(runSummaryNormalizers, "type DiffSummaryActionEntry = [string, unknown];", "run summary normalizers names diff action entry boundary");
-for (const payloadType of [
-  "DiffSummaryPayload",
-  "RunSummaryWorkflowResultPayload",
-  "RunSummaryWorkflowPayload",
-  "RunSummaryStructuredSubagentResultPayload",
-  "RunSummaryStructuredSubagentsPayload",
-  "RunSummaryParallelDelegationTaskPayload",
-  "RunSummaryParallelDelegationGroupPayload",
-  "RunSummaryParallelDelegationPayload",
-  "RunSummaryToolPayload",
-  "RunSummaryFileChangePayload",
-  "RunSummaryFileChangeSnapshotsPayload",
-  "RunSummaryBooleanStatusPayload",
-  "RunSummaryArtifactCountsPayload",
-  "RunSummaryCountsPayload",
-  "RunSummaryPayload",
-]) {
-  assertIncludes(runSummaryNormalizers, `toPayloadSource<${payloadType}>(value)`, `run summary normalizers limit ${payloadType} source reads to known fields`);
-}
-assertIncludes(runSummaryNormalizers, "function toDiffSummaryActionEntries(value: unknown): DiffSummaryActionEntry[] {\n  const payload = toPayloadSource<DiffSummaryActionsPayload>(value);", "run summary normalizers preserve dynamic diff action keys behind a named payload source");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryCountMapEntries(value: unknown): RunSummaryCountMapEntry[] {\n  const payload = toPayloadSource<RunSummaryCountMapPayload>(value);", "run summary normalizers preserve dynamic count-map keys behind a named payload source");
+assertIncludes(runSummaryNormalizers, "function toDiffSummaryPayload(value: unknown): DiffSummaryPayload | null", "run summary normalizers narrow raw diff summary payloads");
+assertIncludes(runSummaryNormalizers, "function normalizeDiffSummaryActions(payload: unknown): Record<string, number>", "run summary normalizers normalize diff action counts");
+assertIncludes(runSummaryNormalizers, "export function normalizeDiffSummary(payload: unknown): DiffSummaryView | null", "run summary normalizers keep the shared trace diff boundary");
+assertIncludes(runSummaryNormalizers, "actions: normalizeDiffSummaryActions(summary.actions),", "run summary normalizers use the named diff action normalizer");
+assertIncludes(runSummaryNormalizers, "export type RunSummaryView = {", "run summary normalizers expose the minimal run summary view");
+assertIncludes(runSummaryNormalizers, "toolCount: number;", "run summary view stores only the consumed tool count");
+assertIncludes(runSummaryNormalizers, "fileChangeCount: number;", "run summary view stores only the consumed file-change count");
+assertIncludes(runSummaryNormalizers, "type RunSummaryPayload = {", "run summary normalizers keep the API payload boundary private");
+assertNotIncludes(runSummaryNormalizers, "export type RunSummaryPayload", "run summary normalizers do not expose the raw API payload");
+assertIncludes(runSummaryNormalizers, "toPayloadSource<RunSummaryToolPayload>(item)", "run summary normalizers narrow tool items before counting");
+assertIncludes(runSummaryNormalizers, "toPayloadSource<RunSummaryFileChangePayload>(item)", "run summary normalizers narrow file-change items before counting");
+assertIncludes(runSummaryNormalizers, "function countRunSummaryTools(value: unknown): number", "run summary normalizers count valid tool names without retaining item detail");
+assertIncludes(runSummaryNormalizers, "function countRunSummaryFileChanges(value: unknown): number", "run summary normalizers count valid file paths without retaining item detail");
+assertIncludes(runSummaryNormalizers, "function toRunSummaryPayload(value: unknown): RunSummaryPayload | null", "run summary normalizers narrow raw run summary payloads");
+assertIncludes(runSummaryNormalizers, "status: payload.status,\n        duration_seconds: payload.duration_seconds,\n        durationSeconds: payload.durationSeconds,", "run summary normalizers project only displayed scalar fields");
+assertIncludes(runSummaryNormalizers, "file_changes: payload.file_changes,\n        fileChanges: payload.fileChanges,", "run summary normalizers preserve file-change aliases needed for the trace decision");
+assertIncludes(runSummaryNormalizers, "export function normalizeRunSummary(payload: unknown): RunSummaryView | null", "run summary normalizers type the minimal summary boundary");
+assertIncludes(runSummaryNormalizers, "toolCount: countRunSummaryTools(summary.tools),", "run summary normalizers expose the tool count");
+assertIncludes(runSummaryNormalizers, "fileChangeCount: countRunSummaryFileChanges(summary.file_changes || summary.fileChanges),", "run summary normalizers expose the file-change count");
 assertNotIncludes(runSummaryNormalizers, "type JsonRecord = Record<string, unknown>;", "run summary normalizers avoid a shared generic JSON record alias");
 assertNotIncludes(runSummaryNormalizers, "function toJsonRecord(value: unknown): JsonRecord | null", "run summary normalizers avoid a shared generic JSON record converter");
-assertNotIncludes(runSummaryNormalizers, "type DiffSummaryActionsPayload = JsonRecord;", "run summary normalizers avoids raw diff action payload records");
-assertIncludes(runSummaryNormalizers, "type DiffSummaryPayload = {", "run summary normalizers names field-aware diff summary payload");
-assertNotIncludes(runSummaryNormalizers, "type DiffSummaryPayload = JsonRecord & {", "run summary normalizers avoids open-ended diff summary payload records");
-assertIncludes(runSummaryNormalizers, "function toDiffSummaryPayload(value: unknown): DiffSummaryPayload | null", "run summary normalizers narrows raw diff summary payloads");
-assertIncludes(runSummaryNormalizers, "schema_version: payload.schema_version,\n        schemaVersion: payload.schemaVersion,\n        changed_files: payload.changed_files,", "run summary normalizers projects diff summary payloads onto named fields");
-assertNotIncludes(runSummaryNormalizers, "function toDiffSummaryPayload(value: unknown): DiffSummaryPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw diff summary records through converter");
-assertIncludes(runSummaryNormalizers, "function toDiffSummaryActionEntries(value: unknown): DiffSummaryActionEntry[]", "run summary normalizers narrows raw diff action maps into entries");
-assertIncludes(runSummaryNormalizers, "toDiffSummaryActionEntries(payload)", "run summary normalizers normalizes diff action entries through the named boundary");
-assertNotIncludes(runSummaryNormalizers, "function toDiffSummaryActionsPayload(value: unknown): DiffSummaryActionsPayload | null", "run summary normalizers avoids raw diff action payload helpers");
-assertIncludes(runSummaryNormalizers, "function normalizeDiffSummaryActions(payload: unknown): Record<string, number>", "run summary normalizers normalizes diff action counts");
-assertIncludes(runSummaryNormalizers, "export function normalizeDiffSummary(payload: unknown): DiffSummaryView | null", "run summary normalizers type diff summary boundary");
-assertIncludes(runSummaryNormalizers, "const summary = toDiffSummaryPayload(payload);", "run summary normalizers uses named diff summary payload guard");
-assertIncludes(runSummaryNormalizers, "actions: normalizeDiffSummaryActions(summary.actions),", "run summary normalizers uses named diff action normalizer");
-assertNotIncludes(runSummaryNormalizers, "const actions = toJsonRecord(summary.actions) || {};", "run summary normalizers avoids inline diff action record normalization");
-assertNotIncludes(runSummaryNormalizers, "actions: Object.fromEntries(\n      Object.entries(actions)", "run summary normalizers avoids inline diff action map construction");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryView = {", "run summary normalizers expose typed run summary view");
-assertNotIncludes(runSummaryNormalizers, "export type RunSummaryView = JsonRecord & {", "run summary normalizers avoids generic run summary index signature");
-assertIncludes(runSummaryNormalizers, "type RunSummaryBooleanStatusPayload = {", "run summary normalizers names field-aware boolean status payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryBooleanStatusPayload = JsonRecord & {", "run summary normalizers avoids open-ended boolean status payload records");
-assertNotIncludes(runSummaryNormalizers, "RunSummaryReviewView", "run summary normalizers exclude retired completion review view");
-assertNotIncludes(runSummaryNormalizers, "RunSummaryReviewPayload", "run summary normalizers exclude retired completion review payload");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryBooleanStatusPayload(value: unknown): RunSummaryBooleanStatusPayload", "run summary normalizers narrows raw boolean status payloads");
-assertIncludes(runSummaryNormalizers, "attempted: payload.attempted,\n        passed: payload.passed,\n        status: payload.status,", "run summary normalizers projects boolean status payloads onto named fields");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryBooleanStatusPayload(value: unknown): RunSummaryBooleanStatusPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw boolean status records through converter");
-assertIncludes(runSummaryNormalizers, "type RunSummaryArtifactCountsView = {", "run summary normalizers names artifact count view");
-assertIncludes(runSummaryNormalizers, "type RunSummaryArtifactCountsPayload = {", "run summary normalizers names field-aware artifact count payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryArtifactCountsPayload = JsonRecord & {", "run summary normalizers avoids open-ended artifact count payload records");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryArtifactCountsPayload(value: unknown): RunSummaryArtifactCountsPayload", "run summary normalizers narrows raw artifact count payloads");
-assertIncludes(runSummaryNormalizers, "total: payload.total,\n        tool: payload.tool,\n        file: payload.file,", "run summary normalizers projects artifact count payloads onto named fields");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryArtifactCountsPayload(value: unknown): RunSummaryArtifactCountsPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw artifact count records through converter");
-assertIncludes(runSummaryNormalizers, "type RunSummaryCountsView = {", "run summary normalizers names run count view");
-assertIncludes(runSummaryNormalizers, "type RunSummaryCountsPayload = {", "run summary normalizers names field-aware run count payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryCountsPayload = JsonRecord & {", "run summary normalizers avoids open-ended run count payload records");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryCountsPayload(value: unknown): RunSummaryCountsPayload", "run summary normalizers narrows raw run count payloads");
-assertIncludes(runSummaryNormalizers, "events: payload.events,\n        parts: payload.parts,\n        tool_calls: payload.tool_calls,", "run summary normalizers projects run count payloads onto named fields");
-assertIncludes(runSummaryNormalizers, "file_changes: payload.file_changes,\n        fileChanges: payload.fileChanges,", "run summary normalizers preserves run count file change aliases");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryCountsPayload(value: unknown): RunSummaryCountsPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw run count records through converter");
-assertIncludes(runSummaryNormalizers, "title: string;", "run summary normalizers type summary titles");
-assertIncludes(runSummaryNormalizers, "duration: string;", "run summary normalizers type display duration");
-assertIncludes(runSummaryNormalizers, "result: string;", "run summary normalizers type summary result");
-assertIncludes(runSummaryNormalizers, "finalAnswer: string;", "run summary normalizers type final answer fallback");
-assertIncludes(runSummaryNormalizers, "type RunSummaryToolPayload = {", "run summary normalizers names field-aware tool summary payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryToolPayload = JsonRecord & {", "run summary normalizers avoids open-ended tool summary payload records");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryToolPayload(value: unknown): RunSummaryToolPayload | null", "run summary normalizers narrows raw tool summary payloads");
-assertIncludes(runSummaryNormalizers, "name: payload.name,\n        count: payload.count,", "run summary normalizers projects tool summary payloads onto named fields");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryToolPayload(value: unknown): RunSummaryToolPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw tool summary records through converter");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryTool(value: unknown): RunSummaryToolView | null", "run summary normalizers normalizes tool summary items");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryTool)", "run summary normalizers uses named tool item normalizer");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryFileChangeView = {", "run summary normalizers expose typed summary file changes");
-assertIncludes(runSummaryNormalizers, "type RunSummaryFileChangePayload = {", "run summary normalizers names field-aware file change payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryFileChangePayload = JsonRecord & {", "run summary normalizers avoids open-ended file change payload records");
-assertIncludes(runSummaryNormalizers, "type RunSummaryFileChangeSnapshotsPayload = {", "run summary normalizers names field-aware file change snapshot payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryFileChangeSnapshotsPayload = JsonRecord & {", "run summary normalizers avoids open-ended file change snapshot payload records");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryFileChangePayload(value: unknown): RunSummaryFileChangePayload | null", "run summary normalizers narrows raw file change payloads");
-assertIncludes(runSummaryNormalizers, "change_id: payload.change_id,\n        changeId: payload.changeId,\n        path: payload.path,", "run summary normalizers projects file change payloads onto named fields");
-assertIncludes(runSummaryNormalizers, "snapshots_available: payload.snapshots_available,\n        snapshotsAvailable: payload.snapshotsAvailable,", "run summary normalizers preserves file change snapshot payload aliases");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryFileChangeSnapshotsPayload(value: unknown): RunSummaryFileChangeSnapshotsPayload | null", "run summary normalizers narrows raw file change snapshot payloads");
-assertIncludes(runSummaryNormalizers, "before: payload.before,\n        after: payload.after,", "run summary normalizers projects file change snapshots onto named fields");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryFileChangePayload(value: unknown): RunSummaryFileChangePayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw file change records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryFileChangeSnapshotsPayload(value: unknown): RunSummaryFileChangeSnapshotsPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw file change snapshot records through converter");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryFileChange(value: unknown): RunSummaryFileChangeView | null", "run summary normalizers normalizes file change items");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryFileChange)", "run summary normalizers uses named file change normalizer");
-assertNotIncludes(runSummaryNormalizers, "const toolRecord = toJsonRecord(tool) || {};", "run summary normalizers avoids inline tool record normalization");
-assertNotIncludes(runSummaryNormalizers, "const changeRecord = toJsonRecord(change);", "run summary normalizers avoids inline file change record normalization");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryBooleanStatus(", "run summary normalizers normalizes boolean status summaries");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryArtifactCounts(value: unknown): RunSummaryArtifactCountsView", "run summary normalizers normalizes artifact count payloads");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryCounts(value: unknown): RunSummaryCountsView", "run summary normalizers normalizes run count payloads");
-assertIncludes(runSummaryNormalizers, "verification: normalizeRunSummaryBooleanStatus(summary.verification, \"not_attempted\"),", "run summary normalizers uses named verification normalizer");
-assertIncludes(runSummaryNormalizers, "artifactCounts: normalizeRunSummaryArtifactCounts(summary.artifact_counts || summary.artifactCounts),", "run summary normalizers uses named artifact count normalizer");
-assertIncludes(runSummaryNormalizers, "counts: normalizeRunSummaryCounts(summary.counts),", "run summary normalizers uses named run count normalizer");
-assertNotIncludes(runSummaryNormalizers, "const verification = toJsonRecord(summary.verification) || {};", "run summary normalizers avoids inline verification payload normalization");
-assertNotIncludes(runSummaryNormalizers, "const counts = toJsonRecord(summary.counts) || {};", "run summary normalizers avoids inline count payload normalization");
-assertNotIncludes(runSummaryNormalizers, "const artifactCounts = toJsonRecord(summary.artifact_counts) || {};", "run summary normalizers avoids inline artifact count payload normalization");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryWorkflowResultView = {", "run summary normalizers expose typed workflow summary results");
-assertIncludes(runSummaryNormalizers, "type RunSummaryWorkflowResultPayload = {", "run summary normalizers names field-aware workflow summary result payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryWorkflowResultPayload = JsonRecord & {", "run summary normalizers avoids open-ended workflow summary result payload records");
-assertIncludes(runSummaryNormalizers, "type RunSummaryCountMapEntry = [string, unknown];", "run summary normalizers names summary count-map entry boundary");
-assertIncludes(runSummaryNormalizers, "type RunSummaryCountMapPayload = {\n  [key: string]: unknown;\n};", "run summary normalizers name dynamic summary count-map boundary");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryCountMapPayload = JsonRecord;", "run summary normalizers avoids raw summary count-map payload records");
-assertIncludes(runSummaryNormalizers, "type RunSummaryWorkflowPayload = {", "run summary normalizers names field-aware workflow summary payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryWorkflowPayload = JsonRecord & {", "run summary normalizers avoids open-ended workflow summary payload records");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryWorkflowView = {", "run summary normalizers expose typed workflow summary view");
-assertIncludes(runSummaryNormalizers, "workflows: RunSummaryWorkflowView;", "run summary normalizers stores typed workflow summaries");
-assertNotIncludes(runSummaryNormalizers, "workflows: unknown;", "run summary normalizers avoids generic workflow summaries");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryWorkflowResultPayload(value: unknown): RunSummaryWorkflowResultPayload | null", "run summary normalizers narrows raw workflow result payloads");
-assertIncludes(runSummaryNormalizers, "workflow_run_id: payload.workflow_run_id,\n        workflowRunId: payload.workflowRunId,\n        workflow: payload.workflow,", "run summary normalizers projects workflow result identity payload aliases");
-assertIncludes(runSummaryNormalizers, "completed_steps: payload.completed_steps,\n        completedSteps: payload.completedSteps,", "run summary normalizers preserves workflow result step aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryWorkflowResult(value: unknown): RunSummaryWorkflowResultView | null", "run summary normalizers normalizes workflow result items");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryCountMapEntries(value: unknown): RunSummaryCountMapEntry[]", "run summary normalizers narrows raw summary count maps into entries");
-assertIncludes(runSummaryNormalizers, "toRunSummaryCountMapEntries(payload)", "run summary normalizers normalizes summary count entries through the named boundary");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryCountMapPayload(value: unknown): RunSummaryCountMapPayload | null", "run summary normalizers avoids raw summary count-map payload helpers");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryCountMap(payload: unknown): Record<string, number>", "run summary normalizers normalizes summary count maps");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryWorkflowPayload(value: unknown): RunSummaryWorkflowPayload | null", "run summary normalizers narrows raw workflow summary payloads");
-assertIncludes(runSummaryNormalizers, "total: payload.total,\n        by_workflow: payload.by_workflow,\n        by_status: payload.by_status,\n        results: payload.results,", "run summary normalizers projects workflow summary payloads onto named fields");
-assertIncludes(runSummaryNormalizers, "function normalizeWorkflowSummary(payload: unknown): RunSummaryWorkflowView", "run summary normalizers type workflow summary boundary");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryWorkflowResult)", "run summary normalizers uses named workflow result normalizer");
-assertIncludes(runSummaryNormalizers, ".filter((result): result is RunSummaryWorkflowResultView => Boolean(result))", "run summary normalizers narrows workflow summary results");
-assertIncludes(runSummaryNormalizers, "byWorkflow: normalizeRunSummaryCountMap(workflowSummary.by_workflow),", "run summary normalizers uses named workflow count-map normalizer");
-assertIncludes(runSummaryNormalizers, "byStatus: normalizeRunSummaryCountMap(workflowSummary.by_status),", "run summary normalizers uses named workflow status count-map normalizer");
-assertNotIncludes(runSummaryNormalizers, "workflowSummary.results\n        .map((item) => {\n          const result = toJsonRecord(item);", "run summary normalizers avoids inline workflow result record normalization");
-assertNotIncludes(runSummaryNormalizers, "const byWorkflow = toJsonRecord(workflowSummary.by_workflow) || {};", "run summary normalizers avoids inline workflow count-map normalization");
-assertNotIncludes(runSummaryNormalizers, "const byStatus = toJsonRecord(workflowSummary.by_status) || {};", "run summary normalizers avoids inline workflow status count-map normalization");
-assertNotIncludes(runSummaryNormalizers, "byWorkflow: Object.fromEntries(Object.entries(byWorkflow)", "run summary normalizers avoids inline workflow count-map construction");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryWorkflowResultPayload(value: unknown): RunSummaryWorkflowResultPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw workflow result records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryWorkflowPayload(value: unknown): RunSummaryWorkflowPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw workflow summary records through converter");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryStructuredSubagentResultView = {", "run summary normalizers expose typed structured subagent results");
-assertIncludes(runSummaryNormalizers, "type RunSummaryStructuredSubagentResultPayload = {", "run summary normalizers names field-aware structured subagent result payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryStructuredSubagentResultPayload = JsonRecord & {", "run summary normalizers avoids open-ended structured subagent result payload records");
-assertIncludes(runSummaryNormalizers, "type RunSummaryStructuredSubagentsPayload = {", "run summary normalizers names field-aware structured subagent summary payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryStructuredSubagentsPayload = JsonRecord & {", "run summary normalizers avoids open-ended structured subagent summary payload records");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryStructuredSubagentsView = {", "run summary normalizers expose typed structured subagent summary view");
-assertIncludes(runSummaryNormalizers, "structuredSubagents: RunSummaryStructuredSubagentsView;", "run summary normalizers stores typed structured subagent summaries");
-assertNotIncludes(runSummaryNormalizers, "structuredSubagents: unknown;", "run summary normalizers avoids generic structured subagent summaries");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryStructuredSubagentResultPayload(value: unknown): RunSummaryStructuredSubagentResultPayload | null", "run summary normalizers narrows raw structured subagent result payloads");
-assertIncludes(runSummaryNormalizers, "task_id: payload.task_id,\n        taskId: payload.taskId,\n        prompt_type: payload.prompt_type,", "run summary normalizers projects structured subagent result identity payload aliases");
-assertIncludes(runSummaryNormalizers, "residual_risk_count: payload.residual_risk_count,\n        residualRiskCount: payload.residualRiskCount,", "run summary normalizers preserves structured subagent residual risk aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryStructuredSubagentResult(value: unknown): RunSummaryStructuredSubagentResultView | null", "run summary normalizers normalizes structured subagent result items");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryStructuredSubagentsPayload(value: unknown): RunSummaryStructuredSubagentsPayload | null", "run summary normalizers narrows raw structured subagent summary payloads");
-assertIncludes(runSummaryNormalizers, "total: payload.total,\n        by_prompt_type: payload.by_prompt_type,\n        by_status: payload.by_status,", "run summary normalizers projects structured subagent summary count payloads");
-assertIncludes(runSummaryNormalizers, "total_residual_risks: payload.total_residual_risks,\n        totalResidualRisks: payload.totalResidualRisks,", "run summary normalizers preserves structured subagent residual risk total aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeStructuredSubagentsSummary(payload: unknown): RunSummaryStructuredSubagentsView", "run summary normalizers type structured subagent summary boundary");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryStructuredSubagentResult)", "run summary normalizers uses named structured subagent result normalizer");
-assertIncludes(runSummaryNormalizers, ".filter((result): result is RunSummaryStructuredSubagentResultView => Boolean(result))", "run summary normalizers narrows structured subagent results");
-assertIncludes(runSummaryNormalizers, "byPromptType: normalizeRunSummaryCountMap(subagentSummary.by_prompt_type),", "run summary normalizers uses named structured subagent prompt count-map normalizer");
-assertIncludes(runSummaryNormalizers, "byStatus: normalizeRunSummaryCountMap(subagentSummary.by_status),", "run summary normalizers uses named structured subagent status count-map normalizer");
-assertNotIncludes(runSummaryNormalizers, "subagentSummary.results\n        .map((item) => {\n          const result = toJsonRecord(item);", "run summary normalizers avoids inline structured subagent result record normalization");
-assertNotIncludes(runSummaryNormalizers, "const byPromptType = toJsonRecord(subagentSummary.by_prompt_type) || {};", "run summary normalizers avoids inline structured subagent prompt count-map normalization");
-assertNotIncludes(runSummaryNormalizers, "const byStatus = toJsonRecord(subagentSummary.by_status) || {};", "run summary normalizers avoids inline structured subagent status count-map normalization");
-assertNotIncludes(runSummaryNormalizers, "byPromptType: Object.fromEntries(Object.entries(byPromptType)", "run summary normalizers avoids inline structured subagent prompt count-map construction");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryStructuredSubagentResultPayload(value: unknown): RunSummaryStructuredSubagentResultPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw structured subagent result records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryStructuredSubagentsPayload(value: unknown): RunSummaryStructuredSubagentsPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw structured subagent summary records through converter");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryParallelDelegationTaskView = {", "run summary normalizers expose typed parallel delegation tasks");
-assertIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationTaskPayload = {", "run summary normalizers names field-aware parallel delegation task payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationTaskPayload = JsonRecord & {", "run summary normalizers avoids open-ended parallel delegation task payload records");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryParallelDelegationGroupView = {", "run summary normalizers expose typed parallel delegation groups");
-assertIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationGroupPayload = {", "run summary normalizers names field-aware parallel delegation group payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationGroupPayload = JsonRecord & {", "run summary normalizers avoids open-ended parallel delegation group payload records");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryParallelDelegationView = {", "run summary normalizers expose typed parallel delegation summary view");
-assertIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationPayload = {", "run summary normalizers names field-aware parallel delegation summary payload");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryParallelDelegationPayload = JsonRecord & {", "run summary normalizers avoids open-ended parallel delegation summary payload records");
-assertIncludes(runSummaryNormalizers, "parallelDelegation: RunSummaryParallelDelegationView;", "run summary normalizers stores typed parallel delegation summaries");
-assertNotIncludes(runSummaryNormalizers, "parallelDelegation: unknown;", "run summary normalizers avoids generic parallel delegation summaries");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationTaskPayload(value: unknown): RunSummaryParallelDelegationTaskPayload | null", "run summary normalizers narrows raw parallel delegation task payloads");
-assertIncludes(runSummaryNormalizers, "task_id: payload.task_id,\n        taskId: payload.taskId,\n        prompt_type: payload.prompt_type,", "run summary normalizers projects parallel delegation task identity payload aliases");
-assertIncludes(runSummaryNormalizers, "child_run_id: payload.child_run_id,\n        childRunId: payload.childRunId,", "run summary normalizers preserves parallel delegation child run aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryParallelDelegationTask(value: unknown): RunSummaryParallelDelegationTaskView | null", "run summary normalizers normalizes parallel delegation task items");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationGroupPayload(value: unknown): RunSummaryParallelDelegationGroupPayload | null", "run summary normalizers narrows raw parallel delegation group payloads");
-assertIncludes(runSummaryNormalizers, "group_id: payload.group_id,\n        groupId: payload.groupId,\n        status: payload.status,", "run summary normalizers projects parallel delegation group identity payload aliases");
-assertIncludes(runSummaryNormalizers, "cancelled_count: payload.cancelled_count,\n        cancelledCount: payload.cancelledCount,", "run summary normalizers preserves parallel delegation cancelled count aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeRunSummaryParallelDelegationGroup(value: unknown): RunSummaryParallelDelegationGroupView | null", "run summary normalizers normalizes parallel delegation group items");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationPayload(value: unknown): RunSummaryParallelDelegationPayload | null", "run summary normalizers narrows raw parallel delegation summary payloads");
-assertIncludes(runSummaryNormalizers, "group_count: payload.group_count,\n        groupCount: payload.groupCount,\n        task_count: payload.task_count,", "run summary normalizers projects parallel delegation summary count aliases");
-assertIncludes(runSummaryNormalizers, "function normalizeParallelDelegationSummary(payload: unknown): RunSummaryParallelDelegationView", "run summary normalizers type parallel delegation summary boundary");
-assertIncludes(runSummaryNormalizers, "const delegationSummary = toRunSummaryParallelDelegationPayload(payload);", "run summary normalizers uses named parallel delegation summary payload guard");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryParallelDelegationGroup)", "run summary normalizers uses named parallel delegation group normalizer");
-assertIncludes(runSummaryNormalizers, ".map(normalizeRunSummaryParallelDelegationTask)", "run summary normalizers uses named parallel delegation task normalizer");
-assertIncludes(runSummaryNormalizers, ".filter((task): task is RunSummaryParallelDelegationTaskView => Boolean(task))", "run summary normalizers narrows parallel delegation tasks");
-assertIncludes(runSummaryNormalizers, ".filter((group): group is RunSummaryParallelDelegationGroupView => Boolean(group))", "run summary normalizers narrows parallel delegation groups");
-assertNotIncludes(runSummaryNormalizers, "const groupRecord = toJsonRecord(group);", "run summary normalizers avoids inline parallel delegation group record normalization");
-assertNotIncludes(runSummaryNormalizers, "const taskRecord = toJsonRecord(task);", "run summary normalizers avoids inline parallel delegation task record normalization");
-assertNotIncludes(runSummaryNormalizers, "const delegationSummary = toJsonRecord(payload);", "run summary normalizers avoids inline parallel delegation summary record normalization");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationTaskPayload(value: unknown): RunSummaryParallelDelegationTaskPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw parallel delegation task records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationGroupPayload(value: unknown): RunSummaryParallelDelegationGroupPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw parallel delegation group records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryParallelDelegationPayload(value: unknown): RunSummaryParallelDelegationPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw parallel delegation summary records through converter");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryTaskScorecardSensorCountsPayload = JsonRecord & {", "run summary normalizers avoids open-ended task scorecard sensor count payload records");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryTaskScorecardPayload = JsonRecord & {", "run summary normalizers avoids open-ended task scorecard payload records");
-assertNotIncludes(runSummaryNormalizers, "taskScorecard: unknown;", "run summary normalizers avoids generic task scorecard summaries");
-assertNotIncludes(runSummaryNormalizers, "const scorecard = toJsonRecord(payload);", "run summary normalizers avoids inline task scorecard record normalization");
-assertNotIncludes(runSummaryNormalizers, "const sensorCounts = toJsonRecord(scorecard.sensor_counts) || toJsonRecord(scorecard.sensorCounts) || {};", "run summary normalizers avoids inline task scorecard sensor count record normalization");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryTaskScorecardPayload(value: unknown): RunSummaryTaskScorecardPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw task scorecard records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryTaskScorecardSensorCountsPayload(\n  value: unknown,\n): RunSummaryTaskScorecardSensorCountsPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw task scorecard sensor count records through converter");
-assertNotIncludes(runSummaryNormalizers, "repairError: string;\n  [key: string]: unknown;\n};", "run summary normalizers avoids open-ended completion verifier metadata views");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryCompletionVerifierMetadataPayload = JsonRecord & {", "run summary normalizers avoids open-ended completion verifier metadata payload records");
-assertNotIncludes(runSummaryNormalizers, "metadata: RunSummaryCompletionVerifierMetadataView;\n  [key: string]: unknown;\n};", "run summary normalizers avoids open-ended completion verifier views");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryCompletionVerifierPayload = JsonRecord & {", "run summary normalizers avoids open-ended completion verifier payload records");
-assertNotIncludes(runSummaryNormalizers, "const metadata = toJsonRecord(payload) || {};", "run summary normalizers avoids inline completion verifier metadata record normalization");
-assertNotIncludes(runSummaryNormalizers, "const verifier = toJsonRecord(payload) || {};", "run summary normalizers avoids inline completion verifier record normalization");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryCompletionVerifierMetadataPayload(value: unknown): RunSummaryCompletionVerifierMetadataPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw completion verifier metadata records through converter");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryCompletionVerifierPayload(value: unknown): RunSummaryCompletionVerifierPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw completion verifier records through converter");
-assertNotIncludes(runSummaryNormalizers, "return {\n    ...metadata,\n    method:", "run summary normalizers avoids spreading raw completion verifier metadata into view");
-assertNotIncludes(runSummaryNormalizers, "return {\n    ...verifier,\n    status:", "run summary normalizers avoids spreading raw completion verifier payloads into view");
-assertNotIncludes(runSummaryNormalizers, "type RunSummaryCompletionPayload = JsonRecord & {", "run summary normalizers avoids open-ended completion summary payload records");
-assertNotIncludes(runSummaryNormalizers, "completion: JsonRecord;", "run summary normalizers avoids generic completion summaries");
-assertNotIncludes(runSummaryNormalizers, "verifier: JsonRecord;", "run summary normalizers avoids raw completion verifier metadata");
-assertNotIncludes(runSummaryNormalizers, "verifier: toJsonRecord(completion.verifier) || {},", "run summary normalizers avoids raw completion verifier passthrough");
-assertNotIncludes(runSummaryNormalizers, "const completion = toJsonRecord(payload) || {};", "run summary normalizers avoids inline completion summary record normalization");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryCompletionPayload(value: unknown): RunSummaryCompletionPayload {\n  return toJsonRecord(value) || {};\n}", "run summary normalizers avoids passing raw completion summary records through converter");
-assertIncludes(runSummaryNormalizers, "export type RunSummaryPayload = {", "run summary normalizers exports field-aware run summary payload");
-assertNotIncludes(runSummaryNormalizers, "export type RunSummaryPayload = JsonRecord & {", "run summary normalizers avoids open-ended run summary payload records");
-assertIncludes(runSummaryNormalizers, "function toRunSummaryPayload(value: unknown): RunSummaryPayload | null", "run summary normalizers narrows raw run summary payloads");
-assertIncludes(runSummaryNormalizers, "run_id: payload.run_id,\n        runId: payload.runId,\n        session_id: payload.session_id,", "run summary normalizers projects run summary identity payload aliases");
-assertIncludes(runSummaryNormalizers, "diff_summary: payload.diff_summary,\n        diffSummary: payload.diffSummary,\n        verification: payload.verification,", "run summary normalizers projects nested run summary payload aliases");
-assertIncludes(runSummaryNormalizers, "artifact_counts: payload.artifact_counts,\n        artifactCounts: payload.artifactCounts,\n        counts: payload.counts,", "run summary normalizers preserves run summary count payload aliases");
-assertIncludes(runSummaryNormalizers, "export function normalizeRunSummary(payload: unknown): RunSummaryView | null", "run summary normalizers type run summary boundary");
-assertIncludes(runSummaryNormalizers, "const summary = toRunSummaryPayload(payload);", "run summary normalizers uses named run summary payload guard");
-assertIncludes(runSummaryNormalizers, "parallelDelegation = normalizeParallelDelegationSummary", "run summary normalizers keep parallel delegation summary");
-assertNotIncludes(runSummaryNormalizers, "completion: toJsonRecord(summary.completion) || {},", "run summary normalizers avoids raw completion summary passthrough");
-assertNotIncludes(runSummaryNormalizers, "const summary = toJsonRecord(payload);", "run summary normalizers avoids inline run summary record normalization");
-assertNotIncludes(runSummaryNormalizers, "function toRunSummaryPayload(value: unknown): RunSummaryPayload | null {\n  return toJsonRecord(value);\n}", "run summary normalizers avoids passing raw run summary records through converter");
 assertNotIncludes(runTraceNormalizers, "type JsonRecord = Record<string, unknown>;", "run trace normalizers avoid a shared unknown record boundary");
 assertIncludes(runTraceNormalizers, "export type TraceEventPayload = {", "run trace normalizers own finite trace event payload boundary");
 assertIncludes(runTraceNormalizers, "created_at?: unknown;", "run trace normalizers trace event payload names created timestamp alias");
@@ -3784,7 +3486,6 @@ assertNotIncludes(runTraceNormalizers, "value as TraceEventPayload", "run trace 
 assertIncludes(runTraceNormalizers, "export function inferRunEventStatus(eventType: unknown, payload: TraceEventPayload = {}): string", "run trace normalizers type event status inference boundary");
 assertNotIncludes(runTraceNormalizers, "type DecisionEventPayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended decision event payloads");
 assertNotIncludes(runTraceNormalizers, "export type TraceEventPayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended trace event payloads");
-assertNotIncludes(runTraceNormalizers, "tool_selection", "run trace normalizers exclude retired tool-selection decision payloads");
 assertNotIncludes(runTraceNormalizers, "Record<string, any>", "run trace normalizers avoid broad any records");
 assertIncludes(runTraceNormalizers, "export type TraceEventCountsView = {", "run trace normalizers type event counts");
 assertIncludes(runTraceNormalizers, "kind: RunEventKind;", "run trace normalizers type run event kind fields");
@@ -3873,10 +3574,10 @@ assertIncludes(runTraceNormalizers, "const metadata: RunArtifactMetadata = {};",
 assertIncludes(runTraceNormalizers, "metadata.finished_at = finishedAt;", "run trace normalizers writes normalized artifact finished timestamp");
 assertNotIncludes(runTraceNormalizers, "export function normalizeRunArtifactMetadata(value: unknown): RunArtifactMetadata {\n  return toJsonRecord(value) || {};\n}", "run trace normalizers avoids raw run artifact metadata passthrough");
 assertIncludes(runTraceNormalizers, "metadata: normalizeRunArtifactMetadata(artifactRecord.metadata),", "run trace normalizers narrow run artifact metadata through the named boundary");
-assertIncludes(runTraceNormalizers, "export type BackgroundProcessEventPayload = {", "run trace normalizers expose typed background process event payloads");
-assertNotIncludes(runTraceNormalizers, "export type BackgroundProcessEventPayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended background process payload indexes");
-assertNotIncludes(runTraceNormalizers, "export type BackgroundProcessEventPayload = TraceEventPayload & {", "run trace normalizers avoid carrying background process payloads through trace event payloads");
-assertNotIncludes(runTraceNormalizers, "export type BackgroundProcessEventPayload = JsonRecord & {", "run trace normalizers avoid carrying background process payloads through generic JSON records");
+assertIncludes(runTraceNormalizers, "type BackgroundProcessEventPayload = {", "run trace normalizers keep a typed background process event payload boundary");
+assertNotIncludes(runTraceNormalizers, "type BackgroundProcessEventPayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended background process payload indexes");
+assertNotIncludes(runTraceNormalizers, "type BackgroundProcessEventPayload = TraceEventPayload & {", "run trace normalizers avoid carrying background process payloads through trace event payloads");
+assertNotIncludes(runTraceNormalizers, "type BackgroundProcessEventPayload = JsonRecord & {", "run trace normalizers avoid carrying background process payloads through generic JSON records");
 assertIncludes(runTraceNormalizers, "process_session_id?: unknown;", "run trace normalizers background process payload lists process session ids");
 assertIncludes(runTraceNormalizers, "termination_reason?: unknown;", "run trace normalizers background process payload lists termination reasons");
 assertIncludes(runTraceNormalizers, "function normalizeBackgroundProcessArtifact(\n  eventType: unknown,\n  payload: BackgroundProcessEventPayload,\n  fallback: RunArtifactFallbackPayload = {},\n): RunArtifactView | null", "run trace normalizers type background process artifact boundary");
@@ -3913,47 +3614,8 @@ assertNotIncludes(runTraceNormalizers, "const beforeContent = changeRecord.befor
 assertNotIncludes(runTraceNormalizers, "const afterContent = changeRecord.after_content ?? changeRecord.afterContent ?? null;", "run trace normalizers avoids raw after file content passthrough");
 assertIncludes(runTraceNormalizers, "const snapshots = toPayloadSource<SnapshotAvailability>(changeRecord.snapshots_available || changeRecord.snapshotsAvailable) || {};", "run trace normalizers narrow file change snapshots");
 assertNotIncludes(runTraceNormalizers, "export type DelegatedTaskMetadata = JsonRecord;", "run trace normalizers avoid pure delegated task metadata JSON aliases");
-assertIncludes(runTraceNormalizers, "export interface WorktreeSandboxView", "run trace normalizers expose typed worktree sandbox view");
-assertIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadataPayload = {", "run trace normalizers name raw worktree sandbox metadata payload boundary");
-assertIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadata = {\n  [key: string]: unknown;", "run trace normalizers own normalized worktree sandbox metadata boundary");
-assertNotIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadataPayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended raw worktree sandbox metadata indexes");
-assertIncludes(runTraceNormalizers, "sandbox_path?: unknown;", "run trace normalizers raw sandbox metadata names sandbox path alias");
-assertIncludes(runTraceNormalizers, "cleanup_supported?: unknown;", "run trace normalizers raw sandbox metadata names cleanup support alias");
-assertIncludes(runTraceNormalizers, "repository_root?: unknown;", "run trace normalizers raw sandbox metadata names repository root alias");
-assertIncludes(runTraceNormalizers, "sandbox_path?: string;", "run trace normalizers normalizes sandbox path alias");
-assertIncludes(runTraceNormalizers, "cleanup_supported?: boolean;", "run trace normalizers normalizes sandbox cleanup support");
-assertIncludes(runTraceNormalizers, "repository_root?: string;", "run trace normalizers normalizes sandbox repository root");
-assertNotIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadataPayload = JsonRecord & {", "run trace normalizers avoid carrying raw sandbox metadata through generic JSON records");
-assertNotIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadata = JsonRecord & {", "run trace normalizers avoid carrying normalized sandbox metadata through generic JSON records");
-assertNotIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadata = JsonRecord;", "run trace normalizers avoid a pure worktree sandbox metadata record");
-assertNotIncludes(runTraceNormalizers, "export type WorktreeSandboxMetadata = WorktreeSandboxMetadataPayload & {", "run trace normalizers avoids carrying raw sandbox metadata into normalized state");
 assertNotIncludes(runTraceNormalizers, "type JsonRecord = Record<string, unknown>;", "run trace normalizers avoid a shared generic JSON record alias");
 assertNotIncludes(runTraceNormalizers, "function toJsonRecord(value: unknown): JsonRecord | null", "run trace normalizers avoid a shared generic JSON record converter");
-assertIncludes(runTraceNormalizers, "export function normalizeWorktreeSandboxMetadata(\n  value: unknown,\n  fallback: WorktreeSandboxMetadataPayload | WorktreeSandboxMetadata = {},\n): WorktreeSandboxMetadata", "run trace normalizers exports worktree sandbox metadata normalization");
-assertIncludes(runTraceNormalizers, "function toWorktreeSandboxMetadataPayload(value: unknown): WorktreeSandboxMetadataPayload | null", "run trace normalizers narrows raw worktree sandbox metadata payloads");
-assertIncludes(runTraceNormalizers, "return toPayloadSource<WorktreeSandboxMetadataPayload>(value);", "run trace normalizers preserve worktree metadata extensions behind a named payload source");
-assertIncludes(runTraceNormalizers, "function normalizeWorktreeSandboxMetadataPayload(payload: WorktreeSandboxMetadataPayload): WorktreeSandboxMetadata", "run trace normalizers normalizes worktree sandbox metadata payloads");
-assertIncludes(runTraceNormalizers, "metadata.sandbox_path = sandboxPath;", "run trace normalizers writes normalized sandbox path");
-assertIncludes(runTraceNormalizers, "metadata.cleanup_supported = coerceBoolean(payload.cleanup_supported);", "run trace normalizers writes normalized sandbox cleanup support");
-assertIncludes(runTraceNormalizers, "return fallbackPayload ? normalizeWorktreeSandboxMetadataPayload(fallbackPayload) : {};", "run trace normalizers normalizes sandbox metadata fallback");
-assertNotIncludes(runTraceNormalizers, "export function normalizeWorktreeSandboxMetadata(\n  value: unknown,\n  fallback: WorktreeSandboxMetadata = {},\n): WorktreeSandboxMetadata {\n  return toJsonRecord(value) || fallback;\n}", "run trace normalizers avoids raw worktree sandbox metadata passthrough");
-assertIncludes(runTraceNormalizers, "function normalizeWorktreeSandbox(payload: unknown): WorktreeSandboxView | null", "run trace normalizers type worktree sandbox normalization boundary");
-assertIncludes(runTraceNormalizers, "type WorktreeSandboxPayload = WorktreeSandboxMetadataPayload & {", "run trace normalizers name worktree sandbox envelope boundary");
-assertIncludes(runTraceNormalizers, "const payloadRecord = toPayloadSource<WorktreeSandboxPayload>(payload);", "run trace normalizers narrow worktree sandbox envelope fields");
-assertIncludes(runTraceNormalizers, "const metadata = normalizeWorktreeSandboxMetadata(payloadRecord.metadata, payloadRecord);", "run trace normalizers narrow worktree sandbox metadata through the named boundary");
-assertIncludes(runTraceNormalizers, "export function findWorktreeSandbox(\n  parts: unknown[] = [],\n  artifacts: unknown[] = [],\n  events: TraceEventView[] = [],\n): WorktreeSandboxView | null", "run trace normalizers type worktree sandbox lookup boundary");
-assertIncludes(runTraceNormalizers, "event.eventType !== \"worktree_cleanup.completed\"", "run trace normalizers consume durable worktree cleanup events");
-assertIncludes(runTraceNormalizers, "export function applyWorktreeCleanupEvent(", "run trace normalizers expose one cleanup event state transition");
-assertIncludes(chatClient, "run.worktreeSandbox = applyWorktreeCleanupEvent(run.worktreeSandbox, rawEvent);", "chat client applies live worktree cleanup completion immediately");
-assertIncludes(chatClient, "run.worktreeSandbox = preserveKnownRemovedWorktreeSandbox(", "trace reload preserves a locally confirmed removed worktree");
-assertIncludes(runTraceNormalizers, "export function preserveKnownRemovedWorktreeSandbox(", "trace normalizer exposes removed worktree state preservation");
-assertIncludes(runTraceNormalizers, "previous.status.trim().toLowerCase() !== \"removed\"", "only a confirmed removed worktree receives stale-trace protection");
-assertIncludes(runTraceNormalizers, "cleanupSupported: false", "run trace normalizers keep removed sandboxes non-cleanable after reload");
-assertIncludes(runTraceNormalizers, "const partRecord = toTracePartPayload(part);", "run trace normalizers narrow worktree sandbox parts through trace part payload boundary");
-assertIncludes(runTraceNormalizers, "const artifactRecord = toPayloadSource<RunArtifactPayload>(artifact);", "run trace normalizers narrow worktree sandbox artifacts before field reads");
-assertNotIncludes(runTraceNormalizers, "type WorkStatePayload = {\n  [key: string]: unknown;", "run trace normalizers avoid open-ended work state payload indexes");
-assertNotIncludes(runTraceNormalizers, "type WorkStatePayload = JsonRecord & {", "run trace normalizers avoid carrying work state through generic JSON records");
-assertNotIncludes(runTraceNormalizers, "export function normalizeWorkState(payload: unknown): WorkStateView | null {\n  const record = toJsonRecord(payload);", "run trace normalizers avoid raw work state records");
 assertIncludes(runTraceNormalizers, "function toTraceEventEnvelopePayload(value: unknown): TraceEventEnvelopePayload", "run trace normalizers narrows raw trace event envelopes");
 assertIncludes(runTraceNormalizers, "const payload = toPayloadSource<TraceEventEnvelopePayload>(value);", "run trace normalizers limit event envelope source reads to known fields");
 assertIncludes(runTraceNormalizers, "schema_version: payload.schema_version,\n        schemaVersion: payload.schemaVersion,\n        event_id: payload.event_id,", "run trace normalizers projects trace event envelope identity fields");
@@ -4000,7 +3662,6 @@ assertNotIncludes(chatClientSessions, "export type ChatSessionStatusMetadata = C
 assertNotIncludes(chatClientSessions, "export type ChatSessionStatusMetadata = JsonRecord;", "chat client sessions avoid aliasing status metadata to raw JSON records");
 assertNotIncludes(chatClientSessions, "export type ChatSessionStatusMetadata = Record<string, unknown>;", "chat client sessions avoid inline status metadata records");
 assertIncludes(chatClientSessions, "metadata: ChatSessionStatusMetadata;", "chat client sessions route status metadata through the shared metadata boundary");
-assertNotIncludes(chatClientSessions, "workState: RunJsonObject | null;", "chat client sessions no longer use generic run JSON for work state");
 assertIncludes(chatClientSessions, "runs: RunViewState[];", "chat client sessions type run list boundary");
 assertIncludes(chatClientSessions, "export function createSession(externalChatId?: string): ChatSession", "chat client session factory is typed");
 assertIncludes(chatClientSessions, "type StoredDraftSessionPayload = {", "chat client sessions types stored draft payloads");

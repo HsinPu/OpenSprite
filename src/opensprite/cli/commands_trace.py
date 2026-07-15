@@ -9,16 +9,14 @@ from typing import Any
 import typer
 
 from ..runs.schema import (
-    sanitize_run_metadata,
     serialize_diff_summary,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_events,
     serialize_run_parts,
     serialize_run_summary,
-    visible_run_events,
-    visible_run_parts,
 )
+from ..utils.json_safe import json_safe_payload
 from .commands_chat import _json_for_stdout
 from .commands_chat_smoke import DEFAULT_SESSIONS_DB_PATH, load_trace_readonly, summarize_trace
 
@@ -32,7 +30,7 @@ def _run_payload(trace: Any) -> dict[str, Any]:
         "created_at": run.created_at,
         "updated_at": run.updated_at,
         "finished_at": run.finished_at,
-        "metadata": sanitize_run_metadata(dict(run.metadata or {})),
+        "metadata": json_safe_payload(dict(run.metadata or {})),
     }
 
 
@@ -40,8 +38,8 @@ def trace_payload(trace: Any, *, full: bool = False) -> dict[str, Any]:
     """Return a script-friendly trace payload."""
     summary = serialize_run_summary(trace)
     compact = summarize_trace(trace)
-    compact["event_count"] = len(visible_run_events(trace.events))
-    compact["part_count"] = len(visible_run_parts(trace.parts))
+    compact["event_count"] = len(trace.events)
+    compact["part_count"] = len(trace.parts)
     payload: dict[str, Any] = {
         "ok": True,
         "run": _run_payload(trace),

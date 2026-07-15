@@ -6,7 +6,6 @@ import {
   type TraceFileChangeView,
   type TracePartView,
   type TraceEventCountsView,
-  type WorktreeSandboxView,
 } from "./runTraceNormalizers";
 import type { DiffSummaryView, RunSummaryView } from "./runSummaryNormalizers";
 import { coerceNonNegativeInteger } from "./chatClientCoercion";
@@ -215,7 +214,6 @@ export interface RunViewState {
   artifacts: RunArtifactView[];
   fileChanges: TraceFileChangeView[];
   diffSummary: DiffSummaryView | null;
-  worktreeSandbox: WorktreeSandboxView | null;
   summary: RunSummaryView | null;
   summaryLoading: boolean;
   summaryError: string;
@@ -248,7 +246,6 @@ export function createRunViewState({
     artifacts: [],
     fileChanges: [],
     diffSummary: null,
-    worktreeSandbox: null,
     summary: null,
     summaryLoading: false,
     summaryError: "",

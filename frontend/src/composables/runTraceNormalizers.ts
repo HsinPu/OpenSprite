@@ -38,8 +38,6 @@ export type TraceEventPayload = {
   ok?: unknown;
   path?: unknown;
   reason?: unknown;
-  sandbox_path?: unknown;
-  sandboxPath?: unknown;
   state?: unknown;
   status?: unknown;
   summary?: unknown;
@@ -105,7 +103,7 @@ type RunArtifactPayload = {
   snapshotsAvailable?: unknown;
   metadata?: unknown;
 };
-export type BackgroundProcessEventPayload = {
+type BackgroundProcessEventPayload = {
   process_session_id?: unknown;
   processSessionId?: unknown;
   command?: unknown;
@@ -287,53 +285,6 @@ type TraceFileChangePayload = {
   createdAt?: unknown;
 };
 
-export type WorktreeSandboxMetadataPayload = {
-  sandbox_path?: unknown;
-  sandboxPath?: unknown;
-  status?: unknown;
-  reason?: unknown;
-  cleanup_supported?: unknown;
-  cleanupSupported?: unknown;
-  repository_root?: unknown;
-  repositoryRoot?: unknown;
-  base_branch?: unknown;
-  baseBranch?: unknown;
-  base_commit?: unknown;
-  baseCommit?: unknown;
-};
-type WorktreeSandboxPayload = WorktreeSandboxMetadataPayload & {
-  metadata?: unknown;
-  artifactType?: unknown;
-  kind?: unknown;
-};
-export type WorktreeSandboxMetadata = {
-  [key: string]: unknown;
-  sandbox_path?: string;
-  sandboxPath?: string;
-  status?: string;
-  reason?: string;
-  cleanup_supported?: boolean;
-  cleanupSupported?: boolean;
-  repository_root?: string;
-  repositoryRoot?: string;
-  base_branch?: string;
-  baseBranch?: string;
-  base_commit?: string;
-  baseCommit?: string;
-};
-
-export interface WorktreeSandboxView {
-  sandboxPath: string;
-  status: string;
-  reason: string;
-  cleanupSupported: boolean;
-  repositoryRoot: string;
-  baseBranch: string;
-  baseCommit: string;
-  cleanupPending: boolean;
-  cleanupResult: unknown;
-}
-
 type TraceEventCountTarget = {
   eventCounts: TraceEventCountsView;
   rawEvents: TraceEventView[];
@@ -416,93 +367,6 @@ export function normalizeTracePartMetadata(value: unknown): TracePartMetadata {
     metadata.streaming = coerceBoolean(payload.streaming);
   }
   return metadata;
-}
-
-function toWorktreeSandboxMetadataPayload(value: unknown): WorktreeSandboxMetadataPayload | null {
-  return toPayloadSource<WorktreeSandboxMetadataPayload>(value);
-}
-
-function normalizeWorktreeSandboxMetadataPayload(payload: WorktreeSandboxMetadataPayload): WorktreeSandboxMetadata {
-  const metadata: WorktreeSandboxMetadata = {};
-  for (const [key, rawValue] of Object.entries(payload)) {
-    if (
-      key !== "sandbox_path"
-      && key !== "sandboxPath"
-      && key !== "status"
-      && key !== "reason"
-      && key !== "cleanup_supported"
-      && key !== "cleanupSupported"
-      && key !== "repository_root"
-      && key !== "repositoryRoot"
-      && key !== "base_branch"
-      && key !== "baseBranch"
-      && key !== "base_commit"
-      && key !== "baseCommit"
-    ) {
-      metadata[key] = rawValue;
-    }
-  }
-
-  const sandboxPath = coerceText(payload.sandbox_path);
-  const camelSandboxPath = coerceText(payload.sandboxPath);
-  const status = coerceText(payload.status);
-  const reason = coerceText(payload.reason);
-  const repositoryRoot = coerceText(payload.repository_root);
-  const camelRepositoryRoot = coerceText(payload.repositoryRoot);
-  const baseBranch = coerceText(payload.base_branch);
-  const camelBaseBranch = coerceText(payload.baseBranch);
-  const baseCommit = coerceText(payload.base_commit);
-  const camelBaseCommit = coerceText(payload.baseCommit);
-
-  if (sandboxPath) {
-    metadata.sandbox_path = sandboxPath;
-  }
-  if (camelSandboxPath) {
-    metadata.sandboxPath = camelSandboxPath;
-  }
-  if (status) {
-    metadata.status = status;
-  }
-  if (reason) {
-    metadata.reason = reason;
-  }
-  if (payload.cleanup_supported !== undefined && payload.cleanup_supported !== null && payload.cleanup_supported !== "") {
-    metadata.cleanup_supported = coerceBoolean(payload.cleanup_supported);
-  }
-  if (payload.cleanupSupported !== undefined && payload.cleanupSupported !== null && payload.cleanupSupported !== "") {
-    metadata.cleanupSupported = coerceBoolean(payload.cleanupSupported);
-  }
-  if (repositoryRoot) {
-    metadata.repository_root = repositoryRoot;
-  }
-  if (camelRepositoryRoot) {
-    metadata.repositoryRoot = camelRepositoryRoot;
-  }
-  if (baseBranch) {
-    metadata.base_branch = baseBranch;
-  }
-  if (camelBaseBranch) {
-    metadata.baseBranch = camelBaseBranch;
-  }
-  if (baseCommit) {
-    metadata.base_commit = baseCommit;
-  }
-  if (camelBaseCommit) {
-    metadata.baseCommit = camelBaseCommit;
-  }
-  return metadata;
-}
-
-export function normalizeWorktreeSandboxMetadata(
-  value: unknown,
-  fallback: WorktreeSandboxMetadataPayload | WorktreeSandboxMetadata = {},
-): WorktreeSandboxMetadata {
-  const payload = toWorktreeSandboxMetadataPayload(value);
-  if (payload) {
-    return normalizeWorktreeSandboxMetadataPayload(payload);
-  }
-  const fallbackPayload = toWorktreeSandboxMetadataPayload(fallback);
-  return fallbackPayload ? normalizeWorktreeSandboxMetadataPayload(fallbackPayload) : {};
 }
 
 const MAX_RUN_EVENTS = 80;
@@ -780,118 +644,6 @@ export function normalizeTraceEventArtifact(
 ): RunArtifactView | null {
   return normalizeRunArtifact(artifact, fallback)
     || normalizeBackgroundProcessArtifact(eventType, payload, fallback);
-}
-
-function normalizeWorktreeSandbox(payload: unknown): WorktreeSandboxView | null {
-  const payloadRecord = toPayloadSource<WorktreeSandboxPayload>(payload);
-  if (!payloadRecord) {
-    return null;
-  }
-  const metadata = normalizeWorktreeSandboxMetadata(payloadRecord.metadata, payloadRecord);
-  const sandboxPath = metadata.sandbox_path || metadata.sandboxPath || "";
-  if (!sandboxPath) {
-    return null;
-  }
-  return {
-    sandboxPath,
-    status: metadata.status || coerceText(payloadRecord.status),
-    reason: metadata.reason || "",
-    cleanupSupported: metadata.cleanup_supported ?? metadata.cleanupSupported ?? false,
-    repositoryRoot: metadata.repository_root || metadata.repositoryRoot || "",
-    baseBranch: metadata.base_branch || metadata.baseBranch || "",
-    baseCommit: metadata.base_commit || metadata.baseCommit || "",
-    cleanupPending: false,
-    cleanupResult: null,
-  };
-}
-
-export function applyWorktreeCleanupEvent(
-  sandbox: WorktreeSandboxView,
-  event: TraceEventView,
-): WorktreeSandboxView {
-  if (event.eventType !== "worktree_cleanup.completed") {
-    return sandbox;
-  }
-  const eventPath = coerceText(event.payload.sandbox_path ?? event.payload.sandboxPath);
-  if (eventPath && eventPath !== sandbox.sandboxPath) {
-    return sandbox;
-  }
-  const status = coerceText(event.payload.status);
-  if (!coerceBoolean(event.payload.ok) && status !== "removed") {
-    return sandbox;
-  }
-  return {
-    ...sandbox,
-    status: status || "removed",
-    cleanupSupported: false,
-    cleanupPending: false,
-    cleanupResult: event.payload,
-  };
-}
-
-export function preserveKnownRemovedWorktreeSandbox(
-  previous: WorktreeSandboxView | null | undefined,
-  incoming: WorktreeSandboxView | null,
-): WorktreeSandboxView | null {
-  if (!previous || previous.status.trim().toLowerCase() !== "removed") {
-    return incoming;
-  }
-  if (!incoming) {
-    return {
-      ...previous,
-      cleanupSupported: false,
-      cleanupPending: false,
-    };
-  }
-  if (incoming.sandboxPath !== previous.sandboxPath) {
-    return incoming;
-  }
-  return {
-    ...incoming,
-    status: "removed",
-    cleanupSupported: false,
-    cleanupPending: false,
-    cleanupResult: previous.cleanupResult ?? incoming.cleanupResult,
-  };
-}
-
-function applyWorktreeCleanupEvents(
-  sandbox: WorktreeSandboxView,
-  events: TraceEventView[],
-): WorktreeSandboxView {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const updated = applyWorktreeCleanupEvent(sandbox, events[index]);
-    if (updated !== sandbox) {
-      return updated;
-    }
-  }
-  return sandbox;
-}
-
-export function findWorktreeSandbox(
-  parts: unknown[] = [],
-  artifacts: unknown[] = [],
-  events: TraceEventView[] = [],
-): WorktreeSandboxView | null {
-  for (const part of parts) {
-    const partRecord = toTracePartPayload(part);
-    if (partRecord?.partType === "worktree_sandbox") {
-      const sandbox = normalizeWorktreeSandbox(partRecord.metadata);
-      if (sandbox) {
-        return applyWorktreeCleanupEvents(sandbox, events);
-      }
-    }
-  }
-  for (const artifact of artifacts) {
-    const artifactRecord = toPayloadSource<RunArtifactPayload>(artifact);
-    if (artifactRecord?.artifactType === "worktree_sandbox" || artifactRecord?.kind === "work") {
-      const sandbox = normalizeWorktreeSandbox(artifactRecord);
-      if (sandbox) {
-        return applyWorktreeCleanupEvents(sandbox, events);
-      }
-    }
-  }
-  return null;
 }
 
 function toTraceEventEnvelopePayload(value: unknown): TraceEventEnvelopePayload {

@@ -73,7 +73,6 @@ from ..context.message_history import (
 )
 from ..tools.registration import register_memory_tool
 from ..runs.trace import RunFileChangeService, RunTraceRecorder
-from ..runs.worktree import cleanup_worktree_sandbox
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagent_run import SubagentRunService
 from .agent_run_hooks import AgentRunHookFactory
@@ -92,7 +91,6 @@ from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
 from .tool_setup import setup_agent_tools
 from .run_update_buffer import RunUpdateBuffer
-from .verification_runner import run_agent_verification
 from .workflow import SubagentWorkflowService
 
 
@@ -241,20 +239,6 @@ class AgentLoop:
             channel=channel,
             external_chat_id=external_chat_id,
             require_persistence=require_persistence,
-        )
-
-    def cleanup_worktree_sandbox(
-        self,
-        sandbox_path: str,
-        *,
-        session_id: str,
-        run_id: str,
-    ) -> dict[str, Any]:
-        """Remove a legacy OpenSprite-managed worktree by marker-guarded path."""
-        return cleanup_worktree_sandbox(
-            sandbox_path,
-            session_id=session_id,
-            run_id=run_id,
         )
 
     @staticmethod
@@ -1357,21 +1341,6 @@ class AgentLoop:
     async def run_workflow(self, workflow: str, task: str, start_step: str | None = None) -> str:
         """Run one fixed multi-step orchestration workflow."""
         return await self.workflows.run_from_step(workflow, task, start_step=start_step)
-
-    async def run_verify(
-        self,
-        *,
-        action: str = "auto",
-        path: str = ".",
-        pytest_args: tuple[str, ...] = (),
-    ) -> ExecutionResult:
-        """Run deterministic verification through the registered verify tool."""
-        return await run_agent_verification(
-            self,
-            action=action,
-            path=path,
-            pytest_args=pytest_args,
-        )
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

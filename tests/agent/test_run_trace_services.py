@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import pytest
 
 from opensprite.runs.trace import RunHookService
-from opensprite.runs.session_entries import serialize_message_entry
 from opensprite.agent.execution_support.events import LlmStepEvent
 from opensprite.runs.trace import (
     RUN_PART_CONTENT_MAX_CHARS,
@@ -37,9 +36,6 @@ from opensprite.runs.schema import (
     RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC,
     RUN_WARNING_PARALLEL_DELEGATION_FAILED,
     compact_run_events,
-    is_retired_lifecycle_event,
-    is_retired_lifecycle_part,
-    sanitize_run_metadata,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
@@ -928,168 +924,6 @@ def test_serialize_file_changed_event_projects_the_durable_change_identity():
     assert payload["payload"]["change_id"] == 3
     assert payload["artifact"]["artifact_id"] == "file_change:3"
     assert payload["artifact"]["source_id"] == "3"
-
-
-def test_run_serializers_hide_retired_lifecycle_rows_without_mutating_history():
-    retired_event_types = [
-        "task_contract.created",
-        "completion_gate.evaluated",
-        "auto_continue.completed",
-        "work_plan.created",
-        "work_progress.updated",
-        "task_artifacts.recorded",
-        "task_checkpoint.recorded",
-        "task_scorecard.recorded",
-        "task_intent.detected",
-        "task_context.resolved",
-        "active_task.seeded",
-        "tool_selection.resolved",
-    ]
-    events = [
-        SimpleNamespace(
-            event_id=index,
-            run_id="run-1",
-            session_id="web:browser-1",
-            event_type=event_type,
-            payload={"status": "completed", "legacy": True},
-            created_at=float(index),
-        )
-        for index, event_type in enumerate(retired_event_types, start=1)
-    ]
-    current_event = SimpleNamespace(
-        event_id=99,
-        run_id="run-1",
-        session_id="web:browser-1",
-        event_type=RUN_FINISHED_EVENT,
-        payload={
-            "status": "completed",
-            "response_len": 12,
-            "task_contract": {"task_type": "coding"},
-            "completion_gate": {"status": "complete"},
-            "auto_continue_attempts": 2,
-            "work_progress": {"next_action": "legacy"},
-            "task_artifacts": [{"kind": "file"}],
-            "delegated_tasks": [{"task_id": "task-current"}],
-            "workflow_outcomes": [{"task_contract": "domain data must stay"}],
-        },
-        created_at=99.0,
-    )
-    events.append(current_event)
-
-    parts = [
-        SimpleNamespace(part_type="task_checklist"),
-        SimpleNamespace(part_type="task_checkpoint"),
-        SimpleNamespace(part_type="task_scorecard"),
-        SimpleNamespace(
-            part_id=4,
-            run_id="run-1",
-            session_id="web:browser-1",
-            part_type="assistant_message",
-            tool_name=None,
-            content="done",
-            metadata={
-                "response_len": 4,
-                "completion_status": "complete",
-                "delegated_tasks": [{"task_id": "task-current"}],
-            },
-            created_at=100.0,
-        ),
-    ]
-
-    serialized_events = serialize_run_events(events)
-    serialized_parts = serialize_run_parts(parts)
-
-    assert all(is_retired_lifecycle_event(event_type) for event_type in retired_event_types)
-    assert all(is_retired_lifecycle_part(part_type) for part_type in ("task_checklist", "task_checkpoint", "task_scorecard"))
-    assert [event["event_type"] for event in serialized_events] == [RUN_FINISHED_EVENT]
-    assert serialized_events[0]["payload"] == {
-        "status": "completed",
-        "response_len": 12,
-        "delegated_tasks": [{"task_id": "task-current"}],
-        "workflow_outcomes": [{"task_contract": "domain data must stay"}],
-    }
-    assert serialize_run_event_counts(events, serialized_events)["total"] == 1
-    assert len(serialized_parts) == 1
-    assert serialized_parts[0]["metadata"] == {
-        "response_len": 4,
-        "delegated_tasks": [{"task_id": "task-current"}],
-    }
-    assert current_event.payload["task_contract"] == {"task_type": "coding"}
-    assert parts[-1].metadata["completion_status"] == "complete"
-
-
-def test_sanitize_run_metadata_keeps_current_and_nested_domain_data():
-    metadata = {
-        "objective": "ship",
-        "task_contract": {"task_type": "coding"},
-        "completion_status": "complete",
-        "tool_evidence": [{"tool": "pytest"}],
-        "quick_action": "resume_follow_up",
-        "follow_up_workflow": "implement_then_review",
-        "follow_up_step_id": "review",
-        "follow_up_step_label": "Code review",
-        "follow_up_prompt_type": "code-reviewer",
-        "delegated_tasks": [{"task_id": "task-current"}],
-        "structured_output": {
-            "work_state": "a user-defined result",
-            "tool_evidence": "nested domain data",
-            "quick_action": "nested domain data",
-            "follow_up_workflow": "nested domain data",
-            "follow_up_step_id": "nested domain data",
-            "follow_up_prompt_type": "nested domain data",
-        },
-    }
-
-    assert sanitize_run_metadata(metadata) == {
-        "objective": "ship",
-        "delegated_tasks": [{"task_id": "task-current"}],
-        "structured_output": {
-            "work_state": "a user-defined result",
-            "tool_evidence": "nested domain data",
-            "quick_action": "nested domain data",
-            "follow_up_workflow": "nested domain data",
-            "follow_up_step_id": "nested domain data",
-            "follow_up_prompt_type": "nested domain data",
-        },
-    }
-
-
-def test_sanitize_run_metadata_keeps_similar_custom_top_level_keys():
-    metadata = {
-        "task_contextual_note": "keep",
-        "active_tasker": "keep",
-        "work_stateful_label": "keep",
-        "completion_status_page": "keep",
-        "quick_actionable": "keep",
-        "task_contract.version": 1,
-        "task_contract_source": "legacy",
-    }
-
-    assert sanitize_run_metadata(metadata) == {
-        "task_contextual_note": "keep",
-        "active_tasker": "keep",
-        "work_stateful_label": "keep",
-        "completion_status_page": "keep",
-        "quick_actionable": "keep",
-    }
-
-
-def test_message_entry_hides_retired_lifecycle_metadata():
-    message = SimpleNamespace(
-        role="assistant",
-        timestamp=1.0,
-        content="done",
-        metadata={
-            "completion_status": "complete",
-            "task_contract": {"task_type": "coding"},
-            "delegated_tasks": [{"task_id": "task-current"}],
-        },
-        tool_name=None,
-    )
-
-    entry = serialize_message_entry(message)
-
-    assert entry["metadata"] == {"delegated_tasks": [{"task_id": "task-current"}]}
 
 
 def test_llm_delta_hook_emits_empty_completion_marker():
