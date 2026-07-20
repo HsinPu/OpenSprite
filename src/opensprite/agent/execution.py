@@ -94,7 +94,6 @@ from .subagent import (
     STRUCTURED_SUBAGENT_TRUNCATED_FIELD,
     SUBAGENT_PROMPT_TYPE_LABEL,
     SUBAGENT_TASK_ID_LABEL,
-    SUBAGENT_TASK_ID_PATTERN,
     PreparedSubagentTask,
     SubagentMessageBuilder,
     SubagentTaskOutcome,

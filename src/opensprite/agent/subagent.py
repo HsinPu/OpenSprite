@@ -13,6 +13,7 @@ from ..context.runtime import build_runtime_context
 from ..llms import ChatMessage
 from ..skills import SkillsLoader
 from ..storage import StoredMessage
+from ..subagent_contracts import SUBAGENT_TASK_ID_PATTERN
 from ..subagent_prompts import load_metadata, load_prompt
 from ..tools import ToolRegistry
 from ..utils.json_safe import json_safe_value
@@ -345,7 +346,6 @@ def _non_negative_int(value: Any) -> int:
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
 DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
-SUBAGENT_TASK_ID_PATTERN = r"^task_[A-Za-z0-9_-]{8,64}$"
 _TASK_ID_RE = re.compile(SUBAGENT_TASK_ID_PATTERN)
 
 

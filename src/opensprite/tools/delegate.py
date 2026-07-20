@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable
 
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
-from ..agent.execution import SUBAGENT_TASK_ID_PATTERN
+from ..subagent_contracts import SUBAGENT_TASK_ID_PATTERN
 from ..subagent_prompts import get_all_subagents
 
 
