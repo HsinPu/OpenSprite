@@ -6,6 +6,39 @@ export function buildHttpApiUrl(wsUrl: string, pathname: string): URL {
   return url;
 }
 
+type ErrorResponsePayload = {
+  error?: unknown;
+  message?: unknown;
+};
+
+function isErrorResponsePayload(value: unknown): value is ErrorResponsePayload {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function payloadErrorMessage(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (!isErrorResponsePayload(value)) {
+    return "";
+  }
+  const error = typeof value.error === "string" ? value.error.trim() : "";
+  const message = typeof value.message === "string" ? value.message.trim() : "";
+  return error || message;
+}
+
+function responseErrorMessage(text: string, status: number): string {
+  const body = text.trim();
+  if (!body) {
+    return `HTTP ${status}`;
+  }
+  try {
+    return payloadErrorMessage(JSON.parse(body)) || body;
+  } catch {
+    return body;
+  }
+}
+
 export async function requestSettingsJson(
   wsUrl: string,
   pathname: string,
@@ -24,7 +57,7 @@ export async function requestSettingsJson(
   });
   if (!response.ok) {
     const text = await response.text();
-    const error = Object.assign(new Error(text || `HTTP ${response.status}`), {
+    const error = Object.assign(new Error(responseErrorMessage(text, response.status)), {
       status: response.status,
       statusText: response.statusText,
     });

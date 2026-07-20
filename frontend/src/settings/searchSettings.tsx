@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { SaveOutlined } from "@ant-design/icons";
 import { Button, Input, InputNumber, Select } from "antd";
-import type { SearchForm, SearchState } from "../composables/searchDefaults";
+import {
+  searxngOptionsMatchTarget,
+  type SearchForm,
+  type SearchState,
+} from "../composables/searchDefaults";
 import {
   mergeSelectedSearchOptions,
   searxngEngineMeta,
@@ -43,9 +47,25 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
   const form = state.searchForm;
   const providerOptions = webSearchProviderOptions(copy, state);
   const freshnessOptions = webSearchFreshnessOptions(copy, state);
-  const engineOptions = mergeSelectedSearchOptions(state.search.searxng_options.engines, form.searxngEngines);
-  const categoryOptions = mergeSelectedSearchOptions(state.search.searxng_options.categories, form.searxngCategories);
+  const searxngOptionsMatchForm = searxngOptionsMatchTarget(
+    state.search.searxng_options,
+    form.searxngUrl,
+    form.searxngProxy,
+  );
+  const engineOptions = mergeSelectedSearchOptions(
+    searxngOptionsMatchForm ? state.search.searxng_options.engines : [],
+    form.searxngEngines,
+  );
+  const categoryOptions = mergeSelectedSearchOptions(
+    searxngOptionsMatchForm ? state.search.searxng_options.categories : [],
+    form.searxngCategories,
+  );
   const summary = webSearchSummary(copy, state);
+
+  function clearSearxngOptionsStatus(): void {
+    state.searchOptionsError = "";
+    state.searchOptionsNotice = "";
+  }
 
   return (
     <section className="settings-page">
@@ -68,17 +88,25 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
           <InputNumber className="settings-control" value={Number(form.searxngMaxPages || 5)} min={1} max={50} disabled={state.searchLoading} onChange={(value) => (form.searxngMaxPages = Number(value || 5))} />
         </SettingsRow>
         <SettingsRow title={searchCopy.searxngUrl?.title || "SearXNG URL"} description={searchCopy.searxngUrl?.description || ""} className="settings-row--field">
-          <Input value={form.searxngUrl} placeholder={searchCopy.searxngUrl?.placeholder || "https://searx.be"} disabled={state.searchLoading} onChange={(event) => (form.searxngUrl = event.target.value)} />
+          <Input
+            value={form.searxngUrl}
+            placeholder={searchCopy.searxngUrl?.placeholder || "https://searx.be"}
+            disabled={state.searchLoading || state.searchOptionsLoading}
+            onChange={(event) => {
+              form.searxngUrl = event.target.value;
+              clearSearxngOptionsStatus();
+            }}
+          />
         </SettingsRow>
 
         <SettingsRow title={searchCopy.searxngOptions?.title || "SearXNG options"} description={searchCopy.searxngOptions?.description || ""}>
           <Button
             aria-expanded={searxngOptionsExpanded}
+            disabled={state.searchLoading || state.searchOptionsLoading}
             onClick={() => {
               const next = !searxngOptionsExpanded;
               setSearxngOptionsExpanded(next);
-              const hasOptions = Boolean(state.search?.searxng_options?.engines?.length || state.search?.searxng_options?.categories?.length);
-              if (next && !hasOptions && !state.searchOptionsLoading) {
+              if (next && !searxngOptionsMatchForm && !state.searchOptionsLoading) {
                 client.loadSearxngOptions();
               }
             }}
@@ -106,7 +134,7 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
                   mode="multiple"
                   className="settings-control"
                   value={form.searxngEngines || []}
-                  disabled={state.searchLoading}
+                  disabled={state.searchLoading || state.searchOptionsLoading}
                   options={engineOptions.map((option: SearchOptionEntry) => ({ value: option.id, label: `${option.label}${searxngEngineMeta(copy, option) ? ` - ${searxngEngineMeta(copy, option)}` : ""}` }))}
                   onChange={(values) => (form.searxngEngines = values)}
                 />
@@ -118,7 +146,7 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
                   mode="multiple"
                   className="settings-control"
                   value={form.searxngCategories || []}
-                  disabled={state.searchLoading}
+                  disabled={state.searchLoading || state.searchOptionsLoading}
                   options={categoryOptions.map((option: SearchOptionEntry) => ({ value: option.id, label: `${option.label}${option.configuredOnly ? ` - ${searchCopy.searxngOptions?.configuredOnly || "Configured but not listed"}` : ""}` }))}
                   onChange={(values) => (form.searxngCategories = values)}
                 />
@@ -128,10 +156,18 @@ export function SearchSettings({ client }: { client: SearchSettingsClient }) {
         ) : null}
 
         <SettingsRow title={searchCopy.searxngProxy?.title || "SearXNG proxy"} description={searchCopy.searxngProxy?.description || ""} className="settings-row--field">
-          <Input value={form.searxngProxy} placeholder={searchCopy.searxngProxy?.placeholder || "http://proxy-host:port"} disabled={state.searchLoading} onChange={(event) => (form.searxngProxy = event.target.value)} />
+          <Input
+            value={form.searxngProxy}
+            placeholder={searchCopy.searxngProxy?.placeholder || "http://proxy-host:port"}
+            disabled={state.searchLoading || state.searchOptionsLoading}
+            onChange={(event) => {
+              form.searxngProxy = event.target.value;
+              clearSearxngOptionsStatus();
+            }}
+          />
         </SettingsRow>
         <SettingsRow title={searchCopy.currentTitle || "Current setting"} description={summary}>
-          <Button icon={<SaveOutlined />} loading={state.searchLoading} disabled={state.searchLoading} onClick={client.saveSearchSettings}>
+          <Button icon={<SaveOutlined />} loading={state.searchLoading} disabled={state.searchLoading || state.searchOptionsLoading} onClick={client.saveSearchSettings}>
             {searchCopy.save || "Save search settings"}
           </Button>
         </SettingsRow>

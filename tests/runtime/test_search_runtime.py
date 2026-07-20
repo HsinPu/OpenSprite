@@ -29,7 +29,7 @@ def test_history_search_requires_sqlite_storage(tmp_path):
 
     with pytest.raises(
         ValueError,
-        match='history_search.backend="sqlite" requires storage.type="sqlite"',
+        match='history_search requires storage.type="sqlite"',
     ):
         create_history_search_store(config)
 
@@ -48,5 +48,6 @@ def test_factory_builds_plain_sqlite_fts_store(tmp_path):
         "history_top_k",
         "chunk_size",
         "chunk_overlap",
+        "_read_only",
         "_lock",
     }

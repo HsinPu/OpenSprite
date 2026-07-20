@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from ..utils.url import join_url_path
+from ..utils.searxng_url import read_limited_searxng_json, searxng_endpoint_url
 from .web_search_freshness import freshness_params
 from .web_search_payloads import format_error, format_results
 
@@ -55,8 +55,9 @@ async def search_searxng(
         scope_params = searxng_scope_params(engines, categories)
         async with client_factory(proxy=searxng_proxy) as client:
             for page in range(1, max_pages + 1):
-                response = await client.get(
-                    join_url_path(base_url, "/search"),
+                async with client.stream(
+                    "GET",
+                    searxng_endpoint_url(base_url, "/search"),
                     params={
                         "q": query,
                         "format": "json",
@@ -64,10 +65,14 @@ async def search_searxng(
                         **scope_params,
                         **freshness_params("searxng", freshness),
                     },
+                    headers={"Accept": "application/json", "Accept-Encoding": "identity"},
                     timeout=10.0,
-                )
-                response.raise_for_status()
-                page_results = response.json().get("results", [])
+                ) as response:
+                    response.raise_for_status()
+                    payload = await read_limited_searxng_json(response)
+                if not isinstance(payload, dict):
+                    raise ValueError("SearXNG search response was not a JSON object")
+                page_results = payload.get("results", [])
                 if not page_results:
                     break
                 for item in page_results:

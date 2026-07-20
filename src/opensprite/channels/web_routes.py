@@ -123,7 +123,7 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_get("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network))
     router.add_put("/api/settings/network", _bind_adapter(adapter, web_settings_handlers_app.handle_settings_network_update))
     router.add_get("/api/settings/web-search", _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_web_search))
-    router.add_get(
+    router.add_post(
         "/api/settings/web-search/searxng-options",
         _bind_adapter(adapter, web_settings_handlers_tools.handle_settings_web_search_searxng_options),
     )

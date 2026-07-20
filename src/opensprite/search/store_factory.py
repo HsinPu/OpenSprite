@@ -12,16 +12,12 @@ def create_history_search_store(config: Config) -> SearchStore | None:
     if not config.history_search.enabled:
         return None
 
-    backend = config.history_search.backend
-    if backend == "sqlite":
-        if config.storage.type != "sqlite":
-            raise ValueError('history_search.backend="sqlite" requires storage.type="sqlite"')
+    if config.storage.type != "sqlite":
+        raise ValueError('history_search requires storage.type="sqlite"')
 
-        from .sqlite_store import SQLiteSearchStore
+    from .sqlite_store import SQLiteSearchStore
 
-        return SQLiteSearchStore(
-            path=config.storage.path,
-            history_top_k=config.history_search.history_top_k,
-        )
-
-    raise ValueError(f"Unsupported history search backend: {backend}")
+    return SQLiteSearchStore(
+        path=config.storage.path,
+        history_top_k=config.history_search.history_top_k,
+    )

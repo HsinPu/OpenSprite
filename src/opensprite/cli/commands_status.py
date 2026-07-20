@@ -215,7 +215,6 @@ def emit_status(
     typer.echo(
         "History search: "
         f"enabled={format_presence(bool(history_search['enabled']))} "
-        f"backend={history_search['backend']} "
         f"(history_top_k={history_search['history_top_k']})"
     )
     typer.echo("Channels: " + (", ".join(enabled_channels) if enabled_channels else "none enabled"))
@@ -321,7 +320,6 @@ def status_command(
             },
             "history_search": {
                 "enabled": loaded.history_search.enabled,
-                "backend": loaded.history_search.backend,
                 "history_top_k": loaded.history_search.history_top_k,
             },
             "channels": channels,

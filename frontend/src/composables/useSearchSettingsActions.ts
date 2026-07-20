@@ -6,6 +6,8 @@ import {
   DEFAULT_SEARCH_PROVIDERS,
   DEFAULT_SEARXNG_URL,
   DEFAULT_SEARXNG_MAX_PAGES,
+  normalizeSearxngTargetUrl,
+  searxngOptionsMatchTarget,
   type SearchForm,
   type SearchState,
   type SearxngOptionEntry,
@@ -37,8 +39,7 @@ type SearxngOptionsDataPayload = {
   engines?: unknown;
   categories?: unknown;
   url?: unknown;
-  fallback?: unknown;
-  warning?: unknown;
+  proxy?: unknown;
 };
 type SearxngOptionPayload = {
   id?: unknown;
@@ -65,7 +66,6 @@ interface SearchSettingsState {
 interface SearchSettingsCopy {
   notices: {
     searchLoadFailed: string;
-    searxngOptionsFallback: string;
     searxngOptionsLoaded: string;
     searxngOptionsLoadFailed: string;
     searchSaved: string;
@@ -133,8 +133,7 @@ function toSearxngOptionsDataPayload(value: unknown): SearxngOptionsDataPayload 
     engines: payload.engines,
     categories: payload.categories,
     url: payload.url,
-    fallback: payload.fallback,
-    warning: payload.warning,
+    proxy: payload.proxy,
   };
 }
 
@@ -187,8 +186,7 @@ function normalizeSearxngOptions(value: unknown = {}): SearxngOptions {
     engines: normalizeOptionEntries(payload.engines),
     categories: normalizeOptionEntries(payload.categories),
     url: String(payload.url || "").trim(),
-    fallback: payload.fallback === true,
-    warning: String(payload.warning || "").trim(),
+    proxy: String(payload.proxy || "").trim(),
   };
 }
 
@@ -211,6 +209,21 @@ function normalizeSearchSettings(search: unknown = {}): SearchState {
   };
 }
 
+function normalizeSearchSettingsPreservingMatchingOptions(
+  search: unknown,
+  currentOptions: SearxngOptions,
+): SearchState {
+  const payload = toSearchDataPayload(search);
+  const normalized = normalizeSearchSettings(payload || {});
+  if (
+    payload?.searxng_options === undefined
+    && searxngOptionsMatchTarget(currentOptions, normalized.searxng_url, normalized.searxng_proxy)
+  ) {
+    normalized.searxng_options = currentOptions;
+  }
+  return normalized;
+}
+
 function syncSearchForm(settingsState: SearchSettingsState): void {
   settingsState.searchForm.provider = settingsState.search.provider;
   settingsState.searchForm.freshness = settingsState.search.freshness;
@@ -222,42 +235,97 @@ function syncSearchForm(settingsState: SearchSettingsState): void {
   settingsState.searchForm.searxngProxy = settingsState.search.searxng_proxy;
 }
 
+function currentSearxngTarget(settingsState: SearchSettingsState): { url: string; proxy: string } {
+  return {
+    url: normalizeSearxngTargetUrl(settingsState.searchForm.searxngUrl),
+    proxy: String(settingsState.searchForm.searxngProxy || "").trim(),
+  };
+}
+
 export function useSearchSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }: SettingsActionContext) {
+  let searchSettingsRequestGeneration = 0;
+  let searchSettingsSaveInFlight = false;
+  let searxngOptionsRequestGeneration = 0;
+
+  function invalidateSearxngOptionsRequest(): void {
+    searxngOptionsRequestGeneration += 1;
+    settingsState.searchOptionsLoading = false;
+  }
+
   async function loadSearchSettings(): Promise<void> {
+    if (searchSettingsSaveInFlight) return;
+    const requestGeneration = ++searchSettingsRequestGeneration;
+    invalidateSearxngOptionsRequest();
     settingsState.searchLoading = true;
     settingsState.searchError = "";
+    settingsState.searchNotice = "";
+    settingsState.searchOptionsError = "";
+    settingsState.searchOptionsNotice = "";
     try {
       const payload = toSearchSettingsPayload(await requestSettingsJson("/api/settings/web-search"));
-      settingsState.search = normalizeSearchSettings(payload.web_search);
+      if (requestGeneration !== searchSettingsRequestGeneration) return;
+      settingsState.search = normalizeSearchSettingsPreservingMatchingOptions(
+        payload.web_search,
+        settingsState.search.searxng_options,
+      );
       syncSearchForm(settingsState);
     } catch (error: unknown) {
-      settingsState.searchError = errorMessage(error) || copy.value.notices.searchLoadFailed;
+      if (requestGeneration === searchSettingsRequestGeneration) {
+        settingsState.searchError = errorMessage(error) || copy.value.notices.searchLoadFailed;
+      }
     } finally {
-      settingsState.searchLoading = false;
+      if (requestGeneration === searchSettingsRequestGeneration) {
+        settingsState.searchLoading = false;
+      }
     }
   }
 
   async function loadSearxngOptions(): Promise<void> {
+    const requestGeneration = ++searxngOptionsRequestGeneration;
+    const { url: searxngUrl, proxy: searxngProxy } = currentSearxngTarget(settingsState);
     settingsState.searchOptionsLoading = true;
     settingsState.searchOptionsError = "";
     settingsState.searchOptionsNotice = "";
     try {
-      const searxngUrl = String(settingsState.searchForm.searxngUrl || settingsState.search.searxng_url || "").trim();
-      const suffix = searxngUrl ? `?url=${encodeURIComponent(searxngUrl)}` : "";
-      const payload = toSearxngOptionsPayload(await requestSettingsJson(`/api/settings/web-search/searxng-options${suffix}`));
-      const searxngOptions = normalizeSearxngOptions(payload.searxng);
-      settingsState.search.searxng_options = searxngOptions;
-      settingsState.searchOptionsNotice = searxngOptions.fallback
-        ? copy.value.notices.searxngOptionsFallback
-        : copy.value.notices.searxngOptionsLoaded;
+      const payload = toSearxngOptionsPayload(await requestSettingsJson("/api/settings/web-search/searxng-options", {
+        method: "POST",
+        body: JSON.stringify({ url: searxngUrl, proxy: searxngProxy }),
+      }));
+      const currentTarget = currentSearxngTarget(settingsState);
+      if (
+        requestGeneration !== searxngOptionsRequestGeneration
+        || currentTarget.url !== searxngUrl
+        || currentTarget.proxy !== searxngProxy
+      ) {
+        return;
+      }
+      settingsState.search.searxng_options = {
+        ...normalizeSearxngOptions(payload.searxng),
+        url: searxngUrl,
+        proxy: searxngProxy,
+      };
+      settingsState.searchOptionsNotice = copy.value.notices.searxngOptionsLoaded;
     } catch (error: unknown) {
-      settingsState.searchOptionsError = errorMessage(error) || copy.value.notices.searxngOptionsLoadFailed;
+      const currentTarget = currentSearxngTarget(settingsState);
+      if (
+        requestGeneration === searxngOptionsRequestGeneration
+        && currentTarget.url === searxngUrl
+        && currentTarget.proxy === searxngProxy
+      ) {
+        settingsState.searchOptionsError = errorMessage(error) || copy.value.notices.searxngOptionsLoadFailed;
+      }
     } finally {
-      settingsState.searchOptionsLoading = false;
+      if (requestGeneration === searxngOptionsRequestGeneration) {
+        settingsState.searchOptionsLoading = false;
+      }
     }
   }
 
   async function saveSearchSettings(): Promise<void> {
+    if (searchSettingsSaveInFlight) return;
+    searchSettingsSaveInFlight = true;
+    const requestGeneration = ++searchSettingsRequestGeneration;
+    invalidateSearxngOptionsRequest();
     settingsState.searchLoading = true;
     settingsState.searchError = "";
     settingsState.searchNotice = "";
@@ -276,13 +344,22 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
           searxng_proxy: form.searxngProxy,
         }),
       }));
-      settingsState.search = normalizeSearchSettings(payload.web_search);
+      if (requestGeneration !== searchSettingsRequestGeneration) return;
+      settingsState.search = normalizeSearchSettingsPreservingMatchingOptions(
+        payload.web_search,
+        settingsState.search.searxng_options,
+      );
       syncSearchForm(settingsState);
       setSettingsSuccess("searchNotice", copy.value.notices.searchSaved);
     } catch (error: unknown) {
-      settingsState.searchError = errorMessage(error) || copy.value.notices.searchSaveFailed;
+      if (requestGeneration === searchSettingsRequestGeneration) {
+        settingsState.searchError = errorMessage(error) || copy.value.notices.searchSaveFailed;
+      }
     } finally {
-      settingsState.searchLoading = false;
+      searchSettingsSaveInFlight = false;
+      if (requestGeneration === searchSettingsRequestGeneration) {
+        settingsState.searchLoading = false;
+      }
     }
   }
 

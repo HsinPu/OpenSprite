@@ -404,8 +404,8 @@ class WebSearchToolConfig(BaseModel):
     searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)
     searxng_categories: list[str] = Field(default_factory=list)
-    max_results: int = Field(default=DEFAULT_WEB_SEARCH_MAX_RESULTS, ge=1)
-    searxng_max_pages: int = Field(default=DEFAULT_SEARXNG_MAX_PAGES, ge=1)
+    max_results: int = Field(default=DEFAULT_WEB_SEARCH_MAX_RESULTS, ge=1, le=100)
+    searxng_max_pages: int = Field(default=DEFAULT_SEARXNG_MAX_PAGES, ge=1, le=50)
     searxng_proxy: str | None = None
 
 
@@ -495,7 +495,6 @@ class HistorySearchConfig(BaseModel):
     """SQLite full-text search configuration for local conversation history."""
 
     enabled: bool = True
-    backend: Literal["sqlite"] = "sqlite"
     history_top_k: int = Field(default=5, ge=1, le=20)
 
 
@@ -958,13 +957,10 @@ class Config:
         config_path: str | Path,
         config_data: dict[str, Any] | None = None,
     ) -> Path:
-        history_search_data = config_data.get("history_search") if isinstance(config_data, dict) else None
         target_path = cls.get_history_search_file_path(config_path, config_data)
 
         if not target_path.exists():
             cls._copy_external_template(target_path, "history_search")
-            if isinstance(history_search_data, dict):
-                cls._write_json_file(target_path, history_search_data)
 
         return target_path
 
@@ -1092,7 +1088,6 @@ class Config:
         merged_channels.update(external_channels)
         if not merged_channels:
             raise ValueError("設定檔缺少必要區塊：channels 或 channels_file")
-        inline_history_search = data.get("history_search", {})
         history_search_path = cls._resolve_history_search_file(
             path,
             data.get("history_search_file"),
@@ -1102,12 +1097,6 @@ class Config:
             if history_search_path is not None
             else {}
         )
-        merged_history_search = (
-            dict(inline_history_search)
-            if isinstance(inline_history_search, dict)
-            else {}
-        )
-        merged_history_search.update(external_history_search)
         media_path = cls._resolve_media_file(path, data.get("media_file"))
         external_media = cls._load_media_data(media_path) if media_path is not None else {}
         media_categories = ("vision", "ocr", "speech", "video")
@@ -1152,12 +1141,8 @@ class Config:
                 **cls._merge_document_section(dict(data.get("memory", {})), template_data.get("memory", {}))
             ),
             history_search=(
-                HistorySearchConfig(**merged_history_search)
-                if (
-                    merged_history_search
-                    or "history_search" in data
-                    or history_search_path is not None
-                )
+                HistorySearchConfig(**external_history_search)
+                if history_search_path is not None
                 else None
             ),
             user_profile=UserProfileConfig(

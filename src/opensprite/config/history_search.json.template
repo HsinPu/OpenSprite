@@ -1,5 +1,4 @@
 {
   "enabled": true,
-  "backend": "sqlite",
   "history_top_k": 5
 }

@@ -55,6 +55,7 @@ from opensprite.config.schema import (
     ToolsConfig,
     VideoConfig,
     VisionConfig,
+    WebSearchToolConfig,
 )
 
 
@@ -370,6 +371,18 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.cron.default_timezone == "UTC"
     assert config.max_tool_iterations == DEFAULT_MAX_TOOL_ITERATIONS
     assert config.mcp_servers_file == "mcp_servers.json"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_results", 101),
+        ("searxng_max_pages", 51),
+    ],
+)
+def test_web_search_config_enforces_runtime_limits(field, value):
+    with pytest.raises(ValidationError):
+        WebSearchToolConfig(**{field: value})
 
 
 def test_template_web_search_defaults_match_backend_defaults():
@@ -708,7 +721,6 @@ def test_history_search_config_provides_fts_defaults():
     config = HistorySearchConfig()
 
     assert config.enabled is True
-    assert config.backend == "sqlite"
     assert config.history_top_k == 5
 
 
@@ -725,7 +737,6 @@ def test_config_load_reads_history_search_from_external_file(tmp_path):
         json.dumps(
             {
                 "enabled": True,
-                "backend": "sqlite",
                 "history_top_k": 7,
             }
         ),
@@ -751,7 +762,6 @@ def test_config_load_reads_history_search_from_external_file(tmp_path):
     config = Config.from_json(config_path)
 
     assert config.history_search.enabled is True
-    assert config.history_search.backend == "sqlite"
     assert config.history_search.history_top_k == 7
     assert config.history_search_file == "history_search.json"
 
@@ -915,7 +925,6 @@ def test_config_save_writes_history_search_to_external_file(tmp_path):
     assert "history_search" not in saved_main
     assert saved_history_search == {
         "enabled": True,
-        "backend": "sqlite",
         "history_top_k": 12,
     }
 

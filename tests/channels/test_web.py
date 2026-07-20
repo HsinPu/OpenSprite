@@ -15,6 +15,7 @@ from opensprite.channels.web import WebAdapter
 import opensprite.channels.web_settings_handlers_tools as web_settings_handlers_tools
 from opensprite.channels.web_routes import register_web_routes
 from opensprite.config import Config, ProviderConfig
+from opensprite.config.defaults import DEFAULT_SEARXNG_URL
 from opensprite.auth.codex import CodexToken, delete_codex_token, save_codex_token
 import opensprite.auth.codex as codex_module
 from opensprite.context.paths import get_session_workspace
@@ -28,6 +29,7 @@ from opensprite.storage import MemoryStorage, StoredMessage
 from opensprite.tools.registry import ToolRegistry
 from opensprite.storage.base import StoredBackgroundProcess
 from opensprite.tools.process_runtime import BackgroundProcessManager
+from opensprite.utils.searxng_url import SEARXNG_MAX_RESPONSE_BYTES
 
 
 class EchoAgent:
@@ -106,8 +108,24 @@ def test_web_adapter_broadcasts_same_session_replies_and_events_to_all_sockets()
 
 
 class _FakeSearxngConfigResponse:
-    def __init__(self, *, error: Exception | None = None):
+    def __init__(
+        self,
+        *,
+        error: Exception | None = None,
+        payload_bytes: bytes | None = None,
+        headers: dict[str, str] | None = None,
+        fail_on_read: bool = False,
+    ):
         self.error = error
+        self.payload_bytes = payload_bytes
+        self.headers = headers or {}
+        self.fail_on_read = fail_on_read
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
 
     def raise_for_status(self):
         if self.error is not None:
@@ -123,11 +141,27 @@ class _FakeSearxngConfigResponse:
             "categories": ["general", "news"],
         }
 
+    async def aiter_bytes(self):
+        if self.fail_on_read:
+            raise AssertionError("compressed SearXNG body must not be read")
+        yield self.payload_bytes or json.dumps(self.json()).encode("utf-8")
+
 
 class _FakeSearxngConfigClient:
-    def __init__(self, *, error: Exception | None = None):
+    def __init__(
+        self,
+        *,
+        error: Exception | None = None,
+        payload_bytes: bytes | None = None,
+        response_headers: dict[str, str] | None = None,
+        fail_on_read: bool = False,
+    ):
         self.requests = []
         self.error = error
+        self.payload_bytes = payload_bytes
+        self.response_headers = response_headers
+        self.fail_on_read = fail_on_read
+        self.constructor_kwargs = {}
 
     async def __aenter__(self):
         return self
@@ -135,9 +169,15 @@ class _FakeSearxngConfigClient:
     async def __aexit__(self, exc_type, exc, tb):
         return None
 
-    async def get(self, url, headers=None, timeout=None):
+    def stream(self, method, url, headers=None, timeout=None):
+        assert method == "GET"
         self.requests.append((url, headers, timeout))
-        return _FakeSearxngConfigResponse(error=self.error)
+        return _FakeSearxngConfigResponse(
+            error=self.error,
+            payload_bytes=self.payload_bytes,
+            headers=self.response_headers,
+            fail_on_read=self.fail_on_read,
+        )
 
 
 async def _stub_handler(request):
@@ -1362,6 +1402,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert payload["web_search"]["freshness"] == "week"
                 assert payload["web_search"]["max_results"] == 12
                 assert payload["web_search"]["searxng_max_pages"] == 4
+                assert payload["web_search"]["searxng_url"] == "https://search.example.test"
                 assert payload["web_search"]["searxng_engines"] == ["google", "bing"]
                 assert payload["web_search"]["searxng_categories"] == ["general", "news"]
 
@@ -1371,6 +1412,26 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
             ) as resp:
                 assert resp.status == 400
 
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/web-search",
+                json={"searxng_url": "ftp://search.example.test"},
+            ) as resp:
+                assert resp.status == 400
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/web-search",
+                json={"searxng_proxy": "proxy.local:8080"},
+            ) as resp:
+                assert resp.status == 400
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/web-search",
+                json={"searxng_url": "   "},
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["web_search"]["searxng_url"] == DEFAULT_SEARXNG_URL
+
         loaded = Config.from_json(config_path)
         assert loaded.tools.web_search.provider == "searxng"
         assert loaded.tools.web_search.freshness == "week"
@@ -1378,7 +1439,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.web_search.searxng_max_pages == 4
         assert loaded.tools.web_search.searxng_engines == ["google", "bing"]
         assert loaded.tools.web_search.searxng_categories == ["general", "news"]
-        assert loaded.tools.web_search.searxng_url == "https://search.example.test"
+        assert loaded.tools.web_search.searxng_url == DEFAULT_SEARXNG_URL
         assert loaded.tools.web_search.searxng_proxy == "http://proxy.local:8080"
         assert agent.reloads[-1].provider == "searxng"
         assert agent.reloads[-1].freshness == "week"
@@ -1399,6 +1460,9 @@ def test_web_adapter_search_settings_roundtrip(tmp_path):
 async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSearxngConfigClient):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
+    config = Config.load(config_path)
+    config.tools.web_search.searxng_url = "https://saved.example/custom"
+    config.save(config_path)
 
     agent = EchoAgent()
     agent.config_path = config_path
@@ -1423,16 +1487,20 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
         assert port is not None
 
         async with ClientSession() as session:
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options?url=https://searx.test/search") as resp:
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options",
+                json={
+                    "url": "https://searx.test/searx/search?lang=zh#metadata",
+                    "proxy": "http://proxy.test:8080",
+                },
+            ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload["searxng"]["url"] == "https://searx.test/search"
+                assert payload["searxng"]["url"] == "https://searx.test/searx/search?lang=zh#metadata"
                 assert payload["searxng"]["categories"] == [
                     {"id": "general", "label": "general"},
                     {"id": "news", "label": "news"},
                 ]
-                assert payload["searxng"]["fallback"] is False
-                assert payload["searxng"]["warning"] == ""
                 assert payload["searxng"]["engines"][0] == {
                     "id": "google",
                     "label": "google",
@@ -1440,8 +1508,33 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
                     "categories": ["general"],
                     "enabled": True,
                 }
-        assert fake_client.requests[0][0] == "https://searx.test/config"
+            assert fake_client.constructor_kwargs["proxy"] == "http://proxy.test:8080"
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options",
+                json={"url": "   ", "proxy": ""},
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["searxng"]["url"] == DEFAULT_SEARXNG_URL
+
+            request_count = len(fake_client.requests)
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options",
+                json={"url": "ftp://searx.test", "proxy": ""},
+            ) as resp:
+                assert resp.status == 400
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options",
+                json={"url": "https://searx.test", "proxy": "not-a-proxy-url"},
+            ) as resp:
+                assert resp.status == 400
+            assert len(fake_client.requests) == request_count
+        assert fake_client.requests[0][0] == "https://searx.test/searx/config"
+        assert fake_client.requests[1][0] == "https://searx.be/config"
         assert fake_client.requests[0][1]["User-Agent"]
+        assert fake_client.requests[0][1]["Accept-Encoding"] == "identity"
+        assert fake_client.constructor_kwargs["proxy"] is None
     finally:
         adapter_task.cancel()
         try:
@@ -1454,11 +1547,16 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
 
 def test_web_adapter_search_searxng_options(tmp_path, monkeypatch):
     fake_client = _FakeSearxngConfigClient()
-    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
+
+    def create_client(*args, **kwargs):
+        fake_client.constructor_kwargs = kwargs
+        return fake_client
+
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", create_client)
     asyncio.run(_run_web_search_searxng_options(tmp_path, fake_client))
 
 
-async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: _FakeSearxngConfigClient):
+async def _run_web_search_searxng_options_error(tmp_path: Path, fake_client: _FakeSearxngConfigClient):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
 
@@ -1485,14 +1583,16 @@ async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: 
         assert port is not None
 
         async with ClientSession() as session:
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options?url=https://searx.be") as resp:
-                assert resp.status == 200
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/web-search/searxng-options",
+                json={"url": "https://searx.be", "proxy": ""},
+            ) as resp:
+                assert resp.status == 502
                 payload = await resp.json()
-                assert payload["searxng"]["fallback"] is True
-                assert "Unable to load" in payload["searxng"]["warning"]
-                assert {entry["id"] for entry in payload["searxng"]["engines"]} >= {"duckduckgo", "google", "bing"}
-                assert {entry["id"] for entry in payload["searxng"]["categories"]} >= {"general", "news"}
+                assert payload["ok"] is False
+                assert "Unable to load" in payload["error"]
         assert fake_client.requests[0][0] == "https://searx.be/config"
+        assert fake_client.constructor_kwargs["proxy"] is None
     finally:
         adapter_task.cancel()
         try:
@@ -1503,10 +1603,42 @@ async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: 
         await asyncio.wait_for(processor, timeout=2)
 
 
-def test_web_adapter_search_searxng_options_fallback(tmp_path, monkeypatch):
+def test_web_adapter_search_searxng_options_error(tmp_path, monkeypatch):
     fake_client = _FakeSearxngConfigClient(error=RuntimeError("403 Forbidden"))
-    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
-    asyncio.run(_run_web_search_searxng_options_fallback(tmp_path, fake_client))
+
+    def create_client(*args, **kwargs):
+        fake_client.constructor_kwargs = kwargs
+        return fake_client
+
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", create_client)
+    asyncio.run(_run_web_search_searxng_options_error(tmp_path, fake_client))
+
+
+def test_web_adapter_search_searxng_options_rejects_oversized_response(tmp_path, monkeypatch):
+    fake_client = _FakeSearxngConfigClient(
+        payload_bytes=b"x" * (SEARXNG_MAX_RESPONSE_BYTES + 1)
+    )
+
+    def create_client(*args, **kwargs):
+        fake_client.constructor_kwargs = kwargs
+        return fake_client
+
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", create_client)
+    asyncio.run(_run_web_search_searxng_options_error(tmp_path, fake_client))
+
+
+def test_web_adapter_search_searxng_options_rejects_compressed_response(tmp_path, monkeypatch):
+    fake_client = _FakeSearxngConfigClient(
+        response_headers={"content-encoding": "gzip"},
+        fail_on_read=True,
+    )
+
+    def create_client(*args, **kwargs):
+        fake_client.constructor_kwargs = kwargs
+        return fake_client
+
+    monkeypatch.setattr("opensprite.channels.web_settings_handlers_tools.httpx.AsyncClient", create_client)
+    asyncio.run(_run_web_search_searxng_options_error(tmp_path, fake_client))
 
 
 async def _run_web_run_events_api():

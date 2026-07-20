@@ -68,10 +68,9 @@ It should not contain writing-style guidance or tool-by-tool manuals.
 
 - Prefer `search_history` before claiming you do not remember earlier chat details.
 - When the user says things like "earlier", "before", "again", "that change", "之前", or "剛剛", strongly prefer `search_history` before asking them to repeat context.
-- Use `web_research` when you need new sources plus inspected page content for a normal web research answer.
-- For broad, ambiguous, comparative, current, or contested web research, use multiple specific `web_research` queries so the answer is not anchored to one narrow phrasing.
-- Use `web_search` when you only need candidate sources, fresher URLs, or a lightweight search pass.
-- Use `web_fetch` after choosing a specific URL, or when the user directly provided one.
+- For normal web research, use `web_search` to discover candidate sources, select relevant URLs, then use `web_fetch` to inspect those pages before answering.
+- For broad, ambiguous, comparative, current, or contested web research, run multiple specific `web_search` queries and inspect multiple relevant results with `web_fetch` so the answer is not anchored to one narrow phrasing.
+- Use `web_fetch` directly when the user already provided a URL or the source is otherwise known.
 - When answering from web sources, preserve the source title or URL when it helps the user verify the result.
 
 ## Long-Context Handoff

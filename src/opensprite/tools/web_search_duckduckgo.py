@@ -53,32 +53,6 @@ async def search_duckduckgo(query: str, n: int, freshness: str) -> str:
 
     try:
         items = await asyncio.to_thread(_run_ddgs_search)
-    except TypeError as exc:
-        if timelimit and "timelimit" in str(exc):
-            logger.warning(
-                "DDGS does not accept timelimit, retrying without freshness filter"
-            )
-            timelimit = None
-            try:
-                items = await asyncio.to_thread(_run_ddgs_search)
-            except Exception as retry_exc:
-                logger.warning("DDGS search failed: %s", retry_exc)
-                return format_error(
-                    query,
-                    "duckduckgo",
-                    f"DDGS search failed: {retry_exc}",
-                    backend="ddgs",
-                    freshness=freshness,
-                )
-        else:
-            logger.warning("DDGS search failed: %s", exc)
-            return format_error(
-                query,
-                "duckduckgo",
-                f"DDGS search failed: {exc}",
-                backend="ddgs",
-                freshness=freshness,
-            )
     except Exception as exc:
         logger.warning("DDGS search failed: %s", exc)
         return format_error(

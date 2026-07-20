@@ -11,10 +11,12 @@ from aiohttp import web
 
 from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
+from ..config.defaults import DEFAULT_SEARXNG_URL
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_provider_factory import browser_cloud_status, cloud_provider_from_config
 from ..tools.browser_runtime import AgentBrowserRuntime
 from ..utils.log import logger, setup_log
+from ..utils.searxng_url import normalize_searxng_proxy_url, read_limited_searxng_json
 from . import (
     web_frontend_runtime,
     web_settings_coercion,
@@ -76,21 +78,47 @@ async def handle_settings_web_search(adapter: Any, request: web.Request) -> web.
 async def handle_settings_web_search_searxng_options(adapter: Any, request: web.Request) -> web.Response:
     config = Config.load(adapter._get_config_path())
     search = config.tools.web_search
-    searxng_url = adapter._coerce_optional_text(request.query.get("url"), default=search.searxng_url) or adapter.DEFAULT_CONFIG.get("searxng_url", "") or "https://searx.be/search"
+    body = await adapter._read_json_body(request)
+    requested_searxng_url = body.get("url") if "url" in body else search.searxng_url
+    searxng_url = adapter._coerce_optional_text(
+        requested_searxng_url,
+        default=DEFAULT_SEARXNG_URL,
+    ) or DEFAULT_SEARXNG_URL
+    requested_searxng_proxy = (
+        adapter._coerce_optional_text(body.get("proxy"), default=None)
+        if "proxy" in body
+        else search.searxng_proxy
+    )
     try:
-        async with httpx.AsyncClient(proxy=search.searxng_proxy) as client:
-            response = await client.get(
-                web_settings_coercion.searxng_config_url(searxng_url),
-                headers={"Accept": "application/json", "User-Agent": SEARXNG_OPTIONS_USER_AGENT},
+        config_url = web_settings_coercion.searxng_config_url(searxng_url)
+        searxng_proxy = normalize_searxng_proxy_url(requested_searxng_proxy)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
+    try:
+        async with httpx.AsyncClient(proxy=searxng_proxy) as client:
+            async with client.stream(
+                "GET",
+                config_url,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "identity",
+                    "User-Agent": SEARXNG_OPTIONS_USER_AGENT,
+                },
                 timeout=10.0,
-            )
-            response.raise_for_status()
-            payload = response.json()
+            ) as response:
+                response.raise_for_status()
+                payload = await read_limited_searxng_json(response)
     except Exception as exc:
         logger.warning("SearXNG options metadata unavailable | url={} error={}", searxng_url, exc)
-        return web.json_response({"searxng": web_settings_coercion.fallback_searxng_options_payload(url=searxng_url, warning=f"Unable to load SearXNG /config metadata: {exc}")})
+        return web.json_response(
+            {"ok": False, "error": f"Unable to load SearXNG /config metadata: {exc}"},
+            status=502,
+        )
     if not isinstance(payload, dict):
-        return web.json_response({"searxng": web_settings_coercion.fallback_searxng_options_payload(url=searxng_url, warning="SearXNG /config response was not a JSON object.")})
+        return web.json_response(
+            {"ok": False, "error": "SearXNG /config response was not a JSON object."},
+            status=502,
+        )
     return web.json_response({"searxng": web_settings_coercion.searxng_options_payload(payload, url=searxng_url)})
 
 
@@ -104,13 +132,25 @@ async def handle_settings_web_search_update(adapter: Any, request: web.Request) 
     search.max_results = web_settings_coercion.coerce_positive_int(body.get("max_results"), field="max_results", default=search.max_results, minimum=1, maximum=100)
     search.searxng_max_pages = web_settings_coercion.coerce_positive_int(body.get("searxng_max_pages"), field="searxng_max_pages", default=search.searxng_max_pages, minimum=1, maximum=50)
     if "searxng_url" in body:
-        search.searxng_url = adapter._coerce_optional_text(body.get("searxng_url"), default="") or adapter.DEFAULT_CONFIG.get("searxng_url", "")
+        requested_searxng_url = adapter._coerce_optional_text(
+            body.get("searxng_url"),
+            default=DEFAULT_SEARXNG_URL,
+        ) or DEFAULT_SEARXNG_URL
+        try:
+            web_settings_coercion.searxng_config_url(requested_searxng_url)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc)) from exc
+        search.searxng_url = requested_searxng_url
     if "searxng_engines" in body:
         search.searxng_engines = web_settings_coercion.coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
     if "searxng_categories" in body:
         search.searxng_categories = web_settings_coercion.coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
     if "searxng_proxy" in body:
-        search.searxng_proxy = adapter._coerce_optional_text(body.get("searxng_proxy"), default="") or None
+        requested_searxng_proxy = adapter._coerce_optional_text(body.get("searxng_proxy"), default="") or None
+        try:
+            search.searxng_proxy = normalize_searxng_proxy_url(requested_searxng_proxy)
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc)) from exc
     config.save(config_path)
     payload = {"web_search": web_settings_payloads.web_search_payload(config), "restart_required": True}
     payload = web_settings_reload.reload_web_search_from_config(adapter, payload, logger=logger)

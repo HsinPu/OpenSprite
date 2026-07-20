@@ -4,27 +4,39 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import typer
+
+if TYPE_CHECKING:
+    from ..config import Config
+    from ..search.sqlite_store import SQLiteSearchStore
 
 
 def load_sqlite_history_search_store(
     config: str | None,
     *,
     resolve_config_path: Callable[[str | None], Path],
-):
-    """Load the configured SQLite history-search store."""
+) -> tuple[Config, SQLiteSearchStore]:
+    """Open the configured history-search store without changing local state."""
     from ..config import Config
     from ..search.sqlite_store import SQLiteSearchStore
-    from ..search.store_factory import create_history_search_store
 
-    loaded = Config.load(resolve_config_path(config))
-    store = create_history_search_store(loaded)
-    if store is None:
+    config_path = resolve_config_path(config)
+    if config_path.suffix != ".json":
+        raise ValueError(f"config path must be a JSON file: {config_path}")
+
+    loaded = Config.from_json(config_path)
+    if not loaded.history_search.enabled:
         raise ValueError("history_search.enabled=false; enable history search first")
-    if not isinstance(store, SQLiteSearchStore):
-        raise ValueError("configured history search backend does not support status inspection")
+    if loaded.storage.type != "sqlite":
+        raise ValueError('history_search requires storage.type="sqlite"')
+
+    store = SQLiteSearchStore(
+        path=loaded.storage.path,
+        history_top_k=loaded.history_search.history_top_k,
+        read_only=True,
+    )
     return loaded, store
 
 
@@ -41,6 +53,7 @@ def search_status_command(
         status = asyncio.run(store.get_status(session_id=session_id))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         handle_search_error(exc)
+        return
 
     scope = session_id or "all sessions"
     typer.echo(f"Chat history search status for {scope}.")

@@ -19,8 +19,7 @@ export interface SearxngOptions {
   engines: SearxngOptionEntry[];
   categories: SearxngOptionEntry[];
   url: string;
-  fallback: boolean;
-  warning: string;
+  proxy: string;
 }
 
 export interface SearchState {
@@ -63,11 +62,23 @@ export function createDefaultSearchState(): SearchState {
       engines: [],
       categories: [],
       url: "",
-      fallback: false,
-      warning: "",
+      proxy: "",
     },
     searxng_proxy: "",
   };
+}
+
+export function normalizeSearxngTargetUrl(url: unknown): string {
+  return String(url || "").trim() || DEFAULT_SEARXNG_URL;
+}
+
+export function searxngOptionsMatchTarget(
+  options: SearxngOptions,
+  url: unknown,
+  proxy: unknown,
+): boolean {
+  return options.url === normalizeSearxngTargetUrl(url)
+    && options.proxy === String(proxy || "").trim();
 }
 
 export function createDefaultSearchForm(): SearchForm {

@@ -68,7 +68,6 @@ def _write_split_config(root):
             {
                 "enabled": False,
                 "history_top_k": 5,
-                "backend": "sqlite",
             },
             indent=2,
         ),
