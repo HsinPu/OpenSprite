@@ -16,10 +16,10 @@ pip install trafilatura
 pip install html2text
 
 # Firecrawl (付費服務，可選)
-pip install requests
+pip install httpx
 
 # 或使用 --break-system-packages (如需要)
-pip install trafilatura html2text requests --break-system-packages
+pip install trafilatura html2text httpx --break-system-packages
 ```
 
 ==========================================
@@ -38,7 +38,6 @@ print(result['text'])  # 擷取的內容
 
 **自動處理的事：**
 - ✅ URL 驗證 (必須 http/https)
-- ✅ 403 Cloudflare 重試
 - ✅ 優先使用 trafilatura 擷取
 - ✅ 可選 Firecrawl (付費服務，需 API Key)
 - ✅ 失敗時自動用 turndown (html2text)
@@ -172,37 +171,28 @@ import re
 import socket
 import asyncio
 import gzip
+import io
 import zlib
-from dataclasses import dataclass
+from http.client import HTTPConnection, HTTPSConnection
 from urllib.parse import urlparse
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import (
+    HTTPHandler,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 from urllib.error import URLError, HTTPError
 from html import unescape
+
+import httpx
 
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_blocking import looks_blocked_or_challenge
-from ..utils.log import logger
 
 WEB_FETCH_MIN_CONTENT_CHARS = 800
-
-
-@dataclass(frozen=True)
-class DocsFallbackRule:
-    domain: str
-    index_path: str
-    index_fallback_path: str
-    index_shell_markers: tuple[str, ...]
-    fallback_title: str
-
-
-_OPENROUTER_DOCS_FALLBACK_RULE = DocsFallbackRule(
-    domain="openrouter.ai",
-    index_path="/docs",
-    index_fallback_path="/docs/llms.txt",
-    index_shell_markers=("no models found", "full documentation content"),
-    fallback_title="OpenRouter full documentation",
-)
 
 
 # 嘗試引入 trafilatura
@@ -211,13 +201,6 @@ try:
     TRAFILATURA_AVAILABLE = True
 except ImportError:
     TRAFILATURA_AVAILABLE = False
-
-# 嘗試引入 requests (用於 Firecrawl)
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
 
 # 嘗試引入 html2text (Turndown 風格)
 try:
@@ -394,12 +377,8 @@ def extract_readability(html: str, url: str = "") -> dict:
 # 網頁擷取核心
 # ============================================
 
-# 預設 User-Agent (正常)
+# 預設 User-Agent
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
-
-# Cloudflare 備用 User-Agent (403 時使用)
-FALLBACK_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
 
 def _blocked_ip_reason(value: str) -> str | None:
     try:
@@ -411,7 +390,11 @@ def _blocked_ip_reason(value: str) -> str | None:
     return f"blocked non-public IP address: {address}"
 
 
-def _validate_public_host(host: str, port: int | None = None) -> None:
+def _resolve_public_endpoints(
+    host: str,
+    port: int | None = None,
+) -> list[tuple[int, int, int, str, tuple]]:
+    """Resolve a host once and return only endpoints safe to connect to."""
     reason = _blocked_ip_reason(host)
     if reason:
         raise Exception(reason)
@@ -424,6 +407,41 @@ def _validate_public_host(host: str, port: int | None = None) -> None:
         reason = _blocked_ip_reason(address)
         if reason:
             raise Exception(reason)
+    if not infos:
+        raise Exception(f"URL host could not be resolved: {host}")
+    return infos
+
+
+def _validate_public_host(host: str, port: int | None = None) -> None:
+    _resolve_public_endpoints(host, port)
+
+
+def _connect_verified_socket(
+    host: str,
+    port: int,
+    timeout: float | object,
+    source_address: tuple[str, int] | None = None,
+):
+    """Connect to the exact public sockaddr returned by the validated lookup."""
+    endpoints = _resolve_public_endpoints(host, port)
+    last_error: OSError | None = None
+    for family, socktype, proto, _canonname, sockaddr in endpoints:
+        connection = None
+        try:
+            connection = socket.socket(family, socktype, proto)
+            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+                connection.settimeout(timeout)
+            if source_address:
+                connection.bind(source_address)
+            connection.connect(sockaddr)
+            return connection
+        except OSError as exc:
+            last_error = exc
+            if connection is not None:
+                connection.close()
+    if last_error is not None:
+        raise last_error
+    raise OSError(f"Could not connect to validated host: {host}")
 
 
 def validate_url(url: str) -> bool:
@@ -440,10 +458,14 @@ def validate_url(url: str) -> bool:
 
 
 def _read_response_with_limit(response, max_response_size: int) -> bytes:
+    if max_response_size < 1:
+        raise ValueError("max_response_size must be at least 1")
+
     chunks: list[bytes] = []
     total = 0
     while True:
-        chunk = response.read(64 * 1024)
+        read_size = min(64 * 1024, max_response_size - total + 1)
+        chunk = response.read(read_size)
         if not chunk:
             break
         total += len(chunk)
@@ -453,19 +475,100 @@ def _read_response_with_limit(response, max_response_size: int) -> bytes:
     return b"".join(chunks)
 
 
-def _decode_response_body(content: bytes, headers: dict[str, str]) -> bytes:
-    encoding = str(headers.get("Content-Encoding") or "").strip().lower()
+def _decompressed_response_too_large(max_response_size: int) -> Exception:
+    return Exception(
+        f"Decompressed response too large (exceeds {max_response_size} bytes limit)"
+    )
+
+
+def _get_header(headers, name: str, default: str = "") -> str:
+    """Read a HTTP header without depending on the sender's casing."""
+    value = headers.get(name) if hasattr(headers, "get") else None
+    if value is not None:
+        return str(value)
+    if hasattr(headers, "items"):
+        expected = name.casefold()
+        for key, candidate in headers.items():
+            if str(key).casefold() == expected:
+                return str(candidate)
+    return default
+
+
+def _decode_response_body(
+    content: bytes,
+    headers: dict[str, str],
+    max_response_size: int,
+) -> bytes:
+    encoding = _get_header(headers, "Content-Encoding").strip().lower()
     if encoding == "gzip" or content.startswith(b"\x1f\x8b"):
         try:
-            return gzip.decompress(content)
+            with gzip.GzipFile(fileobj=io.BytesIO(content)) as stream:
+                decoded = stream.read(max_response_size + 1)
         except (OSError, EOFError):
             return content
+        if len(decoded) > max_response_size:
+            raise _decompressed_response_too_large(max_response_size)
+        return decoded
     if encoding == "deflate":
         try:
-            return zlib.decompress(content)
+            decompressor = zlib.decompressobj()
+            decoded = decompressor.decompress(content, max_response_size + 1)
+            if len(decoded) > max_response_size or decompressor.unconsumed_tail:
+                raise _decompressed_response_too_large(max_response_size)
+            decoded += decompressor.flush(max_response_size + 1 - len(decoded))
         except zlib.error:
             return content
+        if len(decoded) > max_response_size:
+            raise _decompressed_response_too_large(max_response_size)
+        return decoded
     return content
+
+
+class _PinnedHTTPConnection(HTTPConnection):
+    """HTTP connection whose socket is pinned to its validated DNS answer."""
+
+    def connect(self) -> None:
+        self.sock = _connect_verified_socket(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,
+        )
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(HTTPSConnection):
+    """HTTPS connection pinned to a public IP while retaining hostname SNI."""
+
+    def connect(self) -> None:
+        server_hostname = self._tunnel_host or self.host
+        self.sock = _connect_verified_socket(
+            self.host,
+            self.port,
+            self.timeout,
+            self.source_address,
+        )
+        if self._tunnel_host:
+            self._tunnel()
+        self.sock = self._context.wrap_socket(
+            self.sock,
+            server_hostname=server_hostname,
+        )
+
+
+class _PinnedHTTPHandler(HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_PinnedHTTPConnection, req)
+
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(
+            _PinnedHTTPSConnection,
+            req,
+            context=self._context,
+        )
 
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
@@ -474,20 +577,10 @@ class _SafeRedirectHandler(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch_url(url: str, timeout: int = 30, retry_on_403: bool = True, max_response_size: int = 5 * 1024 * 1024) -> tuple:
-    """fetch_url with 403 retry support"""
-    
-    # 第一次嘗試
+def fetch_url(url: str, timeout: int = 30, max_response_size: int = 5 * 1024 * 1024) -> tuple:
+    """Fetch one public URL without hidden provider or access-control retries."""
     content, status, headers, final_url = _do_fetch(url, timeout, DEFAULT_UA, max_response_size)
-    
-    # 403 Cloudflare 重試 (參考 OpenCode)
-    if retry_on_403 and status == 403:
-        cf_mitigated = headers.get("cf-mitigated")
-        if cf_mitigated == "challenge":
-            # 更換 User-Agent 重試
-            content, status, headers, final_url = _do_fetch(url, timeout, FALLBACK_UA, max_response_size)
-    
-    return headers.get('Content-Type', 'text/html'), content, status, final_url
+    return _get_header(headers, 'Content-Type', 'text/html'), content, status, final_url
 
 
 def _do_fetch(url: str, timeout: int, user_agent: str, max_response_size: int) -> tuple:
@@ -499,7 +592,12 @@ def _do_fetch(url: str, timeout: int, user_agent: str, max_response_size: int) -
         'Accept-Language': 'en-US,en;q=0.9',
     }
     request = Request(url, headers=headers)
-    opener = build_opener(_SafeRedirectHandler())
+    opener = build_opener(
+        ProxyHandler({}),
+        _PinnedHTTPHandler(),
+        _PinnedHTTPSHandler(),
+        _SafeRedirectHandler(),
+    )
     
     try:
         with opener.open(request, timeout=timeout) as response:
@@ -508,7 +606,7 @@ def _do_fetch(url: str, timeout: int, user_agent: str, max_response_size: int) -
             headers = dict(response.headers)
             content = _read_response_with_limit(response, max_response_size)
             return (
-                _decode_response_body(content, headers),
+                _decode_response_body(content, headers, max_response_size),
                 response.status,
                 headers,
                 final_url,
@@ -573,57 +671,25 @@ def extract_with_trafilatura(html: str, mode: str = 'markdown') -> dict:
 DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev"
 
 
-def extract_with_jina(url: str, timeout: int = 20) -> dict | None:
-    """使用 Jina Reader API 擷取網頁（免費）
-    
-    參考: https://github.com/HKXU/quick-jina-reader
-    
-    參數:
-        url: 要擷取的網址
-        timeout: 超時秒數
-    
-    回傳:
-        dict: {'text': str, 'title': str, 'extractor': 'jina'}
-    """
-    import httpx
-    
-    jina_url = f"https://r.jina.ai/{url}"
-    
-    try:
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        }
-        
-        response = httpx.get(jina_url, headers=headers, timeout=timeout, follow_redirects=True)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            title = data.get("data", {}).get("title", "") or ""
-            text = data.get("data", {}).get("content", "")
-            
-            if text:
-                # 如果有標題，加上標題
-                if title:
-                    text = f"# {title}\n\n{text}"
-                
-                return {
-                    "text": text,
-                    "title": title,
-                    "extractor": "jina"
-                }
-        
-        return None
-        
-    except Exception as e:
-        logger.warning("Jina extraction failed: {}", e)
-        return None
+def _read_stream_with_limit(chunks, max_response_size: int) -> bytes:
+    if max_response_size < 1:
+        raise ValueError("max_response_size must be at least 1")
+    content: list[bytes] = []
+    total = 0
+    for chunk in chunks:
+        total += len(chunk)
+        if total > max_response_size:
+            raise Exception(
+                f"Response too large (exceeds {max_response_size} bytes limit)"
+            )
+        content.append(chunk)
+    return b"".join(content)
 
 
-def extract_with_firecrawl(url: str, mode: str = 'markdown', 
-                           api_key: str = None, 
-                           timeout: int = 30) -> dict:
+def extract_with_firecrawl(url: str, mode: str = 'markdown',
+                           api_key: str = None,
+                           timeout: int = 30,
+                           max_response_size: int = 5 * 1024 * 1024) -> dict:
     """使用 Firecrawl API 擷取網頁
     
     參數:
@@ -633,12 +699,9 @@ def extract_with_firecrawl(url: str, mode: str = 'markdown',
         timeout: 超時秒數
     
     需要:
-        pip install requests
+        httpx is included in the core OpenSprite dependencies
         Firecrawl API Key: https://firecrawl.dev
     """
-    if not REQUESTS_AVAILABLE:
-        return None
-    
     if not api_key:
         # 嘗試從環境變數取得
         import os
@@ -657,20 +720,32 @@ def extract_with_firecrawl(url: str, mode: str = 'markdown',
             "timeout": timeout * 1000,
         }
         
-        response = requests.post(
+        with httpx.stream(
+            "POST",
             endpoint,
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
+                "Accept-Encoding": "identity",
             },
             json=body,
-            timeout=timeout
-        )
-        
-        if not response.ok:
-            return None
-        
-        payload = response.json()
+            timeout=timeout,
+        ) as response:
+            if not response.is_success:
+                return None
+
+            raw_content = _read_stream_with_limit(
+                response.iter_raw(
+                    chunk_size=min(64 * 1024, max_response_size + 1)
+                ),
+                max_response_size,
+            )
+            content = _decode_response_body(
+                raw_content,
+                response.headers,
+                max_response_size,
+            )
+            payload = json.loads(content.decode(response.encoding or "utf-8"))
         
         if not payload.get('success'):
             return None
@@ -722,42 +797,87 @@ class WebFetcher:
                  max_response_size: int = DEFAULT_MAX_RESPONSE_SIZE,
                  prefer_trafilatura: bool = True,
                  request_callback: callable = None,  # 權限詢問回調
-                 retry_on_403: bool = True,             # 403 重試
                  firecrawl_api_key: str = None):       # Firecrawl API Key
         self.max_chars = max_chars
         self.max_response_size = max_response_size
         self.timeout = timeout
         self.prefer_trafilatura = prefer_trafilatura and TRAFILATURA_AVAILABLE
         self.request_callback = request_callback
-        self.retry_on_403 = retry_on_403
         self.firecrawl_api_key = firecrawl_api_key
+
+    def _firecrawl_fallback(self, url: str, mode: str) -> dict | None:
+        if not self.firecrawl_api_key:
+            return None
+        try:
+            firecrawl_result = extract_with_firecrawl(
+                url,
+                mode,
+                self.firecrawl_api_key,
+                self.timeout,
+                self.max_response_size,
+            )
+        except Exception:
+            return None
+        if not isinstance(firecrawl_result, dict) or not firecrawl_result.get('text'):
+            return None
+
+        text, truncated = truncate_text(str(firecrawl_result['text']), self.max_chars)
+        return {
+            'url': url,
+            'finalUrl': firecrawl_result.get('finalUrl') or url,
+            'status': firecrawl_result.get('status') or 200,
+            'contentType': 'text/plain' if mode == 'text' else 'text/markdown',
+            'extractor': 'firecrawl',
+            'title': firecrawl_result.get('title') or url,
+            'text': text,
+            'truncated': truncated,
+            'attachments': None,
+            'is_image': False,
+        }
+
+    @staticmethod
+    def _allows_external_fallback(error: Exception) -> bool:
+        message = str(error)
+        return not any(
+            marker in message
+            for marker in (
+                "URL is required",
+                "URL must start with",
+                "URL host is required",
+                "blocked non-public IP address",
+            )
+        )
     
     def fetch(self, url: str, mode: str = 'markdown') -> dict:
         # URL 驗證 (參考 OpenCode)
-        validate_url(url)
+        try:
+            validate_url(url)
+        except Exception as error:
+            if (
+                "URL host could not be resolved:" in str(error)
+                and self.firecrawl_api_key
+            ):
+                if self.request_callback:
+                    self.request_callback(url, mode, self.timeout)
+                firecrawl_result = self._firecrawl_fallback(url, mode)
+                if firecrawl_result:
+                    return firecrawl_result
+            raise
         
         # 權限詢問回調 (參考 OpenCode ctx.ask)
         if self.request_callback:
             self.request_callback(url, mode, self.timeout)
         try:
-            content_type, content, status, final_url = fetch_url(url, self.timeout, self.retry_on_403, self.max_response_size)
-        except Exception as exc:
-            if self.retry_on_403 and "HTTP Error: 403" in str(exc):
-                jina_result = extract_with_jina(url, timeout=min(self.timeout, 20))
-                if jina_result and jina_result.get('text'):
-                    text, truncated = truncate_text(jina_result['text'], self.max_chars)
-                    return {
-                        'url': url,
-                        'finalUrl': url,
-                        'status': 403,
-                        'contentType': 'text/markdown',
-                        'extractor': 'jina',
-                        'title': jina_result.get('title') or url,
-                        'text': text,
-                        'truncated': truncated,
-                        'attachments': None,
-                        'is_image': False,
-                    }
+            content_type, content, status, final_url = fetch_url(
+                url,
+                self.timeout,
+                self.max_response_size,
+            )
+        except Exception as error:
+            if self._allows_external_fallback(error):
+                firecrawl_result = self._firecrawl_fallback(url, mode)
+                if firecrawl_result:
+                    return firecrawl_result
             raise
 
         result = {
@@ -836,77 +956,18 @@ class WebFetcher:
                     result['text'] = readability_result['content']
                     result['extractor'] = 'readability'
             
-            # 4. Jina Reader (免費，自動 fallback)
-            if not result['text'] or len(result['text']) < 50:
-                jina_result = extract_with_jina(url)
-                if jina_result and jina_result.get('text'):
-                    result['title'] = jina_result.get('title', result.get('title'))
-                    result['text'] = jina_result['text']
-                    result['extractor'] = 'jina'
-            
-            # 5. 如果全部都失敗，使用 Firecrawl (最後手段，付費服務)
+            # 4. 如果本機擷取不足，且已明確設定 API Key，使用 Firecrawl
             if (not result['text'] or len(result['text']) < 50) and self.firecrawl_api_key:
-                firecrawl_result = extract_with_firecrawl(url, mode, self.firecrawl_api_key, self.timeout)
-                if firecrawl_result and firecrawl_result.get('text'):
-                    result['text'] = firecrawl_result['text']
-                    result['extractor'] = firecrawl_result['extractor']
-                    result['title'] = firecrawl_result.get('title')
-                    result['finalUrl'] = firecrawl_result.get('finalUrl', url)
+                firecrawl_result = self._firecrawl_fallback(url, mode)
+                if firecrawl_result:
+                    result.update(firecrawl_result)
             
             result['text'], result['truncated'] = truncate_text(result['text'], self.max_chars)
         
         else:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
 
-        index_fallback_url = _openrouter_docs_index_fallback_url(url, result.get('finalUrl') or final_url, result.get('text') or '')
-        if index_fallback_url:
-            try:
-                content_type, content, status, final_url = fetch_url(
-                    index_fallback_url,
-                    self.timeout,
-                    self.retry_on_403,
-                    self.max_response_size,
-                )
-            except Exception:
-                pass
-            else:
-                fallback_text = decode_content(content, content_type)
-                result.update(
-                    {
-                        'url': index_fallback_url,
-                        'finalUrl': final_url,
-                        'status': status,
-                        'contentType': content_type,
-                        'title': _OPENROUTER_DOCS_FALLBACK_RULE.fallback_title,
-                        'extractor': 'raw',
-                    }
-                )
-                result['text'], result['truncated'] = truncate_text(fallback_text, self.max_chars)
-        
         return result
-
-
-def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:
-    normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
-    if len(normalized) >= WEB_FETCH_MIN_CONTENT_CHARS:
-        return None
-    rule = _OPENROUTER_DOCS_FALLBACK_RULE
-    if not any(marker in normalized for marker in rule.index_shell_markers):
-        return None
-    for candidate in (final_url, url):
-        try:
-            parsed = urlparse(str(candidate or ""))
-        except Exception:
-            continue
-        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != rule.domain:
-            continue
-        path = parsed.path
-        if path.endswith(".md"):
-            path = path[:-3]
-        if path.rstrip("/") != rule.index_path:
-            continue
-        return parsed._replace(path=rule.index_fallback_path, query="", fragment="").geturl()
-    return None
 
 
 class WebFetchTool(Tool):
@@ -934,7 +995,7 @@ class WebFetchTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Fetch and extract readable content from a URL. Prefer this after selecting a specific source from web_search or web_research."
+        return "Fetch and extract readable content from a URL. Prefer this after selecting a specific source from web_search."
 
     @property
     def parameters(self) -> dict:
@@ -1005,7 +1066,7 @@ class WebFetchTool(Tool):
 
 def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
           max_response_size: int = WebFetcher.DEFAULT_MAX_RESPONSE_SIZE,
-          request_callback: callable = None, retry_on_403: bool = True,
+          request_callback: callable = None,
           firecrawl_api_key: str = None) -> dict:
     """快速擷取網頁
     
@@ -1015,7 +1076,6 @@ def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
         timeout: 超時秒數
         max_response_size: 最大 HTTP 回應大小（bytes）
         request_callback: 權限詢問回調 (url, mode, timeout) -> None
-        retry_on_403: 是否在 403 時重試 (預設 True)
         firecrawl_api_key: Firecrawl API Key (可選，付費服務)
     """
     return WebFetcher(
@@ -1023,7 +1083,6 @@ def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
         max_response_size=max_response_size,
         timeout=timeout,
         request_callback=request_callback,
-        retry_on_403=retry_on_403,
         firecrawl_api_key=firecrawl_api_key
     ).fetch(url)
 

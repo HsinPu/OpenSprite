@@ -16,25 +16,7 @@ from ..config.defaults import (
     WEB_SEARCH_FRESHNESS_OPTIONS,
     WEB_SEARCH_PROVIDERS,
 )
-from ..utils.url import join_url_path
-
-
-SEARXNG_FALLBACK_ENGINES = (
-    "duckduckgo",
-    "google",
-    "bing",
-    "qwant",
-    "startpage",
-    "wikipedia",
-    "wikidata",
-    "github",
-    "stackoverflow",
-    "reddit",
-    "youtube",
-    "arxiv",
-    "semantic scholar",
-)
-SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
+from ..utils.searxng_url import searxng_endpoint_url
 
 
 def coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
@@ -207,27 +189,8 @@ def searxng_options_payload(config_payload: dict[str, Any], *, url: str) -> dict
         for engine in engines:
             category_names.extend(engine.get("categories") or [])
         categories = normalize_searxng_category_options(category_names)
-    return {"url": url, "engines": engines, "categories": categories, "fallback": False, "warning": ""}
-
-
-def fallback_searxng_options_payload(
-    *,
-    url: str,
-    warning: str,
-    fallback_engines: tuple[str, ...] = SEARXNG_FALLBACK_ENGINES,
-    fallback_categories: tuple[str, ...] = SEARXNG_FALLBACK_CATEGORIES,
-) -> dict[str, Any]:
-    return {
-        "url": url,
-        "engines": [{"id": engine, "label": engine, "shortcut": "", "categories": [], "enabled": None} for engine in fallback_engines],
-        "categories": [{"id": category, "label": category} for category in fallback_categories],
-        "fallback": True,
-        "warning": warning,
-    }
+    return {"url": url, "engines": engines, "categories": categories}
 
 
 def searxng_config_url(searxng_url: str) -> str:
-    base = str(searxng_url or "").strip().rstrip("/")
-    if base.lower().endswith("/search"):
-        base = base[:-len("/search")]
-    return join_url_path(base, "/config")
+    return searxng_endpoint_url(searxng_url, "/config")

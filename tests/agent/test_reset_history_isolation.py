@@ -29,7 +29,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
         await storage.add_message("telegram:user-a", StoredMessage(role="user", content="A1", timestamp=1.0))
         await storage.add_message("telegram:user-b", StoredMessage(role="user", content="B1", timestamp=2.0))
 
-        search_store = FakeSearchStore()
+        history_search_store = FakeSearchStore()
         agent = make_agent_loop(
             tmp_path,
             storage=storage,
@@ -38,7 +38,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
                 app_home=tmp_path / "home",
                 tool_workspace=tmp_path / "workspace",
             ),
-            search_store=search_store,
+            history_search_store=history_search_store,
         )
 
         summary_store = RecentSummaryStore(agent.memory.memory_base, app_home=agent.app_home, workspace_root=agent.tool_workspace)
@@ -74,7 +74,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
         return {
             "messages_a": messages_a,
             "messages_b": messages_b,
-            "cleared": search_store.cleared,
+            "cleared": history_search_store.cleared,
             "summary_store": summary_store,
             "workspace_a_exists": workspace_a_exists,
             "workspace_b_exists": workspace_b_exists,

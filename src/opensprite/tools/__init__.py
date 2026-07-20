@@ -32,7 +32,6 @@ from .verify import VerifyTool
 from .search import SearchHistoryTool
 from .web_search import WebSearchTool
 from .web_fetch import WebFetchTool
-from .web_research import WebResearchTool
 from .mcp import MCPToolWrapper, connect_mcp_servers
 from .mcp_config import ConfigureMCPTool
 from .subagent_config import ConfigureSubagentTool
@@ -75,7 +74,6 @@ __all__ = [
     "SearchHistoryTool",
     "WebSearchTool",
     "WebFetchTool",
-    "WebResearchTool",
     "MCPToolWrapper",
     "connect_mcp_servers",
     "ConfigureMCPTool",

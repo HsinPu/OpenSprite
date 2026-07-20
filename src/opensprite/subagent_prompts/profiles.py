@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
 from ..tool_names import (
     BATCH_TOOL_NAME,
     EXECUTION_TOOL_NAMES,
@@ -52,7 +51,6 @@ READ_ONLY_TOOLS = frozenset(
         GREP_FILES_TOOL_NAME,
         BATCH_TOOL_NAME,
         READ_SKILL_TOOL_NAME,
-        HISTORY_SEARCH_TOOL_NAME,
     }
 )
 WEB_TOOLS = WEB_SOURCE_TOOL_NAMES

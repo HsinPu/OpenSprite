@@ -12,7 +12,7 @@ from opensprite.agent.subagent_run import (
 )
 from opensprite.subagent_prompts.profiles import RESEARCH_PROFILE
 from opensprite.tool_names import WEB_SOURCE_TOOL_NAMES
-from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.config.schema import AgentConfig, Config, HistorySearchConfig, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
@@ -198,7 +198,7 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -246,7 +246,7 @@ def test_subagent_uses_independent_tool_iteration_budget(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=1),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -274,7 +274,7 @@ def test_code_reviewer_subagent_is_read_only(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -322,7 +322,7 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -383,7 +383,7 @@ def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -427,7 +427,7 @@ def test_invalid_subagent_tool_profile_blocks_delegation(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -459,7 +459,7 @@ def test_code_reviewer_forbidden_write_call_is_not_executed(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -502,7 +502,7 @@ def test_test_writer_can_use_write_tools_for_source_paths(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -544,7 +544,7 @@ def test_test_writer_can_use_write_tools_for_test_paths(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -586,7 +586,7 @@ def test_test_writer_allows_common_js_tests_directory(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -731,7 +731,7 @@ def test_subagent_resume_uses_child_session_history(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -767,7 +767,7 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -858,7 +858,7 @@ def test_run_subagents_many_returns_ordered_results_and_parent_trace(tmp_path):
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
             tools_config=ToolsConfig(max_tool_iterations=3),
             log_config=LogConfig(),
-            search_config=SearchConfig(),
+            history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             **Config.packaged_agent_llm_chat_kwargs(),
         )
@@ -909,7 +909,7 @@ def test_run_subagents_many_rejects_write_capable_profiles(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -941,7 +941,7 @@ def test_run_subagents_many_cancels_children_with_parent_cancel_request(tmp_path
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
             tools_config=ToolsConfig(max_tool_iterations=3),
             log_config=LogConfig(),
-            search_config=SearchConfig(),
+            history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             **Config.packaged_agent_llm_chat_kwargs(),
         )
@@ -1001,7 +1001,7 @@ def test_run_subagents_many_emits_group_failed_when_one_child_fails(tmp_path):
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
             tools_config=ToolsConfig(max_tool_iterations=3),
             log_config=LogConfig(),
-            search_config=SearchConfig(),
+            history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             **Config.packaged_agent_llm_chat_kwargs(),
         )
@@ -1061,7 +1061,7 @@ def test_run_subagent_uses_prompt_model_override_when_present(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -1100,7 +1100,7 @@ def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -1156,7 +1156,7 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         llm_config=LLMsConfig(
             providers={
@@ -1219,7 +1219,7 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         llm_config=LLMsConfig(
             providers={
@@ -1259,7 +1259,7 @@ def test_run_subagent_strips_trailing_json_and_persists_structured_output(tmp_pa
             memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
             tools_config=ToolsConfig(max_tool_iterations=3),
             log_config=LogConfig(),
-            search_config=SearchConfig(),
+            history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             **Config.packaged_agent_llm_chat_kwargs(),
         )
@@ -1307,7 +1307,7 @@ def test_subagent_resume_rejects_prompt_type_switch(tmp_path):
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(max_tool_iterations=3),
         log_config=LogConfig(),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )

@@ -1,4 +1,4 @@
-"""History search index providers."""
+"""SQLite-backed conversation history search."""
 
 from .base import SearchHit, SearchStore
 
@@ -6,7 +6,7 @@ __all__ = ["SearchHit", "SearchStore", "SQLiteSearchStore"]
 
 
 def __getattr__(name: str):
-    """Lazily import optional search backends to avoid import cycles."""
+    """Lazily import the SQLite store to avoid import cycles."""
     if name == "SQLiteSearchStore":
         from .sqlite_store import SQLiteSearchStore
 

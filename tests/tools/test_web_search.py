@@ -4,10 +4,11 @@ import json
 import sys
 import types
 
+import pytest
+
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.web_search_freshness import (
-    effective_freshness as _effective_freshness,
     freshness_params as _freshness_params,
     normalize_freshness as _normalize_freshness,
 )
@@ -15,17 +16,36 @@ from opensprite.tools.web_search_payloads import (
     format_error as _format_error,
     format_results as _format_results,
 )
+from opensprite.utils.searxng_url import SEARXNG_MAX_RESPONSE_BYTES, searxng_endpoint_url
 
 
 class _FakeSearxngResponse:
-    def __init__(self, results=None):
-        self.results = results or [{"title": "One", "url": "https://example.com/one", "content": "First"}]
+    def __init__(self, results=None, *, payload_bytes=None, headers=None, fail_on_read=False):
+        self.results = (
+            results
+            if results is not None
+            else [{"title": "One", "url": "https://example.com/one", "content": "First"}]
+        )
+        self.payload_bytes = payload_bytes
+        self.headers = headers or {}
+        self.fail_on_read = fail_on_read
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
 
     def raise_for_status(self):
         return None
 
     def json(self):
         return {"results": self.results}
+
+    async def aiter_bytes(self):
+        if self.fail_on_read:
+            raise AssertionError("compressed SearXNG body must not be read")
+        yield self.payload_bytes or json.dumps(self.json()).encode("utf-8")
 
 
 class _FakeSearxngClient:
@@ -38,9 +58,30 @@ class _FakeSearxngClient:
     async def __aexit__(self, exc_type, exc, tb):
         return None
 
-    async def get(self, url, params=None, timeout=None):
-        self.requests.append((url, params))
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
         return _FakeSearxngResponse()
+
+
+class _FakeEmptySearxngClient(_FakeSearxngClient):
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
+        return _FakeSearxngResponse([])
+
+
+class _FakeMalformedSearxngClient(_FakeSearxngClient):
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
+        return _FakeSearxngResponse(
+            [
+                {"title": "", "url": "https://example.com/no-title", "content": "bad"},
+                {"title": "No URL", "url": "", "content": "bad"},
+                None,
+            ]
+        )
 
 
 class _FakePagedSearxngClient:
@@ -53,8 +94,9 @@ class _FakePagedSearxngClient:
     async def __aexit__(self, exc_type, exc, tb):
         return None
 
-    async def get(self, url, params=None, timeout=None):
-        self.requests.append((url, params))
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
         page = int((params or {}).get("pageno") or 1)
         results_by_page = {
             1: [{"title": "One", "url": "https://example.com/one", "content": "First"}],
@@ -62,6 +104,23 @@ class _FakePagedSearxngClient:
             3: [{"title": "Three", "url": "https://example.com/three", "content": "Third"}],
         }
         return _FakeSearxngResponse(results_by_page.get(page, []))
+
+
+class _FakeOversizedSearxngClient(_FakeSearxngClient):
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
+        return _FakeSearxngResponse(payload_bytes=b"x" * (SEARXNG_MAX_RESPONSE_BYTES + 1))
+
+
+class _FakeCompressedSearxngClient(_FakeSearxngClient):
+    def stream(self, method, url, params=None, headers=None, timeout=None):
+        assert method == "GET"
+        self.requests.append((url, params, headers))
+        return _FakeSearxngResponse(
+            headers={"content-encoding": "gzip"},
+            fail_on_read=True,
+        )
 
 
 def _install_fake_ddgs(monkeypatch, *, text_results=None, text_raises=None):
@@ -110,23 +169,18 @@ def test_format_results_returns_structured_json_payload():
         ],
         5,
         provider="duckduckgo",
+        backend="ddgs",
     )
 
     parsed = json.loads(payload)
 
     assert parsed == {
         "type": "web_search",
+        "ok": True,
         "query": "sqlite fts5",
-        "url": "",
-        "final_url": "",
-        "title": "",
-        "content": "",
         "summary": "Search results for: sqlite fts5",
         "provider": "duckduckgo",
-        "extractor": "search",
-        "status": None,
-        "truncated": False,
-        "content_type": "application/json",
+        "backend": "ddgs",
         "items": [
             {
                 "title": "SQLite FTS5",
@@ -173,8 +227,8 @@ def test_web_search_count_limit_comes_from_config():
     assert count_schema["maximum"] == 25
     assert count_schema["default"] == 25
     assert count_schema["description"] == "Results (1-25)"
-    assert freshness_schema["default"] == "auto"
-    assert freshness_schema["enum"] == ["auto", "none", "day", "week", "month", "year"]
+    assert freshness_schema["default"] == "none"
+    assert freshness_schema["enum"] == ["none", "day", "week", "month", "year"]
 
 
 def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
@@ -183,13 +237,13 @@ def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
 
     async def fake_search(query, n, freshness):
         requested_counts.append((n, freshness))
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
     asyncio.run(tool._execute("sqlite", count=50))
 
-    assert requested_counts == [(25, "month")]
+    assert requested_counts == [(25, "none")]
 
 
 def test_web_search_execute_allows_freshness_override(monkeypatch):
@@ -198,7 +252,7 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
 
     async def fake_search(query, n, freshness):
         requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
@@ -207,43 +261,13 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
     assert requested_freshness == ["none"]
 
 
-def test_web_search_execute_uses_auto_freshness_default_for_latest_query(monkeypatch):
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
-    requested_freshness = []
-
-    async def fake_search(query, n, freshness):
-        requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
-
-    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
-
-    asyncio.run(tool._execute("Qwen latest model 2026"))
-
-    assert requested_freshness == ["month"]
-
-
-def test_web_search_execute_uses_auto_freshness_default_for_chinese_query(monkeypatch):
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
-    requested_freshness = []
-
-    async def fake_search(query, n, freshness):
-        requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
-
-    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
-
-    asyncio.run(tool._execute("現在寫 code 最好的語言模型"))
-
-    assert requested_freshness == ["month"]
-
-
 def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="none"))
     requested_freshness = []
 
     async def fake_search(query, n, freshness):
         requested_freshness.append(freshness)
-        return _format_results(query, [], n, provider="duckduckgo")
+        return _format_results(query, [], n, provider="duckduckgo", backend="ddgs")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
@@ -252,35 +276,54 @@ def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
     assert requested_freshness == ["none"]
 
 
-def test_web_search_freshness_aliases_and_provider_params():
-    assert _normalize_freshness("latest", "year") == "month"
-    assert _normalize_freshness("all", "year") == "none"
-    assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
-    assert _effective_freshness(None, "auto", query="現在寫 code 最好的語言模型") == "month"
-    assert _effective_freshness(None, "auto", query="sqlite docs") == "month"
-    assert _effective_freshness("year", "auto", query="latest Qwen models") == "year"
-    assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"
-    assert _effective_freshness("none", "auto", query="latest Qwen models") == "none"
-    assert _effective_freshness("none", "auto", query="sqlite docs") == "none"
-    assert _effective_freshness("none", "year", query="sqlite docs") == "none"
-    assert _freshness_params("duckduckgo", "week") == {"df": "w"}
+def test_web_search_freshness_values_and_provider_params():
+    assert _normalize_freshness("month", "year") == "month"
+    assert _normalize_freshness("latest", "year") == "year"
     assert _freshness_params("searxng", "year") == {"time_range": "year"}
     assert _freshness_params("searxng", "none") == {}
 
 
-def test_searxng_search_accepts_search_endpoint_base_url(monkeypatch):
+@pytest.mark.parametrize(
+    ("base_url", "expected_url"),
+    [
+        ("https://searx.test/search", "https://searx.test/search"),
+        (
+            "https://searx.test/searx/config?lang=zh#metadata",
+            "https://searx.test/searx/search",
+        ),
+        (
+            "https://searx.test/searx/?lang=zh#metadata",
+            "https://searx.test/searx/search",
+        ),
+        (
+            "https://searx.test/search/",
+            "https://searx.test/search/search",
+        ),
+    ],
+)
+def test_searxng_search_normalizes_endpoint_url(monkeypatch, base_url, expected_url):
     fake_client = _FakeSearxngClient()
     monkeypatch.setattr(
         "opensprite.tools.web_search.httpx.AsyncClient",
         lambda *args, **kwargs: fake_client,
     )
-    tool = WebSearchTool(config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test/search"))
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="searxng", searxng_url=base_url))
 
     payload = json.loads(asyncio.run(tool._search_searxng("sqlite", 1, "none")))
 
     assert payload["items"][0]["title"] == "One"
-    assert fake_client.requests[0][0] == "https://searx.test/search"
+    assert fake_client.requests[0][0] == expected_url
     assert fake_client.requests[0][1]["pageno"] == 1
+    assert fake_client.requests[0][2]["Accept-Encoding"] == "identity"
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    ["", "searx.test/search", "ftp://searx.test/search", "https:///search"],
+)
+def test_searxng_endpoint_url_requires_absolute_http_url(base_url):
+    with pytest.raises(ValueError, match=r"absolute HTTP\(S\) URL with a hostname"):
+        searxng_endpoint_url(base_url, "/search")
 
 
 def test_searxng_search_sends_configured_engines_and_categories(monkeypatch):
@@ -331,6 +374,75 @@ def test_searxng_search_respects_configured_page_limit(monkeypatch):
 
     assert [item["title"] for item in payload["items"]] == ["One"]
     assert [request[1]["pageno"] for request in fake_client.requests] == [1]
+
+
+def test_searxng_search_reports_empty_results(monkeypatch):
+    fake_client = _FakeEmptySearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("no matches", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["provider"] == "searxng"
+    assert payload["backend"] == "searxng"
+    assert payload["items"] == []
+    assert payload["error"] == "SearXNG returned no results for 'no matches'."
+
+
+def test_searxng_search_rejects_untraceable_results(monkeypatch):
+    fake_client = _FakeMalformedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("malformed", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["items"] == []
+    assert payload["error"] == "SearXNG returned no results for 'malformed'."
+
+
+def test_searxng_search_rejects_oversized_decoded_response(monkeypatch):
+    fake_client = _FakeOversizedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("oversized", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["items"] == []
+    assert payload["error"] == f"SearXNG response exceeded {SEARXNG_MAX_RESPONSE_BYTES} bytes"
+
+
+def test_searxng_search_rejects_compressed_response_before_reading_body(monkeypatch):
+    fake_client = _FakeCompressedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test")
+    )
+
+    payload = json.loads(asyncio.run(tool._search_searxng("compressed", 3, "none")))
+
+    assert payload["ok"] is False
+    assert payload["error"] == "SearXNG compressed responses are not accepted"
 
 
 def test_duckduckgo_search_prefers_ddgs_package(monkeypatch):
@@ -396,3 +508,20 @@ def test_duckduckgo_search_reports_ddgs_runtime_error(monkeypatch):
     assert payload["backend"] == "ddgs"
     assert payload["freshness"] == "week"
     assert "rate limited 202" in payload["error"]
+
+
+def test_duckduckgo_search_does_not_drop_freshness_when_ddgs_rejects_timelimit(monkeypatch):
+    fake = _install_fake_ddgs(
+        monkeypatch,
+        text_raises=TypeError("DDGS.text() got an unexpected keyword argument 'timelimit'"),
+    )
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=1))
+
+    payload = json.loads(asyncio.run(tool._search_duckduckgo("sqlite", 1, "week")))
+
+    assert payload["ok"] is False
+    assert payload["provider"] == "duckduckgo"
+    assert payload["backend"] == "ddgs"
+    assert payload["freshness"] == "week"
+    assert "unexpected keyword argument 'timelimit'" in payload["error"]
+    assert fake.calls == [("sqlite", {"max_results": 1, "timelimit": "w"})]

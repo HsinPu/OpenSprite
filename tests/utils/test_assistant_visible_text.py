@@ -86,7 +86,7 @@ def test_sanitize_assistant_visible_text_preserves_minimax_tool_call_examples_in
 
 def test_sanitize_assistant_visible_text_strips_generic_tool_call_blocks():
     text = (
-        '<tool_call name="web_research">\n'
+        '<tool_call name="web_search">\n'
         '{"query": "台積電 今日股價"}\n'
         "</tool_call>\n"
         "Visible answer"
@@ -116,7 +116,7 @@ def test_sanitize_assistant_visible_text_strips_function_calls_block():
 
 
 def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in_code():
-    text = 'Example:\n```xml\n<tool_call name="web_research">literal</tool_call>\n```\nVisible answer'
+    text = 'Example:\n```xml\n<tool_call name="web_search">literal</tool_call>\n```\nVisible answer'
 
     assert sanitize_assistant_visible_text(text) == text
 
@@ -124,7 +124,7 @@ def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in
 def test_sanitize_assistant_visible_text_strips_direct_tool_tag_blocks():
     text = (
         "<search_history>\n"
-        "<query>AMD stock price 2026-05-28 web research</query>\n"
+        "<query>AMD stock price 2026-05-28 market update</query>\n"
         "<limit>10</limit>\n"
         "</search_history>\n"
         "Visible answer"

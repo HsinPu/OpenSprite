@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from ..config import CronMessagesConfig, SearchConfig, ToolsConfig, WebSearchToolConfig
+from ..config import CronMessagesConfig, HistorySearchConfig, ToolsConfig, WebSearchToolConfig
 from ..config.defaults import DEFAULT_BROWSER_COMMAND_TIMEOUT, DEFAULT_BROWSER_SESSION_TIMEOUT
 from ..cron import CronManager
 from ..documents.memory import MemoryStore
@@ -52,7 +52,6 @@ from .skill_config import ConfigureSkillTool
 from .verify import VerifyTool
 from .video import AnalyzeVideoTool
 from .web_fetch import WebFetchTool
-from .web_research import WebResearchTool
 from .web_search import WebSearchTool
 from .workflow import RunWorkflowTool
 
@@ -248,7 +247,6 @@ def register_web_tools(
     registry: ToolRegistry,
     *,
     tools_config: ToolsConfig | None = None,
-    get_session_id: Callable[[], str | None] | None = None,
 ) -> None:
     """Register web search and fetch tools."""
     current_tools_config = tools_config or ToolsConfig()
@@ -265,33 +263,15 @@ def register_web_tools(
             firecrawl_api_key=web_fetch_config.firecrawl_api_key,
         )
     )
-    registry.register(
-        WebResearchTool(
-            search_config=web_search_config,
-            fetch_config=web_fetch_config,
-        )
-    )
 
 
 def reload_web_search_tools(
     registry: ToolRegistry,
     web_search_config: WebSearchToolConfig,
 ) -> dict[str, bool]:
-    """Reload registered web search tools while preserving custom research wiring."""
+    """Reload the registered web search tool."""
     registry.register(WebSearchTool(config=web_search_config))
-
-    research_tool_updated = False
-    web_research_tool = registry.get(WebResearchTool.name)
-    if isinstance(web_research_tool, WebResearchTool):
-        web_research_tool.search_config = web_search_config
-        if not web_research_tool._custom_search_tool:
-            web_research_tool.search_tool = WebSearchTool(config=web_search_config)
-        research_tool_updated = True
-
-    return {
-        "tool_updated": registry.get(WebSearchTool.name) is not None,
-        "research_tool_updated": research_tool_updated,
-    }
+    return {"tool_updated": registry.get(WebSearchTool.name) is not None}
 
 
 def register_browser_tools(
@@ -425,23 +405,23 @@ def register_workflow_tools(
     )
 
 
-def register_search_tools(
+def register_history_search_tool(
     registry: ToolRegistry,
     *,
-    search_store: SearchStore | None = None,
-    search_config: SearchConfig | None = None,
+    history_search_store: SearchStore | None = None,
+    history_search_config: HistorySearchConfig | None = None,
     get_session_id: Callable[[], str | None],
 ) -> None:
-    """Register per-session search tools when search is enabled."""
-    if search_store is None:
+    """Register local per-session history search when configured."""
+    if history_search_store is None:
         return
 
-    current_search_config = search_config or SearchConfig()
+    current_config = history_search_config or HistorySearchConfig()
     registry.register(
         SearchHistoryTool(
-            store=search_store,
+            store=history_search_store,
             get_session_id=get_session_id,
-            default_limit=current_search_config.history_top_k,
+            default_limit=current_config.history_top_k,
         )
     )
 
@@ -485,8 +465,8 @@ def register_default_tools(
     app_home: Path | None = None,
     skills_loader: Any = None,
     tools_config: ToolsConfig | None = None,
-    search_store: SearchStore | None = None,
-    search_config: SearchConfig | None = None,
+    history_search_store: SearchStore | None = None,
+    history_search_config: HistorySearchConfig | None = None,
     cron_manager: CronManager | None = None,
     cron_messages_config: CronMessagesConfig | None = None,
     media_router: MediaRouter | None = None,
@@ -542,7 +522,6 @@ def register_default_tools(
     register_web_tools(
         registry,
         tools_config=current_tools_config,
-        get_session_id=get_session_id,
     )
     register_browser_tools(registry, get_session_id=get_session_id, tools_config=current_tools_config)
     register_media_tools(
@@ -566,10 +545,10 @@ def register_default_tools(
         run_workflow=run_workflow,
         workflow_catalog_getter=workflow_catalog_getter,
     )
-    register_search_tools(
+    register_history_search_tool(
         registry,
-        search_store=search_store,
-        search_config=search_config,
+        history_search_store=history_search_store,
+        history_search_config=history_search_config,
         get_session_id=get_session_id,
     )
     register_cron_tools(

@@ -11,16 +11,12 @@ DEFAULT_CHUNK_OVERLAP = 200
 
 @dataclass(frozen=True)
 class SearchChunkPayload:
-    """Searchable chunk payload stored in the shared SQLite index."""
+    """Searchable conversation chunk stored in the SQLite FTS index."""
 
-    source_type: str
     content: str
     created_at: float
     role: str | None = None
     tool_name: str | None = None
-    query: str | None = None
-    title: str | None = None
-    url: str | None = None
     chunk_index: int = 0
 
 
@@ -60,7 +56,6 @@ def build_history_chunks(
     """Build history chunk payloads from one stored message."""
     return [
         SearchChunkPayload(
-            source_type="history",
             role=role,
             tool_name=tool_name,
             content=chunk,

@@ -42,8 +42,11 @@ function assertOccurrenceCount(content, needle, expected, label) {
   }
 }
 
-async function importTypeScriptModule(relativePath) {
-  const source = await read(relativePath);
+async function typescriptModuleDataUrl(relativePath, importUrls = {}) {
+  let source = await read(relativePath);
+  for (const [specifier, url] of Object.entries(importUrls)) {
+    source = source.replaceAll(`from "${specifier}"`, `from "${url}"`);
+  }
   const { outputText } = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ES2022,
@@ -51,7 +54,11 @@ async function importTypeScriptModule(relativePath) {
     },
     fileName: relativePath,
   });
-  return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+  return `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`;
+}
+
+async function importTypeScriptModule(relativePath, importUrls = {}) {
+  return import(await typescriptModuleDataUrl(relativePath, importUrls));
 }
 
 async function importReactiveCompatModule() {
@@ -89,6 +96,22 @@ const {
   mergeRunTraceSnapshot,
   takePendingSessionHistoryRefresh,
 } = await importTypeScriptModule("src/composables/chatClientStateMerges.ts");
+const { requestSettingsJson: requestSettingsJsonForSmoke } = await importTypeScriptModule("src/composables/settingsApi.ts");
+const searchDefaultsModuleUrl = await typescriptModuleDataUrl("src/composables/searchDefaults.ts");
+const payloadBoundaryModuleUrl = await typescriptModuleDataUrl("src/composables/payloadBoundary.ts");
+const {
+  DEFAULT_SEARXNG_URL,
+  createDefaultSearchForm,
+  createDefaultSearchState,
+  searxngOptionsMatchTarget,
+} = await import(searchDefaultsModuleUrl);
+const { useSearchSettingsActions } = await importTypeScriptModule(
+  "src/composables/useSearchSettingsActions.ts",
+  {
+    "./searchDefaults": searchDefaultsModuleUrl,
+    "./payloadBoundary": payloadBoundaryModuleUrl,
+  },
+);
 const { reactive } = await importReactiveCompatModule();
 
 function assertState(condition, label) {
@@ -96,6 +119,364 @@ function assertState(condition, label) {
     throw new Error(label);
   }
 }
+
+function createSearchSettingsStateForSmoke() {
+  return {
+    searchLoading: false,
+    searchOptionsLoading: false,
+    searchError: "",
+    searchOptionsError: "",
+    searchNotice: "",
+    searchOptionsNotice: "",
+    search: createDefaultSearchState(),
+    searchForm: createDefaultSearchForm(),
+  };
+}
+
+function createSearchSettingsActionsForSmoke(settingsState, requestSettingsJson) {
+  return useSearchSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy: {
+      value: {
+        notices: {
+          searchLoadFailed: "load failed",
+          searxngOptionsLoaded: "options loaded",
+          searxngOptionsLoadFailed: "options failed",
+          searchSaved: "settings saved",
+          searchSaveFailed: "save failed",
+        },
+      },
+    },
+    setSettingsSuccess(key, message) {
+      settingsState[key] = message;
+    },
+  });
+}
+
+function createDeferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+const preservedSearchState = createSearchSettingsStateForSmoke();
+preservedSearchState.search.searxng_options = {
+  engines: [{ id: "google", label: "Google", categories: ["general"], shortcut: "g", enabled: true }],
+  categories: [{ id: "general", label: "General", categories: [], shortcut: "", enabled: true }],
+  url: "https://search.example",
+  proxy: "http://proxy.example:8080",
+};
+preservedSearchState.searchForm.provider = "searxng";
+preservedSearchState.searchForm.searxngUrl = "https://search.example";
+preservedSearchState.searchForm.searxngEngines = ["google"];
+preservedSearchState.searchForm.searxngCategories = ["general"];
+preservedSearchState.searchForm.searxngProxy = "http://proxy.example:8080";
+const preservedSearchActions = createSearchSettingsActionsForSmoke(
+  preservedSearchState,
+  async (_pathname, options) => {
+    assertState(options?.method === "PUT", "search settings preservation smoke must exercise the save request");
+    return {
+      web_search: {
+        provider: "searxng",
+        providers: ["duckduckgo", "searxng"],
+        freshness: "none",
+        freshness_options: ["none", "day"],
+        max_results: 25,
+        searxng_max_pages: 5,
+        searxng_url: "https://search.example",
+        searxng_engines: ["google"],
+        searxng_categories: ["general"],
+        searxng_proxy: "http://proxy.example:8080",
+      },
+    };
+  },
+);
+await preservedSearchActions.saveSearchSettings();
+assertState(
+  preservedSearchState.search.searxng_options.engines[0]?.label === "Google",
+  "saving search settings must preserve loaded SearXNG metadata when the response omits searxng_options",
+);
+assertState(
+  preservedSearchState.search.searxng_options.proxy === "http://proxy.example:8080",
+  "preserved SearXNG metadata must retain its proxy target",
+);
+
+const loadedMetadataState = createSearchSettingsStateForSmoke();
+loadedMetadataState.search.searxng_options = {
+  engines: [{ id: "google", label: "Google", categories: ["general"], shortcut: "g", enabled: true }],
+  categories: [{ id: "general", label: "General", categories: [], shortcut: "", enabled: true }],
+  url: "https://search.example",
+  proxy: "http://proxy.example:8080",
+};
+const loadedMetadataActions = createSearchSettingsActionsForSmoke(
+  loadedMetadataState,
+  async (_pathname, options) => {
+    assertState(options?.method === undefined, "search metadata preservation smoke must exercise the load request");
+    return {
+      web_search: {
+        provider: "searxng",
+        providers: ["duckduckgo", "searxng"],
+        freshness: "none",
+        freshness_options: ["none", "day"],
+        max_results: 25,
+        searxng_max_pages: 5,
+        searxng_url: "https://search.example",
+        searxng_engines: ["google"],
+        searxng_categories: ["general"],
+        searxng_proxy: "http://proxy.example:8080",
+      },
+    };
+  },
+);
+await loadedMetadataActions.loadSearchSettings();
+assertState(
+  loadedMetadataState.search.searxng_options.engines[0]?.label === "Google",
+  "loading search settings must preserve matching SearXNG metadata when the response omits searxng_options",
+);
+assertState(
+  loadedMetadataState.search.searxng_options.proxy === "http://proxy.example:8080",
+  "loaded Search settings must preserve metadata only for the matching URL and proxy target",
+);
+
+const searchRaceState = createSearchSettingsStateForSmoke();
+searchRaceState.search.provider = "searxng";
+searchRaceState.searchForm.provider = "searxng";
+const staleSearchLoadResponse = createDeferred();
+const currentSearchSaveResponse = createDeferred();
+const searchRaceActions = createSearchSettingsActionsForSmoke(
+  searchRaceState,
+  async (_pathname, options) => options?.method === "PUT"
+    ? currentSearchSaveResponse.promise
+    : staleSearchLoadResponse.promise,
+);
+const staleSearchLoad = searchRaceActions.loadSearchSettings();
+const currentSearchSave = searchRaceActions.saveSearchSettings();
+staleSearchLoadResponse.resolve({
+  web_search: {
+    provider: "duckduckgo",
+    providers: ["duckduckgo", "searxng"],
+    freshness: "none",
+    freshness_options: ["none"],
+    max_results: 10,
+    searxng_max_pages: 5,
+    searxng_url: DEFAULT_SEARXNG_URL,
+    searxng_engines: [],
+    searxng_categories: [],
+    searxng_proxy: "",
+  },
+});
+await staleSearchLoad;
+assertState(
+  searchRaceState.search.provider === "searxng",
+  "a stale Search settings load must not overwrite state after a save starts",
+);
+assertState(
+  searchRaceState.searchLoading === true,
+  "a stale Search settings load must not clear loading while the current save is pending",
+);
+currentSearchSaveResponse.resolve({
+  web_search: {
+    provider: "searxng",
+    providers: ["duckduckgo", "searxng"],
+    freshness: "none",
+    freshness_options: ["none"],
+    max_results: 25,
+    searxng_max_pages: 5,
+    searxng_url: DEFAULT_SEARXNG_URL,
+    searxng_engines: [],
+    searxng_categories: [],
+    searxng_proxy: "",
+  },
+});
+await currentSearchSave;
+assertState(searchRaceState.search.provider === "searxng", "the current Search settings save must own the final state");
+assertState(searchRaceState.searchLoading === false, "the current Search settings save must release loading");
+
+const saveFirstState = createSearchSettingsStateForSmoke();
+saveFirstState.searchForm.provider = "searxng";
+const saveFirstResponse = createDeferred();
+let saveFirstLoadRequests = 0;
+const saveFirstActions = createSearchSettingsActionsForSmoke(
+  saveFirstState,
+  async (_pathname, options) => {
+    if (options?.method === "PUT") return saveFirstResponse.promise;
+    saveFirstLoadRequests += 1;
+    return { web_search: { provider: "duckduckgo" } };
+  },
+);
+const saveFirstRequest = saveFirstActions.saveSearchSettings();
+await saveFirstActions.loadSearchSettings();
+assertState(saveFirstLoadRequests === 0, "a Search settings load must not race an in-flight save");
+assertState(saveFirstState.searchLoading === true, "an ignored load must not clear an in-flight save's loading state");
+saveFirstResponse.resolve({
+  web_search: {
+    provider: "searxng",
+    providers: ["duckduckgo", "searxng"],
+    freshness: "none",
+    freshness_options: ["none"],
+    max_results: 25,
+    searxng_max_pages: 5,
+    searxng_url: DEFAULT_SEARXNG_URL,
+    searxng_engines: [],
+    searxng_categories: [],
+    searxng_proxy: "",
+  },
+});
+await saveFirstRequest;
+assertState(saveFirstState.search.provider === "searxng", "an in-flight save must remain authoritative over ignored loads");
+assertState(saveFirstState.searchLoading === false, "the authoritative save must release loading after it completes");
+
+const failedReloadState = createSearchSettingsStateForSmoke();
+failedReloadState.searchNotice = "settings saved";
+const failedReloadActions = createSearchSettingsActionsForSmoke(
+  failedReloadState,
+  async () => { throw new Error("reload failed"); },
+);
+const failedReload = failedReloadActions.loadSearchSettings();
+assertState(failedReloadState.searchNotice === "", "starting a Search settings load must clear an old success notice");
+await failedReload;
+assertState(failedReloadState.searchNotice === "", "a failed Search settings reload must not retain an old success notice");
+assertState(failedReloadState.searchError === "reload failed", "a failed Search settings reload must expose its error");
+
+const changedTargetState = createSearchSettingsStateForSmoke();
+const unchangedOptions = changedTargetState.search.searxng_options;
+changedTargetState.searchForm.searxngUrl = "https://first.example";
+changedTargetState.searchForm.searxngProxy = "http://proxy-a.example:8080";
+const changedTargetResponse = createDeferred();
+const changedTargetActions = createSearchSettingsActionsForSmoke(
+  changedTargetState,
+  async () => changedTargetResponse.promise,
+);
+const changedTargetLoad = changedTargetActions.loadSearxngOptions();
+changedTargetState.searchForm.searxngUrl = "https://second.example";
+changedTargetResponse.resolve({
+  searxng: {
+    engines: [{ id: "stale", label: "Stale" }],
+    categories: [],
+    url: "https://first.example",
+  },
+});
+await changedTargetLoad;
+assertState(
+  changedTargetState.search.searxng_options === unchangedOptions,
+  "a SearXNG options response must be ignored when the URL or proxy target changed while it was pending",
+);
+assertState(
+  changedTargetState.searchOptionsNotice === "",
+  "an ignored SearXNG options response must not report a success notice",
+);
+assertState(
+  changedTargetState.searchOptionsLoading === false,
+  "an ignored SearXNG options response must release the loading state",
+);
+
+const blankTargetState = createSearchSettingsStateForSmoke();
+blankTargetState.search.searxng_url = "https://saved.example/custom";
+blankTargetState.searchForm.searxngUrl = "   ";
+let blankTargetRequestBody;
+const blankTargetActions = createSearchSettingsActionsForSmoke(
+  blankTargetState,
+  async (_pathname, options) => {
+    blankTargetRequestBody = JSON.parse(String(options?.body || "{}"));
+    return {
+      searxng: {
+        engines: [{ id: "default", label: "Default" }],
+        categories: [],
+      },
+    };
+  },
+);
+await blankTargetActions.loadSearxngOptions();
+assertState(
+  blankTargetRequestBody.url === DEFAULT_SEARXNG_URL,
+  "a blank SearXNG form URL must load options from the configured default instead of the previously saved custom URL",
+);
+assertState(
+  searxngOptionsMatchTarget(blankTargetState.search.searxng_options, "", ""),
+  "blank SearXNG form URLs must match metadata loaded from the default instance",
+);
+
+const outOfOrderState = createSearchSettingsStateForSmoke();
+const firstOptionsResponse = createDeferred();
+const secondOptionsResponse = createDeferred();
+let optionsRequestCount = 0;
+const outOfOrderActions = createSearchSettingsActionsForSmoke(
+  outOfOrderState,
+  async () => {
+    optionsRequestCount += 1;
+    return optionsRequestCount === 1 ? firstOptionsResponse.promise : secondOptionsResponse.promise;
+  },
+);
+outOfOrderState.searchForm.searxngUrl = "https://first.example";
+outOfOrderState.searchForm.searxngProxy = "http://proxy-a.example:8080";
+const firstOptionsLoad = outOfOrderActions.loadSearxngOptions();
+outOfOrderState.searchForm.searxngUrl = "https://second.example";
+outOfOrderState.searchForm.searxngProxy = "http://proxy-b.example:8080";
+const secondOptionsLoad = outOfOrderActions.loadSearxngOptions();
+secondOptionsResponse.resolve({
+  searxng: {
+    engines: [{ id: "current", label: "Current" }],
+    categories: [],
+  },
+});
+await secondOptionsLoad;
+firstOptionsResponse.resolve({
+  searxng: {
+    engines: [{ id: "stale", label: "Stale" }],
+    categories: [],
+  },
+});
+await firstOptionsLoad;
+assertState(
+  outOfOrderState.search.searxng_options.engines[0]?.id === "current",
+  "a late SearXNG options response must not replace the newest request result",
+);
+assertState(
+  outOfOrderState.search.searxng_options.url === "https://second.example"
+    && outOfOrderState.search.searxng_options.proxy === "http://proxy-b.example:8080",
+  "loaded SearXNG options must be keyed to both their URL and proxy",
+);
+
+async function captureSettingsApiError(body, options = {}) {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(body, {
+      status: options.status || 502,
+      statusText: options.statusText || "Bad Gateway",
+      headers: { "Content-Type": options.contentType || "application/json" },
+    });
+    await requestSettingsJsonForSmoke("ws://127.0.0.1:8765/ws", "/api/settings/web-search/searxng-options");
+  } catch (error) {
+    return error;
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  throw new Error("settings API smoke request unexpectedly succeeded");
+}
+
+const structuredSettingsApiError = await captureSettingsApiError(JSON.stringify({
+  ok: false,
+  error: "  Unable to load SearXNG options  ",
+}));
+assertState(structuredSettingsApiError instanceof Error, "settings API must reject non-success responses with an Error");
+assertState(structuredSettingsApiError.message === "Unable to load SearXNG options", "settings API must extract a clean JSON error message");
+assertState(structuredSettingsApiError.status === 502, "settings API errors must retain the HTTP status");
+assertState(structuredSettingsApiError.statusText === "Bad Gateway", "settings API errors must retain the HTTP status text");
+
+const messageSettingsApiError = await captureSettingsApiError(JSON.stringify({ message: "Request failed" }));
+assertState(messageSettingsApiError.message === "Request failed", "settings API must accept the standard JSON message field");
+
+const plainTextSettingsApiError = await captureSettingsApiError("  Plain-text failure  ", { contentType: "text/plain" });
+assertState(plainTextSettingsApiError.message === "Plain-text failure", "settings API must preserve plain-text errors without surrounding whitespace");
+
+const unknownJsonSettingsApiError = await captureSettingsApiError(JSON.stringify({ ok: false }));
+assertState(unknownJsonSettingsApiError.message === '{"ok":false}', "settings API must preserve unrecognized response bodies for diagnosis");
+
+const emptySettingsApiError = await captureSettingsApiError("");
+assertState(emptySettingsApiError.message === "HTTP 502", "settings API must fall back to the HTTP status for empty responses");
 
 const reactiveRoot = reactive({ sessions: [{ id: "session-1" }] });
 const stableSessionProxy = reactiveRoot.sessions[0];
@@ -1987,9 +2368,11 @@ assertIncludes(searchSettings, "client.saveSearchSettings", "search settings kee
 assertIncludes(searchSettings, "client.loadSearxngOptions", "search settings keeps SearXNG option load action");
 assertIncludes(searchSettings, "type SearchSettingsStateView = SearchSettingsStateLike & {", "search settings types state view");
 assertIncludes(searchSettings, "const searchCopy: SearchSettingsCopyView = copy.settings.search ?? {};", "search settings types copy view");
-assertIncludes(searchSettings, "form.jinaApiKey", "search settings keeps Jina API key field");
+assertIncludes(searchSettings, "form.searxngProxy", "search settings keeps SearXNG proxy field");
 assertIncludes(searchSettings, "form.searxngEngines", "search settings keeps SearXNG engine selection");
 assertIncludes(searchSettings, "form.searxngCategories", "search settings keeps SearXNG category selection");
+assertIncludes(searchSettings, "searxngOptionsMatchTarget", "search settings only renders SearXNG metadata for the active URL and proxy");
+assertIncludes(searchSettings, "disabled={state.searchLoading || state.searchOptionsLoading}", "search settings prevents target and save races while SearXNG options load");
 assertNotIncludes(searchSettings, "type AnyRecord", "search settings avoids dynamic AnyRecord alias");
 assertNotIncludes(searchSettings, "Record<string, any>", "search settings avoids broad dynamic records");
 assertIncludes(searchBrowserHelpers, "export type SearchSettingsCopyView = {", "search helper types search copy view");
@@ -4099,9 +4482,10 @@ assertIncludes(scheduleSettingsActions, "copy.value.notices.scheduleSaved(settin
 assertIncludes(searchDefaults, "export interface SearchState", "search defaults expose typed search state");
 assertIncludes(searchDefaults, "export interface SearxngOptionEntry", "search defaults expose typed SearXNG option entries");
 assertIncludes(searchDefaults, "export interface SearxngOptions", "search defaults expose typed SearXNG options");
-assertIncludes(searchDefaults, "DEFAULT_SEARCH_PROVIDERS = [\"duckduckgo\", \"searxng\", \"jina\"]", "search defaults keep provider order");
+assertIncludes(searchDefaults, "url: string;\n  proxy: string;", "search defaults bind SearXNG options to URL and proxy");
+assertIncludes(searchDefaults, "DEFAULT_SEARCH_PROVIDERS = [\"duckduckgo\", \"searxng\"]", "search defaults keep provider order");
 assertIncludes(searchSettingsActions, "export function useSearchSettingsActions", "search settings actions remain exported");
-assertIncludes(searchSettingsActions, "\"/api/settings/search\"", "search settings actions keep search settings endpoint");
+assertIncludes(searchSettingsActions, "\"/api/settings/web-search\"", "search settings actions keep web search settings endpoint");
 assertIncludes(searchSettingsActions, "type RequestSettingsJson = (pathname: string, options?: RequestInit) => Promise<unknown>;", "search settings actions keep unchecked API responses unknown");
 assertIncludes(searchSettingsActions, "interface SearchSettingsState", "search settings actions type search state boundary");
 assertIncludes(searchSettingsActions, "type SearchSettingsPayload = {", "search settings actions type search API payload boundary");
@@ -4117,31 +4501,35 @@ assertIncludes(searchSettingsActions, "type SearxngOptionPayload = {", "search s
 assertNotIncludes(searchSettingsActions, "type SearxngOptionPayload = JsonRecord & {", "search settings actions avoids open-ended SearXNG option payload records");
 assertIncludes(searchSettingsActions, "function toSearchSettingsPayload(value: unknown): SearchSettingsPayload", "search settings actions narrows search settings responses");
 assertIncludes(searchSettingsActions, "function toSearchSettingsPayload(value: unknown): SearchSettingsPayload {\n  const payload = toPayloadSource<SearchSettingsPayload>(value);\n  if (!payload) {\n    return {};\n  }", "search settings actions handles non-object search responses before field projection");
-assertNotIncludes(searchSettingsActions, "search: payload?.search,", "search settings actions avoid optional chaining after nullable payload boundary");
-assertIncludes(searchSettingsActions, "search: payload.search,", "search settings actions projects search settings payloads onto named fields");
+assertNotIncludes(searchSettingsActions, "web_search: payload?.web_search,", "search settings actions avoid optional chaining after nullable payload boundary");
+assertIncludes(searchSettingsActions, "web_search: payload.web_search,", "search settings actions projects web search settings payloads onto named fields");
 assertIncludes(searchSettingsActions, "function toSearchDataPayload(value: unknown): SearchDataPayload | null", "search settings actions narrow search data before field reads");
-assertIncludes(searchSettingsActions, "provider: payload.provider,\n    providers: payload.providers,\n    freshness: payload.freshness,\n    freshness_options: payload.freshness_options,\n    max_results: payload.max_results,\n    duckduckgo_max_pages: payload.duckduckgo_max_pages,\n    searxng_max_pages: payload.searxng_max_pages,\n    searxng_url: payload.searxng_url,\n    searxng_engines: payload.searxng_engines,\n    searxng_categories: payload.searxng_categories,\n    searxng_options: payload.searxng_options,\n    proxy: payload.proxy,\n    jina_api_key_configured: payload.jina_api_key_configured,", "search settings actions projects search data payloads onto named fields");
+assertIncludes(searchSettingsActions, "provider: payload.provider,\n    providers: payload.providers,\n    freshness: payload.freshness,\n    freshness_options: payload.freshness_options,\n    max_results: payload.max_results,\n    searxng_max_pages: payload.searxng_max_pages,\n    searxng_url: payload.searxng_url,\n    searxng_engines: payload.searxng_engines,\n    searxng_categories: payload.searxng_categories,\n    searxng_options: payload.searxng_options,\n    searxng_proxy: payload.searxng_proxy,", "search settings actions projects search data payloads onto named fields");
 assertIncludes(searchSettingsActions, "function toSearxngOptionsPayload(value: unknown): SearxngOptionsPayload", "search settings actions narrows SearXNG option responses");
 assertIncludes(searchSettingsActions, "function toSearxngOptionsPayload(value: unknown): SearxngOptionsPayload {\n  const payload = toPayloadSource<SearxngOptionsPayload>(value);\n  if (!payload) {\n    return {};\n  }", "search settings actions handles non-object SearXNG option responses before field projection");
 assertNotIncludes(searchSettingsActions, "searxng: payload?.searxng,", "search settings actions avoid optional chaining after nullable SearXNG payload boundary");
 assertIncludes(searchSettingsActions, "searxng: payload.searxng,", "search settings actions projects SearXNG options payloads onto named fields");
 assertIncludes(searchSettingsActions, "function toSearxngOptionsDataPayload(value: unknown): SearxngOptionsDataPayload | null", "search settings actions narrow SearXNG options data before field reads");
-assertIncludes(searchSettingsActions, "engines: payload.engines,\n    categories: payload.categories,\n    url: payload.url,\n    fallback: payload.fallback,\n    warning: payload.warning,", "search settings actions projects SearXNG options data payloads onto named fields");
+assertIncludes(searchSettingsActions, "engines: payload.engines,\n    categories: payload.categories,\n    url: payload.url,\n    proxy: payload.proxy,", "search settings actions projects SearXNG options data payloads onto named fields");
 assertIncludes(searchSettingsActions, "function toSearxngOptionPayload(value: unknown): SearxngOptionPayload | null", "search settings actions narrow individual SearXNG options before field reads");
 assertIncludes(searchSettingsActions, "id: payload.id,\n    name: payload.name,\n    label: payload.label,\n    display_name: payload.display_name,\n    displayName: payload.displayName,\n    categories: payload.categories,\n    shortcut: payload.shortcut,\n    enabled: payload.enabled,", "search settings actions projects individual SearXNG options onto named fields");
 assertIncludes(searchSettingsActions, "function normalizeSearxngOptions(value: unknown = {}): SearxngOptions", "search settings actions normalize typed SearXNG options");
 assertIncludes(searchSettingsActions, "function normalizeSearchSettings(search: unknown = {}): SearchState", "search settings actions normalize typed search settings");
 assertIncludes(searchSettingsActions, "const payload = toSearxngOptionsDataPayload(value) || {};", "search settings actions use typed SearXNG options payload in normalizer");
 assertIncludes(searchSettingsActions, "const payload = toSearchDataPayload(search) || {};", "search settings actions use typed search payload in normalizer");
-assertIncludes(searchSettingsActions, "toSearchSettingsPayload(await requestSettingsJson(\"/api/settings/search\"))", "search settings actions converts unknown search load responses through typed payload boundary");
-assertIncludes(searchSettingsActions, "toSearxngOptionsPayload(await requestSettingsJson(`/api/settings/search/searxng-options${suffix}`))", "search settings actions converts unknown SearXNG options responses through typed payload boundary");
-assertIncludes(searchSettingsActions, "toSearchSettingsPayload(await requestSettingsJson(\"/api/settings/search\",", "search settings actions converts unknown search save responses through typed payload boundary");
+assertIncludes(searchSettingsActions, "toSearchSettingsPayload(await requestSettingsJson(\"/api/settings/web-search\"))", "search settings actions converts unknown web search load responses through typed payload boundary");
+assertIncludes(searchSettingsActions, "toSearxngOptionsPayload(await requestSettingsJson(\"/api/settings/web-search/searxng-options\", {", "search settings actions converts unknown SearXNG options responses through typed payload boundary");
+assertIncludes(searchSettingsActions, "toSearchSettingsPayload(await requestSettingsJson(\"/api/settings/web-search\",", "search settings actions converts unknown web search save responses through typed payload boundary");
 assertNotIncludes(searchSettingsActions, "requestSettingsJson<", "search settings actions avoid trusting unchecked API response generics");
 assertIncludes(searchSettingsActions, "function errorMessage(error: unknown): string", "search settings actions narrow unknown errors");
 assertNotIncludes(searchSettingsActions, "Promise<any>", "search settings actions avoid any request promises");
 assertNotIncludes(searchSettingsActions, "catch (error: any)", "search settings actions avoid any catch boundaries");
-assertIncludes(searchSettingsActions, "searxng-options${suffix}", "search settings actions keep SearXNG options endpoint suffix");
-assertIncludes(searchSettingsActions, "...secretPayload(form)", "search settings actions keep optional secret payload merge");
+assertIncludes(searchSettingsActions, "method: \"POST\"", "search settings actions load SearXNG options through an explicit request body");
+assertIncludes(searchSettingsActions, "body: JSON.stringify({ url: searxngUrl, proxy: searxngProxy })", "search settings actions use the current URL and proxy when loading options");
+assertIncludes(searchSettingsActions, "let searchSettingsRequestGeneration = 0;", "search settings actions reject stale load and save responses");
+assertIncludes(searchSettingsActions, "let searchSettingsSaveInFlight = false;", "search settings actions keep loads from racing an in-flight save");
+assertIncludes(searchSettingsActions, "let searxngOptionsRequestGeneration = 0;", "search settings actions reject out-of-order SearXNG option responses");
+assertNotIncludes(searchSettingsActions, "secretPayload", "search settings actions have no removed provider secret payload");
 assertIncludes(updateSettingsActions, "export function useUpdateSettingsActions", "update settings actions remain exported");
 assertIncludes(updateSettingsActions, "\"/api/settings/update\"", "update settings actions keep update endpoint");
 assertIncludes(updateSettingsActions, "import type { UpdateStatusView } from \"./useSettingsState\";", "update settings actions reuse normalized update status view");
@@ -4184,7 +4572,7 @@ assertIncludes(updateSettingsActions, "function errorMessage(error: unknown): st
 assertNotIncludes(updateSettingsActions, "Promise<any>", "update settings actions avoid any request promises");
 assertNotIncludes(updateSettingsActions, "catch (error: any)", "update settings actions avoid any catch boundaries");
 assertIncludes(updateSettingsActions, "window.setTimeout(() => window.location.reload(), 5000)", "update settings actions keep restart reload delay");
-assertIncludes(settingsApi, "const error = Object.assign(new Error(text || `HTTP ${response.status}`), {", "settings API creates an error with inferred transport metadata");
+assertIncludes(settingsApi, "const error = Object.assign(new Error(responseErrorMessage(text, response.status)), {", "settings API creates a clean error with inferred transport metadata");
 assertIncludes(settingsApi, "status: response.status,\n      statusText: response.statusText,", "settings API preserves HTTP status metadata for callers");
 assertNotIncludes(settingsApi, "SettingsApiError", "settings API avoids casting Error instances to a declared shape");
 assertIncludes(settingsApi, "options: RequestInit = {}", "settings API accepts typed fetch options");

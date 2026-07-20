@@ -5,29 +5,27 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+HISTORY_SEARCH_TOOL_NAME = "search_history"
+
 
 @dataclass
 class SearchHit:
-    """Single search result."""
+    """Single local conversation-history match."""
 
     id: str
     session_id: str
-    source_type: str
     content: str
     created_at: float
     score: float | None = None
     role: str | None = None
     tool_name: str | None = None
-    title: str | None = None
-    url: str | None = None
-    query: str | None = None
 
 
 class SearchStore(ABC):
     """Abstract search index used for per-chat retrieval."""
 
     @abstractmethod
-    async def sync_from_storage(self, storage: "StorageProvider") -> None:
+    async def sync_from_storage(self) -> None:
         """Backfill any missing records from persistent storage."""
 
     @abstractmethod
@@ -48,6 +46,3 @@ class SearchStore(ABC):
     @abstractmethod
     async def clear_session(self, session_id: str) -> None:
         """Remove all indexed data for a chat."""
-
-
-from ..storage.base import StorageProvider

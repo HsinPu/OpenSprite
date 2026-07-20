@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import sqlite3
-import struct
 import time
 from pathlib import Path
 from typing import Any
@@ -26,7 +25,7 @@ from .base import (
     StoredRunPart,
 )
 
-SQLITE_SCHEMA_VERSION = 14
+SQLITE_SCHEMA_VERSION = 15
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -154,71 +153,43 @@ CREATE INDEX IF NOT EXISTS idx_background_processes_state_updated
 CREATE TABLE IF NOT EXISTS search_chunks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
-    owner_type TEXT NOT NULL,
-    owner_id INTEGER NOT NULL DEFAULT 0,
-    source_type TEXT NOT NULL,
+    message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     role TEXT,
     tool_name TEXT,
-    query TEXT,
-    title TEXT,
-    url TEXT,
     chunk_index INTEGER NOT NULL,
     content TEXT NOT NULL,
-    created_at REAL NOT NULL
+    created_at REAL NOT NULL,
+    UNIQUE(message_id, chunk_index)
 );
 
-CREATE INDEX IF NOT EXISTS idx_chunks_chat_source_created
-    ON search_chunks(session_id, source_type, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_search_chunks_chat_created
+    ON search_chunks(session_id, created_at, id);
 
-CREATE INDEX IF NOT EXISTS idx_chunks_owner
-    ON search_chunks(owner_type, owner_id, chunk_index);
-
-CREATE TABLE IF NOT EXISTS chunk_embeddings (
-    chunk_id INTEGER PRIMARY KEY REFERENCES search_chunks(id) ON DELETE CASCADE,
-    embedding_provider TEXT,
-    embedding_model TEXT,
-    embedding_dim INTEGER,
-    embedding_format TEXT NOT NULL DEFAULT 'blob',
-    embedding BLOB,
-    embedding_status TEXT NOT NULL DEFAULT 'pending',
-    embedded_at REAL,
-    version INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_status
-    ON chunk_embeddings(embedding_status, embedding_model);
-
-CREATE TABLE IF NOT EXISTS search_metadata (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at REAL NOT NULL
-);
+CREATE INDEX IF NOT EXISTS idx_search_chunks_message
+    ON search_chunks(message_id, chunk_index);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS search_chunks_fts USING fts5(
     content,
-    title,
-    query,
-    url,
     content='search_chunks',
     content_rowid='id',
     tokenize='unicode61'
 );
 
 CREATE TRIGGER IF NOT EXISTS search_chunks_ai AFTER INSERT ON search_chunks BEGIN
-    INSERT INTO search_chunks_fts(rowid, content, title, query, url)
-    VALUES (new.id, new.content, COALESCE(new.title, ''), COALESCE(new.query, ''), COALESCE(new.url, ''));
+    INSERT INTO search_chunks_fts(rowid, content)
+    VALUES (new.id, new.content);
 END;
 
 CREATE TRIGGER IF NOT EXISTS search_chunks_ad AFTER DELETE ON search_chunks BEGIN
-    INSERT INTO search_chunks_fts(search_chunks_fts, rowid, content, title, query, url)
-    VALUES ('delete', old.id, old.content, COALESCE(old.title, ''), COALESCE(old.query, ''), COALESCE(old.url, ''));
+    INSERT INTO search_chunks_fts(search_chunks_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
 END;
 
 CREATE TRIGGER IF NOT EXISTS search_chunks_au AFTER UPDATE ON search_chunks BEGIN
-    INSERT INTO search_chunks_fts(search_chunks_fts, rowid, content, title, query, url)
-    VALUES ('delete', old.id, old.content, COALESCE(old.title, ''), COALESCE(old.query, ''), COALESCE(old.url, ''));
-    INSERT INTO search_chunks_fts(rowid, content, title, query, url)
-    VALUES (new.id, new.content, COALESCE(new.title, ''), COALESCE(new.query, ''), COALESCE(new.url, ''));
+    INSERT INTO search_chunks_fts(search_chunks_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+    INSERT INTO search_chunks_fts(rowid, content)
+    VALUES (new.id, new.content);
 END;
 """
 
@@ -251,11 +222,6 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
 def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
     """Apply additive schema upgrades for existing normalized databases."""
-    if table_exists(conn, "search_chunks"):
-        conn.execute("DELETE FROM search_chunks WHERE owner_type <> 'message'")
-    if table_exists(conn, "search_chunk_vec_index"):
-        conn.execute("DELETE FROM search_chunk_vec_index WHERE owner_type <> 'message'")
-
     if table_exists(conn, "run_file_changes"):
         file_change_columns = {
             str(row[1])
@@ -350,118 +316,41 @@ def insert_search_chunks(
     conn: sqlite3.Connection,
     *,
     session_id: str,
-    owner_type: str,
-    owner_id: int,
+    message_id: int,
     chunks: list[SearchChunkPayload],
 ) -> None:
     """Insert one batch of search chunks into the shared index table."""
+    conn.execute("DELETE FROM search_chunks WHERE message_id = ?", (message_id,))
     if not chunks:
-        return []
+        return
 
-    chunk_ids: list[int] = []
     for chunk in chunks:
-        cursor = conn.execute(
+        conn.execute(
             """
             INSERT INTO search_chunks (
                 session_id,
-                owner_type,
-                owner_id,
-                source_type,
+                message_id,
                 role,
                 tool_name,
-                query,
-                title,
-                url,
                 chunk_index,
                 content,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
-                owner_type,
-                owner_id,
-                chunk.source_type,
+                message_id,
                 chunk.role,
                 chunk.tool_name,
-                chunk.query,
-                chunk.title,
-                chunk.url,
                 chunk.chunk_index,
                 chunk.content,
                 chunk.created_at,
             ),
         )
-        chunk_ids.append(int(cursor.lastrowid))
-    return chunk_ids
 
 
-def pack_embedding(values: list[float]) -> bytes:
-    """Serialize one embedding vector to a portable little-endian blob."""
-    if not values:
-        return b""
-    return struct.pack(f"<{len(values)}f", *[float(value) for value in values])
-
-
-def unpack_embedding(blob: bytes, dim: int) -> list[float]:
-    """Deserialize one embedding vector blob."""
-    if not blob or dim <= 0:
-        return []
-    return list(struct.unpack(f"<{dim}f", blob))
-
-
-def upsert_chunk_embedding(
-    conn: sqlite3.Connection,
-    *,
-    chunk_id: int,
-    provider: str,
-    model: str,
-    values: list[float] | None,
-    status: str,
-    embedded_at: float | None = None,
-) -> None:
-    """Insert or update one chunk embedding row."""
-    current_time = embedded_at
-    if current_time is None and status in {"completed", "failed"}:
-        current_time = time.time()
-    conn.execute(
-        """
-        INSERT INTO chunk_embeddings (
-            chunk_id,
-            embedding_provider,
-            embedding_model,
-            embedding_dim,
-            embedding_format,
-            embedding,
-            embedding_status,
-            embedded_at,
-            version
-        )
-        VALUES (?, ?, ?, ?, 'blob', ?, ?, ?, 1)
-        ON CONFLICT(chunk_id) DO UPDATE SET
-            embedding_provider = excluded.embedding_provider,
-            embedding_model = excluded.embedding_model,
-            embedding_dim = excluded.embedding_dim,
-            embedding_format = excluded.embedding_format,
-            embedding = excluded.embedding,
-            embedding_status = excluded.embedding_status,
-            embedded_at = excluded.embedded_at,
-            version = excluded.version
-        """,
-        (
-            chunk_id,
-            provider,
-            model,
-            len(values or []),
-            pack_embedding(values or []),
-            status,
-            current_time,
-        ),
-    )
-
-
-def find_message_owner_id(
+def find_message_id(
     conn: sqlite3.Connection,
     *,
     session_id: str,
@@ -469,7 +358,7 @@ def find_message_owner_id(
     content: str,
     tool_name: str | None,
     created_at: float,
-) -> int:
+) -> int | None:
     """Resolve the latest message row id for a just-persisted message."""
     row = conn.execute(
         """
@@ -501,7 +390,7 @@ def find_message_owner_id(
         """,
         (session_id, role, content, tool_name, tool_name),
     ).fetchone()
-    return int(fallback["id"]) if fallback is not None else 0
+    return int(fallback["id"]) if fallback is not None else None
 
 
 def table_exists(conn: sqlite3.Connection, name: str) -> bool:

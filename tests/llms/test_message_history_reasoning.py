@@ -19,7 +19,11 @@ def test_message_history_restores_reasoning_details_from_metadata():
             ),
         )
     )
-    service = MessageHistoryService(storage=storage, search_store=None, max_history_getter=lambda: 10)
+    service = MessageHistoryService(
+        storage=storage,
+        history_search_store=None,
+        max_history_getter=lambda: 10,
+    )
 
     history = asyncio.run(service.load_history("session-1"))
 
@@ -46,7 +50,11 @@ def test_message_history_prepares_prompt_history_without_turn_local_tool_results
         StoredMessage(role="user", content="current question", timestamp=4),
     ]:
         asyncio.run(storage.add_message("session-1", message))
-    service = MessageHistoryService(storage=storage, search_store=None, max_history_getter=lambda: 10)
+    service = MessageHistoryService(
+        storage=storage,
+        history_search_store=None,
+        max_history_getter=lambda: 10,
+    )
 
     prompt_history = asyncio.run(service.load_prompt_history("session-1", "current question"))
 
@@ -82,7 +90,7 @@ def test_message_history_prepare_prompt_history_accepts_dict_messages():
 
 
 def test_message_history_saves_visible_user_and_assistant_messages_to_storage_and_index():
-    class RecordingSearchStore:
+    class RecordingHistorySearchStore:
         def __init__(self):
             self.indexed = []
 
@@ -91,13 +99,17 @@ def test_message_history_saves_visible_user_and_assistant_messages_to_storage_an
 
     async def scenario():
         storage = MemoryStorage()
-        search_store = RecordingSearchStore()
-        service = MessageHistoryService(storage=storage, search_store=search_store, max_history_getter=lambda: 10)
+        history_search_store = RecordingHistorySearchStore()
+        service = MessageHistoryService(
+            storage=storage,
+            history_search_store=history_search_store,
+            max_history_getter=lambda: 10,
+        )
 
         await service.save_user_message("session-1", "hello", metadata={"source": "web"})
         await service.save_assistant_message("session-1", "hi", metadata={"run_id": "run-1"})
 
-        return await storage.get_messages("session-1"), search_store.indexed
+        return await storage.get_messages("session-1"), history_search_store.indexed
 
     messages, indexed = asyncio.run(scenario())
 
@@ -125,7 +137,7 @@ def test_message_history_emits_search_index_failure_event():
 
         service = MessageHistoryService(
             storage=storage,
-            search_store=FailingSearchStore(),
+            history_search_store=FailingSearchStore(),
             max_history_getter=lambda: 10,
             emit_index_failure=emit_index_failure,
         )
@@ -140,3 +152,35 @@ def test_message_history_emits_search_index_failure_event():
     assert events[0][2]["role"] == "user"
     assert events[0][2]["content_len"] == 5
     assert events[0][2]["error"] == "index down"
+
+
+def test_message_history_persists_but_does_not_index_search_history_output():
+    class RecordingHistorySearchStore:
+        def __init__(self):
+            self.indexed = []
+
+        async def index_message(self, **kwargs):
+            self.indexed.append(kwargs)
+
+    async def scenario():
+        storage = MemoryStorage()
+        history_search_store = RecordingHistorySearchStore()
+        service = MessageHistoryService(
+            storage=storage,
+            history_search_store=history_search_store,
+            max_history_getter=lambda: 10,
+        )
+        await service.save_message(
+            "session-1",
+            "tool",
+            "History matches for: cleanup",
+            tool_name="search_history",
+        )
+        return await storage.get_messages("session-1"), history_search_store.indexed
+
+    messages, indexed = asyncio.run(scenario())
+
+    assert [(message.role, message.tool_name) for message in messages] == [
+        ("tool", "search_history")
+    ]
+    assert indexed == []

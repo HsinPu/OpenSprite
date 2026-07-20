@@ -15,7 +15,6 @@ from opensprite.config.defaults import (
     DEFAULT_BROWSERBASE_BASE_URL,
     DEFAULT_CHANNELS_FILE,
     DEFAULT_CRON_TIMEZONE,
-    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
     DEFAULT_LOG_ENABLED,
     DEFAULT_LOG_LEVEL,
@@ -31,9 +30,10 @@ from opensprite.config.defaults import (
     DEFAULT_MEDIA_FILE,
     DEFAULT_MESSAGES_FILE,
     DEFAULT_NO_PROXY,
-    DEFAULT_SEARCH_FILE,
+    DEFAULT_HISTORY_SEARCH_FILE,
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
+    DEFAULT_WEB_SEARCH_FRESHNESS,
     DEFAULT_WEB_SEARCH_PROVIDER,
     DEFAULT_WEB_SEARCH_MAX_RESULTS,
     WEB_SEARCH_PROVIDERS,
@@ -49,13 +49,13 @@ from opensprite.config.schema import (
     NetworkConfig,
     OcrConfig,
     ProviderConfig,
-    SearchConfig,
-    SearchEmbeddingConfig,
+    HistorySearchConfig,
     SpeechConfig,
     StorageConfig,
     ToolsConfig,
     VideoConfig,
     VisionConfig,
+    WebSearchToolConfig,
 )
 
 
@@ -274,7 +274,7 @@ def test_config_load_creates_default_config_and_split_files(monkeypatch, tmp_pat
     assert config.source_path == app_home / "opensprite.json"
     assert (app_home / "opensprite.json").exists()
     assert (app_home / "channels.json").exists()
-    assert (app_home / "search.json").exists()
+    assert (app_home / "history_search.json").exists()
     assert (app_home / "media.json").exists()
     assert (app_home / "messages.json").exists()
     assert (app_home / "mcp_servers.json").exists()
@@ -292,7 +292,7 @@ def test_config_load_creates_explicit_missing_config_and_split_files(tmp_path):
     assert config.source_path == config_path
     assert config_path.exists()
     assert (config_path.parent / "channels.json").exists()
-    assert (config_path.parent / "search.json").exists()
+    assert (config_path.parent / "history_search.json").exists()
     assert (config_path.parent / "media.json").exists()
     assert (config_path.parent / "messages.json").exists()
     assert (config_path.parent / "mcp_servers.json").exists()
@@ -347,12 +347,12 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.exec_tool.notify_on_exit is True
     assert config.exec_tool.notify_on_exit_empty_success is False
     assert config.web_search.provider == "duckduckgo"
-    assert config.web_search.freshness == "auto"
+    assert config.web_search.freshness == "none"
     assert config.web_search.max_results == 25
-    assert config.web_search.duckduckgo_max_pages == 10
     assert config.web_search.searxng_max_pages == 5
     assert config.web_search.searxng_engines == []
     assert config.web_search.searxng_categories == []
+    assert config.web_search.searxng_proxy is None
     assert config.web_fetch.max_chars == 50000
     assert config.web_fetch.max_response_size == 5242880
     assert config.web_fetch.timeout == 30
@@ -373,6 +373,18 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.mcp_servers_file == "mcp_servers.json"
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_results", 101),
+        ("searxng_max_pages", 51),
+    ],
+)
+def test_web_search_config_enforces_runtime_limits(field, value):
+    with pytest.raises(ValidationError):
+        WebSearchToolConfig(**{field: value})
+
+
 def test_template_web_search_defaults_match_backend_defaults():
     template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
     template = json.loads(template_path.read_text(encoding="utf-8"))
@@ -380,10 +392,11 @@ def test_template_web_search_defaults_match_backend_defaults():
 
     assert web_search["provider"] == DEFAULT_WEB_SEARCH_PROVIDER
     assert web_search["provider"] in WEB_SEARCH_PROVIDERS
+    assert web_search["freshness"] == DEFAULT_WEB_SEARCH_FRESHNESS
     assert web_search["searxng_url"] == DEFAULT_SEARXNG_URL
     assert web_search["max_results"] == DEFAULT_WEB_SEARCH_MAX_RESULTS
-    assert web_search["duckduckgo_max_pages"] == DEFAULT_DUCKDUCKGO_MAX_PAGES
     assert web_search["searxng_max_pages"] == DEFAULT_SEARXNG_MAX_PAGES
+    assert web_search["searxng_proxy"] is None
 
 
 def test_template_browser_defaults_match_backend_defaults():
@@ -439,7 +452,7 @@ def test_template_split_file_defaults_match_backend_defaults():
 
     assert template["llm"]["providers_file"] == DEFAULT_LLM_PROVIDERS_FILE
     assert template["channels_file"] == DEFAULT_CHANNELS_FILE
-    assert template["search_file"] == DEFAULT_SEARCH_FILE
+    assert template["history_search_file"] == DEFAULT_HISTORY_SEARCH_FILE
     assert template["media_file"] == DEFAULT_MEDIA_FILE
     assert template["messages_file"] == DEFAULT_MESSAGES_FILE
     assert template["tools"]["mcp_servers_file"] == DEFAULT_MCP_SERVERS_FILE
@@ -454,13 +467,13 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "notify_on_exit_empty_success": True,
             },
             "web_search": {
-                "provider": "jina",
+                "provider": "searxng",
                 "freshness": "month",
                 "max_results": 7,
-                "duckduckgo_max_pages": 3,
                 "searxng_max_pages": 4,
                 "searxng_engines": ["google", "bing"],
                 "searxng_categories": ["general", "news"],
+                "searxng_proxy": "http://proxy.local:8080",
             },
             "web_fetch": {
                 "max_chars": 1234,
@@ -493,13 +506,13 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.exec_tool.timeout == 15
     assert config.exec_tool.notify_on_exit is False
     assert config.exec_tool.notify_on_exit_empty_success is True
-    assert config.web_search.provider == "jina"
+    assert config.web_search.provider == "searxng"
     assert config.web_search.freshness == "month"
     assert config.web_search.max_results == 7
-    assert config.web_search.duckduckgo_max_pages == 3
     assert config.web_search.searxng_max_pages == 4
     assert config.web_search.searxng_engines == ["google", "bing"]
     assert config.web_search.searxng_categories == ["general", "news"]
+    assert config.web_search.searxng_proxy == "http://proxy.local:8080"
     assert config.web_fetch.max_chars == 1234
     assert config.web_fetch.max_response_size == 2048
     assert config.web_fetch.timeout == 9
@@ -704,41 +717,27 @@ def test_messages_config_includes_repeated_invalid_tool_call_fallback():
     assert "{result}" in config.agent.repeated_invalid_tool_call_fallback
 
 
-def test_search_embedding_config_requires_model_when_enabled():
-    with pytest.raises(ValidationError):
-        SearchEmbeddingConfig(enabled=True)
-
-
-def test_search_config_provides_embedding_defaults():
-    config = SearchConfig()
+def test_history_search_config_provides_fts_defaults():
+    config = HistorySearchConfig()
 
     assert config.enabled is True
-    assert config.backend == "sqlite"
-    assert config.embedding.enabled is False
-    assert config.embedding.provider == "openai"
-    assert config.embedding.batch_size == 16
-    assert config.embedding.candidate_count == 20
-    assert config.embedding.candidate_strategy == "vector"
-    assert config.embedding.vector_backend == "auto"
-    assert config.embedding.vector_candidate_count == 50
-    assert config.embedding.retry_failed_on_startup is False
+    assert config.history_top_k == 5
 
 
-def test_config_load_reads_search_from_external_file(tmp_path):
+@pytest.mark.parametrize("history_top_k", [0, 21])
+def test_history_search_config_limits_result_count(history_top_k):
+    with pytest.raises(ValidationError):
+        HistorySearchConfig(history_top_k=history_top_k)
+
+
+def test_config_load_reads_history_search_from_external_file(tmp_path):
     config_path = tmp_path / "opensprite.json"
-    search_path = tmp_path / "search.json"
-    search_path.write_text(
+    history_search_path = tmp_path / "history_search.json"
+    history_search_path.write_text(
         json.dumps(
             {
                 "enabled": True,
-                "backend": "sqlite",
                 "history_top_k": 7,
-                "embedding": {
-                    "enabled": True,
-                    "provider": "openai",
-                    "model": "text-embedding-3-small",
-                    "candidate_count": 33,
-                },
             }
         ),
         encoding="utf-8",
@@ -754,7 +753,7 @@ def test_config_load_reads_search_from_external_file(tmp_path):
                         "web": {"type": "web", "enabled": True},
                     }
                 },
-                "search_file": "search.json",
+                "history_search_file": "history_search.json",
             }
         ),
         encoding="utf-8",
@@ -762,13 +761,9 @@ def test_config_load_reads_search_from_external_file(tmp_path):
 
     config = Config.from_json(config_path)
 
-    assert config.search.enabled is True
-    assert config.search.backend == "sqlite"
-    assert config.search.history_top_k == 7
-    assert config.search.embedding.enabled is True
-    assert config.search.embedding.model == "text-embedding-3-small"
-    assert config.search.embedding.candidate_count == 33
-    assert config.search_file == "search.json"
+    assert config.history_search.enabled is True
+    assert config.history_search.history_top_k == 7
+    assert config.history_search_file == "history_search.json"
 
 
 def test_config_load_defaults_agent_when_section_missing(tmp_path):
@@ -804,7 +799,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.subagent_max_tool_iterations == 100
     assert config.tools.exec_tool.timeout == 60
     assert config.tools.web_search.provider == "duckduckgo"
-    assert config.tools.web_search.freshness == "auto"
+    assert config.tools.web_search.freshness == "none"
     assert config.tools.web_search.max_results == 25
     assert config.tools.web_search.searxng_max_pages == 5
     assert config.tools.web_search.searxng_engines == []
@@ -898,7 +893,7 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
     assert saved_channels["instances"]["web"]["enabled"] is True
 
 
-def test_config_save_writes_search_to_external_file(tmp_path):
+def test_config_save_writes_history_search_to_external_file(tmp_path):
     config_path = tmp_path / "opensprite.json"
     config_path.write_text(
         json.dumps(
@@ -917,21 +912,21 @@ def test_config_save_writes_search_to_external_file(tmp_path):
     )
 
     config = Config.from_json(config_path)
-    config.search.enabled = True
-    config.search.embedding.enabled = True
-    config.search.embedding.model = "text-embedding-3-small"
-    config.search.embedding.candidate_count = 77
+    config.history_search.enabled = True
+    config.history_search.history_top_k = 12
     config.save(config_path)
 
     saved_main = json.loads(config_path.read_text(encoding="utf-8"))
-    saved_search = json.loads((tmp_path / "search.json").read_text(encoding="utf-8"))
+    saved_history_search = json.loads(
+        (tmp_path / "history_search.json").read_text(encoding="utf-8")
+    )
 
-    assert saved_main["search_file"] == "search.json"
-    assert "search" not in saved_main
-    assert saved_search["enabled"] is True
-    assert saved_search["embedding"]["enabled"] is True
-    assert saved_search["embedding"]["model"] == "text-embedding-3-small"
-    assert saved_search["embedding"]["candidate_count"] == 77
+    assert saved_main["history_search_file"] == "history_search.json"
+    assert "history_search" not in saved_main
+    assert saved_history_search == {
+        "enabled": True,
+        "history_top_k": 12,
+    }
 
 
 def test_config_save_writes_media_to_external_file(tmp_path):
@@ -1179,17 +1174,19 @@ def test_copy_template_creates_external_channels_file(tmp_path):
     assert json.loads(channels_path.read_text(encoding="utf-8")) == Config.load_external_template_data("channels")
 
 
-def test_copy_template_creates_external_search_file(tmp_path):
+def test_copy_template_creates_external_history_search_file(tmp_path):
     config_path = tmp_path / "opensprite.json"
 
     Config.copy_template(config_path)
 
     template_data = json.loads(config_path.read_text(encoding="utf-8"))
-    search_path = tmp_path / "search.json"
+    history_search_path = tmp_path / "history_search.json"
 
-    assert template_data["search_file"] == "search.json"
-    assert search_path.exists()
-    assert json.loads(search_path.read_text(encoding="utf-8")) == Config.load_external_template_data("search")
+    assert template_data["history_search_file"] == "history_search.json"
+    assert history_search_path.exists()
+    assert json.loads(history_search_path.read_text(encoding="utf-8")) == Config.load_external_template_data(
+        "history_search"
+    )
 
 
 def test_copy_template_creates_external_media_file(tmp_path):
@@ -1234,7 +1231,7 @@ def test_copy_template_creates_external_llm_providers_file(tmp_path):
 
 def test_external_template_paths_exist():
     assert Config.external_template_path("channels").exists()
-    assert Config.external_template_path("search").exists()
+    assert Config.external_template_path("history_search").exists()
     assert Config.external_template_path("mcp_servers").exists()
     assert Config.external_template_path("media").exists()
     assert Config.external_template_path("messages").exists()

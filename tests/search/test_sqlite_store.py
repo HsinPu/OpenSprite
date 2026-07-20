@@ -1,796 +1,658 @@
-﻿import asyncio
-import json
+import asyncio
 import sqlite3
 
-from opensprite.search.sqlite_store import SQLiteSearchStore
+import pytest
+
+from opensprite.search.sqlite_store import (
+    MAX_HISTORY_SEARCH_QUERY_LENGTH,
+    MAX_HISTORY_SEARCH_QUERY_TOKENS,
+    MAX_HISTORY_SEARCH_RESULTS,
+    SQLiteSearchStore,
+)
 from opensprite.storage.base import StoredMessage
 from opensprite.storage.sqlite import SQLiteStorage
 
 
-class FakeEmbeddingProvider:
-    provider_name = "fake"
-    model_name = "fake-embedding"
-    batch_size = 8
-
-    def __init__(self, vectors: dict[str, list[float]]):
-        self.vectors = vectors
-
-    async def embed_texts(self, texts):
-        return [list(self.vectors.get(text, [0.0, 0.0])) for text in texts]
-
-
-class BlockingEmbeddingProvider:
-    provider_name = "fake"
-    model_name = "fake-embedding"
-    batch_size = 8
-
-    def __init__(self):
-        self.started = asyncio.Event()
-        self.release = asyncio.Event()
-
-    async def embed_texts(self, texts):
-        self.started.set()
-        await self.release.wait()
-        return [[1.0, 0.0] for _ in texts]
-
-
-class FailingThenPassingEmbeddingProvider:
-    provider_name = "fake"
-    model_name = "fake-embedding"
-    batch_size = 8
-
-    def __init__(self):
-        self.should_fail = True
-
-    async def embed_texts(self, texts):
-        if self.should_fail:
-            raise RuntimeError("temporary embedding failure")
-        return [[1.0, 0.0] for _ in texts]
+async def _persist_and_index(
+    storage: SQLiteStorage,
+    search: SQLiteSearchStore,
+    session_id: str,
+    content: str,
+    *,
+    timestamp: float,
+    role: str = "user",
+    tool_name: str | None = None,
+) -> None:
+    await storage.add_message(
+        session_id,
+        StoredMessage(
+            role=role,
+            content=content,
+            timestamp=timestamp,
+            tool_name=tool_name,
+        ),
+    )
+    await search.index_message(
+        session_id,
+        role=role,
+        content=content,
+        tool_name=tool_name,
+        created_at=timestamp,
+    )
 
 
-def test_sqlite_search_store_indexes_and_filters_history(tmp_path):
-    db_path = tmp_path / "search.db"
-
+def test_sqlite_search_store_indexes_only_the_current_session(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(db_path, history_top_k=5)
-
-        await storage.add_message(
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            StoredMessage(role="user", content="Please keep sqlite fts docs handy", timestamp=10.0),
+            "Please keep sqlite fts docs handy",
+            timestamp=10.0,
         )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="Please keep sqlite fts docs handy",
-            created_at=10.0,
-        )
-
-        await storage.add_message(
+        await _persist_and_index(
+            storage,
+            search,
             "chat-b",
-            StoredMessage(role="user", content="Need postgres vector docs", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-b",
-            role="user",
-            content="Need postgres vector docs",
-            created_at=10.0,
+            "Need postgres docs",
+            timestamp=11.0,
         )
 
-        history_hits = await search.search_history("chat-a", "sqlite docs")
-        other_chat_hits = await search.search_history("chat-b", "sqlite docs")
-
+        hits = await search.search_history("chat-a", "sqlite docs")
+        other_hits = await search.search_history("chat-b", "sqlite docs")
         await search.clear_session("chat-a")
-        cleared_history_hits = await search.search_history("chat-a", "sqlite docs")
-        remaining_messages = await storage.get_messages("chat-a")
+        cleared_hits = await search.search_history("chat-a", "sqlite docs")
+        persisted = await storage.get_messages("chat-a")
+        return hits, other_hits, cleared_hits, persisted
 
-        return history_hits, other_chat_hits, cleared_history_hits, remaining_messages
+    hits, other_hits, cleared_hits, persisted = asyncio.run(scenario())
 
-    history_hits, other_chat_hits, cleared_history_hits, remaining_messages = asyncio.run(scenario())
-
-    assert len(history_hits) == 1
-    assert history_hits[0].source_type == "history"
-    assert "sqlite fts docs" in history_hits[0].content.lower()
-    assert other_chat_hits == []
-    assert cleared_history_hits == []
-    assert [message.content for message in remaining_messages] == ["Please keep sqlite fts docs handy"]
+    assert len(hits) == 1
+    assert hits[0].session_id == "chat-a"
+    assert "sqlite fts docs" in hits[0].content.lower()
+    assert other_hits == []
+    assert cleared_hits == []
+    assert [message.content for message in persisted] == ["Please keep sqlite fts docs handy"]
 
 
-def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
-    db_path = tmp_path / "search.db"
-
+def test_sync_backfills_messages_and_skips_search_history_output(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
         await storage.add_message(
             "chat-a",
-            StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
+            StoredMessage(role="user", content="Remember the blue deployment", timestamp=10.0),
         )
         await storage.add_message(
             "chat-a",
             StoredMessage(
                 role="tool",
-                content=json.dumps({"type": "web_search", "query": "sqlite fts5", "items": []}),
+                content="History matches for: blue deployment",
                 timestamp=11.0,
-                tool_name="web_search",
+                tool_name="search_history",
             ),
         )
 
-        search = SQLiteSearchStore(db_path, history_top_k=5)
-        await search.sync_from_storage(storage)
+        search = SQLiteSearchStore(db_path)
+        await search.sync_from_storage()
+        hits = await search.search_history("chat-a", "blue deployment")
+        status = await search.get_status("chat-a")
+        return hits, status
 
-        history_hits = await search.search_history("chat-a", "sqlite handy")
-        conn = sqlite3.connect(str(db_path))
-        removed_knowledge_table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_sources'"
-        ).fetchone()
-        conn.close()
+    hits, status = asyncio.run(scenario())
 
-        return history_hits, removed_knowledge_table
-
-    history_hits, removed_knowledge_table = asyncio.run(scenario())
-
-    assert history_hits
-    assert history_hits[0].source_type == "history"
-    assert removed_knowledge_table is None
+    assert [hit.role for hit in hits] == ["user"]
+    assert status == {"session_count": 1, "message_count": 1, "chunk_count": 1}
 
 
-def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):
-    db_path = tmp_path / "search.db"
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(db_path, history_top_k=5)
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="Please keep sqlite docs handy",
-            created_at=10.0,
-        )
-        return storage, search
-
-    storage, search = asyncio.run(seed())
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "UPDATE search_metadata SET value = ? WHERE key = ?",
-        ("v0:chunk=10:2", "index_signature"),
-    )
-    conn.commit()
-    conn.close()
-
-    asyncio.run(search.sync_from_storage(storage))
-
-    conn = sqlite3.connect(str(db_path))
-    signature = conn.execute(
-        "SELECT value FROM search_metadata WHERE key = ?",
-        ("index_signature",),
-    ).fetchone()[0]
-    chunk_count = conn.execute("SELECT COUNT(*) FROM search_chunks").fetchone()[0]
-    conn.close()
-
-    assert signature == search._index_signature
-    assert chunk_count >= 1
-
-
-def test_sqlite_search_store_persists_embeddings_and_reranks_candidates(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider(
-        {
-            "sqlite guide basics": [1.0, 0.0],
-            "postgres guide basics": [0.0, 1.0],
-            "guide": [1.0, 0.0],
-        }
-    )
-
+def test_fts_zero_results_fall_back_to_chinese_substring_matching(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-
-        await storage.add_message(
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            StoredMessage(role="user", content="sqlite guide basics", timestamp=10.0),
+            "我們最後決定把後端搜尋整理成簡單流程",
+            timestamp=10.0,
         )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="sqlite guide basics",
-            created_at=10.0,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="postgres guide basics", timestamp=20.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="postgres guide basics",
-            created_at=20.0,
-        )
-
-        await search.wait_for_embedding_idle()
-
-        hits = await search.search_history("chat-a", "guide", limit=2)
-
-        conn = sqlite3.connect(str(db_path))
-        embedding_rows = conn.execute(
-            "SELECT embedding_provider, embedding_model, embedding_dim, embedding_status FROM chunk_embeddings ORDER BY chunk_id ASC"
-        ).fetchall()
-        conn.close()
-        return hits, embedding_rows
-
-    hits, embedding_rows = asyncio.run(scenario())
-
-    assert [hit.content for hit in hits] == ["sqlite guide basics", "postgres guide basics"]
-    assert embedding_rows == [
-        ("fake", "fake-embedding", 2, "completed"),
-        ("fake", "fake-embedding", 2, "completed"),
-    ]
-
-
-def test_sqlite_search_store_can_use_vector_candidate_strategy(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider(
-        {
-            "orchard manual": [1.0, 0.0],
-            "kitchen recipe": [0.0, 1.0],
-            "guide": [1.0, 0.0],
-        }
-    )
-
-    async def scenario():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-            embedding_candidate_strategy="vector",
-            vector_candidate_count=10,
-        )
-
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="orchard manual", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="orchard manual",
-            created_at=10.0,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="kitchen recipe", timestamp=20.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="kitchen recipe",
-            created_at=20.0,
-        )
-        await search.wait_for_embedding_idle()
-
-        return await search.search_history("chat-a", "guide", limit=1)
+        return await search.search_history("chat-a", "搜尋整理")
 
     hits = asyncio.run(scenario())
 
-    assert [hit.content for hit in hits] == ["orchard manual"]
+    assert len(hits) == 1
+    assert "搜尋整理" in hits[0].content
 
 
-def test_sqlite_search_store_falls_back_to_exact_when_sqlite_vec_is_unavailable(tmp_path, monkeypatch):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider(
-        {
-            "orchard manual": [1.0, 0.0],
-            "kitchen recipe": [0.0, 1.0],
-            "guide": [1.0, 0.0],
-        }
-    )
-
-    monkeypatch.setattr("opensprite.search.sqlite_store.load_sqlite_vec_extension", lambda conn: (False, "missing"))
-
+@pytest.mark.parametrize(
+    ("query", "content", "expected_match"),
+    [
+        ("版本1", "版本10已部署", False),
+        ("模型A", "模型AB已部署", False),
+        ("版本1", "版本說明1", False),
+        ("1版本", "1說明版本", False),
+        ("A模型B", "A超級模型B", False),
+        ("版本1", "新版本1", True),
+        ("1版本", "1版本更新", True),
+    ],
+)
+def test_mixed_cjk_tokens_preserve_latin_and_number_boundaries(
+    tmp_path,
+    query,
+    content,
+    expected_match,
+):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-            embedding_candidate_strategy="vector",
-            vector_backend="sqlite_vec",
-            vector_candidate_count=10,
-        )
-
-        await storage.add_message(
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            StoredMessage(role="user", content="orchard manual", timestamp=10.0),
+            content,
+            timestamp=10.0,
         )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="orchard manual",
-            created_at=10.0,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="kitchen recipe", timestamp=20.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="kitchen recipe",
-            created_at=20.0,
-        )
-        await search.wait_for_embedding_idle()
+        return await search.search_history("chat-a", query)
 
-        hits = await search.search_history("chat-a", "guide", limit=1)
-        status = await search.get_status()
-        return hits, status
+    hits = asyncio.run(scenario())
 
-    hits, status = asyncio.run(scenario())
-
-    assert [hit.content for hit in hits] == ["orchard manual"]
-    assert status["vector_backend_requested"] == "sqlite_vec"
-    assert status["vector_backend_effective"] == "exact"
+    assert [hit.content for hit in hits] == ([content] if expected_match else [])
 
 
-def test_sqlite_search_store_uses_sqlite_vec_dispatch_when_available(tmp_path, monkeypatch):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"guide": [1.0, 0.0]})
-    calls: list[str] = []
-
-    monkeypatch.setattr("opensprite.search.sqlite_store.load_sqlite_vec_extension", lambda conn: (True, None))
-
-    async def fake_sqlite_vec_candidate_rows(self, conn, **kwargs):
-        calls.append("sqlite_vec")
-        return [
-            {
-                "id": 1,
-                "owner_id": 1,
-                "session_id": "chat-a",
-                "source_type": "history",
-                "content": "orchard manual",
-                "created_at": 1.0,
-                "role": "user",
-                "tool_name": None,
-                "title": None,
-                "url": None,
-                "query": None,
-                "summary": None,
-                "provider": None,
-                "extractor": None,
-                "status": None,
-                "content_type": None,
-                "truncated": None,
-                "embedding_similarity": 0.95,
-            }
-        ]
-
-    async def fake_exact_vector_candidate_rows(self, conn, **kwargs):
-        calls.append("exact")
-        return []
-
-    monkeypatch.setattr(SQLiteSearchStore, "_sqlite_vec_candidate_rows", fake_sqlite_vec_candidate_rows)
-    monkeypatch.setattr(SQLiteSearchStore, "_exact_vector_candidate_rows", fake_exact_vector_candidate_rows)
-
+def test_casefolded_latin_token_matches_between_cjk_spans(tmp_path):
     async def scenario():
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-            embedding_candidate_strategy="vector",
-            vector_backend="sqlite_vec",
-            vector_candidate_count=10,
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        content = "版本Straße已更新"
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            content,
+            timestamp=10.0,
         )
-        hits = await search.search_history("chat-a", "guide", limit=1)
-        status = await search.get_status()
-        return hits, status
+        return content, await search.search_history("chat-a", "STRASSE")
 
-    hits, status = asyncio.run(scenario())
+    content, hits = asyncio.run(scenario())
 
-    assert [hit.content for hit in hits] == ["orchard manual"]
-    assert calls == ["sqlite_vec"]
-    assert status["vector_backend_requested"] == "sqlite_vec"
-    assert status["vector_backend_effective"] == "sqlite_vec"
+    assert [hit.content for hit in hits] == [content]
 
 
-def test_sqlite_search_store_processes_embeddings_in_background(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = BlockingEmbeddingProvider()
-
+def test_result_limit_is_bounded_between_one_and_twenty(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
+        search = SQLiteSearchStore(db_path)
+        for index in range(25):
+            await _persist_and_index(
+                storage,
+                search,
+                "chat-a",
+                f"shared-keyword message {index}",
+                timestamp=float(index + 1),
+            )
+        upper = await search.search_history("chat-a", "shared keyword", limit=999)
+        lower = await search.search_history("chat-a", "shared keyword", limit=0)
+        return upper, lower
 
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="background embedding", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="background embedding",
-            created_at=10.0,
-        )
+    upper, lower = asyncio.run(scenario())
 
-        await asyncio.wait_for(embedder.started.wait(), timeout=1.0)
-        status_during = await search.get_status()
-
-        embedder.release.set()
-        status_after = await search.wait_for_embedding_idle()
-        return status_during, status_after
-
-    status_during, status_after = asyncio.run(scenario())
-
-    assert status_during["processing"] == 1
-    assert status_after["completed"] == 1
-    assert status_after["pending"] == 0
+    assert len(upper) == MAX_HISTORY_SEARCH_RESULTS
+    assert len(lower) == 1
 
 
-def test_sqlite_search_store_can_retry_failed_embeddings(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FailingThenPassingEmbeddingProvider()
-
+def test_reindexing_a_message_does_not_duplicate_chunks(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-
-        await storage.add_message(
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            StoredMessage(role="user", content="retry embeddings", timestamp=10.0),
+            "single indexed message",
+            timestamp=10.0,
         )
         await search.index_message(
             "chat-a",
             role="user",
-            content="retry embeddings",
+            content="single indexed message",
             created_at=10.0,
         )
+        return await search.get_status("chat-a")
 
-        failed_status = await search.wait_for_embedding_idle()
-        embedder.should_fail = False
-        retried_status = await search.retry_failed_embeddings(session_id="chat-a", wait=True)
-
-        conn = sqlite3.connect(str(db_path))
-        embedding_rows = conn.execute(
-            "SELECT embedding_status, embedding_dim FROM chunk_embeddings ORDER BY chunk_id ASC"
-        ).fetchall()
-        conn.close()
-        return failed_status, retried_status, embedding_rows
-
-    failed_status, retried_status, embedding_rows = asyncio.run(scenario())
-
-    assert failed_status["failed"] == 1
-    assert retried_status["retried"] == 1
-    assert retried_status["failed"] == 0
-    assert retried_status["completed"] == 1
-    assert embedding_rows == [("completed", 2)]
+    assert asyncio.run(scenario())["chunk_count"] == 1
 
 
-def test_sqlite_search_store_requeues_processing_embeddings_on_startup(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"startup recovery": [1.0, 0.0]})
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="startup recovery", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="startup recovery",
-            created_at=10.0,
-        )
-        await search.wait_for_embedding_idle()
-        return storage
-
-    storage = asyncio.run(seed())
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "UPDATE chunk_embeddings SET embedding_status = 'processing', embedded_at = NULL"
-    )
-    conn.commit()
-    conn.close()
-
-    async def recover():
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await search.sync_from_storage(storage)
-        return await search.wait_for_embedding_idle()
-
-    status = asyncio.run(recover())
-
-    assert status["processing"] == 0
-    assert status["pending"] == 0
-    assert status["completed"] == 1
-
-
-def test_sqlite_search_store_can_retry_failed_embeddings_on_startup(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FailingThenPassingEmbeddingProvider()
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="startup failed retry", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="startup failed retry",
-            created_at=10.0,
-        )
-        failed_status = await search.wait_for_embedding_idle()
-        return storage, failed_status
-
-    storage, failed_status = asyncio.run(seed())
-    assert failed_status["failed"] == 1
-
-    embedder.should_fail = False
-
-    async def recover():
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-            retry_failed_on_startup=True,
-        )
-        await search.sync_from_storage(storage)
-        return await search.wait_for_embedding_idle()
-
-    status = asyncio.run(recover())
-
-    assert status["failed"] == 0
-    assert status["completed"] == 1
-
-
-def test_sqlite_search_store_refreshes_missing_and_stale_embeddings(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"refresh stale vector": [1.0, 0.0]})
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="refresh stale vector", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="refresh stale vector",
-            created_at=10.0,
-        )
-        await search.wait_for_embedding_idle()
-        return search
-
-    search = asyncio.run(seed())
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "UPDATE chunk_embeddings SET embedding_provider = 'legacy', embedding_model = 'legacy-model', embedding_status = 'completed', embedded_at = NULL"
-    )
-    conn.commit()
-    conn.close()
-
-    refreshed_status = asyncio.run(search.refresh_embeddings(force=False, wait=True))
-
-    conn = sqlite3.connect(str(db_path))
-    embedding_rows = conn.execute(
-        "SELECT embedding_provider, embedding_model, embedding_status, embedding_dim FROM chunk_embeddings ORDER BY chunk_id ASC"
-    ).fetchall()
-    conn.close()
-
-    assert refreshed_status["refreshed"] == 1
-    assert refreshed_status["stale"] == 0
-    assert refreshed_status["completed"] == 1
-    assert embedding_rows == [("fake", "fake-embedding", "completed", 2)]
-
-
-def test_sqlite_search_store_status_reports_missing_embeddings(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"missing embedding row": [1.0, 0.0]})
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="missing embedding row", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="missing embedding row",
-            created_at=10.0,
-        )
-        await search.wait_for_embedding_idle()
-        return search
-
-    search = asyncio.run(seed())
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("DELETE FROM chunk_embeddings")
-    conn.commit()
-    conn.close()
-
-    status = asyncio.run(search.get_status())
-
-    assert status["embedding_total"] == 0
-    assert status["missing"] == 1
-    assert status["stale"] == 0
-
-
-def test_sqlite_search_store_sync_refreshes_stale_embeddings(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"sync stale vector": [1.0, 0.0]})
-
-    async def seed():
-        storage = SQLiteStorage(db_path)
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
-            "chat-a",
-            StoredMessage(role="user", content="sync stale vector", timestamp=10.0),
-        )
-        await search.index_message(
-            "chat-a",
-            role="user",
-            content="sync stale vector",
-            created_at=10.0,
-        )
-        await search.wait_for_embedding_idle()
-        return storage
-
-    storage = asyncio.run(seed())
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "UPDATE chunk_embeddings SET embedding_provider = 'legacy', embedding_model = 'legacy-model'"
-    )
-    conn.commit()
-    conn.close()
-
-    async def recover():
-        search = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await search.sync_from_storage(storage)
-        return await search.wait_for_embedding_idle()
-
-    status = asyncio.run(recover())
-
-    assert status["stale"] == 0
-    assert status["completed"] == 1
-
-
-def test_sqlite_search_store_run_queue_records_last_run_metadata(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({"queue run metadata": [1.0, 0.0]})
-
+def test_search_returns_only_the_best_chunk_per_message(tmp_path):
     async def scenario():
+        db_path = tmp_path / "history.db"
         storage = SQLiteStorage(db_path)
-        indexing_store = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-        )
-        worker_store = SQLiteSearchStore(
-            db_path,
-            history_top_k=2,
-            embedding_provider=embedder,
-            hybrid_candidate_count=4,
-        )
-        await storage.add_message(
+        search = SQLiteSearchStore(db_path, chunk_size=40, chunk_overlap=15)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            StoredMessage(role="user", content="queue run metadata", timestamp=10.0),
+            f"{'a' * 26} needle {'b' * 50}",
+            timestamp=10.0,
         )
-        await indexing_store.index_message(
+        return await search.search_history("chat-a", "needle", limit=20)
+
+    hits = asyncio.run(scenario())
+
+    assert len(hits) == 1
+    assert "needle" in hits[0].content
+
+
+@pytest.mark.parametrize(
+    ("query", "matching_content"),
+    [
+        ("C++", "Use C++ templates for this implementation"),
+        ("C#", "Use C# records for this implementation"),
+        ("C++?", "Use C++ templates for this implementation"),
+        ('"C#"', "Use C# records for this implementation"),
+    ],
+)
+def test_punctuation_heavy_queries_require_a_literal_match(
+    tmp_path,
+    query,
+    matching_content,
+):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
             "chat-a",
-            role="user",
-            content="queue run metadata",
-            created_at=10.0,
+            "Only the letter C appears in this message",
+            timestamp=10.0,
+        )
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            matching_content,
+            timestamp=11.0,
+        )
+        return await search.search_history("chat-a", query)
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == [matching_content]
+
+
+def test_multiword_literal_query_does_not_degrade_to_plain_token(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Use C templates for this implementation",
+            timestamp=20.0,
+        )
+        matching_content = "Use C++ templates for this implementation"
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            matching_content,
+            timestamp=10.0,
+        )
+        return matching_content, await search.search_history(
+            "chat-a",
+            "C++ templates",
         )
 
-        status = await worker_store.run_queue(once=True)
-        final_status = await worker_store.get_status()
-        return status, final_status
+    matching_content, hits = asyncio.run(scenario())
 
-    status, final_status = asyncio.run(scenario())
-
-    assert status["processed_chunks"] == 1
-    assert final_status["worker_running"] is False
-    assert final_status["last_run_mode"] == "once"
-    assert final_status["last_run_processed"] == 1
-    assert final_status["last_run_finished_at"] is not None
+    assert [hit.content for hit in hits] == [matching_content]
 
 
-def test_sqlite_search_store_run_queue_rejects_active_worker_lease(tmp_path):
-    db_path = tmp_path / "search.db"
-    embedder = FakeEmbeddingProvider({})
-
-    search = SQLiteSearchStore(
-        db_path,
-        history_top_k=2,
-        embedding_provider=embedder,
-        hybrid_candidate_count=4,
-    )
-
-    conn = sqlite3.connect(str(db_path))
-    conn.execute(
-        "INSERT INTO search_metadata (key, value, updated_at) VALUES (?, ?, ?)",
+@pytest.mark.parametrize(
+    ("query", "plain_content", "matching_content"),
+    [
         (
-            "embedding_worker_lock",
-            json.dumps({"owner": "other-worker", "expires_at": 9999999999.0}),
-            9999999999.0,
+            "C++17 migration",
+            "Plan the C 17 migration",
+            "Plan the C++17 migration",
         ),
-    )
-    conn.commit()
-    conn.close()
-
+        (
+            "C#12 migration",
+            "Plan the C 12 migration",
+            "Plan the C#12 migration",
+        ),
+    ],
+)
+def test_versioned_literal_identifier_does_not_degrade_to_plain_tokens(
+    tmp_path,
+    query,
+    plain_content,
+    matching_content,
+):
     async def scenario():
-        try:
-            await search.run_queue(once=True)
-        except RuntimeError as exc:
-            return str(exc)
-        return ""
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            plain_content,
+            timestamp=20.0,
+        )
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            matching_content,
+            timestamp=10.0,
+        )
+        return await search.search_history("chat-a", query)
 
-    error = asyncio.run(scenario())
+    hits = asyncio.run(scenario())
 
-    assert "already running" in error
+    assert [hit.content for hit in hits] == [matching_content]
+
+
+def test_multiword_query_requires_each_literal_identifier(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        for timestamp, content in enumerate(
+            (
+                "Only C++ templates are discussed here",
+                "Only C# records are discussed here",
+                "C++ and C# interop is discussed here",
+            ),
+            start=10,
+        ):
+            await _persist_and_index(
+                storage,
+                search,
+                "chat-a",
+                content,
+                timestamp=float(timestamp),
+            )
+        return await search.search_history("chat-a", "C++ C#")
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["C++ and C# interop is discussed here"]
+
+
+def test_literal_only_query_returns_phrase_and_non_phrase_matches(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        contents = (
+            "C++ C# direct comparison",
+            "C++ and C# interop notes",
+        )
+        for timestamp, content in enumerate(contents, start=10):
+            await _persist_and_index(
+                storage,
+                search,
+                "chat-a",
+                content,
+                timestamp=float(timestamp),
+            )
+        return contents, await search.search_history("chat-a", "C++ C#")
+
+    contents, hits = asyncio.run(scenario())
+
+    assert {hit.content for hit in hits} == set(contents)
+
+
+def test_multiword_literal_query_preserves_word_boundaries(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "C++ metatemplates are mentioned",
+            timestamp=10.0,
+        )
+        return await search.search_history("chat-a", "C++ templates")
+
+    hits = asyncio.run(scenario())
+
+    assert hits == []
+
+
+def test_multiword_query_punctuation_remains_a_search_separator(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Alpha and beta are both present",
+            timestamp=10.0,
+        )
+        return await search.search_history("chat-a", "alpha, beta")
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["Alpha and beta are both present"]
+
+
+@pytest.mark.parametrize(
+    ("query", "matching_content"),
+    [
+        ("sqlite?", "SQLite powers local history search"),
+        ('"hello"', "Hello from OpenSprite"),
+    ],
+)
+def test_common_punctuation_falls_back_to_fts_tokens(
+    tmp_path,
+    query,
+    matching_content,
+):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            matching_content,
+            timestamp=10.0,
+        )
+        return await search.search_history("chat-a", query)
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == [matching_content]
+
+
+def test_unicode61_query_tokens_preserve_sharp_s(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Die Straße bleibt geöffnet",
+            timestamp=10.0,
+        )
+        return await search.search_history("chat-a", "Straße")
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["Die Straße bleibt geöffnet"]
+
+
+def test_fts_and_unicode_substring_results_are_merged_stably(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        unicode_content = "Die Straße bleibt geöffnet"
+        ascii_content = "The ASCII STRASSE spelling is also recorded"
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            unicode_content,
+            timestamp=20.0,
+        )
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            ascii_content,
+            timestamp=10.0,
+        )
+        full = await search.search_history("chat-a", "STRASSE", limit=2)
+        limited = await search.search_history("chat-a", "STRASSE", limit=1)
+        return unicode_content, ascii_content, full, limited
+
+    unicode_content, ascii_content, full, limited = asyncio.run(scenario())
+
+    assert [hit.content for hit in full] == [ascii_content, unicode_content]
+    assert [hit.content for hit in limited] == [ascii_content]
+    assert len({hit.id for hit in full}) == 2
+
+
+def test_unicode_literal_identifier_matching_is_case_insensitive(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Plain CAFÉ appears without a suffix",
+            timestamp=10.0,
+        )
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Use CAFÉ++ for this implementation",
+            timestamp=11.0,
+        )
+        return await search.search_history("chat-a", "café++")
+
+    hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["Use CAFÉ++ for this implementation"]
+
+
+def test_unicode_literal_normalizes_nfd_content_before_matching(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        nfd_content = "Use CAFE\u0301++ for this implementation"
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            nfd_content,
+            timestamp=10.0,
+        )
+        return nfd_content, await search.search_history("chat-a", "café++")
+
+    nfd_content, hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == [nfd_content]
+
+
+def test_unicode_literal_normalizes_nfd_query_before_matching(tmp_path):
+    async def scenario():
+        db_path = tmp_path / "history.db"
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path)
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            "Plain CAFE appears without a suffix",
+            timestamp=10.0,
+        )
+        matching_content = "Use CAFÉ++ for this implementation"
+        await _persist_and_index(
+            storage,
+            search,
+            "chat-a",
+            matching_content,
+            timestamp=11.0,
+        )
+        nfd_query = "cafe\u0301++"
+        return matching_content, await search.search_history("chat-a", nfd_query)
+
+    matching_content, hits = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == [matching_content]
+
+
+def test_query_tokens_are_unicode_lowered_and_deduplicated():
+    assert SQLiteSearchStore._query_tokens("Alpha alpha BETA alpha") == [
+        "alpha",
+        "beta",
+    ]
+    assert SQLiteSearchStore._query_tokens("Straße") == ["straße"]
+
+
+def test_search_rejects_an_overlong_query_before_sqlite(tmp_path):
+    search = SQLiteSearchStore(tmp_path / "history.db")
+    query = "x" * (MAX_HISTORY_SEARCH_QUERY_LENGTH + 1)
+
+    with pytest.raises(ValueError, match="must be at most"):
+        asyncio.run(search.search_history("chat-a", query))
+
+
+def test_search_rejects_too_many_unique_tokens_before_sqlite(tmp_path):
+    search = SQLiteSearchStore(tmp_path / "history.db")
+    query = " ".join(
+        f"token{index}" for index in range(MAX_HISTORY_SEARCH_QUERY_TOKENS + 1)
+    )
+    assert len(query) <= MAX_HISTORY_SEARCH_QUERY_LENGTH
+
+    with pytest.raises(ValueError, match="too many unique tokens"):
+        asyncio.run(search.search_history("chat-a", query))
+
+
+def test_schema_contains_expected_local_history_columns(tmp_path):
+    db_path = tmp_path / "history.db"
+    SQLiteStorage(db_path)
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(search_chunks)")]
+    finally:
+        conn.close()
+
+    assert columns == [
+        "id",
+        "session_id",
+        "message_id",
+        "role",
+        "tool_name",
+        "chunk_index",
+        "content",
+        "created_at",
+    ]

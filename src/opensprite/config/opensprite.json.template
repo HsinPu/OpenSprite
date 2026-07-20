@@ -9,7 +9,7 @@
     "path": "~/.opensprite/data/sessions.db"
   },
   "channels_file": "channels.json",
-  "search_file": "search.json",
+  "history_search_file": "history_search.json",
   "media_file": "media.json",
   "messages_file": "messages.json",
   "log": {
@@ -32,15 +32,13 @@
     },
     "web_search": {
       "provider": "duckduckgo",
-        "freshness": "auto",
-      "jina_api_key": "",
+      "freshness": "none",
       "searxng_url": "https://searx.be",
       "searxng_engines": [],
       "searxng_categories": [],
       "max_results": 25,
-      "duckduckgo_max_pages": 10,
       "searxng_max_pages": 5,
-      "proxy": null
+      "searxng_proxy": null
     },
     "web_fetch": {
       "max_chars": 50000,

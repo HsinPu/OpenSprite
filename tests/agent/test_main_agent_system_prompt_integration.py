@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.llms.base import LLMResponse
@@ -112,7 +112,7 @@ def _agent(provider: CapturingProvider, context_builder: FileContextBuilder, reg
         memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
         tools_config=ToolsConfig(),
         log_config=LogConfig(log_system_prompt=False),
-        search_config=SearchConfig(),
+        history_search_config=HistorySearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
@@ -145,6 +145,9 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
     assert "# Retrieval Strategy" in system_text
     assert "Do not end a turn with a promise of future action" in system_text
     assert 'When the user says things like "earlier", "before", "again"' in system_text
+    assert "use `web_search` to discover candidate sources" in system_text
+    assert "then use `web_fetch` to inspect those pages before answering" in system_text
+    assert "`web_" + "research`" not in system_text
     assert "When the conversation has been compacted, treat the compacted state as a handoff" in system_text
     assert "For command or program version questions, run the direct version command" in system_text
     assert "# MCP Configuration" in system_text

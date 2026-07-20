@@ -1,44 +1,317 @@
-"""SQLite-backed per-chat search store using FTS5."""
+"""SQLite FTS5 index for local conversation-history search."""
 
 from __future__ import annotations
 
 import asyncio
-import json
-import math
-import os
+import hashlib
 import re
-import socket
+import sqlite3
+import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
-from .base import SearchHit, SearchStore
-from .embeddings import EmbeddingProvider
+from .base import HISTORY_SEARCH_TOOL_NAME, SearchHit, SearchStore
 from .indexing import build_history_chunks
-from .sqlite_vec_backend import load_sqlite_vec_extension
-from ..storage.base import StorageProvider
 from ..storage.sqlite import (
     ensure_sqlite_schema,
-    find_message_owner_id,
+    find_message_id,
     insert_search_chunks,
     open_sqlite_connection,
-    pack_embedding,
-    table_exists,
-    unpack_embedding,
-    upsert_chunk_embedding,
 )
 from ..utils.log import logger
 
-SEARCH_INDEX_VERSION = 2
-SEARCH_INDEX_SIGNATURE_KEY = "index_signature"
-SEARCH_WORKER_LOCK_KEY = "embedding_worker_lock"
-SEARCH_WORKER_LAST_RUN_KEY = "embedding_worker_last_run"
-SEARCH_WORKER_LEASE_SECONDS = 60.0
-SQLITE_VEC_INDEX_TABLE = "search_chunk_vec_index"
-SQLITE_VEC_INDEX_STATE_KEY = "sqlite_vec_index_state"
+MAX_HISTORY_SEARCH_RESULTS = 20
+MAX_HISTORY_SEARCH_QUERY_LENGTH = 512
+MAX_HISTORY_SEARCH_QUERY_TOKENS = 64
+_READ_ONLY_SNAPSHOT_ATTEMPTS = 3
+_SNAPSHOT_COPY_BUFFER_SIZE = 1024 * 1024
+_LITERAL_IDENTIFIER_TERM_PATTERN = re.compile(
+    r"(?<![\w+#])(?P<identifier>\w+(?:\+\+|#)\w*)(?![\w+#])",
+    flags=re.UNICODE,
+)
+
+
+class _ReadOnlySnapshotConnection(sqlite3.Connection):
+    """SQLite connection that owns and removes its private snapshot."""
+
+    _snapshot_directory: tempfile.TemporaryDirectory | None = None
+
+    def attach_snapshot_directory(
+        self,
+        snapshot_directory: tempfile.TemporaryDirectory,
+    ) -> None:
+        self._snapshot_directory = snapshot_directory
+
+    def close(self) -> None:
+        try:
+            super().close()
+        finally:
+            snapshot_directory = self._snapshot_directory
+            self._snapshot_directory = None
+            if snapshot_directory is not None:
+                try:
+                    snapshot_directory.cleanup()
+                except OSError as exc:
+                    raise RuntimeError(
+                        "could not clean up the read-only history search snapshot"
+                    ) from exc
+
+
+class _SnapshotChangedError(RuntimeError):
+    """Internal signal that a source database changed during capture."""
+
+
+def _cleanup_snapshot_attempt(
+    conn: _ReadOnlySnapshotConnection | None,
+    snapshot_directory: tempfile.TemporaryDirectory | None,
+) -> None:
+    if conn is not None:
+        conn.close()
+        return
+    if snapshot_directory is None:
+        return
+    try:
+        snapshot_directory.cleanup()
+    except OSError as exc:
+        raise RuntimeError(
+            "could not clean up the read-only history search snapshot"
+        ) from exc
+
+
+def _path_state(path: Path) -> tuple[int, int, int] | None:
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return None
+    return (stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def _snapshot_source_state(
+    db_path: Path,
+    wal_path: Path,
+    shm_path: Path,
+) -> tuple[
+    tuple[int, int, int] | None,
+    tuple[int, int, int] | None,
+    tuple[int, int, int] | None,
+]:
+    return (
+        _path_state(db_path),
+        _path_state(wal_path),
+        _path_state(shm_path),
+    )
+
+
+def _copy_with_sha256(source: Path, destination: Path) -> bytes:
+    digest = hashlib.sha256()
+    with source.open("rb") as source_file, destination.open("wb") as destination_file:
+        while chunk := source_file.read(_SNAPSHOT_COPY_BUFFER_SIZE):
+            digest.update(chunk)
+            destination_file.write(chunk)
+    return digest.digest()
+
+
+def _file_sha256(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as source_file:
+        while chunk := source_file.read(_SNAPSHOT_COPY_BUFFER_SIZE):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def _unicode_casefold(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFC", value or "")
+    return unicodedata.normalize("NFC", normalized.casefold())
+
+
+def _literal_identifiers(query: str) -> list[str]:
+    normalized_query = unicodedata.normalize("NFC", query)
+    identifiers: list[str] = []
+    seen: set[str] = set()
+    for match in _LITERAL_IDENTIFIER_TERM_PATTERN.finditer(normalized_query):
+        identifier = match.group("identifier")
+        normalized_identifier = _unicode_casefold(identifier)
+        if normalized_identifier in seen:
+            continue
+        seen.add(normalized_identifier)
+        identifiers.append(identifier)
+    return identifiers
+
+
+def _query_without_literal_identifiers(query: str) -> str:
+    normalized_query = unicodedata.normalize("NFC", query)
+    return _LITERAL_IDENTIFIER_TERM_PATTERN.sub(" ", normalized_query)
+
+
+def _deduplicated_query_tokens(query: str) -> list[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for token in re.findall(r"\w+", query.lower()):
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+    return tokens
+
+
+def parse_history_search_terms(query: str) -> tuple[list[str], list[str]]:
+    """Split a query into semantic literals and ordinary word tokens."""
+    literals = _literal_identifiers(query)
+    tokens = _deduplicated_query_tokens(_query_without_literal_identifiers(query))
+    return literals, tokens
+
+
+def _is_contiguous_script_character(character: str) -> bool:
+    unicode_name = unicodedata.name(character, "")
+    return unicode_name.startswith(
+        (
+            "CJK COMPATIBILITY IDEOGRAPH",
+            "CJK UNIFIED IDEOGRAPH",
+            "HANGUL",
+            "HIRAGANA",
+            "KATAKANA",
+        )
+    )
+
+
+def _unicode_search_spans(value: str | None) -> list[tuple[str, str]]:
+    normalized_value = _unicode_casefold(value)
+    spans: list[tuple[str, str]] = []
+    current_kind: str | None = None
+    for character in normalized_value:
+        if _is_contiguous_script_character(character):
+            kind = "contiguous"
+        elif character.isalnum() or character == "_":
+            kind = "word"
+        elif unicodedata.category(character).startswith("M") and current_kind:
+            kind = current_kind
+        else:
+            current_kind = None
+            continue
+
+        if spans and current_kind == kind:
+            previous_kind, previous_text = spans[-1]
+            spans[-1] = (previous_kind, f"{previous_text}{character}")
+        else:
+            spans.append((kind, character))
+        current_kind = kind
+    return spans
+
+
+def _unicode_search_span_matches(
+    query_kind: str,
+    query_text: str,
+    content_kind: str,
+    content_text: str,
+    *,
+    has_previous_query_span: bool,
+    has_next_query_span: bool,
+) -> bool:
+    if query_kind != content_kind:
+        return False
+    if query_kind != "contiguous":
+        return query_text == content_text
+    if has_previous_query_span and has_next_query_span:
+        return query_text == content_text
+    if has_previous_query_span:
+        return content_text.startswith(query_text)
+    if has_next_query_span:
+        return content_text.endswith(query_text)
+    return query_text in content_text
+
+
+def _matching_unicode_span_index(
+    content_spans: list[tuple[str, str]],
+    query_spans: list[tuple[str, str]],
+) -> int | None:
+    if len(query_spans) > len(content_spans):
+        return None
+
+    for start in range(len(content_spans) - len(query_spans) + 1):
+        candidates = content_spans[start : start + len(query_spans)]
+        if all(
+            _unicode_search_span_matches(
+                query_kind,
+                query_text,
+                content_kind,
+                content_text,
+                has_previous_query_span=index > 0,
+                has_next_query_span=index < len(query_spans) - 1,
+            )
+            for index, (
+                (query_kind, query_text),
+                (content_kind, content_text),
+            ) in enumerate(zip(query_spans, candidates))
+        ):
+            return start
+    return None
+
+
+def find_history_search_token_offset(value: str, token: str) -> int | None:
+    """Return a folded-text offset for one parsed ordinary query token."""
+    query_spans = _unicode_search_spans(token)
+    if not query_spans:
+        return None
+    content_spans = _unicode_search_spans(value)
+    match_index = _matching_unicode_span_index(content_spans, query_spans)
+    if match_index is None:
+        return None
+
+    folded_value = _unicode_casefold(value)
+    content_offsets: list[int] = []
+    cursor = 0
+    for _, content_text in content_spans:
+        content_offset = folded_value.find(content_text, cursor)
+        if content_offset < 0:
+            return None
+        content_offsets.append(content_offset)
+        cursor = content_offset + len(content_text)
+
+    content_kind, content_text = content_spans[match_index]
+    query_kind, query_text = query_spans[0]
+    relative_offset = 0
+    if query_kind == content_kind == "contiguous":
+        relative_offset = (
+            len(content_text) - len(query_text)
+            if len(query_spans) > 1
+            else content_text.find(query_text)
+        )
+    return content_offsets[match_index] + relative_offset
+
+
+def _unicode_token_match(value: str | None, token: str | None) -> int:
+    if value is None or token is None:
+        return 0
+    return int(find_history_search_token_offset(value, token) is not None)
+
+
+def validate_history_search_query(query: str) -> str:
+    """Return a stripped query or raise a stable validation error."""
+    if not isinstance(query, str):
+        raise ValueError("history search query must be a string")
+
+    normalized = query.strip()
+    if len(normalized) > MAX_HISTORY_SEARCH_QUERY_LENGTH:
+        raise ValueError(
+            "history search query must be at most "
+            f"{MAX_HISTORY_SEARCH_QUERY_LENGTH} characters"
+        )
+
+    literals, tokens = parse_history_search_terms(normalized)
+    query_components = {_unicode_casefold(identifier) for identifier in literals}
+    query_components.update(_unicode_casefold(token) for token in tokens)
+    token_count = len(query_components)
+    if token_count > MAX_HISTORY_SEARCH_QUERY_TOKENS:
+        raise ValueError(
+            "history search query has too many unique tokens "
+            f"(maximum {MAX_HISTORY_SEARCH_QUERY_TOKENS})"
+        )
+    return normalized
 
 
 class SQLiteSearchStore(SearchStore):
-    """Per-chat searchable history index backed by SQLite."""
+    """Per-session conversation history backed only by SQLite FTS5."""
 
     def __init__(
         self,
@@ -46,1224 +319,175 @@ class SQLiteSearchStore(SearchStore):
         history_top_k: int = 5,
         chunk_size: int = 1200,
         chunk_overlap: int = 200,
-        embedding_provider: EmbeddingProvider | None = None,
-        hybrid_candidate_count: int = 20,
-        embedding_candidate_strategy: str = "fts",
-        vector_backend: str = "exact",
-        vector_candidate_count: int = 50,
-        retry_failed_on_startup: bool = False,
-    ):
+        *,
+        read_only: bool = False,
+    ) -> None:
         self.path = Path(path).expanduser()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.history_top_k = history_top_k
+        self.history_top_k = self._bounded_limit(history_top_k, default=5)
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.embedding_provider = embedding_provider
-        self.hybrid_candidate_count = max(hybrid_candidate_count, history_top_k)
-        self.embedding_candidate_strategy = embedding_candidate_strategy
-        self.vector_backend_requested = vector_backend
-        self.vector_backend_effective = "exact"
-        self._sqlite_vec_warning_emitted = False
-        self.vector_candidate_count = max(vector_candidate_count, history_top_k)
-        self.retry_failed_on_startup = retry_failed_on_startup
+        self._read_only = read_only
         self._lock = asyncio.Lock()
-        self._embedding_task: asyncio.Task | None = None
-        self._queue_worker_task: asyncio.Task | None = None
-        self._worker_owner = f"{socket.gethostname()}:{os.getpid()}:{id(self)}"
+
+        if self._read_only:
+            if not self.path.is_file():
+                raise FileNotFoundError(
+                    f"history search database does not exist: {self.path}"
+                )
+            return
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         conn = self._get_conn()
         try:
             ensure_sqlite_schema(conn)
         finally:
             conn.close()
 
-    def _get_conn(self):
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._read_only:
+            return self._open_read_only_snapshot_connection()
         conn = open_sqlite_connection(self.path)
-        self._maybe_load_sqlite_vec(conn)
+        conn.create_function(
+            "unicode_casefold",
+            1,
+            _unicode_casefold,
+            deterministic=True,
+        )
+        conn.create_function(
+            "unicode_token_match",
+            2,
+            _unicode_token_match,
+            deterministic=True,
+        )
         return conn
 
-    def _should_try_sqlite_vec(self) -> bool:
-        """Return whether sqlite-vec should be attempted for vector candidate retrieval."""
-        if self.vector_backend_requested == "sqlite_vec":
-            return True
-        return self.vector_backend_requested == "auto"
+    def _open_read_only_snapshot_connection(self) -> sqlite3.Connection:
+        """Open a stable private copy without letting SQLite touch source files."""
+        resolved_path = self.path.resolve()
+        wal_path = Path(f"{resolved_path}-wal")
+        shm_path = Path(f"{resolved_path}-shm")
+        last_error: Exception | None = None
 
-    def _maybe_load_sqlite_vec(self, conn) -> bool:
-        """Load sqlite-vec into this connection when configured."""
-        if not self._should_try_sqlite_vec() or self.embedding_provider is None:
-            self.vector_backend_effective = "exact"
-            return False
-
-        loaded, error = load_sqlite_vec_extension(conn)
-        if loaded:
-            self.vector_backend_effective = "sqlite_vec"
-            return True
-
-        self.vector_backend_effective = "exact"
-        if not self._sqlite_vec_warning_emitted:
-            logger.warning("search.vector | sqlite-vec unavailable, falling back to exact scan: {}", error)
-            self._sqlite_vec_warning_emitted = True
-        return False
-
-    @property
-    def _index_signature(self) -> str:
-        """Return the current signature for the SQLite search index layout."""
-        embedding_signature = "disabled"
-        if self.embedding_provider is not None:
-            embedding_signature = f"{self.embedding_provider.provider_name}:{self.embedding_provider.model_name}"
-        return (
-            f"v{SEARCH_INDEX_VERSION}:chunk={self.chunk_size}:{self.chunk_overlap}:embed={embedding_signature}"
-            f":strategy={self.embedding_candidate_strategy}:backend={self.vector_backend_requested}:vectork={self.vector_candidate_count}"
-        )
-
-    def _read_index_signature(self, conn) -> str | None:
-        """Read the persisted search index signature, if any."""
-        row = conn.execute(
-            "SELECT value FROM search_metadata WHERE key = ?",
-            (SEARCH_INDEX_SIGNATURE_KEY,),
-        ).fetchone()
-        return str(row["value"]) if row is not None else None
-
-    def _write_index_signature(self, conn) -> None:
-        """Persist the current search index signature."""
-        conn.execute(
-            """
-            INSERT INTO search_metadata (key, value, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-            """,
-            (SEARCH_INDEX_SIGNATURE_KEY, self._index_signature, time.time()),
-        )
-
-    def _read_json_metadata(self, conn, key: str) -> dict | None:
-        """Read a JSON object from search metadata."""
-        row = conn.execute(
-            "SELECT value FROM search_metadata WHERE key = ?",
-            (key,),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            payload = json.loads(str(row["value"]))
-        except Exception:
-            return None
-        return payload if isinstance(payload, dict) else None
-
-    def _write_json_metadata(self, conn, key: str, payload: dict) -> None:
-        """Persist a JSON object into search metadata."""
-        conn.execute(
-            """
-            INSERT INTO search_metadata (key, value, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-            """,
-            (key, json.dumps(payload, ensure_ascii=False), time.time()),
-        )
-
-    def _delete_metadata(self, conn, key: str) -> None:
-        """Delete a metadata entry by key."""
-        conn.execute("DELETE FROM search_metadata WHERE key = ?", (key,))
-
-    def _acquire_worker_lease(self, conn) -> tuple[bool, dict | None]:
-        """Acquire the queue worker lease if no other live worker holds it."""
-        now = time.time()
-        expires_at = now + SEARCH_WORKER_LEASE_SECONDS
-        conn.execute("BEGIN IMMEDIATE")
-        payload = self._read_json_metadata(conn, SEARCH_WORKER_LOCK_KEY)
-        if payload is not None:
-            current_owner = str(payload.get("owner", ""))
-            current_expires_at = float(payload.get("expires_at", 0) or 0)
-            if current_owner and current_owner != self._worker_owner and current_expires_at > now:
-                conn.rollback()
-                return False, payload
-
-        lease_payload = {
-            "owner": self._worker_owner,
-            "started_at": now,
-            "heartbeat_at": now,
-            "expires_at": expires_at,
-        }
-        self._write_json_metadata(conn, SEARCH_WORKER_LOCK_KEY, lease_payload)
-        conn.commit()
-        return True, lease_payload
-
-    def _heartbeat_worker_lease(self, conn) -> None:
-        """Refresh the queue worker lease while this process is active."""
-        now = time.time()
-        if not conn.in_transaction:
-            conn.execute("BEGIN IMMEDIATE")
-        payload = self._read_json_metadata(conn, SEARCH_WORKER_LOCK_KEY)
-        if payload is None or str(payload.get("owner", "")) != self._worker_owner:
-            conn.rollback()
-            raise RuntimeError("search embedding worker lease was lost")
-        payload["heartbeat_at"] = now
-        payload["expires_at"] = now + SEARCH_WORKER_LEASE_SECONDS
-        self._write_json_metadata(conn, SEARCH_WORKER_LOCK_KEY, payload)
-        conn.commit()
-
-    def _release_worker_lease(self, conn) -> None:
-        """Release the queue worker lease if this process owns it."""
-        if not conn.in_transaction:
-            conn.execute("BEGIN IMMEDIATE")
-        payload = self._read_json_metadata(conn, SEARCH_WORKER_LOCK_KEY)
-        if payload is not None and str(payload.get("owner", "")) == self._worker_owner:
-            self._delete_metadata(conn, SEARCH_WORKER_LOCK_KEY)
-            conn.commit()
-            return
-        conn.rollback()
-
-    def _write_last_run_metadata(self, conn, payload: dict) -> None:
-        """Persist queue worker run summary metadata."""
-        self._write_json_metadata(conn, SEARCH_WORKER_LAST_RUN_KEY, payload)
-
-    def _sqlite_vec_state(self, *, vector_dim: int) -> dict[str, object]:
-        """Return the desired sqlite-vec index state for the current embedding model."""
-        return {
-            "provider": self.embedding_provider.provider_name if self.embedding_provider else "",
-            "model": self.embedding_provider.model_name if self.embedding_provider else "",
-            "dim": int(vector_dim),
-            "distance_metric": "cosine",
-        }
-
-    def _drop_sqlite_vec_index(self, conn) -> None:
-        """Drop the sqlite-vec virtual table and clear its state metadata."""
-        conn.execute(f"DROP TABLE IF EXISTS {SQLITE_VEC_INDEX_TABLE}")
-        self._delete_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY)
-
-    def _ensure_sqlite_vec_index(self, conn, *, vector_dim: int) -> bool:
-        """Ensure the sqlite-vec virtual table exists for the current embedding model."""
-        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
-            return False
-
-        try:
-            desired_state = self._sqlite_vec_state(vector_dim=vector_dim)
-            current_state = self._read_json_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY)
-            if current_state != desired_state:
-                self._drop_sqlite_vec_index(conn)
-                conn.execute(
-                    f"""
-                    CREATE VIRTUAL TABLE {SQLITE_VEC_INDEX_TABLE} USING vec0(
-                        chunk_id integer primary key,
-                        embedding float[{vector_dim}] distance_metric=cosine,
-                        session_id text,
-                        owner_type text,
-                        source_type text
-                    )
-                    """
+        for _ in range(_READ_ONLY_SNAPSHOT_ATTEMPTS):
+            snapshot_directory: tempfile.TemporaryDirectory | None = None
+            conn: _ReadOnlySnapshotConnection | None = None
+            try:
+                snapshot_directory = tempfile.TemporaryDirectory(
+                    prefix="opensprite-search-readonly-"
                 )
-                self._write_json_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY, desired_state)
-                self._rebuild_sqlite_vec_index(conn)
-            return True
-        except Exception as exc:
-            logger.warning("search.vector | sqlite-vec index unavailable, falling back to exact scan: {}", exc)
-            self.vector_backend_effective = "exact"
-            return False
-
-    def _rebuild_sqlite_vec_index(self, conn) -> None:
-        """Repopulate the sqlite-vec table from completed current-model embeddings."""
-        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
-            return
-        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE}")
-        rows = conn.execute(
-            """
-            SELECT
-                c.id,
-                c.session_id,
-                c.owner_type,
-                c.source_type,
-                ce.embedding,
-                ce.embedding_dim
-            FROM search_chunks c
-            JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            WHERE ce.embedding_status = 'completed'
-              AND COALESCE(ce.embedding_provider, '') = ?
-              AND COALESCE(ce.embedding_model, '') = ?
-            ORDER BY c.id ASC
-            """,
-            (
-                self.embedding_provider.provider_name,
-                self.embedding_provider.model_name,
-            ),
-        ).fetchall()
-        for row in rows:
-            conn.execute(
-                f"""
-                INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
-                    chunk_id,
-                    embedding,
-                    session_id,
-                    owner_type,
-                    source_type
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    int(row["id"]),
-                    row["embedding"],
-                    str(row["session_id"] or ""),
-                    str(row["owner_type"] or ""),
-                    str(row["source_type"] or ""),
-                ),
-            )
-
-    def _delete_sqlite_vec_rows(self, conn, chunk_ids: list[int]) -> None:
-        """Remove chunk ids from the sqlite-vec index table."""
-        if self.vector_backend_effective != "sqlite_vec" or not chunk_ids:
-            return
-        if not table_exists(conn, SQLITE_VEC_INDEX_TABLE):
-            return
-        conn.executemany(
-            f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chunk_id = ?",
-            [(chunk_id,) for chunk_id in chunk_ids],
-        )
-
-    def _upsert_sqlite_vec_rows(self, conn, chunk_ids: list[int], *, vector_dim: int) -> None:
-        """Insert or replace one batch of completed embeddings into sqlite-vec."""
-        if not chunk_ids or not self._ensure_sqlite_vec_index(conn, vector_dim=vector_dim):
-            return
-
-        placeholders = ", ".join("?" for _ in chunk_ids)
-        rows = conn.execute(
-            f"""
-            SELECT
-                c.id,
-                c.session_id,
-                c.owner_type,
-                c.source_type,
-                ce.embedding
-            FROM search_chunks c
-            JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            WHERE c.id IN ({placeholders})
-              AND ce.embedding_status = 'completed'
-              AND COALESCE(ce.embedding_provider, '') = ?
-              AND COALESCE(ce.embedding_model, '') = ?
-            ORDER BY c.id ASC
-            """,
-            [
-                *chunk_ids,
-                self.embedding_provider.provider_name,
-                self.embedding_provider.model_name,
-            ],
-        ).fetchall()
-
-        self._delete_sqlite_vec_rows(conn, chunk_ids)
-        for row in rows:
-            conn.execute(
-                f"""
-                INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
-                    chunk_id,
-                    embedding,
-                    session_id,
-                    owner_type,
-                    source_type
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    int(row["id"]),
-                    row["embedding"],
-                    str(row["session_id"] or ""),
-                    str(row["owner_type"] or ""),
-                    str(row["source_type"] or ""),
-                ),
-            )
-
-    def _candidate_limit(self, requested_limit: int) -> int:
-        """Expand the search candidate pool when embeddings are enabled."""
-        if self.embedding_provider is None:
-            return max(requested_limit, 1)
-        return max(requested_limit, self.hybrid_candidate_count)
-
-    def _vector_limit(self, requested_limit: int) -> int:
-        """Return the candidate pool size for vector-based retrieval."""
-        return max(requested_limit, self.vector_candidate_count)
-
-    def _schedule_pending_embeddings(self) -> None:
-        """Start the background embedding worker when there is an active event loop."""
-        if self.embedding_provider is None:
-            return
-        if self._queue_worker_task is not None and not self._queue_worker_task.done():
-            return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        if self._embedding_task is not None and not self._embedding_task.done():
-            return
-        self._embedding_task = loop.create_task(self.process_pending_embeddings())
-        self._embedding_task.add_done_callback(self._clear_embedding_task)
-
-    def _clear_embedding_task(self, task: asyncio.Task) -> None:
-        """Reset the cached background task when it finishes."""
-        if self._embedding_task is task:
-            self._embedding_task = None
-        try:
-            task.result()
-        except asyncio.CancelledError:
-            logger.info("search.embed | background worker cancelled")
-        except Exception as exc:
-            logger.warning("search.embed | background worker failed: {}", exc)
-
-    def _queue_chunk_embeddings(self, conn, chunk_ids: list[int]) -> None:
-        """Mark new chunk rows as pending embedding work."""
-        if self.embedding_provider is None or not chunk_ids:
-            return
-        self._delete_sqlite_vec_rows(conn, chunk_ids)
-        for chunk_id in chunk_ids:
-            upsert_chunk_embedding(
-                conn,
-                chunk_id=chunk_id,
-                provider=self.embedding_provider.provider_name,
-                model=self.embedding_provider.model_name,
-                values=None,
-                status="pending",
-                embedded_at=None,
-            )
-
-    async def _claim_pending_embedding_batch(self) -> list[tuple[int, str]]:
-        """Claim one batch of pending chunk ids for background embedding."""
-        if self.embedding_provider is None:
-            return []
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                conn.execute("BEGIN IMMEDIATE")
-                rows = conn.execute(
-                    """
-                    SELECT ce.chunk_id, sc.content
-                    FROM chunk_embeddings ce
-                    JOIN search_chunks sc ON sc.id = ce.chunk_id
-                    WHERE ce.embedding_status = 'pending'
-                      AND ce.embedding_model = ?
-                    ORDER BY ce.chunk_id ASC
-                    LIMIT ?
-                    """,
-                    (self.embedding_provider.model_name, self.embedding_provider.batch_size),
-                ).fetchall()
-                if not rows:
-                    conn.commit()
-                    return []
-                chunk_ids = [int(row["chunk_id"]) for row in rows]
-                conn.executemany(
-                    "UPDATE chunk_embeddings SET embedding_status = 'processing' WHERE chunk_id = ? AND embedding_status = 'pending'",
-                    [(chunk_id,) for chunk_id in chunk_ids],
+                snapshot_path = Path(snapshot_directory.name) / resolved_path.name
+                snapshot_wal_path = Path(f"{snapshot_path}-wal")
+                before_state = _snapshot_source_state(
+                    resolved_path,
+                    wal_path,
+                    shm_path,
                 )
-                conn.commit()
-                return [(int(row["chunk_id"]), str(row["content"] or "")) for row in rows]
-            finally:
-                conn.close()
-
-    async def _mark_embedding_batch(
-        self,
-        chunk_ids: list[int],
-        *,
-        vectors: list[list[float]] | None,
-        status: str,
-    ) -> None:
-        """Persist one processed embedding batch."""
-        if self.embedding_provider is None or not chunk_ids:
-            return
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                payloads = vectors or [None] * len(chunk_ids)
-                for chunk_id, values in zip(chunk_ids, payloads, strict=True):
-                    upsert_chunk_embedding(
-                        conn,
-                        chunk_id=chunk_id,
-                        provider=self.embedding_provider.provider_name,
-                        model=self.embedding_provider.model_name,
-                        values=values,
-                        status=status,
+                if before_state[0] is None:
+                    raise FileNotFoundError(
+                        f"history search database does not exist: {resolved_path}"
                     )
-                if status == "completed" and vectors:
-                    self._upsert_sqlite_vec_rows(conn, chunk_ids, vector_dim=len(vectors[0]))
-                else:
-                    self._delete_sqlite_vec_rows(conn, chunk_ids)
-                conn.commit()
-            finally:
-                conn.close()
+                has_wal = before_state[1] is not None
 
-    async def process_pending_embeddings(self) -> dict[str, int]:
-        """Drain pending chunk embeddings and persist results."""
-        if self.embedding_provider is None:
-            return await self.get_status()
+                copied_hashes = [_copy_with_sha256(resolved_path, snapshot_path)]
+                source_paths = [resolved_path]
+                if has_wal:
+                    copied_hashes.append(_copy_with_sha256(wal_path, snapshot_wal_path))
+                    source_paths.append(wal_path)
 
-        processed_chunks = 0
-        failed_chunks_run = 0
-        current_task = asyncio.current_task()
-        if self._embedding_task is not None and self._embedding_task is not current_task and not self._embedding_task.done():
-            await self._embedding_task
-            status = await self.get_status()
-            status["processed_chunks"] = 0
-            status["failed_chunks_run"] = 0
-            return status
-
-        while True:
-            batch = await self._claim_pending_embedding_batch()
-            if not batch:
-                break
-            chunk_ids = [chunk_id for chunk_id, _ in batch]
-            texts = [content for _, content in batch]
-            try:
-                vectors = await self.embedding_provider.embed_texts(texts)
-            except Exception as exc:
-                logger.warning("search.embed | failed to embed batch: {}", exc)
-                await self._mark_embedding_batch(chunk_ids, vectors=None, status="failed")
-                failed_chunks_run += len(chunk_ids)
-                continue
-            await self._mark_embedding_batch(chunk_ids, vectors=vectors, status="completed")
-            processed_chunks += len(chunk_ids)
-
-        status = await self.get_status()
-        status["processed_chunks"] = processed_chunks
-        status["failed_chunks_run"] = failed_chunks_run
-        return status
-
-    async def wait_for_embedding_idle(self) -> dict[str, int]:
-        """Wait for background embedding work to finish and return current status counts."""
-        if self._embedding_task is not None and not self._embedding_task.done():
-            await self._embedding_task
-        return await self.process_pending_embeddings()
-
-    async def run_queue(
-        self,
-        *,
-        once: bool = False,
-        poll_interval: float = 5.0,
-        idle_exit_seconds: float | None = None,
-        force_refresh: bool = False,
-    ) -> dict[str, int | float | str | bool | None]:
-        """Run the embedding queue worker once or continuously with a lease."""
-        if self.embedding_provider is None:
-            status = await self.get_status()
-            status.update({
-                "refreshed": 0,
-                "processed_chunks": 0,
-                "failed_chunks_run": 0,
-                "worker_mode": "disabled",
-            })
-            return status
-
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                acquired, payload = self._acquire_worker_lease(conn)
-            finally:
-                conn.close()
-
-        if not acquired:
-            owner = str((payload or {}).get("owner", "unknown"))
-            raise RuntimeError(f"search embedding queue is already running by {owner}")
-
-        started_at = time.time()
-        last_status: dict[str, int | float | str | bool | None] = {}
-        idle_started_at: float | None = None
-        mode = "once" if once else "watch"
-        current_worker_task = asyncio.current_task()
-        previous_worker_task = self._queue_worker_task
-        self._queue_worker_task = current_worker_task
-
-        try:
-            while True:
-                refresh_status = await self.refresh_embeddings(
-                    force=force_refresh,
-                    wait=False,
-                    schedule=False,
+                source_hashes = [_file_sha256(path) for path in source_paths]
+                after_state = _snapshot_source_state(
+                    resolved_path,
+                    wal_path,
+                    shm_path,
                 )
-                process_status = await self.process_pending_embeddings()
-                current_status = await self.get_status()
-                current_status["refreshed"] = int(refresh_status.get("refreshed", 0))
-                current_status["processed_chunks"] = int(process_status.get("processed_chunks", 0))
-                current_status["failed_chunks_run"] = int(process_status.get("failed_chunks_run", 0))
-                current_status["worker_mode"] = mode
-                last_status = current_status
+                if before_state != after_state or copied_hashes != source_hashes:
+                    raise _SnapshotChangedError(
+                        "history search database changed during snapshot capture"
+                    )
 
-                async with self._lock:
-                    conn = self._get_conn()
-                    try:
-                        self._heartbeat_worker_lease(conn)
-                    finally:
-                        conn.close()
-
-                did_work = bool(
-                    current_status["refreshed"]
-                    or current_status["processed_chunks"]
-                    or current_status["failed_chunks_run"]
-                    or current_status["queued"]
+                query = "mode=ro" if has_wal else "mode=ro&immutable=1"
+                uri = f"{snapshot_path.resolve().as_uri()}?{query}"
+                conn = sqlite3.connect(
+                    uri,
+                    timeout=30.0,
+                    uri=True,
+                    factory=_ReadOnlySnapshotConnection,
                 )
+                conn.attach_snapshot_directory(snapshot_directory)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA query_only = ON")
+                conn.execute("PRAGMA busy_timeout = 30000")
+                conn.create_function(
+                    "unicode_casefold",
+                    1,
+                    _unicode_casefold,
+                    deterministic=True,
+                )
+                conn.create_function(
+                    "unicode_token_match",
+                    2,
+                    _unicode_token_match,
+                    deterministic=True,
+                )
+                conn.execute("PRAGMA schema_version").fetchone()
+                return conn
+            except _SnapshotChangedError as exc:
+                last_error = exc
+                _cleanup_snapshot_attempt(conn, snapshot_directory)
+            except FileNotFoundError as exc:
+                if snapshot_directory is None:
+                    raise RuntimeError(
+                        "could not create a read-only history search snapshot"
+                    ) from exc
+                last_error = exc
+                _cleanup_snapshot_attempt(conn, snapshot_directory)
+            except sqlite3.DatabaseError as exc:
+                _cleanup_snapshot_attempt(conn, snapshot_directory)
+                raise RuntimeError(
+                    "history search index is unavailable or incompatible"
+                ) from exc
+            except OSError as exc:
+                _cleanup_snapshot_attempt(conn, snapshot_directory)
+                raise RuntimeError(
+                    "could not create a read-only history search snapshot"
+                ) from exc
 
-                if once:
-                    break
-                if did_work:
-                    idle_started_at = None
-                else:
-                    idle_started_at = idle_started_at or time.time()
-                    if idle_exit_seconds is not None and (time.time() - idle_started_at) >= max(idle_exit_seconds, 0):
-                        break
+        raise RuntimeError(
+            "history search database changed while creating a read-only snapshot"
+        ) from last_error
 
-                await asyncio.sleep(max(poll_interval, 0.1))
-        finally:
-            finished_at = time.time()
-            summary = dict(last_status)
-            summary.update(
-                {
-                    "owner": self._worker_owner,
-                    "started_at": started_at,
-                    "finished_at": finished_at,
-                    "mode": mode,
-                    "force_refresh": force_refresh,
-                }
-            )
-            if self._queue_worker_task is current_worker_task:
-                self._queue_worker_task = previous_worker_task if previous_worker_task is not current_worker_task else None
-            async with self._lock:
-                conn = self._get_conn()
-                try:
-                    self._write_last_run_metadata(conn, summary)
-                    self._release_worker_lease(conn)
-                finally:
-                    conn.close()
-
-        return last_status
-
-    async def _requeue_embeddings(self, *, from_status: str, session_id: str | None = None) -> int:
-        """Move matching embedding jobs back to pending."""
-        if self.embedding_provider is None:
-            return 0
-
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                params: list[object] = [self.embedding_provider.model_name]
-                where_clauses = ["ce.embedding_status = ?", "ce.embedding_model = ?"]
-                params.insert(0, from_status)
-                if session_id:
-                    where_clauses.append("sc.session_id = ?")
-                    params.append(session_id)
-                rows = conn.execute(
-                    f"""
-                    SELECT ce.chunk_id
-                    FROM chunk_embeddings ce
-                    JOIN search_chunks sc ON sc.id = ce.chunk_id
-                    WHERE {' AND '.join(where_clauses)}
-                    ORDER BY ce.chunk_id ASC
-                    """,
-                    params,
-                ).fetchall()
-                chunk_ids = [int(row["chunk_id"]) for row in rows]
-                if chunk_ids:
-                    conn.executemany(
-                        "UPDATE chunk_embeddings SET embedding_status = 'pending', embedded_at = NULL WHERE chunk_id = ?",
-                        [(chunk_id,) for chunk_id in chunk_ids],
-                    )
-                    self._delete_sqlite_vec_rows(conn, chunk_ids)
-                    conn.commit()
-                return len(chunk_ids)
-            finally:
-                conn.close()
-
-    async def retry_failed_embeddings(
-        self,
-        session_id: str | None = None,
-        *,
-        wait: bool = True,
-    ) -> dict[str, int]:
-        """Move failed embedding jobs back to pending and optionally wait for completion."""
-        if self.embedding_provider is None:
-            status = await self.get_status(session_id=session_id)
-            status["retried"] = 0
-            return status
-
-        retried = await self._requeue_embeddings(from_status="failed", session_id=session_id)
-
-        if retried:
-            self._schedule_pending_embeddings()
-            if wait:
-                await self.wait_for_embedding_idle()
-
-        filtered_status = await self.get_status(session_id=session_id)
-        filtered_status["retried"] = retried
-        return filtered_status
-
-    async def refresh_embeddings(
-        self,
-        session_id: str | None = None,
-        *,
-        force: bool = False,
-        wait: bool = True,
-        schedule: bool = True,
-    ) -> dict[str, int]:
-        """Queue embeddings for missing, stale, or explicitly refreshed chunks."""
-        if self.embedding_provider is None:
-            status = await self.get_status(session_id=session_id)
-            status["refreshed"] = 0
-            return status
-
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                filters = []
-                params: list[object] = []
-                if session_id:
-                    filters.append("sc.session_id = ?")
-                    params.append(session_id)
-
-                if force:
-                    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
-                else:
-                    filters.append(
-                        "(ce.chunk_id IS NULL OR ce.embedding_status = 'failed' OR COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?)"
-                    )
-                    params.extend([
-                        self.embedding_provider.provider_name,
-                        self.embedding_provider.model_name,
-                    ])
-                    where_clause = f"WHERE {' AND '.join(filters)}"
-
-                rows = conn.execute(
-                    f"""
-                    SELECT sc.id
-                    FROM search_chunks sc
-                    LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
-                    {where_clause}
-                    ORDER BY sc.id ASC
-                    """,
-                    params,
-                ).fetchall()
-                chunk_ids = [int(row["id"]) for row in rows]
-                if chunk_ids:
-                    self._queue_chunk_embeddings(conn, chunk_ids)
-                    conn.commit()
-            finally:
-                conn.close()
-
-        if chunk_ids:
-            if schedule:
-                self._schedule_pending_embeddings()
-            if wait:
-                if schedule:
-                    await self.wait_for_embedding_idle()
-                else:
-                    await self.process_pending_embeddings()
-
-        status = await self.get_status(session_id=session_id)
-        status["refreshed"] = len(chunk_ids)
-        return status
-
-    async def get_status(self, session_id: str | None = None) -> dict[str, int]:
-        """Return search and embedding status counts."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                filters = ""
-                params: list[object] = []
-                if session_id:
-                    filters = " WHERE session_id = ?"
-                    params.append(session_id)
-                chats = conn.execute(
-                    f"SELECT COUNT(DISTINCT session_id) FROM search_chunks{filters}",
-                    params,
-                ).fetchone()[0]
-                chunks = conn.execute(
-                    f"SELECT COUNT(*) FROM search_chunks{filters}",
-                    params,
-                ).fetchone()[0]
-                messages = conn.execute(
-                    f"SELECT COUNT(*) FROM messages{filters}",
-                    params,
-                ).fetchone()[0]
-
-                embedding_filters = ""
-                embedding_params: list[object] = []
-                if session_id:
-                    embedding_filters = " WHERE sc.session_id = ?"
-                    embedding_params.append(session_id)
-                status_rows = conn.execute(
-                    f"""
-                    SELECT ce.embedding_status, COUNT(*) AS count
-                    FROM chunk_embeddings ce
-                    JOIN search_chunks sc ON sc.id = ce.chunk_id
-                    {embedding_filters}
-                    GROUP BY ce.embedding_status
-                    """,
-                    embedding_params,
-                ).fetchall()
-
-                missing_count = 0
-                stale_count = 0
-                worker_running = False
-                worker_owner: str | None = None
-                worker_expires_at: float | None = None
-                last_run_started_at: float | None = None
-                last_run_finished_at: float | None = None
-                last_run_mode: str | None = None
-                last_run_refreshed = 0
-                last_run_processed = 0
-                last_run_failed = 0
-                lock_payload = self._read_json_metadata(conn, SEARCH_WORKER_LOCK_KEY)
-                if lock_payload:
-                    worker_owner = str(lock_payload.get("owner", "") or "") or None
-                    worker_expires_at = float(lock_payload.get("expires_at", 0) or 0) or None
-                    worker_running = bool(worker_owner and worker_expires_at and worker_expires_at > time.time())
-                last_run_payload = self._read_json_metadata(conn, SEARCH_WORKER_LAST_RUN_KEY)
-                if last_run_payload:
-                    raw_started_at = last_run_payload.get("started_at")
-                    raw_finished_at = last_run_payload.get("finished_at")
-                    last_run_started_at = float(raw_started_at) if isinstance(raw_started_at, (int, float)) else None
-                    last_run_finished_at = float(raw_finished_at) if isinstance(raw_finished_at, (int, float)) else None
-                    last_run_mode = str(last_run_payload.get("mode", "") or "") or None
-                    last_run_refreshed = int(last_run_payload.get("refreshed", 0) or 0)
-                    last_run_processed = int(last_run_payload.get("processed_chunks", 0) or 0)
-                    last_run_failed = int(last_run_payload.get("failed_chunks_run", 0) or 0)
-                if self.embedding_provider is not None:
-                    missing_count = int(
-                        conn.execute(
-                            f"""
-                            SELECT COUNT(*)
-                            FROM search_chunks sc
-                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
-                            {embedding_filters}
-                            AND ce.chunk_id IS NULL
-                            """
-                            if embedding_filters
-                            else """
-                            SELECT COUNT(*)
-                            FROM search_chunks sc
-                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
-                            WHERE ce.chunk_id IS NULL
-                            """,
-                            embedding_params,
-                        ).fetchone()[0]
-                    )
-                    stale_params = list(embedding_params)
-                    stale_params.extend([
-                        self.embedding_provider.provider_name,
-                        self.embedding_provider.model_name,
-                    ])
-                    stale_count = int(
-                        conn.execute(
-                            f"""
-                            SELECT COUNT(*)
-                            FROM chunk_embeddings ce
-                            JOIN search_chunks sc ON sc.id = ce.chunk_id
-                            {embedding_filters}
-                            {' AND ' if embedding_filters else ' WHERE '}(
-                                COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?
-                            )
-                            """,
-                            stale_params,
-                        ).fetchone()[0]
-                    )
-            finally:
-                conn.close()
-
-        counts = {str(row["embedding_status"]): int(row["count"] or 0) for row in status_rows}
-        total_embeddings = sum(counts.values())
-        return {
-            "session_count": int(chats or 0),
-            "message_count": int(messages or 0),
-            "chunk_count": int(chunks or 0),
-            "embedding_total": int(total_embeddings),
-            "queued": counts.get("pending", 0) + counts.get("processing", 0),
-            "pending": counts.get("pending", 0),
-            "processing": counts.get("processing", 0),
-            "completed": counts.get("completed", 0),
-            "failed": counts.get("failed", 0),
-            "missing": int(missing_count),
-            "stale": int(stale_count),
-            "worker_running": worker_running,
-            "worker_owner": worker_owner,
-            "worker_expires_at": worker_expires_at,
-            "last_run_started_at": last_run_started_at,
-            "last_run_finished_at": last_run_finished_at,
-            "last_run_mode": last_run_mode,
-            "last_run_refreshed": last_run_refreshed,
-            "last_run_processed": last_run_processed,
-            "last_run_failed": last_run_failed,
-            "vector_backend_requested": self.vector_backend_requested,
-            "vector_backend_effective": self.vector_backend_effective,
-        }
-
-    async def _rerank_rows(self, conn, query: str, rows, limit: int, *, owner_type: str):
-        """Fuse FTS, lexical coverage, embeddings, and source preference into final ranking."""
-        if not rows:
-            return []
-
-        normalized_query = self._normalize_query_text(query)
-        query_tokens = self._query_tokens(normalized_query)
-        ranked_rows = [dict(row) if not isinstance(row, dict) else dict(row) for row in rows]
-
-        embedding_similarities: dict[int, float] = {
-            int(row["id"]): float(row["embedding_similarity"])
-            for row in ranked_rows
-            if row.get("embedding_similarity") is not None
-        }
-        if self.embedding_provider is not None and not embedding_similarities:
-            try:
-                query_vectors = await self.embedding_provider.embed_texts([normalized_query or query])
-            except Exception as exc:
-                logger.warning("search.embed | failed to embed query for rerank: {}", exc)
-                query_vectors = []
-
-            if query_vectors:
-                query_vector = query_vectors[0]
-                row_ids = [int(row["id"]) for row in ranked_rows]
-                placeholders = ", ".join("?" for _ in row_ids)
-                embedding_rows = conn.execute(
-                    f"""
-                    SELECT chunk_id, embedding, embedding_dim
-                    FROM chunk_embeddings
-                    WHERE chunk_id IN ({placeholders})
-                      AND embedding_status = 'completed'
-                    """,
-                    row_ids,
-                ).fetchall()
-                vectors = {
-                    int(row["chunk_id"]): unpack_embedding(row["embedding"], int(row["embedding_dim"] or 0))
-                    for row in embedding_rows
-                }
-                for row in ranked_rows:
-                    vector = vectors.get(int(row["id"]))
-                    similarity = self._cosine_similarity(query_vector, vector) if vector else None
-                    if similarity is not None:
-                        embedding_similarities[int(row["id"])] = similarity
-
-        scored_rows: list[dict] = []
-        for index, row in enumerate(ranked_rows, start=1):
-            fts_component = 1.0 / index
-            coverage_component = self._coverage_score(query_tokens, row)
-            embedding_similarity = embedding_similarities.get(int(row["id"]))
-            embedding_component = ((embedding_similarity + 1.0) / 2.0) if embedding_similarity is not None else 0.0
-            source_bonus = 0.0
-
-            if embedding_similarity is not None:
-                combined_score = (0.25 * fts_component) + (0.25 * coverage_component) + (0.45 * embedding_component) + source_bonus
-            else:
-                combined_score = (0.55 * fts_component) + (0.35 * coverage_component) + source_bonus
-
-            row["score"] = combined_score
-            row["embedding_similarity"] = embedding_similarity
-            scored_rows.append(row)
-
-        scored_rows.sort(
-            key=lambda row: (
-                float(row["score"] or 0),
-                float(row["created_at"] or 0),
-                int(row["id"]),
-            ),
-            reverse=True,
-        )
-
-        return scored_rows[: max(limit, 1)]
-
-    async def _vector_candidate_rows(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ) -> list[dict]:
-        """Select candidates using the configured vector backend with safe fallback."""
-        if self.embedding_provider is None:
-            return []
-
-        if self.vector_backend_effective == "sqlite_vec":
-            rows = await self._sqlite_vec_candidate_rows(
-                conn,
-                session_id=session_id,
-                query=query,
-                owner_type=owner_type,
-                limit=limit,
-            )
-            if rows:
-                return rows
-
-        return await self._exact_vector_candidate_rows(
-            conn,
-            session_id=session_id,
-            query=query,
-            owner_type=owner_type,
-            limit=limit,
-        )
-
-    async def _exact_vector_candidate_rows(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ) -> list[dict]:
-        """Select candidates by exact vector similarity over stored embeddings."""
-        if self.embedding_provider is None:
-            return []
-
-        normalized_query = self._normalize_query_text(query)
-        try:
-            query_vectors = await self.embedding_provider.embed_texts([normalized_query or query])
-        except Exception as exc:
-            logger.warning("search.embed | failed to embed query for vector retrieval: {}", exc)
-            return []
-        if not query_vectors:
-            return []
-
-        query_vector = query_vectors[0]
-        sql = """
-            SELECT
-                c.id,
-                c.owner_id,
-                c.session_id,
-                c.source_type,
-                c.content,
-                c.created_at,
-                c.role,
-                c.tool_name,
-                c.title,
-                c.url,
-                c.query,
-                ce.embedding,
-                ce.embedding_dim
-            FROM search_chunks c
-            JOIN chunk_embeddings ce ON ce.chunk_id = c.id
-            WHERE c.session_id = ?
-              AND c.owner_type = ?
-              AND ce.embedding_status = 'completed'
-              AND COALESCE(ce.embedding_provider, '') = ?
-              AND COALESCE(ce.embedding_model, '') = ?
-        """
-        params: list[object] = [
-            session_id,
-            owner_type,
-            self.embedding_provider.provider_name,
-            self.embedding_provider.model_name,
-        ]
-        rows = conn.execute(sql, params).fetchall()
-        scored_rows: list[dict] = []
-        for row in rows:
-            payload = dict(row)
-            vector = unpack_embedding(row["embedding"], int(row["embedding_dim"] or 0))
-            similarity = self._cosine_similarity(query_vector, vector)
-            if similarity is None:
-                continue
-            payload["embedding_similarity"] = similarity
-            payload["score"] = similarity
-            scored_rows.append(payload)
-
-        scored_rows.sort(
-            key=lambda row: (
-                float(row.get("embedding_similarity") or 0),
-                float(row.get("created_at") or 0),
-                int(row.get("id") or 0),
-            ),
-            reverse=True,
-        )
-        return scored_rows[: max(limit, 1)]
-
-    async def _sqlite_vec_candidate_rows(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ) -> list[dict]:
-        """Select candidates from the sqlite-vec virtual table."""
-        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
-            return []
-
-        normalized_query = self._normalize_query_text(query)
-        try:
-            query_vectors = await self.embedding_provider.embed_texts([normalized_query or query])
-        except Exception as exc:
-            logger.warning("search.embed | failed to embed query for sqlite-vec retrieval: {}", exc)
-            return []
-        if not query_vectors:
-            return []
-
-        query_blob = pack_embedding(query_vectors[0])
-        vector_dim = len(query_vectors[0])
-        if not self._ensure_sqlite_vec_index(conn, vector_dim=vector_dim):
-            return []
-
-        sql = f"""
-            WITH vector_matches AS (
-                SELECT chunk_id, distance
-                FROM {SQLITE_VEC_INDEX_TABLE}
-                WHERE embedding MATCH ?
-                  AND k = ?
-                  AND session_id = ?
-                  AND owner_type = ?
-        """
-        params: list[object] = [query_blob, max(limit, 1), session_id, owner_type]
-
-        sql += f"""
-            )
-            SELECT
-                c.id,
-                c.owner_id,
-                c.session_id,
-                c.source_type,
-                c.content,
-                c.created_at,
-                c.role,
-                c.tool_name,
-                c.title,
-                c.url,
-                c.query,
-                vm.distance
-            FROM vector_matches vm
-            JOIN search_chunks c ON c.id = vm.chunk_id
-            ORDER BY vm.distance ASC, c.created_at DESC, c.id DESC
-        """
-
-        try:
-            rows = conn.execute(sql, params).fetchall()
-        except Exception as exc:
-            logger.warning("search.vector | sqlite-vec query failed, falling back to exact scan: {}", exc)
-            self.vector_backend_effective = "exact"
-            return []
-
-        payloads: list[dict] = []
-        for row in rows:
-            payload = dict(row)
-            distance = row["distance"]
-            payload["embedding_similarity"] = None if distance is None else 1.0 - float(distance)
-            payloads.append(payload)
-        return payloads
-
-    @staticmethod
-    def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
-        """Return cosine similarity for two vectors of the same dimension."""
-        if not left or not right or len(left) != len(right):
-            return None
-        numerator = sum(a * b for a, b in zip(left, right, strict=True))
-        left_norm = math.sqrt(sum(a * a for a in left))
-        right_norm = math.sqrt(sum(b * b for b in right))
-        if left_norm == 0 or right_norm == 0:
-            return None
-        return numerator / (left_norm * right_norm)
-
-    @staticmethod
-    def _normalize_query_text(text: str) -> str:
-        """Normalize a free-form query into a whitespace-separated token string."""
-        tokens = [token.strip() for token in re.findall(r"\w+", text.lower()) if token.strip()]
-        if tokens:
-            return " ".join(tokens)
-        return " ".join(text.strip().lower().split())
-
-    @classmethod
-    def _query_tokens(cls, text: str) -> list[str]:
-        """Tokenize a normalized query string."""
-        normalized = cls._normalize_query_text(text)
-        return [token for token in normalized.split() if token]
-
-    @classmethod
-    def _coverage_score(cls, query_tokens: list[str], row) -> float:
-        """Estimate how much of the normalized query is covered by this row."""
-        if not query_tokens:
-            return 0.0
-        haystack = " ".join(
-            str(row.get(key, "") or "")
-            for key in ("title", "query", "content", "url")
-        )
-        haystack_tokens = set(cls._query_tokens(haystack))
-        if not haystack_tokens:
-            return 0.0
-        matched = sum(1 for token in query_tokens if token in haystack_tokens)
-        return matched / max(len(query_tokens), 1)
-
-    async def sync_from_storage(self, storage: StorageProvider) -> None:
-        """Backfill the shared SQLite index when search is enabled after history already exists."""
+    async def sync_from_storage(self) -> None:
+        """Rebuild when persisted messages and indexed messages are out of sync."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 ensure_sqlite_schema(conn)
-                persisted_signature = self._read_index_signature(conn)
                 indexable_message_count = int(
                     conn.execute(
-                        "SELECT COUNT(*) FROM messages WHERE TRIM(content) <> ''"
+                        """
+                        SELECT COUNT(*)
+                        FROM messages
+                        WHERE TRIM(content) <> ''
+                          AND (tool_name IS NULL OR tool_name <> ?)
+                        """,
+                        (HISTORY_SEARCH_TOOL_NAME,),
                     ).fetchone()[0]
                 )
                 indexed_message_count = int(
                     conn.execute(
-                        "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'message'"
+                        "SELECT COUNT(DISTINCT message_id) FROM search_chunks"
                     ).fetchone()[0]
                 )
-                pending_embedding_count = int(
-                    conn.execute(
-                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'pending'"
-                    ).fetchone()[0]
-                )
-                processing_embedding_count = int(
-                    conn.execute(
-                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'processing'"
-                    ).fetchone()[0]
-                )
-                failed_embedding_count = int(
-                    conn.execute(
-                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'failed'"
-                    ).fetchone()[0]
-                )
-                missing_embedding_count = 0
-                stale_embedding_count = 0
-                if self.embedding_provider is not None:
-                    missing_embedding_count = int(
-                        conn.execute(
-                            """
-                            SELECT COUNT(*)
-                            FROM search_chunks sc
-                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
-                            WHERE ce.chunk_id IS NULL
-                            """
-                        ).fetchone()[0]
-                    )
-                    stale_embedding_count = int(
-                        conn.execute(
-                            """
-                            SELECT COUNT(*)
-                            FROM chunk_embeddings ce
-                            WHERE COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?
-                            """,
-                            (
-                                self.embedding_provider.provider_name,
-                                self.embedding_provider.model_name,
-                            ),
-                        ).fetchone()[0]
-                    )
             finally:
                 conn.close()
 
-        needs_rebuild = False
-        if persisted_signature != self._index_signature:
-            needs_rebuild = True
-        elif indexable_message_count > indexed_message_count:
-            needs_rebuild = True
-
-        if not needs_rebuild:
-            if processing_embedding_count > 0:
-                requeued_processing = await self._requeue_embeddings(from_status="processing")
-                if requeued_processing > 0:
-                    pending_embedding_count += requeued_processing
-            if self.retry_failed_on_startup and failed_embedding_count > 0:
-                await self.retry_failed_embeddings(wait=False)
-            if (missing_embedding_count > 0 or stale_embedding_count > 0) and self.embedding_provider is not None:
-                await self.refresh_embeddings(wait=False)
-            if pending_embedding_count > 0:
-                self._schedule_pending_embeddings()
-            return None
-
-        logger.info(
-            "search.sync | rebuilding sqlite index signature={} expected={} messages={} indexed_messages={}",
-            persisted_signature,
-            self._index_signature,
-            indexable_message_count,
-            indexed_message_count,
-        )
-        await self.rebuild_index()
-        self._schedule_pending_embeddings()
-        return None
+        if indexable_message_count != indexed_message_count:
+            logger.info(
+                "history_search.sync | rebuilding messages={} indexed_messages={}",
+                indexable_message_count,
+                indexed_message_count,
+            )
+            await self.rebuild_index()
 
     async def index_message(
         self,
@@ -1273,12 +497,16 @@ class SQLiteSearchStore(SearchStore):
         tool_name: str | None = None,
         created_at: float | None = None,
     ) -> None:
-        current_created_at = created_at or time.time()
+        """Index one already-persisted message."""
+        if tool_name == HISTORY_SEARCH_TOOL_NAME:
+            return
+
+        timestamp = created_at if created_at is not None else time.time()
         chunks = build_history_chunks(
             role=role,
             content=content,
             tool_name=tool_name,
-            created_at=current_created_at,
+            created_at=timestamp,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
         )
@@ -1288,151 +516,138 @@ class SQLiteSearchStore(SearchStore):
         async with self._lock:
             conn = self._get_conn()
             try:
-                owner_id = find_message_owner_id(
+                message_id = find_message_id(
                     conn,
                     session_id=session_id,
                     role=role,
                     content=content,
                     tool_name=tool_name,
-                    created_at=current_created_at,
+                    created_at=timestamp,
                 )
-                chunk_ids = insert_search_chunks(
+                if message_id is None:
+                    logger.warning(
+                        "history_search.index | persisted message not found session_id={} role={}",
+                        session_id,
+                        role,
+                    )
+                    return
+                insert_search_chunks(
                     conn,
                     session_id=session_id,
-                    owner_type="message",
-                    owner_id=owner_id,
+                    message_id=message_id,
                     chunks=chunks,
                 )
-                self._queue_chunk_embeddings(conn, chunk_ids)
-                self._write_index_signature(conn)
                 conn.commit()
             finally:
                 conn.close()
-        self._schedule_pending_embeddings()
 
-    async def search_history(self, session_id: str, query: str, limit: int = 5) -> list[SearchHit]:
+    async def search_history(
+        self,
+        session_id: str,
+        query: str,
+        limit: int = 5,
+    ) -> list[SearchHit]:
+        """Search one session by merging FTS and Unicode substring matches."""
+        query = validate_history_search_query(query)
+        if not query:
+            return []
+        requested_limit = self._bounded_limit(limit, default=self.history_top_k)
+
         async with self._lock:
             conn = self._get_conn()
             try:
-                requested_limit = limit or self.history_top_k
-                rows = await self._select_candidate_rows(
+                fts_rows = self._search_fts(
                     conn,
                     session_id=session_id,
                     query=query,
-                    owner_type="message",
                     limit=requested_limit,
                 )
-                rows = await self._rerank_rows(
+                substring_rows = self._search_substring(
                     conn,
-                    query,
-                    rows,
-                    requested_limit,
-                    owner_type="message",
+                    session_id=session_id,
+                    query=query,
+                    limit=requested_limit,
+                )
+                rows = self._merge_search_rows(
+                    fts_rows,
+                    substring_rows,
+                    limit=requested_limit,
                 )
                 return [self._row_to_hit(row) for row in rows]
             finally:
                 conn.close()
 
-    async def _select_candidate_rows(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ):
-        """Select candidate rows using the configured retrieval strategy."""
-        if self.embedding_candidate_strategy == "vector" and self.embedding_provider is not None:
-            rows = await self._vector_candidate_rows(
-                conn,
-                session_id=session_id,
-                query=query,
-                owner_type=owner_type,
-                limit=self._vector_limit(limit),
-            )
-            if rows:
-                return rows
-
-        return self._search_rows(
-            conn,
-            session_id=session_id,
-            query=query,
-            owner_type=owner_type,
-            limit=self._candidate_limit(limit),
-        )
-
     async def clear_session(self, session_id: str) -> None:
+        """Remove indexed chunks for one session without deleting its messages."""
         async with self._lock:
             conn = self._get_conn()
             try:
-                if self.vector_backend_effective == "sqlite_vec":
-                    conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
                 conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()
 
     async def rebuild_index(self, session_id: str | None = None) -> dict[str, int]:
-        """Rebuild indexed history rows from persisted messages."""
+        """Rebuild searchable chunks from persisted conversation messages."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 ensure_sqlite_schema(conn)
                 conn.execute("BEGIN")
-                if session_id:
-                    if self.vector_backend_effective == "sqlite_vec":
-                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
+                if session_id is None:
+                    conn.execute("DELETE FROM search_chunks")
+                    rows = conn.execute(
+                        """
+                        SELECT id, session_id, role, content, tool_name, created_at
+                        FROM messages
+                        WHERE TRIM(content) <> ''
+                          AND (tool_name IS NULL OR tool_name <> ?)
+                        ORDER BY session_id ASC, id ASC
+                        """,
+                        (HISTORY_SEARCH_TOOL_NAME,),
+                    ).fetchall()
+                else:
                     conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
                     rows = conn.execute(
                         """
                         SELECT id, session_id, role, content, tool_name, created_at
                         FROM messages
                         WHERE session_id = ?
+                          AND TRIM(content) <> ''
+                          AND (tool_name IS NULL OR tool_name <> ?)
                         ORDER BY id ASC
                         """,
-                        (session_id,),
-                    ).fetchall()
-                else:
-                    if self.vector_backend_effective == "sqlite_vec":
-                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE}")
-                    conn.execute("DELETE FROM search_chunks")
-                    rows = conn.execute(
-                        """
-                        SELECT id, session_id, role, content, tool_name, created_at
-                        FROM messages
-                        ORDER BY session_id ASC, id ASC
-                        """
+                        (session_id, HISTORY_SEARCH_TOOL_NAME),
                     ).fetchall()
 
                 message_count = 0
                 chunk_count = 0
+                sessions: set[str] = set()
                 for row in rows:
-                    created_at = float(row["created_at"] or 0)
-                    history_chunks = build_history_chunks(
+                    chunks = build_history_chunks(
                         role=str(row["role"]),
                         content=str(row["content"]),
                         tool_name=row["tool_name"],
-                        created_at=created_at,
+                        created_at=float(row["created_at"] or 0),
                         chunk_size=self.chunk_size,
                         chunk_overlap=self.chunk_overlap,
                     )
-                    history_chunk_ids = insert_search_chunks(
+                    if not chunks:
+                        continue
+                    current_session_id = str(row["session_id"])
+                    insert_search_chunks(
                         conn,
-                        session_id=str(row["session_id"]),
-                        owner_type="message",
-                        owner_id=int(row["id"]),
-                        chunks=history_chunks,
+                        session_id=current_session_id,
+                        message_id=int(row["id"]),
+                        chunks=chunks,
                     )
-                    self._queue_chunk_embeddings(conn, history_chunk_ids)
-                    chunk_count += len(history_chunks)
+                    sessions.add(current_session_id)
                     message_count += 1
+                    chunk_count += len(chunks)
 
-                self._write_index_signature(conn)
                 conn.commit()
-                self._schedule_pending_embeddings()
                 return {
-                    "session_count": len({str(row["session_id"]) for row in rows}),
+                    "session_count": len(sessions),
                     "message_count": message_count,
                     "chunk_count": chunk_count,
                 }
@@ -1442,141 +657,213 @@ class SQLiteSearchStore(SearchStore):
             finally:
                 conn.close()
 
-    def _search_rows(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ):
-        match_query = self._compile_match_query(query)
-        if match_query is None:
-            return self._search_rows_fallback(
-                conn,
-                session_id=session_id,
-                query=query,
-                owner_type=owner_type,
-                limit=limit,
-            )
-
-        sql = """
-            SELECT
-                c.id,
-                c.owner_id,
-                c.session_id,
-                c.source_type,
-                c.content,
-                c.created_at,
-                c.role,
-                c.tool_name,
-                c.title,
-                c.url,
-                c.query,
-                bm25(search_chunks_fts) AS score
-            FROM search_chunks_fts
-            JOIN search_chunks c ON c.id = search_chunks_fts.rowid
-            WHERE search_chunks_fts MATCH ?
-              AND c.session_id = ?
-              AND c.owner_type = ?
-        """
-        params: list[object] = [match_query, session_id, owner_type]
-        sql += " ORDER BY score ASC, c.created_at DESC, c.id DESC LIMIT ?"
-        params.append(max(limit, 1))
-
-        try:
-            return conn.execute(sql, params).fetchall()
-        except Exception:
-            return self._search_rows_fallback(
-                conn,
-                session_id=session_id,
-                query=query,
-                owner_type=owner_type,
-                limit=limit,
-            )
-
-    def _search_rows_fallback(
-        self,
-        conn,
-        *,
-        session_id: str,
-        query: str,
-        owner_type: str,
-        limit: int,
-    ):
-        sql = """
-            SELECT
-                c.id,
-                c.owner_id,
-                c.session_id,
-                c.source_type,
-                c.content,
-                c.created_at,
-                c.role,
-                c.tool_name,
-                c.title,
-                c.url,
-                c.query
-            FROM search_chunks c
-            WHERE c.session_id = ?
-              AND c.owner_type = ?
-        """
-        params: list[object] = [session_id, owner_type]
-        sql += " ORDER BY c.created_at DESC, c.id DESC"
-
-        rows = conn.execute(sql, params).fetchall()
-        scored = []
-        for row in rows:
-            haystack = " ".join(
-                str(row[key] or "")
-                for key in ("title", "query", "content", "url")
-            )
-            score = self._lexical_score(query, haystack)
-            if score > 0:
-                scored.append((score, row))
-        scored.sort(key=lambda item: (item[0], float(item[1]["created_at"] or 0), int(item[1]["id"])), reverse=True)
-        return [self._row_with_score(row, score) for score, row in scored[: max(limit, 1)]]
+    async def get_status(self, session_id: str | None = None) -> dict[str, int]:
+        """Return compact index counts for diagnostics."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                if session_id is None:
+                    row = conn.execute(
+                        """
+                        SELECT
+                            COUNT(DISTINCT session_id) AS session_count,
+                            COUNT(DISTINCT message_id) AS message_count,
+                            COUNT(*) AS chunk_count
+                        FROM search_chunks
+                        """
+                    ).fetchone()
+                else:
+                    row = conn.execute(
+                        """
+                        SELECT
+                            COUNT(DISTINCT session_id) AS session_count,
+                            COUNT(DISTINCT message_id) AS message_count,
+                            COUNT(*) AS chunk_count
+                        FROM search_chunks
+                        WHERE session_id = ?
+                        """,
+                        (session_id,),
+                    ).fetchone()
+                return {
+                    "session_count": int(row["session_count"] or 0),
+                    "message_count": int(row["message_count"] or 0),
+                    "chunk_count": int(row["chunk_count"] or 0),
+                }
+            except sqlite3.DatabaseError as exc:
+                raise RuntimeError(
+                    "history search index is unavailable or incompatible"
+                ) from exc
+            finally:
+                conn.close()
 
     @staticmethod
-    def _compile_match_query(query: str) -> str | None:
-        tokens = SQLiteSearchStore._query_tokens(query)
+    def _bounded_limit(value: int | None, *, default: int) -> int:
+        try:
+            parsed = int(value if value is not None else default)
+        except (TypeError, ValueError):
+            parsed = default
+        return min(max(parsed, 1), MAX_HISTORY_SEARCH_RESULTS)
+
+    @staticmethod
+    def _query_tokens(query: str) -> list[str]:
+        normalized = validate_history_search_query(query)
+        _, tokens = parse_history_search_terms(normalized)
+        return tokens
+
+    @classmethod
+    def _compile_match_query(cls, query: str) -> str | None:
+        tokens = cls._query_tokens(query)
         if not tokens:
             return None
         return " AND ".join(f'"{token}"' for token in tokens)
 
     @staticmethod
-    def _lexical_score(query: str, content: str) -> float:
-        query_tokens = {token for token in SQLiteSearchStore._query_tokens(query) if len(token) > 1}
-        if not query_tokens:
-            normalized_query = SQLiteSearchStore._normalize_query_text(query)
-            normalized_content = SQLiteSearchStore._normalize_query_text(content)
-            return 1.0 if normalized_query and normalized_query in normalized_content else 0.0
-        content_tokens = SQLiteSearchStore._query_tokens(content)
-        if not content_tokens:
-            return 0.0
-        counts = {token: content_tokens.count(token) for token in query_tokens}
-        return sum(counts.values()) / max(len(content_tokens), 1)
+    def _merge_search_rows(
+        fts_rows: list[sqlite3.Row],
+        substring_rows: list[sqlite3.Row],
+        *,
+        limit: int,
+    ) -> list[sqlite3.Row]:
+        """Keep FTS relevance first, then add Unicode-only rows by recency."""
+        merged_rows: list[sqlite3.Row] = []
+        seen_message_ids: set[int] = set()
+        for rows in (fts_rows, substring_rows):
+            for row in rows:
+                message_id = int(row["message_id"])
+                if message_id in seen_message_ids:
+                    continue
+                seen_message_ids.add(message_id)
+                merged_rows.append(row)
+                if len(merged_rows) >= limit:
+                    return merged_rows
+        return merged_rows
+
+    @classmethod
+    def _search_fts(
+        cls,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        query: str,
+        limit: int,
+    ) -> list[sqlite3.Row]:
+        match_query = cls._compile_match_query(query)
+        if match_query is None:
+            return []
+        literals, _ = parse_history_search_terms(query)
+        normalized_literals = [_unicode_casefold(identifier) for identifier in literals]
+        literal_filters = "".join(
+            "\n                      AND instr(unicode_casefold(c.content), ?) > 0"
+            for _ in normalized_literals
+        )
+        try:
+            return conn.execute(
+                f"""
+                WITH matches AS (
+                    SELECT
+                        c.id,
+                        c.message_id,
+                        c.session_id,
+                        c.content,
+                        c.created_at,
+                        c.role,
+                        c.tool_name,
+                        bm25(search_chunks_fts) AS score
+                    FROM search_chunks_fts
+                    JOIN search_chunks c ON c.id = search_chunks_fts.rowid
+                    WHERE search_chunks_fts MATCH ?
+                      AND c.session_id = ?{literal_filters}
+                ),
+                ranked_matches AS (
+                    SELECT
+                        *,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY message_id
+                            ORDER BY score ASC, id DESC
+                        ) AS message_rank
+                    FROM matches
+                )
+                SELECT
+                    id, message_id, session_id, content, created_at, role, tool_name, score
+                FROM ranked_matches
+                WHERE message_rank = 1
+                ORDER BY score ASC, created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (match_query, session_id, *normalized_literals, limit),
+            ).fetchall()
+        except sqlite3.DatabaseError:
+            return []
+
+    @classmethod
+    def _search_substring(
+        cls,
+        conn: sqlite3.Connection,
+        *,
+        session_id: str,
+        query: str,
+        limit: int,
+    ) -> list[sqlite3.Row]:
+        literals, tokens = parse_history_search_terms(query)
+        normalized_literals = [_unicode_casefold(identifier) for identifier in literals]
+        normalized_tokens = [_unicode_casefold(token) for token in tokens]
+        if not normalized_literals and not normalized_tokens:
+            return []
+
+        term_filters = [
+            "instr(unicode_casefold(content), ?) > 0"
+            for _ in normalized_literals
+        ]
+        term_filters.extend(
+            "unicode_token_match(content, ?) = 1" for _ in normalized_tokens
+        )
+        return conn.execute(
+            f"""
+            WITH matches AS (
+                SELECT
+                    id,
+                    message_id,
+                    session_id,
+                    content,
+                    created_at,
+                    role,
+                    tool_name,
+                    1.0 AS score
+                FROM search_chunks
+                WHERE session_id = ?
+                  AND {' AND '.join(term_filters)}
+            ),
+            ranked_matches AS (
+                SELECT
+                    *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY message_id
+                        ORDER BY created_at DESC, id DESC
+                    ) AS message_rank
+                FROM matches
+            )
+            SELECT id, message_id, session_id, content, created_at, role, tool_name, score
+            FROM ranked_matches
+            WHERE message_rank = 1
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (session_id, *normalized_literals, *normalized_tokens, limit),
+        ).fetchall()
 
     @staticmethod
-    def _row_with_score(row, score: float):
-        payload = dict(row)
-        payload["score"] = score
-        return payload
-
-    @staticmethod
-    def _row_to_hit(row) -> SearchHit:
-        score = row["score"] if isinstance(row, dict) else row["score"]
+    def _row_to_hit(row: sqlite3.Row) -> SearchHit:
+        score = row["score"]
         return SearchHit(
             id=str(row["id"]),
             session_id=str(row["session_id"]),
-            source_type=str(row["source_type"]),
             content=str(row["content"]),
             created_at=float(row["created_at"] or 0),
             score=float(score) if score is not None else None,
-            role=row["role"],
-            tool_name=row["tool_name"],
-            title=row["title"],
-            url=row["url"],
-            query=row["query"],
+            role=str(row["role"]) if row["role"] is not None else None,
+            tool_name=(
+                str(row["tool_name"])
+                if row["tool_name"] is not None
+                else None
+            ),
         )

@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from ..utils.url import join_url_path
+from ..utils.searxng_url import read_limited_searxng_json, searxng_endpoint_url
 from .web_search_freshness import freshness_params
 from .web_search_payloads import format_error, format_results
 
@@ -46,17 +46,18 @@ async def search_searxng(
     max_pages: int,
     engines: Any,
     categories: Any,
-    proxy: str | None,
+    searxng_proxy: str | None,
     client_factory: Any = httpx.AsyncClient,
 ) -> str:
     try:
         seen_results: set[str] = set()
         items: list[dict[str, str]] = []
         scope_params = searxng_scope_params(engines, categories)
-        async with client_factory(proxy=proxy) as client:
+        async with client_factory(proxy=searxng_proxy) as client:
             for page in range(1, max_pages + 1):
-                response = await client.get(
-                    join_url_path(base_url, "/search"),
+                async with client.stream(
+                    "GET",
+                    searxng_endpoint_url(base_url, "/search"),
                     params={
                         "q": query,
                         "format": "json",
@@ -64,18 +65,26 @@ async def search_searxng(
                         **scope_params,
                         **freshness_params("searxng", freshness),
                     },
+                    headers={"Accept": "application/json", "Accept-Encoding": "identity"},
                     timeout=10.0,
-                )
-                response.raise_for_status()
-                page_results = response.json().get("results", [])
+                ) as response:
+                    response.raise_for_status()
+                    payload = await read_limited_searxng_json(response)
+                if not isinstance(payload, dict):
+                    raise ValueError("SearXNG search response was not a JSON object")
+                page_results = payload.get("results", [])
                 if not page_results:
                     break
                 for item in page_results:
+                    if not isinstance(item, dict):
+                        continue
                     normalized = {
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "content": item.get("content", ""),
+                        "title": str(item.get("title") or "").strip(),
+                        "url": str(item.get("url") or "").strip(),
+                        "content": str(item.get("content") or "").strip(),
                     }
+                    if not normalized["title"] or not normalized["url"]:
+                        continue
                     dedupe_key = normalized.get("url") or normalized.get("title")
                     if dedupe_key in seen_results:
                         continue
@@ -85,6 +94,27 @@ async def search_searxng(
                         break
                 if len(items) >= n:
                     break
-        return format_results(query, items, n, provider="searxng", freshness=freshness)
+        if not items:
+            return format_error(
+                query,
+                "searxng",
+                f"SearXNG returned no results for '{query}'.",
+                backend="searxng",
+                freshness=freshness,
+            )
+        return format_results(
+            query,
+            items,
+            n,
+            provider="searxng",
+            backend="searxng",
+            freshness=freshness,
+        )
     except Exception as exc:
-        return format_error(query, "searxng", str(exc), freshness=freshness)
+        return format_error(
+            query,
+            "searxng",
+            str(exc),
+            backend="searxng",
+            freshness=freshness,
+        )

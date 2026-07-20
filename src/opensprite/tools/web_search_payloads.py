@@ -20,8 +20,16 @@ def normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str, **metadata: Any) -> str:
-    """Format search results into the shared web payload schema."""
+def format_results(
+    query: str,
+    items: list[dict[str, Any]],
+    n: int,
+    *,
+    provider: str,
+    backend: str,
+    **metadata: Any,
+) -> str:
+    """Format a compact web-search result payload."""
     normalized_items: list[dict[str, str]] = []
     for item in items[:n]:
         normalized_items.append(
@@ -33,17 +41,11 @@ def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider:
         )
     payload = {
         "type": "web_search",
+        "ok": True,
         "query": query,
-        "url": "",
-        "final_url": "",
-        "title": "",
-        "content": "",
         "summary": f"Search results for: {query}",
         "provider": provider,
-        "extractor": "search",
-        "status": None,
-        "truncated": False,
-        "content_type": "application/json",
+        "backend": backend,
         "items": normalized_items,
     }
     payload.update({key: value for key, value in metadata.items() if value is not None})
@@ -51,21 +53,13 @@ def format_results(query: str, items: list[dict[str, Any]], n: int, *, provider:
 
 
 def format_error(query: str, provider: str, error: str, **metadata: Any) -> str:
-    """Format provider failures into the shared web payload schema."""
+    """Format a compact web-search error payload."""
     payload = {
         "type": "web_search",
         "ok": False,
         "query": query,
-        "url": "",
-        "final_url": "",
-        "title": "",
-        "content": "",
         "summary": f"Search failed for: {query}",
         "provider": provider,
-        "extractor": "search",
-        "status": metadata.pop("status", None),
-        "truncated": False,
-        "content_type": "application/json",
         "items": [],
         "error": str(error or "").strip(),
         "error_type": "WebSearchError",

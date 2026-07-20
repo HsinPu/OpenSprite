@@ -1,177 +1,53 @@
 import pytest
-import asyncio
 
 from opensprite.config.schema import (
-    AgentConfig,
     ChannelsConfig,
     Config,
+    HistorySearchConfig,
     LLMsConfig,
-    SearchEmbeddingConfig,
-    SearchConfig,
     StorageConfig,
 )
-from opensprite.runtime_lifecycle import stop_background_task
-from opensprite.search.embedding_factory import create_search_embedding_provider
-from opensprite.search.queue_worker import should_start_search_queue_worker, start_search_queue_worker
-from opensprite.search.store_factory import create_search_store
+from opensprite.search.sqlite_store import SQLiteSearchStore
+from opensprite.search.store_factory import create_history_search_store
 
 
-class FakeSearchStore:
-    def __init__(self, embedding_provider=None):
-        self.embedding_provider = embedding_provider
-        self.started = asyncio.Event()
-        self.cancelled = asyncio.Event()
-
-    async def run_queue(self, once=False):
-        self.started.set()
-        try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            self.cancelled.set()
-            raise
-
-
-def test_create_search_store_requires_sqlite_storage_when_enabled():
-    config = Config(
-        llm=LLMsConfig(**{**Config.packaged_llm_flat_dict(), "api_key": "key", "model": "gpt"}),
+def _config(tmp_path, *, storage_type="sqlite", enabled=True, history_top_k=5):
+    return Config(
+        llm=LLMsConfig(**Config.packaged_llm_flat_dict()),
         agent=Config.load_agent_template_config(),
-        storage=StorageConfig(type="memory", path="memory.db"),
+        storage=StorageConfig(type=storage_type, path=str(tmp_path / "history.db")),
         channels=ChannelsConfig(),
-        search=SearchConfig(enabled=True),
-    )
-
-    with pytest.raises(ValueError, match='search.backend="sqlite" requires storage.type="sqlite"'):
-        create_search_store(config)
-
-
-def test_create_search_embedding_provider_uses_search_or_llm_credentials():
-    config = Config(
-        llm=LLMsConfig(
-            **{
-                **Config.packaged_llm_flat_dict(),
-                "providers": {
-                    "openai": {
-                        "api_key": "llm-key",
-                        "model": "gpt-4o-mini",
-                        "base_url": "https://api.openai.com/v1",
-                        "enabled": True,
-                    }
-                },
-                "default": "openai",
-                "api_key": "",
-                "model": "",
-            }
-        ),
-        agent=Config.load_agent_template_config(),
-        storage=StorageConfig(type="sqlite", path="sessions.db"),
-        channels=ChannelsConfig(),
-        search=SearchConfig(
-            enabled=True,
-            embedding=SearchEmbeddingConfig(enabled=True, provider="openai", model="text-embedding-3-small"),
+        history_search=HistorySearchConfig(
+            enabled=enabled,
+            history_top_k=history_top_k,
         ),
     )
 
-    provider = create_search_embedding_provider(config)
 
-    assert provider is not None
-    assert provider.provider_name == "openai"
-    assert provider.model_name == "text-embedding-3-small"
-    assert provider.batch_size == 16
+def test_history_search_requires_sqlite_storage(tmp_path):
+    config = _config(tmp_path, storage_type="memory")
 
-
-def test_create_search_store_passes_retry_failed_embedding_setting(tmp_path):
-    config = Config(
-        llm=LLMsConfig(
-            **{
-                **Config.packaged_llm_flat_dict(),
-                "providers": {
-                    "openai": {
-                        "api_key": "llm-key",
-                        "model": "gpt-4o-mini",
-                        "base_url": "https://api.openai.com/v1",
-                        "enabled": True,
-                    }
-                },
-                "default": "openai",
-                "api_key": "",
-                "model": "",
-            }
-        ),
-        agent=Config.load_agent_template_config(),
-        storage=StorageConfig(type="sqlite", path=str(tmp_path / "sessions.db")),
-        channels=ChannelsConfig(),
-        search=SearchConfig(
-            enabled=True,
-            embedding=SearchEmbeddingConfig(
-                enabled=True,
-                provider="openai",
-                model="text-embedding-3-small",
-                retry_failed_on_startup=True,
-            ),
-        ),
-    )
-
-    store = create_search_store(config)
-
-    assert store is not None
-    assert store.retry_failed_on_startup is True
+    with pytest.raises(
+        ValueError,
+        match='history_search requires storage.type="sqlite"',
+    ):
+        create_history_search_store(config)
 
 
-def test_create_search_store_passes_embedding_candidate_strategy(tmp_path):
-    config = Config(
-        llm=LLMsConfig(
-            **{
-                **Config.packaged_llm_flat_dict(),
-                "providers": {
-                    "openai": {
-                        "api_key": "llm-key",
-                        "model": "gpt-4o-mini",
-                        "base_url": "https://api.openai.com/v1",
-                        "enabled": True,
-                    }
-                },
-                "default": "openai",
-                "api_key": "",
-                "model": "",
-            }
-        ),
-        agent=Config.load_agent_template_config(),
-        storage=StorageConfig(type="sqlite", path=str(tmp_path / "sessions.db")),
-        channels=ChannelsConfig(),
-        search=SearchConfig(
-            enabled=True,
-            embedding=SearchEmbeddingConfig(
-                enabled=True,
-                provider="openai",
-                model="text-embedding-3-small",
-                candidate_strategy="vector",
-                vector_backend="sqlite_vec",
-                vector_candidate_count=80,
-            ),
-        ),
-    )
-
-    store = create_search_store(config)
-
-    assert store is not None
-    assert store.embedding_candidate_strategy == "vector"
-    assert store.vector_backend_requested == "sqlite_vec"
-    assert store.vector_candidate_count == 80
+def test_history_search_can_be_disabled(tmp_path):
+    assert create_history_search_store(_config(tmp_path, enabled=False)) is None
 
 
-def test_should_start_search_queue_worker_requires_embeddings():
-    assert should_start_search_queue_worker(None) is False
-    assert should_start_search_queue_worker(FakeSearchStore()) is False
-    assert should_start_search_queue_worker(FakeSearchStore(embedding_provider=object())) is True
+def test_factory_builds_plain_sqlite_fts_store(tmp_path):
+    store = create_history_search_store(_config(tmp_path, history_top_k=7))
 
-
-def test_start_and_stop_search_queue_worker_lifecycle():
-    async def scenario():
-        store = FakeSearchStore(embedding_provider=object())
-        task = start_search_queue_worker(store)
-        assert task is not None
-        await asyncio.wait_for(store.started.wait(), timeout=1.0)
-        await stop_background_task(task, name="test queue worker")
-        await asyncio.wait_for(store.cancelled.wait(), timeout=1.0)
-
-    asyncio.run(scenario())
+    assert isinstance(store, SQLiteSearchStore)
+    assert store.history_top_k == 7
+    assert set(vars(store)) == {
+        "path",
+        "history_top_k",
+        "chunk_size",
+        "chunk_overlap",
+        "_read_only",
+        "_lock",
+    }
