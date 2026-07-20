@@ -8,6 +8,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = PROJECT_ROOT / "src" / "opensprite" / "config"
+DOCUMENTS_ROOT = PROJECT_ROOT / "src" / "opensprite" / "documents"
 TOOLS_ROOT = PROJECT_ROOT / "src" / "opensprite" / "tools"
 
 
@@ -49,6 +50,11 @@ def _find_forbidden_imports(package_root: Path, forbidden_package: str) -> list[
 def test_config_does_not_import_channel_runtime():
     violations = _find_forbidden_imports(CONFIG_ROOT, "opensprite.channels")
     assert violations == [], f"config must not import channel runtime: {violations}"
+
+
+def test_documents_do_not_import_agent_runtime():
+    violations = _find_forbidden_imports(DOCUMENTS_ROOT, "opensprite.agent")
+    assert violations == [], f"documents must not import agent runtime: {violations}"
 
 
 def test_tools_do_not_import_agent_runtime():

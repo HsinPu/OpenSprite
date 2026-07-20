@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ..agent.execution import ExecutionResult
-
+from .curator_contracts import CuratorTurnResult
 
 SnapshotReader = Callable[[str], str]
 SessionRunner = Callable[[str], Awaitable[Any]]
@@ -22,7 +20,7 @@ class CuratorRequest:
     run_id: str | None = None
     channel: str | None = None
     external_chat_id: str | None = None
-    result: ExecutionResult | None = None
+    result: CuratorTurnResult | None = None
     maintenance_job_keys: tuple[str, ...] = ()
     run_skill_review: bool = False
 

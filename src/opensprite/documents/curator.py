@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
@@ -26,6 +26,7 @@ from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
 from ..utils.log import logger
 from .coalescing_scheduler import CoalescingTaskScheduler
+from .curator_contracts import CuratorTurnResult
 from .curator_jobs import (
     CuratorJob,
     CuratorMaintenanceServices,
@@ -55,12 +56,8 @@ from .curator_state import (
 )
 from .user_profile import UserProfileConsolidator
 
-if TYPE_CHECKING:
-    from ..agent.execution import ExecutionResult
-
-
 RunEventEmitter = Callable[[str, str, str, dict[str, Any], str | None, str | None], Awaitable[None]]
-SkillReviewDecider = Callable[["ExecutionResult"], bool]
+SkillReviewDecider = Callable[[CuratorTurnResult], bool]
 LearningRecorder = Callable[[str, str, str, str, str | None, dict[str, Any] | None], None]
 CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
 CURATOR_SLOW_JOB_SECONDS = 10.0
@@ -412,7 +409,7 @@ class CuratorService:
         run_id: str,
         channel: str | None,
         external_chat_id: str | None,
-        result: ExecutionResult,
+        result: CuratorTurnResult,
     ) -> bool:
         """Schedule the full curator pass after one visible assistant turn."""
         return self._schedule(
@@ -449,7 +446,7 @@ class CuratorService:
     def schedule_skill_review(
         self,
         session_id: str,
-        result: ExecutionResult,
+        result: CuratorTurnResult,
         *,
         run_id: str | None = None,
         channel: str | None = None,
