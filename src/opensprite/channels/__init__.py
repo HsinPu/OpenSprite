@@ -10,8 +10,9 @@ import asyncio
 import json
 from typing import Any
 
-from .registry import CHANNEL_ADAPTER_FACTORIES, coerce_channel_instances
+from .registry import CHANNEL_ADAPTER_FACTORIES
 from .identity import normalize_identifier
+from ..config.channel_instances import coerce_channel_instances
 from ..utils.log import logger
 
 

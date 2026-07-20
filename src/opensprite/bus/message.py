@@ -51,12 +51,6 @@ class UserMessage:
     metadata: dict[str, Any] = field(default_factory=dict)
     raw: Any = None  # 原始訊息物件，可選
 
-    @property
-    def sender(self) -> str | None:
-        """Backward-compatible sender view."""
-        return self.sender_name or self.sender_id
-
-
 @dataclass
 class AssistantMessage:
     """

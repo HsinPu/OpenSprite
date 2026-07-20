@@ -1,22 +1,22 @@
-"""Shared channel instance settings helpers for Web settings."""
+"""Channel instance settings operations for Web settings."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from ..channels.identity import normalize_identifier
-from ..channels.registry import (
+from .identity import normalize_identifier
+from .registry import (
     CHANNEL_ADAPTER_FACTORIES,
     CHANNEL_TYPES,
-    coerce_channel_instances,
     default_instance_config,
     list_connectable_channel_types,
     make_unique_instance_id,
 )
-from .defaults import DEFAULT_CHANNELS_FILE
-from .json_files import load_json_dict, write_json_dict
-from .schema import Config
+from ..config.channel_instances import coerce_channel_instances
+from ..config.defaults import DEFAULT_CHANNELS_FILE
+from ..config.json_files import load_json_dict, write_json_dict
+from ..config.schema import Config
 
 
 class ChannelSettingsError(Exception):

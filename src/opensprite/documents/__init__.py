@@ -2,7 +2,7 @@
 
 from .base import ConversationConsolidator, ConversationDocumentStore, IncrementalStateStore
 from .managed import ManagedMarkdownDocument
-from .memory import MemoryDocumentStore, MemoryStore, FileMemoryStorage, consolidate
+from .memory import MemoryDocumentStore, MemoryStore, consolidate
 from .recent_summary import RecentSummaryConsolidator, RecentSummaryStore, consolidate_recent_summary
 from .state import JsonProgressStore
 from .user_profile import (
@@ -21,7 +21,6 @@ __all__ = [
     "ConversationDocumentStore",
     "DEFAULT_MANAGED_CONTENT",
     "END_MARKER",
-    "FileMemoryStorage",
     "IncrementalStateStore",
     "JsonProgressStore",
     "ManagedMarkdownDocument",

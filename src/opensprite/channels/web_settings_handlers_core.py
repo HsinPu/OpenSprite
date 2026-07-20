@@ -6,7 +6,7 @@ from typing import Any
 
 from aiohttp import web
 
-from ..config.channel_settings import ChannelSettingsError
+from .settings import ChannelSettingsError
 from ..utils.log import logger
 from . import web_settings_reload, web_settings_support
 

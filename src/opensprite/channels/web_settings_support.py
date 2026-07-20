@@ -18,7 +18,7 @@ from ..config.provider_errors import (
     ProviderSettingsValidationError,
 )
 from ..config.provider_settings import ProviderSettingsService
-from ..config.channel_settings import (
+from .settings import (
     ChannelSettingsError,
     ChannelSettingsNotFound,
     ChannelSettingsService,

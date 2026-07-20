@@ -33,7 +33,6 @@ class BackgroundServiceStatus:
 
 WINDOWS_STARTUP_TASK_NAME = "OpenSprite Gateway"
 WINDOWS_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-WINDOWS_STARTUP_LEGACY_FILE_NAMES = ("OpenSprite Gateway.vbs", "OpenSprite Gateway.cmd")
 
 
 def get_app_home(home: Path | None = None) -> Path:
@@ -49,20 +48,6 @@ def get_pid_file(home: Path | None = None) -> Path:
 def get_log_file(home: Path | None = None) -> Path:
     """Return the detached gateway log file path."""
     return get_app_home(home) / "logs" / "gateway.log"
-
-
-def get_windows_startup_folder() -> Path:
-    """Return the current user's Windows Startup folder."""
-    appdata = os.getenv("APPDATA")
-    if appdata:
-        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-
-
-def get_windows_startup_file_paths() -> tuple[Path, ...]:
-    """Return previous fallback startup file paths that should be cleaned up."""
-    startup_folder = get_windows_startup_folder()
-    return tuple(startup_folder / file_name for file_name in WINDOWS_STARTUP_LEGACY_FILE_NAMES)
 
 
 def _read_pid(pid_file: Path) -> int | None:
@@ -198,17 +183,6 @@ def _build_windows_startup_command(
     return " ".join(_quote_task_command_part(part) for part in parts)
 
 
-def _cleanup_windows_startup_files() -> bool:
-    removed = False
-    for startup_file in get_windows_startup_file_paths():
-        try:
-            startup_file.unlink()
-            removed = True
-        except (FileNotFoundError, OSError):
-            pass
-    return removed
-
-
 def _require_winreg():
     if winreg is None:
         raise RuntimeError("Windows registry is unavailable on this platform.")
@@ -246,7 +220,6 @@ def _delete_windows_run_value() -> bool:
 def _install_startup_run_value(*, config_path: Path | None = None, python_executable: Path | None = None) -> str:
     command = _build_windows_startup_command(config_path, python_executable=python_executable, windowless=True)
     _set_windows_run_value(command)
-    _cleanup_windows_startup_files()
     return f"{WINDOWS_STARTUP_TASK_NAME} (Run key)"
 
 
@@ -285,7 +258,6 @@ def install_startup_task(
             return _install_startup_run_value(config_path=config_path, python_executable=python_executable)
         raise RuntimeError(message)
     _delete_windows_run_value()
-    _cleanup_windows_startup_files()
     return WINDOWS_STARTUP_TASK_NAME
 
 
@@ -294,7 +266,6 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
     if platform.system() != "Windows":
         raise RuntimeError("Startup task uninstall is only supported on Windows.")
     removed = _delete_windows_run_value()
-    removed = _cleanup_windows_startup_files() or removed
 
     result = run(
         ["schtasks", "/Delete", "/TN", WINDOWS_STARTUP_TASK_NAME, "/F"],

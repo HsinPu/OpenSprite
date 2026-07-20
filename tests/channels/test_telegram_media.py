@@ -6,6 +6,9 @@ from opensprite.bus.message import AssistantMessage
 from opensprite.channels.telegram import TelegramAdapter
 
 
+TEST_MESSAGE_QUEUE = object()
+
+
 class FakeFile:
     def __init__(self, payload: bytes):
         self._payload = payload
@@ -48,7 +51,7 @@ def _data_url(mime_type: str, payload: bytes) -> str:
 
 def test_telegram_adapter_downloads_voice_message_as_audio_data_url():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = SimpleNamespace(
             update_id=1,
             bot=FakeBot(),
@@ -75,7 +78,7 @@ def test_telegram_adapter_downloads_voice_message_as_audio_data_url():
 
 def test_telegram_adapter_marks_uploaded_audio_file_kind():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = SimpleNamespace(
             update_id=1,
             bot=FakeBot(),
@@ -102,7 +105,7 @@ def test_telegram_adapter_marks_uploaded_audio_file_kind():
 
 def test_telegram_adapter_downloads_video_message_as_video_data_url():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = SimpleNamespace(
             update_id=1,
             bot=FakeBot(),
@@ -131,7 +134,7 @@ def test_telegram_adapter_downloads_video_message_as_video_data_url():
 
 def test_telegram_adapter_uses_explicit_bot_when_update_has_no_bot_attribute():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = SimpleNamespace(
             update_id=1,
             message=SimpleNamespace(
@@ -159,7 +162,7 @@ def test_telegram_adapter_uses_explicit_bot_when_update_has_no_bot_attribute():
 
 def test_telegram_adapter_skips_media_download_when_bot_is_unavailable():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = SimpleNamespace(
             update_id=1,
             message=SimpleNamespace(
@@ -185,7 +188,7 @@ def test_telegram_adapter_skips_media_download_when_bot_is_unavailable():
 
 def test_telegram_adapter_sends_outbound_media_attachments():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         bot = FakeBot()
         adapter.app = SimpleNamespace(bot=bot)
 

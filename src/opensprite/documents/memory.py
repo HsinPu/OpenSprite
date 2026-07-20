@@ -58,7 +58,6 @@ class MemoryDocumentStore(ConversationDocumentStore):
         return ""
 
 
-FileMemoryStorage = MemoryDocumentStore
 MemoryStore = MemoryDocumentStore
 
 _CONSOLIDATION_MESSAGE_TOKEN_BUDGET = 6000

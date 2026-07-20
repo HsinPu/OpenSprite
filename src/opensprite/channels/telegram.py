@@ -68,7 +68,7 @@ class TelegramAdapter(MessageAdapter):
     def __init__(
         self,
         bot_token: str,
-        mq=None,
+        mq: Any,
         config: dict[str, Any] | None = None,
         channel_instance_id: str = "telegram",
     ):
@@ -77,7 +77,7 @@ class TelegramAdapter(MessageAdapter):
         
         參數：
             bot_token: Telegram Bot Token（從 @BotFather 取得）
-            mq: MessageQueue 實例（可選，不給則用舊方式直接叫 agent）
+            mq: MessageQueue 實例
         """
         self.bot_token = bot_token
         self.app = None
@@ -838,6 +838,9 @@ class TelegramAdapter(MessageAdapter):
         - 訊息會丟到 Queue 處理
         - 回覆會透過 telegram channel handler 發送
         """
+        if self.mq is None:
+            raise RuntimeError("TelegramAdapter requires a MessageQueue")
+
         logger.info("Preparing Telegram adapter startup: {}", self._describe_startup_config())
         if not self.bot_token:
             logger.warning("Telegram token is empty; skipping Telegram adapter startup")
@@ -857,21 +860,13 @@ class TelegramAdapter(MessageAdapter):
             if not user_msg.text and not user_msg.images and not user_msg.audios and not user_msg.videos:
                 return
             
-            if self.mq:
-                # === 新方式：走 MessageQueue ===
-                self._start_typing_indicator(user_msg.session_id, user_msg.external_chat_id)
-                await self.mq.enqueue(user_msg)
-            else:
-                # === 舊方式：直接叫 agent（向後相容）===
-                # 這裡需要傳入 agent，暫時不支援
-                raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
+            self._start_typing_indicator(user_msg.session_id, user_msg.external_chat_id)
+            await self.mq.enqueue(user_msg)
         
         from telegram.ext import MessageHandler
 
         self.app.add_handler(MessageHandler(self._supported_message_filters(), handle_update))
 
-        if self.mq is None:
-            raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
         self.mq.register_response_handler(self.channel_instance_id, self._on_response)
         self.mq.register_error_handler(self.channel_instance_id, self._on_error)
         self._registered_handlers = True

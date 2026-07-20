@@ -1,7 +1,8 @@
 import asyncio
 
 import opensprite.channels as channels_module
-from opensprite.channels.registry import default_channel_instances
+from opensprite.channels.registry import CHANNEL_TYPES
+from opensprite.config.channel_instances import DEFAULT_WEB_CHANNEL_CONFIG, default_channel_instances
 
 
 class FakeAdapter:
@@ -45,3 +46,5 @@ def test_web_channel_defaults_expose_auth_token():
     instances = default_channel_instances()
 
     assert instances["web"]["auth_token"] == ""
+    assert CHANNEL_TYPES["web"].default_config == DEFAULT_WEB_CHANNEL_CONFIG
+    assert CHANNEL_TYPES["web"].default_config is not DEFAULT_WEB_CHANNEL_CONFIG

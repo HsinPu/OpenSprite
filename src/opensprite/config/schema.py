@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from ..channels.registry import coerce_channel_instances, default_channel_instances
+from .channel_instances import coerce_channel_instances, default_channel_instances
 from .defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -110,10 +110,6 @@ class DocumentLlmConfig(BaseModel):
     def request_kwargs(self) -> dict[str, Any]:
         """Build provider.chat kwargs for this internal request."""
         return {"max_tokens": self.max_tokens}
-
-
-# 舊名稱保留，與 memory.llm 設定語意相同
-MemoryLlmConfig = DocumentLlmConfig
 
 
 class AgentConfig(BaseModel):

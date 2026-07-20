@@ -893,7 +893,7 @@ class MessageQueue:
         metadata[_QUEUE_GENERATION_METADATA_KEY] = generation
         inbound = InboundMessage(
             channel=channel,
-            sender_id=user_message.sender_id or user_message.sender or "unknown",
+            sender_id=user_message.sender_id or user_message.sender_name or "unknown",
             sender_name=user_message.sender_name,
             external_chat_id=external_chat_id,
             session_id=session_id,

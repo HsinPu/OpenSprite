@@ -134,13 +134,6 @@ def sync_subagent_prompts_from_package(app_home: str | Path | None = None, *, si
     return changed
 
 
-def get_workspace_path(workspace: str | Path | None = None) -> Path:
-    """Backward-compatible helper for the tool workspace path."""
-    if workspace is not None:
-        return ensure_dir(Path(workspace).expanduser())
-    return get_tool_workspace()
-
-
 def split_session_id(session_id: str | None) -> tuple[str, str]:
     """Split a session id into channel and raw external chat id."""
     value = (session_id or "default").strip() or "default"

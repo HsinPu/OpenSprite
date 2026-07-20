@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from ..config.channel_instances import DEFAULT_WEB_CHANNEL_CONFIG
 from .identity import normalize_identifier
 
 
@@ -69,19 +70,7 @@ CHANNEL_TYPES: dict[str, ChannelTypeSpec] = {
         type_id="web",
         name="Web",
         description="瀏覽器 WebSocket 頻道與設定介面。",
-        default_config={
-            "enabled": True,
-            "host": "127.0.0.1",
-            "port": 8765,
-            "path": "/ws",
-            "health_path": "/healthz",
-            "max_message_size": 1024 * 1024,
-            "frontend_auto_build": True,
-            "frontend_auto_install": True,
-            "frontend_build_timeout": 120,
-            "frontend_install_timeout": 300,
-            "auth_token": "",
-        },
+        default_config=dict(DEFAULT_WEB_CHANNEL_CONFIG),
     ),
 }
 
@@ -108,28 +97,12 @@ def build_channel_adapter(mq: Any, instance_id: str, channel_config: dict[str, A
     return factory(mq, normalize_identifier(instance_id, fallback=channel_type), channel_config)
 
 
-def default_channel_instances() -> dict[str, dict[str, Any]]:
-    return {"web": {"type": "web", "name": "Web", **dict(CHANNEL_TYPES["web"].default_config)}}
-
-
 def default_instance_config(channel_type: str, *, name: str | None = None) -> dict[str, Any]:
     spec = get_channel_type(channel_type)
     if spec is None:
         raise KeyError(channel_type)
     config = {"type": spec.type_id, "name": name or spec.name, **dict(spec.default_config)}
     return config
-
-
-def coerce_channel_instances(channels_data: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Normalize channels config into an instance mapping."""
-    raw_instances = channels_data.get("instances")
-    instances: dict[str, dict[str, Any]] = {}
-    if isinstance(raw_instances, dict):
-        instances = {str(instance_id): dict(config) for instance_id, config in raw_instances.items() if isinstance(config, dict)}
-
-    if "web" not in instances:
-        instances.update(default_channel_instances())
-    return instances
 
 
 def make_unique_instance_id(instances: dict[str, Any], channel_type: str, name: str | None = None) -> str:

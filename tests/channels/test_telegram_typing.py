@@ -9,6 +9,9 @@ from opensprite.config.schema import MessagesConfig
 from opensprite.channels.telegram import TelegramAdapter
 
 
+TEST_MESSAGE_QUEUE = object()
+
+
 class FakeBot:
     def __init__(self):
         self.typing_calls = []
@@ -23,7 +26,7 @@ class FakeBot:
 
 def test_typing_indicator_starts_and_stops_on_response():
     async def scenario():
-        adapter = TelegramAdapter("token", config={"typing_action_interval": 1})
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE, config={"typing_action_interval": 1})
         adapter.app = SimpleNamespace(bot=FakeBot())
 
         adapter._start_typing_indicator("telegram:user-a", "user-a")
@@ -54,7 +57,7 @@ def test_typing_indicator_keeps_running_after_interim_tool_progress():
     """Interim outbound (e.g. delegate / read_skill notice) must not stop typing before the final reply."""
 
     async def scenario():
-        adapter = TelegramAdapter("token", config={"typing_action_interval": 1})
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE, config={"typing_action_interval": 1})
         adapter.app = SimpleNamespace(bot=FakeBot())
 
         adapter._start_typing_indicator("telegram:user-a", "user-a")
@@ -96,7 +99,7 @@ def test_typing_indicator_keeps_running_after_interim_tool_progress():
 
 def test_typing_indicator_stops_on_error():
     async def scenario():
-        adapter = TelegramAdapter("token", config={"typing_action_interval": 1})
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE, config={"typing_action_interval": 1})
         adapter.app = SimpleNamespace(bot=FakeBot())
         adapter._start_typing_indicator("telegram:user-a", "user-a")
         await asyncio.sleep(0.05)
@@ -132,7 +135,7 @@ def test_send_uses_configured_empty_message_fallback():
 
 def test_to_user_message_sets_session_id_for_typing():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = Update.de_json(
             {
                 "update_id": 1,
@@ -156,7 +159,7 @@ def test_to_user_message_sets_session_id_for_typing():
 
 def test_to_user_message_uses_channel_instance_id_for_session():
     async def scenario():
-        adapter = TelegramAdapter("token", channel_instance_id="telegram_work")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE, channel_instance_id="telegram_work")
         update = Update.de_json(
             {
                 "update_id": 1,
@@ -183,7 +186,7 @@ def test_to_user_message_uses_channel_instance_id_for_session():
 
 def test_to_user_message_bypasses_commands_addressed_to_other_bot():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = Update.de_json(
             {
                 "update_id": 1,
@@ -207,7 +210,7 @@ def test_to_user_message_bypasses_commands_addressed_to_other_bot():
 
 def test_to_user_message_allows_commands_addressed_to_this_bot():
     async def scenario():
-        adapter = TelegramAdapter("token")
+        adapter = TelegramAdapter("token", mq=TEST_MESSAGE_QUEUE)
         update = Update.de_json(
             {
                 "update_id": 1,
@@ -286,7 +289,7 @@ def test_supported_message_filters_include_media_updates():
 
 
 def test_run_skips_startup_when_token_is_empty():
-    adapter = TelegramAdapter("")
+    adapter = TelegramAdapter("", mq=TEST_MESSAGE_QUEUE)
 
     asyncio.run(adapter.run())
 
