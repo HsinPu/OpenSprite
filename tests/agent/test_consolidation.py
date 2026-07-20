@@ -3,21 +3,19 @@ import asyncio
 import opensprite.documents.curator as curator_module
 from opensprite.documents.curator import MemoryConsolidationService
 from opensprite.config.schema import Config, DocumentLlmConfig
-from opensprite.storage.base import StoredMessage
+from opensprite.storage import MemoryStorage, StoredMessage
 
 
 def _memory_llm() -> DocumentLlmConfig:
     return DocumentLlmConfig(**Config.load_template_data()["memory"]["llm"])
 
 
-class FakeStorage:
+class FakeStorage(MemoryStorage):
     def __init__(self, messages, consolidated_index=0):
-        self.messages = messages
+        super().__init__()
+        self._messages["chat-1"].extend(messages)
         self.consolidated_index = consolidated_index
         self.updated_index = None
-
-    async def get_messages(self, session_id, limit=None):
-        return list(self.messages)
 
     async def get_consolidated_index(self, session_id):
         return self.consolidated_index

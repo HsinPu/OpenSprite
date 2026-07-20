@@ -1,7 +1,5 @@
 import pytest
 
-from opensprite.documents.curator import CURATOR_SCOPE_CHOICES as legacy_scope_choices
-from opensprite.documents.curator import resolve_curator_scope as legacy_resolve_curator_scope
 from opensprite.documents.curator_scope import (
     CURATOR_MAINTENANCE_JOB_KEYS,
     CURATOR_SCOPE_CHOICES,
@@ -31,8 +29,3 @@ def test_ordered_maintenance_job_keys_keeps_canonical_order():
         "memory",
         "user_profile",
     )
-
-
-def test_curator_reexports_scope_helpers_for_compatibility():
-    assert legacy_scope_choices is CURATOR_SCOPE_CHOICES
-    assert legacy_resolve_curator_scope is resolve_curator_scope

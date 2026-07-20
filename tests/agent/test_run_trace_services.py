@@ -45,7 +45,7 @@ from opensprite.runs.schema import (
     serialize_run_parts,
     serialize_run_summary,
 )
-from opensprite.storage import MemoryStorage, StorageProvider
+from opensprite.storage import MemoryStorage
 
 
 def test_run_trace_lifecycle_markers_are_stable():
@@ -154,74 +154,6 @@ def test_cancelled_run_commit_survives_repeated_caller_cancellation():
     assert run.finished_at is not None
     assert events[-1].event_type == RUN_CANCELLED_EVENT
     assert was_cancelled is False
-
-
-def test_run_trace_recorder_accepts_legacy_storage_without_optional_run_api():
-    class LegacyStorage(StorageProvider):
-        def __init__(self):
-            self.messages = {}
-            self.consolidated = {}
-
-        async def get_messages(self, session_id, limit=None):
-            messages = list(self.messages.get(session_id, []))
-            return messages[-limit:] if limit else messages
-
-        async def add_message(self, session_id, message):
-            self.messages.setdefault(session_id, []).append(message)
-
-        async def clear_messages(self, session_id):
-            self.messages.pop(session_id, None)
-
-        async def get_consolidated_index(self, session_id):
-            return self.consolidated.get(session_id, 0)
-
-        async def set_consolidated_index(self, session_id, index):
-            self.consolidated[session_id] = index
-
-        async def get_all_sessions(self):
-            return sorted(self.messages)
-
-    async def scenario():
-        storage = LegacyStorage()
-        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
-        await recorder.create_run("web:browser-1", "run-legacy")
-        await recorder.update_run_status("web:browser-1", "run-legacy", "completed")
-        return await storage.get_run("web:browser-1", "run-legacy")
-
-    assert asyncio.run(scenario()) is None
-
-
-def test_run_trace_recorder_rejects_partial_optional_run_contract():
-    class PartialRunStorage(StorageProvider):
-        async def get_messages(self, session_id, limit=None):
-            return []
-
-        async def add_message(self, session_id, message):
-            return None
-
-        async def clear_messages(self, session_id):
-            return None
-
-        async def get_consolidated_index(self, session_id):
-            return 0
-
-        async def set_consolidated_index(self, session_id, index):
-            return None
-
-        async def get_all_sessions(self):
-            return []
-
-        async def create_run(self, *args, **kwargs):
-            return SimpleNamespace(run_id="run-partial")
-
-    async def scenario():
-        recorder = RunTraceRecorder(storage=PartialRunStorage(), message_bus_getter=lambda: None)
-        with pytest.raises(RuntimeError, match="implement create_run and update_run_status together"):
-            await recorder.create_run("web:browser-1", "run-partial")
-        with pytest.raises(RuntimeError, match="implement create_run and update_run_status together"):
-            await recorder.update_run_status("web:browser-1", "run-partial", "completed")
-
-    asyncio.run(scenario())
 
 
 def test_truncate_run_part_content_bounds_large_payloads():

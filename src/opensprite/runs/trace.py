@@ -126,23 +126,21 @@ class RunEventSink:
         """Persist and publish one structured run event."""
         created_at = time.time()
         safe_payload = json_safe_payload(payload)
-        add_event = getattr(self.storage, "add_run_event", None)
         stored_event = None
-        if callable(add_event):
-            try:
-                stored_event = await add_event(
-                    session_id,
-                    run_id,
-                    event_type,
-                    payload=safe_payload,
-                    created_at=created_at,
-                )
-            except Exception as e:
-                logger.warning("[{}] run.event.persist.failed | run_id={} type={} error={}", session_id, run_id, event_type, e)
-                if require_persistence:
-                    raise RunEventPersistenceError(
-                        f"Failed to persist run event {event_type!r} for run {run_id!r}"
-                    ) from e
+        try:
+            stored_event = await self.storage.add_run_event(
+                session_id,
+                run_id,
+                event_type,
+                payload=safe_payload,
+                created_at=created_at,
+            )
+        except Exception as e:
+            logger.warning("[{}] run.event.persist.failed | run_id={} type={} error={}", session_id, run_id, event_type, e)
+            if require_persistence:
+                raise RunEventPersistenceError(
+                    f"Failed to persist run event {event_type!r} for run {run_id!r}"
+                ) from e
         if require_persistence and stored_event is None:
             raise RunEventPersistenceError(
                 f"Run event persistence is unavailable for event {event_type!r} on run {run_id!r}"
@@ -205,12 +203,8 @@ class RunFileChangeService:
         channel: str | None = None,
         external_chat_id: str | None = None,
     ) -> None:
-        """Persist file mutations for the active run when available."""
+        """Persist file mutations for the active run."""
         if not session_id or not run_id or not changes:
-            return
-
-        add_change = getattr(self.storage, "add_run_file_change", None)
-        if not callable(add_change):
             return
 
         for raw_change in changes:
@@ -224,7 +218,7 @@ class RunFileChangeService:
             metadata = json_safe_payload(raw_metadata if isinstance(raw_metadata, dict) else {})
             metadata.setdefault("diff_len", len(diff))
             try:
-                stored_change = await add_change(
+                stored_change = await self.storage.add_run_file_change(
                     session_id,
                     run_id,
                     tool_name,
@@ -313,19 +307,6 @@ class RunFileChangeService:
         change_id: int,
     ) -> PreparedRunFileChangeRevert:
         """Build a dry-run preview and required state for one guarded revert."""
-        getter = getattr(self.storage, "get_run_file_change", None)
-        if not callable(getter):
-            return PreparedRunFileChangeRevert(
-                preview={
-                    "status": "unavailable",
-                    "ok": False,
-                    "session_id": session_id,
-                    "run_id": run_id,
-                    "change_id": change_id,
-                    "reason": "storage does not support run file-change lookup",
-                }
-            )
-
         try:
             normalized_change_id = int(change_id)
         except (TypeError, ValueError):
@@ -340,7 +321,7 @@ class RunFileChangeService:
                 }
             )
 
-        change = await getter(session_id, run_id, normalized_change_id)
+        change = await self.storage.get_run_file_change(session_id, run_id, normalized_change_id)
         if change is None:
             return PreparedRunFileChangeRevert(
                 preview={
@@ -590,21 +571,6 @@ class RunTraceRecorder:
         self.storage = storage
         self._message_bus_getter = message_bus_getter
         self.events = RunEventSink(storage=storage, message_bus_getter=message_bus_getter)
-        create_supported = self._overrides_optional_storage_method("create_run")
-        update_supported = self._overrides_optional_storage_method("update_run_status")
-        self._run_persistence_supported = create_supported and update_supported
-        self._run_persistence_contract_error = create_supported != update_supported
-
-    def _overrides_optional_storage_method(self, method_name: str) -> bool:
-        method = getattr(self.storage, method_name, None)
-        implementation = getattr(method, "__func__", method)
-        return callable(method) and implementation is not getattr(StorageProvider, method_name, None)
-
-    def _require_consistent_run_persistence_contract(self) -> None:
-        if self._run_persistence_contract_error:
-            raise RuntimeError(
-                "Run storage must implement create_run and update_run_status together, or inherit both optional defaults."
-            )
 
     async def create_run(
         self,
@@ -614,14 +580,8 @@ class RunTraceRecorder:
         status: str = "running",
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Create a durable run record when the configured storage supports it."""
-        self._require_consistent_run_persistence_contract()
-        if not self._run_persistence_supported:
-            return
-        creator = getattr(self.storage, "create_run", None)
-        if not callable(creator):
-            return
-        created = await creator(session_id, run_id, status=status, metadata=metadata)
+        """Create a durable run record."""
+        created = await self.storage.create_run(session_id, run_id, status=status, metadata=metadata)
         if created is None:
             raise RuntimeError(f"Run storage did not create {run_id!r} for session {session_id!r}.")
 
@@ -634,19 +594,19 @@ class RunTraceRecorder:
         metadata: dict[str, Any] | None = None,
         finished_at: float | None = None,
     ) -> None:
-        """Update a durable run record when the configured storage supports it.
+        """Update a durable run record.
 
         Terminal status is the source of truth for CLI, Web, and smoke clients,
         so persistence failures must propagate instead of creating a false
         successful terminal event while the durable row remains ``running``.
         """
-        self._require_consistent_run_persistence_contract()
-        if not self._run_persistence_supported:
-            return
-        updater = getattr(self.storage, "update_run_status", None)
-        if not callable(updater):
-            return
-        updated = await updater(session_id, run_id, status, metadata=metadata, finished_at=finished_at)
+        updated = await self.storage.update_run_status(
+            session_id,
+            run_id,
+            status,
+            metadata=metadata,
+            finished_at=finished_at,
+        )
         if updated is None:
             raise RuntimeError(f"Run storage did not update {run_id!r} for session {session_id!r}.")
 
@@ -660,15 +620,12 @@ class RunTraceRecorder:
         tool_name: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Persist one ordered run artifact when the storage supports it."""
-        add_part = getattr(self.storage, "add_run_part", None)
-        if not callable(add_part):
-            return
+        """Persist one ordered run artifact."""
         try:
             stored_content, content_metadata = truncate_run_part_content(str(content or ""))
             safe_metadata = json_safe_payload(metadata)
             safe_metadata.update(content_metadata)
-            await add_part(
+            await self.storage.add_run_part(
                 session_id,
                 run_id,
                 part_type,

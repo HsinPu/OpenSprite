@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
-from opensprite.storage.base import StoredMessage
+from opensprite.storage import MemoryStorage, StoredMessage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -53,34 +52,17 @@ class NoCallProvider:
     def get_default_model(self) -> str:
         return "fake-model"
 
-class SavedMessageStorage:
+class SavedMessageStorage(MemoryStorage):
     def __init__(self, messages: dict[str, list[StoredMessage]] | None = None):
+        super().__init__()
         self.saved = []
-        self.messages: defaultdict[str, list[StoredMessage]] = defaultdict(list)
+        self.messages = self._messages
         for session_id, rows in (messages or {}).items():
             self.messages[session_id].extend(rows)
 
-    async def get_messages(self, session_id, limit=None):
-        messages = self.messages.get(session_id, [])
-        if limit is None:
-            return list(messages)
-        return list(messages[-limit:])
-
     async def add_message(self, session_id, message: StoredMessage):
-        self.messages[session_id].append(message)
+        await super().add_message(session_id, message)
         self.saved.append((session_id, message.role, message.content, message.tool_name, dict(message.metadata)))
-
-    async def clear_messages(self, session_id):
-        self.messages.pop(session_id, None)
-
-    async def get_consolidated_index(self, session_id):
-        return 0
-
-    async def set_consolidated_index(self, session_id, index):
-        return None
-
-    async def get_all_sessions(self):
-        return list(self.messages)
 
 
 class DummyTool(Tool):

@@ -8,7 +8,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_ROOT = PROJECT_ROOT / "src" / "opensprite" / "config"
+CHANNELS_ROOT = PROJECT_ROOT / "src" / "opensprite" / "channels"
 DOCUMENTS_ROOT = PROJECT_ROOT / "src" / "opensprite" / "documents"
+STORAGE_ROOT = PROJECT_ROOT / "src" / "opensprite" / "storage"
 TOOLS_ROOT = PROJECT_ROOT / "src" / "opensprite" / "tools"
 
 
@@ -52,9 +54,19 @@ def test_config_does_not_import_channel_runtime():
     assert violations == [], f"config must not import channel runtime: {violations}"
 
 
+def test_channels_do_not_import_cli_runtime():
+    violations = _find_forbidden_imports(CHANNELS_ROOT, "opensprite.cli")
+    assert violations == [], f"channels must use operations services instead of CLI runtime: {violations}"
+
+
 def test_documents_do_not_import_agent_runtime():
     violations = _find_forbidden_imports(DOCUMENTS_ROOT, "opensprite.agent")
     assert violations == [], f"documents must not import agent runtime: {violations}"
+
+
+def test_storage_does_not_import_search_runtime():
+    violations = _find_forbidden_imports(STORAGE_ROOT, "opensprite.search")
+    assert violations == [], f"storage must not import search runtime: {violations}"
 
 
 def test_tools_do_not_import_agent_runtime():

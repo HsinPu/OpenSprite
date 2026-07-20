@@ -1,4 +1,3 @@
-from opensprite.documents.curator import fingerprint_text_directory as legacy_fingerprint_text_directory
 from opensprite.documents.document_fingerprints import fingerprint_text_directory
 
 
@@ -26,7 +25,3 @@ def test_fingerprint_text_directory_tracks_paths_and_content(tmp_path):
     assert original
     assert changed_content != original
     assert changed_path != changed_content
-
-
-def test_curator_reexports_fingerprint_helper_for_compatibility():
-    assert legacy_fingerprint_text_directory is fingerprint_text_directory

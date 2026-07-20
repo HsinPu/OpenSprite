@@ -167,7 +167,7 @@ class AgentLoop:
         status: str = "running",
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Create a durable run record when the configured storage supports it."""
+        """Create a durable run record."""
         await self.run_trace.create_run(session_id, run_id, status=status, metadata=metadata)
 
     async def _update_run_status(
@@ -179,7 +179,7 @@ class AgentLoop:
         metadata: dict[str, Any] | None = None,
         finished_at: float | None = None,
     ) -> None:
-        """Update a durable run record when the configured storage supports it."""
+        """Update a durable run record."""
         await self.run_trace.update_run_status(
             session_id,
             run_id,
@@ -198,7 +198,7 @@ class AgentLoop:
         tool_name: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Persist one ordered run artifact when the storage supports it."""
+        """Persist one ordered run artifact."""
         await self.run_trace.add_part(
             session_id,
             run_id,
@@ -209,7 +209,7 @@ class AgentLoop:
         )
 
     async def _record_file_changes(self, tool_name: str, changes: list[dict[str, Any]]) -> None:
-        """Persist file mutations for the active run when available."""
+        """Persist file mutations for the active run."""
         await self.file_changes.record_changes(
             tool_name,
             changes,
@@ -850,17 +850,6 @@ class AgentLoop:
     async def close_mcp(self) -> None:
         """Close any active MCP sessions and reset lifecycle flags."""
         await self.mcp_lifecycle.close()
-
-    def _schedule_background_maintenance(
-        self,
-        *,
-        kind: str,
-        session_id: str,
-        runner: Callable[[str], Awaitable[None]],
-    ) -> None:
-        """Back-compat wrapper for callers that still schedule maintenance directly."""
-        del kind, runner
-        self._schedule_post_response_maintenance(session_id)
 
     def _schedule_post_response_maintenance(self, session_id: str) -> None:
         """Queue maintenance-only curator work without blocking the reply."""

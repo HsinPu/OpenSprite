@@ -9,7 +9,6 @@ from typing import Any, Callable
 from ..config.schema import DocumentLlmConfig
 from ..context.paths import get_bootstrap_dir, get_user_profile_file, get_user_profile_state_file
 from ..storage import StoredMessage, StorageProvider
-from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..utils.log import logger
 from .base import ConversationConsolidator
 from .curator_prompts import curator_shared_rules
@@ -329,7 +328,7 @@ class UserProfileConsolidator(ConversationConsolidator):
             return
 
         profile_store = self.profile_store_factory(session_id)
-        message_count = await get_storage_message_count(self.storage, session_id)
+        message_count = await self.storage.get_message_count(session_id)
         last_processed = profile_store.get_processed_index(session_id)
         if last_processed > message_count:
             profile_store.set_processed_index(session_id, message_count)
@@ -340,8 +339,7 @@ class UserProfileConsolidator(ConversationConsolidator):
             return
 
         end_index = min(message_count, last_processed + self.lookback_messages)
-        chunk = await get_storage_messages_slice(
-            self.storage,
+        chunk = await self.storage.get_messages_slice(
             session_id,
             start_index=last_processed,
             end_index=end_index,

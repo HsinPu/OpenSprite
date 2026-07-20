@@ -4,7 +4,7 @@ import subprocess
 from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
-from opensprite.cli import service_linux
+from opensprite.ops import service_linux
 
 
 runner = CliRunner()

@@ -131,27 +131,14 @@ def test_merge_workflow_outcomes_normalizes_workflow_run_ids():
     assert [item["status"] for item in merged] == ["new", "updated"]
 
 
-class FakeStorage:
+class FakeStorage(MemoryStorage):
     def __init__(self):
+        super().__init__()
         self.saved = []
 
-    async def get_messages(self, session_id, limit=None):
-        return []
-
     async def add_message(self, session_id, message: StoredMessage):
+        await super().add_message(session_id, message)
         self.saved.append((session_id, message.role, message.content, dict(message.metadata)))
-
-    async def clear_messages(self, session_id):
-        return None
-
-    async def get_consolidated_index(self, session_id):
-        return 0
-
-    async def set_consolidated_index(self, session_id, index):
-        return None
-
-    async def get_all_sessions(self):
-        return []
 
 
 class HistoryStorage(FakeStorage):
@@ -163,6 +150,12 @@ class HistoryStorage(FakeStorage):
         if limit is None:
             return list(self.messages)
         return list(self.messages[-limit:])
+
+    async def get_message_count(self, session_id):
+        return len(self.messages)
+
+    async def get_messages_slice(self, session_id, *, start_index=0, end_index=None):
+        return list(self.messages[max(0, start_index):end_index])
 
 
 class FakeBus:

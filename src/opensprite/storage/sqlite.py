@@ -10,9 +10,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..search.indexing import (
-    SearchChunkPayload,
-)
 from ..utils.json_safe import json_safe_value as json_safe
 from ..utils.log import logger
 from .base import (
@@ -310,44 +307,6 @@ def insert_message_row(conn: sqlite3.Connection, session_id: str, message: Store
         ),
     )
     return int(cursor.lastrowid)
-
-
-def insert_search_chunks(
-    conn: sqlite3.Connection,
-    *,
-    session_id: str,
-    message_id: int,
-    chunks: list[SearchChunkPayload],
-) -> None:
-    """Insert one batch of search chunks into the shared index table."""
-    conn.execute("DELETE FROM search_chunks WHERE message_id = ?", (message_id,))
-    if not chunks:
-        return
-
-    for chunk in chunks:
-        conn.execute(
-            """
-            INSERT INTO search_chunks (
-                session_id,
-                message_id,
-                role,
-                tool_name,
-                chunk_index,
-                content,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                session_id,
-                message_id,
-                chunk.role,
-                chunk.tool_name,
-                chunk.chunk_index,
-                chunk.content,
-                chunk.created_at,
-            ),
-        )
 
 
 def find_message_id(

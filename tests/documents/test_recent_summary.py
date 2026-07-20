@@ -9,7 +9,7 @@ from opensprite.documents.recent_summary import (
 )
 from opensprite.documents.state import JsonProgressStore
 from opensprite.llms.base import LLMResponse
-from opensprite.storage.base import StoredMessage
+from opensprite.storage import MemoryStorage, StoredMessage
 
 
 class FakeProvider:
@@ -22,12 +22,10 @@ class FakeProvider:
         return LLMResponse(content=self.content, model=model or "fake-model")
 
 
-class FakeStorage:
+class FakeStorage(MemoryStorage):
     def __init__(self, messages):
-        self.messages = list(messages)
-
-    async def get_messages(self, session_id, limit=None):
-        return list(self.messages)
+        super().__init__()
+        self._messages["chat-1"].extend(messages)
 
 
 def test_consolidate_recent_summary_uses_structured_prompt(tmp_path):

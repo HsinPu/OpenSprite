@@ -298,6 +298,7 @@ class StorageProvider(ABC):
         """Persist the last consolidated message index for a chat."""
         pass
 
+    @abstractmethod
     async def create_run(
         self,
         session_id: str,
@@ -307,9 +308,10 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRun | None:
-        """Optionally persist a run; overrides must pair with update_run_status and return StoredRun."""
-        return None
+        """Persist a run and return the durable record."""
+        pass
 
+    @abstractmethod
     async def update_run_status(
         self,
         session_id: str,
@@ -319,25 +321,27 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         finished_at: float | None = None,
     ) -> StoredRun | None:
-        """Optionally update a run; overrides must pair with create_run and return StoredRun."""
-        return None
+        """Update a run lifecycle state and return the durable record when found."""
+        pass
 
+    @abstractmethod
     async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
-        """Return persisted runs for one chat from newest to oldest when supported."""
-        return []
+        """Return persisted runs for one chat from newest to oldest."""
+        pass
 
     async def get_run(self, session_id: str, run_id: str) -> StoredRun | None:
-        """Return one persisted run for a chat when supported."""
+        """Return one persisted run for a chat."""
         for run in await self.get_runs(session_id):
             if run.run_id == run_id:
                 return run
         return None
 
     async def get_latest_run(self, session_id: str) -> StoredRun | None:
-        """Return the newest persisted run for one chat when supported."""
+        """Return the newest persisted run for one chat."""
         runs = await self.get_runs(session_id, limit=1)
         return runs[0] if runs else None
 
+    @abstractmethod
     async def add_run_event(
         self,
         session_id: str,
@@ -347,13 +351,15 @@ class StorageProvider(ABC):
         payload: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRunEvent | None:
-        """Persist one structured run event when supported."""
-        return None
+        """Persist one structured run event."""
+        pass
 
+    @abstractmethod
     async def get_run_events(self, session_id: str, run_id: str) -> list[StoredRunEvent]:
-        """Return persisted events for one run when supported."""
-        return []
+        """Return persisted events for one run."""
+        pass
 
+    @abstractmethod
     async def add_run_part(
         self,
         session_id: str,
@@ -365,13 +371,15 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRunPart | None:
-        """Persist one ordered run artifact when supported."""
-        return None
+        """Persist one ordered run artifact."""
+        pass
 
+    @abstractmethod
     async def get_run_parts(self, session_id: str, run_id: str) -> list[StoredRunPart]:
-        """Return ordered run artifacts for one run when supported."""
-        return []
+        """Return ordered run artifacts for one run."""
+        pass
 
+    @abstractmethod
     async def add_run_file_change(
         self,
         session_id: str,
@@ -388,12 +396,13 @@ class StorageProvider(ABC):
         metadata: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRunFileChange | None:
-        """Persist one file mutation captured during a run when supported."""
-        return None
+        """Persist one file mutation captured during a run."""
+        pass
 
+    @abstractmethod
     async def get_run_file_changes(self, session_id: str, run_id: str) -> list[StoredRunFileChange]:
-        """Return ordered file mutations captured for one run when supported."""
-        return []
+        """Return ordered file mutations captured for one run."""
+        pass
 
     async def get_run_file_change(
         self,
@@ -401,7 +410,7 @@ class StorageProvider(ABC):
         run_id: str,
         change_id: int,
     ) -> StoredRunFileChange | None:
-        """Return one captured file mutation for a run when supported."""
+        """Return one captured file mutation for a run."""
         for change in await self.get_run_file_changes(session_id, run_id):
             if change.change_id == change_id:
                 return change
@@ -419,17 +428,20 @@ class StorageProvider(ABC):
             file_changes=await self.get_run_file_changes(session_id, run_id),
         )
 
+    @abstractmethod
     async def upsert_background_process(
         self,
         process: StoredBackgroundProcess,
     ) -> StoredBackgroundProcess | None:
-        """Create or update persisted background process metadata when supported."""
-        return None
+        """Create or update persisted background process metadata."""
+        pass
 
+    @abstractmethod
     async def get_background_process(self, process_session_id: str) -> StoredBackgroundProcess | None:
-        """Return one persisted background process by process session id when supported."""
-        return None
+        """Return one persisted background process by process session id."""
+        pass
 
+    @abstractmethod
     async def list_background_processes(
         self,
         *,
@@ -437,11 +449,11 @@ class StorageProvider(ABC):
         states: tuple[str, ...] | None = None,
         limit: int | None = None,
     ) -> list[StoredBackgroundProcess]:
-        """Return persisted background processes from newest to oldest when supported."""
-        return []
+        """Return persisted background processes from newest to oldest."""
+        pass
 
     async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
-        """Return known session ids from newest to oldest when supported."""
+        """Return known session ids from newest to oldest."""
         session_ids = await self.get_all_sessions()
         if limit is not None:
             return session_ids[: max(0, int(limit))]
@@ -456,26 +468,3 @@ class StorageProvider(ABC):
             list[str]: 聊天室 ID 清單
         """
         pass
-
-
-async def get_storage_message_count(storage: Any, session_id: str) -> int:
-    """Compatibility helper for storages that may not implement get_message_count yet."""
-    getter = getattr(storage, "get_message_count", None)
-    if callable(getter):
-        return int(await getter(session_id))
-    return len(await storage.get_messages(session_id))
-
-
-async def get_storage_messages_slice(
-    storage: Any,
-    session_id: str,
-    *,
-    start_index: int = 0,
-    end_index: int | None = None,
-) -> list[StoredMessage]:
-    """Compatibility helper for storages that may not implement get_messages_slice yet."""
-    getter = getattr(storage, "get_messages_slice", None)
-    if callable(getter):
-        return list(await getter(session_id, start_index=max(0, start_index), end_index=end_index))
-    messages = await storage.get_messages(session_id)
-    return list(messages[max(0, start_index):end_index])

@@ -1,6 +1,5 @@
 import asyncio
 import json
-from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
@@ -106,32 +105,15 @@ def test_research_subagent_profile_uses_shared_web_tool_policy():
     assert "browser_snapshot" not in RESEARCH_PROFILE.allowed_tools
 
 
-class FakeStorage:
+class FakeStorage(MemoryStorage):
     def __init__(self):
+        super().__init__()
         self.saved = []
-        self.messages = defaultdict(list)
-
-    async def get_messages(self, session_id, limit=None):
-        messages = self.messages.get(session_id, [])
-        if limit:
-            return messages[-limit:]
-        return list(messages)
+        self.messages = self._messages
 
     async def add_message(self, session_id, message):
-        self.messages[session_id].append(message)
+        await super().add_message(session_id, message)
         self.saved.append((session_id, message.role, message.content, message.tool_name, message.metadata))
-
-    async def clear_messages(self, session_id):
-        return None
-
-    async def get_consolidated_index(self, session_id):
-        return 0
-
-    async def set_consolidated_index(self, session_id, index):
-        return None
-
-    async def get_all_sessions(self):
-        return []
 
 
 class DummyTool(Tool):

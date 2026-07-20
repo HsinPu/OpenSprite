@@ -11,6 +11,7 @@ import typer
 from .. import __version__
 from ..context.paths import get_tool_workspace
 from ..cron import CronService
+from ..ops import service_background, service_linux, update as update_cli
 from ..runtime import gateway as run_gateway
 from . import (
     commands_auth,
@@ -22,9 +23,6 @@ from . import (
     commands_service,
     commands_status,
     commands_update,
-    service_background,
-    service_linux,
-    update as update_cli,
 )
 
 app = typer.Typer(

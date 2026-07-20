@@ -3,7 +3,7 @@ import subprocess
 from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
-from opensprite.cli import update as update_cli
+from opensprite.ops import update as update_cli
 
 
 runner = CliRunner()

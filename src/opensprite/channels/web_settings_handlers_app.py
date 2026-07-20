@@ -10,9 +10,9 @@ from typing import Any
 
 from aiohttp import web
 
-from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
 from ..network_environment import apply_network_environment
+from ..ops import service_background, service_linux, update as update_cli
 from ..utils.log import logger
 from . import web_settings_coercion, web_settings_payloads, web_settings_reload, web_settings_support
 

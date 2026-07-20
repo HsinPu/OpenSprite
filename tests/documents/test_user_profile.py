@@ -8,15 +8,14 @@ from opensprite.documents.user_profile import (
     create_user_profile_store,
 )
 from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.storage.base import StoredMessage
+from opensprite.storage import MemoryStorage, StoredMessage
 
 
-class FakeStorage:
+class FakeStorage(MemoryStorage):
     def __init__(self, messages_by_session):
-        self.messages_by_session = messages_by_session
-
-    async def get_messages(self, session_id, limit=None):
-        return list(self.messages_by_session[session_id])
+        super().__init__()
+        for session_id, messages in messages_by_session.items():
+            self._messages[session_id].extend(messages)
 
 
 class FakeProvider:

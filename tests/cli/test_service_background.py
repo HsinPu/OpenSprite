@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
-from opensprite.cli import service_background
+from opensprite.ops import service_background
 
 
 runner = CliRunner()

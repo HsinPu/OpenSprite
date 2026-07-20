@@ -3,8 +3,6 @@ import json
 
 from agent_test_helpers import make_agent_loop
 from opensprite.agent.execution import ExecutionResult
-from opensprite.documents.curator import build_skill_review_user_content as legacy_build_skill_review_user_content
-from opensprite.documents.curator import format_stored_messages_for_transcript as legacy_format_stored_messages_for_transcript
 from opensprite.documents.skill_review_prompts import build_skill_review_user_content, format_stored_messages_for_transcript
 from opensprite.storage.base import StoredMessage
 
@@ -27,11 +25,6 @@ def test_build_skill_review_user_content_wraps_transcript():
     assert "--- TRANSCRIPT ---" in body
     assert "LINE1" in body
     assert "Nothing to save" in body
-
-
-def test_curator_reexports_skill_review_prompt_helpers_for_compatibility():
-    assert legacy_build_skill_review_user_content is build_skill_review_user_content
-    assert legacy_format_stored_messages_for_transcript is format_stored_messages_for_transcript
 
 
 def test_skill_review_collects_configured_skill_metadata():

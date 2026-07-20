@@ -1,7 +1,5 @@
 import json
 
-from opensprite.documents.curator import CURATOR_HISTORY_LIMIT as legacy_history_limit
-from opensprite.documents.curator import CURATOR_STATE_SCHEMA_VERSION as legacy_schema_version
 from opensprite.documents.curator_state import (
     CURATOR_HISTORY_LIMIT,
     CURATOR_STATE_SCHEMA_VERSION,
@@ -44,8 +42,3 @@ def test_curator_state_store_round_trips_file_state(tmp_path):
 
     assert not state_path.exists()
     assert store.load("chat-a")["run_count"] == 0
-
-
-def test_curator_reexports_state_constants_for_compatibility():
-    assert legacy_history_limit == CURATOR_HISTORY_LIMIT
-    assert legacy_schema_version == CURATOR_STATE_SCHEMA_VERSION

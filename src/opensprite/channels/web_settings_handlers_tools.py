@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from aiohttp import web
 
-from ..cli import service_background, service_linux, update as update_cli
 from ..config import Config
 from ..config.defaults import DEFAULT_SEARXNG_URL
 from ..tools.browser import _validate_navigation_url

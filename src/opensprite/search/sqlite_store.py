@@ -12,11 +12,10 @@ import unicodedata
 from pathlib import Path
 
 from .base import HISTORY_SEARCH_TOOL_NAME, SearchHit, SearchStore
-from .indexing import build_history_chunks
+from .indexing import SearchChunkPayload, build_history_chunks
 from ..storage.sqlite import (
     ensure_sqlite_schema,
     find_message_id,
-    insert_search_chunks,
     open_sqlite_connection,
 )
 from ..utils.log import logger
@@ -30,6 +29,41 @@ _LITERAL_IDENTIFIER_TERM_PATTERN = re.compile(
     r"(?<![\w+#])(?P<identifier>\w+(?:\+\+|#)\w*)(?![\w+#])",
     flags=re.UNICODE,
 )
+
+
+def _insert_search_chunks(
+    conn: sqlite3.Connection,
+    *,
+    session_id: str,
+    message_id: int,
+    chunks: list[SearchChunkPayload],
+) -> None:
+    """Insert one batch of search chunks into the shared index table."""
+    conn.execute("DELETE FROM search_chunks WHERE message_id = ?", (message_id,))
+    for chunk in chunks:
+        conn.execute(
+            """
+            INSERT INTO search_chunks (
+                session_id,
+                message_id,
+                role,
+                tool_name,
+                chunk_index,
+                content,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                message_id,
+                chunk.role,
+                chunk.tool_name,
+                chunk.chunk_index,
+                chunk.content,
+                chunk.created_at,
+            ),
+        )
 
 
 class _ReadOnlySnapshotConnection(sqlite3.Connection):
@@ -531,7 +565,7 @@ class SQLiteSearchStore(SearchStore):
                         role,
                     )
                     return
-                insert_search_chunks(
+                _insert_search_chunks(
                     conn,
                     session_id=session_id,
                     message_id=message_id,
@@ -635,7 +669,7 @@ class SQLiteSearchStore(SearchStore):
                     if not chunks:
                         continue
                     current_session_id = str(row["session_id"])
-                    insert_search_chunks(
+                    _insert_search_chunks(
                         conn,
                         session_id=current_session_id,
                         message_id=int(row["id"]),

@@ -19,7 +19,6 @@ from ..runs.events import (
     CURATOR_STARTED_EVENT,
 )
 from ..storage import StorageProvider, StoredMessage
-from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, SKILL_REVIEW_TOOL_NAMES
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
@@ -35,22 +34,19 @@ from .curator_jobs import (
     SnapshotReader,
 )
 from .curator_scope import (
-    CURATOR_MAINTENANCE_JOB_KEYS,
-    CURATOR_SCOPE_CHOICES,
+    CURATOR_MAINTENANCE_JOB_KEYS as _CURATOR_MAINTENANCE_JOB_KEYS,
     _ordered_maintenance_job_keys,
-    resolve_curator_scope,
+    resolve_curator_scope as _resolve_curator_scope,
 )
-from .document_fingerprints import fingerprint_text_directory
 from .memory import MemoryStore, consolidate
 from .skill_review_prompts import (
     SKILL_REVIEW_SYSTEM,
     SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON,
-    build_skill_review_user_content,
-    format_stored_messages_for_transcript,
+    build_skill_review_user_content as _build_skill_review_user_content,
+    format_stored_messages_for_transcript as _format_stored_messages_for_transcript,
 )
 from .curator_state import (
-    CURATOR_HISTORY_LIMIT,
-    CURATOR_STATE_SCHEMA_VERSION,
+    CURATOR_HISTORY_LIMIT as _CURATOR_HISTORY_LIMIT,
     CuratorStateStore,
     safe_int,
 )
@@ -96,12 +92,12 @@ class SkillReviewService:
     async def run(self, session_id: str, *, tool_registry: ToolRegistry) -> list[dict[str, str]]:
         """Execute one review pass for a session using the restricted skill tool registry."""
         stored = await self.storage.get_messages(session_id, limit=self._transcript_message_limit_getter())
-        transcript = format_stored_messages_for_transcript(stored)
+        transcript = _format_stored_messages_for_transcript(stored)
         if len(transcript) < 80:
             logger.info("[%s] skill.review.skip | reason=%s", session_id, SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON)
             return []
 
-        user_content = build_skill_review_user_content(transcript)
+        user_content = _build_skill_review_user_content(transcript)
         chat_messages = [
             ChatMessage(role="system", content=SKILL_REVIEW_SYSTEM),
             ChatMessage(role="user", content=user_content),
@@ -182,14 +178,13 @@ class MemoryConsolidationService:
 
     async def maybe_consolidate(self, session_id: str) -> None:
         """Consolidate pending session history into long-term memory when needed."""
-        message_count = await get_storage_message_count(self.storage, session_id)
+        message_count = await self.storage.get_message_count(session_id)
         last_consolidated = await self.storage.get_consolidated_index(session_id)
         if last_consolidated > message_count:
             await self.storage.set_consolidated_index(session_id, message_count)
             return
         pending_messages = self._to_message_dicts(
-            await get_storage_messages_slice(
-                self.storage,
+            await self.storage.get_messages_slice(
                 session_id,
                 start_index=last_consolidated,
             )
@@ -364,14 +359,14 @@ class CuratorService:
                 "status": run_status,
             }
         )
-        state["history"] = history[-CURATOR_HISTORY_LIMIT:]
+        state["history"] = history[-_CURATOR_HISTORY_LIMIT:]
         self._state_store.save(session_id, state)
 
     def _history_entries(self, session_id: str) -> list[dict[str, Any]]:
         state = self._session_state(session_id)
         raw_history = state.get("history") if isinstance(state.get("history"), list) else []
         history = [dict(item) for item in raw_history if isinstance(item, dict)]
-        state["history"] = history[-CURATOR_HISTORY_LIMIT:]
+        state["history"] = history[-_CURATOR_HISTORY_LIMIT:]
         return state["history"]
 
     def history(self, session_id: str, *, limit: int = 10) -> list[dict[str, Any]]:
@@ -419,7 +414,7 @@ class CuratorService:
                 channel=channel,
                 external_chat_id=external_chat_id,
                 result=result,
-                maintenance_job_keys=CURATOR_MAINTENANCE_JOB_KEYS,
+                maintenance_job_keys=_CURATOR_MAINTENANCE_JOB_KEYS,
                 run_skill_review=self._should_run_skill_review(result),
             )
         )
@@ -439,7 +434,7 @@ class CuratorService:
                 run_id=run_id,
                 channel=channel,
                 external_chat_id=external_chat_id,
-                maintenance_job_keys=CURATOR_MAINTENANCE_JOB_KEYS,
+                maintenance_job_keys=_CURATOR_MAINTENANCE_JOB_KEYS,
             )
         )
 
@@ -476,7 +471,7 @@ class CuratorService:
         scope: str | None = None,
     ) -> bool:
         """Schedule a manual full curator pass for one session."""
-        maintenance_job_keys, run_skill_review = resolve_curator_scope(scope)
+        maintenance_job_keys, run_skill_review = _resolve_curator_scope(scope)
         return self._schedule(
             CuratorRequest(
                 session_id=session_id,
