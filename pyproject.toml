@@ -34,20 +34,20 @@ dependencies = [
 dev = []
 
 [project.scripts]
-opensprite = "opensprite.cli.commands:app"
+opensprite = "opensprite.app.cli.commands:app"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.package-data]
 opensprite = [
-  "config/llm-presets.json",
+  "modules/llm/llm-presets.json",
   "config/*.template",
-  "templates/*.md",
-  "templates/memory/*.md",
-  "skills/*/*.md",
-    "skills/*/*.py",
-    "subagent_prompts/*.md",
+  "resources/templates/*.md",
+  "resources/templates/memory/*.md",
+  "resources/skills/*/*.md",
+  "resources/skills/*/*.py",
+  "resources/subagent_prompts/*.md",
 ]
 
 [tool.setuptools.packages.find]

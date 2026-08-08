@@ -1,0 +1,80 @@
+from opensprite.core.contracts.tool_names import (
+    ANALYZE_IMAGE_TOOL_NAME,
+    ANALYZE_VIDEO_TOOL_NAME,
+    APPLY_PATCH_TOOL_NAME,
+    CODE_NAVIGATION_TOOL_NAME,
+    CONFIGURE_SKILL_TOOL_NAME,
+    DELEGATE_MANY_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+    DELEGATED_EXECUTION_TOOL_NAMES,
+    EDIT_FILE_TOOL_NAME,
+    EXEC_TOOL_NAME,
+    EXECUTION_TOOL_NAMES,
+    GLOB_FILES_TOOL_NAME,
+    GREP_FILES_TOOL_NAME,
+    LIST_DIR_TOOL_NAME,
+    LIST_RUN_FILE_CHANGES_TOOL_NAME,
+    MEDIA_ANALYSIS_TOOL_NAMES,
+    MEDIA_TOOL_NAMES,
+    OCR_IMAGE_TOOL_NAME,
+    PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME,
+    PROCESS_TOOL_NAME,
+    READ_FILE_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
+    RUN_TRACE_READ_TOOL_NAMES,
+    RUN_WORKFLOW_TOOL_NAME,
+    SEND_MEDIA_TOOL_NAME,
+    SKILL_REVIEW_TOOL_NAMES,
+    TRANSCRIBE_AUDIO_TOOL_NAME,
+    VERIFICATION_TOOL_NAME,
+    WEB_FETCH_TOOL_NAME,
+    WEB_SEARCH_TOOL_NAME,
+    WEB_SOURCE_TOOL_NAMES,
+    WORKSPACE_DISCOVERY_TOOL_NAMES,
+    WORKSPACE_WRITE_TOOL_NAMES,
+    WRITE_FILE_TOOL_NAME,
+    is_verification_tool_name,
+)
+
+
+def test_tool_name_groups_preserve_runtime_policy_membership():
+    assert WORKSPACE_DISCOVERY_TOOL_NAMES == frozenset(
+        {
+            READ_FILE_TOOL_NAME,
+            LIST_DIR_TOOL_NAME,
+            GLOB_FILES_TOOL_NAME,
+            GREP_FILES_TOOL_NAME,
+            CODE_NAVIGATION_TOOL_NAME,
+        }
+    )
+    assert WORKSPACE_WRITE_TOOL_NAMES == frozenset(
+        {APPLY_PATCH_TOOL_NAME, WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME}
+    )
+    assert EXECUTION_TOOL_NAMES == frozenset({EXEC_TOOL_NAME, PROCESS_TOOL_NAME})
+    assert RUN_TRACE_READ_TOOL_NAMES == frozenset(
+        {LIST_RUN_FILE_CHANGES_TOOL_NAME, PREVIEW_RUN_FILE_CHANGE_REVERT_TOOL_NAME}
+    )
+    assert SKILL_REVIEW_TOOL_NAMES == frozenset(
+        {READ_SKILL_TOOL_NAME, CONFIGURE_SKILL_TOOL_NAME}
+    )
+    assert DELEGATED_EXECUTION_TOOL_NAMES == frozenset(
+        {DELEGATE_TOOL_NAME, DELEGATE_MANY_TOOL_NAME, RUN_WORKFLOW_TOOL_NAME}
+    )
+    assert MEDIA_ANALYSIS_TOOL_NAMES == frozenset(
+        {
+            ANALYZE_IMAGE_TOOL_NAME,
+            OCR_IMAGE_TOOL_NAME,
+            TRANSCRIBE_AUDIO_TOOL_NAME,
+            ANALYZE_VIDEO_TOOL_NAME,
+        }
+    )
+    assert SEND_MEDIA_TOOL_NAME not in MEDIA_ANALYSIS_TOOL_NAMES
+    assert MEDIA_TOOL_NAMES == frozenset({*MEDIA_ANALYSIS_TOOL_NAMES, SEND_MEDIA_TOOL_NAME})
+    assert WEB_SOURCE_TOOL_NAMES == frozenset({WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME})
+
+
+def test_verification_tool_name_check_remains_exact():
+    assert is_verification_tool_name(VERIFICATION_TOOL_NAME) is True
+    assert is_verification_tool_name(f" {VERIFICATION_TOOL_NAME} ") is True
+    assert is_verification_tool_name("verify_run") is False
+    assert is_verification_tool_name(None) is False

@@ -34,15 +34,13 @@ from .defaults import (
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_MAX_RESULTS,
     DEFAULT_WEB_SEARCH_FRESHNESS,
-    DEFAULT_WEB_SEARCH_PROVIDER,
 )
-from .llm_presets import provider_profile_defaults
-from .provider_api_modes import ProviderApiMode
-from .provider_auth_types import (
+from ..core.contracts.web_search import (
+    DEFAULT_WEB_SEARCH_PROVIDER as _DEFAULT_WEB_SEARCH_PROVIDER,
+)
+from ..modules.llm.provider_api_modes import ProviderApiMode
+from ..modules.llm.provider_auth_types import (
     API_KEY_AUTH_TYPE,
-    GITHUB_COPILOT_OAUTH_AUTH_TYPE,
-    OPENAI_CODEX_OAUTH_AUTH_TYPE,
-    OPTIONAL_API_KEY_AUTH_TYPE,
     ProviderAuthType,
 )
 
@@ -395,7 +393,7 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["duckduckgo", "searxng"] = DEFAULT_WEB_SEARCH_PROVIDER
+    provider: Literal["duckduckgo", "searxng"] = _DEFAULT_WEB_SEARCH_PROVIDER
     freshness: Literal["none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
     searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)
@@ -1171,50 +1169,18 @@ class Config:
             path = workspace / "opensprite.json"
             if not path.exists():
                 cls.copy_template(path)
-                from ..utils.log import logger
+                from opensprite.core.logging import logger
                 logger.info(f"已建立設定檔：{path}")
         path = Path(path)
         if not path.exists():
             if path.suffix != ".json":
                 raise ValueError(f"不支援的格式：{path.suffix}")
             cls.copy_template(path)
-            from ..utils.log import logger
+            from opensprite.core.logging import logger
             logger.info(f"已建立設定檔：{path}")
         if path.suffix != ".json":
             raise ValueError(f"不支援的格式：{path.suffix}")
         return cls.from_json(path)
-
-    @property
-    def is_llm_configured(self) -> bool:
-        if self.llm.providers and self.llm.default and self.llm.default in self.llm.providers:
-            provider = self.llm.providers[self.llm.default]
-            provider_id = str(provider.provider or self.llm.default or "").strip()
-            defaults = provider_profile_defaults(provider_id, auth_type=provider.auth_type, api_mode=provider.api_mode)
-            auth_type = defaults.auth_type
-            if auth_type == OPENAI_CODEX_OAUTH_AUTH_TYPE:
-                if not provider.model:
-                    return False
-                try:
-                    from ..auth.codex import get_codex_status
-
-                    status = get_codex_status(self.source_path.parent if self.source_path is not None else None)
-                except Exception:
-                    return False
-                return status.configured and status.expired is not True
-            if auth_type == GITHUB_COPILOT_OAUTH_AUTH_TYPE:
-                if not provider.model:
-                    return False
-                try:
-                    from ..auth.copilot import get_copilot_status
-
-                    status = get_copilot_status(self.source_path.parent if self.source_path is not None else None)
-                except Exception:
-                    return False
-                return status.configured
-            if auth_type == OPTIONAL_API_KEY_AUTH_TYPE:
-                return bool(provider.model)
-            return bool((provider.api_key or provider.credential_id) and provider.model)
-        return False
 
     @classmethod
     def template_path(cls) -> Path:
@@ -1261,7 +1227,7 @@ class Config:
 
     @classmethod
     def packaged_agent_llm_chat_kwargs(cls) -> dict[str, Any]:
-        """Map packaged ``llm`` to :class:`opensprite.agent.agent.AgentLoop` keyword arguments."""
+        """Map packaged ``llm`` to :class:`opensprite.app.agent.agent.AgentLoop` keyword arguments."""
         agent = cls.load_template_data().get("agent", {})
         return {
             "llm_output_reserve_tokens": agent["context_output_reserve_tokens"],
@@ -1269,7 +1235,7 @@ class Config:
 
     @classmethod
     def packaged_execution_engine_chat_kwargs(cls) -> dict[str, Any]:
-        """Map packaged ``llm`` to :class:`opensprite.agent.execution.ExecutionEngine` keyword arguments."""
+        """Map packaged ``llm`` to :class:`opensprite.app.agent.execution.ExecutionEngine` keyword arguments."""
         agent = cls.load_template_data().get("agent", {})
         return {
             "context_output_reserve_tokens": agent["context_output_reserve_tokens"],

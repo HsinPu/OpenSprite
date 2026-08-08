@@ -1,10 +1,10 @@
 import asyncio
 
 from agent_test_helpers import DummyTool, make_agent_loop
-from opensprite.bus.message import UserMessage
+from opensprite.core.contracts.messages import UserMessage
 from opensprite.config.schema import ToolsConfig
-from opensprite.tools.mcp import MCPConnectionSummary, MCPServerConnectionResult
-from opensprite.tools.result_status import classify_tool_result_status
+from opensprite.integrations.mcp.transport import MCPConnectionSummary, MCPServerConnectionResult
+from opensprite.core.contracts.tool_results import classify_tool_result_status
 
 
 def _make_agent(tmp_path, tools_config: ToolsConfig | None = None):
@@ -48,7 +48,7 @@ def test_connect_mcp_registers_tools_once(tmp_path, monkeypatch):
         registry.register(DummyTool("mcp_demo_echo"))
         return _connection_summary(connected=("demo",))
 
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
 
     agent = _make_agent(
         tmp_path,
@@ -71,8 +71,8 @@ def test_connect_mcp_uses_retry_backoff_after_failure(tmp_path, monkeypatch):
         calls.append(sorted(servers.keys()))
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
-    monkeypatch.setattr("opensprite.runs.trace.time.monotonic", lambda: clock["now"])
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.lifecycle.time.monotonic", lambda: clock["now"])
 
     agent = _make_agent(
         tmp_path,
@@ -100,7 +100,7 @@ def test_connect_mcp_treats_zero_success_summary_as_retryable_failure(tmp_path, 
     async def fake_connect(servers, registry, stack):
         return _connection_summary(failed=("demo",))
 
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
 
     agent = _make_agent(
         tmp_path,
@@ -129,8 +129,8 @@ def test_connect_mcp_retries_only_failed_servers_after_partial_success(tmp_path,
         registry.register(DummyTool("mcp_bad_echo"))
         return _connection_summary(connected=("bad",))
 
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
-    monkeypatch.setattr("opensprite.runs.trace.time.monotonic", lambda: clock["now"])
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.lifecycle.time.monotonic", lambda: clock["now"])
 
     agent = _make_agent(
         tmp_path,
@@ -175,7 +175,7 @@ def test_concurrent_first_connect_waits_for_single_attempt(tmp_path, monkeypatch
             registry.register(DummyTool("mcp_demo_echo"))
             return _connection_summary(connected=("demo",))
 
-        monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+        monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
         agent = _make_agent(
             tmp_path,
             ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
@@ -212,7 +212,7 @@ def test_connect_mcp_cancellation_cleans_partial_tools_and_stack(tmp_path, monke
             started.set()
             await asyncio.Future()
 
-        monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+        monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
         agent = _make_agent(
             tmp_path,
             ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
@@ -251,7 +251,7 @@ def test_process_saves_input_before_connecting_mcp_and_calling_llm(tmp_path):
             ]
 
         async def fake_call_llm(session_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
-            from opensprite.agent.execution import ExecutionResult
+            from opensprite.app.agent.execution import ExecutionResult
 
             order.append("call_llm")
             assert order[0] == "connect"
@@ -304,8 +304,8 @@ def test_close_mcp_resets_state_and_closes_stack(tmp_path, monkeypatch):
     async def fake_connect(servers, registry, stack):
         return _connection_summary(connected=("demo",))
 
-    monkeypatch.setattr("opensprite.runs.trace.AsyncExitStack", FakeStack)
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.lifecycle.AsyncExitStack", FakeStack)
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
 
     agent = _make_agent(
         tmp_path,
@@ -345,7 +345,7 @@ def test_reload_mcp_from_config_replaces_registered_mcp_tools(tmp_path, monkeypa
             registry.register(DummyTool(f"mcp_{server_name}_echo"))
         return _connection_summary(connected=tuple(sorted(servers)))
 
-    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+    monkeypatch.setattr("opensprite.integrations.mcp.transport.connect_mcp_servers", fake_connect)
 
     agent = _make_agent(
         tmp_path,

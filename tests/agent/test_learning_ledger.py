@@ -1,37 +1,11 @@
 import asyncio
 import json
 
-from agent_test_helpers import make_agent_loop
-from opensprite.agent import learning_runtime
-from opensprite.context.message_history import LearningLedger
-from opensprite.context.paths import get_session_learning_state_file
-
-
-def test_learning_ledger_records_and_ranks_relevant_entries():
-    ledger = LearningLedger()
-    ledger.record_learning(
-        "telegram:room-1",
-        kind="skill",
-        target_id="pytest-helper",
-        summary="Reusable pytest workflow for updating assertions and running focused tests.",
-        source_run_id="run-1",
-    )
-    ledger.record_learning(
-        "telegram:room-1",
-        kind="memory",
-        target_id="memory",
-        summary="Updated session memory.",
-        source_run_id="run-2",
-    )
-
-    entries = ledger.relevant_entries("telegram:room-1", "Please update pytest assertions")
-
-    assert entries
-    assert entries[0]["kind"] == "skill"
-    assert entries[0]["target_id"] == "pytest-helper"
-    context = ledger.build_relevant_context("telegram:room-1", "Please update pytest assertions")
-    assert "# Relevant Learned Context" in context
-    assert "pytest-helper" in context
+from agent_test_helpers import FakeContextBuilder, make_agent_loop
+from opensprite.app.agent import learning_runtime
+from opensprite.integrations.workspace.paths import get_session_learning_state_file
+from opensprite.integrations.documents.learning import JsonLearningLedgerStore
+from opensprite.modules.documents.learning import LearningLedger
 
 
 def test_agent_loop_marks_read_skill_reuse_in_learning_ledger(tmp_path):
@@ -78,33 +52,37 @@ def test_agent_loop_ignores_failed_read_skill_for_learning_ledger(tmp_path):
     assert entries == []
 
 
-def test_learning_ledger_persists_per_session_file(tmp_path):
+def test_agent_loop_composes_file_backed_learning_ledger(tmp_path):
+    class RecordingContextBuilder(FakeContextBuilder):
+        def set_learning_ledger(self, ledger):
+            self.attached_learning_ledger = ledger
+
     app_home = tmp_path / "home"
-    workspace_root = app_home / "workspace"
-    ledger = LearningLedger(
-        state_path_for_session=lambda session_id: get_session_learning_state_file(
-            session_id,
-            app_home=app_home,
-            workspace_root=workspace_root,
-        )
+    workspace_root = tmp_path / "workspace"
+    session_id = "telegram:room-1"
+    context_builder = RecordingContextBuilder(
+        tmp_path / "context",
+        app_home=app_home,
+        tool_workspace=workspace_root,
+    )
+    agent = make_agent_loop(
+        tmp_path / "context",
+        context_builder=context_builder,
     )
 
-    ledger.record_learning(
-        "telegram:room-1",
+    assert context_builder.attached_learning_ledger is agent.learning_ledger
+    agent.learning_ledger.record_learning(
+        session_id,
         kind="skill",
         target_id="pytest-helper",
-        summary="Reusable pytest workflow.",
-        source_run_id="run-1",
+        summary="Persisted through AgentLoop composition.",
     )
 
-    reloaded = LearningLedger(
-        state_path_for_session=lambda session_id: get_session_learning_state_file(
-            session_id,
-            app_home=app_home,
-            workspace_root=workspace_root,
-        )
+    state_path = get_session_learning_state_file(
+        session_id,
+        app_home=app_home,
+        workspace_root=workspace_root,
     )
-    entries = reloaded.recent_entries("telegram:room-1", limit=1)
-
-    assert entries[0]["target_id"] == "pytest-helper"
-    assert get_session_learning_state_file("telegram:room-1", app_home=app_home, workspace_root=workspace_root).exists()
+    assert state_path.exists()
+    reloaded = LearningLedger(store=JsonLearningLedgerStore(state_path=state_path))
+    assert reloaded.recent_entries(session_id, limit=1)[0]["target_id"] == "pytest-helper"

@@ -6,14 +6,14 @@ import json
 
 import pytest
 
-from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import ExecutionResult
-from opensprite.bus.message import CLIENT_TURN_ID_METADATA_KEY, UserMessage
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.app.agent.execution import ExecutionResult
+from opensprite.core.contracts.messages import CLIENT_TURN_ID_METADATA_KEY, UserMessage
 from opensprite.config import AgentMessagesConfig, MessagesConfig
-from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.runs.trace import RunBusyError
-from opensprite.storage import MemoryStorage
-from opensprite.tools.registry import ToolRegistry
+from opensprite.core.contracts.llm import LLMResponse, ToolCall
+from opensprite.core.run_tracking.state import RunBusyError
+from opensprite.integrations.persistence.memory import MemoryStorage
+from opensprite.modules.tools.registry import ToolRegistry
 
 from agent_test_helpers import DummyTool, SavedMessageStorage, make_agent_loop, make_tool_registry
 

@@ -3,11 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from opensprite.agent.agent import AgentLoop
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.app.tools.registration import (
+    register_memory_tool,
+    reload_browser_tools,
+    reload_web_search_tools,
+)
+from opensprite.app.tools.setup import register_default_agent_tools
+from opensprite.app.media import reload_media_router
 from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
-from opensprite.storage import MemoryStorage, StoredMessage
-from opensprite.tools.base import Tool
-from opensprite.tools.registry import ToolRegistry
+from opensprite.core.contracts.persistence import StoredMessage
+from opensprite.integrations.persistence.memory import MemoryStorage
+from opensprite.modules.tools.base import Tool
+from opensprite.modules.tools.registry import ToolRegistry
 
 
 class FakeContextBuilder:
@@ -135,6 +143,23 @@ def make_agent_loop(
         user_profile_config=agent_kwargs.pop("user_profile_config", disabled_user_profile_config()),
         history_search_store=history_search_store,
         config_path=config_path,
+        media_router_reloader=agent_kwargs.pop("media_router_reloader", reload_media_router),
+        default_tool_registrar=agent_kwargs.pop(
+            "default_tool_registrar",
+            register_default_agent_tools,
+        ),
+        memory_tool_registrar=agent_kwargs.pop(
+            "memory_tool_registrar",
+            register_memory_tool,
+        ),
+        web_search_tool_reloader=agent_kwargs.pop(
+            "web_search_tool_reloader",
+            reload_web_search_tools,
+        ),
+        browser_tool_reloader=agent_kwargs.pop(
+            "browser_tool_reloader",
+            reload_browser_tools,
+        ),
         **Config.packaged_agent_llm_chat_kwargs(),
         **agent_kwargs,
     )

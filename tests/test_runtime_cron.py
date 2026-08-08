@@ -1,15 +1,15 @@
 import asyncio
 
-from opensprite import runtime
-from opensprite.cron.factory import create_cron_manager
-from opensprite.cron.types import CronSchedule
+from opensprite.app import runtime
+from opensprite.app.scheduling import create_cron_manager
+from opensprite.modules.scheduling.types import CronSchedule
 
 
 class FakeConfig:
     def __init__(self):
         self.log = object()
         self.channels = object()
-        self.is_llm_configured = True
+        self.llm_configured = True
         self.source_path = None
 
 
@@ -75,8 +75,9 @@ def test_runtime_run_starts_and_stops_cron_manager(monkeypatch):
 
     monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
     monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True, app_home=None: None)
-    monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
+    monkeypatch.setattr(runtime, "is_llm_configured", lambda config: config.llm_configured)
+    monkeypatch.setattr("opensprite.integrations.observability.logging.setup_log", lambda config=None, console=True, app_home=None: None)
+    monkeypatch.setattr("opensprite.app.channels.runtime.start_channels", fake_start_channels)
     monkeypatch.setattr(runtime.asyncio, "Event", FakeEvent)
 
     asyncio.run(runtime.run())
@@ -106,6 +107,15 @@ def test_runtime_cron_jobs_are_enqueued_through_message_queue(tmp_path):
         queue = CronQueue()
         manager = create_cron_manager(object(), agent, queue)
         service = await manager.get_or_create_service("telegram:same-chat")
+        expected_store_path = (
+            agent.tool_workspace
+            / "sessions"
+            / "telegram"
+            / "same-chat"
+            / "cron"
+            / "jobs.json"
+        )
+        assert service.store_path == expected_store_path
         job = service.add_job(
             name="quoted-command",
             schedule=CronSchedule(kind="every", every_ms=60_000),
@@ -114,6 +124,7 @@ def test_runtime_cron_jobs_are_enqueued_through_message_queue(tmp_path):
             channel="telegram",
             external_chat_id="same-chat",
         )
+        assert expected_store_path.is_file()
         await service.run_job(job.id)
         await manager.stop()
         return agent, queue, job.id

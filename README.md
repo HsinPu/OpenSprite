@@ -211,24 +211,64 @@ npm run build
 
 ```text
 src/opensprite/
-  cli/              # Typer CLI
-  agent/            # Agent loop and direct tool execution
-  channels/         # Web and Telegram channel wiring
-  config/           # Config schema and templates
-  context/          # Memory, history, and prompt context assembly
-  cron/             # Scheduled jobs
-  llms/             # LLM providers
-  media/            # Media routing
-  search/           # SQLite FTS conversation-history search
-  storage/          # Storage backends
-  tools/            # Built-in tools and MCP integration
-  runtime.py        # Gateway wiring
+  app/               # Application entrypoints and composition
+    agent/           # Agent loop and execution support
+    channels/        # Channel runtime lifecycle
+    cli/             # Typer commands
+    messaging/       # Queue and message dispatching
+    settings/        # Application-facing settings use cases
+    tools/           # Concrete tool adapters exposed to the agent
+  config/            # Shared config schema, defaults, normalization, and JSON-file helpers
+  core/              # Cross-feature contracts, ports, serialization, logging, and run state
+    contracts/       # Stable cross-layer data contracts
+    ports/           # Interfaces implemented by integrations
+    run_tracking/    # Shared run lifecycle state
+  modules/           # Feature behavior with no application composition
+    channels/        # Channel settings domain behavior
+    context/         # Prompt/history context behavior
+    conversations/   # Conversation domain behavior
+    documents/       # Memory, profile, and document workflows
+    llm/             # Provider rules and preset behavior
+    media/           # Media routing behavior
+    processes/       # Process policy behavior
+    runs/            # Run and file-change workflows
+    scheduling/      # Schedule models and services
+    search/          # Search policy and indexing behavior
+    session_commands/ # Chat-session command catalog
+    skills/          # Skill discovery and content behavior
+    subagents/       # Subagent domain behavior
+    tools/           # Tool contracts, registry, and validation
+    workspace/       # Workspace domain behavior
+  integrations/      # External systems and environment-specific adapters
+    auth/            # Provider OAuth and credential persistence
+    browser/         # Browser-provider implementations
+    channels/        # Telegram adapter
+    llm/             # LLM provider clients
+    mcp/             # MCP transport and adapters
+    persistence/     # SQLite, memory, and provider settings persistence
+    web/             # HTTP/WebSocket gateway adapters
+  resources/         # Packaged non-code resources: templates, skills, and subagent prompts
 
 frontend/
   src/App.tsx       # React + Ant Design shell
   src/composables/  # Shared Web client state and normalization helpers
   scripts/smoke.mjs # UI contract smoke checks
 ```
+
+### 後端分層與流程
+
+`app` 是唯一的組裝與啟動區：CLI、Web／Telegram runtime 進來後，由 `app/bootstrap.py`
+建立 Agent、訊息佇列、Storage、Search、Media、排程與工具。`app/agent` 執行 Agent loop，
+再呼叫各 feature module 的行為與 integration adapter。
+
+`core` 只放跨功能都可使用的契約、port 與共享狀態，不能依賴外層；`modules` 放產品功能與
+領域行為；`integrations` 放 SQLite、MCP、LLM、Browser、Telegram、Web 等外部實作。新增功能時，
+先在 `modules` 放行為，需要外部 I/O 時在 `integrations` 實作 adapter，最後才在 `app` 組裝。
+
+`config` 刻意維持為獨立的共用設定邊界，而不是 feature module 或 runtime。它集中設定 schema、
+預設值、normalization 與設定檔讀寫，供 `app`、`modules`、`integrations` 使用；若搬進 `app`，
+需要設定型別的 module 會反向依賴 application layer。`resources` 則只放打包資源，不放 Python
+runtime code。
 
 ## 測試
 
@@ -241,7 +281,7 @@ python -m pytest
 Focused test example：
 
 ```bash
-python -m pytest tests/channels/test_web.py::test_web_adapter_roundtrip
+python -m pytest tests/integrations/web/test_adapter.py::test_web_adapter_roundtrip
 ```
 
 Frontend baseline：

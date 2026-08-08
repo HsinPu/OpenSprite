@@ -9,6 +9,8 @@ venv/
 
 # tooling
 .pytest_cache/
+.pytest-agent-runtime/
+.pytest-architecture-agent/
 .mypy_cache/
 .ruff_cache/
 .codegraph/
@@ -18,6 +20,10 @@ frontend/dist/
 
 # local agent instructions
 AGENTS.md
+!src/opensprite/resources/templates/AGENTS.md
+
+# local Codex workspace configuration
+.codex/
 
 # local docs and research notes
 docs/

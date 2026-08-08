@@ -1,7 +1,7 @@
 import asyncio
 
 from agent_test_helpers import make_agent_loop
-from opensprite.llms.base import ChatMessage, LLMResponse
+from opensprite.core.contracts.llm import ChatMessage, LLMResponse
 
 
 class StreamingDebugProvider:

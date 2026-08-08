@@ -1,13 +1,13 @@
 import asyncio
 
-from opensprite import runtime
+from opensprite.app import runtime
 
 
 class FakeConfig:
     def __init__(self, *, llm_configured: bool = True):
         self.log = object()
         self.channels = object()
-        self.is_llm_configured = llm_configured
+        self.llm_configured = llm_configured
         self.source_path = None
 
 
@@ -74,8 +74,9 @@ def test_runtime_run_connects_and_closes_mcp(monkeypatch):
 
     monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
     monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True, app_home=None: None)
-    monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
+    monkeypatch.setattr(runtime, "is_llm_configured", lambda config: config.llm_configured)
+    monkeypatch.setattr("opensprite.integrations.observability.logging.setup_log", lambda config=None, console=True, app_home=None: None)
+    monkeypatch.setattr("opensprite.app.channels.runtime.start_channels", fake_start_channels)
     monkeypatch.setattr(runtime.asyncio, "Event", FakeEvent)
 
     asyncio.run(runtime.run())
@@ -105,8 +106,9 @@ def test_runtime_run_still_starts_when_llm_not_configured(monkeypatch):
 
     monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
     monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True, app_home=None: None)
-    monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
+    monkeypatch.setattr(runtime, "is_llm_configured", lambda config: config.llm_configured)
+    monkeypatch.setattr("opensprite.integrations.observability.logging.setup_log", lambda config=None, console=True, app_home=None: None)
+    monkeypatch.setattr("opensprite.app.channels.runtime.start_channels", fake_start_channels)
     monkeypatch.setattr(runtime.asyncio, "Event", FakeEvent)
 
     asyncio.run(runtime.run())
@@ -128,8 +130,9 @@ def test_runtime_run_treats_channel_cancellation_as_shutdown(monkeypatch):
 
     monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
     monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
-    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True, app_home=None: None)
-    monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
+    monkeypatch.setattr(runtime, "is_llm_configured", lambda config: config.llm_configured)
+    monkeypatch.setattr("opensprite.integrations.observability.logging.setup_log", lambda config=None, console=True, app_home=None: None)
+    monkeypatch.setattr("opensprite.app.channels.runtime.start_channels", fake_start_channels)
 
     asyncio.run(runtime.run())
 

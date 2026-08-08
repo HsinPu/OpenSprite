@@ -1,10 +1,9 @@
 from agent_test_helpers import make_agent_loop
 
 from opensprite.config.schema import Config
-from opensprite.tools.audio import TranscribeAudioTool
-from opensprite.tools.browser import BrowserNavigateTool
-from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.web_search import WebSearchTool
+from opensprite.app.tools.web.browser import BrowserNavigateTool
+from opensprite.modules.tools.registry import ToolRegistry
+from opensprite.app.tools.web.search import WebSearchTool
 
 
 def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
@@ -43,13 +42,34 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
     assert web_search_tool.searxng_proxy == "http://proxy.local:8080"
 
 
+def test_agent_reload_web_search_uses_injected_tool_reloader(tmp_path):
+    calls = []
+
+    def reload_tools(registry, web_search_config):
+        calls.append((registry, web_search_config))
+        return {"tool_updated": False}
+
+    agent = make_agent_loop(
+        tmp_path / "workspace",
+        web_search_tool_reloader=reload_tools,
+    )
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+
+    payload = agent.reload_web_search_from_config(config)
+
+    assert calls == [(agent.tools, config.tools.web_search)]
+    assert payload["tool_updated"] is False
+
+
 def test_agent_reload_media_from_config_updates_registered_media_router(tmp_path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
     agent = make_agent_loop(tmp_path / "workspace", tools=ToolRegistry(), config_path=config_path)
 
     transcribe_tool = agent.tools.get("transcribe_audio")
-    assert isinstance(transcribe_tool, TranscribeAudioTool)
+    assert transcribe_tool is not None
     assert transcribe_tool._media_router is agent.media_router
     assert transcribe_tool._media_router.speech_provider is None
 
@@ -118,3 +138,31 @@ def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
         "tool_removed": True,
     }
     assert not any(name.startswith("browser_") for name in agent.tools.tool_names)
+
+
+def test_agent_reload_browser_uses_injected_tool_reloader(tmp_path):
+    calls = []
+
+    def reload_tools(registry, *, get_session_id, tools_config):
+        calls.append((registry, get_session_id, tools_config))
+        return {"tool_updated": False, "tool_removed": False}
+
+    agent = make_agent_loop(
+        tmp_path / "workspace",
+        browser_tool_reloader=reload_tools,
+    )
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+
+    payload = agent.reload_browser_from_config(config)
+
+    assert calls == [
+        (
+            agent.tools,
+            agent._get_current_session_id,
+            agent.tools_config,
+        )
+    ]
+    assert payload["tool_updated"] is False
+    assert payload["tool_removed"] is False

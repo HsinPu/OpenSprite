@@ -2,11 +2,12 @@ import asyncio
 import json
 from pathlib import Path
 
-from opensprite.agent.agent import AgentLoop
-from opensprite.agent.workflow import (
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.app.agent.workflow import (
     SubagentWorkflowService,
     WorkflowSpec,
     WorkflowStepSpec,
+    WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_FIELD,
     WORKFLOW_ID_FIELD,
@@ -18,7 +19,8 @@ from opensprite.agent.workflow import (
     WORKFLOW_STATUS_FIELD,
     WORKFLOW_SUMMARY_FIELD,
 )
-from opensprite.agent.subagent import (
+from opensprite.core.run_tracking.state import RunCancelledError
+from opensprite.app.agent.subagent import (
     SubagentTaskOutcome,
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
@@ -27,8 +29,8 @@ from opensprite.agent.subagent import (
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
 )
 from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
-from opensprite.llms.base import LLMResponse
-from opensprite.runs.events import (
+from opensprite.core.contracts.llm import LLMResponse
+from opensprite.core.contracts.run_events import (
     WORKFLOW_COMPLETED_EVENT,
     WORKFLOW_FAILED_EVENT,
     WORKFLOW_STARTED_EVENT,
@@ -36,9 +38,9 @@ from opensprite.runs.events import (
     WORKFLOW_STEP_FAILED_EVENT,
     WORKFLOW_STEP_STARTED_EVENT,
 )
-from opensprite.storage import MemoryStorage
-from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.result_status import classify_tool_result_status
+from opensprite.integrations.persistence.memory import MemoryStorage
+from opensprite.modules.tools.registry import ToolRegistry
+from opensprite.core.contracts.tool_results import classify_tool_result_status
 
 
 class FakeContextBuilder:
@@ -254,6 +256,48 @@ def test_workflow_payloads_share_outcome_fields():
     assert workflow_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."
     assert outcome_payload["completed_steps"] == 1
     assert outcome_payload[WORKFLOW_SUMMARY_FIELD] == "Completed 1/1 workflow step(s)."
+
+
+def test_workflow_catches_and_reraises_canonical_run_cancellation():
+    async def scenario():
+        events = []
+        recorded_outcomes = []
+
+        async def cancel_subagent(*args, **kwargs):
+            raise RunCancelledError("parent run cancelled")
+
+        async def emit_run_event(session_id, run_id, event_type, payload, **kwargs):
+            events.append((event_type, payload))
+
+        service = SubagentWorkflowService(
+            current_session_id_getter=lambda: "telegram:user-a",
+            current_run_id_getter=lambda: "run-parent",
+            current_channel_getter=lambda: "telegram",
+            current_external_chat_id_getter=lambda: "user-a",
+            run_subagent_task=cancel_subagent,
+            emit_run_event=emit_run_event,
+            format_log_preview=lambda value, **kwargs: str(value),
+            record_workflow_outcome=lambda run_id, payload: recorded_outcomes.append(
+                (run_id, payload)
+            ),
+        )
+
+        try:
+            await service.run("implement_then_review", "Implement a safe change.")
+        except RunCancelledError as exc:
+            assert type(exc) is RunCancelledError
+        else:
+            raise AssertionError("RunCancelledError was not re-raised")
+
+        return events, recorded_outcomes
+
+    events, recorded_outcomes = asyncio.run(scenario())
+
+    assert recorded_outcomes[0][0] == "run-parent"
+    assert recorded_outcomes[0][1][WORKFLOW_STATUS_FIELD] == WORKFLOW_CANCELLED_STATUS
+    assert recorded_outcomes[0][1][WORKFLOW_ERROR_FIELD] == WORKFLOW_CANCELLED_STATUS
+    assert events[-1][0] == WORKFLOW_FAILED_EVENT
+    assert events[-1][1][WORKFLOW_STATUS_FIELD] == WORKFLOW_CANCELLED_STATUS
 
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):

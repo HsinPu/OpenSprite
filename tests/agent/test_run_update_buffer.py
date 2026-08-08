@@ -1,5 +1,5 @@
-from opensprite.agent.run_update_buffer import RunUpdateBuffer
-from opensprite.storage import StoredDelegatedTask
+from opensprite.app.agent.run_update_buffer import RunUpdateBuffer
+from opensprite.app.agent.delegation_contracts import StoredDelegatedTask
 
 
 def test_run_update_buffer_merges_delegated_task_updates_by_task_id():

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .provider_errors import ProviderSettingsValidationError
+from ..modules.llm.provider_errors import ProviderSettingsValidationError
 
 
 def load_json_dict(path: Path) -> dict[str, Any]:

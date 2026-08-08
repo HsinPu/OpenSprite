@@ -5,14 +5,14 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from opensprite.agent.agent import AgentLoop
+from opensprite.app.agent.agent import AgentLoop
 from opensprite.config.schema import Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
-from opensprite.context.file_builder import FileContextBuilder
-from opensprite.context.paths import sync_templates
-from opensprite.llms.base import LLMResponse
-from opensprite.storage.base import StoredMessage
-from opensprite.tools.base import Tool
-from opensprite.tools.registry import ToolRegistry
+from opensprite.integrations.context.file_builder import FileContextBuilder
+from opensprite.integrations.workspace.bootstrap import sync_templates
+from opensprite.core.contracts.llm import LLMResponse
+from opensprite.core.contracts.persistence import StoredMessage
+from opensprite.modules.tools.base import Tool
+from opensprite.modules.tools.registry import ToolRegistry
 
 
 class CapturingProvider:

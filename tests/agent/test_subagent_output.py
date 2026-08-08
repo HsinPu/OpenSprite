@@ -1,6 +1,6 @@
 import json
 
-from opensprite.agent.subagent import (
+from opensprite.app.agent.subagent import (
     first_structured_review_finding,
     format_review_finding,
     parse_structured_subagent_output,

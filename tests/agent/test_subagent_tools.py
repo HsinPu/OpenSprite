@@ -2,31 +2,32 @@ import asyncio
 import json
 from pathlib import Path
 
-from opensprite.agent.agent import AgentLoop
-from opensprite.agent.subagent_run import (
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.app.llm.runtime_provider import DefaultLlmRuntimeFactory
+from opensprite.app.agent.subagent_run import (
     SubagentRunService,
     _subagent_preparation_error_detail,
     _subagent_validation_error,
     build_subagent_tool_registry,
 )
-from opensprite.subagent_prompts.profiles import RESEARCH_PROFILE
-from opensprite.tool_names import WEB_SOURCE_TOOL_NAMES
+from opensprite.modules.subagents.profiles import RESEARCH_PROFILE
+from opensprite.core.contracts.tool_names import WEB_SOURCE_TOOL_NAMES
 from opensprite.config.schema import AgentConfig, Config, HistorySearchConfig, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, ToolsConfig, UserProfileConfig
-from opensprite.context.paths import get_session_workspace
-from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.runs.events import (
+from opensprite.integrations.workspace.paths import get_session_workspace
+from opensprite.core.contracts.llm import LLMResponse, ToolCall
+from opensprite.core.contracts.run_events import (
     RUN_PART_DELTA_EVENT,
     SUBAGENT_COMPLETED_EVENT,
     SUBAGENT_STARTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
 )
-from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
-from opensprite.runs.schema import serialize_run_artifacts
-from opensprite.storage import MemoryStorage
-from opensprite.tools.base import Tool
-from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.result_status import classify_tool_result_status, tool_error_result
+from opensprite.core.contracts.run_lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
+from opensprite.modules.runs.presentation import serialize_run_artifacts
+from opensprite.integrations.persistence.memory import MemoryStorage
+from opensprite.modules.tools.base import Tool
+from opensprite.modules.tools.registry import ToolRegistry
+from opensprite.core.contracts.tool_results import classify_tool_result_status, tool_error_result
 
 
 class FakeContextBuilder:
@@ -911,6 +912,94 @@ def test_run_subagents_many_rejects_write_capable_profiles(tmp_path):
     assert "parallel delegation only supports read-only or research subagents" in status.error
 
 
+def test_run_subagents_many_allows_custom_research_profile(tmp_path):
+    workspace = tmp_path / "workspace"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "custom-researcher.md").write_text(
+        "---\n"
+        "name: custom-researcher\n"
+        "description: Custom parallel research helper.\n"
+        "tool_profile: research\n"
+        "---\n"
+        "Research the delegated task.\n",
+        encoding="utf-8",
+    )
+    provider = ParallelOutcomeProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(workspace),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        history_search_config=HistorySearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(
+        agent.run_subagents_many(
+            [{"task": "research the task", "prompt_type": "custom-researcher"}],
+            max_parallel=1,
+        )
+    )
+
+    assert "Parallel delegation completed: 1 task(s), 0 failed." in result
+    assert "[1] custom-researcher" in result
+    assert len(provider.calls) == 1
+
+
+def test_run_subagents_many_rejects_custom_implementation_profile(tmp_path):
+    workspace = tmp_path / "workspace"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "custom-implementer.md").write_text(
+        "---\n"
+        "name: custom-implementer\n"
+        "description: Custom implementation helper.\n"
+        "tool_profile: implementation\n"
+        "---\n"
+        "Implement the delegated task.\n",
+        encoding="utf-8",
+    )
+    provider = ResumeProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(workspace),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        history_search_config=HistorySearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(
+        agent.run_subagents_many(
+            [{"task": "implement the task", "prompt_type": "custom-implementer"}],
+            max_parallel=1,
+        )
+    )
+
+    status = classify_tool_result_status(result)
+    assert status.error_type == "DelegateManyToolError"
+    assert status.category == "parallel_profile_not_supported"
+    assert "'custom-implementer' uses profile 'implementation'" in status.error
+    assert provider.calls == []
+
+
 def test_run_subagents_many_cancels_children_with_parent_cancel_request(tmp_path):
     async def scenario():
         storage = MemoryStorage()
@@ -1095,7 +1184,7 @@ def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
     assert provider.calls[0]["max_tokens"] != 123
 
 
-def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monkeypatch):
+def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path):
     workspace = tmp_path / "workspace"
     session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
     prompt_dir = session_workspace / "subagent_prompts"
@@ -1114,20 +1203,12 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
     base_provider = ModelRoutingProvider()
     routed_provider = ModelRoutingProvider()
 
-    def fake_create_llm(
-        api_key: str,
-        model: str,
-        base_url: str = "",
-        provider_name: str = "",
-        enabled: bool = True,
-        **kwargs,
-    ):
-        _ = api_key, base_url, enabled, kwargs
-        assert provider_name == "review"
-        assert model == "provider-review-model"
-        return routed_provider
-
-    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm", fake_create_llm)
+    class FakeRuntimeFactory:
+        def create_provider(self, provider_config, *, provider_name, app_home=None):
+            _ = app_home
+            assert provider_name == "review"
+            assert provider_config.model == "provider-review-model"
+            return routed_provider, object()
 
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
@@ -1151,6 +1232,7 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
             },
             default="review",
         ),
+        llm_runtime_factory=FakeRuntimeFactory(),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
     agent._current_session_id.set("telegram:user-a")
@@ -1182,15 +1264,11 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
     routed_provider = ModelRoutingProvider()
     captured = {}
 
-    def fail_create_llm(*args, **kwargs):
-        raise AssertionError("profile-backed providers should resolve through runtime")
-
     def fake_create_llm_from_runtime(runtime):
         captured["runtime"] = runtime
         return routed_provider
 
-    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm", fail_create_llm)
-    monkeypatch.setattr("opensprite.llms.runtime_provider.create_llm_from_runtime", fake_create_llm_from_runtime)
+    monkeypatch.setattr("opensprite.app.llm.runtime_provider.create_llm_from_runtime", fake_create_llm_from_runtime)
 
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
@@ -1214,6 +1292,7 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
             },
             default="minimax",
         ),
+        llm_runtime_factory=DefaultLlmRuntimeFactory(),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
     agent._current_session_id.set("telegram:user-a")

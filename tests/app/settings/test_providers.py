@@ -1,0 +1,430 @@
+import json
+
+import pytest
+
+from opensprite.app.settings import provider_public
+from opensprite.app.settings.providers import ProviderSettingsService
+from opensprite.config import Config
+from opensprite.integrations.llm import provider_discovery
+from opensprite.modules.llm.provider_errors import (
+    ProviderSettingsConflict,
+    ProviderSettingsValidationError,
+)
+
+_ORIGINAL_FETCH_OPENROUTER_MODELS = provider_discovery.fetch_openrouter_models
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_model_discovery(monkeypatch):
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", lambda _api_key, _base_url: [])
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", lambda: [])
+    monkeypatch.setattr(provider_discovery, "fetch_codex_models", lambda _app_home=None: [])
+    monkeypatch.setattr(provider_discovery, "fetch_copilot_provider_models", lambda _api_key: [])
+
+
+def _copy_config(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    return config_path
+
+
+def test_provider_settings_connects_provider_without_leaking_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("openai", api_key="secret-key")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    connected = listing["connected"][0]
+
+    assert result["provider"] == connected
+    assert result["provider"]["api_key_configured"] is True
+    assert providers["openai"]["api_key"] == ""
+    assert providers["openai"]["credential_id"].startswith("cred_")
+    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+    assert auth_store["credentials"]["openai"][0]["secret"] == "secret-key"
+    assert providers["openai"]["enabled"] is False
+    assert providers["openai"]["model"] == ""
+    assert connected["id"] == "openai"
+    assert connected["provider"] == "openai"
+    assert connected["api_key_configured"] is True
+    assert connected["credential_effective_id"] == providers["openai"]["credential_id"]
+    assert connected["credential_source"] == "explicit"
+    assert connected["credential_preview"] == "secr...-key"
+    assert "api_key" not in connected
+    assert "openai" in {provider["id"] for provider in listing["available"]}
+
+
+def test_provider_settings_labels_credential_sources():
+    assert provider_public.public_credential_source({"credential_id": "cred_1"}, {"id": "cred_1"}) == "explicit"
+    assert provider_public.public_credential_source({}, {"id": "cred_1", "is_default": True}) == "provider_default"
+    assert provider_public.public_credential_source({}, {"id": "cred_1", "is_default": False}) == "priority"
+    assert provider_public.public_credential_source({}, None) == ""
+
+
+def test_provider_settings_allows_multiple_connections_for_same_provider(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    first = service.connect_provider("openai", api_key="first-key", name="Work")
+    second = service.connect_provider("openai", api_key="second-key", name="Personal")
+    service.select_model(second["provider"]["id"], "gpt-4.1-mini")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert first["provider"]["id"] == "openai"
+    assert second["provider"]["id"] == "openai_personal"
+    assert providers["openai"]["provider"] == "openai"
+    assert providers["openai_personal"]["provider"] == "openai"
+    assert providers["openai_personal"]["name"] == "Personal"
+    assert providers["openai_personal"]["api_key"] == ""
+    assert providers["openai_personal"]["credential_id"].startswith("cred_")
+    assert providers["openai_personal"]["enabled"] is True
+    assert providers["openai"]["enabled"] is False
+    assert models["default_provider"] == "openai_personal"
+    assert {provider["id"] for provider in models["providers"]} >= {"openai", "openai_personal"}
+
+
+def test_provider_settings_connects_codex_without_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("openai-codex", api_key=None)
+    service.select_model("openai-codex", "gpt-5.1-codex")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+    connected = listing["connected"][0]
+
+    assert result["provider"]["api_key_configured"] is False
+    assert result["provider"]["requires_api_key"] is False
+    assert providers["openai-codex"]["auth_type"] == "openai_codex_oauth"
+    assert providers["openai-codex"].get("api_key", "") == ""
+    assert providers["openai-codex"]["enabled"] is True
+    assert connected["id"] == "openai-codex"
+    assert connected["auth_type"] == "openai_codex_oauth"
+    assert connected["requires_api_key"] is False
+    assert models["default_provider"] == "openai-codex"
+    assert models["providers"][0]["provider"] == "openai-codex"
+
+
+def test_provider_settings_connects_copilot_provider(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("copilot", api_key=None)
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+
+    assert result["provider"]["id"] == "copilot"
+    assert result["provider"]["provider"] == "copilot"
+    assert result["provider"]["base_url"] == "https://api.githubcopilot.com"
+    assert result["provider"]["requires_api_key"] is False
+    assert providers["copilot"].get("api_key", "") == ""
+    assert providers["copilot"]["auth_type"] == "github_copilot_oauth"
+    assert listing["connected"][0]["name"] == "GitHub Copilot"
+
+
+def test_provider_settings_connects_local_ollama_without_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("ollama", api_key=None)
+    service.select_model("ollama", "qwen3:14b")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+
+    assert result["provider"]["provider"] == "ollama"
+    assert result["provider"]["auth_type"] == "optional_api_key"
+    assert result["provider"]["requires_api_key"] is False
+    assert result["provider"]["api_key_optional"] is True
+    assert result["provider"]["base_url"] == "http://localhost:11434/v1"
+    assert providers["ollama"].get("api_key", "") == ""
+    assert providers["ollama"].get("credential_id", "") == ""
+    assert providers["ollama"]["enabled"] is True
+    assert listing["connected"][0]["name"] == "Ollama Local"
+    assert models["default_provider"] == "ollama"
+
+
+def test_provider_settings_connects_ollama_cloud_with_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("ollama-cloud", api_key="ollama-key")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+
+    assert result["provider"]["provider"] == "ollama-cloud"
+    assert result["provider"]["auth_type"] == "api_key"
+    assert result["provider"]["requires_api_key"] is True
+    assert result["provider"].get("api_key_optional") is False
+    assert providers["ollama-cloud"]["base_url"] == "https://ollama.com/v1"
+    assert providers["ollama-cloud"]["credential_id"].startswith("cred_")
+    assert providers["ollama-cloud"]["api_key"] == ""
+    assert auth_store["credentials"]["ollama-cloud"][0]["secret"] == "ollama-key"
+
+
+def test_provider_settings_uses_discovered_copilot_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_discovery, "fetch_copilot_provider_models", lambda api_key: ["copilot-live", "gpt-5.4"])
+
+    service.connect_provider("copilot", api_key="github-token")
+    models = service.list_models()
+
+    provider = next(entry for entry in models["providers"] if entry["id"] == "copilot")
+    assert provider["model_source"] == "live"
+    assert provider["models"][:2] == ["copilot-live", "gpt-5.4"]
+
+
+def test_provider_settings_uses_discovered_provider_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(
+        provider_discovery,
+        "fetch_openai_compatible_models",
+        lambda api_key, base_url: ["live-model", "gpt-4.1-mini", "live-model"],
+    )
+
+    service.connect_provider("openai", api_key="openai-key")
+    service.select_model("openai", "custom-selected-model")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "live"
+    assert provider["models"][:3] == ["custom-selected-model", "live-model", "gpt-4.1-mini"]
+
+
+def test_provider_settings_removes_provider_references_for_deleted_credential(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    connected = service.connect_provider("openai", api_key="secret-key")
+    service.select_model("openai", "gpt-4.1-mini")
+
+    cleanup = service.remove_credential_references("openai", connected["provider"]["credential_id"])
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    main_config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert cleanup == {"removed_provider_ids": ["openai"], "restart_required": True}
+    assert providers == {}
+    assert main_config["llm"]["default"] is None
+
+
+def test_provider_settings_does_not_probe_anthropic_messages_minimax_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    def fail_fetch(api_key, base_url):
+        raise AssertionError(f"unexpected model probe: {api_key} {base_url}")
+
+    monkeypatch.setattr(provider_discovery, "fetch_openai_compatible_models", fail_fetch)
+
+    service.connect_provider("minimax", api_key="minimax-key")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "preset"
+    assert provider["models"][:3] == ["MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"]
+
+
+def test_provider_settings_falls_back_to_preset_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", lambda: [])
+
+    service.connect_provider("openrouter", api_key="router-key")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "preset"
+    assert "openai/gpt-5.5" in provider["models"]
+    assert provider["model_metadata"] == {}
+
+
+def test_provider_settings_includes_openrouter_context_metadata(tmp_path, monkeypatch):
+    def fake_read_json_url(url, *, headers=None):
+        return {
+            "data": [
+                {"id": "no-tools", "context_length": 4096, "supported_parameters": ["temperature"]},
+                {"id": "openai/live", "context_length": 128000, "supported_parameters": ["tools"]},
+                {"id": "anthropic/live", "context_length": "200000", "supported_parameters": ["tools"]},
+                {"id": "fallback-context", "top_provider": {"context_length": 32768}},
+            ]
+        }
+
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "live"
+    assert provider["models"][:3] == ["openai/live", "anthropic/live", "fallback-context"]
+    assert "no-tools" not in provider["models"]
+    assert provider["model_metadata"] == {
+        "openai/live": {"context_length": 128000},
+        "anthropic/live": {"context_length": 200000},
+        "fallback-context": {"context_length": 32768},
+    }
+
+
+def test_provider_settings_select_model_persists_discovered_context_window(tmp_path, monkeypatch):
+    def fake_read_json_url(url, *, headers=None):
+        return {
+            "data": [
+                {"id": "anthropic/live", "context_length": "200000", "supported_parameters": ["tools"]},
+            ]
+        }
+
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_discovery, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
+    monkeypatch.setattr(provider_discovery, "_read_json_url", fake_read_json_url)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    service.list_models()
+    service.select_model("openrouter", "anthropic/live")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    assert providers["openrouter"]["context_window_tokens"] == 200000
+    assert Config.from_json(config_path).llm.get_active().context_window_tokens == 200000
+
+
+def test_provider_settings_uses_discovered_codex_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    seen_app_homes = []
+
+    def fake_fetch_codex_models(app_home=None):
+        seen_app_homes.append(app_home)
+        return ["gpt-5.1-codex-live", "gpt-5.1-codex"]
+
+    monkeypatch.setattr(provider_discovery, "fetch_codex_models", fake_fetch_codex_models)
+
+    service.connect_provider("openai-codex", api_key=None)
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert seen_app_homes == [tmp_path]
+    assert provider["model_source"] == "live"
+    assert provider["models"][:2] == ["gpt-5.1-codex-live", "gpt-5.1-codex"]
+
+
+def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openai", api_key="openai-key")
+    service.connect_provider("openrouter", api_key="router-key")
+    result = service.select_model("openrouter", "openai/gpt-4o-mini")
+
+    main_config = json.loads(config_path.read_text(encoding="utf-8"))
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert result == {
+        "ok": True,
+        "provider_id": "openrouter",
+        "model": "openai/gpt-4o-mini",
+        "reasoning_effort": "",
+        "restart_required": True,
+    }
+    assert main_config["llm"]["default"] == "openrouter"
+    assert providers["openrouter"]["enabled"] is True
+    assert providers["openrouter"]["model"] == "openai/gpt-4o-mini"
+    assert "reasoning_effort" not in providers["openrouter"]
+    assert providers["openai"]["enabled"] is False
+    assert models["default_provider"] == "openrouter"
+    assert models["active_model"] == "openai/gpt-4o-mini"
+    provider = models["providers"][0]
+    assert provider["capabilities"] == [
+        "chat",
+        "model_discovery",
+        "media_discovery",
+        "model_metadata",
+    ]
+    assert provider["model_metadata_fields"] == ["context_length"]
+    assert provider["model_capabilities"]["openai/gpt-5.5"]["reasoning"] is True
+    assert provider["reasoning_effort"] == ""
+    assert "request_options" not in provider
+    assert "recommended_options" not in provider["model_capabilities"]["openai/gpt-5.5"]
+    assert "options" not in provider
+
+
+def test_provider_settings_select_model_persists_reasoning_effort(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    result = service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="high")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert result["reasoning_effort"] == "high"
+    assert providers["openrouter"]["reasoning_effort"] == "high"
+    assert models["providers"][0]["reasoning_effort"] == "high"
+
+
+def test_provider_settings_omits_empty_reasoning_effort_when_cleared(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="high")
+    result = service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    models = service.list_models()
+
+    assert result["reasoning_effort"] == ""
+    assert "reasoning_effort" not in providers["openrouter"]
+    assert models["providers"][0]["reasoning_effort"] == ""
+
+
+def test_provider_settings_rejects_unknown_reasoning_effort(tmp_path):
+    service = ProviderSettingsService(_copy_config(tmp_path))
+
+    service.connect_provider("openrouter", api_key="router-key")
+    with pytest.raises(ProviderSettingsValidationError, match="reasoning_effort"):
+        service.select_model("openrouter", "google/gemini-3-flash-preview", reasoning_effort="turbo")
+
+
+def test_provider_settings_rejects_unconnected_model_selection(tmp_path):
+    service = ProviderSettingsService(_copy_config(tmp_path))
+
+    with pytest.raises(ProviderSettingsConflict):
+        service.select_model("openai", "gpt-4.1-mini")
+
+
+def test_provider_settings_disconnects_active_provider_and_clears_default(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openai", api_key="secret-key")
+    service.select_model("openai", "gpt-4.1-mini")
+    result = service.disconnect_provider("openai")
+
+    main_config = json.loads(config_path.read_text(encoding="utf-8"))
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+
+    assert result == {"ok": True, "provider_id": "openai", "restart_required": True}
+    assert main_config["llm"]["default"] is None
+    assert providers == {}
+    assert listing["connected"] == []
+    assert {provider["id"] for provider in listing["available"]} >= {"openai", "openrouter", "minimax"}
+    assert "minimax-cn" not in {provider["id"] for provider in listing["available"]}
+    assert models["default_provider"] is None
+    assert models["active_model"] == ""

@@ -1,7 +1,8 @@
 import asyncio
+from contextlib import asynccontextmanager
 
 from agent_test_helpers import FakeContextBuilder, make_agent_loop
-from opensprite.context.paths import (
+from opensprite.integrations.workspace.paths import (
     get_session_curator_state_file,
     get_session_learning_state_file,
     get_session_memory_file,
@@ -9,10 +10,10 @@ from opensprite.context.paths import (
     get_session_skills_dir,
     get_session_workspace,
 )
-from opensprite.documents.user_profile import create_user_profile_store
-from opensprite.documents.recent_summary import RecentSummaryStore
-from opensprite.storage.base import StoredMessage
-from opensprite.storage.memory import MemoryStorage
+from opensprite.integrations.documents.user_profile import create_user_profile_store
+from opensprite.integrations.documents.recent_summary import RecentSummaryStore
+from opensprite.core.contracts.persistence import StoredMessage
+from opensprite.integrations.persistence.memory import MemoryStorage
 
 
 class FakeSearchStore:
@@ -21,6 +22,16 @@ class FakeSearchStore:
 
     async def clear_session(self, session_id: str) -> None:
         self.cleared.append(session_id)
+
+
+class FakeCronManager:
+    def __init__(self):
+        self.removed = []
+
+    @asynccontextmanager
+    async def quiesce_session(self, session_id: str):
+        self.removed.append(session_id)
+        yield
 
 
 def test_reset_history_only_clears_target_session(tmp_path):
@@ -40,6 +51,8 @@ def test_reset_history_only_clears_target_session(tmp_path):
             ),
             history_search_store=history_search_store,
         )
+        cron_manager = FakeCronManager()
+        agent.cron_manager = cron_manager
 
         summary_store = RecentSummaryStore(agent.memory.memory_base, app_home=agent.app_home, workspace_root=agent.tool_workspace)
         summary_store.write("telegram:user-a", "# Active Threads\n- stale context")
@@ -75,6 +88,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
             "messages_a": messages_a,
             "messages_b": messages_b,
             "cleared": history_search_store.cleared,
+            "removed_cron_sessions": cron_manager.removed,
             "summary_store": summary_store,
             "workspace_a_exists": workspace_a_exists,
             "workspace_b_exists": workspace_b_exists,
@@ -97,6 +111,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
     assert result["messages_a"] == []
     assert [message.content for message in result["messages_b"]] == ["B1"]
     assert result["cleared"] == ["telegram:user-a"]
+    assert result["removed_cron_sessions"] == ["telegram:user-a"]
     assert result["workspace_a_exists"] is False
     assert result["workspace_b_exists"] is True
     assert result["memory_a"].exists() is False

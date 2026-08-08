@@ -1,6 +1,6 @@
-from opensprite.tools.selection import ToolSelectionResolver
-from opensprite.tools.base import Tool
-from opensprite.tools.registry import ToolRegistry
+from opensprite.app.agent.tool_selection import ToolSelectionResolver
+from opensprite.modules.tools.base import Tool
+from opensprite.modules.tools.registry import ToolRegistry
 
 
 class DummyTool(Tool):

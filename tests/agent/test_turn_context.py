@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 
-from opensprite.agent.turn_context import TurnContextService
+from opensprite.app.agent.turn_context import TurnContextService
 
 
 def _make_context_service() -> TurnContextService:

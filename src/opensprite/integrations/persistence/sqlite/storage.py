@@ -1,0 +1,856 @@
+"""SQLite-backed storage adapter."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import sqlite3
+import time
+from pathlib import Path
+from typing import Any
+
+from ....core.contracts.persistence import (
+    StoredBackgroundProcess,
+    StoredMessage,
+    StoredRun,
+    StoredRunEvent,
+    StoredRunFileChange,
+    StoredRunPart,
+)
+from ....core.ports.storage import StorageProvider
+from . import database as sqlite_database
+from ....core.serialization import json_safe_value as json_safe
+
+
+class SQLiteStorage(StorageProvider):
+    """Normalized SQLite storage implementation."""
+
+    DEFAULT_DB_PATH = Path.home() / ".opensprite" / "data" / "sessions.db"
+
+    def __init__(self, db_path: str | os.PathLike[str] | None = None):
+        self.db_path = self._resolve_db_path(db_path)
+        self._lock = asyncio.Lock()
+        self._init_db()
+
+    @classmethod
+    def _resolve_db_path(cls, db_path: str | os.PathLike[str] | None) -> Path:
+        """Resolve db path; expands ``~`` to the user home directory."""
+        if db_path is None or str(db_path).strip() == "":
+            return cls.DEFAULT_DB_PATH
+        return Path(db_path).expanduser()
+
+    def _init_db(self) -> None:
+        """Initialize or migrate the shared SQLite database."""
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = self._get_conn()
+        try:
+            sqlite_database.ensure_sqlite_schema(conn)
+        finally:
+            conn.close()
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """Open a configured connection to the shared database."""
+        return sqlite_database.open_sqlite_connection(self.db_path)
+
+    @staticmethod
+    def _rows_to_messages(rows: list[sqlite3.Row]) -> list[StoredMessage]:
+        """Convert selected message rows into StoredMessage objects."""
+        return [
+            StoredMessage(
+                role=str(row["role"]),
+                content=str(row["content"]),
+                timestamp=float(row["created_at"] or 0),
+                tool_name=row["tool_name"],
+                is_consolidated=bool(row["is_consolidated"]),
+                metadata=_load_metadata(row["metadata_json"]),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _row_to_run(row: sqlite3.Row | None) -> StoredRun | None:
+        """Convert one run row into a StoredRun object."""
+        if row is None:
+            return None
+        return StoredRun(
+            run_id=str(row["run_id"]),
+            session_id=str(row["session_id"]),
+            status=str(row["status"]),
+            created_at=float(row["created_at"] or 0),
+            updated_at=float(row["updated_at"] or 0),
+            finished_at=None if row["finished_at"] is None else float(row["finished_at"]),
+            metadata=_load_metadata(row["metadata_json"]),
+        )
+
+    @staticmethod
+    def _rows_to_run_events(rows: list[sqlite3.Row]) -> list[StoredRunEvent]:
+        """Convert selected run event rows into StoredRunEvent objects."""
+        return [
+            StoredRunEvent(
+                event_id=int(row["id"]),
+                run_id=str(row["run_id"]),
+                session_id=str(row["session_id"]),
+                event_type=str(row["event_type"]),
+                payload=_load_metadata(row["payload_json"]),
+                created_at=float(row["created_at"] or 0),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _rows_to_run_parts(rows: list[sqlite3.Row]) -> list[StoredRunPart]:
+        """Convert selected run part rows into StoredRunPart objects."""
+        return [
+            StoredRunPart(
+                part_id=int(row["id"]),
+                run_id=str(row["run_id"]),
+                session_id=str(row["session_id"]),
+                part_type=str(row["part_type"]),
+                content=str(row["content"] or ""),
+                tool_name=row["tool_name"],
+                metadata=_load_metadata(row["metadata_json"]),
+                created_at=float(row["created_at"] or 0),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _rows_to_run_file_changes(rows: list[sqlite3.Row]) -> list[StoredRunFileChange]:
+        """Convert selected file-change rows into StoredRunFileChange objects."""
+        return [
+            StoredRunFileChange(
+                change_id=int(row["id"]),
+                run_id=str(row["run_id"]),
+                session_id=str(row["session_id"]),
+                tool_name=str(row["tool_name"]),
+                path=str(row["path"]),
+                action=str(row["action"]),
+                before_sha256=row["before_sha256"],
+                after_sha256=row["after_sha256"],
+                before_content=row["before_content"],
+                after_content=row["after_content"],
+                diff=str(row["diff"] or ""),
+                metadata=_load_metadata(row["metadata_json"]),
+                created_at=float(row["created_at"] or 0),
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _row_to_background_process(row: sqlite3.Row | None) -> StoredBackgroundProcess | None:
+        """Convert one background-process row into a StoredBackgroundProcess object."""
+        if row is None:
+            return None
+        return StoredBackgroundProcess(
+            process_session_id=str(row["process_session_id"]),
+            owner_session_id=str(row["owner_session_id"]),
+            owner_run_id=row["owner_run_id"],
+            owner_channel=row["owner_channel"],
+            owner_external_chat_id=row["owner_external_chat_id"],
+            pid=None if row["pid"] is None else int(row["pid"]),
+            command=str(row["command"]),
+            cwd=row["cwd"],
+            state=str(row["state"]),
+            termination_reason=row["termination_reason"],
+            exit_code=None if row["exit_code"] is None else int(row["exit_code"]),
+            notify_mode=str(row["notify_mode"] or "agent_summary"),
+            output_tail=str(row["output_tail"] or ""),
+            output_path=row["output_path"],
+            metadata=_load_metadata(row["metadata_json"]),
+            started_at=float(row["started_at"] or 0),
+            updated_at=float(row["updated_at"] or 0),
+            finished_at=None if row["finished_at"] is None else float(row["finished_at"]),
+        )
+
+    async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
+        """Return the persisted messages for one chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                if limit:
+                    rows = conn.execute(
+                        """
+                        SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
+                        FROM messages
+                        WHERE session_id = ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (session_id, limit),
+                    ).fetchall()
+                    rows = list(reversed(rows))
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
+                        FROM messages
+                        WHERE session_id = ?
+                        ORDER BY id ASC
+                        """,
+                        (session_id,),
+                    ).fetchall()
+
+                return self._rows_to_messages(rows)
+            finally:
+                conn.close()
+
+    async def get_message_count(self, session_id: str) -> int:
+        """Return the total persisted message count for one chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) AS count FROM messages WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+                return int(row["count"] if row is not None else 0)
+            finally:
+                conn.close()
+
+    async def get_messages_slice(
+        self,
+        session_id: str,
+        *,
+        start_index: int = 0,
+        end_index: int | None = None,
+    ) -> list[StoredMessage]:
+        """Return one ordered message slice for a chat."""
+        start = max(0, int(start_index))
+        stop = None if end_index is None else max(start, int(end_index))
+        if stop is not None and stop <= start:
+            return []
+
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                if stop is None:
+                    rows = conn.execute(
+                        """
+                        SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
+                        FROM messages
+                        WHERE session_id = ?
+                        ORDER BY id ASC
+                        LIMIT -1 OFFSET ?
+                        """,
+                        (session_id, start),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
+                        FROM messages
+                        WHERE session_id = ?
+                        ORDER BY id ASC
+                        LIMIT ? OFFSET ?
+                        """,
+                        (session_id, stop - start, start),
+                    ).fetchall()
+                return self._rows_to_messages(rows)
+            finally:
+                conn.close()
+
+    async def add_message(self, session_id: str, message: StoredMessage) -> None:
+        """Persist one message in the normalized schema."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                sqlite_database.insert_message_row(conn, session_id, message)
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def clear_messages(self, session_id: str) -> None:
+        """Delete all persisted data for one chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute("DELETE FROM chats WHERE session_id = ?", (session_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def get_consolidated_index(self, session_id: str) -> int:
+        """Return the last consolidated message index for one chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT consolidated_index FROM chat_state WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+                return int(row["consolidated_index"]) if row is not None else 0
+            finally:
+                conn.close()
+
+    async def set_consolidated_index(self, session_id: str, index: int) -> None:
+        """Persist the latest consolidated index for one chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                current_time = time.time()
+                sqlite_database.ensure_chat_row(
+                    conn, session_id, created_at=current_time, updated_at=current_time
+                )
+                conn.execute(
+                    """
+                    INSERT INTO chat_state (session_id, consolidated_index)
+                    VALUES (?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET consolidated_index = excluded.consolidated_index
+                    """,
+                    (session_id, int(index)),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def create_run(
+        self,
+        session_id: str,
+        run_id: str,
+        *,
+        status: str = "running",
+        metadata: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRun | None:
+        """Persist the start of one user-facing run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                sqlite_database.ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
+                conn.execute(
+                    """
+                    INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(run_id) DO UPDATE SET
+                        status = excluded.status,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        run_id,
+                        session_id,
+                        status,
+                        json.dumps(json_safe(metadata or {}), ensure_ascii=False),
+                        now,
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                return self._row_to_run(row)
+            finally:
+                conn.close()
+
+    async def update_run_status(
+        self,
+        session_id: str,
+        run_id: str,
+        status: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        finished_at: float | None = None,
+    ) -> StoredRun | None:
+        """Update the lifecycle status for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = time.time()
+                row = conn.execute("SELECT metadata_json FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                if row is None:
+                    return None
+                merged_metadata = _load_metadata(row["metadata_json"])
+                if metadata:
+                    merged_metadata.update(metadata)
+                conn.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, metadata_json = ?, updated_at = ?, finished_at = COALESCE(?, finished_at)
+                    WHERE run_id = ? AND session_id = ?
+                    """,
+                    (
+                        status,
+                        json.dumps(json_safe(merged_metadata), ensure_ascii=False),
+                        now,
+                        finished_at,
+                        run_id,
+                        session_id,
+                    ),
+                )
+                conn.commit()
+                updated = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                return self._row_to_run(updated)
+            finally:
+                conn.close()
+
+    async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
+        """Return persisted runs for one chat from newest to oldest."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                params: tuple[Any, ...]
+                query = """
+                    SELECT *
+                    FROM runs
+                    WHERE session_id = ?
+                    ORDER BY created_at DESC, run_id DESC
+                """
+                params = (session_id,)
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params = (session_id, int(limit))
+                rows = conn.execute(query, params).fetchall()
+                return [run for run in (self._row_to_run(row) for row in rows) if run is not None]
+            finally:
+                conn.close()
+
+    async def get_run(self, session_id: str, run_id: str) -> StoredRun | None:
+        """Return one persisted run for a chat."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM runs WHERE session_id = ? AND run_id = ?",
+                    (session_id, run_id),
+                ).fetchone()
+                return self._row_to_run(row)
+            finally:
+                conn.close()
+
+    async def upsert_background_process(
+        self,
+        process: StoredBackgroundProcess,
+    ) -> StoredBackgroundProcess | None:
+        """Create or update persisted metadata for one managed background process."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                started_at = float(process.started_at or time.time())
+                updated_at = float(process.updated_at or time.time())
+                sqlite_database.ensure_chat_row(
+                    conn, process.owner_session_id, created_at=started_at, updated_at=updated_at
+                )
+                existing = conn.execute(
+                    "SELECT started_at FROM background_processes WHERE process_session_id = ?",
+                    (process.process_session_id,),
+                ).fetchone()
+                if existing is not None and existing["started_at"] is not None:
+                    started_at = float(existing["started_at"])
+                conn.execute(
+                    """
+                    INSERT INTO background_processes (
+                        process_session_id,
+                        owner_session_id,
+                        owner_run_id,
+                        owner_channel,
+                        owner_external_chat_id,
+                        pid,
+                        command,
+                        cwd,
+                        state,
+                        termination_reason,
+                        exit_code,
+                        notify_mode,
+                        output_tail,
+                        output_path,
+                        metadata_json,
+                        started_at,
+                        updated_at,
+                        finished_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(process_session_id) DO UPDATE SET
+                        owner_session_id = excluded.owner_session_id,
+                        owner_run_id = excluded.owner_run_id,
+                        owner_channel = excluded.owner_channel,
+                        owner_external_chat_id = excluded.owner_external_chat_id,
+                        pid = excluded.pid,
+                        command = excluded.command,
+                        cwd = excluded.cwd,
+                        state = excluded.state,
+                        termination_reason = excluded.termination_reason,
+                        exit_code = excluded.exit_code,
+                        notify_mode = excluded.notify_mode,
+                        output_tail = excluded.output_tail,
+                        output_path = excluded.output_path,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at,
+                        finished_at = excluded.finished_at
+                    """,
+                    (
+                        process.process_session_id,
+                        process.owner_session_id,
+                        process.owner_run_id,
+                        process.owner_channel,
+                        process.owner_external_chat_id,
+                        process.pid,
+                        process.command,
+                        process.cwd,
+                        process.state,
+                        process.termination_reason,
+                        process.exit_code,
+                        process.notify_mode,
+                        process.output_tail,
+                        process.output_path,
+                        json.dumps(json_safe(process.metadata or {}), ensure_ascii=False),
+                        started_at,
+                        updated_at,
+                        process.finished_at,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute(
+                    "SELECT * FROM background_processes WHERE process_session_id = ?",
+                    (process.process_session_id,),
+                ).fetchone()
+                return self._row_to_background_process(row)
+            finally:
+                conn.close()
+
+    async def get_background_process(self, process_session_id: str) -> StoredBackgroundProcess | None:
+        """Return one persisted background process by process session id."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM background_processes WHERE process_session_id = ?",
+                    (process_session_id,),
+                ).fetchone()
+                return self._row_to_background_process(row)
+            finally:
+                conn.close()
+
+    async def list_background_processes(
+        self,
+        *,
+        owner_session_id: str | None = None,
+        states: tuple[str, ...] | None = None,
+        limit: int | None = None,
+    ) -> list[StoredBackgroundProcess]:
+        """Return persisted background processes from newest to oldest."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                clauses: list[str] = []
+                params: list[Any] = []
+                if owner_session_id is not None:
+                    clauses.append("owner_session_id = ?")
+                    params.append(owner_session_id)
+                if states:
+                    placeholders = ", ".join("?" for _ in states)
+                    clauses.append(f"state IN ({placeholders})")
+                    params.extend(states)
+                query = "SELECT * FROM background_processes"
+                if clauses:
+                    query += " WHERE " + " AND ".join(clauses)
+                query += " ORDER BY updated_at DESC, process_session_id DESC"
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params.append(int(limit))
+                rows = conn.execute(query, tuple(params)).fetchall()
+                return [
+                    process
+                    for process in (self._row_to_background_process(row) for row in rows)
+                    if process is not None
+                ]
+            finally:
+                conn.close()
+
+    async def add_run_event(
+        self,
+        session_id: str,
+        run_id: str,
+        event_type: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRunEvent | None:
+        """Persist one structured event for a run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                sqlite_database.ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
+                if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                    conn.execute(
+                        """
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
+                        VALUES (?, ?, 'running', '{}', ?, ?)
+                        """,
+                        (run_id, session_id, now, now),
+                    )
+                cursor = conn.execute(
+                    """
+                    INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        session_id,
+                        event_type,
+                        json.dumps(json_safe(payload or {}), ensure_ascii=False),
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM run_events WHERE id = ?", (cursor.lastrowid,)).fetchone()
+                events = self._rows_to_run_events([row]) if row is not None else []
+                return events[0] if events else None
+            finally:
+                conn.close()
+
+    async def get_run_events(self, session_id: str, run_id: str) -> list[StoredRunEvent]:
+        """Return all events persisted for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, run_id, session_id, event_type, payload_json, created_at
+                    FROM run_events
+                    WHERE session_id = ? AND run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id, run_id),
+                ).fetchall()
+                return self._rows_to_run_events(rows)
+            finally:
+                conn.close()
+
+    async def add_run_part(
+        self,
+        session_id: str,
+        run_id: str,
+        part_type: str,
+        *,
+        content: str = "",
+        tool_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRunPart | None:
+        """Persist one ordered execution artifact for a run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                sqlite_database.ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
+                if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                    conn.execute(
+                        """
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
+                        VALUES (?, ?, 'running', '{}', ?, ?)
+                        """,
+                        (run_id, session_id, now, now),
+                    )
+                cursor = conn.execute(
+                    """
+                    INSERT INTO run_parts (run_id, session_id, part_type, content, tool_name, metadata_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        session_id,
+                        part_type,
+                        str(content or ""),
+                        tool_name,
+                        json.dumps(json_safe(metadata or {}), ensure_ascii=False),
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM run_parts WHERE id = ?", (cursor.lastrowid,)).fetchone()
+                parts = self._rows_to_run_parts([row]) if row is not None else []
+                return parts[0] if parts else None
+            finally:
+                conn.close()
+
+    async def get_run_parts(self, session_id: str, run_id: str) -> list[StoredRunPart]:
+        """Return all durable parts persisted for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, run_id, session_id, part_type, content, tool_name, metadata_json, created_at
+                    FROM run_parts
+                    WHERE session_id = ? AND run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id, run_id),
+                ).fetchall()
+                return self._rows_to_run_parts(rows)
+            finally:
+                conn.close()
+
+    async def add_run_file_change(
+        self,
+        session_id: str,
+        run_id: str,
+        tool_name: str,
+        path: str,
+        action: str,
+        *,
+        before_sha256: str | None = None,
+        after_sha256: str | None = None,
+        before_content: str | None = None,
+        after_content: str | None = None,
+        diff: str = "",
+        metadata: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRunFileChange | None:
+        """Persist one file mutation captured during a run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                sqlite_database.ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
+                if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                    conn.execute(
+                        """
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
+                        VALUES (?, ?, 'running', '{}', ?, ?)
+                        """,
+                        (run_id, session_id, now, now),
+                    )
+                cursor = conn.execute(
+                    """
+                    INSERT INTO run_file_changes (
+                        run_id,
+                        session_id,
+                        tool_name,
+                        path,
+                        action,
+                        before_sha256,
+                        after_sha256,
+                        before_content,
+                        after_content,
+                        diff,
+                        metadata_json,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        session_id,
+                        tool_name,
+                        path,
+                        action,
+                        before_sha256,
+                        after_sha256,
+                        before_content,
+                        after_content,
+                        str(diff or ""),
+                        json.dumps(json_safe(metadata or {}), ensure_ascii=False),
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM run_file_changes WHERE id = ?", (cursor.lastrowid,)).fetchone()
+                changes = self._rows_to_run_file_changes([row]) if row is not None else []
+                return changes[0] if changes else None
+            finally:
+                conn.close()
+
+    async def get_run_file_changes(self, session_id: str, run_id: str) -> list[StoredRunFileChange]:
+        """Return file mutations captured for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, run_id, session_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
+                    FROM run_file_changes
+                    WHERE session_id = ? AND run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (session_id, run_id),
+                ).fetchall()
+                return self._rows_to_run_file_changes(rows)
+            finally:
+                conn.close()
+
+    async def get_run_file_change(
+        self,
+        session_id: str,
+        run_id: str,
+        change_id: int,
+    ) -> StoredRunFileChange | None:
+        """Return one captured file mutation for a run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                row = conn.execute(
+                    """
+                    SELECT id, run_id, session_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
+                    FROM run_file_changes
+                    WHERE session_id = ? AND run_id = ? AND id = ?
+                    """,
+                    (session_id, run_id, int(change_id)),
+                ).fetchone()
+                changes = self._rows_to_run_file_changes([row]) if row is not None else []
+                return changes[0] if changes else None
+            finally:
+                conn.close()
+
+    async def get_all_sessions(self) -> list[str]:
+        """Return all known session ids."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute("SELECT session_id FROM chats ORDER BY session_id ASC").fetchall()
+                return [str(row["session_id"]) for row in rows]
+            finally:
+                conn.close()
+
+    async def get_recent_sessions(self, limit: int | None = None) -> list[str]:
+        """Return known session ids from newest to oldest."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                query = """
+                    SELECT
+                        c.session_id,
+                        MAX(
+                            COALESCE(
+                                (
+                                    SELECT MAX(m.created_at)
+                                    FROM messages AS m
+                                    WHERE m.session_id = c.session_id
+                                ),
+                                0
+                            ),
+                            COALESCE(
+                                (
+                                    SELECT r.updated_at
+                                    FROM runs AS r
+                                    WHERE r.session_id = c.session_id
+                                    ORDER BY r.created_at DESC, r.run_id DESC
+                                    LIMIT 1
+                                ),
+                                0
+                            )
+                        ) AS updated_at
+                    FROM chats AS c
+                    ORDER BY updated_at DESC, c.session_id DESC
+                """
+                params: tuple[Any, ...] = ()
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params = (max(0, int(limit)),)
+                rows = conn.execute(query, params).fetchall()
+                return [str(row["session_id"]) for row in rows]
+            finally:
+                conn.close()
+
+
+def _load_metadata(raw: str | None) -> dict[str, Any]:
+    """Parse stored metadata JSON safely."""
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}

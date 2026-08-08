@@ -1,14 +1,14 @@
 import asyncio
 
-from opensprite.agent.agent import AgentLoop
-from opensprite.bus.message import UserMessage
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.core.contracts.messages import UserMessage
 from opensprite.config.schema import AgentConfig, Config, HistorySearchConfig, LogConfig, MemoryConfig, ToolsConfig, UserProfileConfig
-from opensprite.context.file_builder import FileContextBuilder
-from opensprite.context.paths import get_session_workspace
-from opensprite.llms.base import LLMResponse
-from opensprite.storage.sqlite import SQLiteStorage
-from opensprite.tools.base import Tool
-from opensprite.tools.registry import ToolRegistry
+from opensprite.integrations.context.file_builder import FileContextBuilder
+from opensprite.integrations.workspace.paths import get_session_workspace
+from opensprite.core.contracts.llm import LLMResponse
+from opensprite.integrations.persistence.sqlite.storage import SQLiteStorage
+from opensprite.modules.tools.base import Tool
+from opensprite.modules.tools.registry import ToolRegistry
 
 
 class DummyTool(Tool):

@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from opensprite.auth.codex import CodexToken, save_codex_token
+from opensprite.app.llm.runtime_provider import is_llm_configured
+from opensprite.integrations.auth.codex import CodexToken, save_codex_token
 from opensprite.config.defaults import (
     BROWSER_BACKENDS,
     DEFAULT_BROWSER_BACKEND,
@@ -34,8 +35,10 @@ from opensprite.config.defaults import (
     DEFAULT_SEARXNG_URL,
     DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_FRESHNESS,
-    DEFAULT_WEB_SEARCH_PROVIDER,
     DEFAULT_WEB_SEARCH_MAX_RESULTS,
+)
+from opensprite.core.contracts.web_search import (
+    DEFAULT_WEB_SEARCH_PROVIDER,
     WEB_SEARCH_PROVIDERS,
 )
 from opensprite.config.schema import (
@@ -120,11 +123,11 @@ def test_codex_oauth_provider_is_configured_when_token_exists(tmp_path):
     data["llm"]["default"] = "openai-codex"
     config_path.write_text(json.dumps(data), encoding="utf-8")
 
-    assert Config.from_json(config_path).is_llm_configured is False
+    assert is_llm_configured(Config.from_json(config_path)) is False
 
     save_codex_token(CodexToken(access_token="codex-token"), tmp_path)
 
-    assert Config.from_json(config_path).is_llm_configured is True
+    assert is_llm_configured(Config.from_json(config_path)) is True
 
 
 def test_codex_provider_is_configured_when_profile_defaults_apply(tmp_path):
@@ -147,11 +150,11 @@ def test_codex_provider_is_configured_when_profile_defaults_apply(tmp_path):
     data["llm"]["default"] = "openai-codex"
     config_path.write_text(json.dumps(data), encoding="utf-8")
 
-    assert Config.from_json(config_path).is_llm_configured is False
+    assert is_llm_configured(Config.from_json(config_path)) is False
 
     save_codex_token(CodexToken(access_token="codex-token"), tmp_path)
 
-    assert Config.from_json(config_path).is_llm_configured is True
+    assert is_llm_configured(Config.from_json(config_path)) is True
 
 
 def test_optional_api_key_provider_is_configured_with_model(tmp_path):
@@ -176,7 +179,7 @@ def test_optional_api_key_provider_is_configured_with_model(tmp_path):
     data["llm"]["default"] = "ollama"
     config_path.write_text(json.dumps(data), encoding="utf-8")
 
-    assert Config.from_json(config_path).is_llm_configured is True
+    assert is_llm_configured(Config.from_json(config_path)) is True
 
 
 def test_optional_api_key_provider_is_configured_when_profile_defaults_apply(tmp_path):
@@ -199,7 +202,7 @@ def test_optional_api_key_provider_is_configured_when_profile_defaults_apply(tmp
     data["llm"]["default"] = "ollama"
     config_path.write_text(json.dumps(data), encoding="utf-8")
 
-    assert Config.from_json(config_path).is_llm_configured is True
+    assert is_llm_configured(Config.from_json(config_path)) is True
 
 
 def test_agent_config_requires_template_backed_values():

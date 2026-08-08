@@ -1,22 +1,21 @@
 import asyncio
 import json
 
-import opensprite.agent.execution as execution_module
-from opensprite.agent.execution import ExecutionEngine
-from opensprite.agent.execution_support.events import (
+import opensprite.app.agent.execution as execution_module
+from opensprite.app.agent.execution import ExecutionEngine
+from opensprite.core.contracts.execution_events import (
     LLM_COMPACTION_EMPTY_REASON,
     LLM_STEP_COMPLETED_STATUS,
     LLM_STEP_ERROR_STATUS,
     MAX_TOOL_ITERATIONS_STOP_REASON,
 )
-from opensprite.agent.execution_support.prompt_logging import PromptLoggingService
+from opensprite.app.agent.execution_support.prompt_logging import PromptLoggingService
 from opensprite.config.schema import Config, ToolsConfig
-from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
-from opensprite.tools.base import Tool
-from opensprite.tools.credential_store import CredentialStoreTool
-from opensprite.tools.image import AnalyzeImageTool
-from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.result_status import tool_error_result
+from opensprite.core.contracts.llm import ChatMessage, LLMResponse, ToolCall
+from opensprite.modules.tools.base import Tool
+from opensprite.app.tools.auth.credential_store import CredentialStoreTool
+from opensprite.modules.tools.registry import ToolRegistry
+from opensprite.core.contracts.tool_results import tool_error_result
 
 
 def test_execution_extracts_delegate_task_info_from_shared_result_labels():
@@ -387,24 +386,19 @@ def test_execution_engine_provider_override_does_not_mutate_concurrent_runs():
     assert engine.provider is base_provider
 
 
-def test_execution_engine_records_invalid_media_tool_args_as_tool_error():
+def test_execution_engine_records_invalid_tool_args_as_tool_error():
     registry = ToolRegistry()
-    registry.register(
-        AnalyzeImageTool(
-            media_router=object(),
-            get_current_images=lambda: ["data:image/png;base64,abc"],
-        )
-    )
+    registry.register(DummyTool())
     provider = FakeProvider(
         [
             LLMResponse(
-                content="try image",
+                content="try tool",
                 model="fake-model",
                 tool_calls=[
                     ToolCall(
                         id="tc1",
-                        name="analyze_image",
-                        arguments={"instruction": "read", "image_index": "bad"},
+                        name="demo_tool",
+                        arguments={"value": 123},
                     )
                 ],
             ),
@@ -416,7 +410,7 @@ def test_execution_engine_records_invalid_media_tool_args_as_tool_error():
     result = asyncio.run(
         engine.execute_messages(
             "chat-1",
-            [ChatMessage(role="user", content="read the image")],
+            [ChatMessage(role="user", content="run the tool")],
             allow_tools=True,
         )
     )
@@ -706,7 +700,7 @@ def test_execution_engine_retries_transient_provider_errors_with_metadata():
 
 
 def test_execution_engine_retries_transient_transport_errors_without_status_code(monkeypatch):
-    monkeypatch.setattr("opensprite.llms.retry.random.random", lambda: 0.0)
+    monkeypatch.setattr("opensprite.modules.runs.provider_retry.random.random", lambda: 0.0)
 
     class TransportThenSuccessProvider:
         def __init__(self):
@@ -1540,7 +1534,7 @@ def test_execution_engine_projects_completed_tool_when_result_persistence_fails(
 
 
 def test_execution_engine_does_not_relabel_completed_tool_after_repeated_cancel(monkeypatch):
-    import opensprite.agent.execution as execution_module
+    import opensprite.app.agent.execution as execution_module
 
     monkeypatch.setattr(execution_module, "_CANCELLATION_HOOK_TIMEOUT_SECONDS", 0.02)
 

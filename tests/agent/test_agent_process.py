@@ -8,20 +8,21 @@ import shlex
 import subprocess
 import sys
 
-from opensprite.agent.agent import AgentLoop
-from opensprite.agent import media_runtime
-from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.execution_support.events import ContextCompactionEvent
-from opensprite.runs.trace import RunBusyError
-from opensprite.runs.events import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
-from opensprite.agent.turn_result_updates import apply_runtime_file_changes, merge_workflow_outcomes
-from opensprite.bus import MessageBus
-from opensprite.bus.events import InboundMessage, OutboundMessage
+from opensprite.app.agent.agent import AgentLoop
+from opensprite.app.agent import media_runtime
+from opensprite.app.agent.execution import ExecutionResult
+from opensprite.core.contracts.execution_events import ContextCompactionEvent
+from opensprite.core.run_tracking.state import RunBusyError
+from opensprite.core.contracts.run_events import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
+from opensprite.app.agent.turn_result_updates import apply_runtime_file_changes, merge_workflow_outcomes
+from opensprite.app.messaging import MessageBus
+from opensprite.app.tools.setup import register_default_agent_tools
+from opensprite.core.contracts.bus_events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, HistorySearchConfig, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, ToolsConfig, UserProfileConfig
-from opensprite.context.paths import get_session_skills_dir
-from opensprite.bus.message import UserMessage
-from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.runs.events import (
+from opensprite.integrations.workspace.paths import get_session_skills_dir
+from opensprite.core.contracts.messages import UserMessage
+from opensprite.core.contracts.llm import LLMResponse, ToolCall
+from opensprite.core.contracts.run_events import (
     CURATOR_STARTED_EVENT,
     FILE_CHANGED_EVENT,
     LLM_STATUS_EVENT,
@@ -30,15 +31,16 @@ from opensprite.runs.events import (
     VERIFICATION_RESULT_EVENT,
     VERIFICATION_STARTED_EVENT,
 )
-from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
-from opensprite.media.router import MediaRouter
-from opensprite.storage import MemoryStorage, StoredDelegatedTask
-from opensprite.storage.base import StoredMessage
-from opensprite.tools.base import Tool
-from opensprite.tools.process_runtime import BackgroundSession
-from opensprite.tools.registry import ToolRegistry
-from opensprite.tools.result_status import tool_error_result
-from opensprite.tools.shell_runtime import CapturedOutputChunk
+from opensprite.core.contracts.run_lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
+from opensprite.modules.media.router import MediaRouter
+from opensprite.app.agent.delegation_contracts import StoredDelegatedTask
+from opensprite.integrations.persistence.memory import MemoryStorage
+from opensprite.core.contracts.persistence import StoredMessage
+from opensprite.modules.tools.base import Tool
+from opensprite.integrations.processes.background_runtime import BackgroundSession
+from opensprite.modules.tools.registry import ToolRegistry
+from opensprite.core.contracts.tool_results import tool_error_result
+from opensprite.integrations.processes.shell_runtime import CapturedOutputChunk
 from tests.agent.agent_test_helpers import make_tool_registry
 
 
@@ -702,6 +704,7 @@ def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):
             history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            default_tool_registrar=register_default_agent_tools,
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         await storage.create_run("web:browser-1", "run-1")
@@ -1168,6 +1171,7 @@ def test_agent_process_cancel_request_kills_owned_background_sessions(tmp_path):
             history_search_config=HistorySearchConfig(),
             user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
             recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            default_tool_registrar=register_default_agent_tools,
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         session_ids: list[str] = []

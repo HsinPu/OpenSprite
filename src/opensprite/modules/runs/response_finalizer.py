@@ -1,0 +1,174 @@
+"""Assistant response persistence and run finalization."""
+
+from __future__ import annotations
+
+import json
+from typing import Any, Awaitable, Callable, Literal
+
+from ...core.contracts.messages import CLIENT_TURN_ID_METADATA_KEY, AssistantMessage
+from ...core.contracts.run_lifecycle import RUN_STOPPED_STATUS
+from opensprite.core.logging import logger
+from .trace_recorder import RunTraceRecorder
+
+
+class RunResponseFinalizer:
+    """Persists assistant replies, completes runs, and builds outbound messages."""
+
+    def __init__(
+        self,
+        *,
+        run_trace: RunTraceRecorder,
+        save_assistant_message: Callable[..., Awaitable[None]],
+        format_log_preview: Callable[..., str],
+        log_reasoning_details: bool = False,
+    ):
+        self.run_trace = run_trace
+        self._save_assistant_message = save_assistant_message
+        self._format_log_preview = format_log_preview
+        self._log_reasoning_details_enabled = bool(log_reasoning_details)
+
+    @staticmethod
+    def _reasoning_text_size(value: Any) -> int:
+        if isinstance(value, str):
+            return len(value)
+        if isinstance(value, dict):
+            return sum(RunResponseFinalizer._reasoning_text_size(item) for item in value.values())
+        if isinstance(value, list):
+            return sum(RunResponseFinalizer._reasoning_text_size(item) for item in value)
+        return 0
+
+    @staticmethod
+    def _reasoning_type_summary(details: list[Any]) -> str:
+        counts: dict[str, int] = {}
+        for item in details:
+            item_type = item.get("type") if isinstance(item, dict) else type(item).__name__
+            key = str(item_type or "unknown")
+            counts[key] = counts.get(key, 0) + 1
+        return ", ".join(f"{key}:{counts[key]}" for key in sorted(counts)) or "none"
+
+    def _log_reasoning_details(self, session_id: str, metadata: dict[str, Any]) -> None:
+        details = metadata.get("llm_reasoning_details")
+        if not isinstance(details, list) or not details:
+            return
+
+        logger.info(
+            "[{}] LLM reasoning summary | details={} chars={} types={}",
+            session_id,
+            len(details),
+            self._reasoning_text_size(details),
+            self._reasoning_type_summary(details),
+        )
+        if not self._log_reasoning_details_enabled:
+            return
+
+        logger.info(
+            "[{}] LLM reasoning details | {}",
+            session_id,
+            json.dumps(details, ensure_ascii=False, default=str),
+        )
+
+    def _log_outbound(
+        self,
+        session_id: str,
+        response: str,
+        *,
+        prefix: str = "",
+    ) -> None:
+        logger.info(
+            f"[{session_id}] outbound | {prefix}text={self._format_log_preview(response, max_chars=200)}"
+        )
+
+    async def finalize(
+        self,
+        *,
+        session_id: str,
+        run_id: str,
+        response: str,
+        channel: str | None,
+        external_chat_id: str | None,
+        assistant_metadata: dict[str, Any],
+        run_part_metadata: dict[str, Any],
+        run_event_payload: dict[str, Any],
+        persisted_assistant_metadata: dict[str, Any] | None = None,
+        status_metadata: dict[str, Any] | None = None,
+        images: list[str] | None = None,
+        voices: list[str] | None = None,
+        audios: list[str] | None = None,
+        videos: list[str] | None = None,
+        log_prefix: str = "",
+        log_before_record: bool = False,
+        after_save: Callable[[], Awaitable[None]] | None = None,
+        terminal_status: Literal["completed", "failed", "stopped"] = "completed",
+    ) -> AssistantMessage:
+        """Finalize a visible assistant response for one user turn."""
+        client_turn_id = str(assistant_metadata.get(CLIENT_TURN_ID_METADATA_KEY) or "").strip()
+        event_payload = dict(run_event_payload)
+        terminal_status_metadata = dict(status_metadata or {})
+        if client_turn_id:
+            event_payload[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+            terminal_status_metadata[CLIENT_TURN_ID_METADATA_KEY] = client_turn_id
+
+        if log_before_record:
+            self._log_outbound(session_id, response, prefix=log_prefix)
+
+        await self.run_trace.record_assistant_message_part(
+            session_id,
+            run_id,
+            response,
+            metadata=run_part_metadata,
+        )
+
+        if not log_before_record:
+            self._log_outbound(session_id, response, prefix=log_prefix)
+
+        persisted_metadata = persisted_assistant_metadata if persisted_assistant_metadata is not None else assistant_metadata
+        self._log_reasoning_details(session_id, persisted_metadata)
+
+        await self._save_assistant_message(
+            session_id,
+            response,
+            metadata=persisted_metadata,
+        )
+        if after_save is not None:
+            await after_save()
+
+        if terminal_status == "failed":
+            await self.run_trace.fail_run(
+                session_id,
+                run_id,
+                status="failed",
+                event_payload={**event_payload, "status": "failed"},
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
+        elif terminal_status == RUN_STOPPED_STATUS:
+            await self.run_trace.finish_run(
+                session_id,
+                run_id,
+                status=RUN_STOPPED_STATUS,
+                event_payload=event_payload,
+                status_metadata=terminal_status_metadata,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
+        else:
+            await self.run_trace.complete_run(
+                session_id,
+                run_id,
+                event_payload=event_payload,
+                status_metadata=terminal_status_metadata,
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
+
+        return AssistantMessage(
+            text=response,
+            channel=channel or "unknown",
+            external_chat_id=external_chat_id,
+            session_id=session_id,
+            images=images,
+            voices=voices,
+            audios=audios,
+            videos=videos,
+            metadata=assistant_metadata,
+        )

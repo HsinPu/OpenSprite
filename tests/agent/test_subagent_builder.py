@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from opensprite.agent.subagent import SubagentMessageBuilder
-from opensprite.skills import SkillsLoader
+from opensprite.app.agent.subagent import SubagentMessageBuilder
+from opensprite.modules.skills.loader import SkillsLoader
 
 
 def _write_skill(root: Path, name: str, description: str, body: str) -> None:
