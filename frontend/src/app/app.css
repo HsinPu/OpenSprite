@@ -52,7 +52,7 @@ button {
   display: grid;
   grid-template-columns: 276px minmax(0, 1fr);
   min-height: 100vh;
-  background: var(--os-bg);
+  background: var(--os-surface);
 }
 
 .app-shell.is-sidebar-collapsed {
@@ -338,7 +338,7 @@ button {
   overflow: hidden;
   border: 1px solid var(--os-border);
   border-radius: 18px;
-  background: var(--os-surface);
+  background: var(--os-bg);
   box-shadow: 0 24px 72px rgb(38 33 29 / 24%);
 }
 

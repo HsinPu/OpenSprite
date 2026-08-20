@@ -153,6 +153,9 @@ function GeneralSettings({ settings, onChange }: { settings: DemoSettings; onCha
 
 function ModelsSettings({ settings, onChange }: { settings: DemoSettings; onChange: <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => void }) {
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success">("idle");
+  const provider = settings.defaultModel.startsWith("Anthropic ·") ? "Anthropic" : "OpenAI";
+  const selectedModel = settings.defaultModel.split(" · ")[1] ?? "GPT-5.6";
+  const modelOptions = provider === "Anthropic" ? ["Claude Sonnet 4", "Claude Haiku 4"] : ["GPT-5.6", "GPT-5.6 mini"];
 
   const testConnection = () => {
     setTestStatus("testing");
@@ -161,24 +164,11 @@ function ModelsSettings({ settings, onChange }: { settings: DemoSettings; onChan
 
   return (
     <div className="settings-form-stack">
-      <section className="settings-model-section" aria-labelledby="default-model-heading">
-        <h3 id="default-model-heading" className="settings-subheading">預設模型</h3>
-        <label className="settings-model-select" htmlFor="settings-default-model">
-          <span className="settings-model-select-main"><Icon name="openai" /><span>{settings.defaultModel}</span></span>
-          <span className="settings-connected-badge">已連線</span>
-          <select id="settings-default-model" value={settings.defaultModel} onChange={(event) => onChange("defaultModel", event.target.value)} aria-label="選擇預設模型">
-            <option>OpenAI · GPT-5.6</option>
-            <option>OpenAI · GPT-5.6 mini</option>
-          </select>
-        </label>
-        <p className="settings-helper-text">新對話會優先使用這個模型</p>
-      </section>
-
-      <section className="settings-model-section" aria-labelledby="connected-services-heading">
-        <h3 id="connected-services-heading" className="settings-subheading">已連接的服務</h3>
+      <SettingsCard icon="connections" title="模型廠家">
+        <p className="settings-card-description">管理您連接的模型廠家與 API 金鑰。</p>
         <div className="settings-service-list">
           <div className="settings-service-card">
-            <div className="settings-service-identity"><Icon name="openai" /><span><strong>OpenAI</strong><span className="settings-online"><i aria-hidden="true" />已連線</span><small>API Key ·••••••••8K2</small></span></div>
+            <div className="settings-service-identity"><Icon name="openai" /><span><strong>OpenAI</strong><span className="settings-online"><i aria-hidden="true" />已連線</span><small>sk-••••••••••••••••••a1b2</small></span></div>
             <div className="settings-service-actions">
               <button type="button" className="settings-secondary-button" disabled title="Demo 版本尚未提供連線管理">管理</button>
               <button type="button" className="settings-secondary-button" onClick={testConnection} disabled={testStatus === "testing"}>{testStatus === "testing" ? "測試中…" : "測試連線"}</button>
@@ -190,15 +180,31 @@ function ModelsSettings({ settings, onChange }: { settings: DemoSettings; onChan
             <button type="button" className="settings-outline-button" onClick={() => onChange("anthropicConnected", true)} disabled={settings.anthropicConnected}>{settings.anthropicConnected ? "已連線" : "連接"}</button>
           </div>
         </div>
-        <button type="button" className="settings-add-link" disabled title="Demo 版本尚未提供新增服務"><span aria-hidden="true">＋</span>新增其他服務</button>
-      </section>
+        <button type="button" className="settings-add-link" disabled title="Demo 版本尚未提供新增模型廠家"><span aria-hidden="true">＋</span>新增模型廠家</button>
+      </SettingsCard>
 
-      <section className="settings-card settings-preferences" aria-labelledby="model-preferences-heading">
-        <h3 id="model-preferences-heading" className="settings-subheading">模型偏好</h3>
+      <SettingsCard icon="robot" title="選擇模型">
+        <div className="settings-model-selection">
+          <SelectField
+            id="settings-model-provider"
+            label="模型廠家"
+            value={provider}
+            options={["OpenAI", "Anthropic"]}
+            onChange={(value) => onChange("defaultModel", `${value} · ${value === "Anthropic" ? "Claude Sonnet 4" : "GPT-5.6"}`)}
+          />
+          <SelectField
+            id="settings-default-model"
+            label="預設模型"
+            value={selectedModel}
+            options={modelOptions}
+            onChange={(value) => onChange("defaultModel", `${provider} · ${value}`)}
+          />
+          <p className="settings-helper-text">新對話會優先使用這個模型</p>
+        </div>
         <div className="settings-preference-row"><span>回應速度</span><div className="settings-segmented" role="group" aria-label="回應速度">{["快速", "平衡", "深入"].map((option) => <button key={option} type="button" className={settings.responseSpeed === option ? "is-selected" : ""} aria-pressed={settings.responseSpeed === option} onClick={() => onChange("responseSpeed", option)}>{option}</button>)}</div></div>
         <DemoSwitch checked={settings.autoSelect} label="自動選擇可用模型" onChange={(value) => onChange("autoSelect", value)} />
         <DemoSwitch checked={settings.showNames} label="顯示模型名稱" onChange={(value) => onChange("showNames", value)} />
-      </section>
+      </SettingsCard>
     </div>
   );
 }
