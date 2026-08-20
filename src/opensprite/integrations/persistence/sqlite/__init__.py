@@ -1,1 +1,0 @@
-"""Shared SQLite persistence infrastructure."""

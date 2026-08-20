@@ -1,1 +1,0 @@
-"""External verification command integrations."""
