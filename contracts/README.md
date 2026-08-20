@@ -1,5 +1,18 @@
 # Contracts
 
-這個目錄將成為前端與後端 HTTP、WebSocket 資料格式的明確來源。目前尚未批准任何 API、schema、event envelope 或相容政策，因此本階段不建立契約檔案。
+`provider-connections.openapi.json` is the authoritative consumer-visible HTTP
+contract for the local provider-connection boundary. The frontend and backend
+must derive their request, response, and error expectations from this file; they
+must not maintain incompatible copies.
 
-未來新增契約時，必須同時提供前端使用方式、後端驗證方式與契約測試，禁止在前後端各自維護無法核對的重複格式。
+The contract currently covers:
+
+- backend liveness at `GET /healthz`;
+- the fixed `openai` and `anthropic` provider catalog;
+- validate-then-save connection replacement;
+- testing and deleting a stored provider connection;
+- stable public summaries and a secret-safe error envelope.
+
+This first contract has no pagination, filtering, sorting, event, webhook, or
+WebSocket surface. Any future contract must be added explicitly and follow the
+evolution rules recorded in `docs/architecture/overview.md`.

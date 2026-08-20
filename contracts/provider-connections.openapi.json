@@ -1,0 +1,526 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local provider connections API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative draft v1 HTTP contract for the local desktop provider catalog and provider credential lifecycle. Provider network and operating-system credential-store implementations are deliberately outside this contract file."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {
+    "scope": "loopback-only local desktop service",
+    "applicationAuthentication": "none",
+    "browserOriginPolicy": "same-origin",
+    "cors": "disabled by default",
+    "requirements": [
+      "Runtime and installer configurations must bind only to loopback addresses.",
+      "Deployments must reject non-loopback Host values and cross-origin browser mutations before provider routes become operational."
+    ]
+  },
+  "x-compatibility": {
+    "catalog": "fixed",
+    "pagination": false,
+    "partialSuccess": false,
+    "policy": "After the first consumer release, additions must be backward compatible; removals, renamed fields, enum narrowing, identifier changes, stricter validation, authentication changes, and semantic changes require an explicit versioned migration."
+  },
+  "x-traffic-profile": {
+    "consumers": ["OpenSprite desktop frontend", "local diagnostic clients"],
+    "expectedUsage": "single-user, interactive, low request volume",
+    "applicationRateLimit": "none in draft v1"
+  },
+  "x-events": {
+    "supported": false,
+    "description": "This contract defines no event, webhook, or WebSocket delivery behavior."
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Local service liveness."
+    },
+    {
+      "name": "provider-connections",
+      "description": "Fixed provider catalog and one stored credential per provider."
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Report process liveness",
+        "tags": ["health"],
+        "responses": {
+          "200": {
+            "description": "The backend process can serve HTTP requests. This does not assert credential-store or provider availability.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "example": {
+                  "status": "ok"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/providers": {
+      "get": {
+        "operationId": "listProviders",
+        "summary": "List the fixed provider catalog",
+        "description": "Returns exactly one summary for each supported provider, ordered as openai then anthropic. The complete catalog is returned; pagination, filtering, and sorting are not supported. The response is all-or-error; partial provider results are never returned.",
+        "tags": ["provider-connections"],
+        "responses": {
+          "200": {
+            "description": "Public provider summaries. No raw credential or internal storage metadata is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderListResponse"
+                },
+                "example": {
+                  "providers": [
+                    {
+                      "id": "openai",
+                      "name": "OpenAI",
+                      "connected": true,
+                      "status": "connected",
+                      "credentialPreview": "••••••••1234",
+                      "lastCheckedAt": "2026-08-20T08:30:00Z"
+                    },
+                    {
+                      "id": "anthropic",
+                      "name": "Anthropic",
+                      "connected": false,
+                      "status": "disconnected",
+                      "credentialPreview": null,
+                      "lastCheckedAt": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/CredentialStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/providers/{provider_id}/connection": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProviderId"
+        }
+      ],
+      "put": {
+        "operationId": "putProviderConnection",
+        "summary": "Validate and replace a provider credential",
+        "description": "Validates the candidate credential with the named provider before saving it. Every PUT revalidates the supplied credential, including a credential equal to the stored value, and a successful request updates lastCheckedAt before atomically replacing that provider's previous credential. A failed validation or provider call leaves any previous credential and public summary unchanged. This operation is therefore not guaranteed to return the same observable result when repeated; no idempotency key is supported. Operations for one provider are serialized; after concurrent accepted replacements, the last successfully completed replacement is stored. The operation deadline is 30 seconds.",
+        "tags": ["provider-connections"],
+        "x-operation-timeout-seconds": 30,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutProviderConnectionRequest"
+              },
+              "example": {
+                "apiKey": "sk-example-redacted"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The candidate credential was valid and is now the stored credential for this provider.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSummary"
+                },
+                "example": {
+                  "id": "openai",
+                  "name": "OpenAI",
+                  "connected": true,
+                  "status": "connected",
+                  "credentialPreview": "••••••••cted",
+                  "lastCheckedAt": "2026-08-20T08:30:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/UnsupportedProvider"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidCredentials"
+          },
+          "429": {
+            "$ref": "#/components/responses/ProviderRateLimited"
+          },
+          "502": {
+            "$ref": "#/components/responses/ProviderUnreachable"
+          },
+          "503": {
+            "$ref": "#/components/responses/CredentialStoreUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/ProviderTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProviderConnection",
+        "summary": "Delete a stored provider credential",
+        "description": "Deletes the stored credential and connection-check metadata for the named provider. The operation is idempotent: a supported provider that is already disconnected also returns 204. It participates in the same per-provider serialization as replace and test operations.",
+        "tags": ["provider-connections"],
+        "responses": {
+          "204": {
+            "description": "The supported provider is disconnected. No response body is returned."
+          },
+          "404": {
+            "$ref": "#/components/responses/UnsupportedProvider"
+          },
+          "503": {
+            "$ref": "#/components/responses/CredentialStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/providers/{provider_id}/connection/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProviderId"
+        }
+      ],
+      "post": {
+        "operationId": "testProviderConnection",
+        "summary": "Test the stored provider credential",
+        "description": "Tests only the credential already stored for the named provider and updates its last check status and timestamp. The request has no body; a non-empty body is rejected as invalid_request. A failed check never deletes the stored credential. It participates in per-provider serialization so its result cannot overwrite a later connection mutation. The operation deadline is 30 seconds.",
+        "tags": ["provider-connections"],
+        "x-operation-timeout-seconds": 30,
+        "responses": {
+          "200": {
+            "description": "The stored credential was accepted by the provider.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderSummary"
+                },
+                "example": {
+                  "id": "anthropic",
+                  "name": "Anthropic",
+                  "connected": true,
+                  "status": "connected",
+                  "credentialPreview": null,
+                  "lastCheckedAt": "2026-08-20T08:35:00Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/UnsupportedProvider"
+          },
+          "409": {
+            "$ref": "#/components/responses/NotConnected"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidCredentials"
+          },
+          "429": {
+            "$ref": "#/components/responses/ProviderRateLimited"
+          },
+          "502": {
+            "$ref": "#/components/responses/ProviderUnreachable"
+          },
+          "503": {
+            "$ref": "#/components/responses/CredentialStoreUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/ProviderTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ProviderId": {
+        "name": "provider_id",
+        "in": "path",
+        "required": true,
+        "description": "Stable provider identifier. Unknown values return unsupported_provider rather than being interpreted as configuration names.",
+        "schema": {
+          "type": "string",
+          "enum": ["openai", "anthropic"]
+        }
+      }
+    },
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok"
+          }
+        }
+      },
+      "ProviderId": {
+        "type": "string",
+        "enum": ["openai", "anthropic"]
+      },
+      "ProviderStatus": {
+        "type": "string",
+        "description": "Last known public state. connected indicates a stored credential whose most recent validation succeeded. A failure status can coexist with connected=true because failed tests do not delete the stored credential.",
+        "enum": [
+          "disconnected",
+          "connected",
+          "invalid_credentials",
+          "provider_unreachable",
+          "provider_timeout",
+          "provider_rate_limited",
+          "credential_store_unavailable"
+        ]
+      },
+      "ProviderSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "connected",
+          "status",
+          "credentialPreview",
+          "lastCheckedAt"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "name": {
+            "type": "string",
+            "description": "Stable display name: OpenAI or Anthropic."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "True only when a credential is stored for this provider."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProviderStatus"
+          },
+          "credentialPreview": {
+            "type": ["string", "null"],
+            "description": "Opaque, display-only masked hint. It is null when disconnected and may also be null when the credential store cannot provide a safe hint. Consumers must not parse it."
+          },
+          "lastCheckedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "UTC RFC 3339 timestamp for the completed validation represented by status, or null when no check exists. Deleting a connection resets it to null."
+          }
+        }
+      },
+      "ProviderListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["providers"],
+        "properties": {
+          "providers": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              {
+                "allOf": [
+                  {"$ref": "#/components/schemas/ProviderSummary"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {"const": "openai"},
+                      "name": {"const": "OpenAI"}
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {"$ref": "#/components/schemas/ProviderSummary"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {"const": "anthropic"},
+                      "name": {"const": "Anthropic"}
+                    }
+                  }
+                ]
+              }
+            ],
+            "items": false
+          }
+        }
+      },
+      "PutProviderConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Provider API key. A whitespace-only value is invalid. The value must never appear in responses, errors, or logs."
+          }
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "invalid_request",
+          "unsupported_provider",
+          "not_connected",
+          "invalid_credentials",
+          "provider_unreachable",
+          "provider_timeout",
+          "provider_rate_limited",
+          "credential_store_unavailable",
+          "internal_error"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "description": "Stable, secret-safe public message. It never contains a credential, provider response body, filesystem path, store identifier, or internal configuration path."
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether an automatic retry of the same operation is permitted. Clients should still use bounded backoff."
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      }
+    },
+    "responses": {
+      "InvalidRequest": {
+        "description": "Malformed JSON, unsupported media type, missing or unknown fields, whitespace-only key, key longer than 4096 characters, or a body on the test operation.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "invalid_request", "message": "Request validation failed.", "retryable": false}}
+          }
+        }
+      },
+      "UnsupportedProvider": {
+        "description": "The provider_id is not one of the fixed supported identifiers.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "unsupported_provider", "message": "The requested provider is not supported.", "retryable": false}}
+          }
+        }
+      },
+      "NotConnected": {
+        "description": "The provider has no stored credential to test.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "not_connected", "message": "The provider is not connected.", "retryable": false}}
+          }
+        }
+      },
+      "InvalidCredentials": {
+        "description": "The provider rejected the candidate or stored credential.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "invalid_credentials", "message": "The provider rejected the credential.", "retryable": false}}
+          }
+        }
+      },
+      "ProviderUnreachable": {
+        "description": "The provider could not be reached before a response was established.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "provider_unreachable", "message": "The provider is temporarily unreachable.", "retryable": true}}
+          }
+        }
+      },
+      "ProviderTimeout": {
+        "description": "The provider operation exceeded the 30-second deadline.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "provider_timeout", "message": "The provider did not respond before the timeout.", "retryable": true}}
+          }
+        }
+      },
+      "ProviderRateLimited": {
+        "description": "The provider refused the validation because its rate limit was reached. A Retry-After header may be added later only through an additive contract revision.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "provider_rate_limited", "message": "The provider rate limit was reached.", "retryable": true}}
+          }
+        }
+      },
+      "CredentialStoreUnavailable": {
+        "description": "The operating-system credential store is unavailable. No plaintext fallback is permitted.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "credential_store_unavailable", "message": "Secure credential storage is unavailable.", "retryable": true}}
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected local error occurred. Internal exception details are not disclosed.",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},
+            "example": {"error": {"code": "internal_error", "message": "An internal error occurred.", "retryable": false}}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,27 @@
 # Backend
 
-這個目錄保留給未來的 OpenSprite Python service。目前不建立 Python package、runtime、API、資料庫、Agent、背景服務或 CLI。
+This directory contains the minimal Python 3.12+ FastAPI foundation for the
+local OpenSprite service. `contracts/provider-connections.openapi.json` is the
+authoritative HTTP contract.
 
-後端只能在使用者明確開始後端階段後建立；屆時應先根據已確認的前端需求與 contracts 設計最小介面，而不是從舊版整批搬移模組。
+The current slice provides:
+
+- a typed ASGI `create_app()` factory;
+- `GET /healthz`;
+- thin provider-connection routes and public models;
+- an explicit `ProviderConnections` dependency seam;
+- a default dependency that fails closed with
+  `credential_store_unavailable`.
+
+It deliberately does not contain provider network adapters, credential
+persistence, a plaintext fallback, a database, an Agent runtime, or an
+application CLI. Provider routes become operational only when a secure
+operating-system credential implementation and provider validators are supplied
+to the app factory.
+
+After dependency synchronization, run the focused checks from this directory:
+
+```powershell
+uv sync --dev
+uv run pytest
+```
