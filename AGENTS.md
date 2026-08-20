@@ -31,13 +31,14 @@ Do not add compatibility aliases, disabled legacy paths, keyword-based task rout
 
 ## Current verification
 
-The foundation contains dependency and toolchain configuration but no runnable application. These are the only frontend checks currently expected:
+The frontend now contains a runnable fake-data demo. Run these frontend checks:
 
 ```powershell
 cd frontend
 npm ci --ignore-scripts
-npm exec vite -- --version
-npm exec tsc -- --version
+npm run typecheck
+npm run build
+npm run dev
 ```
 
 Repository checks:
@@ -47,7 +48,7 @@ git diff --check
 git status --short --branch
 ```
 
-Do not claim that frontend build, browser smoke, backend tests, API tests, or installer tests exist until their implementing files and commands are committed.
+Browser verification is currently manual against the local Vite server. Do not claim that automated frontend tests, backend tests, API tests, or installer tests exist until their implementing files and commands are committed.
 
 ## Generated and local files
 

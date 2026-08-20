@@ -1,11 +1,17 @@
 {
   "name": "@opensprite/web",
   "private": true,
+  "type": "module",
   "version": "0.0.0",
   "description": "OpenSprite browser client foundation",
   "packageManager": "npm@10.8.0",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "antd": "6.6.1",

@@ -1,10 +1,12 @@
 # OpenSprite
 
-OpenSprite 正在從乾淨的 repository 基礎重新設計。這個分支只建立前端優先的專案結構、工具設定與修改紀錄，不包含可執行程式。
+OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的前端 Demo，用假資料驗證核心對話與設定流程；後端仍未開始實作。
 
 ## 目前狀態
 
-- 前端技術方向：React、TypeScript、Vite、Ant Design。
+- 前端：React、TypeScript、Vite、Ant Design，可啟動 Demo。
+- Demo 畫面：AI 對話工作台、一般設定、AI 模型設定。
+- Demo 資料：全部保存在瀏覽器記憶體，不會連線或永久保存。
 - 後端：尚未建立，等待前端方向穩定後再規劃。
 - CLI：不在新版本範圍內。
 - API、WebSocket、安裝器：目前只有預留邊界，尚未實作。
