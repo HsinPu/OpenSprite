@@ -21,11 +21,11 @@ Frontend -> Contracts <- Backend
 
 ## 目前階段
 
-Frontend 已有可執行的 fake-data demo。本階段首次建立 provider connection HTTP
-契約與最小 FastAPI service foundation，但尚未加入 provider network adapter 或作業系統
-credential store。Provider routes 已存在並可由 dependency injection 驗證；未注入安全實作時
-一律以 `credential_store_unavailable` fail closed。`GET /healthz` 只代表 HTTP process
-liveness，不代表 credential store 或上游 provider 可用。
+Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
+FastAPI service foundation，以及尚未接入 routes 的作業系統 credential-store boundary；provider
+network adapter 仍不存在。Provider routes 已存在並可由 dependency injection 驗證；未注入完整
+安全實作時一律以 `credential_store_unavailable` fail closed。`GET /healthz` 只代表 HTTP
+process liveness，不代表 credential store 或上游 provider 可用。
 
 ## Provider connection 邊界
 
@@ -65,6 +65,14 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
 - Error envelope 固定為 `error.code/message/retryable`。Status mapping、retryability 與公開訊息
   都由 contract 定義；provider response 與 exception detail 不得透出。
 - 不提供 plaintext credential fallback。Credential store 不可用時必須回 `503`，不能降級儲存。
+- Credential store 固定使用 service namespace `OpenSprite`，並以
+  `provider.openai.api-key`、`provider.anthropic.api-key` 作為不可由 caller 指定的 credential
+  name。Windows 僅接受 keyring 的 `WinVaultKeyring`（Windows Credential Manager），Linux 僅
+  接受 `SecretService.Keyring`（Secret Service）。keyring 25.7.0 已依 platform 宣告 Windows 的
+  `pywin32-ctypes` 與 Linux 的 `SecretStorage`/`jeepney`；不另設 file fallback。
+- Backend preflight 只檢查 platform、backend identity 與 backend priority，不以測試寫入探測
+  可用性。Fake-backed unit tests 驗證 adapter selection policy，但不構成 Windows 或 Linux OS
+  integration 成功證明；installer/runtime 階段仍須在各目標 OS 做 read-only preflight 與人工驗證。
 - PUT 與 test 的 provider deadline 是 30 秒；client retry 必須 bounded backoff。Draft v1
   不加 application rate limit，上游 rate limit 以固定 `provider_rate_limited` 錯誤呈現。
 
@@ -84,12 +92,11 @@ signature 或 replay 保證。未來若加入，必須以獨立 message contract
 已拒絕：plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
 過早加入 pagination/version alias，以及從 archived implementation 整批搬移。
 
-尚未決定且不屬於本切片：各 OS credential-store implementation、OpenAI/Anthropic 最小驗證
-request、per-provider serialization 機制、runtime Host/Origin enforcement 以及 packaging/installer
-binding。其中 loopback binding、Host validation 與 same-origin mutation enforcement 是 provider
-routes 上線前的 release-blocking requirement。Backend implementer 必須在不改公開契約的前提下
-完成這些項目；frontend implementer 只消費 contract 中的 public model，不推測 store 或 provider
-internals。
+尚未決定且不屬於本切片：OpenAI/Anthropic 最小驗證 request、per-provider serialization 機制、
+runtime Host/Origin enforcement 以及 packaging/installer binding。其中 loopback binding、Host
+validation 與 same-origin mutation enforcement 是 provider routes 上線前的 release-blocking
+requirement。Backend implementer 必須在不改公開契約的前提下完成這些項目；frontend implementer
+只消費 contract 中的 public model，不推測 store 或 provider internals。
 
 ## 長期限制
 
