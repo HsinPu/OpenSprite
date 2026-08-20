@@ -27,8 +27,7 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 
 - `/` 或 `/#chat`：AI 對話工作台。
 - `/#new-chat`：空白新對話。
-- `/#settings-general`：一般設定。
-- `/#settings-models`：AI 模型設定。
+- 設定由主導覽的「設定」按鈕開啟彈出視窗，不改變目前網址或對話。
 
 所有對話、執行資訊、模型服務、憑證遮蔽值與設定狀態都是假資料，只存在目前瀏覽器工作階段。沒有 HTTP、WebSocket 或後端連線。
 

@@ -41,6 +41,7 @@ type SettingsPageProps = {
   onSectionChange: (section: SettingsSection) => void;
   settings: DemoSettings;
   onSettingsChange: (next: DemoSettings) => void;
+  onClose: () => void;
 };
 
 type IconName = "settings" | "robot" | "database" | "connections" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic";
@@ -202,7 +203,7 @@ function ModelsSettings({ settings, onChange }: { settings: DemoSettings; onChan
   );
 }
 
-export function SettingsPage({ section, onSectionChange, settings, onSettingsChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, onClose }: SettingsPageProps) {
   const [saved, setSaved] = useState(true);
 
   useEffect(() => {
@@ -221,7 +222,12 @@ export function SettingsPage({ section, onSectionChange, settings, onSettingsCha
     <section className="settings-page" aria-labelledby="settings-page-title">
       <header className="settings-header">
         <div><h1 id="settings-page-title">設定</h1><p>調整 OpenSprite 的使用方式</p></div>
-        <SaveStatus saved={saved} />
+        <div className="settings-header-actions">
+          <SaveStatus saved={saved} />
+          <button className="settings-close-button" type="button" onClick={onClose} aria-label="關閉設定" title="關閉設定">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
       </header>
       <div className="settings-layout">
         <nav className="settings-category-rail" aria-label="設定分類">

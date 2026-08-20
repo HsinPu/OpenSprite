@@ -329,6 +329,33 @@ button {
   overflow: hidden;
 }
 
+.settings-dialog {
+  width: min(920px, calc(100vw - 48px));
+  height: min(760px, calc(100dvh - 64px));
+  max-width: calc(100vw - 48px);
+  max-height: calc(100dvh - 64px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--os-border);
+  border-radius: 18px;
+  background: var(--os-surface);
+  box-shadow: 0 24px 72px rgb(38 33 29 / 24%);
+}
+
+.settings-dialog::backdrop {
+  background: rgb(34 30 27 / 34%);
+  backdrop-filter: blur(3px);
+}
+
+.settings-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-dialog .settings-page {
+  height: 100%;
+}
+
 .mobile-header,
 .sidebar-backdrop {
   display: none;
@@ -453,6 +480,18 @@ button {
 
   .app-content {
     min-height: calc(100vh - 60px);
+  }
+}
+
+@media (max-width: 767px) {
+  .settings-dialog {
+    width: 100dvw;
+    max-width: 100dvw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
   }
 }
 

@@ -8,33 +8,21 @@ import {
   type SettingsSection,
 } from "../features/settings/SettingsPage";
 
-type AppView =
-  | { kind: "chat"; title: string }
-  | { kind: "settings"; section: SettingsSection };
-
-function viewFromHash(): AppView {
-  if (window.location.hash === "#settings-models") {
-    return { kind: "settings", section: "models" };
-  }
-
-  if (window.location.hash === "#settings-general") {
-    return { kind: "settings", section: "general" };
-  }
-
+function chatTitleFromHash(): string {
   if (window.location.hash === "#new-chat") {
-    return { kind: "chat", title: "新對話" };
+    return "新對話";
   }
 
   if (window.location.hash.startsWith("#chat=")) {
     const encodedTitle = window.location.hash.slice("#chat=".length);
     try {
-      return { kind: "chat", title: decodeURIComponent(encodedTitle) };
+      return decodeURIComponent(encodedTitle);
     } catch {
-      return { kind: "chat", title: recentConversations[0] };
+      return recentConversations[0];
     }
   }
 
-  return { kind: "chat", title: recentConversations[0] };
+  return recentConversations[0];
 }
 
 const recentConversations = [
@@ -81,23 +69,40 @@ function ConversationButton({
 }
 
 export function App() {
-  const [view, setView] = useState<AppView>(viewFromHash);
+  const [chatTitle, setChatTitle] = useState(chatTitleFromHash);
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const menuWasOpen = useRef(false);
 
   useEffect(() => {
     const syncHash = () => {
-      setView(viewFromHash());
+      setChatTitle(chatTitleFromHash());
       setMenuOpen(false);
     };
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
   }, []);
+
+  useEffect(() => {
+    const dialog = settingsDialogRef.current;
+    if (!dialog) return;
+
+    if (settingsOpen && !dialog.open) {
+      dialog.showModal();
+    }
+
+    if (!settingsOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (menuOpen) {
@@ -132,7 +137,7 @@ export function App() {
   }, []);
 
   const openChat = (title: string) => {
-    setView({ kind: "chat", title });
+    setChatTitle(title);
     window.location.hash =
       title === "新對話" ? "new-chat" : `chat=${encodeURIComponent(title)}`;
     setMenuOpen(false);
@@ -144,10 +149,12 @@ export function App() {
   };
 
   const openSettings = (section: SettingsSection = "general") => {
-    setView({ kind: "settings", section });
-    window.location.hash = `settings-${section}`;
+    setSettingsSection(section);
+    setSettingsOpen(true);
     setMenuOpen(false);
   };
+
+  const closeSettings = () => setSettingsOpen(false);
 
   return (
     <div className={`app-shell${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
@@ -227,7 +234,7 @@ export function App() {
             <ConversationButton
               key={title}
               title={title}
-              active={view.kind === "chat" && view.title === title}
+              active={chatTitle === title}
               onClick={() => openChat(title)}
             />
           ))}
@@ -238,7 +245,7 @@ export function App() {
             <ConversationButton
               key={title}
               title={title}
-              active={view.kind === "chat" && view.title === title}
+              active={chatTitle === title}
               onClick={() => openChat(title)}
             />
           ))}
@@ -255,10 +262,13 @@ export function App() {
             <span className="utility-label">工具與連線</span>
           </button>
           <button
-            className={view.kind === "settings" ? "is-active" : ""}
+            ref={settingsButtonRef}
+            className={settingsOpen ? "is-active" : ""}
             type="button"
             aria-label="設定"
             title="設定"
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
             onClick={() => openSettings()}
           >
             <span aria-hidden="true">⚙</span>
@@ -268,22 +278,42 @@ export function App() {
       </aside>
 
       <main className="app-content">
-        {view.kind === "chat" ? (
-          <ChatWorkspace
-            key={`${view.title}-${chatRevision}`}
-            title={view.title}
-            initiallyEmpty={view.title === "新對話"}
-            modelName={settings.defaultModel.replace("OpenAI · ", "")}
-          />
-        ) : (
-          <SettingsPage
-            section={view.section}
-            onSectionChange={(section) => openSettings(section)}
-            settings={settings}
-            onSettingsChange={setSettings}
-          />
-        )}
+        <ChatWorkspace
+          key={`${chatTitle}-${chatRevision}`}
+          title={chatTitle}
+          initiallyEmpty={chatTitle === "新對話"}
+          modelName={settings.defaultModel.replace("OpenAI · ", "")}
+        />
       </main>
+
+      <dialog
+        ref={settingsDialogRef}
+        className="settings-dialog"
+        aria-labelledby="settings-page-title"
+        onClose={() => {
+          setSettingsOpen(false);
+          window.requestAnimationFrame(() => {
+            if (window.innerWidth <= 900) {
+              mobileMenuButtonRef.current?.focus();
+            } else {
+              settingsButtonRef.current?.focus();
+            }
+          });
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            closeSettings();
+          }
+        }}
+      >
+        <SettingsPage
+          section={settingsSection}
+          onSectionChange={setSettingsSection}
+          settings={settings}
+          onSettingsChange={setSettings}
+          onClose={closeSettings}
+        />
+      </dialog>
     </div>
   );
 }
