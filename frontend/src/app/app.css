@@ -55,6 +55,10 @@ button {
   background: var(--os-bg);
 }
 
+.app-shell.is-sidebar-collapsed {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+
 .main-sidebar {
   position: relative;
   z-index: 20;
@@ -67,14 +71,58 @@ button {
   background: rgba(255, 255, 255, 0.92);
 }
 
+.sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 28px;
+}
+
 .brand {
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 2px 8px 30px;
+  padding: 2px 8px 0;
   font-size: 23px;
   font-weight: 720;
   letter-spacing: -0.6px;
+}
+
+.sidebar-collapse-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  margin-top: 0;
+  border: 1px solid var(--os-border);
+  border-radius: 9px;
+  color: var(--os-muted);
+  background: var(--os-surface);
+  cursor: pointer;
+}
+
+.sidebar-collapse-button:hover {
+  color: var(--os-primary-strong);
+  background: var(--os-primary-soft);
+}
+
+.sidebar-chevron {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform-origin: center;
+}
+
+.sidebar-chevron.is-left {
+  transform: rotate(135deg);
+}
+
+.sidebar-chevron.is-right {
+  transform: rotate(-45deg);
 }
 
 .brand-mark {
@@ -135,6 +183,7 @@ button {
 .new-chat-button:focus-visible,
 .conversation-link:focus-visible,
 .utility-nav button:focus-visible,
+.sidebar-collapse-button:focus-visible,
 .mobile-menu-button:focus-visible {
   outline: 3px solid rgb(255 101 69 / 28%);
   outline-offset: 2px;
@@ -221,10 +270,57 @@ button {
   font-size: 15px;
 }
 
-.utility-nav button span {
+.utility-nav button > span:first-child {
   width: 22px;
   text-align: center;
   font-size: 18px;
+}
+
+.app-shell.is-sidebar-collapsed .main-sidebar {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-header {
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-shell.is-sidebar-collapsed .brand {
+  padding: 2px 0 0;
+}
+
+.app-shell.is-sidebar-collapsed .brand > span:last-child,
+.app-shell.is-sidebar-collapsed .new-chat-label,
+.app-shell.is-sidebar-collapsed .utility-label {
+  display: none;
+}
+
+.app-shell.is-sidebar-collapsed .brand {
+  gap: 0;
+}
+
+.app-shell.is-sidebar-collapsed .new-chat-button {
+  width: 52px;
+  padding: 0;
+}
+
+.app-shell.is-sidebar-collapsed .utility-nav button {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-shell.is-sidebar-collapsed .utility-nav button > span:first-child {
+  margin: 0;
+}
+
+.app-shell.is-sidebar-collapsed .utility-nav {
+  margin-top: auto;
+}
+
+.app-shell.is-sidebar-collapsed .conversation-nav {
+  display: none;
 }
 
 .app-content {
@@ -246,6 +342,10 @@ button {
   .app-shell {
     display: block;
     padding-top: 60px;
+  }
+
+  .app-shell.is-sidebar-collapsed {
+    display: block;
   }
 
   .mobile-header {
@@ -276,6 +376,10 @@ button {
     font-size: 19px;
   }
 
+  .sidebar-collapse-button {
+    display: none;
+  }
+
   .brand--mobile {
     padding: 0;
     font-size: 18px;
@@ -301,6 +405,41 @@ button {
 
   .main-sidebar.is-open {
     transform: translateX(0);
+  }
+
+  .app-shell.is-sidebar-collapsed .main-sidebar {
+    padding: 28px 16px 18px;
+  }
+
+  .app-shell.is-sidebar-collapsed .sidebar-header {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .app-shell.is-sidebar-collapsed .brand {
+    gap: 11px;
+    padding: 2px 8px 0;
+  }
+
+  .app-shell.is-sidebar-collapsed .brand > span:last-child,
+  .app-shell.is-sidebar-collapsed .new-chat-label,
+  .app-shell.is-sidebar-collapsed .utility-label {
+    display: inline;
+  }
+
+  .app-shell.is-sidebar-collapsed .new-chat-button {
+    width: 100%;
+    padding: 0;
+  }
+
+  .app-shell.is-sidebar-collapsed .utility-nav button {
+    justify-content: flex-start;
+    padding: 0 12px;
+  }
+
+  .app-shell.is-sidebar-collapsed .conversation-nav {
+    display: block;
   }
 
   .sidebar-backdrop {

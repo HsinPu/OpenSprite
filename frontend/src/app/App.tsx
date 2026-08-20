@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import {
@@ -84,12 +84,51 @@ export function App() {
   const [view, setView] = useState<AppView>(viewFromHash);
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const newChatButtonRef = useRef<HTMLButtonElement>(null);
+  const menuWasOpen = useRef(false);
 
   useEffect(() => {
-    const syncHash = () => setView(viewFromHash());
+    const syncHash = () => {
+      setView(viewFromHash());
+      setMenuOpen(false);
+    };
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    if (!menuWasOpen.current && menuOpen && window.innerWidth <= 900) {
+      newChatButtonRef.current?.focus();
+    }
+
+    if (menuWasOpen.current && !menuOpen) {
+      mobileMenuButtonRef.current?.focus();
+    }
+    menuWasOpen.current = menuOpen;
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
   const openChat = (title: string) => {
@@ -111,13 +150,16 @@ export function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
       <header className="mobile-header">
         <button
+          ref={mobileMenuButtonRef}
           className="mobile-menu-button"
           type="button"
-          aria-label="開啟主選單"
+          aria-label={menuOpen ? "關閉主選單" : "開啟主選單"}
           aria-expanded={menuOpen}
+          aria-controls="main-navigation-sidebar"
+          title={menuOpen ? "關閉主選單" : "開啟主選單"}
           onClick={() => setMenuOpen((open) => !open)}
         >
           ☰
@@ -137,18 +179,49 @@ export function App() {
         />
       ) : null}
 
-      <aside className={`main-sidebar${menuOpen ? " is-open" : ""}`}>
-        <div className="brand">
-          <OpenSpriteMark />
-          <span>OpenSprite</span>
+      <aside
+        id="main-navigation-sidebar"
+        className={`main-sidebar${menuOpen ? " is-open" : ""}${sidebarCollapsed ? " is-collapsed" : ""}`}
+        aria-label="主選單"
+      >
+        <div className="sidebar-header">
+          <div className="brand">
+            <OpenSpriteMark />
+            <span>OpenSprite</span>
+          </div>
+          <button
+            className="sidebar-collapse-button"
+            type="button"
+            aria-label={sidebarCollapsed ? "展開側邊欄" : "收合側邊欄"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="conversation-navigation"
+            title={sidebarCollapsed ? "展開側邊欄" : "收合側邊欄"}
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          >
+            <span
+              className={`sidebar-chevron ${sidebarCollapsed ? "is-right" : "is-left"}`}
+              aria-hidden="true"
+            />
+          </button>
         </div>
 
-        <button className="new-chat-button" type="button" onClick={startNewChat}>
+        <button
+          ref={newChatButtonRef}
+          className="new-chat-button"
+          type="button"
+          aria-label="新對話"
+          title="新對話"
+          onClick={startNewChat}
+        >
           <span aria-hidden="true">＋</span>
-          新對話
+          <span className="new-chat-label">新對話</span>
         </button>
 
-        <nav className="conversation-nav" aria-label="對話紀錄">
+        <nav
+          id="conversation-navigation"
+          className="conversation-nav"
+          aria-label="對話紀錄"
+        >
           <p className="nav-group-label">今天</p>
           {recentConversations.map((title) => (
             <ConversationButton
@@ -175,18 +248,21 @@ export function App() {
           <button
             type="button"
             disabled
+            aria-label="工具與連線"
             title="此功能將在後續 Demo 加入"
           >
             <span aria-hidden="true">⌘</span>
-            工具與連線
+            <span className="utility-label">工具與連線</span>
           </button>
           <button
             className={view.kind === "settings" ? "is-active" : ""}
             type="button"
+            aria-label="設定"
+            title="設定"
             onClick={() => openSettings()}
           >
             <span aria-hidden="true">⚙</span>
-            設定
+            <span className="utility-label">設定</span>
           </button>
         </nav>
       </aside>
