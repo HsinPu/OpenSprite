@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useId, useState } from 'react';
 
 import './ChatWorkspace.css';
 
@@ -80,44 +80,78 @@ function AssistantSummary() {
 }
 
 function ExecutionContext({ modelName }: { modelName: string }) {
+  const [isExpanded, setIsExpanded] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
+  const contextId = useId();
+  const executionTitleId = `${contextId}-execution-title`;
+  const executionBodyId = `${contextId}-execution-body`;
+  const modelTitleId = `${contextId}-model-title`;
+  const capabilitiesTitleId = `${contextId}-capabilities-title`;
+  const executionInfoTitleId = `${contextId}-execution-info-title`;
+
   return (
-    <aside className="chat-workspace__context" aria-labelledby="execution-title">
+    <aside
+      className={`chat-workspace__context${isExpanded ? '' : ' chat-workspace__context--collapsed'}`}
+      aria-labelledby={executionTitleId}
+    >
       <div className="chat-workspace__context-heading">
-        <h2 id="execution-title">本次執行</h2>
+        <h2 id={executionTitleId}>本次執行</h2>
+        <button
+          type="button"
+          className="chat-workspace__context-toggle"
+          aria-expanded={isExpanded}
+          aria-controls={executionBodyId}
+          aria-label={isExpanded ? '收合本次執行' : '展開本次執行'}
+          title={isExpanded ? '收合本次執行' : '展開本次執行'}
+          onClick={() => setIsExpanded((current) => !current)}
+        >
+          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--horizontal">{isExpanded ? '›' : '‹'}</span>
+          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--vertical">{isExpanded ? '⌃' : '⌄'}</span>
+        </button>
       </div>
 
-      <section className="chat-workspace__context-section" aria-labelledby="model-title">
-        <h3 id="model-title">模型</h3>
-        <div className="chat-workspace__model-card">
-          <OpenSpriteMark small />
-          <span>{modelName}</span>
-          <span className="chat-workspace__connected-pill"><i aria-hidden="true" />本機執行</span>
-        </div>
-      </section>
+      <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
+        <span>已完成</span>
+        <span>{modelName}</span>
+        <span>3 / 3</span>
+      </div>
 
-      <section className="chat-workspace__context-section" aria-labelledby="capabilities-title">
-        <h3 id="capabilities-title">已連線的能力</h3>
-        <ul className="chat-workspace__capability-list">
-          <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌕</span><span>搜尋</span><i aria-label="已連線" /></li>
-          <li><span className="chat-workspace__capability-icon" aria-hidden="true">□</span><span>檔案</span><i aria-label="已連線" /></li>
-          <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌄</span><span>記憶</span><i aria-label="已連線" /></li>
-        </ul>
-      </section>
+      <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isExpanded}>
+        <section className="chat-workspace__context-section" aria-labelledby={modelTitleId}>
+          <h3 id={modelTitleId}>模型</h3>
+          <div className="chat-workspace__model-card">
+            <OpenSpriteMark small />
+            <span>{modelName}</span>
+            <span className="chat-workspace__connected-pill"><i aria-hidden="true" />本機執行</span>
+          </div>
+        </section>
 
-      <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby="execution-info-title">
-        <h3 id="execution-info-title">執行資訊</h3>
-        <dl className="chat-workspace__stats">
-          <div><dt>開始時間</dt><dd>10:21:10</dd></div>
-          <div><dt>執行時長</dt><dd>00:00:18</dd></div>
-          <div><dt>步驟</dt><dd>3 / 3</dd></div>
-          <div><dt>來源</dt><dd>對話、檔案、記憶</dd></div>
-        </dl>
-      </section>
+        <section className="chat-workspace__context-section" aria-labelledby={capabilitiesTitleId}>
+          <h3 id={capabilitiesTitleId}>已連線的能力</h3>
+          <ul className="chat-workspace__capability-list">
+            <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌕</span><span>搜尋</span><i aria-label="已連線" /></li>
+            <li><span className="chat-workspace__capability-icon" aria-hidden="true">□</span><span>檔案</span><i aria-label="已連線" /></li>
+            <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌄</span><span>記憶</span><i aria-label="已連線" /></li>
+          </ul>
+        </section>
 
-      <details className="chat-workspace__record-details">
-        <summary><span>詳細紀錄</span><span aria-hidden="true">⌄</span></summary>
-        <p>本次執行未產生額外警告。</p>
-      </details>
+        <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={executionInfoTitleId}>
+          <h3 id={executionInfoTitleId}>執行資訊</h3>
+          <dl className="chat-workspace__stats">
+            <div><dt>開始時間</dt><dd>10:21:10</dd></div>
+            <div><dt>執行時長</dt><dd>00:00:18</dd></div>
+            <div><dt>步驟</dt><dd>3 / 3</dd></div>
+            <div><dt>來源</dt><dd>對話、檔案、記憶</dd></div>
+          </dl>
+        </section>
+
+        <details className="chat-workspace__record-details">
+          <summary><span>詳細紀錄</span><span aria-hidden="true">⌄</span></summary>
+          <p>本次執行未產生額外警告。</p>
+        </details>
+      </div>
     </aside>
   );
 }
