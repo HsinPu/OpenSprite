@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 import hashlib
 import hmac
-from pathlib import Path
 from typing import Protocol
 
 import httpx
 
+from .app_paths import AppPaths, build_app_paths
 from .credentials import CredentialStore, KeyringCredentialStore
 from .models import (
     ErrorCode,
@@ -394,9 +394,9 @@ class ProviderRuntime:
 
 def create_provider_runtime(
     *,
+    app_paths: AppPaths | None = None,
     credential_store: CredentialStore | None = None,
     state_repository: ProviderStateRepository | None = None,
-    state_path: Path | None = None,
     http_client: httpx.AsyncClient | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     clock: Callable[[], datetime] | None = None,
@@ -420,11 +420,10 @@ def create_provider_runtime(
         if credential_store is not None
         else KeyringCredentialStore.from_system()
     )
-    states = (
-        state_repository
-        if state_repository is not None
-        else JsonProviderStateRepository(state_path)
-    )
+    states = state_repository
+    if states is None:
+        paths = app_paths if app_paths is not None else build_app_paths()
+        states = JsonProviderStateRepository(paths.provider_state_file)
     connections = ProviderConnectionService(
         store,
         states,

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from opensprite_backend.models import ProviderStatus
+from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.provider_state import (
     JsonProviderStateRepository,
     ProviderState,
@@ -51,6 +52,24 @@ def test_round_trip_uses_only_strict_non_secret_schema(tmp_path: Path) -> None:
         ],
     }
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_empty_read_is_side_effect_free_and_first_write_only_creates_state(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    repository = JsonProviderStateRepository(paths.provider_state_file)
+
+    assert repository.get("openai") is None
+    assert not paths.home.exists()
+
+    repository.set(state())
+
+    assert paths.provider_state_file.is_file()
+    assert sorted(
+        path.relative_to(paths.home).as_posix()
+        for path in paths.home.rglob("*")
+    ) == ["state", "state/providers.json"]
 
 
 @pytest.mark.parametrize(

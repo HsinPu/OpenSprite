@@ -29,8 +29,9 @@ policy.
   provider id, public status, display-only credential preview, UTC check time,
   and an internal full SHA-256 fingerprint that binds state to the complete
   credential. The fingerprint is never included in the public summary.
-- Metadata uses a strict version-2 schema, the fixed provider catalog,
-  `platformdirs`, and atomic same-directory replacement. Corrupt or unavailable
+- Metadata uses a strict version-2 schema, the fixed provider catalog, the
+  then-current application-data location, and atomic same-directory
+  replacement. Corrupt or unavailable
   metadata fails closed; schema v1 is rejected with no legacy lookup, fallback,
   or migration.
 - Provider mutations use per-provider async locks under the single-process
@@ -47,7 +48,8 @@ policy.
 ## Code and dependency changes
 
 - Promoted `httpx==0.28.1` to a runtime dependency.
-- Added `platformdirs==4.11.3` as an exact runtime dependency.
+- Added the then-current application-data path dependency; the centralized
+  path contract in change 0013 later superseded and removed it.
 - Added fixed HTTP provider adapters and offline `MockTransport` tests.
 - Added strict atomic JSON provider-state repository.
 - Bound metadata to the full credential using an internal SHA-256 fingerprint;

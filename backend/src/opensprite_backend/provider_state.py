@@ -10,8 +10,6 @@ from pathlib import Path
 import tempfile
 from typing import Final, Protocol
 
-from platformdirs import user_data_path
-
 from .models import ProviderId, ProviderStatus
 
 _SCHEMA_VERSION: Final = 2
@@ -51,15 +49,11 @@ class ProviderStateRepository(Protocol):
     def delete(self, provider_id: ProviderId) -> None: ...
 
 
-def default_provider_state_path() -> Path:
-    return user_data_path("OpenSprite", appauthor=False) / "providers.json"
-
-
 class JsonProviderStateRepository:
     """Persist only validated, non-secret metadata in one atomic JSON file."""
 
-    def __init__(self, path: Path | None = None) -> None:
-        self._path = path if path is not None else default_provider_state_path()
+    def __init__(self, path: Path) -> None:
+        self._path = path
 
     def get(self, provider_id: ProviderId) -> ProviderState | None:
         return self._read().get(provider_id)

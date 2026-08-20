@@ -101,8 +101,11 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   `GET https://api.anthropic.com/v1/models?limit=1` 驗證 `x-api-key`，並固定送出
   `anthropic-version: 2023-06-01`。HTTP client 使用預設 TLS 驗證、禁止 redirect、固定 30 秒
   timeout；成功 body 上限 1 MiB，且必須是含 `data` list 的 JSON object，但 model list 不落盤。
-- Provider metadata 使用 `platformdirs` 決定本機 application-data 位置並以 atomic replace 寫入
-  strict schema-v2 JSON；保存 provider id、status、display-only preview、UTC last-check time 與
+- 本機資料位置由 [`local-data-layout.md`](local-data-layout.md) 的 `AppPaths` 單一管理；建立路徑
+  mapping、匯入 backend、啟動 system app 與讀取不存在的狀態都不建立任何目錄。Provider metadata
+  只在實際寫入時建立 `%USERPROFILE%\.opensprite\state\providers.json`（Linux 為
+  `~/.opensprite/state/providers.json`），並以 atomic replace 寫入 strict schema-v2 JSON；保存
+  provider id、status、display-only preview、UTC last-check time 與
   internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。

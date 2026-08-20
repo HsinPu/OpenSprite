@@ -13,8 +13,10 @@ The current slice provides:
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable OS credential-store boundary backed by `keyring`;
-- strict non-secret provider metadata under the platform-local application data
-  directory, written by atomic JSON replacement;
+- a pure `AppPaths` contract rooted at `%USERPROFILE%\.opensprite` on Windows
+  and `~/.opensprite` on Linux;
+- strict non-secret provider metadata at `state/providers.json`, written by
+  atomic JSON replacement;
 - an explicit `create_provider_runtime()` composition factory;
 - a secured `create_system_app()` runtime factory that owns and closes the
   provider HTTP client through FastAPI lifespan; and
@@ -26,6 +28,12 @@ Credential Manager or Linux Secret Service, a plaintext fallback, a database,
 an Agent runtime or an application CLI. Unit
 tests inject `httpx.MockTransport` and fake credential/state repositories; they
 make no real provider request or operating-system credential call.
+
+Constructing `AppPaths`, importing this package, starting the system app, and
+reading absent provider state are filesystem-side-effect free. The provider
+repository creates only `.opensprite/state` when metadata is first written.
+Configuration, database, conversation, log, and cache paths are reserved by the
+layout contract but are not created before an approved feature uses them.
 
 Importing or calling `create_system_app()` performs no keyring selection,
 credential operation, or provider request. Each successful FastAPI lifespan

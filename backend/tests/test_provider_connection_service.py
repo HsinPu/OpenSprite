@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from opensprite_backend import create_app
+from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.credentials import CredentialStore, KeyringCredentialStore
 from opensprite_backend.models import ErrorCode, ProviderId, ProviderStatus
 from opensprite_backend.provider_connections import (
@@ -616,6 +617,35 @@ def test_runtime_factory_is_offline_until_an_operation_and_owns_client() -> None
     summary = run(runtime.connections.connect("openai", NEW_SECRET))
     assert summary.status is ProviderStatus.CONNECTED
     assert calls == 1
+    run(runtime.aclose())
+
+
+def test_runtime_factory_uses_injected_app_paths_for_default_state_repository(
+    tmp_path: Path,
+) -> None:
+    credentials = FakeCredentialStore()
+    paths = build_app_paths(tmp_path / ".opensprite")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []}, request=request)
+
+    runtime = create_provider_runtime(
+        app_paths=paths,
+        credential_store=credentials,
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+
+    assert not paths.home.exists()
+    summary = run(runtime.connections.connect("openai", NEW_SECRET))
+
+    assert summary.status is ProviderStatus.CONNECTED
+    assert paths.provider_state_file.is_file()
+    assert not paths.config_dir.exists()
+    assert not paths.data_dir.exists()
+    assert not paths.conversations_dir.exists()
+    assert not paths.logs_dir.exists()
+    assert not paths.cache_dir.exists()
     run(runtime.aclose())
 
 
