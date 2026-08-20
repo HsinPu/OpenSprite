@@ -53,6 +53,14 @@ adapter 只能透過已定義的 `ProviderConnections` seam 接入，不得改�
 credential-store identifier、上游 response body 與 internal config path 永不屬於公開 model。
 Internal credential fingerprint 也不屬於公開 model。
 
+Frontend 消費者只使用相對 `/api` 路徑。Vite dev 與 preview proxy 轉送至
+`127.0.0.1:8765` 時保留 browser-facing Host 和 Origin（`changeOrigin: false`），讓本機
+runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗證固定 catalog 的順序、
+欄位、狀態與 UTC timestamp；無法驗證的回應只顯示固定安全錯誤。API key 只存在連線 modal
+的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
+都會清除。模型選項仍是前端 local catalog，依 provider id 選擇，並不向 provider 取得或解析
+display string。
+
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值
 相同；成功時更新 `lastCheckedAt`，因此不承諾 repeated PUT 有完全相同的 observable result。

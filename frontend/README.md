@@ -1,6 +1,6 @@
 # Frontend
 
-這裡是 OpenSprite 瀏覽器介面的唯一來源。目前提供 React、TypeScript、Vite、Ant Design 實作的前端 Demo，使用假資料呈現核心對話與設定流程。
+這裡是 OpenSprite 瀏覽器介面的唯一來源。目前提供 React、TypeScript、Vite、Ant Design 實作的前端 Demo；模型廠家連線會透過本機 Provider Connections HTTP API 管理。
 
 ## 責任
 
@@ -29,13 +29,15 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 - `/#new-chat`：空白新對話。
 - 設定由主導覽的「設定」按鈕開啟彈出視窗，不改變目前網址或對話。
 
-所有對話、執行資訊、模型服務、憑證遮蔽值與設定狀態都是假資料，只存在目前瀏覽器工作階段。沒有 HTTP、WebSocket 或後端連線。
+對話與執行資訊仍為假資料，只存在目前瀏覽器工作階段。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
 
 ## 驗證
 
 ```powershell
 npm run typecheck
+npm test
 npm run build
 ```
 
-目前尚未加入自動化前端測試。
+Vitest/jsdom 與 React Testing Library 會驗證 provider API 的嚴格回應
+邊界、設定 dialog 的焦點回復、provider 操作併發與金鑰 modal 的安全互動。

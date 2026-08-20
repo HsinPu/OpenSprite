@@ -90,6 +90,16 @@
 .settings-outline-button { min-width: 116px; border-color: var(--settings-primary); color: var(--settings-primary); }
 .settings-add-link { margin-top: 14px; padding: 7px 0; border: 0; background: transparent; color: var(--settings-primary); cursor: pointer; font-size: 15px; }
 .settings-action-status { color: var(--settings-success); font-size: 12px; white-space: nowrap; }
+.settings-action-error, .provider-modal-error { margin: 8px 0 0; color: #b42318; font-size: 13px; line-height: 1.45; }
+.settings-provider-feedback { margin: 14px 0; color: var(--settings-muted); font-size: 14px; }
+.settings-provider-feedback--error { display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #b42318; }
+.settings-provider-feedback--error p { margin: 0; }
+.settings-provider-announcement { min-height: 0; }
+.settings-danger-button { min-height: 44px; padding: 0 16px; border: 1px solid #d92d20; border-radius: 9px; color: #b42318; background: var(--settings-surface); cursor: pointer; }
+.settings-danger-button:disabled { cursor: not-allowed; opacity: .55; }
+.provider-modal-copy { margin: 0 0 16px; color: var(--settings-muted); line-height: 1.55; }
+.provider-key-label { display: block; margin-bottom: 8px; font-weight: 600; }
+.provider-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .settings-add-link:hover { text-decoration: underline; }
 .settings-brand-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; font-size: 26px; line-height: 1; }
 .settings-brand-icon--openai { border: 2px solid currentColor; border-radius: 50%; font-size: 23px; }
@@ -126,6 +136,10 @@
   .settings-service-card { align-items: flex-start; flex-direction: column; gap: 14px; }
   .settings-service-actions { width: 100%; }
   .settings-secondary-button, .settings-outline-button { flex: 1; min-height: 42px; }
+  .settings-danger-button { flex: 1; min-height: 42px; }
+  .settings-provider-feedback--error { align-items: flex-start; flex-direction: column; }
+  .provider-modal-actions { flex-direction: column-reverse; }
+  .provider-modal-actions .settings-secondary-button, .provider-modal-actions .settings-outline-button { width: 100%; }
   .settings-preference-row { flex-direction: column; align-items: stretch; }
   .settings-segmented { width: 100%; }
   .settings-segmented button { min-height: 42px; }

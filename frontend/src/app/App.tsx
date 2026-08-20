@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import {
   defaultDemoSettings,
+  modelLabel,
   SettingsPage,
   type DemoSettings,
   type SettingsSection,
@@ -75,11 +76,13 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
+  const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const menuWasOpen = useRef(false);
 
   useEffect(() => {
@@ -148,13 +151,18 @@ export function App() {
     openChat("新對話");
   };
 
-  const openSettings = (section: SettingsSection = "general") => {
+  const openSettings = (section: SettingsSection = "general", opener?: HTMLElement) => {
+    const activeElement = opener ?? document.activeElement;
+    settingsOpenerRef.current = activeElement instanceof HTMLElement
+      ? activeElement
+      : settingsButtonRef.current;
     setSettingsSection(section);
     setSettingsOpen(true);
     setMenuOpen(false);
   };
 
-  const closeSettings = () => setSettingsOpen(false);
+  const hasProviderModal = () => document.querySelector(".provider-connection-modal") !== null;
+  const closeSettings = () => { if (!providerModalOpen && !hasProviderModal()) setSettingsOpen(false); };
 
   return (
     <div className={`app-shell${sidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
@@ -269,7 +277,7 @@ export function App() {
             title="設定"
             aria-haspopup="dialog"
             aria-expanded={settingsOpen}
-            onClick={() => openSettings()}
+            onClick={(event) => openSettings("general", event.currentTarget)}
           >
             <span aria-hidden="true">⚙</span>
             <span className="utility-label">設定</span>
@@ -282,7 +290,7 @@ export function App() {
           key={`${chatTitle}-${chatRevision}`}
           title={chatTitle}
           initiallyEmpty={chatTitle === "新對話"}
-          modelName={settings.defaultModel.replace("OpenAI · ", "")}
+          modelName={modelLabel(settings.defaultModel)}
         />
       </main>
 
@@ -293,12 +301,13 @@ export function App() {
         onClose={() => {
           setSettingsOpen(false);
           window.requestAnimationFrame(() => {
-            if (window.innerWidth <= 900) {
-              mobileMenuButtonRef.current?.focus();
-            } else {
-              settingsButtonRef.current?.focus();
-            }
+            const opener = settingsOpenerRef.current;
+            if (opener?.isConnected) opener.focus();
+            else settingsButtonRef.current?.focus();
           });
+        }}
+        onCancel={(event) => {
+          if (providerModalOpen || hasProviderModal()) event.preventDefault();
         }}
         onClick={(event) => {
           if (event.target === event.currentTarget) {
@@ -312,6 +321,7 @@ export function App() {
           settings={settings}
           onSettingsChange={setSettings}
           onClose={closeSettings}
+          onProviderModalChange={setProviderModalOpen}
         />
       </dialog>
     </div>
