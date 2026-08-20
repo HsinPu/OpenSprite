@@ -22,10 +22,11 @@ Frontend -> Contracts <- Backend
 ## 目前階段
 
 Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
-FastAPI service foundation，以及尚未接入 routes 的作業系統 credential-store boundary；provider
-network adapter 仍不存在。Provider routes 已存在並可由 dependency injection 驗證；未注入完整
-安全實作時一律以 `credential_store_unavailable` fail closed。`GET /healthz` 只代表 HTTP
-process liveness，不代表 credential store 或上游 provider 可用。
+FastAPI service foundation、作業系統 credential-store boundary、固定的 OpenAI/Anthropic
+validation adapters，以及負責 rollback 的 provider connection service。`create_provider_runtime()`
+是未來 server launch 可注入 `create_app()` 的 system composition；在 launch wiring 尚未批准前，
+未注入 dependency 的 routes 仍以 `credential_store_unavailable` fail closed。`GET /healthz` 只代表
+HTTP process liveness，不代表 credential store 或上游 provider 可用。
 
 ## Provider connection 邊界
 
@@ -47,6 +48,7 @@ adapter 只能透過已定義的 `ProviderConnections` seam 接入，不得改�
 失敗時允許 `connected=true` 且 status 為失敗原因。`credentialPreview` 是不可解析的顯示提示，
 可為 null；`lastCheckedAt` 是 UTC RFC 3339 timestamp 或 null。Raw secret、filesystem path、
 credential-store identifier、上游 response body 與 internal config path 永不屬於公開 model。
+Internal credential fingerprint 也不屬於公開 model。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值
@@ -75,6 +77,20 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   integration 成功證明；installer/runtime 階段仍須在各目標 OS 做 read-only preflight 與人工驗證。
 - PUT 與 test 的 provider deadline 是 30 秒；client retry 必須 bounded backoff。Draft v1
   不加 application rate limit，上游 rate limit 以固定 `provider_rate_limited` 錯誤呈現。
+- OpenAI 只以 `GET https://api.openai.com/v1/models` 驗證 Bearer credential；Anthropic 只以
+  `GET https://api.anthropic.com/v1/models?limit=1` 驗證 `x-api-key`，並固定送出
+  `anthropic-version: 2023-06-01`。HTTP client 使用預設 TLS 驗證、禁止 redirect、固定 30 秒
+  timeout；成功 body 上限 1 MiB，且必須是含 `data` list 的 JSON object，但 model list 不落盤。
+- Provider metadata 使用 `platformdirs` 決定本機 application-data 位置並以 atomic replace 寫入
+  strict schema-v2 JSON；保存 provider id、status、display-only preview、UTC last-check time 與
+  internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
+  credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
+  不做 migration、legacy lookup 或 plaintext fallback。
+- 同 provider 的 PUT/test/DELETE 由 process-local async lock 序列化；此設計假設單一 desktop
+  backend process 擁有 runtime。secret/state partial failure 會嘗試還原並重讀前一 snapshot；無法
+  證明 rollback 時永不回 success，只回固定 `credential_store_unavailable`。
+- POST test 是 state-only transaction：只讀 secure-store credential，永不呼叫 credential
+  set/delete；metadata 寫入失敗時只還原 prior state，再重讀 credential 證明未變。
 
 ## 相容與演進
 
@@ -92,10 +108,10 @@ signature 或 replay 保證。未來若加入，必須以獨立 message contract
 已拒絕：plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
 過早加入 pagination/version alias，以及從 archived implementation 整批搬移。
 
-尚未決定且不屬於本切片：OpenAI/Anthropic 最小驗證 request、per-provider serialization 機制、
-runtime Host/Origin enforcement 以及 packaging/installer binding。其中 loopback binding、Host
-validation 與 same-origin mutation enforcement 是 provider routes 上線前的 release-blocking
-requirement。Backend implementer 必須在不改公開契約的前提下完成這些項目；frontend implementer
+本切片已決定最小 validation request、per-provider serialization、non-secret metadata 與 runtime
+composition。尚未決定且不屬於本切片：server launch wiring、runtime Host/Origin enforcement 以及
+packaging/installer binding。其中 loopback binding、Host validation 與 same-origin mutation
+enforcement 仍是 provider routes 上線前的 release-blocking requirement。Frontend implementer
 只消費 contract 中的 public model，不推測 store 或 provider internals。
 
 ## 長期限制

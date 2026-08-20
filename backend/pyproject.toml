@@ -9,13 +9,14 @@ description = "Local HTTP service foundation for OpenSprite"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi==0.116.1",
+  "httpx==0.28.1",
   "keyring==25.7.0",
+  "platformdirs==4.11.3",
   "uvicorn==0.35.0",
 ]
 
 [dependency-groups]
 dev = [
-  "httpx==0.28.1",
   "pytest==8.4.1",
 ]
 
