@@ -23,10 +23,13 @@ Frontend -> Contracts <- Backend
 
 Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
 FastAPI service foundation、作業系統 credential-store boundary、固定的 OpenAI/Anthropic
-validation adapters，以及負責 rollback 的 provider connection service。`create_provider_runtime()`
-是未來 server launch 可注入 `create_app()` 的 system composition；在 launch wiring 尚未批准前，
-未注入 dependency 的 routes 仍以 `credential_store_unavailable` fail closed。`GET /healthz` 只代表
-HTTP process liveness，不代表 credential store 或上游 provider 可用。
+validation adapters、負責 rollback 的 provider connection service，以及安全的本機 system
+runtime。匯入或呼叫 `create_system_app()` 本身維持離線；每次 FastAPI lifespan entry 才以
+`create_provider_runtime()` 建立並綁定全新的 dependency，teardown 先解除綁定再精確關閉該次
+entry 擁有的 HTTP client。startup/close 失敗後維持 fail closed，下一次 entry 重新建立 runtime；
+concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` 未注入 dependency 時仍以
+`credential_store_unavailable` fail closed，方便 contract test 與明確 composition。`GET /healthz`
+只代表 HTTP process liveness，不代表 credential store 或上游 provider 可用。
 
 ## Provider connection 邊界
 
@@ -58,8 +61,17 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
 ## 信任、安全與可用性
 
 - API 是單使用者、低流量、interactive 的 local desktop boundary，沒有已承諾的正式 SLO。
-- Transport 必須只綁定 loopback。Provider routes 上線前，runtime/installer 必須拒絕非
-  loopback Host 與 cross-origin browser mutation；初版不開 CORS。
+- System runtime 的 uvicorn 啟動命令只綁定 `127.0.0.1`，並以 `--no-proxy-headers` 禁止
+  `X-Forwarded-*` 改寫 request scheme；不建立 trusted proxy。
+- Secured runtime 對所有 HTTP request 要求恰好一個 `Host`，canonical hostname 只能是
+  `localhost`、`127.0.0.1` 或 `::1`。拒絕 duplicate/combined Host、userinfo、control character、
+  非標準 loopback encoding、alias、非 loopback IP、錯誤 bracket 與越界 port。
+- `POST`、`PUT`、`PATCH`、`DELETE` 另要求恰好一個 `Origin`，其 canonical scheme、hostname 與
+  effective port 必須和 request scheme + Host 相同。拒絕 missing/null/opaque/multiple Origin、
+  wildcard、userinfo、path/query/fragment、scheme/host/port mismatch；不開 CORS，也不使用
+  `Referer` fallback。
+- Vite development proxy 必須使用 `changeOrigin: false`，保留原始 browser-facing Host 與
+  Origin；兩者連 port 都必須同源，不為任意 localhost port 放寬 equality。
 - OpenAPI 明確宣告沒有 application-layer authentication；這依賴 loopback 與 same-origin
   deployment control，若未來要放寬 network scope，必須先以 versioned migration 加入 auth。
 - `apiKey` 是 write-only secret，長度上限 4096，whitespace-only 無效。Validation error 使用
@@ -89,6 +101,10 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
 - 同 provider 的 PUT/test/DELETE 由 process-local async lock 序列化；此設計假設單一 desktop
   backend process 擁有 runtime。secret/state partial failure 會嘗試還原並重讀前一 snapshot；無法
   證明 rollback 時永不回 success，只回固定 `credential_store_unavailable`。
+- System app 在 lifespan 外、startup failure 與 teardown 開始後都綁定
+  `UnavailableProviderConnections`。每個 lifespan entry 各自建立/關閉 runtime；close 失敗先解除
+  綁定再向上傳遞，且不阻止後續 fresh entry。non-blocking lifecycle guard 拒絕 concurrent entry，
+  避免 closed client 被重新提供服務。
 - POST test 是 state-only transaction：只讀 secure-store credential，永不呼叫 credential
   set/delete；metadata 寫入失敗時只還原 prior state，再重讀 credential 證明未變。
 
@@ -108,11 +124,11 @@ signature 或 replay 保證。未來若加入，必須以獨立 message contract
 已拒絕：plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
 過早加入 pagination/version alias，以及從 archived implementation 整批搬移。
 
-本切片已決定最小 validation request、per-provider serialization、non-secret metadata 與 runtime
-composition。尚未決定且不屬於本切片：server launch wiring、runtime Host/Origin enforcement 以及
-packaging/installer binding。其中 loopback binding、Host validation 與 same-origin mutation
-enforcement 仍是 provider routes 上線前的 release-blocking requirement。Frontend implementer
-只消費 contract 中的 public model，不推測 store 或 provider internals。
+本切片已決定最小 validation request、per-provider serialization、non-secret metadata、runtime
+composition、loopback Host validation 與 same-origin mutation enforcement。System app 透過
+documented uvicorn factory command 啟動，不建立 project CLI。尚未決定且不屬於本切片的是
+packaging/installer lifecycle。Frontend implementer 只消費 contract 中的 public model；Vite
+proxy 必須保留同源 Host/Origin，不推測 store 或 provider internals。
 
 ## 長期限制
 

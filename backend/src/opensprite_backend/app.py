@@ -6,7 +6,9 @@ from typing import Annotated, cast
 from fastapi import Depends, FastAPI, Path, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.types import Lifespan
 
+from .local_security import LocalRequestSecurityMiddleware
 from .models import (
     ErrorCode,
     ErrorDetail,
@@ -125,6 +127,9 @@ ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
 def create_app(
     provider_connections: ProviderConnections | None = None,
+    *,
+    lifespan: Lifespan[FastAPI] | None = None,
+    enforce_local_security: bool = False,
 ) -> FastAPI:
     """Create the ASGI app with an injectable provider-connection boundary."""
 
@@ -135,12 +140,20 @@ def create_app(
         openapi_url=None,
         docs_url=None,
         redoc_url=None,
+        lifespan=lifespan,
     )
     app.state.provider_connections = (
         provider_connections
         if provider_connections is not None
         else UnavailableProviderConnections()
     )
+    if enforce_local_security:
+        app.add_middleware(
+            LocalRequestSecurityMiddleware,
+            rejection_response=lambda: _error_response(
+                ErrorCode.INVALID_REQUEST
+            ),
+        )
 
     async def validation_error_handler(
         request: Request,

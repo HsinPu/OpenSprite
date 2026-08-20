@@ -15,16 +15,46 @@ The current slice provides:
 - a synchronous, injectable OS credential-store boundary backed by `keyring`;
 - strict non-secret provider metadata under the platform-local application data
   directory, written by atomic JSON replacement;
-- an explicit `create_provider_runtime()` composition factory; and
-- a default application dependency that still fails closed with
-  `credential_store_unavailable` until a future server-launch slice injects the
-  composed runtime.
+- an explicit `create_provider_runtime()` composition factory;
+- a secured `create_system_app()` runtime factory that owns and closes the
+  provider HTTP client through FastAPI lifespan; and
+- an injectable `create_app()` default that remains unchanged and fails closed
+  with `credential_store_unavailable` unless a caller supplies dependencies.
 
 It deliberately does not contain credential persistence outside Windows
 Credential Manager or Linux Secret Service, a plaintext fallback, a database,
-an Agent runtime, an application CLI, or server-launch lifecycle wiring. Unit
+an Agent runtime or an application CLI. Unit
 tests inject `httpx.MockTransport` and fake credential/state repositories; they
 make no real provider request or operating-system credential call.
+
+Importing or calling `create_system_app()` performs no keyring selection,
+credential operation, or provider request. Each successful FastAPI lifespan
+entry creates and binds one fresh provider runtime. Teardown first replaces the
+bound dependency with the fail-closed unavailable implementation, then closes
+that entry's client exactly once. Startup failure never binds a runtime;
+shutdown failure remains unbound and does not prevent a later fresh entry.
+Concurrent lifespan entry is rejected before a second runtime can serve.
+
+## Local server
+
+Start the system application only on IPv4 loopback and disable proxy-header
+interpretation:
+
+```powershell
+uv run uvicorn opensprite_backend.runtime:create_system_app --factory --host 127.0.0.1 --port 8765 --no-proxy-headers
+```
+
+The secured runtime rejects requests unless exactly one `Host` identifies
+`localhost`, `127.0.0.1`, or bracketed `::1`. `POST`, `PUT`, `PATCH`, and
+`DELETE` additionally require exactly one `Origin` whose canonical scheme,
+host, and effective port equal the request scheme and `Host`. It does not trust
+`X-Forwarded-*`, enable CORS, or fall back to `Referer`.
+
+For the Vite development proxy, preserve the browser-facing `Host` and
+`Origin` with `changeOrigin: false`. Both values must remain the same origin,
+including the port; the backend does not allow an arbitrary second localhost
+port. The documented uvicorn process must not be launched with proxy-header
+support or a non-loopback bind.
 
 OpenAI validation calls `GET https://api.openai.com/v1/models` with an
 `Authorization: Bearer` header. Anthropic validation calls
