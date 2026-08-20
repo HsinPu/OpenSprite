@@ -97,7 +97,6 @@ function ExecutionContext({ modelName }: { modelName: string }) {
       aria-labelledby={executionTitleId}
     >
       <div className="chat-workspace__context-heading">
-        <h2 id={executionTitleId}>本次執行</h2>
         <button
           type="button"
           className="chat-workspace__context-toggle"
@@ -110,6 +109,7 @@ function ExecutionContext({ modelName }: { modelName: string }) {
           <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--horizontal">{isExpanded ? '›' : '‹'}</span>
           <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--vertical">{isExpanded ? '⌃' : '⌄'}</span>
         </button>
+        <h2 id={executionTitleId}>本次執行</h2>
       </div>
 
       <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
