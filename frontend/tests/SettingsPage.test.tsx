@@ -3,6 +3,7 @@ import { StrictMode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultDemoSettings, SettingsPage, type DemoSettings, type SettingsSection } from "../src/features/settings/SettingsPage";
+import type { ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/settings/modelCatalog";
 
 const disconnectedCatalog = {
@@ -59,25 +60,36 @@ function SettingsHarness({ initialSettings = defaultDemoSettings, initialSelecti
   const [settings, setSettings] = useState<DemoSettings>(initialSettings);
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [choices, setChoices] = useState<ReadonlyArray<{ selection: ModelSelection; label: string }>>([]);
-  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} modelSelectionSaving={false} modelSelectionError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onModelChoicesChange={setChoices} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, choices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
+  const [responseMode, setResponseMode] = useState<ResponseMode>("balanced");
+  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onModelChoicesChange={setChoices} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, choices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
 }
 
 function GuardedDialogHarness() {
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} modelSelectionSaving={false} modelSelectionError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onModelChoicesChange={() => undefined} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onModelChoicesChange={() => undefined} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing" });
   const [section, setSection] = useState<SettingsSection>("models");
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} modelSelection={selection} modelSelectionSaving={false} modelSelectionError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onModelChoicesChange={() => undefined} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onModelChoicesChange={() => undefined} onClose={() => undefined} /></>;
 }
 
 describe("provider settings", () => {
   beforeEach(() => vi.unstubAllGlobals());
+
+  it("presents the persisted response modes under the response-mode label", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
+    render(<SettingsHarness />);
+
+    const group = screen.getByRole("group", { name: "回應模式" });
+    expect(within(group).getByRole("button", { name: "平衡" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(group).getByRole("button", { name: "深入" }));
+    await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
+  });
 
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
@@ -269,7 +281,7 @@ describe("provider settings", () => {
     const modelSelect = screen.getByLabelText("模型");
     await waitFor(() => expect(modelSelect.closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
     fireEvent.mouseDown(modelSelect);
-    expect(await screen.findByText("Acme Fast")).toBeTruthy();
+    expect((await screen.findAllByText("Acme Fast")).length).toBeGreaterThan(0);
   });
 
   it("accepts OpenRouter models after the StrictMode remount simulation", async () => {

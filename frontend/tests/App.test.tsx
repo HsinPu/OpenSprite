@@ -61,12 +61,12 @@ describe("settings dialog focus restoration", () => {
   });
 });
 
-describe("persisted model selection", () => {
+describe("persisted AI settings", () => {
   it("chooses the first available model when no selection exists", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: null })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: null, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -74,17 +74,17 @@ describe("persisted model selection", () => {
 
     const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
     expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } }),
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" }),
     });
   });
 
   it("ignores a late hydration result after a newer model save", async () => {
     const hydration = deferred<Response>();
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/model" && !init) return hydration.promise;
+      if (path === "/api/settings/ai" && !init) return hydration.promise;
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -93,19 +93,19 @@ describe("persisted model selection", () => {
     const modelPicker = await screen.findByRole("combobox", { name: /尚未選擇模型/ });
     fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
-    hydration.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "deep" })));
 
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } }),
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" }),
     });
   });
 
   it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } })));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" })));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -119,14 +119,14 @@ describe("persisted model selection", () => {
     await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 mini" })).toBeTruthy());
     fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } }) });
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" }) });
   });
 
   it("keeps the confirmed model when the PUT fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -140,5 +140,50 @@ describe("persisted model selection", () => {
     fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
     expect((await screen.findByRole("alert")).textContent).toContain("尚未連線");
     expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
+  });
+
+  it("hydrates and persists the response mode with the confirmed model", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "deep" })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    const deep = await screen.findByRole("button", { name: "深入" });
+    expect(deep.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "快速" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "快速" }).getAttribute("aria-pressed")).toBe("true"));
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "fast" }),
+    });
+  });
+
+  it("keeps the confirmed response mode when saving fails", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    const balanced = await screen.findByRole("button", { name: "平衡" });
+    await waitFor(() => expect(balanced.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(screen.getByRole("button", { name: "深入" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("AI 設定暫時無法讀取或儲存");
+    expect(balanced.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("false");
   });
 });

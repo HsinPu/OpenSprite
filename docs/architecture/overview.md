@@ -67,9 +67,9 @@ runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗�
 欄位、狀態與 UTC timestamp；無法驗證的回應只顯示固定安全錯誤。API key 只存在連線 modal
 的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
 都會清除。OpenAI 與 Anthropic 模型選項仍是前端 local catalog；OpenRouter 則在連線後即時
-取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。模型選擇只保存 provider id 與
-執行用 model id；顯示 label 從固定 catalog 或當次 OpenRouter 記憶體清單衍生。動態清單不寫入
-browser storage、URL 或 `.opensprite`。
+取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。AI settings 只保存 provider id、
+執行用 model id 與 `fast`／`balanced`／`deep` 回應模式；顯示 label 從固定 catalog 或當次
+OpenRouter 記憶體清單衍生。動態清單與 AI settings 都不寫入 browser storage 或 URL。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getModelSelection, modelSelectionErrorText, putModelSelection } from "../api/modelSelection";
+import { aiSettingsErrorText, getAiSettings, putAiSettings, type AiSettings, type ResponseMode } from "../api/aiSettings";
 import { listProviderConnections, type ProviderSummary } from "../api/providerConnections";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import {
@@ -89,9 +89,10 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
-  const [modelSelectionLoaded, setModelSelectionLoaded] = useState(false);
-  const [modelSelectionSaving, setModelSelectionSaving] = useState(false);
-  const [modelSelectionError, setModelSelectionError] = useState<string | null>(null);
+  const [responseMode, setResponseMode] = useState<ResponseMode>("balanced");
+  const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
+  const [aiSettingsSaving, setAiSettingsSaving] = useState(false);
+  const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
   const [modelChoices, setModelChoices] = useState<ReadonlyArray<ModelChoice>>([]);
   const [providerCatalog, setProviderCatalog] = useState<ReadonlyArray<ProviderSummary> | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -110,17 +111,18 @@ export function App() {
   useEffect(() => {
     const generation = modelLoadGenerationRef.current + 1;
     modelLoadGenerationRef.current = generation;
-    void getModelSelection()
-      .then((savedSelection) => {
+    void getAiSettings()
+      .then((savedSettings) => {
         if (modelLoadGenerationRef.current !== generation) return;
-        setModelSelection(savedSelection);
-        setModelSelectionLoaded(true);
-        setModelSelectionError(null);
+        setModelSelection(savedSettings.model);
+        setResponseMode(savedSettings.responseMode);
+        setAiSettingsLoaded(true);
+        setAiSettingsError(null);
       })
       .catch((error: unknown) => {
         if (modelLoadGenerationRef.current !== generation) return;
-        setModelSelectionLoaded(false);
-        setModelSelectionError(modelSelectionErrorText(error));
+        setAiSettingsLoaded(false);
+        setAiSettingsError(aiSettingsErrorText(error));
       });
 
     void listProviderConnections()
@@ -134,37 +136,47 @@ export function App() {
       });
   }, []);
 
-  const saveModelSelection = useCallback((next: ModelSelection | null): Promise<string | null> => {
+  const saveAiSettings = useCallback((next: AiSettings): Promise<string | null> => {
     modelLoadGenerationRef.current += 1;
     const generation = modelSaveGenerationRef.current + 1;
     modelSaveGenerationRef.current = generation;
-    setModelSelectionSaving(true);
-    setModelSelectionError(null);
+    setAiSettingsSaving(true);
+    setAiSettingsError(null);
     const operation = modelSaveQueueRef.current.then(async () => {
       try {
-        const saved = await putModelSelection(next);
-        if ((saved?.providerId ?? null) !== (next?.providerId ?? null) || (saved?.modelId ?? null) !== (next?.modelId ?? null)) {
-          throw new Error("model_selection_response_mismatch");
+        const saved = await putAiSettings(next);
+        if ((saved.model?.providerId ?? null) !== (next.model?.providerId ?? null) || (saved.model?.modelId ?? null) !== (next.model?.modelId ?? null) || saved.responseMode !== next.responseMode) {
+          throw new Error("ai_settings_response_mismatch");
         }
         if (modelSaveGenerationRef.current === generation) {
-          setModelSelection(saved);
-          setModelSelectionError(null);
+          setModelSelection(saved.model);
+          setResponseMode(saved.responseMode);
+          setAiSettingsError(null);
         }
         return null;
       } catch (error) {
-        const message = modelSelectionErrorText(error);
-        if (modelSaveGenerationRef.current === generation) setModelSelectionError(message);
+        const message = aiSettingsErrorText(error);
+        if (modelSaveGenerationRef.current === generation) setAiSettingsError(message);
         return message;
       } finally {
-        if (modelSaveGenerationRef.current === generation) setModelSelectionSaving(false);
+        if (modelSaveGenerationRef.current === generation) setAiSettingsSaving(false);
       }
     });
     modelSaveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
   }, []);
 
+  const saveModelSelection = useCallback(
+    (next: ModelSelection | null) => saveAiSettings({ model: next, responseMode }),
+    [responseMode, saveAiSettings],
+  );
+  const saveResponseMode = useCallback(
+    (next: ResponseMode) => saveAiSettings({ model: modelSelection, responseMode: next }),
+    [modelSelection, saveAiSettings],
+  );
+
   useEffect(() => {
-    if (!modelSelectionLoaded || providerCatalog === null || modelSelectionSaving) return;
+    if (!aiSettingsLoaded || providerCatalog === null || aiSettingsSaving) return;
     const connectedProviders = providerCatalog.filter((provider) => provider.connected);
     if (modelSelection?.providerId === "openrouter") return;
     const selectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
@@ -175,7 +187,7 @@ export function App() {
     } else if (modelSelection !== null && connectedProviders.length === 0) {
       void saveModelSelection(null);
     }
-  }, [modelChoices, modelSelection, modelSelectionLoaded, modelSelectionSaving, providerCatalog, saveModelSelection]);
+  }, [aiSettingsLoaded, aiSettingsSaving, modelChoices, modelSelection, providerCatalog, saveModelSelection]);
 
   useEffect(() => {
     const syncHash = () => {
@@ -385,7 +397,7 @@ export function App() {
           modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}
           modelSelection={modelSelection}
           modelChoices={modelChoices}
-          modelSelectionSaving={modelSelectionSaving}
+          modelSelectionSaving={aiSettingsSaving}
           onModelSelectionChange={saveModelSelection}
         />
       </main>
@@ -417,9 +429,11 @@ export function App() {
           settings={settings}
           onSettingsChange={setSettings}
           modelSelection={modelSelection}
-          modelSelectionSaving={modelSelectionSaving}
-          modelSelectionError={modelSelectionError}
+          responseMode={responseMode}
+          aiSettingsSaving={aiSettingsSaving}
+          aiSettingsError={aiSettingsError}
           onModelSelectionChange={saveModelSelection}
+          onResponseModeChange={saveResponseMode}
           onModelChoicesChange={setModelChoices}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
