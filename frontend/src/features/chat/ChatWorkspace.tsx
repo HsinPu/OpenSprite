@@ -25,6 +25,24 @@ function OpenSpriteMark({ small = false }: { small?: boolean }) {
 }
 
 
+function SendIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5" />
+    </svg>
+  );
+}
+
+
+function StopIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+    </svg>
+  );
+}
+
+
 export function ChatWorkspace({
   conversationId,
   modelName,
@@ -156,9 +174,9 @@ export function ChatWorkspace({
               <button type="button" className="chat-workspace__tool-button" disabled title="訊息選項尚未上線" aria-label="訊息選項（尚未上線）">☷</button>
             </div>
             {chat.isRunning ? (
-              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label="停止回覆" title="停止回覆" onClick={() => void chat.cancel()}>■</button>
+              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label="停止回覆" title="停止回覆" onClick={() => void chat.cancel()}><StopIcon /></button>
             ) : (
-              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label="送出訊息">➤</button>
+              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label="送出訊息" title="送出訊息"><SendIcon /></button>
             )}
           </div>
         </form>

@@ -238,10 +238,34 @@
 .chat-workspace__composer-actions { justify-content: space-between; gap: 12px; }
 .chat-workspace__composer-actions > div { display: flex; gap: 10px; }
 .chat-workspace__tool-button { width: 44px; height: 44px; border-radius: 10px; font-size: 1.3rem; }
-.chat-workspace__send-button { width: 54px; height: 48px; border: 0; border-radius: 13px; background: var(--chat-text); color: #fff; cursor: pointer; font-size: 1.5rem; transition: opacity 160ms ease, transform 160ms ease; }
-.chat-workspace__send-button:hover:not(:disabled) { transform: translateY(-1px); }
-.chat-workspace__send-button:disabled { cursor: not-allowed; opacity: 0.38; }
-.chat-workspace__send-button--stop { background: #a84335; font-size: 1rem; }
+.chat-workspace .chat-workspace__send-button {
+  display: grid;
+  flex: 0 0 48px;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: var(--chat-text);
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 1;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.chat-workspace__send-button svg { width: 22px; height: 22px; pointer-events: none; }
+.chat-workspace__send-button path { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chat-workspace__send-button rect { fill: currentColor; }
+.chat-workspace .chat-workspace__send-button:hover:not(:disabled) { transform: translateY(-1px); }
+.chat-workspace .chat-workspace__send-button:disabled {
+  background: color-mix(in srgb, var(--chat-text) 9%, var(--chat-surface));
+  color: color-mix(in srgb, var(--chat-muted) 68%, var(--chat-surface));
+  cursor: not-allowed;
+  opacity: 1;
+}
+.chat-workspace .chat-workspace__send-button--stop { background: #a84335; color: #fff; }
+.chat-workspace .chat-workspace__send-button--stop:disabled { background: #c98d82; color: #fff; }
 
 .chat-workspace__context { min-width: 0; overflow: auto; border-left: 1px solid var(--chat-border); background: var(--chat-surface); }
 .chat-workspace__context-heading { display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 30px 26px 15px; }

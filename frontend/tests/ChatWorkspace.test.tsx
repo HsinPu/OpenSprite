@@ -80,7 +80,43 @@ describe("live chat workspace", () => {
     expect(screen.queryByText("File")).toBeNull();
     expect(screen.queryByText("Memory")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "停止回覆" }));
+    const stopButton = screen.getByRole("button", { name: "停止回覆" });
+    expect(stopButton.querySelector("svg")).toBeTruthy();
+    fireEvent.click(stopButton);
     expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it("uses a stable icon and enables send only after text is entered", () => {
+    mockedUseConversationRun.mockReturnValue({
+      messages: [],
+      activeRun: null,
+      events: [],
+      streamedText: "",
+      loading: false,
+      error: null,
+      isRunning: false,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+    });
+
+    render(
+      <ChatWorkspace
+        conversationId={null}
+        modelName="GPT-5.6"
+        modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }}
+        modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]}
+        modelSelectionSaving={false}
+        onModelSelectionChange={vi.fn(async () => null)}
+        onConversationAccepted={vi.fn()}
+        onConversationUpdated={vi.fn()}
+      />,
+    );
+
+    const sendButton = screen.getByRole("button", { name: "送出訊息" });
+    expect(sendButton.querySelector("svg")).toBeTruthy();
+    expect(sendButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "輸入訊息" }), { target: { value: "hello" } });
+    expect(sendButton.hasAttribute("disabled")).toBe(false);
   });
 });
