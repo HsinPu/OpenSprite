@@ -7,6 +7,13 @@ Windows: %USERPROFILE%\.opensprite
 Linux:   ~/.opensprite
 ```
 
+This is a durable product invariant: every future conversation, database,
+uploaded attachment, generated output, memory document, runtime state, log, and
+cache entry must remain below this root. Features may not introduce their own
+application-data root or persist an absolute user-profile path in the database.
+The only storage exception is a raw credential, which remains in the native
+operating-system credential service.
+
 Program files are separate from user data. The future Windows installer owns
 `%LOCALAPPDATA%\OpenSprite\app`; the future Linux installer owns its documented
 application installation directory. Uninstallers preserve `.opensprite` unless

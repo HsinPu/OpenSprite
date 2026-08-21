@@ -19,6 +19,14 @@
 
 Keep business behavior out of shared configuration, installer, and documentation boundaries. Do not create generic dumping grounds such as broad `utils`, `helpers`, or `services` directories.
 
+## Local user-data boundary
+
+- `%USERPROFILE%\.opensprite` on Windows and `~/.opensprite` on Linux are the sole OpenSprite user-data roots.
+- All future conversations, databases, uploaded attachments, generated outputs, memory, state, logs, and cache must remain below that root and use the mapping owned by `backend/src/opensprite_backend/app_paths.py`.
+- Do not introduce a second product-data root, persist absolute user-profile paths in the database, or let individual features construct their own home-directory paths.
+- Program installation remains separate. Raw API credentials remain in the operating-system credential service and must not be written under `.opensprite`.
+- Do not create reserved directories until an implemented feature performs its first real write.
+
 ## Change workflow
 
 1. Keep each change focused on one approved objective.
