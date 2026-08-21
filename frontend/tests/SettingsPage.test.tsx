@@ -8,6 +8,7 @@ const disconnectedCatalog = {
   providers: [
     { id: "openai", name: "OpenAI", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
     { id: "anthropic", name: "Anthropic", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
+    { id: "openrouter", name: "OpenRouter", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
   ],
 };
 
@@ -15,6 +16,7 @@ const connectedCatalog = {
   providers: [
     { id: "openai", name: "OpenAI", connected: true, status: "connected", credentialPreview: "••••1234", lastCheckedAt: "2026-08-20T08:30:00Z" },
     disconnectedCatalog.providers[1],
+    disconnectedCatalog.providers[2],
   ],
 };
 
@@ -22,6 +24,7 @@ const connectedBothCatalog = {
   providers: [
     connectedCatalog.providers[0],
     { id: "anthropic", name: "Anthropic", connected: true, status: "connected", credentialPreview: "••••5678", lastCheckedAt: "2026-08-20T08:30:00Z" },
+    disconnectedCatalog.providers[2],
   ],
 };
 
@@ -48,6 +51,15 @@ function GuardedDialogHarness() {
 
 describe("provider settings", () => {
   beforeEach(() => vi.unstubAllGlobals());
+
+  it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
+    render(<SettingsHarness />);
+
+    const card = await screen.findByLabelText("OpenRouter 連線");
+    expect(within(card).getByText("OR")).toBeTruthy();
+    expect((within(card).getByRole("button", { name: "連接" }) as HTMLButtonElement).disabled).toBe(false);
+  });
 
   it("shows a safe catalog error and retries the initial GET", async () => {
     const fetchMock = vi.fn()
@@ -91,7 +103,7 @@ describe("provider settings", () => {
   });
 
   it("refreshes persisted status after a failed connection test and keeps unavailable models disabled", async () => {
-    const checkedFailure = { providers: [{ ...connectedCatalog.providers[0], status: "invalid_credentials" }, disconnectedCatalog.providers[1]] };
+    const checkedFailure = { providers: [{ ...connectedCatalog.providers[0], status: "invalid_credentials" }, disconnectedCatalog.providers[1], disconnectedCatalog.providers[2]] };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedCatalog)))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "invalid_credentials", message: "never render", retryable: false } }), { status: 422 }))
@@ -140,6 +152,7 @@ describe("provider settings", () => {
     staleOpenAiRefresh.resolve(new Response(JSON.stringify({ providers: [
       { ...connectedBothCatalog.providers[0], status: "invalid_credentials" },
       connectedBothCatalog.providers[1],
+      connectedBothCatalog.providers[2],
     ] })));
 
     await screen.findByText("API 金鑰無效");

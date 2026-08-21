@@ -69,7 +69,7 @@
       "get": {
         "operationId": "listProviders",
         "summary": "List the fixed provider catalog",
-        "description": "Returns exactly one summary for each supported provider, ordered as openai then anthropic. The complete catalog is returned; pagination, filtering, and sorting are not supported. The response is all-or-error; partial provider results are never returned.",
+        "description": "Returns exactly one summary for each supported provider, ordered as openai, anthropic, then openrouter. The complete catalog is returned; pagination, filtering, and sorting are not supported. The response is all-or-error; partial provider results are never returned.",
         "tags": ["provider-connections"],
         "responses": {
           "200": {
@@ -92,6 +92,14 @@
                     {
                       "id": "anthropic",
                       "name": "Anthropic",
+                      "connected": false,
+                      "status": "disconnected",
+                      "credentialPreview": null,
+                      "lastCheckedAt": null
+                    },
+                    {
+                      "id": "openrouter",
+                      "name": "OpenRouter",
                       "connected": false,
                       "status": "disconnected",
                       "credentialPreview": null,
@@ -273,7 +281,7 @@
         "description": "Stable provider identifier. Unknown values return unsupported_provider rather than being interpreted as configuration names.",
         "schema": {
           "type": "string",
-          "enum": ["openai", "anthropic"]
+          "enum": ["openai", "anthropic", "openrouter"]
         }
       }
     },
@@ -291,7 +299,7 @@
       },
       "ProviderId": {
         "type": "string",
-        "enum": ["openai", "anthropic"]
+        "enum": ["openai", "anthropic", "openrouter"]
       },
       "ProviderStatus": {
         "type": "string",
@@ -323,7 +331,7 @@
           },
           "name": {
             "type": "string",
-            "description": "Stable display name: OpenAI or Anthropic."
+            "description": "Stable display name: OpenAI, Anthropic, or OpenRouter."
           },
           "connected": {
             "type": "boolean",
@@ -350,8 +358,8 @@
         "properties": {
           "providers": {
             "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
+            "minItems": 3,
+            "maxItems": 3,
             "prefixItems": [
               {
                 "allOf": [
@@ -373,6 +381,18 @@
                     "properties": {
                       "id": {"const": "anthropic"},
                       "name": {"const": "Anthropic"}
+                    }
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {"$ref": "#/components/schemas/ProviderSummary"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {"const": "openrouter"},
+                      "name": {"const": "OpenRouter"}
                     }
                   }
                 ]

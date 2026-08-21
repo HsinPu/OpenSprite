@@ -39,6 +39,7 @@ class RecordingConnections:
             providers=[
                 self._summary("openai", False),
                 self._summary("anthropic", False),
+                self._summary("openrouter", False),
             ]
         )
 
@@ -65,7 +66,11 @@ class RecordingConnections:
     ) -> ProviderSummary:
         return ProviderSummary(
             id=provider_id,
-            name="OpenAI" if provider_id == "openai" else "Anthropic",
+            name={
+                "openai": "OpenAI",
+                "anthropic": "Anthropic",
+                "openrouter": "OpenRouter",
+            }[provider_id],
             connected=connected,
             status=(
                 ProviderStatus.CONNECTED

@@ -14,6 +14,7 @@ export const localModelCatalog: Record<ProviderId, ReadonlyArray<{ id: string; l
     { id: "claude-sonnet-4", label: "Claude Sonnet 4" },
     { id: "claude-haiku-4", label: "Claude Haiku 4" },
   ],
+  openrouter: [],
 };
 
 export function modelLabel(selection: ModelSelection): string {

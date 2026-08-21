@@ -8,7 +8,7 @@ must not maintain incompatible copies.
 The contract currently covers:
 
 - backend liveness at `GET /healthz`;
-- the fixed `openai` and `anthropic` provider catalog;
+- the fixed `openai`, `anthropic`, and `openrouter` provider catalog;
 - validate-then-save connection replacement;
 - testing and deleting a stored provider connection;
 - stable public summaries and a secret-safe error envelope.

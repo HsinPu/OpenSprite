@@ -26,7 +26,11 @@ CONTRACT_PATH = (
 
 
 def summary(provider_id: ProviderId, connected: bool) -> ProviderSummary:
-    name = "OpenAI" if provider_id == "openai" else "Anthropic"
+    name = {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "openrouter": "OpenRouter",
+    }[provider_id]
     return ProviderSummary(
         id=provider_id,
         name=name,
@@ -50,7 +54,11 @@ class RecordingProviderConnections:
 
     async def list_providers(self) -> ProviderListResponse:
         return ProviderListResponse(
-            providers=[summary("openai", False), summary("anthropic", False)]
+            providers=[
+                summary("openai", False),
+                summary("anthropic", False),
+                summary("openrouter", False),
+            ]
         )
 
     async def connect(
@@ -146,8 +154,16 @@ def test_runtime_contract_and_documentation_routes_are_disabled(path: str) -> No
 @pytest.mark.parametrize(
     "providers",
     [
-        [summary("openai", False), summary("openai", False)],
-        [summary("anthropic", False), summary("openai", False)],
+        [
+            summary("openai", False),
+            summary("openai", False),
+            summary("openrouter", False),
+        ],
+        [
+            summary("anthropic", False),
+            summary("openai", False),
+            summary("openrouter", False),
+        ],
         [
             ProviderSummary(
                 id="openai",
@@ -158,6 +174,7 @@ def test_runtime_contract_and_documentation_routes_are_disabled(path: str) -> No
                 lastCheckedAt=None,
             ),
             summary("anthropic", False),
+            summary("openrouter", False),
         ],
     ],
     ids=["duplicate", "reversed", "mismatched-name"],

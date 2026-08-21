@@ -155,7 +155,7 @@ def test_preflight_accepts_only_documented_native_backend_identity(
     store_for(FakeKeyringFacade(backend), platform).preflight()
 
 
-@pytest.mark.parametrize("provider_id", ["openai", "anthropic"])
+@pytest.mark.parametrize("provider_id", ["openai", "anthropic", "openrouter"])
 def test_set_get_and_delete_use_fixed_names(provider_id: str) -> None:
     facade = FakeKeyringFacade()
     store: CredentialStore = store_for(facade)

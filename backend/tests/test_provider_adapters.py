@@ -15,6 +15,7 @@ from opensprite_backend.providers import (
     ProviderValidationError,
     ProviderValidator,
 )
+from opensprite_backend.providers.adapters import OPENROUTER_KEY_URL
 
 SECRET = "provider-secret-must-not-leak"
 
@@ -69,6 +70,106 @@ def test_anthropic_uses_exact_endpoint_and_headers() -> None:
     assert seen[0].headers["x-api-key"] == SECRET
     assert seen[0].headers["anthropic-version"] == "2023-06-01"
     assert "authorization" not in seen[0].headers
+
+
+def test_openrouter_uses_exact_key_endpoint_and_bearer_only() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"data": {"label": "OpenSprite"}})
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler),
+            follow_redirects=True,
+        ) as client:
+            await ProviderValidator(client).validate("openrouter", SECRET)
+
+    run(scenario())
+    assert len(seen) == 1
+    assert str(seen[0].url) == OPENROUTER_KEY_URL
+    assert seen[0].method == "GET"
+    assert seen[0].headers["authorization"] == f"Bearer {SECRET}"
+    assert "x-api-key" not in seen[0].headers
+    assert "http-referer" not in seen[0].headers
+    assert "x-title" not in seen[0].headers
+    assert seen[0].extensions["timeout"] == {
+        "connect": 30.0,
+        "read": 30.0,
+        "write": 30.0,
+        "pool": 30.0,
+    }
+
+
+@pytest.mark.parametrize("payload", [b"not-json", b'{"data": []}', b'{"data": null}'])
+def test_openrouter_requires_object_data_response(payload: bytes) -> None:
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, content=payload, request=request)
+            )
+        ) as client:
+            with pytest.raises(ProviderValidationError) as raised:
+                await ProviderValidator(client).validate("openrouter", SECRET)
+        assert raised.value.code is ErrorCode.PROVIDER_UNREACHABLE
+        assert SECRET not in repr(raised.value)
+
+    run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (401, ErrorCode.INVALID_CREDENTIALS),
+        (403, ErrorCode.INVALID_CREDENTIALS),
+        (429, ErrorCode.PROVIDER_RATE_LIMITED),
+        (500, ErrorCode.PROVIDER_UNREACHABLE),
+    ],
+)
+def test_openrouter_non_success_status_mapping(
+    status: int,
+    expected: ErrorCode,
+) -> None:
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    status,
+                    text=f"private:{SECRET}",
+                    request=request,
+                )
+            )
+        ) as client:
+            with pytest.raises(ProviderValidationError) as raised:
+                await ProviderValidator(client).validate("openrouter", SECRET)
+        assert raised.value.code is expected
+        assert SECRET not in repr(raised.value)
+
+    run(scenario())
+
+
+@pytest.mark.parametrize("extra_bytes", [0, 1])
+def test_openrouter_success_body_limit(extra_bytes: int) -> None:
+    payload = b'{"data":{}}'
+    payload += b" " * (
+        MAX_PROVIDER_RESPONSE_BYTES + extra_bytes - len(payload)
+    )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, content=payload, request=request)
+            )
+        ) as client:
+            if extra_bytes == 0:
+                await ProviderValidator(client).validate("openrouter", SECRET)
+            else:
+                with pytest.raises(ProviderValidationError) as raised:
+                    await ProviderValidator(client).validate("openrouter", SECRET)
+                assert raised.value.code is ErrorCode.PROVIDER_UNREACHABLE
+
+    run(scenario())
 
 
 @pytest.mark.parametrize(

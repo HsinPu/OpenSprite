@@ -13,6 +13,7 @@ const catalog = {
   providers: [
     { id: "openai", name: "OpenAI", connected: true, status: "connected", credentialPreview: "••••1234", lastCheckedAt: "2026-08-20T08:30:00Z" },
     { id: "anthropic", name: "Anthropic", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
+    { id: "openrouter", name: "OpenRouter", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
   ],
 };
 
@@ -47,7 +48,7 @@ describe("provider connection client", () => {
   });
 
   it("fails closed on a malformed catalog and never exposes an error response message", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [catalog.providers[1], catalog.providers[0]] }))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [catalog.providers[1], catalog.providers[0], catalog.providers[2]] }))));
     await expect(listProviderConnections()).rejects.toMatchObject({ code: "malformed_response" });
 
     const safeText = providerErrorText(new ProviderApiError("invalid_credentials"));
@@ -63,14 +64,14 @@ describe("provider connection client", () => {
     ["an impossible leap-day timestamp", { ...catalog.providers[0], lastCheckedAt: "2026-02-30T08:30:00Z" }],
     ["a 24:00 timestamp", { ...catalog.providers[0], lastCheckedAt: "2026-08-20T24:00:00Z" }],
   ])("rejects %s", async (_description, malformedOpenAi) => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [malformedOpenAi, catalog.providers[1]] }))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [malformedOpenAi, catalog.providers[1], catalog.providers[2]] }))));
     await expect(listProviderConnections()).rejects.toMatchObject({ code: "malformed_response" });
   });
 
   it("accepts a connected provider with a checked failure status and UTC metadata", async () => {
     const checkedFailure = { ...catalog.providers[0], status: "invalid_credentials" };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [checkedFailure, catalog.providers[1]] }))));
-    await expect(listProviderConnections()).resolves.toEqual([checkedFailure, catalog.providers[1]]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [checkedFailure, catalog.providers[1], catalog.providers[2]] }))));
+    await expect(listProviderConnections()).resolves.toEqual([checkedFailure, catalog.providers[1], catalog.providers[2]]);
   });
 
   it.each([

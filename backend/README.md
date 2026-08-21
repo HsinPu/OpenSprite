@@ -9,7 +9,7 @@ The current slice provides:
 - a typed ASGI `create_app()` factory;
 - `GET /healthz`;
 - thin provider-connection routes and public models;
-- a fixed OpenAI/Anthropic validation catalog using `httpx`;
+- a fixed OpenAI/Anthropic/OpenRouter validation catalog using `httpx`;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable OS credential-store boundary backed by `keyring`;
@@ -67,10 +67,12 @@ support or a non-loopback bind.
 OpenAI validation calls `GET https://api.openai.com/v1/models` with an
 `Authorization: Bearer` header. Anthropic validation calls
 `GET https://api.anthropic.com/v1/models?limit=1` with `x-api-key` and
-`anthropic-version: 2023-06-01`. Both use a fixed 30-second timeout, default TLS
-verification, and disabled redirects. A success response must be a JSON object
-with a `data` list and fit within the 1 MiB validation-body limit; the list is
-never persisted.
+`anthropic-version: 2023-06-01`. OpenRouter validation calls
+`GET https://openrouter.ai/api/v1/key` with an `Authorization: Bearer` header
+only. All three use a fixed 30-second timeout, default TLS verification, and
+disabled redirects. OpenAI and Anthropic require a JSON `data` list;
+OpenRouter requires a JSON `data` object. Every success response must fit within
+the 1 MiB validation-body limit and no response content is persisted.
 
 Provider mutations are serialized per provider inside the single owning
 desktop backend process. Candidate credentials are validated before any local

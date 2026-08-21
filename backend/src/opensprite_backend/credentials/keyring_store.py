@@ -48,6 +48,8 @@ def _credential_name(provider_id: str) -> str:
         return "provider.openai.api-key"
     if provider_id == "anthropic":
         return "provider.anthropic.api-key"
+    if provider_id == "openrouter":
+        return "provider.openrouter.api-key"
     raise UnsupportedCredentialProviderError
 
 

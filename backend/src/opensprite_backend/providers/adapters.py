@@ -14,6 +14,7 @@ PROVIDER_TIMEOUT_SECONDS: Final = 30.0
 MAX_PROVIDER_RESPONSE_BYTES: Final = 1024 * 1024
 OPENAI_MODELS_URL: Final = "https://api.openai.com/v1/models"
 ANTHROPIC_MODELS_URL: Final = "https://api.anthropic.com/v1/models?limit=1"
+OPENROUTER_KEY_URL: Final = "https://openrouter.ai/api/v1/key"
 
 
 class ProviderValidationError(Exception):
@@ -36,12 +37,14 @@ class _HttpProviderAdapter:
         header_name: str,
         header_value_prefix: str = "",
         extra_headers: dict[str, str] | None = None,
+        expected_data_type: type[object] = list,
     ) -> None:
         self._client = client
         self._url = url
         self._header_name = header_name
         self._header_value_prefix = header_value_prefix
         self._extra_headers = extra_headers or {}
+        self._expected_data_type = expected_data_type
 
     async def validate(self, api_key: str) -> None:
         failure: ErrorCode | None = None
@@ -98,7 +101,7 @@ class _HttpProviderAdapter:
         if (
             malformed
             or type(payload) is not dict
-            or type(payload.get("data")) is not list
+            or type(payload.get("data")) is not self._expected_data_type
         ):
             raise ProviderValidationError(ErrorCode.PROVIDER_UNREACHABLE)
 
@@ -119,6 +122,13 @@ class ProviderValidator:
                 ANTHROPIC_MODELS_URL,
                 "x-api-key",
                 extra_headers={"anthropic-version": "2023-06-01"},
+            ),
+            "openrouter": _HttpProviderAdapter(
+                client,
+                OPENROUTER_KEY_URL,
+                "Authorization",
+                "Bearer ",
+                expected_data_type=dict,
             ),
         }
 

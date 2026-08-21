@@ -68,8 +68,8 @@ def test_provider_catalog_schema_fixes_identity_name_and_order() -> None:
         "ProviderListResponse"
     ]["properties"]["providers"]
 
-    assert providers["minItems"] == 2
-    assert providers["maxItems"] == 2
+    assert providers["minItems"] == 3
+    assert providers["maxItems"] == 3
     assert providers["items"] is False
     assert [
         (
@@ -77,7 +77,17 @@ def test_provider_catalog_schema_fixes_identity_name_and_order() -> None:
             item["allOf"][1]["properties"]["name"]["const"],
         )
         for item in providers["prefixItems"]
-    ] == [("openai", "OpenAI"), ("anthropic", "Anthropic")]
+    ] == [
+        ("openai", "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("openrouter", "OpenRouter"),
+    ]
+
+    assert load_contract()["components"]["schemas"]["ProviderId"]["enum"] == [
+        "openai",
+        "anthropic",
+        "openrouter",
+    ]
 
 
 def test_error_status_mapping_is_explicit() -> None:

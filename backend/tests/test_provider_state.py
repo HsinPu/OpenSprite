@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from opensprite_backend.models import ProviderStatus
+from opensprite_backend.models import ProviderId, ProviderStatus
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.provider_state import (
     JsonProviderStateRepository,
@@ -21,9 +21,9 @@ CHECKED_AT = datetime(2026, 8, 20, 9, 30, tzinfo=UTC)
 FINGERPRINT = hashlib.sha256(b"stored-secret-1234").hexdigest()
 
 
-def state() -> ProviderState:
+def state(provider_id: ProviderId = "openai") -> ProviderState:
     return ProviderState(
-        provider_id="openai",
+        provider_id=provider_id,
         status=ProviderStatus.CONNECTED,
         credential_preview="••••1234",
         credential_fingerprint=FINGERPRINT,
@@ -70,6 +70,34 @@ def test_empty_read_is_side_effect_free_and_first_write_only_creates_state(
         path.relative_to(paths.home).as_posix()
         for path in paths.home.rglob("*")
     ) == ["state", "state/providers.json"]
+
+
+def test_openrouter_round_trip_is_supported(tmp_path: Path) -> None:
+    path = tmp_path / "providers.json"
+    repository = JsonProviderStateRepository(path)
+
+    repository.set(state("openrouter"))
+
+    assert repository.get("openrouter") == state("openrouter")
+    assert json.loads(path.read_text(encoding="utf-8"))["providers"][0]["id"] == (
+        "openrouter"
+    )
+
+
+def test_metadata_write_uses_fixed_catalog_order(tmp_path: Path) -> None:
+    path = tmp_path / "providers.json"
+    repository = JsonProviderStateRepository(path)
+
+    repository.set(state("openrouter"))
+    repository.set(state("openai"))
+    repository.set(state("anthropic"))
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert [record["id"] for record in payload["providers"]] == [
+        "openai",
+        "anthropic",
+        "openrouter",
+    ]
 
 
 @pytest.mark.parametrize(

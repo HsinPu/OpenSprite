@@ -13,7 +13,11 @@ from typing import Final, Protocol
 from .models import ProviderId, ProviderStatus
 
 _SCHEMA_VERSION: Final = 2
-_CATALOG: Final[tuple[ProviderId, ...]] = ("openai", "anthropic")
+_CATALOG: Final[tuple[ProviderId, ...]] = (
+    "openai",
+    "anthropic",
+    "openrouter",
+)
 _PERSISTED_STATUSES: Final = frozenset(
     {
         ProviderStatus.CONNECTED,

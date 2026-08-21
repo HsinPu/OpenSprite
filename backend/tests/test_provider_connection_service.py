@@ -107,12 +107,14 @@ class FakeValidator:
 
 def old_state(
     status: ProviderStatus = ProviderStatus.CONNECTED,
+    provider_id: ProviderId = "openai",
+    secret: str = OLD_SECRET,
 ) -> ProviderState:
     return ProviderState(
-        provider_id="openai",
+        provider_id=provider_id,
         status=status,
-        credential_preview="••••1234",
-        credential_fingerprint=hashlib.sha256(OLD_SECRET.encode()).hexdigest(),
+        credential_preview=f"••••{secret[-4:]}",
+        credential_fingerprint=hashlib.sha256(secret.encode()).hexdigest(),
         last_checked_at=OLD,
     )
 
@@ -221,6 +223,56 @@ def test_repeated_put_revalidates_even_same_candidate() -> None:
         ("anthropic", NEW_SECRET),
         ("anthropic", NEW_SECRET),
     ]
+
+
+def test_openrouter_round_trip_list_connect_test_and_delete() -> None:
+    credentials = FakeCredentialStore()
+    states = FakeStateRepository()
+    validator = FakeValidator()
+    runtime = service(credentials, states, validator)
+
+    connected = run(runtime.connect("openrouter", NEW_SECRET))
+    listed = run(runtime.list_providers())
+    tested = run(runtime.test("openrouter"))
+    run(runtime.disconnect("openrouter"))
+    disconnected = run(runtime.list_providers())
+
+    assert connected.id == "openrouter"
+    assert connected.name == "OpenRouter"
+    assert tested.status is ProviderStatus.CONNECTED
+    assert [(item.id, item.name) for item in listed.providers] == [
+        ("openai", "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("openrouter", "OpenRouter"),
+    ]
+    assert listed.providers[2].connected is True
+    assert disconnected.providers[2].connected is False
+    assert credentials.values == {}
+    assert states.values == {}
+    assert validator.seen == [
+        ("openrouter", NEW_SECRET),
+        ("openrouter", NEW_SECRET),
+    ]
+
+
+def test_openrouter_connect_failure_rolls_back_prior_secret_and_state() -> None:
+    credentials = FakeCredentialStore()
+    credentials.values["openrouter"] = OLD_SECRET
+    states = FakeStateRepository()
+    states.values["openrouter"] = old_state(provider_id="openrouter")
+    states.fail_once = "set"
+
+    with pytest.raises(ProviderConnectionError) as raised:
+        run(
+            service(credentials, states, FakeValidator()).connect(
+                "openrouter",
+                NEW_SECRET,
+            )
+        )
+
+    assert raised.value.code is ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
+    assert credentials.values["openrouter"] == OLD_SECRET
+    assert states.values["openrouter"] == old_state(provider_id="openrouter")
 
 
 @pytest.mark.parametrize(
@@ -484,6 +536,7 @@ def test_list_is_fixed_order_and_reconciles_absent_credentials() -> None:
     assert [(item.id, item.name) for item in result.providers] == [
         ("openai", "OpenAI"),
         ("anthropic", "Anthropic"),
+        ("openrouter", "OpenRouter"),
     ]
     assert result.providers[0].connected is True
     assert result.providers[1].connected is False

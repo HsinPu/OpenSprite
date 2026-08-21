@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-ProviderId = Literal["openai", "anthropic"]
+ProviderId = Literal["openai", "anthropic", "openrouter"]
 
 
 class ContractModel(BaseModel):
@@ -65,15 +65,19 @@ class ProviderSummary(ContractModel):
 
 
 class ProviderListResponse(ContractModel):
-    providers: list[ProviderSummary] = Field(min_length=2, max_length=2)
+    providers: list[ProviderSummary] = Field(min_length=3, max_length=3)
 
     @model_validator(mode="after")
     def require_fixed_ordered_catalog(self) -> "ProviderListResponse":
         catalog = tuple((provider.id, provider.name) for provider in self.providers)
-        if catalog != (("openai", "OpenAI"), ("anthropic", "Anthropic")):
+        if catalog != (
+            ("openai", "OpenAI"),
+            ("anthropic", "Anthropic"),
+            ("openrouter", "OpenRouter"),
+        ):
             raise ValueError(
                 "providers must be ordered as openai/OpenAI then "
-                "anthropic/Anthropic"
+                "anthropic/Anthropic then openrouter/OpenRouter"
             )
         return self
 

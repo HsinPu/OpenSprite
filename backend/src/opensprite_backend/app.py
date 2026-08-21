@@ -25,12 +25,14 @@ from .provider_connections import (
     UnavailableProviderConnections,
 )
 
-SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"openai", "anthropic"})
+SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
+    {"openai", "anthropic", "openrouter"}
+)
 ProviderPathId = Annotated[
     str,
     Path(
         description="Stable provider identifier.",
-        json_schema_extra={"enum": ["openai", "anthropic"]},
+        json_schema_extra={"enum": ["openai", "anthropic", "openrouter"]},
     ),
 ]
 

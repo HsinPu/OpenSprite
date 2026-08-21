@@ -22,7 +22,7 @@ Frontend -> Contracts <- Backend
 ## 目前階段
 
 Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
-FastAPI service foundation、作業系統 credential-store boundary、固定的 OpenAI/Anthropic
+FastAPI service foundation、作業系統 credential-store boundary、固定的 OpenAI／Anthropic／OpenRouter
 validation adapters、負責 rollback 的 provider connection service，以及安全的本機 system
 runtime。匯入或呼叫 `create_system_app()` 本身維持離線；每次 FastAPI lifespan entry 才以
 `create_provider_runtime()` 建立並綁定全新的 dependency，teardown 先解除綁定再精確關閉該次
@@ -38,11 +38,11 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 tests。Backend 擁有 HTTP provider implementation，未來的 credential-store 與 provider
 adapter 只能透過已定義的 `ProviderConnections` seam 接入，不得改寫 consumer-visible schema。
 
-第一版固定支援 `openai` 與 `anthropic`，每個 provider 最多一份 credential：
+第一版固定支援 `openai`、`anthropic` 與 `openrouter`，每個 provider 最多一份 credential：
 
 | Operation | Observable behavior |
 | --- | --- |
-| `GET /api/providers` | 固定順序回傳兩筆完整 public summary；全部成功或固定錯誤，不做 partial success。 |
+| `GET /api/providers` | 依 OpenAI、Anthropic、OpenRouter 固定順序回傳三筆完整 public summary；全部成功或固定錯誤，不做 partial success。 |
 | `PUT /api/providers/{provider_id}/connection` | 先在 30 秒 deadline 內驗證候選 key，再原子替換；失敗保留既有 credential 與 summary。 |
 | `POST /api/providers/{provider_id}/connection/test` | 不接受 body，只測試已儲存 credential；失敗會更新該連線的最後檢查狀態，但不刪除 credential。 |
 | `DELETE /api/providers/{provider_id}/connection` | 刪除 credential 與檢查 metadata；對已斷線的 supported provider 仍回 `204`。 |
@@ -88,7 +88,7 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   都由 contract 定義；provider response 與 exception detail 不得透出。
 - 不提供 plaintext credential fallback。Credential store 不可用時必須回 `503`，不能降級儲存。
 - Credential store 固定使用 service namespace `OpenSprite`，並以
-  `provider.openai.api-key`、`provider.anthropic.api-key` 作為不可由 caller 指定的 credential
+  `provider.openai.api-key`、`provider.anthropic.api-key`、`provider.openrouter.api-key` 作為不可由 caller 指定的 credential
   name。Windows 僅接受 keyring 的 `WinVaultKeyring`（Windows Credential Manager），Linux 僅
   接受 `SecretService.Keyring`（Secret Service）。keyring 25.7.0 已依 platform 宣告 Windows 的
   `pywin32-ctypes` 與 Linux 的 `SecretStorage`/`jeepney`；不另設 file fallback。
@@ -99,8 +99,11 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   不加 application rate limit，上游 rate limit 以固定 `provider_rate_limited` 錯誤呈現。
 - OpenAI 只以 `GET https://api.openai.com/v1/models` 驗證 Bearer credential；Anthropic 只以
   `GET https://api.anthropic.com/v1/models?limit=1` 驗證 `x-api-key`，並固定送出
-  `anthropic-version: 2023-06-01`。HTTP client 使用預設 TLS 驗證、禁止 redirect、固定 30 秒
-  timeout；成功 body 上限 1 MiB，且必須是含 `data` list 的 JSON object，但 model list 不落盤。
+  `anthropic-version: 2023-06-01`；OpenRouter 只以
+  `GET https://openrouter.ai/api/v1/key` 驗證 Bearer credential，不送出 attribution headers。
+  HTTP client 使用預設 TLS 驗證、禁止 redirect、固定 30 秒 timeout；成功 body 上限 1 MiB。
+  OpenAI／Anthropic 必須回傳含 `data` list 的 JSON object，OpenRouter 必須回傳含 `data` object
+  的 JSON object；所有上游內容均不落盤。
 - 本機資料位置由 [`local-data-layout.md`](local-data-layout.md) 的 `AppPaths` 單一管理；建立路徑
   mapping、匯入 backend、啟動 system app 與讀取不存在的狀態都不建立任何目錄。Provider metadata
   只在實際寫入時建立 `%USERPROFILE%\.opensprite\state\providers.json`（Linux 為

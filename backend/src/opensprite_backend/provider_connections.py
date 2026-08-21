@@ -31,6 +31,7 @@ from .providers import ProviderValidationError, ProviderValidator
 _CATALOG: tuple[tuple[ProviderId, str], ...] = (
     ("openai", "OpenAI"),
     ("anthropic", "Anthropic"),
+    ("openrouter", "OpenRouter"),
 )
 _FAILURE_STATUS = {
     ErrorCode.INVALID_CREDENTIALS: ProviderStatus.INVALID_CREDENTIALS,
@@ -346,7 +347,7 @@ class ProviderConnectionService:
 
     @staticmethod
     def _name(provider_id: ProviderId) -> str:
-        return "OpenAI" if provider_id == "openai" else "Anthropic"
+        return dict(_CATALOG)[provider_id]
 
     @staticmethod
     def _summary(
