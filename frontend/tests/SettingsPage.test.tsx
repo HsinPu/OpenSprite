@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultDemoSettings, SettingsPage, type DemoSettings, type SettingsSection } from "../src/features/settings/SettingsPage";
@@ -148,8 +148,8 @@ describe("provider settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "測試連線" }));
     expect(await screen.findByText("API 金鑰無效")).toBeTruthy();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect((screen.getByLabelText("預設模型") as HTMLInputElement).closest(".ant-select")?.className).not.toContain("ant-select-disabled");
-    fireEvent.mouseDown(screen.getByLabelText("預設模型"));
+    expect((screen.getByLabelText("模型") as HTMLInputElement).closest(".ant-select")?.className).not.toContain("ant-select-disabled");
+    fireEvent.mouseDown(screen.getByLabelText("模型"));
     expect(screen.queryByText("Claude Sonnet 4")).toBeNull();
   });
 
@@ -263,13 +263,30 @@ describe("provider settings", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(document.getElementById("settings-model-provider")?.closest(".ant-select")?.textContent).toContain("OpenRouter");
     expect(screen.getByText("正在讀取 OpenRouter 可用模型…")).toBeTruthy();
-    expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).toContain("ant-select-disabled");
+    expect(screen.getByLabelText("模型").closest(".ant-select")?.className).toContain("ant-select-disabled");
 
     pendingModels.resolve(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] })));
-    const modelSelect = screen.getByLabelText("預設模型");
+    const modelSelect = screen.getByLabelText("模型");
     await waitFor(() => expect(modelSelect.closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
     fireEvent.mouseDown(modelSelect);
     expect(await screen.findByText("Acme Fast")).toBeTruthy();
+  });
+
+  it("accepts OpenRouter models after the StrictMode remount simulation", async () => {
+    const fetchMock = vi.fn(async (path: string | URL | Request) => {
+      if (path === "/api/providers") return new Response(JSON.stringify(connectedOpenRouterCatalog));
+      if (path === "/api/providers/openrouter/models") {
+        return new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] }));
+      }
+      throw new Error(`Unexpected request: ${String(path)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<StrictMode><SettingsHarness initialSelection={null} /></StrictMode>);
+
+    const modelSelect = await screen.findByLabelText("模型");
+    await waitFor(() => expect(modelSelect.closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
+    expect(screen.queryByText("正在讀取 OpenRouter 可用模型…")).toBeNull();
   });
 
   it("loads connected OpenRouter models once, exposes a searchable selection, and retries an isolated catalog error", async () => {
@@ -287,7 +304,7 @@ describe("provider settings", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
     await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("Acme Fast"));
-    const modelSelect = screen.getByLabelText("預設模型");
+    const modelSelect = screen.getByLabelText("模型");
     fireEvent.mouseDown(modelSelect);
     fireEvent.change(modelSelect, { target: { value: "Reasoning" } });
     await waitFor(() => expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["acme/reasoning"]));
@@ -303,7 +320,7 @@ describe("provider settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6" }} />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled");
+    expect(screen.getByLabelText("模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled");
     pendingModels.resolve(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }));
     await screen.findByRole("alert");
     expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6");
@@ -316,7 +333,7 @@ describe("provider settings", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<ToggleSectionHarness />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
+    await waitFor(() => expect(screen.getByLabelText("模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
     fireEvent.click(screen.getByRole("button", { name: "show general" }));
     fireEvent.click(screen.getByRole("button", { name: "show models" }));
     expect(fetchMock.mock.calls.filter(([path]) => path === "/api/providers/openrouter/models")).toHaveLength(1);
