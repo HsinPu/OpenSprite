@@ -14,11 +14,21 @@ from .models import (
     ErrorDetail,
     ErrorEnvelope,
     HealthResponse,
+    ModelSelectionErrorCode,
+    ModelSelectionErrorDetail,
+    ModelSelectionErrorEnvelope,
+    ModelSelectionResponse,
     OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderSummary,
     PutProviderConnectionRequest,
+    PutModelSelectionRequest,
+)
+from .model_selection import (
+    ModelSelections,
+    SettingsStoreError,
+    UnavailableModelSelections,
 )
 from .provider_connections import (
     ProviderConnectionError,
@@ -79,6 +89,43 @@ PUBLIC_ERRORS: dict[ErrorCode, tuple[str, bool]] = {
     ErrorCode.INTERNAL_ERROR: ("An internal error occurred.", False),
 }
 
+MODEL_SELECTION_ERROR_STATUS: dict[ModelSelectionErrorCode, int] = {
+    ModelSelectionErrorCode.INVALID_REQUEST: status.HTTP_400_BAD_REQUEST,
+    ModelSelectionErrorCode.NOT_CONNECTED: status.HTTP_409_CONFLICT,
+    ModelSelectionErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
+        status.HTTP_503_SERVICE_UNAVAILABLE
+    ),
+    ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE: (
+        status.HTTP_503_SERVICE_UNAVAILABLE
+    ),
+    ModelSelectionErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+}
+
+MODEL_SELECTION_PUBLIC_ERRORS: dict[
+    ModelSelectionErrorCode, tuple[str, bool]
+] = {
+    ModelSelectionErrorCode.INVALID_REQUEST: (
+        "Request validation failed.",
+        False,
+    ),
+    ModelSelectionErrorCode.NOT_CONNECTED: (
+        "The provider is not connected.",
+        False,
+    ),
+    ModelSelectionErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
+        "Secure credential storage is unavailable.",
+        True,
+    ),
+    ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE: (
+        "Model selection settings are unavailable.",
+        True,
+    ),
+    ModelSelectionErrorCode.INTERNAL_ERROR: (
+        "An internal error occurred.",
+        False,
+    ),
+}
+
 PROVIDER_LIST_ERROR_RESPONSES = {
     500: {"model": ErrorEnvelope},
     503: {"model": ErrorEnvelope},
@@ -112,6 +159,16 @@ PROVIDER_DELETE_ERROR_RESPONSES = {
     500: {"model": ErrorEnvelope},
     503: {"model": ErrorEnvelope},
 }
+MODEL_SELECTION_GET_ERROR_RESPONSES = {
+    500: {"model": ModelSelectionErrorEnvelope},
+    503: {"model": ModelSelectionErrorEnvelope},
+}
+MODEL_SELECTION_PUT_ERROR_RESPONSES = {
+    400: {"model": ModelSelectionErrorEnvelope},
+    409: {"model": ModelSelectionErrorEnvelope},
+    500: {"model": ModelSelectionErrorEnvelope},
+    503: {"model": ModelSelectionErrorEnvelope},
+}
 
 
 def _error_response(code: ErrorCode) -> JSONResponse:
@@ -121,6 +178,23 @@ def _error_response(code: ErrorCode) -> JSONResponse:
     )
     return JSONResponse(
         status_code=ERROR_STATUS[code],
+        content=envelope.model_dump(mode="json", by_alias=True),
+    )
+
+
+def _model_selection_error_response(
+    code: ModelSelectionErrorCode,
+) -> JSONResponse:
+    message, retryable = MODEL_SELECTION_PUBLIC_ERRORS[code]
+    envelope = ModelSelectionErrorEnvelope(
+        error=ModelSelectionErrorDetail(
+            code=code,
+            message=message,
+            retryable=retryable,
+        )
+    )
+    return JSONResponse(
+        status_code=MODEL_SELECTION_ERROR_STATUS[code],
         content=envelope.model_dump(mode="json", by_alias=True),
     )
 
@@ -135,12 +209,17 @@ def _provider_connections(request: Request) -> ProviderConnections:
     return cast(ProviderConnections, request.app.state.provider_connections)
 
 
+def _model_selection(request: Request) -> ModelSelections:
+    return cast(ModelSelections, request.app.state.model_selection)
+
+
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
 
 def create_app(
     provider_connections: ProviderConnections | None = None,
     *,
+    model_selection: ModelSelections | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
 ) -> FastAPI:
@@ -159,6 +238,11 @@ def create_app(
         provider_connections
         if provider_connections is not None
         else UnavailableProviderConnections()
+    )
+    app.state.model_selection = (
+        model_selection
+        if model_selection is not None
+        else UnavailableModelSelections()
     )
     if enforce_local_security:
         app.add_middleware(
@@ -182,6 +266,15 @@ def create_app(
         del request
         return _error_response(exc.code)
 
+    async def settings_store_error_handler(
+        request: Request,
+        exc: SettingsStoreError,
+    ) -> JSONResponse:
+        del request, exc
+        return _model_selection_error_response(
+            ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE
+        )
+
     async def internal_error_handler(
         request: Request,
         exc: Exception,
@@ -198,6 +291,10 @@ def create_app(
         cast(ExceptionHandler, provider_error_handler),
     )
     app.add_exception_handler(
+        SettingsStoreError,
+        cast(ExceptionHandler, settings_store_error_handler),
+    )
+    app.add_exception_handler(
         Exception,
         cast(ExceptionHandler, internal_error_handler),
     )
@@ -210,6 +307,31 @@ def create_app(
     )
     async def get_health() -> HealthResponse:
         return HealthResponse()
+
+    @app.get(
+        "/api/settings/model",
+        operation_id="getModelSelection",
+        response_model=ModelSelectionResponse,
+        responses=MODEL_SELECTION_GET_ERROR_RESPONSES,
+        tags=["model-selection"],
+    )
+    async def get_model_selection(
+        selections: ModelSelections = Depends(_model_selection),
+    ) -> ModelSelectionResponse:
+        return await selections.get()
+
+    @app.put(
+        "/api/settings/model",
+        operation_id="putModelSelection",
+        response_model=ModelSelectionResponse,
+        responses=MODEL_SELECTION_PUT_ERROR_RESPONSES,
+        tags=["model-selection"],
+    )
+    async def put_model_selection(
+        payload: PutModelSelectionRequest,
+        selections: ModelSelections = Depends(_model_selection),
+    ) -> ModelSelectionResponse:
+        return await selections.put(payload)
 
     @app.get(
         "/api/providers",

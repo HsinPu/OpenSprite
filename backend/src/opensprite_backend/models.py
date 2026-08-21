@@ -102,6 +102,26 @@ class PutProviderConnectionRequest(ContractModel):
         return value
 
 
+class ModelSelection(ContractModel):
+    provider_id: ProviderId = Field(alias="providerId")
+    model_id: str = Field(alias="modelId", min_length=1, max_length=256)
+
+    @field_validator("model_id")
+    @classmethod
+    def reject_whitespace_only_model_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("modelId must contain a non-whitespace character")
+        return value
+
+
+class ModelSelectionResponse(ContractModel):
+    selection: ModelSelection | None
+
+
+class PutModelSelectionRequest(ContractModel):
+    selection: ModelSelection | None
+
+
 class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_PROVIDER = "unsupported_provider"
@@ -122,3 +142,21 @@ class ErrorDetail(ContractModel):
 
 class ErrorEnvelope(ContractModel):
     error: ErrorDetail
+
+
+class ModelSelectionErrorCode(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    NOT_CONNECTED = "not_connected"
+    CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
+    SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
+    INTERNAL_ERROR = "internal_error"
+
+
+class ModelSelectionErrorDetail(ContractModel):
+    code: ModelSelectionErrorCode
+    message: str
+    retryable: bool
+
+
+class ModelSelectionErrorEnvelope(ContractModel):
+    error: ModelSelectionErrorDetail
