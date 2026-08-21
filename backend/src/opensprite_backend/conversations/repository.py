@@ -17,7 +17,16 @@ from .models import (
     RunEventType,
     RunSnapshot,
     StartRunResult,
+    StoreFailure,
 )
+
+
+class ConversationStoreError(Exception):
+    """Fail-closed persistence error without implementation details."""
+
+    def __init__(self, failure: StoreFailure) -> None:
+        self.failure = failure
+        super().__init__(failure.value)
 
 
 class ConversationRepository(Protocol):

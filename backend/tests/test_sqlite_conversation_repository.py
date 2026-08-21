@@ -18,8 +18,8 @@ from opensprite_backend.conversations.models import (
     RunStatus,
     StoreFailure,
 )
+from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
-    ConversationStoreError,
     SqliteConversationRepository,
 )
 

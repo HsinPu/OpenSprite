@@ -98,6 +98,16 @@ tools. Local writes, external writes, destructive actions, shell access, MCP,
 subagents, background work, memory, search, and file mutation are not implied by
 the Agent loop and must be approved as separate capabilities later.
 
+The core loop and registry boundary are now implemented independently of HTTP
+and native Provider transports. The loop consumes only the Conversation
+repository protocol, normalized Model gateway, and explicit Tool Registry. It
+streams text into Run partial state, executes structured calls sequentially,
+persists only bounded semantic summaries, and stops on duplicate failed calls,
+round/tool limits, cancellation, malformed model output, or safe Provider
+errors. The runtime will compose an empty registry until an individual read-only
+tool is separately approved and implemented; the UI must not advertise tools
+that are not present in that composition.
+
 ## Provider and response-mode boundary
 
 The Model gateway presents one normalized stream to the Agent loop while each

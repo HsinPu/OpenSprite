@@ -30,6 +30,7 @@ from .models import (
     StartRunResult,
     StoreFailure,
 )
+from .repository import ConversationStoreError
 
 
 _SCHEMA_VERSION = 1
@@ -147,14 +148,6 @@ ON messages(conversation_id, sequence DESC);
 PRAGMA user_version = 1;
 COMMIT;
 """
-
-
-class ConversationStoreError(Exception):
-    """Fail-closed database boundary error without private storage details."""
-
-    def __init__(self, failure: StoreFailure) -> None:
-        self.failure = failure
-        super().__init__(failure.value)
 
 
 class SqliteConversationRepository:

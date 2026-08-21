@@ -1,0 +1,353 @@
+"""Behavior tests for the one-path bounded structured-tool Agent loop."""
+
+from __future__ import annotations
+
+import asyncio
+from collections import deque
+from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
+from functools import wraps
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+
+from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.app_paths import build_app_paths
+from opensprite_backend.conversations.models import RunEventType, RunStatus
+from opensprite_backend.conversations.sqlite_repository import (
+    SqliteConversationRepository,
+)
+from opensprite_backend.inference.gateway import ModelGatewayError
+from opensprite_backend.inference.models import (
+    InferenceFailure,
+    ModelCompleted,
+    ModelFinishReason,
+    ModelRequest,
+    ModelStreamEvent,
+    ModelTextDelta,
+    ModelToolCall,
+)
+from opensprite_backend.tools.definition import (
+    ToolContext,
+    ToolDefinition,
+    ToolEffect,
+    ToolResult,
+)
+from opensprite_backend.tools.policy import ReadOnlyToolPolicy
+from opensprite_backend.tools.registry import ToolRegistry
+
+
+def async_test(function):
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(function(*args, **kwargs))
+
+    return wrapper
+
+
+class ScriptedGateway:
+    def __init__(
+        self,
+        scripts: list[list[ModelStreamEvent | Exception]],
+    ) -> None:
+        self.scripts = deque(scripts)
+        self.requests: list[ModelRequest] = []
+
+    async def stream(
+        self,
+        request: ModelRequest,
+    ) -> AsyncIterator[ModelStreamEvent]:
+        self.requests.append(request)
+        script = self.scripts.popleft()
+        for item in script:
+            if isinstance(item, Exception):
+                raise item
+            yield item
+
+
+@dataclass
+class LookupTool:
+    definition: ToolDefinition = field(
+        default_factory=lambda: ToolDefinition(
+            name="lookup_note",
+            description="Look up a local note.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "minLength": 1, "maxLength": 50}
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            effect=ToolEffect.READ_ONLY,
+            timeout_seconds=1,
+            max_output_chars=1024,
+        )
+    )
+    calls: list[dict[str, object]] = field(default_factory=list)
+
+    async def invoke(
+        self,
+        arguments: dict[str, object],
+        context: ToolContext,
+    ) -> ToolResult:
+        del context
+        self.calls.append(arguments)
+        return ToolResult(content="今天有 3 項工作", summary="找到 3 項工作")
+
+
+def store(tmp_path: Path) -> SqliteConversationRepository:
+    return SqliteConversationRepository(
+        build_app_paths(tmp_path / ".opensprite").database_file
+    )
+
+
+def accepted_run(repository: SqliteConversationRepository):
+    return repository.start_run(
+        conversation_id=None,
+        client_request_id=str(uuid4()),
+        message="整理今天的工作",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+    ).run
+
+
+@async_test
+async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelTextDelta("整理完成"),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ]
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "整理完成"
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert [(item.role, item.content) for item in messages.items] == [
+        ("user", "整理今天的工作"),
+        ("assistant", "整理完成"),
+    ]
+    assert [message.role for message in gateway.requests[0].messages] == [
+        "system",
+        "user",
+    ]
+    assert gateway.requests[0].tools == ()
+    assert [
+        event.type
+        for event in repository.list_run_events(
+            run.id,
+            after_sequence=0,
+            limit=100,
+        )
+    ] == [
+        RunEventType.RUN_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.RUN_COMPLETED,
+    ]
+
+
+@async_test
+async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    tool = LookupTool()
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelTextDelta("我先查詢。"),
+                ModelToolCall("call-1", "lookup_note", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [
+                ModelTextDelta("今天共有 3 項工作。"),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "我先查詢。今天共有 3 項工作。"
+    assert tool.calls == [{"query": "today"}]
+    second_roles = [message.role for message in gateway.requests[1].messages]
+    assert second_roles == ["system", "user", "assistant", "tool"]
+    assistant = gateway.requests[1].messages[-2]
+    assert assistant.tool_calls[0].name == "lookup_note"
+    tool_result = gateway.requests[1].messages[-1]
+    assert tool_result.tool_call_id == "call-1"
+    assert tool_result.content == "今天有 3 項工作"
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    assert [event.type for event in events] == [
+        RunEventType.RUN_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.TOOL_STARTED,
+        RunEventType.TOOL_COMPLETED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.RUN_COMPLETED,
+    ]
+    assert events[4].data == {
+        "callId": "call-1",
+        "toolName": "lookup_note",
+        "summary": "找到 3 項工作",
+    }
+    database_bytes = repository.database_file.read_bytes()
+    assert b'"query"' not in database_bytes
+    assert b'"today"' not in database_bytes
+
+
+@async_test
+async def test_repeated_identical_tool_failure_stops_bounded_loop(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelToolCall("call-1", "missing_tool", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [
+                ModelToolCall("call-2", "missing_tool", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "agent_limit_reached"
+    assert len(gateway.requests) == 2
+    assert [
+        event.type
+        for event in repository.list_run_events(
+            run.id,
+            after_sequence=0,
+            limit=100,
+        )
+    ].count(RunEventType.TOOL_FAILED) == 2
+
+
+@async_test
+async def test_model_round_limit_stops_infinite_tool_loop(tmp_path: Path) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelToolCall("call-1", "missing_one", {}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [
+                ModelToolCall("call-2", "missing_two", {}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        max_model_rounds=2,
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "agent_limit_reached"
+
+
+@async_test
+async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [[ModelGatewayError(InferenceFailure.PROVIDER_TIMEOUT)]]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "provider_timeout"
+    assert result.error.retryable is True
+    assert "private" not in result.error.message.lower()
+
+
+@async_test
+async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    entered = asyncio.Event()
+
+    class BlockingGateway:
+        async def stream(
+            self,
+            request: ModelRequest,
+        ) -> AsyncIterator[ModelStreamEvent]:
+            del request
+            entered.set()
+            await asyncio.Event().wait()
+            if False:
+                yield ModelCompleted(ModelFinishReason.FINAL)
+
+    loop = AgentLoop(
+        repository=repository,
+        gateway=BlockingGateway(),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+    )
+    cancellation = asyncio.Event()
+    task = asyncio.create_task(loop.execute(run.id, cancellation))
+    await asyncio.wait_for(entered.wait(), timeout=1)
+
+    cancellation.set()
+    result = await asyncio.wait_for(task, timeout=1)
+
+    assert result.status is RunStatus.CANCELLED
+    assert repository.list_run_events(run.id, after_sequence=0, limit=100)[
+        -1
+    ].type is RunEventType.RUN_CANCELLED
