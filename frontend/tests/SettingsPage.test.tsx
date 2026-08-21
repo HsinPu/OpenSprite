@@ -252,6 +252,26 @@ describe("provider settings", () => {
     expect(document.getElementById("settings-default-model")?.getAttribute("aria-describedby")).toBe("settings-model-helper");
   });
 
+  it("shows the sole connected OpenRouter provider while its dynamic models load", async () => {
+    const pendingModels = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
+      .mockImplementationOnce(() => pendingModels.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSelection={null} />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(document.getElementById("settings-model-provider")?.closest(".ant-select")?.textContent).toContain("OpenRouter");
+    expect(screen.getByText("正在讀取 OpenRouter 可用模型…")).toBeTruthy();
+    expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).toContain("ant-select-disabled");
+
+    pendingModels.resolve(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] })));
+    const modelSelect = screen.getByLabelText("預設模型");
+    await waitFor(() => expect(modelSelect.closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
+    fireEvent.mouseDown(modelSelect);
+    expect(await screen.findByText("Acme Fast")).toBeTruthy();
+  });
+
   it("loads connected OpenRouter models once, exposes a searchable selection, and retries an isolated catalog error", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))

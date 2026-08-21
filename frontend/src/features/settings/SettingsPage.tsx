@@ -341,7 +341,9 @@ function ModelsSettings({ settings, onChange, modelSelection, modelSelectionSavi
   };
 
   const connectedProviders = useMemo(() => providers?.filter((provider) => provider.connected) ?? [], [providers]);
-  const selectedProvider = modelSelection ? connectedProviders.find((provider) => provider.id === modelSelection.providerId) : undefined;
+  const selectedProvider = modelSelection
+    ? connectedProviders.find((provider) => provider.id === modelSelection.providerId)
+    : connectedProviders.length === 1 ? connectedProviders[0] : undefined;
   const selectedModels = selectedProvider
     ? selectedProvider.id === "openrouter" ? openRouterModels ?? [] : localModelCatalog[selectedProvider.id]
     : [];
