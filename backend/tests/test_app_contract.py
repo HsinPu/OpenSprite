@@ -142,6 +142,16 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/healthz", "get", "getHealth"),
         ("/api/settings/ai", "get", "getAiSettings"),
         ("/api/settings/ai", "put", "putAiSettings"),
+        ("/api/conversations", "get", "listConversations"),
+        (
+            "/api/conversations/{conversation_id}/messages",
+            "get",
+            "listConversationMessages",
+        ),
+        ("/api/runs", "post", "startRun"),
+        ("/api/runs/{run_id}", "get", "getRun"),
+        ("/api/runs/{run_id}/events", "get", "streamRunEvents"),
+        ("/api/runs/{run_id}/cancel", "post", "cancelRun"),
         ("/api/providers", "get", "listProviders"),
         (
             "/api/providers/openrouter/models",

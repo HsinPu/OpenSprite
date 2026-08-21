@@ -8,6 +8,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import Lifespan
 
+from .api.chat_models import chat_error_response
+from .api.chat_routes import router as chat_router
+from .api.chat_service import (
+    AgentChatError,
+    AgentChatOperations,
+    UnavailableAgentChat,
+)
 from .local_security import LocalRequestSecurityMiddleware
 from .models import (
     AiSettings,
@@ -220,6 +227,7 @@ def create_app(
     provider_connections: ProviderConnections | None = None,
     *,
     ai_settings: AiSettingsOperations | None = None,
+    agent_chat: AgentChatOperations | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
 ) -> FastAPI:
@@ -243,6 +251,9 @@ def create_app(
         ai_settings
         if ai_settings is not None
         else UnavailableAiSettings()
+    )
+    app.state.agent_chat = (
+        agent_chat if agent_chat is not None else UnavailableAgentChat()
     )
     if enforce_local_security:
         app.add_middleware(
@@ -275,6 +286,13 @@ def create_app(
             AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
+    async def agent_chat_error_handler(
+        request: Request,
+        exc: AgentChatError,
+    ) -> JSONResponse:
+        del request
+        return chat_error_response(exc.code)
+
     async def internal_error_handler(
         request: Request,
         exc: Exception,
@@ -293,6 +311,10 @@ def create_app(
     app.add_exception_handler(
         SettingsStoreError,
         cast(ExceptionHandler, settings_store_error_handler),
+    )
+    app.add_exception_handler(
+        AgentChatError,
+        cast(ExceptionHandler, agent_chat_error_handler),
     )
     app.add_exception_handler(
         Exception,
@@ -407,4 +429,5 @@ def create_app(
         await connections.disconnect(_provider_id(provider_id))
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    app.include_router(chat_router)
     return app

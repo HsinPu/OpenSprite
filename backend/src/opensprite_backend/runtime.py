@@ -7,6 +7,12 @@ from typing import Protocol
 
 from fastapi import FastAPI
 
+from .agent import AgentLoop, RunManager
+from .api.chat_service import (
+    AgentChatOperations,
+    AgentChatService,
+    UnavailableAgentChat,
+)
 from .app import create_app
 from .app_paths import AppPaths, build_app_paths
 from .ai_settings import (
@@ -14,21 +20,28 @@ from .ai_settings import (
     UnavailableAiSettings,
     create_ai_settings_service,
 )
+from .conversations import SqliteConversationRepository
+from .inference import ModelGateway
 from .provider_connections import (
     ProviderConnections,
     UnavailableProviderConnections,
     create_provider_runtime,
 )
+from .tools import ReadOnlyToolPolicy, ToolRegistry
 
 
 class LocalProviderRuntime(Protocol):
     connections: ProviderConnections
+    model_gateway: ModelGateway
 
     async def aclose(self) -> None: ...
 
 
 class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     ai_settings: AiSettingsOperations
+    agent_chat: AgentChatOperations
+
+    async def astart(self) -> None: ...
 
 
 RuntimeFactory = Callable[[], LocalSystemRuntime]
@@ -39,13 +52,21 @@ class _SystemRuntime:
         self,
         provider_runtime: LocalProviderRuntime,
         ai_settings: AiSettingsOperations,
+        agent_chat: AgentChatService,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
         self.ai_settings = ai_settings
+        self.agent_chat = agent_chat
+
+    async def astart(self) -> None:
+        await self.agent_chat.startup()
 
     async def aclose(self) -> None:
-        await self._provider_runtime.aclose()
+        try:
+            await self.agent_chat.close()
+        finally:
+            await self._provider_runtime.aclose()
 
 
 def create_system_runtime(
@@ -56,9 +77,26 @@ def create_system_runtime(
 
     paths = app_paths if app_paths is not None else build_app_paths()
     provider_runtime = create_provider_runtime(app_paths=paths)
+    ai_settings = create_ai_settings_service(
+        paths,
+        provider_runtime.connections,
+    )
+    repository = SqliteConversationRepository(paths.database_file)
+    agent_loop = AgentLoop(
+        repository=repository,
+        gateway=provider_runtime.model_gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+    )
+    agent_chat = AgentChatService(
+        repository,
+        ai_settings,
+        provider_runtime.connections,
+        RunManager(repository, agent_loop),
+    )
     return _SystemRuntime(
         provider_runtime,
-        create_ai_settings_service(paths, provider_runtime.connections),
+        ai_settings,
+        agent_chat,
     )
 
 
@@ -84,13 +122,23 @@ def create_system_app(
         try:
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
+            app.state.agent_chat = UnavailableAgentChat()
             runtime = factory()
+            starter = getattr(runtime, "astart", None)
+            if starter is not None:
+                await starter()
             app.state.provider_connections = runtime.connections
             app.state.ai_settings = runtime.ai_settings
+            app.state.agent_chat = getattr(
+                runtime,
+                "agent_chat",
+                UnavailableAgentChat(),
+            )
             yield
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
+            app.state.agent_chat = UnavailableAgentChat()
             try:
                 if runtime is not None:
                     await runtime.aclose()

@@ -70,3 +70,14 @@ def test_tools_do_not_import_agent_inference_persistence_or_providers() -> None:
         for source, module in imported_modules("tools")
         if module.startswith(forbidden_prefixes)
     ] == []
+
+
+def test_core_agent_layers_never_depend_back_on_http_api() -> None:
+    violations = [
+        (directory, source, module)
+        for directory in ("agent", "conversations", "inference", "tools")
+        for source, module in imported_modules(directory)
+        if module.startswith("opensprite_backend.api")
+    ]
+
+    assert violations == []

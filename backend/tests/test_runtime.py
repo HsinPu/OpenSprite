@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 import pytest
 
 from opensprite_backend.models import ProviderListResponse
+from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.ai_settings import UnavailableAiSettings
+from opensprite_backend.conversations.sqlite_repository import (
+    SqliteConversationRepository,
+)
 from opensprite_backend.provider_connections import (
     UnavailableProviderConnections,
 )
@@ -218,3 +222,26 @@ def test_concurrent_lifespan_entry_is_rejected_before_serving() -> None:
         app.state.provider_connections,
         UnavailableProviderConnections,
     )
+
+
+def test_real_system_runtime_exposes_chat_and_interrupts_orphaned_run(
+    tmp_path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    repository = SqliteConversationRepository(paths.database_file)
+    queued = repository.start_run(
+        conversation_id=None,
+        client_request_id="d1a1db88-3a6e-4d3c-96f7-97e5a11d4d34",
+        message="orphaned",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+    ).run
+    app = create_system_app(app_paths=paths)
+
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        response = client.get(f"/api/runs/{queued.id}")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "interrupted"
+    assert response.json()["error"]["code"] == "internal_error"

@@ -64,6 +64,25 @@ The request id is the idempotency boundary for retries. A conversation may have
 only one queued, running, or cancelling Run. A new conversation is created only
 when the first user message is durably accepted.
 
+This workflow is now composed in the local system runtime. `AgentChatService`
+reads the atomic AI setting, verifies the selected Provider still has encrypted
+credential metadata, commits the user Message and Run, and only then asks
+`RunManager` to schedule execution. The API layer validates and serializes the
+contract but does not call a Provider, execute a tool, or write SQLite directly.
+
+| Route | Responsibility |
+| --- | --- |
+| `GET /api/conversations` | Reverse-updated cursor page for the sidebar. |
+| `GET /api/conversations/{id}/messages` | Visible Message page in ascending sequence. |
+| `POST /api/runs` | Idempotently accept one user message and queued Run. |
+| `GET /api/runs/{id}` | Read the durable snapshot, partial text, status, and safe error. |
+| `GET /api/runs/{id}/events` | Replay and follow events after `Last-Event-ID`. |
+| `POST /api/runs/{id}/cancel` | Bodyless cancellation of queued or running work. |
+
+SSE frame ids are durable positive event sequences and frame event names equal
+the semantic event type. Opening after completion replays the missing suffix and
+closes. The browser closes its EventSource after receiving a terminal event.
+
 ## Persistence
 
 The first implementation uses only four SQLite tables under
@@ -144,9 +163,9 @@ selects its own behavior. Reasoning/thinking stream fields are consumed only as
 protocol data and never become Model events, Messages, Run events, logs, or
 database content.
 
-These adapters and the shared credential/lock composition exist now, but live
-chat HTTP routes are still a later slice. The production Tool Registry remains
-empty, so no native request currently advertises an unimplemented tool.
+These adapters and the shared credential/lock composition are now connected to
+the live Run workflow. The production Tool Registry remains empty, so native
+requests do not advertise an unimplemented tool.
 
 ## HTTP and security boundary
 
@@ -159,6 +178,13 @@ The UI may display semantic status, safe errors, and tool summaries. It must not
 display or persist API keys, encrypted credential material, raw Provider
 responses, internal prompts, or hidden reasoning. The URL hash identifies a
 conversation by backend UUID rather than by its title or message content.
+
+Run start and cancel use the same exact loopback Host and same-origin Origin
+middleware as Provider/settings mutations. SSE remains a GET under the loopback
+Host boundary and is not exposed through CORS. Runtime startup marks any
+pre-existing queued, running, or cancelling Run interrupted before binding the
+Agent chat dependency. Shutdown first unbinds HTTP, then cancels owned tasks and
+records interruption before closing the shared Provider HTTP client.
 
 ## Deliberate exclusions
 
