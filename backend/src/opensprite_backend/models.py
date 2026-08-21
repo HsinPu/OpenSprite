@@ -82,6 +82,15 @@ class ProviderListResponse(ContractModel):
         return self
 
 
+class OpenRouterModel(ContractModel):
+    id: str = Field(min_length=1, max_length=256)
+    name: str = Field(min_length=1, max_length=256)
+
+
+class OpenRouterModelListResponse(ContractModel):
+    models: list[OpenRouterModel] = Field(min_length=1, max_length=1000)
+
+
 class PutProviderConnectionRequest(ContractModel):
     apiKey: str = Field(min_length=1, max_length=4096)
 

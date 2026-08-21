@@ -54,6 +54,14 @@
 .settings-select-row, .settings-switch-row { min-height: 64px; padding: 12px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 15px; }
 .settings-card-body > :last-child { border-bottom: 0; }
 .settings-select-row select { min-width: min(350px, 52%); height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--settings-border); border-radius: 9px; background: var(--settings-surface); color: var(--settings-text); cursor: pointer; }
+.settings-select-row .ant-select { min-width: min(350px, 52%); }
+.settings-select-row .ant-select-selector { min-height: 44px !important; border-color: var(--settings-border) !important; border-radius: 9px !important; }
+.settings-select-row .ant-select-selection-item, .settings-select-row .ant-select-selection-placeholder { line-height: 42px !important; }
+.settings-model-retry { margin-top: 10px; }
+.settings-model-load-error { margin-top: 10px; color: #b42318; }
+.settings-model-load-error p { margin: 0; font-size: 13px; }
+.settings-model-option { display: grid; gap: 2px; }
+.settings-model-option small { color: var(--settings-muted); font-size: 12px; overflow-wrap: anywhere; }
 .settings-control-label, .settings-control-description { display: block; }
 .settings-control-description, .settings-helper-text { color: var(--settings-muted); font-size: 13px; margin-top: 4px; }
 .settings-switch-row { cursor: pointer; }
@@ -133,6 +141,7 @@
   .settings-select-row, .settings-switch-row, .settings-preference-row { align-items: flex-start; min-height: 58px; gap: 14px; font-size: 14px; }
   .settings-select-row { flex-direction: column; gap: 8px; }
   .settings-select-row select { width: 100%; min-width: 0; height: 42px; }
+  .settings-select-row .ant-select { width: 100%; min-width: 0; }
   .settings-model-select { min-height: 56px; }
   .settings-service-card { align-items: flex-start; flex-direction: column; gap: 14px; }
   .settings-service-actions { width: 100%; }

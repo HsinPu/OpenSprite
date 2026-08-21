@@ -46,6 +46,7 @@ adapter 只能透過已定義的 `ProviderConnections` seam 接入，不得改�
 | `PUT /api/providers/{provider_id}/connection` | 先在 30 秒 deadline 內驗證候選 key，再原子替換；失敗保留既有 credential 與 summary。 |
 | `POST /api/providers/{provider_id}/connection/test` | 不接受 body，只測試已儲存 credential；失敗會更新該連線的最後檢查狀態，但不刪除 credential。 |
 | `DELETE /api/providers/{provider_id}/connection` | 刪除 credential 與檢查 metadata；對已斷線的 supported provider 仍回 `204`。 |
+| `POST /api/providers/openrouter/models` | 不接受 body，使用已儲存 credential 即時讀取 OpenRouter 可用文字模型；不落盤、不快取。 |
 
 `connected` 只表示安全 store 中存在 credential。`status` 表示最後可觀察狀態，因此測試
 失敗時允許 `connected=true` 且 status 為失敗原因。`credentialPreview` 是不可解析的顯示提示，
@@ -58,8 +59,9 @@ Frontend 消費者只使用相對 `/api` 路徑。Vite dev 與 preview proxy 轉
 runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗證固定 catalog 的順序、
 欄位、狀態與 UTC timestamp；無法驗證的回應只顯示固定安全錯誤。API key 只存在連線 modal
 的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
-都會清除。模型選項仍是前端 local catalog，依 provider id 選擇，並不向 provider 取得或解析
-display string。
+都會清除。OpenAI 與 Anthropic 模型選項仍是前端 local catalog；OpenRouter 則在連線後即時
+取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。選擇值分開保存 provider id、
+執行用 model id 與顯示 label，不將動態清單寫入 browser storage、URL 或 `.opensprite`。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值
@@ -104,6 +106,11 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   HTTP client 使用預設 TLS 驗證、禁止 redirect、固定 30 秒 timeout；成功 body 上限 1 MiB。
   OpenAI／Anthropic 必須回傳含 `data` list 的 JSON object，OpenRouter 必須回傳含 `data` object
   的 JSON object；所有上游內容均不落盤。
+- OpenRouter 模型清單只透過 bodyless `POST /api/providers/openrouter/models` 觸發，並與該
+  provider 的 PUT/test/DELETE 共用 process-local lock。Backend 使用已儲存 Bearer credential
+  呼叫 `GET https://openrouter.ai/api/v1/models/user`，成功 body 上限 4 MiB，只保留同時支援
+  text input/output 的有效項目，依 id 去重、依 name 再 id 排序，最多回傳 1000 筆。請求不改寫
+  credential、metadata 或其他 `.opensprite` 路徑；上游回應與模型清單均不落盤。
 - 本機資料位置由 [`local-data-layout.md`](local-data-layout.md) 的 `AppPaths` 單一管理；建立路徑
   mapping、匯入 backend、啟動 system app 與讀取不存在的狀態都不建立任何目錄。Provider metadata
   只在實際寫入時建立 `%USERPROFILE%\.opensprite\state\providers.json`（Linux 為

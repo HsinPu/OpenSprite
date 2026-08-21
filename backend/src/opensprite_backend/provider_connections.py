@@ -16,6 +16,7 @@ from .app_paths import AppPaths, build_app_paths
 from .credentials import CredentialStore, KeyringCredentialStore
 from .models import (
     ErrorCode,
+    OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderStatus,
@@ -52,6 +53,8 @@ class ProviderConnectionError(Exception):
 class ProviderConnections(Protocol):
     async def list_providers(self) -> ProviderListResponse: ...
 
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse: ...
+
     async def connect(
         self,
         provider_id: ProviderId,
@@ -71,6 +74,9 @@ class UnavailableProviderConnections:
         return ProviderConnectionError(ErrorCode.CREDENTIAL_STORE_UNAVAILABLE)
 
     async def list_providers(self) -> ProviderListResponse:
+        raise self._unavailable()
+
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse:
         raise self._unavailable()
 
     async def connect(
@@ -136,6 +142,38 @@ class ProviderConnectionService:
                     raise self._store_unavailable()
                 summaries.append(self._summary(provider_id, name, snapshot.state))
         return ProviderListResponse(providers=summaries)
+
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        async with self._locks["openrouter"]:
+            snapshot = self._snapshot("openrouter")
+            if snapshot is None:
+                raise self._store_unavailable()
+            if snapshot.credential is None:
+                raise ProviderConnectionError(ErrorCode.NOT_CONNECTED)
+            if (
+                snapshot.state is None
+                or not self._state_matches_credential(
+                    snapshot.state,
+                    snapshot.credential,
+                )
+            ):
+                raise self._store_unavailable()
+
+            failure: ErrorCode | None = None
+            models: OpenRouterModelListResponse | None = None
+            try:
+                models = await self._validator.list_openrouter_models(
+                    snapshot.credential
+                )
+            except ProviderValidationError as error:
+                failure = error.code
+            except Exception:
+                failure = ErrorCode.PROVIDER_UNREACHABLE
+            if failure is not None:
+                raise ProviderConnectionError(failure)
+            if models is None:
+                raise ProviderConnectionError(ErrorCode.PROVIDER_UNREACHABLE)
+            return models
 
     async def connect(
         self,

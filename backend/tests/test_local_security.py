@@ -12,6 +12,8 @@ from starlette.types import Message, Scope
 
 from opensprite_backend import create_app
 from opensprite_backend.models import (
+    OpenRouterModel,
+    OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderStatus,
@@ -30,6 +32,7 @@ INVALID_REQUEST = {
 class RecordingConnections:
     def __init__(self) -> None:
         self.list_calls = 0
+        self.models_calls = 0
         self.connect_calls = 0
         self.test_calls = 0
 
@@ -41,6 +44,12 @@ class RecordingConnections:
                 self._summary("anthropic", False),
                 self._summary("openrouter", False),
             ]
+        )
+
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        self.models_calls += 1
+        return OpenRouterModelListResponse(
+            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
         )
 
     async def connect(
@@ -189,6 +198,25 @@ def test_mutations_require_canonical_same_origin(
     assert response.status_code == 200
     assert response.json()["connected"] is True
     assert connections.connect_calls == 1
+
+
+def test_openrouter_model_discovery_requires_same_origin() -> None:
+    connections = RecordingConnections()
+    client = TestClient(
+        secured_app(connections),
+        base_url="http://localhost:8765",
+    )
+
+    rejected = client.post("/api/providers/openrouter/models")
+    accepted = client.post(
+        "/api/providers/openrouter/models",
+        headers={"origin": "http://localhost:8765"},
+    )
+
+    assert rejected.status_code == 400
+    assert rejected.json() == INVALID_REQUEST
+    assert accepted.status_code == 200
+    assert connections.models_calls == 1
 
 
 def test_ipv6_host_and_origin_are_supported_by_the_asgi_boundary() -> None:

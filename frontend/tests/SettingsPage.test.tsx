@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { defaultDemoSettings, SettingsPage, type DemoSettings } from "../src/features/settings/SettingsPage";
+import { defaultDemoSettings, SettingsPage, type DemoSettings, type SettingsSection } from "../src/features/settings/SettingsPage";
 
 const disconnectedCatalog = {
   providers: [
@@ -28,6 +28,22 @@ const connectedBothCatalog = {
   ],
 };
 
+const connectedOpenRouterCatalog = {
+  providers: [
+    disconnectedCatalog.providers[0],
+    disconnectedCatalog.providers[1],
+    { id: "openrouter", name: "OpenRouter", connected: true, status: "connected", credentialPreview: "••••9999", lastCheckedAt: "2026-08-20T08:30:00Z" },
+  ],
+};
+
+const connectedOpenAiAndOpenRouterCatalog = {
+  providers: [
+    connectedCatalog.providers[0],
+    disconnectedCatalog.providers[1],
+    connectedOpenRouterCatalog.providers[2],
+  ],
+};
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -38,15 +54,21 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function SettingsHarness() {
-  const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
-  return <SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} onClose={() => undefined} />;
+function SettingsHarness({ initialSettings = defaultDemoSettings }: { initialSettings?: DemoSettings }) {
+  const [settings, setSettings] = useState<DemoSettings>(initialSettings);
+  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} onClose={() => undefined} /><output data-testid="selected-model">{settings.defaultModel.label}</output></>;
 }
 
 function GuardedDialogHarness() {
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+}
+
+function ToggleSectionHarness() {
+  const [settings, setSettings] = useState<DemoSettings>({ ...defaultDemoSettings, defaultModel: { providerId: "openrouter", modelId: "missing", label: "missing" } });
+  const [section, setSection] = useState<SettingsSection>("models");
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} onClose={() => undefined} /></>;
 }
 
 describe("provider settings", () => {
@@ -114,8 +136,9 @@ describe("provider settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "測試連線" }));
     expect(await screen.findByText("API 金鑰無效")).toBeTruthy();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect((screen.getByLabelText("預設模型") as HTMLSelectElement).disabled).toBe(false);
-    expect(Array.from((screen.getByLabelText("預設模型") as HTMLSelectElement).options).map((option) => option.text)).not.toContain("Claude Sonnet 4");
+    expect((screen.getByLabelText("預設模型") as HTMLInputElement).closest(".ant-select")?.className).not.toContain("ant-select-disabled");
+    fireEvent.mouseDown(screen.getByLabelText("預設模型"));
+    expect(screen.queryByText("Claude Sonnet 4")).toBeNull();
   });
 
   it("keeps per-provider operations independent and ignores a stale failed-test refresh", async () => {
@@ -215,6 +238,79 @@ describe("provider settings", () => {
     await screen.findByText("OpenAI");
     expect(document.getElementById("settings-model-provider")?.getAttribute("aria-describedby")).toBe("settings-model-helper");
     expect(document.getElementById("settings-default-model")?.getAttribute("aria-describedby")).toBe("settings-model-helper");
+  });
+
+  it("loads connected OpenRouter models once, exposes a searchable selection, and retries an isolated catalog error", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenAiAndOpenRouterCatalog)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }, { id: "acme/reasoning", name: "Acme Reasoning" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSettings={{ ...defaultDemoSettings, defaultModel: { providerId: "openrouter", modelId: "missing", label: "missing" } }} />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("模型廠家回應逾時");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("selected-model").textContent).toBe("missing");
+    fireEvent.click(screen.getByRole("button", { name: "重試讀取模型" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("Acme Fast"));
+    const modelSelect = screen.getByLabelText("預設模型");
+    fireEvent.mouseDown(modelSelect);
+    fireEvent.change(modelSelect, { target: { value: "Reasoning" } });
+    await waitFor(() => expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["acme/reasoning"]));
+    fireEvent.change(modelSelect, { target: { value: "acme\/fast" } });
+    await waitFor(() => expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["acme/fast"]));
+  });
+
+  it("keeps an OpenRouter selection on catalog failure while an OpenAI picker stays available during loading", async () => {
+    const pendingModels = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenAiAndOpenRouterCatalog)))
+      .mockImplementationOnce(() => pendingModels.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSettings={{ ...defaultDemoSettings, defaultModel: { providerId: "openai", modelId: "gpt-5.6", label: "GPT-5.6" } }} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled");
+    pendingModels.resolve(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }));
+    await screen.findByRole("alert");
+    expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6");
+  });
+
+  it("keeps the OpenRouter catalog cache across a general/models section toggle", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ToggleSectionHarness />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByLabelText("預設模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
+    fireEvent.click(screen.getByRole("button", { name: "show general" }));
+    fireEvent.click(screen.getByRole("button", { name: "show models" }));
+    expect(fetchMock.mock.calls.filter(([path]) => path === "/api/providers/openrouter/models")).toHaveLength(1);
+  });
+
+  it("ignores a stale OpenRouter model response after disconnect and falls back to OpenAI", async () => {
+    const pendingModels = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenAiAndOpenRouterCatalog)))
+      .mockImplementationOnce(() => pendingModels.promise)
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsHarness initialSettings={{ ...defaultDemoSettings, defaultModel: { providerId: "openrouter", modelId: "old/model", label: "Old model" } }} />);
+
+    const openRouterActions = await screen.findByRole("group", { name: "OpenRouter 操作" });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    fireEvent.click(within(openRouterActions).getByRole("button", { name: "移除" }));
+    const confirmation = await screen.findByText("移除 OpenRouter 的已儲存 API 金鑰？");
+    const popover = confirmation.closest(".ant-popover")!;
+    fireEvent.click(within(popover as HTMLElement).getByRole("button", { name: /移\s*除/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6"));
+
+    pendingModels.resolve(new Response(JSON.stringify({ models: [{ id: "stale/model", name: "Stale model" }] })));
+    await waitFor(() => expect(screen.queryByText("Stale model")).toBeNull());
+    expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6");
   });
 
 });

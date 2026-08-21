@@ -14,6 +14,7 @@ from .models import (
     ErrorDetail,
     ErrorEnvelope,
     HealthResponse,
+    OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderSummary,
@@ -81,6 +82,16 @@ PUBLIC_ERRORS: dict[ErrorCode, tuple[str, bool]] = {
 PROVIDER_LIST_ERROR_RESPONSES = {
     500: {"model": ErrorEnvelope},
     503: {"model": ErrorEnvelope},
+}
+OPENROUTER_MODELS_ERROR_RESPONSES = {
+    400: {"model": ErrorEnvelope},
+    409: {"model": ErrorEnvelope},
+    422: {"model": ErrorEnvelope},
+    429: {"model": ErrorEnvelope},
+    500: {"model": ErrorEnvelope},
+    502: {"model": ErrorEnvelope},
+    503: {"model": ErrorEnvelope},
+    504: {"model": ErrorEnvelope},
 }
 PROVIDER_CONNECTION_ERROR_RESPONSES = {
     400: {"model": ErrorEnvelope},
@@ -211,6 +222,21 @@ def create_app(
         connections: ProviderConnections = Depends(_provider_connections),
     ) -> ProviderListResponse:
         return await connections.list_providers()
+
+    @app.post(
+        "/api/providers/openrouter/models",
+        operation_id="listOpenRouterModels",
+        response_model=OpenRouterModelListResponse,
+        responses=OPENROUTER_MODELS_ERROR_RESPONSES,
+        tags=["provider-connections"],
+    )
+    async def list_openrouter_models(
+        request: Request,
+        connections: ProviderConnections = Depends(_provider_connections),
+    ) -> OpenRouterModelListResponse:
+        if await request.body():
+            raise ProviderConnectionError(ErrorCode.INVALID_REQUEST)
+        return await connections.list_openrouter_models()
 
     @app.put(
         "/api/providers/{provider_id}/connection",

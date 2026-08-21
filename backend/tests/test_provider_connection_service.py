@@ -15,7 +15,13 @@ import pytest
 from opensprite_backend import create_app
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.credentials import CredentialStore, KeyringCredentialStore
-from opensprite_backend.models import ErrorCode, ProviderId, ProviderStatus
+from opensprite_backend.models import (
+    ErrorCode,
+    OpenRouterModel,
+    OpenRouterModelListResponse,
+    ProviderId,
+    ProviderStatus,
+)
 from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnectionService,
@@ -98,11 +104,23 @@ class FakeValidator:
     def __init__(self, failure: ErrorCode | None = None) -> None:
         self.failure = failure
         self.seen: list[tuple[ProviderId, str]] = []
+        self.models_seen: list[str] = []
 
     async def validate(self, provider_id: ProviderId, api_key: str) -> None:
         self.seen.append((provider_id, api_key))
         if self.failure is not None:
             raise ProviderValidationError(self.failure)
+
+    async def list_openrouter_models(
+        self,
+        api_key: str,
+    ) -> OpenRouterModelListResponse:
+        self.models_seen.append(api_key)
+        if self.failure is not None:
+            raise ProviderValidationError(self.failure)
+        return OpenRouterModelListResponse(
+            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+        )
 
 
 def old_state(
@@ -253,6 +271,102 @@ def test_openrouter_round_trip_list_connect_test_and_delete() -> None:
         ("openrouter", NEW_SECRET),
         ("openrouter", NEW_SECRET),
     ]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [None, ErrorCode.INVALID_CREDENTIALS, ErrorCode.PROVIDER_TIMEOUT],
+    ids=["success", "invalid-credential", "timeout"],
+)
+def test_openrouter_model_discovery_is_read_only_and_uses_connected_credential(
+    failure: ErrorCode | None,
+) -> None:
+    credentials = FakeCredentialStore()
+    credentials.values["openrouter"] = OLD_SECRET
+    states = FakeStateRepository(credentials)
+    before = old_state(provider_id="openrouter")
+    states.values["openrouter"] = before
+    validator = FakeValidator(failure)
+    runtime = service(credentials, states, validator)
+
+    if failure is None:
+        result = run(runtime.list_openrouter_models())
+        assert [(model.id, model.name) for model in result.models] == [
+            ("openai/gpt-4", "GPT-4")
+        ]
+    else:
+        with pytest.raises(ProviderConnectionError) as raised:
+            run(runtime.list_openrouter_models())
+        assert raised.value.code is failure
+
+    assert validator.models_seen == [OLD_SECRET]
+    assert credentials.values["openrouter"] == OLD_SECRET
+    assert states.values["openrouter"] == before
+    assert_no_credential_mutations(credentials)
+
+
+def test_openrouter_model_discovery_requires_coherent_connected_state() -> None:
+    credentials = FakeCredentialStore()
+    credentials.values["openrouter"] = OLD_SECRET
+    states = FakeStateRepository(credentials)
+    validator = FakeValidator()
+
+    with pytest.raises(ProviderConnectionError) as raised:
+        run(service(credentials, states, validator).list_openrouter_models())
+
+    assert raised.value.code is ErrorCode.CREDENTIAL_STORE_UNAVAILABLE
+    assert validator.models_seen == []
+    assert_no_credential_mutations(credentials)
+
+
+def test_openrouter_model_discovery_serializes_with_disconnect() -> None:
+    class DeferredModelValidator(FakeValidator):
+        def __init__(self) -> None:
+            super().__init__()
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def list_openrouter_models(
+            self,
+            api_key: str,
+        ) -> OpenRouterModelListResponse:
+            self.models_seen.append(api_key)
+            self.started.set()
+            await self.release.wait()
+            return OpenRouterModelListResponse(
+                models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+            )
+
+    async def scenario() -> None:
+        credentials = FakeCredentialStore()
+        credentials.values["openrouter"] = OLD_SECRET
+        states = FakeStateRepository(credentials)
+        before = old_state(provider_id="openrouter")
+        states.values["openrouter"] = before
+        validator = DeferredModelValidator()
+        runtime = service(credentials, states, validator)
+
+        listing = asyncio.create_task(runtime.list_openrouter_models())
+        await validator.started.wait()
+        disconnecting = asyncio.create_task(runtime.disconnect("openrouter"))
+        await asyncio.sleep(0)
+
+        assert validator.models_seen == [OLD_SECRET]
+        assert credentials.values["openrouter"] == OLD_SECRET
+        assert states.values["openrouter"] == before
+        assert_no_credential_mutations(credentials)
+
+        validator.release.set()
+        models = await listing
+        await disconnecting
+
+        assert [(model.id, model.name) for model in models.models] == [
+            ("openai/gpt-4", "GPT-4")
+        ]
+        assert credentials.values == {}
+        assert states.values == {}
+
+    run(scenario())
 
 
 def test_openrouter_connect_failure_rolls_back_prior_secret_and_state() -> None:

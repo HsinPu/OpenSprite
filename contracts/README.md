@@ -11,6 +11,7 @@ The contract currently covers:
 - the fixed `openai`, `anthropic`, and `openrouter` provider catalog;
 - validate-then-save connection replacement;
 - testing and deleting a stored provider connection;
+- on-demand discovery of connected OpenRouter text models;
 - stable public summaries and a secret-safe error envelope.
 
 This first contract has no pagination, filtering, sorting, event, webhook, or

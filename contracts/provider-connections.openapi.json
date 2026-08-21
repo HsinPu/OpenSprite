@@ -270,6 +270,58 @@
           }
         }
       }
+    },
+    "/api/providers/openrouter/models": {
+      "post": {
+        "operationId": "listOpenRouterModels",
+        "summary": "Load the connected OpenRouter account's usable text models",
+        "description": "Accepts no request body. Reads the stored OpenRouter credential and performs one same-origin-protected upstream discovery request. The returned model list is not persisted or cached on disk.",
+        "tags": ["provider-connections"],
+        "responses": {
+          "200": {
+            "description": "A deterministic, deduplicated list of text-input/text-output OpenRouter models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenRouterModelListResponse"
+                },
+                "example": {
+                  "models": [
+                    {
+                      "id": "openai/gpt-4",
+                      "name": "GPT-4"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/NotConnected"
+          },
+          "422": {
+            "$ref": "#/components/responses/InvalidCredentials"
+          },
+          "429": {
+            "$ref": "#/components/responses/ProviderRateLimited"
+          },
+          "502": {
+            "$ref": "#/components/responses/ProviderUnreachable"
+          },
+          "503": {
+            "$ref": "#/components/responses/CredentialStoreUnavailable"
+          },
+          "504": {
+            "$ref": "#/components/responses/ProviderTimeout"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -399,6 +451,40 @@
               }
             ],
             "items": false
+          }
+        }
+      },
+      "OpenRouterModel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Stable OpenRouter model identifier used for future inference requests."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Display-only OpenRouter model name."
+          }
+        }
+      },
+      "OpenRouterModelListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["models"],
+        "properties": {
+          "models": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/OpenRouterModel"
+            }
           }
         }
       },

@@ -8,6 +8,12 @@ from .adapters import (
     ProviderValidationError,
     ProviderValidator,
 )
+from .openrouter_models import (
+    MAX_OPENROUTER_MODELS,
+    MAX_OPENROUTER_MODELS_RESPONSE_BYTES,
+    OPENROUTER_MODELS_URL,
+    OpenRouterModelDiscovery,
+)
 
 __all__ = [
     "ANTHROPIC_MODELS_URL",
@@ -16,4 +22,8 @@ __all__ = [
     "PROVIDER_TIMEOUT_SECONDS",
     "ProviderValidationError",
     "ProviderValidator",
+    "MAX_OPENROUTER_MODELS",
+    "MAX_OPENROUTER_MODELS_RESPONSE_BYTES",
+    "OPENROUTER_MODELS_URL",
+    "OpenRouterModelDiscovery",
 ]

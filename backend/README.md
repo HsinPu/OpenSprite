@@ -10,6 +10,7 @@ The current slice provides:
 - `GET /healthz`;
 - thin provider-connection routes and public models;
 - a fixed OpenAI/Anthropic/OpenRouter validation catalog using `httpx`;
+- on-demand OpenRouter model discovery using the stored credential;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable OS credential-store boundary backed by `keyring`;
@@ -73,6 +74,13 @@ only. All three use a fixed 30-second timeout, default TLS verification, and
 disabled redirects. OpenAI and Anthropic require a JSON `data` list;
 OpenRouter requires a JSON `data` object. Every success response must fit within
 the 1 MiB validation-body limit and no response content is persisted.
+
+Connected OpenRouter accounts can load their available text models through
+bodyless `POST /api/providers/openrouter/models`. The backend calls
+`GET https://openrouter.ai/api/v1/models/user` with the stored Bearer credential,
+keeps only text-input/text-output models, deduplicates by id, sorts by name then
+id, and returns at most 1000 entries. The upstream response is capped at 4 MiB
+and is never cached or written to `.opensprite`.
 
 Provider mutations are serialized per provider inside the single owning
 desktop backend process. Candidate credentials are validated before any local

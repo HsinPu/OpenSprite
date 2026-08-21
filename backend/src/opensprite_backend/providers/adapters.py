@@ -8,7 +8,7 @@ from typing import Final, Protocol
 
 import httpx
 
-from ..models import ErrorCode, ProviderId
+from ..models import ErrorCode, OpenRouterModelListResponse, ProviderId
 
 PROVIDER_TIMEOUT_SECONDS: Final = 30.0
 MAX_PROVIDER_RESPONSE_BYTES: Final = 1024 * 1024
@@ -110,6 +110,8 @@ class ProviderValidator:
     """Deny-by-default catalog containing only approved provider adapters."""
 
     def __init__(self, client: httpx.AsyncClient) -> None:
+        from .openrouter_models import OpenRouterModelDiscovery
+
         self._adapters: dict[ProviderId, ProviderAdapter] = {
             "openai": _HttpProviderAdapter(
                 client,
@@ -131,9 +133,16 @@ class ProviderValidator:
                 expected_data_type=dict,
             ),
         }
+        self._openrouter_models = OpenRouterModelDiscovery(client)
 
     async def validate(self, provider_id: ProviderId, api_key: str) -> None:
         adapter = self._adapters.get(provider_id)
         if adapter is None:
             raise ProviderValidationError(ErrorCode.UNSUPPORTED_PROVIDER)
         await adapter.validate(api_key)
+
+    async def list_openrouter_models(
+        self,
+        api_key: str,
+    ) -> OpenRouterModelListResponse:
+        return await self._openrouter_models.list_models(api_key)

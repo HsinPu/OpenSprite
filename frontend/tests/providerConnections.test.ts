@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ProviderApiError,
   deleteProviderConnection,
+  listOpenRouterModels,
   listProviderConnections,
   providerErrorText,
   replaceProviderConnection,
@@ -45,6 +46,36 @@ describe("provider connection client", () => {
     });
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/providers/openai/connection/test", { method: "POST" });
     expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/providers/openai/connection", { method: "DELETE" });
+  });
+
+  it("posts without a body for the OpenRouter model catalog and validates its exact shape", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6" }] })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listOpenRouterModels()).resolves.toEqual([{ id: "openai/gpt-5.6", name: "GPT-5.6" }]);
+    expect(fetchMock).toHaveBeenCalledWith("/api/providers/openrouter/models", { method: "POST" });
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6", extra: true }] }))));
+    await expect(listOpenRouterModels()).rejects.toMatchObject({ code: "malformed_response" });
+  });
+
+  it.each([
+    ["an empty catalog", { models: [] }, 200],
+    ["more than 1000 models", { models: Array.from({ length: 1001 }, (_, index) => ({ id: `model-${index}`, name: `Model ${index}` })) }, 200],
+    ["an invalid model length", { models: [{ id: "", name: "Name" }] }, 200],
+    ["a mismatched error status", { error: { code: "provider_timeout", message: "private", retryable: true } }, 502],
+  ])("rejects OpenRouter models response with %s", async (_description, body, status) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })));
+    await expect(listOpenRouterModels()).rejects.toMatchObject({ code: "malformed_response" });
+  });
+
+  it("counts OpenRouter model identifiers by Unicode code point", async () => {
+    const accepted = "😀".repeat(256);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: accepted, name: "name" }] }))));
+    await expect(listOpenRouterModels()).resolves.toEqual([{ id: accepted, name: "name" }]);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "😀".repeat(257), name: "name" }] }))));
+    await expect(listOpenRouterModels()).rejects.toMatchObject({ code: "malformed_response" });
   });
 
   it("fails closed on a malformed catalog and never exposes an error response message", async () => {

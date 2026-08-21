@@ -38,6 +38,7 @@ def test_contract_has_only_the_approved_operations() -> None:
         ("/api/providers/{provider_id}/connection", "put"),
         ("/api/providers/{provider_id}/connection", "delete"),
         ("/api/providers/{provider_id}/connection/test", "post"),
+        ("/api/providers/openrouter/models", "post"),
     }
 
 
@@ -61,6 +62,12 @@ def test_public_summary_and_error_fields_are_fixed() -> None:
         "message",
         "retryable",
     ]
+    assert schemas["OpenRouterModel"]["required"] == ["id", "name"]
+    assert schemas["OpenRouterModel"]["additionalProperties"] is False
+    assert schemas["OpenRouterModelListResponse"]["required"] == ["models"]
+    assert schemas["OpenRouterModelListResponse"]["properties"]["models"][
+        "maxItems"
+    ] == 1000
 
 
 def test_provider_catalog_schema_fixes_identity_name_and_order() -> None:
@@ -109,3 +116,17 @@ def test_error_status_mapping_is_explicit() -> None:
     assert put_responses["504"]["$ref"].endswith("/ProviderTimeout")
     assert put_responses["500"]["$ref"].endswith("/InternalError")
     assert test_responses["409"]["$ref"].endswith("/NotConnected")
+
+    model_responses = paths["/api/providers/openrouter/models"]["post"][
+        "responses"
+    ]
+    assert model_responses["400"]["$ref"].endswith("/InvalidRequest")
+    assert model_responses["409"]["$ref"].endswith("/NotConnected")
+    assert model_responses["422"]["$ref"].endswith("/InvalidCredentials")
+    assert model_responses["429"]["$ref"].endswith("/ProviderRateLimited")
+    assert model_responses["502"]["$ref"].endswith("/ProviderUnreachable")
+    assert model_responses["503"]["$ref"].endswith(
+        "/CredentialStoreUnavailable"
+    )
+    assert model_responses["504"]["$ref"].endswith("/ProviderTimeout")
+    assert model_responses["500"]["$ref"].endswith("/InternalError")

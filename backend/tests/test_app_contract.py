@@ -11,6 +11,8 @@ import pytest
 from opensprite_backend import create_app
 from opensprite_backend.models import (
     ErrorCode,
+    OpenRouterModel,
+    OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderStatus,
@@ -61,6 +63,11 @@ class RecordingProviderConnections:
             ]
         )
 
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        return OpenRouterModelListResponse(
+            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+        )
+
     async def connect(
         self,
         provider_id: ProviderId,
@@ -99,6 +106,9 @@ class FailingProviderConnections(RecordingProviderConnections):
         del provider_id
         raise self.failure()
 
+    async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        raise self.failure()
+
 
 class ExplodingProviderConnections(RecordingProviderConnections):
     def __init__(self, private_text: str) -> None:
@@ -126,6 +136,11 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
     assert operations == {
         ("/healthz", "get", "getHealth"),
         ("/api/providers", "get", "listProviders"),
+        (
+            "/api/providers/openrouter/models",
+            "post",
+            "listOpenRouterModels",
+        ),
         (
             "/api/providers/{provider_id}/connection",
             "put",
@@ -388,6 +403,46 @@ def test_connection_test_rejects_any_non_empty_body() -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_request"
+
+
+def test_openrouter_model_discovery_has_fixed_body_and_error_contract() -> None:
+    response = TestClient(create_app(RecordingProviderConnections())).post(
+        "/api/providers/openrouter/models",
+        content=b"{}",
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_request"
+
+    private_text = "private-model-list-error"
+    error_response = TestClient(
+        create_app(
+            FailingProviderConnections(
+                ErrorCode.PROVIDER_TIMEOUT,
+                private_text,
+            )
+        )
+    ).post("/api/providers/openrouter/models")
+
+    assert error_response.status_code == 504
+    assert error_response.json() == {
+        "error": {
+            "code": "provider_timeout",
+            "message": "The provider did not respond before the timeout.",
+            "retryable": True,
+        }
+    }
+    assert private_text not in error_response.text
+
+
+def test_openrouter_model_discovery_returns_fixed_model_shape() -> None:
+    response = TestClient(create_app(RecordingProviderConnections())).post(
+        "/api/providers/openrouter/models"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"models": [{"id": "openai/gpt-4", "name": "GPT-4"}]}
 
 
 def test_delete_is_no_content() -> None:
