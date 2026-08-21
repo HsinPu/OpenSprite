@@ -31,6 +31,12 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 `credential_store_unavailable` fail closed，方便 contract test 與明確 composition。`GET /healthz`
 只代表 HTTP process liveness，不代表 credential store 或上游 provider 可用。
 
+目前也已建立模型選擇的最小完整流程：`contracts/model-selection.openapi.json` 定義
+`GET`／`PUT /api/settings/model`；後端只將 `providerId` 與 `modelId` 以 strict schema-v1
+保存在 `config/settings.json`，並在寫入前確認該 provider 有已保存的連線。這個設定 API 不會
+解密 API key、不聯網驗證模型清單，也不保存 display label 或動態 catalog。前端設定頁與聊天
+工作台共用同一份確認後的選擇；儲存失敗保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
+
 ## Provider connection 邊界
 
 `contracts/provider-connections.openapi.json` 是唯一 authoritative contract。主要 consumer
@@ -60,8 +66,9 @@ runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗�
 欄位、狀態與 UTC timestamp；無法驗證的回應只顯示固定安全錯誤。API key 只存在連線 modal
 的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
 都會清除。OpenAI 與 Anthropic 模型選項仍是前端 local catalog；OpenRouter 則在連線後即時
-取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。選擇值分開保存 provider id、
-執行用 model id 與顯示 label，不將動態清單寫入 browser storage、URL 或 `.opensprite`。
+取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。模型選擇只保存 provider id 與
+執行用 model id；顯示 label 從固定 catalog 或當次 OpenRouter 記憶體清單衍生。動態清單不寫入
+browser storage、URL 或 `.opensprite`。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值
@@ -123,6 +130,11 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。
+- `config/settings.json` 是 strict schema-v1 的非秘密模型選擇檔，只含 `defaultModel.providerId` 與
+  `defaultModel.modelId`。讀取不存在檔案不建立目錄；首次成功選擇才以 fsync + atomic replacement
+  建立 `config` 與該檔案。PUT `null` 清除選擇並刪除這個目前唯一的 settings file，不接觸 credential
+  或 provider model catalog。model-selection route 以獨立 error enum 描述其可觀察錯誤，避免將
+  settings-only code 洩漏到 provider API schema。
 - 同 provider 的 PUT/test/DELETE 由 process-local async lock 序列化；此設計假設單一 desktop
   backend process 擁有 runtime。secret/state partial failure 會嘗試還原並重讀前一 snapshot；無法
   證明 rollback 時永不回 success，只回固定 `credential_store_unavailable`。

@@ -1,13 +1,26 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getModelSelection, modelSelectionErrorText, putModelSelection } from "../api/modelSelection";
+import { listProviderConnections, type ProviderSummary } from "../api/providerConnections";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import {
   defaultDemoSettings,
-  modelLabel,
   SettingsPage,
   type DemoSettings,
   type SettingsSection,
 } from "../features/settings/SettingsPage";
+import { localModelCatalog, modelLabel, type ModelSelection } from "../features/settings/modelCatalog";
+
+type ModelChoice = { selection: ModelSelection; label: string };
+
+function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): ReadonlyArray<ModelChoice> {
+  return providers.flatMap((provider) => provider.connected
+    ? localModelCatalog[provider.id].map((model) => ({
+      selection: { providerId: provider.id, modelId: model.id },
+      label: model.label,
+    }))
+    : []);
+}
 
 function chatTitleFromHash(): string {
   if (window.location.hash === "#new-chat") {
@@ -75,6 +88,12 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
+  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
+  const [modelSelectionLoaded, setModelSelectionLoaded] = useState(false);
+  const [modelSelectionSaving, setModelSelectionSaving] = useState(false);
+  const [modelSelectionError, setModelSelectionError] = useState<string | null>(null);
+  const [modelChoices, setModelChoices] = useState<ReadonlyArray<ModelChoice>>([]);
+  const [providerCatalog, setProviderCatalog] = useState<ReadonlyArray<ProviderSummary> | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
@@ -84,6 +103,79 @@ export function App() {
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const menuWasOpen = useRef(false);
+  const modelLoadGenerationRef = useRef(0);
+  const modelSaveGenerationRef = useRef(0);
+  const modelSaveQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    const generation = modelLoadGenerationRef.current + 1;
+    modelLoadGenerationRef.current = generation;
+    void getModelSelection()
+      .then((savedSelection) => {
+        if (modelLoadGenerationRef.current !== generation) return;
+        setModelSelection(savedSelection);
+        setModelSelectionLoaded(true);
+        setModelSelectionError(null);
+      })
+      .catch((error: unknown) => {
+        if (modelLoadGenerationRef.current !== generation) return;
+        setModelSelectionLoaded(false);
+        setModelSelectionError(modelSelectionErrorText(error));
+      });
+
+    void listProviderConnections()
+      .then((providers) => {
+        setProviderCatalog(providers);
+        setModelChoices(staticModelChoices(providers));
+      })
+      .catch(() => {
+        setProviderCatalog(null);
+        setModelChoices([]);
+      });
+  }, []);
+
+  const saveModelSelection = useCallback((next: ModelSelection | null): Promise<string | null> => {
+    modelLoadGenerationRef.current += 1;
+    const generation = modelSaveGenerationRef.current + 1;
+    modelSaveGenerationRef.current = generation;
+    setModelSelectionSaving(true);
+    setModelSelectionError(null);
+    const operation = modelSaveQueueRef.current.then(async () => {
+      try {
+        const saved = await putModelSelection(next);
+        if ((saved?.providerId ?? null) !== (next?.providerId ?? null) || (saved?.modelId ?? null) !== (next?.modelId ?? null)) {
+          throw new Error("model_selection_response_mismatch");
+        }
+        if (modelSaveGenerationRef.current === generation) {
+          setModelSelection(saved);
+          setModelSelectionError(null);
+        }
+        return null;
+      } catch (error) {
+        const message = modelSelectionErrorText(error);
+        if (modelSaveGenerationRef.current === generation) setModelSelectionError(message);
+        return message;
+      } finally {
+        if (modelSaveGenerationRef.current === generation) setModelSelectionSaving(false);
+      }
+    });
+    modelSaveQueueRef.current = operation.then(() => undefined, () => undefined);
+    return operation;
+  }, []);
+
+  useEffect(() => {
+    if (!modelSelectionLoaded || providerCatalog === null || modelSelectionSaving) return;
+    const connectedProviders = providerCatalog.filter((provider) => provider.connected);
+    if (modelSelection?.providerId === "openrouter") return;
+    const selectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
+    if (selectionIsAvailable) return;
+    const fallback = modelChoices[0];
+    if (fallback) {
+      void saveModelSelection(fallback.selection);
+    } else if (modelSelection !== null && connectedProviders.length === 0) {
+      void saveModelSelection(null);
+    }
+  }, [modelChoices, modelSelection, modelSelectionLoaded, modelSelectionSaving, providerCatalog, saveModelSelection]);
 
   useEffect(() => {
     const syncHash = () => {
@@ -290,7 +382,11 @@ export function App() {
           key={`${chatTitle}-${chatRevision}`}
           title={chatTitle}
           initiallyEmpty={chatTitle === "新對話"}
-          modelName={modelLabel(settings.defaultModel)}
+          modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}
+          modelSelection={modelSelection}
+          modelChoices={modelChoices}
+          modelSelectionSaving={modelSelectionSaving}
+          onModelSelectionChange={saveModelSelection}
         />
       </main>
 
@@ -320,6 +416,11 @@ export function App() {
           onSectionChange={setSettingsSection}
           settings={settings}
           onSettingsChange={setSettings}
+          modelSelection={modelSelection}
+          modelSelectionSaving={modelSelectionSaving}
+          modelSelectionError={modelSelectionError}
+          onModelSelectionChange={saveModelSelection}
+          onModelChoicesChange={setModelChoices}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

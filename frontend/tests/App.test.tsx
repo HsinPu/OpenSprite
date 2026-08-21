@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/app/App";
 
 beforeEach(() => {
+  vi.unstubAllGlobals();
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value(this: HTMLDialogElement) { this.open = true; },
@@ -16,6 +17,24 @@ beforeEach(() => {
     },
   });
 });
+
+const connectedOpenAi = {
+  providers: [
+    { id: "openai", name: "OpenAI", connected: true, status: "connected", credentialPreview: "••••1234", lastCheckedAt: "2026-08-20T08:30:00Z" },
+    { id: "anthropic", name: "Anthropic", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
+    { id: "openrouter", name: "OpenRouter", connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null },
+  ],
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("settings dialog focus restoration", () => {
   it.each([[1440], [390]])("returns focus to the actual settings opener at %ipx after close", async (width) => {
@@ -39,5 +58,87 @@ describe("settings dialog focus restoration", () => {
     if (!cancel.defaultPrevented) dialog.close();
 
     await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
+});
+
+describe("persisted model selection", () => {
+  it("chooses the first available model when no selection exists", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: null })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
+    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } }),
+    });
+  });
+
+  it("ignores a late hydration result after a newer model save", async () => {
+    const hydration = deferred<Response>();
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/model" && !init) return hydration.promise;
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: /尚未選擇模型/ });
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
+    hydration.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } }),
+    });
+  });
+
+  it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } })));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
+    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    await screen.findAllByText("OpenAI");
+    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 mini" })).toBeTruthy());
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/model", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6-mini" } }) });
+  });
+
+  it("keeps the confirmed model when the PUT fails", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/model" && !init) return Promise.resolve(new Response(JSON.stringify({ selection: { providerId: "openai", modelId: "gpt-5.6" } })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/settings/model" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    await screen.findAllByText("OpenAI");
+    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 mini" })).toBeTruthy());
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
+    expect((await screen.findByRole("alert")).textContent).toContain("尚未連線");
+    expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
   });
 });

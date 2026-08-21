@@ -81,7 +81,7 @@
 .chat-workspace__icon-button:hover:not(:disabled),
 .chat-workspace__tool-button:hover:not(:disabled) { border-color: var(--chat-primary); background: var(--chat-primary-soft); }
 
-.chat-workspace button:disabled {
+.chat-workspace button:disabled, .chat-workspace select:disabled {
   cursor: not-allowed;
   opacity: 0.52;
 }
@@ -93,6 +93,8 @@
   min-height: 42px;
   padding: 0 14px;
   border-radius: 11px;
+  color: var(--chat-text);
+  font: inherit;
 }
 
 .chat-workspace__icon-button { width: 42px; height: 42px; border-radius: 11px; font-size: 1.5rem; line-height: 1; }

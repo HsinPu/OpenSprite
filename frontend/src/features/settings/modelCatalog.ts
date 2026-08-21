@@ -8,7 +8,6 @@ export type ModelCatalogItem = {
 export type ModelSelection = {
   providerId: ProviderId;
   modelId: string;
-  label: string;
 };
 
 export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogItem>> = {
@@ -23,8 +22,10 @@ export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogIte
   openrouter: [],
 };
 
-export function modelLabel(selection: ModelSelection): string {
-  return selection.label || selection.modelId;
+export function modelLabel(selection: ModelSelection | null, openRouterModels: ReadonlyArray<ModelCatalogItem> = []): string {
+  if (!selection) return "尚未選擇模型";
+  const catalog = selection.providerId === "openrouter" ? openRouterModels : localModelCatalog[selection.providerId];
+  return catalog.find((model) => model.id === selection.modelId)?.label ?? selection.modelId;
 }
 
 export function openRouterModelCatalog(models: ReadonlyArray<OpenRouterModel>): ReadonlyArray<ModelCatalogItem> {

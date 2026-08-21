@@ -1,5 +1,7 @@
 import { FormEvent, useId, useState } from 'react';
 
+import type { ModelSelection } from '../settings/modelCatalog';
+
 import './ChatWorkspace.css';
 
 type ChatMessage = {
@@ -10,6 +12,10 @@ type ChatMessage = {
 
 type ChatWorkspaceProps = {
   modelName: string;
+  modelSelection: ModelSelection | null;
+  modelChoices: ReadonlyArray<{ selection: ModelSelection; label: string }>;
+  modelSelectionSaving: boolean;
+  onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   title?: string;
   initiallyEmpty?: boolean;
 };
@@ -158,6 +164,10 @@ function ExecutionContext({ modelName }: { modelName: string }) {
 
 export function ChatWorkspace({
   modelName,
+  modelSelection,
+  modelChoices,
+  modelSelectionSaving,
+  onModelSelectionChange,
   title = '整理今天的工作',
   initiallyEmpty = false,
 }: ChatWorkspaceProps) {
@@ -166,6 +176,14 @@ export function ChatWorkspace({
   );
   const [draft, setDraft] = useState('');
   const [nextId, setNextId] = useState(3);
+  const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : '';
+  const currentSelectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
+  const choices = modelChoices;
+  const choicesByProvider = ['openai', 'anthropic', 'openrouter'].map((providerId) => ({
+    providerId,
+    label: providerId === 'openai' ? 'OpenAI' : providerId === 'anthropic' ? 'Anthropic' : 'OpenRouter',
+    choices: choices.filter((choice) => choice.selection.providerId === providerId),
+  })).filter((group) => group.choices.length > 0);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -187,15 +205,25 @@ export function ChatWorkspace({
         <header className="chat-workspace__header">
           <h1>{title}</h1>
           <div className="chat-workspace__header-actions">
-            <button
-              type="button"
+            <select
               className="chat-workspace__model-select"
-              disabled
-              title="Demo 中無法切換模型"
-              aria-label={`目前模型 ${modelName}，Demo 中無法切換`}
+              disabled={choices.length === 0 || modelSelectionSaving}
+              title={choices.length === 0 ? '尚無可用模型；請先在設定中連接模型廠家。' : currentSelectionIsAvailable ? '切換新對話使用的模型' : '目前模型暫時無法使用，請選擇可用模型。'}
+              aria-label={choices.length === 0 ? '目前沒有可用模型，請先在設定中連接模型廠家' : currentSelectionIsAvailable ? `目前模型 ${modelName}，切換新對話使用的模型` : `目前模型 ${modelName} 暫時無法使用，請選擇可用模型`}
+              value={currentSelectionValue}
+              onChange={(event) => {
+                try {
+                  const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection['providerId'], string];
+                  if (typeof modelId === 'string') void onModelSelectionChange({ providerId, modelId });
+                } catch {
+                  // A DOM value cannot create a selection outside the rendered grouped choices.
+                }
+              }}
             >
-              {modelName} <span aria-hidden="true">⌄</span>
-            </button>
+              {modelSelection === null ? <option value="">尚未選擇模型</option> : null}
+              {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
+              {choicesByProvider.map((group) => <optgroup key={group.providerId} label={group.label}>{group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}</optgroup>)}
+            </select>
             <span className="chat-workspace__local-status"><i aria-hidden="true" />本機執行</span>
             <button
               type="button"
