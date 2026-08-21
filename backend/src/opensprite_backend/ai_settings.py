@@ -36,7 +36,7 @@ class AiSettingsOperations(Protocol):
 
 
 def default_ai_settings() -> AiSettings:
-    return AiSettings(model=None, responseMode="balanced")
+    return AiSettings(model=None, responseMode="default")
 
 
 class JsonAiSettingsStore:

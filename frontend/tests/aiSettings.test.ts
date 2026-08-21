@@ -8,14 +8,14 @@ describe("AI settings client", () => {
   it("uses the exact GET and PUT shapes", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ model: selection, responseMode: "deep" })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ model: null, responseMode: "fast" })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ model: null, responseMode: "default" })));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getAiSettings()).resolves.toEqual({ model: selection, responseMode: "deep" });
-    await expect(putAiSettings({ model: null, responseMode: "fast" })).resolves.toEqual({ model: null, responseMode: "fast" });
+    await expect(putAiSettings({ model: null, responseMode: "default" })).resolves.toEqual({ model: null, responseMode: "default" });
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/settings/ai", undefined);
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: null, responseMode: "fast" }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: null, responseMode: "default" }),
     });
   });
 

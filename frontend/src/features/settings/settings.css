@@ -116,7 +116,7 @@
 .settings-preferences { padding-bottom: 8px; }
 .settings-model-selection { min-width: 0; }
 .settings-preference-row { min-height: 64px; padding: 12px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.settings-segmented { display: grid; grid-template-columns: repeat(3, minmax(72px, 1fr)); overflow: hidden; border: 1px solid var(--settings-border); border-radius: 9px; }
+.settings-segmented { display: grid; grid-template-columns: repeat(4, minmax(64px, 1fr)); overflow: hidden; border: 1px solid var(--settings-border); border-radius: 9px; }
 .settings-segmented button { min-height: 40px; padding: 0 16px; border: 0; border-right: 1px solid var(--settings-border); background: var(--settings-surface); cursor: pointer; }
 .settings-segmented button:last-child { border-right: 0; }
 .settings-segmented button.is-selected { background: var(--settings-surface); color: var(--settings-primary); box-shadow: inset 0 -2px 0 var(--settings-primary); font-weight: 600; }

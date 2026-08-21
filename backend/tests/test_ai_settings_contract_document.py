@@ -54,7 +54,7 @@ def test_ai_settings_schema_persists_only_model_and_response_mode() -> None:
     assert settings["additionalProperties"] is False
     assert settings["required"] == ["model", "responseMode"]
     assert set(settings["properties"]) == {"model", "responseMode"}
-    assert schemas["ResponseMode"]["enum"] == ["fast", "balanced", "deep"]
+    assert schemas["ResponseMode"]["enum"] == ["default", "fast", "balanced", "deep"]
     assert schemas["ErrorCode"]["enum"] == [
         "invalid_request",
         "not_connected",

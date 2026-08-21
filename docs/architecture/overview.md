@@ -32,7 +32,7 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 只代表 HTTP process liveness，不代表 credential store 或上游 provider 可用。
 
 目前 AI 設定的 authoritative contract 是 `contracts/ai-settings.openapi.json`：
-`GET`／`PUT /api/settings/ai` 將 nullable model 與 `fast`／`balanced`／`deep` 回應模式視為一個
+`GET`／`PUT /api/settings/ai` 將 nullable model 與 `default`／`fast`／`balanced`／`deep` 回應模式視為一個
 atomic setting。後端以 strict schema-v2 保存在 `config/settings.json`，並在寫入 non-null model
 前確認該 provider 有已保存的連線。這個設定 API 不會解密 API key、不聯網驗證模型清單，也不
 保存 display label 或動態 catalog。前端設定頁與聊天工作台共用同一份確認後的設定；儲存失敗
@@ -68,7 +68,8 @@ runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗�
 的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
 都會清除。OpenAI 與 Anthropic 模型選項仍是前端 local catalog；OpenRouter 則在連線後即時
 取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。AI settings 只保存 provider id、
-執行用 model id 與 `fast`／`balanced`／`deep` 回應模式；顯示 label 從固定 catalog 或當次
+執行用 model id 與 `default`／`fast`／`balanced`／`deep` 回應模式；`default` 的執行語意是省略
+Provider 推理強度參數，而不是轉成某個固定強度。顯示 label 從固定 catalog 或當次
 OpenRouter 記憶體清單衍生。動態清單與 AI settings 都不寫入 browser storage 或 URL。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
@@ -132,7 +133,7 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。
 - `config/settings.json` 是 strict schema-v2 的非秘密 AI settings 檔，包含 nullable `model` 與
-  `responseMode`。讀取不存在檔案不建立目錄，並回傳 null model 與 balanced；成功 PUT 才以 fsync
+  `responseMode`。讀取不存在檔案不建立目錄，並回傳 null model 與 default；成功 PUT 才以 fsync
   + atomic replacement 建立或替換整份設定。清除 model 仍保留 response mode，不接觸 credential
   或 provider model catalog。AI-settings route 以獨立 error enum 描述其可觀察錯誤，避免將
   settings-only code 洩漏到 provider API schema。

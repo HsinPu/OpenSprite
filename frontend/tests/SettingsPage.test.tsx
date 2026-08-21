@@ -60,7 +60,7 @@ function SettingsHarness({ initialSettings = defaultDemoSettings, initialSelecti
   const [settings, setSettings] = useState<DemoSettings>(initialSettings);
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [choices, setChoices] = useState<ReadonlyArray<{ selection: ModelSelection; label: string }>>([]);
-  const [responseMode, setResponseMode] = useState<ResponseMode>("balanced");
+  const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onModelChoicesChange={setChoices} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, choices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
 }
 
@@ -81,12 +81,12 @@ function ToggleSectionHarness() {
 describe("provider settings", () => {
   beforeEach(() => vi.unstubAllGlobals());
 
-  it("presents the persisted response modes under the response-mode label", async () => {
+  it("presents provider default plus the three explicit response modes", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
 
     const group = screen.getByRole("group", { name: "回應模式" });
-    expect(within(group).getByRole("button", { name: "平衡" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(group).getByRole("button", { name: "預設" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(group).getByRole("button", { name: "深入" }));
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
   });

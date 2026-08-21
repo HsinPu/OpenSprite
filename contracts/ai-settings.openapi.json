@@ -71,7 +71,7 @@
   "components": {
     "schemas": {
       "ProviderId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]},
-      "ResponseMode": {"type": "string", "enum": ["fast", "balanced", "deep"]},
+      "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,

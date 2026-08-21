@@ -81,7 +81,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == settings()
+    assert store.get() == AiSettings(model=None, responseMode="default")
     assert not paths.home.exists()
     saved = settings(model=selection(), response_mode=ResponseMode.DEEP)
     store.set(saved)
@@ -198,7 +198,7 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
             json={"model": {"providerId": "openai", "modelId": "   "}, "responseMode": "deep"},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "balanced"}
+    assert initial.json() == {"model": None, "responseMode": "default"}
     assert saved.status_code == 200
     assert saved.json() == {
         "model": {"providerId": "openai", "modelId": "gpt-5.6"},
@@ -251,6 +251,6 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "balanced"}
+        assert response.json() == {"model": None, "responseMode": "default"}
 
     assert not paths.home.exists()

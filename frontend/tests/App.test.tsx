@@ -97,7 +97,7 @@ describe("persisted AI settings", () => {
 
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "default" }),
     });
   });
 

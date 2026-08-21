@@ -40,8 +40,10 @@ The credential and key files are created only after a provider key validates;
 the provider repository creates `.opensprite/state` when metadata is written.
 The AI settings file is created only after a successful settings write. It uses
 strict schema v2 and stores one nullable Provider/model identifier plus the
-`fast`, `balanced`, or `deep` response mode. A missing file reads as a null model
-with balanced mode without creating any directory. The file never contains a
+`default`, `fast`, `balanced`, or `deep` response mode. `default` means a future
+inference request must omit reasoning-strength parameters and defer to the
+Provider. A missing file reads as a null model with default mode without creating
+any directory. The file never contains a
 raw API key, display label, or dynamic model catalog. Database, conversation,
 log, and cache paths remain reserved by the layout contract and are not created
 before an approved feature uses them.

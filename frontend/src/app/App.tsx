@@ -89,7 +89,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
-  const [responseMode, setResponseMode] = useState<ResponseMode>("balanced");
+  const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
   const [aiSettingsSaving, setAiSettingsSaving] = useState(false);
   const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);

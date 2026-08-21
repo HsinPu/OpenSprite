@@ -5,7 +5,7 @@ export type PersistedModelSelection = {
   modelId: string;
 };
 
-export type ResponseMode = "fast" | "balanced" | "deep";
+export type ResponseMode = "default" | "fast" | "balanced" | "deep";
 
 export type AiSettings = {
   model: PersistedModelSelection | null;
@@ -25,7 +25,7 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) => Object.keys(value).length === expected.length && Object.keys(value).every((key) => expected.includes(key));
 const codePointLength = (value: string) => Array.from(value).length;
 const errorCodes = ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"] as const;
-const responseModes = ["fast", "balanced", "deep"] as const;
+const responseModes = ["default", "fast", "balanced", "deep"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {
   if (value === null) return null;

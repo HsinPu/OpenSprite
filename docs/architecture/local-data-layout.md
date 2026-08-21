@@ -55,9 +55,10 @@ key validates or AI settings are successfully saved.
 
 `config/settings.json` is a strict schema-v2, non-secret file containing one
 nullable `model` (`providerId` and `modelId`) plus one `responseMode` value:
-`fast`, `balanced`, or `deep`. It never contains a display label, API key, or
+`default`, `fast`, `balanced`, or `deep`. `default` means future inference omits
+the Provider reasoning-strength parameter. It never contains a display label, API key, or
 provider model catalog. Reads of a missing file are side-effect free and return
-`model: null` with `responseMode: balanced`. Every successful change replaces
+`model: null` with `responseMode: default`. Every successful change replaces
 both values atomically; clearing the model preserves and persists the chosen
 response mode. `state/providers.json` remains strict non-secret metadata. Other
 paths are not created in advance.
