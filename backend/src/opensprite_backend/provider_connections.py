@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,6 +13,7 @@ import httpx
 
 from .app_paths import AppPaths, build_app_paths
 from .credentials import CredentialStore, EncryptedJsonCredentialStore
+from .inference.native_gateway import NativeModelGateway
 from .models import (
     ErrorCode,
     OpenRouterModelListResponse,
@@ -27,7 +27,11 @@ from .provider_state import (
     ProviderState,
     ProviderStateRepository,
 )
-from .providers import ProviderValidationError, ProviderValidator
+from .providers import (
+    ProviderOperationLocks,
+    ProviderValidationError,
+    ProviderValidator,
+)
 
 _CATALOG: tuple[tuple[ProviderId, str], ...] = (
     ("openai", "OpenAI"),
@@ -115,17 +119,18 @@ class ProviderConnectionService:
         state_repository: ProviderStateRepository,
         validator: ProviderValidator,
         clock: Callable[[], datetime] | None = None,
+        operation_locks: ProviderOperationLocks | None = None,
     ) -> None:
         self._credentials = credential_store
         self._states = state_repository
         self._validator = validator
         self._clock = clock or (lambda: datetime.now(UTC))
-        self._locks = {provider_id: asyncio.Lock() for provider_id, _ in _CATALOG}
+        self._operation_locks = operation_locks or ProviderOperationLocks()
 
     async def list_providers(self) -> ProviderListResponse:
         summaries: list[ProviderSummary] = []
         for provider_id, name in _CATALOG:
-            async with self._locks[provider_id]:
+            async with self._operation_locks.hold(provider_id):
                 try:
                     fingerprint = self._credentials.fingerprint(provider_id)
                     state = self._states.get(provider_id)
@@ -143,7 +148,7 @@ class ProviderConnectionService:
         return ProviderListResponse(providers=summaries)
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
-        async with self._locks["openrouter"]:
+        async with self._operation_locks.hold("openrouter"):
             snapshot = self._snapshot("openrouter")
             if snapshot is None:
                 raise self._store_unavailable()
@@ -179,7 +184,7 @@ class ProviderConnectionService:
         provider_id: ProviderId,
         api_key: str,
     ) -> ProviderSummary:
-        async with self._locks[provider_id]:
+        async with self._operation_locks.hold(provider_id):
             validation_error = await self._validate(provider_id, api_key)
             if validation_error is not None:
                 raise ProviderConnectionError(validation_error)
@@ -201,7 +206,7 @@ class ProviderConnectionService:
             return self._summary(provider_id, self._name(provider_id), desired)
 
     async def test(self, provider_id: ProviderId) -> ProviderSummary:
-        async with self._locks[provider_id]:
+        async with self._operation_locks.hold(provider_id):
             before = self._snapshot(provider_id)
             if before is None:
                 raise self._store_unavailable()
@@ -236,7 +241,7 @@ class ProviderConnectionService:
             return self._summary(provider_id, self._name(provider_id), desired)
 
     async def disconnect(self, provider_id: ProviderId) -> None:
-        async with self._locks[provider_id]:
+        async with self._operation_locks.hold(provider_id):
             before = self._snapshot(provider_id)
             if before is None:
                 raise self._store_unavailable()
@@ -432,6 +437,8 @@ class ProviderRuntime:
     """Explicit system composition with owned HTTP-client lifecycle."""
 
     connections: ProviderConnectionService
+    model_gateway: NativeModelGateway
+    operation_locks: ProviderOperationLocks
     http_client: httpx.AsyncClient
     owns_http_client: bool
 
@@ -448,6 +455,7 @@ def create_provider_runtime(
     http_client: httpx.AsyncClient | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     clock: Callable[[], datetime] | None = None,
+    operation_locks: ProviderOperationLocks | None = None,
 ) -> ProviderRuntime:
     """Compose the provider runtime without accessing a secret or network."""
 
@@ -475,10 +483,18 @@ def create_provider_runtime(
     states = state_repository
     if states is None:
         states = JsonProviderStateRepository(paths.provider_state_file)
+    locks = operation_locks or ProviderOperationLocks()
     connections = ProviderConnectionService(
         store,
         states,
         ProviderValidator(client),
         clock,
+        locks,
     )
-    return ProviderRuntime(connections, client, owns_client)
+    return ProviderRuntime(
+        connections=connections,
+        model_gateway=NativeModelGateway(store, client, locks),
+        operation_locks=locks,
+        http_client=client,
+        owns_http_client=owns_client,
+    )

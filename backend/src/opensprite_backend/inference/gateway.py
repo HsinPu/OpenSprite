@@ -18,3 +18,11 @@ class ModelGatewayError(Exception):
 
 class ModelGateway(Protocol):
     def stream(self, request: ModelRequest) -> AsyncIterator[ModelStreamEvent]: ...
+
+
+class ProviderInferenceAdapter(Protocol):
+    def stream(
+        self,
+        request: ModelRequest,
+        api_key: str,
+    ) -> AsyncIterator[ModelStreamEvent]: ...

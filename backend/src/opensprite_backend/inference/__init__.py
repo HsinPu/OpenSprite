@@ -1,6 +1,7 @@
 """Provider-neutral model request and streaming boundary."""
 
 from .gateway import ModelGateway, ModelGatewayError
+from .native_gateway import NativeModelGateway
 from .models import (
     InferenceFailure,
     ModelCompleted,
@@ -21,6 +22,7 @@ __all__ = [
     "ModelGateway",
     "ModelGatewayError",
     "ModelMessage",
+    "NativeModelGateway",
     "ModelRequest",
     "ModelStreamEvent",
     "ModelTextDelta",

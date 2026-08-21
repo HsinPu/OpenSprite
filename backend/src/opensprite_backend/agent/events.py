@@ -7,6 +7,11 @@ from opensprite_backend.inference.models import InferenceFailure
 
 
 _INFERENCE_ERRORS = {
+    InferenceFailure.PROVIDER_NOT_CONNECTED: PublicRunError(
+        code="provider_not_connected",
+        message="選擇的模型廠家目前尚未連線。",
+        retryable=False,
+    ),
     InferenceFailure.INVALID_CREDENTIALS: PublicRunError(
         code="invalid_credentials",
         message="模型廠家的 API 金鑰無效或已失效。",

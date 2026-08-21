@@ -16,6 +16,7 @@ _NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 class InferenceFailure(str, Enum):
+    PROVIDER_NOT_CONNECTED = "provider_not_connected"
     INVALID_CREDENTIALS = "invalid_credentials"
     PROVIDER_RATE_LIMITED = "provider_rate_limited"
     PROVIDER_TIMEOUT = "provider_timeout"

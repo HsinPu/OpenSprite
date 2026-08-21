@@ -119,6 +119,35 @@ and `deep` map only when the selected Provider/model supports an equivalent
 setting. Unsupported behavior must be reported accurately; it must not be
 silently presented as applied.
 
+The three native streaming adapters are now implemented behind the normalized
+gateway:
+
+- OpenAI uses `POST https://api.openai.com/v1/responses` with `store: false`.
+- Anthropic uses `POST https://api.anthropic.com/v1/messages` with the fixed
+  `anthropic-version: 2023-06-01` header.
+- OpenRouter uses `POST https://openrouter.ai/api/v1/chat/completions` without
+  attribution headers.
+
+Every model round decrypts the selected credential only while holding the same
+per-Provider operation lock used by connect, test, delete, and model discovery.
+The key is never placed in a request body or retained by the gateway. Redirects
+are disabled; connect/write/pool timeouts are 30 seconds, a model stream is
+bounded to 300 seconds and 16 MiB, and one upstream SSE event is bounded to
+1 MiB. Status, transport, timeout, malformed stream, duplicate JSON key, and
+incomplete terminal failures are reduced to fixed safe inference errors.
+
+For explicit modes, OpenRouter receives `reasoning.effort` with reasoning output
+excluded, OpenAI reasoning-capable models receive `reasoning.effort`, and
+Anthropic receives `output_config.effort`; the values are low, medium, and high
+for fast, balanced, and deep. `default` omits all three fields so the Provider
+selects its own behavior. Reasoning/thinking stream fields are consumed only as
+protocol data and never become Model events, Messages, Run events, logs, or
+database content.
+
+These adapters and the shared credential/lock composition exist now, but live
+chat HTTP routes are still a later slice. The production Tool Registry remains
+empty, so no native request currently advertises an unimplemented tool.
+
 ## HTTP and security boundary
 
 `contracts/agent-chat.openapi.json` is authoritative. State-changing operations

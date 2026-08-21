@@ -14,6 +14,7 @@ from .openrouter_models import (
     OPENROUTER_MODELS_URL,
     OpenRouterModelDiscovery,
 )
+from .operation_locks import ProviderOperationLocks
 
 __all__ = [
     "ANTHROPIC_MODELS_URL",
@@ -26,4 +27,5 @@ __all__ = [
     "MAX_OPENROUTER_MODELS_RESPONSE_BYTES",
     "OPENROUTER_MODELS_URL",
     "OpenRouterModelDiscovery",
+    "ProviderOperationLocks",
 ]

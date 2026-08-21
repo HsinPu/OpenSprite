@@ -35,7 +35,11 @@ from opensprite_backend.provider_state import (
     ProviderState,
     ProviderStateRepository,
 )
-from opensprite_backend.providers import ProviderValidationError, ProviderValidator
+from opensprite_backend.providers import (
+    ProviderOperationLocks,
+    ProviderValidationError,
+    ProviderValidator,
+)
 
 NOW = datetime(2026, 8, 20, 10, 15, tzinfo=UTC)
 OLD = datetime(2026, 8, 19, 10, 15, tzinfo=UTC)
@@ -374,6 +378,33 @@ def test_openrouter_model_discovery_serializes_with_disconnect() -> None:
         ]
         assert credentials.values == {}
         assert states.values == {}
+
+    run(scenario())
+
+
+def test_connection_service_uses_injected_provider_operation_locks() -> None:
+    async def scenario() -> None:
+        credentials = FakeCredentialStore()
+        locks = ProviderOperationLocks()
+        runtime = ProviderConnectionService(
+            credentials,
+            FakeStateRepository(credentials),
+            cast(ProviderValidator, FakeValidator()),
+            clock=lambda: NOW,
+            operation_locks=locks,
+        )
+
+        async with locks.hold("openai"):
+            listing = asyncio.create_task(runtime.list_providers())
+            await asyncio.sleep(0)
+            assert listing.done() is False
+
+        result = await listing
+        assert [provider.connected for provider in result.providers] == [
+            False,
+            False,
+            False,
+        ]
 
     run(scenario())
 
@@ -765,6 +796,8 @@ def test_runtime_factory_is_offline_until_an_operation_and_owns_client() -> None
     )
     assert calls == 0
     assert runtime.owns_http_client is True
+    assert runtime.model_gateway is not None
+    assert runtime.operation_locks is not None
 
     summary = run(runtime.connections.connect("openai", NEW_SECRET))
     assert summary.status is ProviderStatus.CONNECTED
