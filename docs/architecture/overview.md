@@ -38,6 +38,12 @@ atomic setting。後端以 strict schema-v2 保存在 `config/settings.json`，�
 保存 display label 或動態 catalog。前端設定頁與聊天工作台共用同一份確認後的設定；儲存失敗
 保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
 
+下一個已批准的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
+對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。
+所有訊息都進入同一個 Agent loop，不加入關鍵字分類、舊 Task lifecycle 或直接繞過 Run 的
+模型分支。公開 HTTP／SSE 形狀以 `contracts/agent-chat.openapi.json` 為準；本段只記錄已固定的
+責任與依賴方向，後續實作仍須分切片驗證。
+
 ## Provider connection 邊界
 
 `contracts/provider-connections.openapi.json` 是唯一 authoritative contract。主要 consumer
@@ -155,8 +161,9 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
 breaking change，必須建立明確的新版本與 consumer migration。固定 catalog 不建立額外的 URL
 version compatibility layer；真正需要 breaking change 時才設計新 boundary。
 
-本契約不定義 event、webhook 或 WebSocket，因此沒有 delivery、ordering、duplicate、retry、
-signature 或 replay 保證。未來若加入，必須以獨立 message contract 明確定義。
+Provider connection 與 AI settings 契約不定義 event、webhook 或 WebSocket。Agent chat 另外以
+`agent-chat.openapi.json` 定義 Run event 的 SSE replay、ordering 與 reconnect 邊界；它不改變
+Provider lifecycle 契約。未來若加入 webhook 或 WebSocket，必須以獨立 message contract 定義。
 
 ## 決策與後續 handoff
 

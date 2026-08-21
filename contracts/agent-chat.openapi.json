@@ -1,0 +1,979 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite Agent Chat API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative local HTTP contract for conversations, bounded agent runs, semantic run events, and cancellation."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same-origin OpenSprite desktop runtime"
+    }
+  ],
+  "security": [],
+  "paths": {
+    "/api/conversations": {
+      "get": {
+        "operationId": "listConversations",
+        "summary": "List conversations in reverse update order",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/conversations/{conversation_id}/messages": {
+      "get": {
+        "operationId": "listConversationMessages",
+        "summary": "List persisted visible messages in sequence order",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ConversationId"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "beforeSequence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/runs": {
+      "post": {
+        "operationId": "startRun",
+        "summary": "Persist one user message and start one agent run",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Run accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/RunStartConflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}": {
+      "get": {
+        "operationId": "getRun",
+        "summary": "Read a persisted run snapshot",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/events": {
+      "get": {
+        "operationId": "streamRunEvents",
+        "summary": "Replay and follow safe semantic events for one run",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "description": "Last processed positive event sequence for reconnect replay.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE frames whose data field is a RunEvent JSON object. Each frame id equals RunEvent.sequence and event equals RunEvent.type.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-cache"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "examples": {
+                  "delta": {
+                    "value": "id: 3\nevent: assistant.delta\ndata: {\"sequence\":3,\"type\":\"assistant.delta\",\"runId\":\"550e8400-e29b-41d4-a716-446655440000\",\"conversationId\":\"550e8400-e29b-41d4-a716-446655440001\",\"createdAt\":\"2026-08-21T08:00:00Z\",\"data\":{\"text\":\"Hello\"}}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancelRun",
+        "summary": "Request cancellation of an active run",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RunId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Cancellation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/RunNotActive"
+          },
+          "503": {
+            "$ref": "#/components/responses/LocalStoreUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ConversationId": {
+        "name": "conversation_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        }
+      },
+      "RunId": {
+        "name": "run_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        }
+      }
+    },
+    "schemas": {
+      "Identifier": {
+        "type": "string",
+        "format": "uuid",
+        "minLength": 36,
+        "maxLength": 36
+      },
+      "UtcTimestamp": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "ProviderId": {
+        "type": "string",
+        "enum": [
+          "openai",
+          "anthropic",
+          "openrouter"
+        ]
+      },
+      "ResponseMode": {
+        "type": "string",
+        "description": "default means the adapter omits an explicit inference-effort parameter.",
+        "enum": [
+          "default",
+          "fast",
+          "balanced",
+          "deep"
+        ]
+      },
+      "ConversationSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "latestMessagePreview",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "latestMessagePreview": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 280
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        }
+      },
+      "ConversationListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversations",
+          "nextCursor"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ConversationSummary"
+            }
+          },
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "MessageRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "assistant"
+        ]
+      },
+      "Message": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "conversationId",
+          "runId",
+          "role",
+          "content",
+          "sequence",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MessageRole"
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        }
+      },
+      "MessageListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "nextBeforeSequence"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "nextBeforeSequence": {
+            "oneOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "cancelling",
+          "completed",
+          "failed",
+          "cancelled",
+          "interrupted"
+        ]
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "invalid_request",
+          "not_found",
+          "run_busy",
+          "run_not_active",
+          "model_not_selected",
+          "provider_not_connected",
+          "invalid_credentials",
+          "provider_rate_limited",
+          "provider_timeout",
+          "provider_unreachable",
+          "credential_store_unavailable",
+          "settings_store_unavailable",
+          "database_unavailable",
+          "agent_limit_reached",
+          "tool_failure",
+          "invalid_provider_response",
+          "internal_error"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "RunSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "conversationId",
+          "userMessageId",
+          "assistantMessageId",
+          "providerId",
+          "modelId",
+          "responseMode",
+          "status",
+          "error",
+          "partialText",
+          "createdAt",
+          "startedAt",
+          "finishedAt"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "userMessageId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "assistantMessageId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "providerId": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "responseMode": {
+            "$ref": "#/components/schemas/ResponseMode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "partialText": {
+            "type": "string",
+            "maxLength": 1048576
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "startedAt": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "StartRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "clientRequestId",
+          "message"
+        ],
+        "properties": {
+          "conversationId": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Identifier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientRequestId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32768
+          }
+        }
+      },
+      "StartRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "conversationId",
+          "runId",
+          "status"
+        ],
+        "properties": {
+          "conversationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued"
+          }
+        }
+      },
+      "CancelRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runId",
+          "status"
+        ],
+        "properties": {
+          "runId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "cancelling",
+              "cancelled"
+            ]
+          }
+        }
+      },
+      "RunEventType": {
+        "type": "string",
+        "enum": [
+          "run.started",
+          "model.started",
+          "assistant.delta",
+          "tool.started",
+          "tool.completed",
+          "tool.failed",
+          "run.completed",
+          "run.failed",
+          "run.cancelled",
+          "run.interrupted"
+        ]
+      },
+      "EmptyEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "maxProperties": 0
+      },
+      "ModelStartedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "providerId",
+          "modelId",
+          "responseMode"
+        ],
+        "properties": {
+          "providerId": {
+            "$ref": "#/components/schemas/ProviderId"
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "responseMode": {
+            "$ref": "#/components/schemas/ResponseMode"
+          }
+        }
+      },
+      "AssistantDeltaEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384
+          }
+        }
+      },
+      "ToolStartedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "callId",
+          "toolName"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "toolName": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
+        }
+      },
+      "ToolCompletedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "callId",
+          "toolName",
+          "summary"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "toolName": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      },
+      "ToolFailedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "callId",
+          "toolName",
+          "error"
+        ],
+        "properties": {
+          "callId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "toolName": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "RunCompletedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assistantMessageId"
+        ],
+        "properties": {
+          "assistantMessageId": {
+            "$ref": "#/components/schemas/Identifier"
+          }
+        }
+      },
+      "RunFailedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "RunEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sequence",
+          "type",
+          "runId",
+          "conversationId",
+          "createdAt",
+          "data"
+        ],
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "$ref": "#/components/schemas/RunEventType"
+          },
+          "runId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EmptyEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ModelStartedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/AssistantDeltaEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ToolStartedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ToolCompletedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ToolFailedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/RunCompletedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/RunFailedEventData"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "responses": {
+      "InvalidRequest": {
+        "description": "Request shape, identifier, cursor, or body is invalid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Conversation or run does not exist.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "RunStartConflict": {
+        "description": "The selected model is unavailable or the conversation already has an active run.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "RunNotActive": {
+        "description": "The run is already terminal and cannot be cancelled.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "LocalStoreUnavailable": {
+        "description": "The local database, settings store, or encrypted credential store is unavailable.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "An unexpected local service failure occurred.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    }
+  }
+}

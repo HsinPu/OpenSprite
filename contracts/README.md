@@ -10,6 +10,11 @@ for the atomic model selection and response mode setting. It is separate from
 provider credential lifecycle because it never returns or persists a raw API
 key, dynamic model list, display label, or inference result.
 
+`agent-chat.openapi.json` is the authoritative consumer-visible HTTP and SSE
+contract for durable conversations, one-message agent runs, safe semantic Run
+events, and cancellation. It deliberately excludes raw Provider payloads,
+credentials, internal prompts, hidden reasoning, and unapproved tool surfaces.
+
 The contract currently covers:
 
 - backend liveness at `GET /healthz`;
@@ -25,6 +30,15 @@ The AI settings contract covers:
 - atomically saving both values for a connected Provider;
 - clearing the model while preserving a selected response mode.
 
-This first contract has no pagination, filtering, sorting, event, webhook, or
-WebSocket surface. Any future contract must be added explicitly and follow the
-evolution rules recorded in `docs/architecture/overview.md`.
+The agent chat contract covers:
+
+- listing conversations and their visible persisted messages;
+- atomically accepting one user message and one idempotent Run;
+- reading a Run snapshot and replaying/following semantic events over SSE;
+- cancelling one active Run without fabricating a successful answer.
+
+Provider connections and AI settings have no event, webhook, or WebSocket
+surface. Agent chat has bounded cursor pagination and one server-to-browser SSE
+surface, but no webhook or WebSocket contract. Any future contract must be added
+explicitly and follow the evolution rules recorded in
+`docs/architecture/overview.md`.
