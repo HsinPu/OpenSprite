@@ -105,7 +105,9 @@ class OpenRouterInferenceAdapter:
                     _merge_tool_delta(fragments, item)
             current_finish = choice.get("finish_reason")
             if current_finish is not None:
-                if type(current_finish) is not str or finish_reason is not None:
+                if type(current_finish) is not str or (
+                    finish_reason is not None and finish_reason != current_finish
+                ):
                     raise invalid_response()
                 finish_reason = current_finish
             if parsed_usage is not None:

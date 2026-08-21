@@ -156,6 +156,15 @@ async def test_openrouter_streams_text_usage_and_final_without_reasoning_leak() 
                         "delta": {"content": "好"},
                         "finish_reason": "stop",
                     }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": ""},
+                        "finish_reason": "stop",
+                    }
                 ],
                 "usage": {"prompt_tokens": 4, "completion_tokens": 2},
             },
@@ -190,6 +199,24 @@ async def test_openrouter_streams_text_usage_and_final_without_reasoning_leak() 
         "stream_options": {"include_usage": True},
     }
     assert b"openrouter-secret" not in outbound.content
+
+
+@async_test
+async def test_openrouter_rejects_conflicting_repeated_finish_reason() -> None:
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return response(
+            outbound,
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "length"}]},
+            "[DONE]",
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+        with pytest.raises(ModelGatewayError) as captured:
+            await collect(gateway.stream(request("openrouter")))
+
+    assert captured.value.failure is InferenceFailure.INVALID_PROVIDER_RESPONSE
 
 
 @async_test
