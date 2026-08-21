@@ -114,12 +114,20 @@ class ModelSelection(ContractModel):
         return value
 
 
-class ModelSelectionResponse(ContractModel):
-    selection: ModelSelection | None
+class ResponseMode(StrEnum):
+    FAST = "fast"
+    BALANCED = "balanced"
+    DEEP = "deep"
 
 
-class PutModelSelectionRequest(ContractModel):
-    selection: ModelSelection | None
+class AiSettings(ContractModel):
+    model: ModelSelection | None
+    responseMode: ResponseMode
+
+
+class PutAiSettingsRequest(ContractModel):
+    model: ModelSelection | None
+    responseMode: ResponseMode
 
 
 class ErrorCode(StrEnum):
@@ -144,7 +152,7 @@ class ErrorEnvelope(ContractModel):
     error: ErrorDetail
 
 
-class ModelSelectionErrorCode(StrEnum):
+class AiSettingsErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     NOT_CONNECTED = "not_connected"
     CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
@@ -152,11 +160,11 @@ class ModelSelectionErrorCode(StrEnum):
     INTERNAL_ERROR = "internal_error"
 
 
-class ModelSelectionErrorDetail(ContractModel):
-    code: ModelSelectionErrorCode
+class AiSettingsErrorDetail(ContractModel):
+    code: AiSettingsErrorCode
     message: str
     retryable: bool
 
 
-class ModelSelectionErrorEnvelope(ContractModel):
-    error: ModelSelectionErrorDetail
+class AiSettingsErrorEnvelope(ContractModel):
+    error: AiSettingsErrorDetail

@@ -1,4 +1,4 @@
-"""Strict persisted default-model selection for the local backend."""
+"""Strict persisted AI settings for the local backend."""
 
 from __future__ import annotations
 
@@ -9,59 +9,51 @@ import tempfile
 from typing import Final, Protocol
 
 from .app_paths import AppPaths
-from .models import ModelSelection, ModelSelectionResponse, PutModelSelectionRequest
-from .provider_connections import (
-    ProviderConnectionError,
-    ProviderConnections,
-)
-from .models import ErrorCode
+from .models import AiSettings, ErrorCode
+from .provider_connections import ProviderConnectionError, ProviderConnections
 
-_SCHEMA_VERSION: Final = 1
+_SCHEMA_VERSION: Final = 2
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
-_PROVIDERS: Final = frozenset({"openai", "anthropic", "openrouter"})
 
 
 class SettingsStoreError(Exception):
     """Sanitized failure for unavailable or malformed local settings."""
 
     def __init__(self) -> None:
-        super().__init__("Model selection settings are unavailable.")
+        super().__init__("AI settings are unavailable.")
 
 
-class ModelSelectionStore(Protocol):
-    def get(self) -> ModelSelection | None: ...
+class AiSettingsStore(Protocol):
+    def get(self) -> AiSettings: ...
 
-    def set(self, selection: ModelSelection | None) -> None: ...
-
-
-class ModelSelections(Protocol):
-    async def get(self) -> ModelSelectionResponse: ...
-
-    async def put(
-        self,
-        payload: PutModelSelectionRequest,
-    ) -> ModelSelectionResponse: ...
+    def set(self, settings: AiSettings) -> None: ...
 
 
-class JsonModelSelectionStore:
-    """Persist the one fixed-schema model-selection record atomically."""
+class AiSettingsOperations(Protocol):
+    async def get(self) -> AiSettings: ...
+
+    async def put(self, payload: AiSettings) -> AiSettings: ...
+
+
+def default_ai_settings() -> AiSettings:
+    return AiSettings(model=None, responseMode="balanced")
+
+
+class JsonAiSettingsStore:
+    """Persist one fixed-schema AI settings record atomically."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def get(self) -> ModelSelection | None:
+    def get(self) -> AiSettings:
         raw = self._read()
-        return self._decode(raw) if raw is not None else None
+        return self._decode(raw) if raw is not None else default_ai_settings()
 
-    def set(self, selection: ModelSelection | None) -> None:
-        if selection is None:
-            self._clear()
-            return
-        self._validate_selection(selection)
+    def set(self, settings: AiSettings) -> None:
         payload = json.dumps(
             {
                 "version": _SCHEMA_VERSION,
-                "defaultModel": selection.model_dump(by_alias=True),
+                **settings.model_dump(mode="json", by_alias=True),
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -80,9 +72,7 @@ class JsonModelSelectionStore:
         except Exception:
             failed = True
             data = b""
-        if failed:
-            raise SettingsStoreError
-        if len(data) > _MAX_SETTINGS_BYTES:
+        if failed or len(data) > _MAX_SETTINGS_BYTES:
             raise SettingsStoreError
         failed = False
         raw: object = None
@@ -108,46 +98,26 @@ class JsonModelSelectionStore:
             value[key] = item
         return value
 
-    def _decode(self, raw: object) -> ModelSelection:
+    @staticmethod
+    def _decode(raw: object) -> AiSettings:
         if (
             type(raw) is not dict
-            or set(raw) != {"version", "defaultModel"}
+            or set(raw) != {"version", "model", "responseMode"}
             or type(raw["version"]) is not int
             or raw["version"] != _SCHEMA_VERSION
-            or type(raw["defaultModel"]) is not dict
         ):
             raise SettingsStoreError
-        default_model = raw["defaultModel"]
-        if set(default_model) != {"providerId", "modelId"}:
-            raise SettingsStoreError
         failed = False
-        selection: ModelSelection | None = None
+        settings: AiSettings | None = None
         try:
-            selection = ModelSelection.model_validate(default_model)
+            settings = AiSettings.model_validate(
+                {"model": raw["model"], "responseMode": raw["responseMode"]}
+            )
         except Exception:
             failed = True
-        if failed or selection is None:
+        if failed or settings is None:
             raise SettingsStoreError
-        self._validate_selection(selection)
-        return selection
-
-    @staticmethod
-    def _validate_selection(selection: ModelSelection) -> None:
-        if (
-            selection.provider_id not in _PROVIDERS
-            or type(selection.model_id) is not str
-            or not selection.model_id.strip()
-        ):
-            raise SettingsStoreError
-
-    def _clear(self) -> None:
-        failed = False
-        try:
-            self._path.unlink(missing_ok=True)
-        except Exception:
-            failed = True
-        if failed:
-            raise SettingsStoreError
+        return settings
 
     def _atomic_write(self, payload: bytes) -> None:
         temporary_path: Path | None = None
@@ -185,61 +155,50 @@ class JsonModelSelectionStore:
             raise SettingsStoreError
 
 
-class UnavailableModelSelections:
-    """Fail closed when selection storage is not explicitly composed."""
+class UnavailableAiSettings:
+    """Fail closed when AI settings storage is not explicitly composed."""
 
-    @staticmethod
-    def _unavailable() -> SettingsStoreError:
-        return SettingsStoreError()
+    async def get(self) -> AiSettings:
+        raise SettingsStoreError
 
-    async def get(self) -> ModelSelectionResponse:
-        raise self._unavailable()
-
-    async def put(
-        self,
-        payload: PutModelSelectionRequest,
-    ) -> ModelSelectionResponse:
+    async def put(self, payload: AiSettings) -> AiSettings:
         del payload
-        raise self._unavailable()
+        raise SettingsStoreError
 
 
-class ModelSelectionService:
-    """Validate default selection against connected provider summaries only."""
+class AiSettingsService:
+    """Persist AI settings after validating any selected provider."""
 
     def __init__(
         self,
-        store: ModelSelectionStore,
+        store: AiSettingsStore,
         provider_connections: ProviderConnections,
     ) -> None:
         self._store = store
         self._provider_connections = provider_connections
 
-    async def get(self) -> ModelSelectionResponse:
-        return ModelSelectionResponse(selection=self._store.get())
+    async def get(self) -> AiSettings:
+        return self._store.get()
 
-    async def put(
-        self,
-        payload: PutModelSelectionRequest,
-    ) -> ModelSelectionResponse:
-        selection = payload.selection
-        if selection is not None:
+    async def put(self, payload: AiSettings) -> AiSettings:
+        if payload.model is not None:
             providers = await self._provider_connections.list_providers()
             if not any(
-                provider.id == selection.provider_id and provider.connected
+                provider.id == payload.model.provider_id and provider.connected
                 for provider in providers.providers
             ):
                 raise ProviderConnectionError(ErrorCode.NOT_CONNECTED)
-        self._store.set(selection)
-        return ModelSelectionResponse(selection=selection)
+        self._store.set(payload)
+        return payload
 
 
-def create_model_selection_service(
+def create_ai_settings_service(
     app_paths: AppPaths,
     provider_connections: ProviderConnections,
-) -> ModelSelectionService:
-    """Compose settings persistence from the existing local data root."""
+) -> AiSettingsService:
+    """Compose AI settings persistence from the local data root."""
 
-    return ModelSelectionService(
-        JsonModelSelectionStore(app_paths.settings_file),
+    return AiSettingsService(
+        JsonAiSettingsStore(app_paths.settings_file),
         provider_connections,
     )

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from opensprite_backend.models import ProviderListResponse
-from opensprite_backend.model_selection import UnavailableModelSelections
+from opensprite_backend.ai_settings import UnavailableAiSettings
 from opensprite_backend.provider_connections import (
     UnavailableProviderConnections,
 )
@@ -50,7 +50,7 @@ class FakeRuntime:
     def __init__(self, *, close_error: Exception | None = None) -> None:
         self.client = FakeClient(close_error=close_error)
         self.connections = RuntimeConnections(self.client)
-        self.model_selection = UnavailableModelSelections()
+        self.ai_settings = UnavailableAiSettings()
 
     async def aclose(self) -> None:
         await self.client.aclose()

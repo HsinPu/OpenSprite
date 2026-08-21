@@ -2,7 +2,7 @@
 
 This directory contains the minimal Python 3.12+ FastAPI foundation for the
 local OpenSprite service. `contracts/provider-connections.openapi.json` and
-`contracts/model-selection.openapi.json` are the authoritative HTTP contracts.
+`contracts/ai-settings.openapi.json` are the authoritative HTTP contracts.
 
 The current slice provides:
 
@@ -11,8 +11,8 @@ The current slice provides:
 - thin provider-connection routes and public models;
 - a fixed OpenAI/Anthropic/OpenRouter validation catalog using `httpx`;
 - on-demand OpenRouter model discovery using the stored credential;
-- strict persisted default model selection at `config/settings.json`, exposed
-  through `GET`/`PUT /api/settings/model`;
+- strict persisted AI settings at `config/settings.json`, exposed through
+  `GET`/`PUT /api/settings/ai`;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable AES-256-GCM credential store below `.opensprite`;
@@ -38,12 +38,13 @@ Constructing `AppPaths`, importing this package, starting the system app, and
 reading absent provider or credential state are filesystem-side-effect free.
 The credential and key files are created only after a provider key validates;
 the provider repository creates `.opensprite/state` when metadata is written.
-The model-selection settings file is created only after a successful selection
-and is removed when the selection is cleared. It contains only a schema-v1
-Provider ID and model ID; it never contains a raw API key, display label, or
-dynamic model catalog. Database, conversation, log, and cache paths remain
-reserved by the layout contract and are not created before an approved feature
-uses them.
+The AI settings file is created only after a successful settings write. It uses
+strict schema v2 and stores one nullable Provider/model identifier plus the
+`fast`, `balanced`, or `deep` response mode. A missing file reads as a null model
+with balanced mode without creating any directory. The file never contains a
+raw API key, display label, or dynamic model catalog. Database, conversation,
+log, and cache paths remain reserved by the layout contract and are not created
+before an approved feature uses them.
 
 Importing or calling `create_system_app()` performs no credential file
 operation or provider request. Each successful FastAPI lifespan
@@ -91,13 +92,14 @@ keeps only text-input/text-output models, deduplicates by id, sorts by name then
 id, and returns at most 1000 entries. The upstream response is capped at 4 MiB
 and is never cached or written to `.opensprite`.
 
-`GET /api/settings/model` reads the saved default model selection without
+`GET /api/settings/ai` reads the confirmed model and response mode without
 creating a file, decrypting a credential, or calling a provider. `PUT
-/api/settings/model` accepts either a non-null `{providerId, modelId}` for a
-currently connected provider, or `null` to clear the selection. It does not
-perform provider model discovery, so a temporarily unavailable OpenRouter
-catalog does not erase a saved model ID. Provider metadata remains the only
-connection check; raw credentials are never read by the settings API.
+/api/settings/ai` atomically replaces both values. A non-null model requires a
+currently connected Provider; a null model remains valid and keeps the supplied
+response mode. The operation does not perform model discovery, so a temporarily
+unavailable OpenRouter catalog does not erase a saved model ID. Provider
+metadata remains the only connection check; raw credentials are never read by
+the settings API.
 
 Provider mutations are serialized per provider inside the single owning
 desktop backend process. Candidate credentials are validated before any local

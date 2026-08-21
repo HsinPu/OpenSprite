@@ -1,4 +1,4 @@
-"""Tests for strict, local-only persisted model selection."""
+"""Tests for strict, local-only persisted AI settings."""
 
 from __future__ import annotations
 
@@ -12,19 +12,20 @@ import pytest
 
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.model_selection import (
-    JsonModelSelectionStore,
-    ModelSelectionService,
+from opensprite_backend.ai_settings import (
+    AiSettingsService,
+    JsonAiSettingsStore,
     SettingsStoreError,
-    create_model_selection_service,
+    create_ai_settings_service,
 )
 from opensprite_backend.models import (
+    AiSettings,
     ErrorCode,
     ModelSelection,
-    PutModelSelectionRequest,
     ProviderListResponse,
     ProviderStatus,
     ProviderSummary,
+    ResponseMode,
 )
 from opensprite_backend.provider_connections import ProviderConnectionError
 from opensprite_backend.runtime import create_system_app, create_system_runtime
@@ -32,6 +33,14 @@ from opensprite_backend.runtime import create_system_app, create_system_runtime
 
 def selection() -> ModelSelection:
     return ModelSelection(providerId="openai", modelId="gpt-5.6")
+
+
+def settings(
+    *,
+    model: ModelSelection | None = None,
+    response_mode: ResponseMode = ResponseMode.BALANCED,
+) -> AiSettings:
+    return AiSettings(model=model, responseMode=response_mode)
 
 
 class RecordingConnections:
@@ -68,26 +77,30 @@ class RecordingConnections:
         )
 
 
-def test_store_round_trip_lazy_read_and_clear(tmp_path: Path) -> None:
+def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
-    store = JsonModelSelectionStore(paths.settings_file)
+    store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() is None
+    assert store.get() == settings()
     assert not paths.home.exists()
-    store.set(selection())
+    saved = settings(model=selection(), response_mode=ResponseMode.DEEP)
+    store.set(saved)
 
-    assert store.get() == selection()
+    assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 1,
-        "defaultModel": {"providerId": "openai", "modelId": "gpt-5.6"},
+        "version": 2,
+        "model": {"providerId": "openai", "modelId": "gpt-5.6"},
+        "responseMode": "deep",
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
         "config",
         "config/settings.json",
     ]
 
-    store.set(None)
-    assert not paths.settings_file.exists()
+    cleared = settings(model=None, response_mode=ResponseMode.FAST)
+    store.set(cleared)
+    assert store.get() == cleared
+    assert paths.settings_file.exists()
 
 
 @pytest.mark.parametrize(
@@ -95,12 +108,13 @@ def test_store_round_trip_lazy_read_and_clear(tmp_path: Path) -> None:
     [
         "not-json",
         "{}",
-        '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"},"extra":true}',
-        '{"version":1,"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6","extra":true}}',
-        '{"version":2,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":1,"defaultModel":{"providerId":"other","modelId":"gpt-5.6"}}',
-        '{"version":1,"defaultModel":{"providerId":"openai","modelId":"   "}}',
+        '{"version":2,"model":null,"responseMode":"balanced","extra":true}',
+        '{"version":2,"version":2,"model":null,"responseMode":"balanced"}',
+        '{"version":2,"model":{"providerId":"openai","modelId":"gpt-5.6","extra":true},"responseMode":"balanced"}',
+        '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
+        '{"version":2,"model":{"providerId":"other","modelId":"gpt-5.6"},"responseMode":"balanced"}',
+        '{"version":2,"model":{"providerId":"openai","modelId":"   "},"responseMode":"balanced"}',
+        '{"version":2,"model":null,"responseMode":"other"}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -111,9 +125,9 @@ def test_store_rejects_malformed_or_noncanonical_json(
     path.write_text(payload, encoding="utf-8")
 
     with pytest.raises(SettingsStoreError) as raised:
-        JsonModelSelectionStore(path).get()
+        JsonAiSettingsStore(path).get()
 
-    assert str(raised.value) == "Model selection settings are unavailable."
+    assert str(raised.value) == "AI settings are unavailable."
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
 
@@ -123,7 +137,7 @@ def test_store_rejects_oversized_file(tmp_path: Path) -> None:
     path.write_bytes(b" " * (1024 * 1024 + 1))
 
     with pytest.raises(SettingsStoreError):
-        JsonModelSelectionStore(path).get()
+        JsonAiSettingsStore(path).get()
 
 
 def test_atomic_failure_cleans_temp_and_preserves_old_data(
@@ -131,8 +145,8 @@ def test_atomic_failure_cleans_temp_and_preserves_old_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = tmp_path / "config" / "settings.json"
-    store = JsonModelSelectionStore(path)
-    store.set(selection())
+    store = JsonAiSettingsStore(path)
+    store.set(settings(model=selection()))
     before = path.read_bytes()
 
     def fail_replace(source: Path, destination: Path) -> None:
@@ -141,101 +155,102 @@ def test_atomic_failure_cleans_temp_and_preserves_old_data(
 
     monkeypatch.setattr(os, "replace", fail_replace)
     with pytest.raises(SettingsStoreError) as raised:
-        store.set(ModelSelection(providerId="anthropic", modelId="claude"))
+        store.set(settings(model=ModelSelection(providerId="anthropic", modelId="claude")))
 
-    assert str(raised.value) == "Model selection settings are unavailable."
+    assert str(raised.value) == "AI settings are unavailable."
     assert path.read_bytes() == before
     assert list(path.parent.glob("*.tmp")) == []
 
 
-def test_service_checks_connection_only_for_non_null_selection(
+def test_service_checks_connection_only_for_non_null_model(
     tmp_path: Path,
 ) -> None:
     connections = RecordingConnections(connected=False)
-    service = ModelSelectionService(
-        JsonModelSelectionStore(tmp_path / "settings.json"),
+    service = AiSettingsService(
+        JsonAiSettingsStore(tmp_path / "settings.json"),
         connections,
     )
 
     with pytest.raises(ProviderConnectionError) as raised:
-        run(service.put(PutModelSelectionRequest(selection=selection())))
+        run(service.put(settings(model=selection())))
     assert raised.value.code is ErrorCode.NOT_CONNECTED
     assert connections.list_calls == 1
 
-    response = run(service.put(PutModelSelectionRequest(selection=None)))
-    assert response.selection is None
+    response = run(service.put(settings(model=None, response_mode=ResponseMode.DEEP)))
+    assert response == settings(model=None, response_mode=ResponseMode.DEEP)
     assert connections.list_calls == 1
 
 
-def test_api_routes_return_selection_and_map_errors(tmp_path: Path) -> None:
+def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
     connections = RecordingConnections()
-    service = ModelSelectionService(
-        JsonModelSelectionStore(tmp_path / "settings.json"),
+    service = AiSettingsService(
+        JsonAiSettingsStore(tmp_path / "settings.json"),
         connections,
     )
-    with TestClient(create_app(connections, model_selection=service)) as client:
-        initial = client.get("/api/settings/model")
+    with TestClient(create_app(connections, ai_settings=service)) as client:
+        initial = client.get("/api/settings/ai")
         saved = client.put(
-            "/api/settings/model",
-            json={"selection": {"providerId": "openai", "modelId": "gpt-5.6"}},
+            "/api/settings/ai",
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6"}, "responseMode": "deep"},
         )
         invalid = client.put(
-            "/api/settings/model",
-            json={"selection": {"providerId": "openai", "modelId": "   "}},
+            "/api/settings/ai",
+            json={"model": {"providerId": "openai", "modelId": "   "}, "responseMode": "deep"},
         )
 
-    assert initial.json() == {"selection": None}
+    assert initial.json() == {"model": None, "responseMode": "balanced"}
     assert saved.status_code == 200
     assert saved.json() == {
-        "selection": {"providerId": "openai", "modelId": "gpt-5.6"}
+        "model": {"providerId": "openai", "modelId": "gpt-5.6"},
+        "responseMode": "deep",
     }
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_request"
 
 
-def test_same_origin_protection_applies_to_selection_put(tmp_path: Path) -> None:
+def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> None:
     connections = RecordingConnections()
-    service = ModelSelectionService(
-        JsonModelSelectionStore(tmp_path / "settings.json"),
+    service = AiSettingsService(
+        JsonAiSettingsStore(tmp_path / "settings.json"),
         connections,
     )
     app = create_app(
         connections,
-        model_selection=service,
+        ai_settings=service,
         enforce_local_security=True,
     )
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.put(
-            "/api/settings/model",
+            "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"selection": None},
+            json={"model": None, "responseMode": "balanced"},
         )
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_request"
 
 
-def test_runtime_composes_selection_from_provider_runtime_app_paths(
+def test_runtime_composes_ai_settings_from_provider_runtime_app_paths(
     tmp_path: Path,
 ) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     runtime = create_system_runtime(app_paths=paths)
 
-    assert runtime.model_selection.__class__.__name__ == "ModelSelectionService"
+    assert runtime.ai_settings.__class__.__name__ == "AiSettingsService"
     assert not paths.home.exists()
 
     run(runtime.aclose())
 
 
-def test_system_app_uses_one_injected_data_root_for_model_selection(
+def test_system_app_uses_one_injected_data_root_for_ai_settings(
     tmp_path: Path,
 ) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     app = create_system_app(app_paths=paths)
 
     with TestClient(app, base_url="http://localhost:8765") as client:
-        response = client.get("/api/settings/model")
+        response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"selection": None}
+        assert response.json() == {"model": None, "responseMode": "balanced"}
 
     assert not paths.home.exists()

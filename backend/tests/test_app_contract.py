@@ -25,10 +25,10 @@ CONTRACT_PATH = (
     / "contracts"
     / "provider-connections.openapi.json"
 )
-MODEL_SELECTION_CONTRACT_PATH = (
+AI_SETTINGS_CONTRACT_PATH = (
     Path(__file__).resolve().parents[2]
     / "contracts"
-    / "model-selection.openapi.json"
+    / "ai-settings.openapi.json"
 )
 
 
@@ -140,8 +140,8 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
 
     assert operations == {
         ("/healthz", "get", "getHealth"),
-        ("/api/settings/model", "get", "getModelSelection"),
-        ("/api/settings/model", "put", "putModelSelection"),
+        ("/api/settings/ai", "get", "getAiSettings"),
+        ("/api/settings/ai", "put", "putAiSettings"),
         ("/api/providers", "get", "listProviders"),
         (
             "/api/providers/openrouter/models",
@@ -235,32 +235,32 @@ def test_generated_public_models_align_with_authoritative_contract() -> None:
     assert generated_key["maxLength"] == contract_key["maxLength"]
 
 
-def test_generated_error_schemas_keep_provider_and_model_selection_codes_separate() -> None:
+def test_generated_error_schemas_keep_provider_and_ai_settings_codes_separate() -> None:
     generated = create_app().openapi()
     schemas = generated["components"]["schemas"]
     model_contract = json.loads(
-        MODEL_SELECTION_CONTRACT_PATH.read_text(encoding="utf-8")
+        AI_SETTINGS_CONTRACT_PATH.read_text(encoding="utf-8")
     )["components"]["schemas"]
 
     assert "settings_store_unavailable" not in schemas["ErrorCode"]["enum"]
-    assert schemas["ModelSelectionErrorCode"]["enum"] == model_contract[
+    assert schemas["AiSettingsErrorCode"]["enum"] == model_contract[
         "ErrorCode"
     ]["enum"]
-    assert schemas["ModelSelectionErrorDetail"]["required"] == model_contract[
+    assert schemas["AiSettingsErrorDetail"]["required"] == model_contract[
         "ErrorDetail"
     ]["required"]
-    assert schemas["ModelSelectionErrorEnvelope"]["required"] == model_contract[
+    assert schemas["AiSettingsErrorEnvelope"]["required"] == model_contract[
         "ErrorEnvelope"
     ]["required"]
 
     provider_schema = generated["paths"]["/api/providers"]["get"][
         "responses"
     ]["503"]["content"]["application/json"]["schema"]["$ref"]
-    selection_schema = generated["paths"]["/api/settings/model"]["get"][
+    settings_schema = generated["paths"]["/api/settings/ai"]["get"][
         "responses"
     ]["503"]["content"]["application/json"]["schema"]["$ref"]
     assert provider_schema.endswith("/ErrorEnvelope")
-    assert selection_schema.endswith("/ModelSelectionErrorEnvelope")
+    assert settings_schema.endswith("/AiSettingsErrorEnvelope")
 
 
 def test_health_is_liveness_only() -> None:

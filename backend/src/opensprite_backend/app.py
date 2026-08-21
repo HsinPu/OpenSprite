@@ -10,25 +10,25 @@ from starlette.types import Lifespan
 
 from .local_security import LocalRequestSecurityMiddleware
 from .models import (
+    AiSettings,
+    AiSettingsErrorCode,
+    AiSettingsErrorDetail,
+    AiSettingsErrorEnvelope,
     ErrorCode,
     ErrorDetail,
     ErrorEnvelope,
     HealthResponse,
-    ModelSelectionErrorCode,
-    ModelSelectionErrorDetail,
-    ModelSelectionErrorEnvelope,
-    ModelSelectionResponse,
     OpenRouterModelListResponse,
     ProviderId,
     ProviderListResponse,
     ProviderSummary,
+    PutAiSettingsRequest,
     PutProviderConnectionRequest,
-    PutModelSelectionRequest,
 )
-from .model_selection import (
-    ModelSelections,
+from .ai_settings import (
+    AiSettingsOperations,
     SettingsStoreError,
-    UnavailableModelSelections,
+    UnavailableAiSettings,
 )
 from .provider_connections import (
     ProviderConnectionError,
@@ -89,38 +89,38 @@ PUBLIC_ERRORS: dict[ErrorCode, tuple[str, bool]] = {
     ErrorCode.INTERNAL_ERROR: ("An internal error occurred.", False),
 }
 
-MODEL_SELECTION_ERROR_STATUS: dict[ModelSelectionErrorCode, int] = {
-    ModelSelectionErrorCode.INVALID_REQUEST: status.HTTP_400_BAD_REQUEST,
-    ModelSelectionErrorCode.NOT_CONNECTED: status.HTTP_409_CONFLICT,
-    ModelSelectionErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
+AI_SETTINGS_ERROR_STATUS: dict[AiSettingsErrorCode, int] = {
+    AiSettingsErrorCode.INVALID_REQUEST: status.HTTP_400_BAD_REQUEST,
+    AiSettingsErrorCode.NOT_CONNECTED: status.HTTP_409_CONFLICT,
+    AiSettingsErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
         status.HTTP_503_SERVICE_UNAVAILABLE
     ),
-    ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE: (
+    AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE: (
         status.HTTP_503_SERVICE_UNAVAILABLE
     ),
-    ModelSelectionErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    AiSettingsErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }
 
-MODEL_SELECTION_PUBLIC_ERRORS: dict[
-    ModelSelectionErrorCode, tuple[str, bool]
+AI_SETTINGS_PUBLIC_ERRORS: dict[
+    AiSettingsErrorCode, tuple[str, bool]
 ] = {
-    ModelSelectionErrorCode.INVALID_REQUEST: (
+    AiSettingsErrorCode.INVALID_REQUEST: (
         "Request validation failed.",
         False,
     ),
-    ModelSelectionErrorCode.NOT_CONNECTED: (
+    AiSettingsErrorCode.NOT_CONNECTED: (
         "The provider is not connected.",
         False,
     ),
-    ModelSelectionErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
+    AiSettingsErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
         "Secure credential storage is unavailable.",
         True,
     ),
-    ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE: (
-        "Model selection settings are unavailable.",
+    AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE: (
+        "AI settings are unavailable.",
         True,
     ),
-    ModelSelectionErrorCode.INTERNAL_ERROR: (
+    AiSettingsErrorCode.INTERNAL_ERROR: (
         "An internal error occurred.",
         False,
     ),
@@ -159,15 +159,15 @@ PROVIDER_DELETE_ERROR_RESPONSES = {
     500: {"model": ErrorEnvelope},
     503: {"model": ErrorEnvelope},
 }
-MODEL_SELECTION_GET_ERROR_RESPONSES = {
-    500: {"model": ModelSelectionErrorEnvelope},
-    503: {"model": ModelSelectionErrorEnvelope},
+AI_SETTINGS_GET_ERROR_RESPONSES = {
+    500: {"model": AiSettingsErrorEnvelope},
+    503: {"model": AiSettingsErrorEnvelope},
 }
-MODEL_SELECTION_PUT_ERROR_RESPONSES = {
-    400: {"model": ModelSelectionErrorEnvelope},
-    409: {"model": ModelSelectionErrorEnvelope},
-    500: {"model": ModelSelectionErrorEnvelope},
-    503: {"model": ModelSelectionErrorEnvelope},
+AI_SETTINGS_PUT_ERROR_RESPONSES = {
+    400: {"model": AiSettingsErrorEnvelope},
+    409: {"model": AiSettingsErrorEnvelope},
+    500: {"model": AiSettingsErrorEnvelope},
+    503: {"model": AiSettingsErrorEnvelope},
 }
 
 
@@ -182,19 +182,19 @@ def _error_response(code: ErrorCode) -> JSONResponse:
     )
 
 
-def _model_selection_error_response(
-    code: ModelSelectionErrorCode,
+def _ai_settings_error_response(
+    code: AiSettingsErrorCode,
 ) -> JSONResponse:
-    message, retryable = MODEL_SELECTION_PUBLIC_ERRORS[code]
-    envelope = ModelSelectionErrorEnvelope(
-        error=ModelSelectionErrorDetail(
+    message, retryable = AI_SETTINGS_PUBLIC_ERRORS[code]
+    envelope = AiSettingsErrorEnvelope(
+        error=AiSettingsErrorDetail(
             code=code,
             message=message,
             retryable=retryable,
         )
     )
     return JSONResponse(
-        status_code=MODEL_SELECTION_ERROR_STATUS[code],
+        status_code=AI_SETTINGS_ERROR_STATUS[code],
         content=envelope.model_dump(mode="json", by_alias=True),
     )
 
@@ -209,8 +209,8 @@ def _provider_connections(request: Request) -> ProviderConnections:
     return cast(ProviderConnections, request.app.state.provider_connections)
 
 
-def _model_selection(request: Request) -> ModelSelections:
-    return cast(ModelSelections, request.app.state.model_selection)
+def _ai_settings(request: Request) -> AiSettingsOperations:
+    return cast(AiSettingsOperations, request.app.state.ai_settings)
 
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
@@ -219,7 +219,7 @@ ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 def create_app(
     provider_connections: ProviderConnections | None = None,
     *,
-    model_selection: ModelSelections | None = None,
+    ai_settings: AiSettingsOperations | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
 ) -> FastAPI:
@@ -239,10 +239,10 @@ def create_app(
         if provider_connections is not None
         else UnavailableProviderConnections()
     )
-    app.state.model_selection = (
-        model_selection
-        if model_selection is not None
-        else UnavailableModelSelections()
+    app.state.ai_settings = (
+        ai_settings
+        if ai_settings is not None
+        else UnavailableAiSettings()
     )
     if enforce_local_security:
         app.add_middleware(
@@ -271,8 +271,8 @@ def create_app(
         exc: SettingsStoreError,
     ) -> JSONResponse:
         del request, exc
-        return _model_selection_error_response(
-            ModelSelectionErrorCode.SETTINGS_STORE_UNAVAILABLE
+        return _ai_settings_error_response(
+            AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
     async def internal_error_handler(
@@ -309,29 +309,29 @@ def create_app(
         return HealthResponse()
 
     @app.get(
-        "/api/settings/model",
-        operation_id="getModelSelection",
-        response_model=ModelSelectionResponse,
-        responses=MODEL_SELECTION_GET_ERROR_RESPONSES,
-        tags=["model-selection"],
+        "/api/settings/ai",
+        operation_id="getAiSettings",
+        response_model=AiSettings,
+        responses=AI_SETTINGS_GET_ERROR_RESPONSES,
+        tags=["ai-settings"],
     )
-    async def get_model_selection(
-        selections: ModelSelections = Depends(_model_selection),
-    ) -> ModelSelectionResponse:
-        return await selections.get()
+    async def get_ai_settings(
+        settings: AiSettingsOperations = Depends(_ai_settings),
+    ) -> AiSettings:
+        return await settings.get()
 
     @app.put(
-        "/api/settings/model",
-        operation_id="putModelSelection",
-        response_model=ModelSelectionResponse,
-        responses=MODEL_SELECTION_PUT_ERROR_RESPONSES,
-        tags=["model-selection"],
+        "/api/settings/ai",
+        operation_id="putAiSettings",
+        response_model=AiSettings,
+        responses=AI_SETTINGS_PUT_ERROR_RESPONSES,
+        tags=["ai-settings"],
     )
-    async def put_model_selection(
-        payload: PutModelSelectionRequest,
-        selections: ModelSelections = Depends(_model_selection),
-    ) -> ModelSelectionResponse:
-        return await selections.put(payload)
+    async def put_ai_settings(
+        payload: PutAiSettingsRequest,
+        settings: AiSettingsOperations = Depends(_ai_settings),
+    ) -> AiSettings:
+        return await settings.put(AiSettings.model_validate(payload.model_dump()))
 
     @app.get(
         "/api/providers",

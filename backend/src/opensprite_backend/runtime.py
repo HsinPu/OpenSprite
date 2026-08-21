@@ -9,10 +9,10 @@ from fastapi import FastAPI
 
 from .app import create_app
 from .app_paths import AppPaths, build_app_paths
-from .model_selection import (
-    ModelSelections,
-    UnavailableModelSelections,
-    create_model_selection_service,
+from .ai_settings import (
+    AiSettingsOperations,
+    UnavailableAiSettings,
+    create_ai_settings_service,
 )
 from .provider_connections import (
     ProviderConnections,
@@ -28,7 +28,7 @@ class LocalProviderRuntime(Protocol):
 
 
 class LocalSystemRuntime(LocalProviderRuntime, Protocol):
-    model_selection: ModelSelections
+    ai_settings: AiSettingsOperations
 
 
 RuntimeFactory = Callable[[], LocalSystemRuntime]
@@ -38,11 +38,11 @@ class _SystemRuntime:
     def __init__(
         self,
         provider_runtime: LocalProviderRuntime,
-        model_selection: ModelSelections,
+        ai_settings: AiSettingsOperations,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
-        self.model_selection = model_selection
+        self.ai_settings = ai_settings
 
     async def aclose(self) -> None:
         await self._provider_runtime.aclose()
@@ -58,7 +58,7 @@ def create_system_runtime(
     provider_runtime = create_provider_runtime(app_paths=paths)
     return _SystemRuntime(
         provider_runtime,
-        create_model_selection_service(paths, provider_runtime.connections),
+        create_ai_settings_service(paths, provider_runtime.connections),
     )
 
 
@@ -83,14 +83,14 @@ def create_system_app(
         runtime: LocalSystemRuntime | None = None
         try:
             app.state.provider_connections = UnavailableProviderConnections()
-            app.state.model_selection = UnavailableModelSelections()
+            app.state.ai_settings = UnavailableAiSettings()
             runtime = factory()
             app.state.provider_connections = runtime.connections
-            app.state.model_selection = runtime.model_selection
+            app.state.ai_settings = runtime.ai_settings
             yield
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
-            app.state.model_selection = UnavailableModelSelections()
+            app.state.ai_settings = UnavailableAiSettings()
             try:
                 if runtime is not None:
                     await runtime.aclose()

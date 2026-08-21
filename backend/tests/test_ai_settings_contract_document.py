@@ -1,4 +1,4 @@
-"""Static checks for the authoritative model-selection HTTP contract."""
+"""Static checks for the authoritative AI settings HTTP contract."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 CONTRACT_PATH = (
     Path(__file__).resolve().parents[2]
     / "contracts"
-    / "model-selection.openapi.json"
+    / "ai-settings.openapi.json"
 )
 
 
@@ -22,11 +22,11 @@ def test_contract_is_openapi_31_json() -> None:
     contract = load_contract()
 
     assert contract["openapi"] == "3.1.0"
-    assert contract["info"]["version"] == "0.1.0-draft"
+    assert contract["info"]["version"] == "0.2.0-draft"
     assert contract["security"] == []
 
 
-def test_contract_has_only_the_approved_model_selection_operations() -> None:
+def test_contract_has_only_the_approved_ai_settings_operations() -> None:
     contract = load_contract()
     operations = {
         (path, method)
@@ -36,12 +36,12 @@ def test_contract_has_only_the_approved_model_selection_operations() -> None:
     }
 
     assert operations == {
-        ("/api/settings/model", "get"),
-        ("/api/settings/model", "put"),
+        ("/api/settings/ai", "get"),
+        ("/api/settings/ai", "put"),
     }
 
 
-def test_selection_schema_persists_only_provider_and_model_identifiers() -> None:
+def test_ai_settings_schema_persists_only_model_and_response_mode() -> None:
     schemas = load_contract()["components"]["schemas"]
     selection = schemas["ModelSelection"]
 
@@ -50,8 +50,11 @@ def test_selection_schema_persists_only_provider_and_model_identifiers() -> None
     assert set(selection["properties"]) == {"providerId", "modelId"}
     assert selection["properties"]["modelId"]["minLength"] == 1
     assert selection["properties"]["modelId"]["maxLength"] == 256
-    assert schemas["PutModelSelectionRequest"]["required"] == ["selection"]
-    assert schemas["ModelSelectionResponse"]["required"] == ["selection"]
+    settings = schemas["AiSettings"]
+    assert settings["additionalProperties"] is False
+    assert settings["required"] == ["model", "responseMode"]
+    assert set(settings["properties"]) == {"model", "responseMode"}
+    assert schemas["ResponseMode"]["enum"] == ["fast", "balanced", "deep"]
     assert schemas["ErrorCode"]["enum"] == [
         "invalid_request",
         "not_connected",
@@ -62,7 +65,7 @@ def test_selection_schema_persists_only_provider_and_model_identifiers() -> None
 
 
 def test_put_error_mapping_is_explicit() -> None:
-    responses = load_contract()["paths"]["/api/settings/model"]["put"][
+    responses = load_contract()["paths"]["/api/settings/ai"]["put"][
         "responses"
     ]
 

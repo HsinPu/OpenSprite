@@ -1,0 +1,122 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local AI settings API",
+    "version": "0.2.0-draft",
+    "description": "Authoritative HTTP contract for one atomic local model selection and response mode setting."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {
+    "scope": "loopback-only local desktop service",
+    "applicationAuthentication": "none",
+    "browserOriginPolicy": "same-origin",
+    "cors": "disabled by default",
+    "requirements": [
+      "Runtime and installer configurations must bind only to loopback addresses.",
+      "Deployments must reject non-loopback Host values and cross-origin browser mutations before AI settings routes become operational."
+    ]
+  },
+  "x-compatibility": {
+    "policy": "This rebuild is new-install-only. The removed model-only route and schema are intentionally unsupported."
+  },
+  "x-events": {
+    "supported": false,
+    "description": "This contract defines no event, webhook, or WebSocket delivery behavior."
+  },
+  "tags": [
+    {
+      "name": "ai-settings",
+      "description": "One atomic local model selection and response mode setting."
+    }
+  ],
+  "paths": {
+    "/api/settings/ai": {
+      "get": {
+        "operationId": "getAiSettings",
+        "summary": "Read AI settings",
+        "description": "Returns a null model and balanced response mode when no settings file exists. The read is side-effect free.",
+        "tags": ["ai-settings"],
+        "responses": {
+          "200": {
+            "description": "The confirmed local AI settings.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+          },
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      },
+      "put": {
+        "operationId": "putAiSettings",
+        "summary": "Replace AI settings atomically",
+        "description": "A non-null model requires a currently connected Provider. A null model preserves and persists the supplied response mode.",
+        "tags": ["ai-settings"],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "The requested values are now the confirmed local AI settings.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AiSettings"}}}
+          },
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "409": {"$ref": "#/components/responses/NotConnected"},
+          "503": {"$ref": "#/components/responses/SettingsOrCredentialStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProviderId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]},
+      "ResponseMode": {"type": "string", "enum": ["fast", "balanced", "deep"]},
+      "ModelSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["providerId", "modelId"],
+        "properties": {
+          "providerId": {"$ref": "#/components/schemas/ProviderId"},
+          "modelId": {"type": "string", "minLength": 1, "maxLength": 256}
+        }
+      },
+      "AiSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model", "responseMode"],
+        "properties": {
+          "model": {"anyOf": [{"$ref": "#/components/schemas/ModelSelection"}, {"type": "null"}]},
+          "responseMode": {"$ref": "#/components/schemas/ResponseMode"}
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {"$ref": "#/components/schemas/ErrorCode"},
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"}
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}
+      }
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed or noncanonical AI settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "NotConnected": {"description": "The selected Provider is not connected.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "SettingsStoreUnavailable": {"description": "The local AI settings file is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "SettingsOrCredentialStoreUnavailable": {"description": "AI settings or Provider state could not be safely accessed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "An unexpected local backend error occurred.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}
