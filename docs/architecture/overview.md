@@ -21,7 +21,8 @@ Frontend -> Contracts <- Backend
 
 ## 目前階段
 
-Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
+Frontend 已有可執行的真實 Conversation／Run 對話工作台；尚未實作的附件與訊息選項會明確標成
+未來功能，不使用假資料模擬成功。本階段已建立 provider connection HTTP 契約、最小
 FastAPI service foundation、跨平台本機加密 credential-store boundary、固定的 OpenAI／Anthropic／OpenRouter
 validation adapters、負責 rollback 的 provider connection service，以及安全的本機 system
 runtime。匯入或呼叫 `create_system_app()` 本身維持離線；每次 FastAPI lifespan entry 才以
@@ -38,11 +39,12 @@ atomic setting。後端以 strict schema-v2 保存在 `config/settings.json`，�
 保存 display label 或動態 catalog。前端設定頁與聊天工作台共用同一份確認後的設定；儲存失敗
 保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
 
-下一個已批准的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
+已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
 對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。
 所有訊息都進入同一個 Agent loop，不加入關鍵字分類、舊 Task lifecycle 或直接繞過 Run 的
 模型分支。公開 HTTP／SSE 形狀以 `contracts/agent-chat.openapi.json` 為準；本段只記錄已固定的
-責任與依賴方向，後續實作仍須分切片驗證。
+責任與依賴方向。前端以真實對話清單、訊息、Run snapshot、SSE 事件與取消操作消費此契約；
+production Tool Registry 目前刻意為空。
 
 ## Provider connection 邊界
 

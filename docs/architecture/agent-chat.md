@@ -83,6 +83,28 @@ SSE frame ids are durable positive event sequences and frame event names equal
 the semantic event type. Opening after completion replays the missing suffix and
 closes. The browser closes its EventSource after receiving a terminal event.
 
+## Browser workflow
+
+The sidebar reads `GET /api/conversations` and identifies a selected
+conversation only by its backend UUID in the URL hash. A new conversation has
+no durable identity until `POST /api/runs` accepts its first message; the
+returned conversation UUID then replaces the temporary new-chat state.
+
+The browser keeps the submitted user message visible while acceptance is in
+flight, follows named semantic events over SSE, and appends only
+`assistant.delta` text to the live assistant surface. At a terminal event it
+reloads both the durable Run snapshot and visible Messages rather than treating
+the stream buffer as authoritative. Duplicate replayed event sequences and
+events belonging to an obsolete selected conversation are ignored. An active
+Run exposes a stop action through the bodyless cancellation operation.
+
+The execution panel is a projection of the selected Run and its semantic
+events. It displays the fixed Provider/model/mode snapshot, safe status and
+timing, and only tool names that actually appeared in persisted tool events.
+Because the current production Tool Registry is empty, the UI explicitly says
+that no extra tool was used and does not advertise Search, File, Memory, or any
+other speculative capability.
+
 ## Persistence
 
 The first implementation uses only four SQLite tables under

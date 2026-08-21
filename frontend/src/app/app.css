@@ -197,6 +197,13 @@ button {
   scrollbar-width: thin;
 }
 
+.conversation-nav__status {
+  margin: 8px 10px;
+  color: #74777c;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .nav-group-label {
   margin: 0 10px 8px;
   color: #4d5055;

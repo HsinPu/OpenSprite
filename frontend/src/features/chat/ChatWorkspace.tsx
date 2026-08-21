@@ -1,202 +1,69 @@
-import { FormEvent, useId, useState } from 'react';
+import { FormEvent, useState } from "react";
 
-import type { ModelSelection } from '../settings/modelCatalog';
+import type { ModelSelection } from "../settings/modelCatalog";
+import { ExecutionContext } from "./ExecutionContext";
+import { useConversationRun } from "./useConversationRun";
 
-import './ChatWorkspace.css';
+import "./ChatWorkspace.css";
 
-type ChatMessage = {
-  id: number;
-  role: 'user' | 'assistant';
-  content: string;
-};
 
 type ChatWorkspaceProps = {
+  conversationId: string | null;
   modelName: string;
   modelSelection: ModelSelection | null;
   modelChoices: ReadonlyArray<{ selection: ModelSelection; label: string }>;
   modelSelectionSaving: boolean;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
+  onConversationAccepted: (conversationId: string, firstMessage: string) => void;
+  onConversationUpdated: () => void;
   title?: string;
-  initiallyEmpty?: boolean;
 };
 
-const initialMessages: ChatMessage[] = [
-  {
-    id: 1,
-    role: 'user',
-    content: '幫我整理今天的重要工作，並找出還沒完成的項目',
-  },
-  {
-    id: 2,
-    role: 'assistant',
-    content: '以下是今天的重要工作摘要與未完成項目：',
-  },
-];
 
 function OpenSpriteMark({ small = false }: { small?: boolean }) {
-  return <span aria-hidden="true" className={`chat-workspace__mark${small ? ' chat-workspace__mark--small' : ''}`} />;
+  return <span aria-hidden="true" className={`chat-workspace__mark${small ? " chat-workspace__mark--small" : ""}`} />;
 }
 
-function AssistantSummary() {
-  return (
-    <div className="chat-workspace__assistant-card">
-      <p className="chat-workspace__assistant-intro">以下是今天的重要工作摘要與未完成項目：</p>
-
-      <section aria-labelledby="summary-title">
-        <h2 id="summary-title" className="chat-workspace__section-title">今日摘要</h2>
-        <p className="chat-workspace__body-copy">
-          你今天完成了專案進度更新與團隊會議，處理了客戶回覆與需求確認。目前仍有 3 項待完成，建議優先處理專案報告與設計審核。
-        </p>
-      </section>
-
-      <section aria-labelledby="pending-title">
-        <h2 id="pending-title" className="chat-workspace__section-title">待完成項目</h2>
-        <ol className="chat-workspace__task-list">
-          <li>完成專案進度報告並同步給利害關係人</li>
-          <li>審核首頁設計稿並提供回饋</li>
-          <li>整理客戶回饋並更新需求文件</li>
-        </ol>
-      </section>
-
-      <details className="chat-workspace__process" open>
-        <summary>
-          <span>執行過程</span>
-          <span aria-hidden="true" className="chat-workspace__chevron">⌃</span>
-        </summary>
-        <ol className="chat-workspace__process-list" aria-label="執行步驟">
-          <li className="chat-workspace__process-item chat-workspace__process-item--complete">
-            <span className="chat-workspace__step-icon" aria-hidden="true">✓</span>
-            <span>讀取對話紀錄</span>
-            <time dateTime="10:21:12">10:21:12</time>
-          </li>
-          <li className="chat-workspace__process-item chat-workspace__process-item--complete">
-            <span className="chat-workspace__step-icon" aria-hidden="true">✓</span>
-            <span>整理待辦事項</span>
-            <time dateTime="10:21:14">10:21:14</time>
-          </li>
-          <li className="chat-workspace__process-item chat-workspace__process-item--active" aria-current="step">
-            <span className="chat-workspace__step-icon" aria-hidden="true" />
-            <span>產生摘要</span>
-            <span className="chat-workspace__process-status">已完成</span>
-          </li>
-        </ol>
-      </details>
-    </div>
-  );
-}
-
-function ExecutionContext({ modelName }: { modelName: string }) {
-  const [isExpanded, setIsExpanded] = useState(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
-    return !window.matchMedia('(max-width: 767px)').matches;
-  });
-  const contextId = useId();
-  const executionTitleId = `${contextId}-execution-title`;
-  const executionBodyId = `${contextId}-execution-body`;
-  const modelTitleId = `${contextId}-model-title`;
-  const capabilitiesTitleId = `${contextId}-capabilities-title`;
-  const executionInfoTitleId = `${contextId}-execution-info-title`;
-
-  return (
-    <aside
-      className={`chat-workspace__context${isExpanded ? '' : ' chat-workspace__context--collapsed'}`}
-      aria-labelledby={executionTitleId}
-    >
-      <div className="chat-workspace__context-heading">
-        <button
-          type="button"
-          className="chat-workspace__context-toggle"
-          aria-expanded={isExpanded}
-          aria-controls={executionBodyId}
-          aria-label={isExpanded ? '收合本次執行' : '展開本次執行'}
-          title={isExpanded ? '收合本次執行' : '展開本次執行'}
-          onClick={() => setIsExpanded((current) => !current)}
-        >
-          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--horizontal">{isExpanded ? '›' : '‹'}</span>
-          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--vertical">{isExpanded ? '⌃' : '⌄'}</span>
-        </button>
-        <h2 id={executionTitleId}>本次執行</h2>
-      </div>
-
-      <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
-        <span>已完成</span>
-        <span>{modelName}</span>
-        <span>3 / 3</span>
-      </div>
-
-      <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isExpanded}>
-        <section className="chat-workspace__context-section" aria-labelledby={modelTitleId}>
-          <h3 id={modelTitleId}>模型</h3>
-          <div className="chat-workspace__model-card">
-            <OpenSpriteMark small />
-            <span>{modelName}</span>
-            <span className="chat-workspace__connected-pill"><i aria-hidden="true" />本機執行</span>
-          </div>
-        </section>
-
-        <section className="chat-workspace__context-section" aria-labelledby={capabilitiesTitleId}>
-          <h3 id={capabilitiesTitleId}>已連線的能力</h3>
-          <ul className="chat-workspace__capability-list">
-            <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌕</span><span>搜尋</span><i aria-label="已連線" /></li>
-            <li><span className="chat-workspace__capability-icon" aria-hidden="true">□</span><span>檔案</span><i aria-label="已連線" /></li>
-            <li><span className="chat-workspace__capability-icon" aria-hidden="true">⌄</span><span>記憶</span><i aria-label="已連線" /></li>
-          </ul>
-        </section>
-
-        <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={executionInfoTitleId}>
-          <h3 id={executionInfoTitleId}>執行資訊</h3>
-          <dl className="chat-workspace__stats">
-            <div><dt>開始時間</dt><dd>10:21:10</dd></div>
-            <div><dt>執行時長</dt><dd>00:00:18</dd></div>
-            <div><dt>步驟</dt><dd>3 / 3</dd></div>
-            <div><dt>來源</dt><dd>對話、檔案、記憶</dd></div>
-          </dl>
-        </section>
-
-        <details className="chat-workspace__record-details">
-          <summary><span>詳細紀錄</span><span aria-hidden="true">⌄</span></summary>
-          <p>本次執行未產生額外警告。</p>
-        </details>
-      </div>
-    </aside>
-  );
-}
 
 export function ChatWorkspace({
+  conversationId,
   modelName,
   modelSelection,
   modelChoices,
   modelSelectionSaving,
   onModelSelectionChange,
-  title = '整理今天的工作',
-  initiallyEmpty = false,
+  onConversationAccepted,
+  onConversationUpdated,
+  title = "新對話",
 }: ChatWorkspaceProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    initiallyEmpty ? [] : initialMessages,
-  );
-  const [draft, setDraft] = useState('');
-  const [nextId, setNextId] = useState(3);
-  const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : '';
+  const [draft, setDraft] = useState("");
+  const chat = useConversationRun({
+    conversationId,
+    onConversationAccepted,
+    onConversationUpdated,
+  });
+  const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : "";
   const currentSelectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
-  const choices = modelChoices;
-  const choicesByProvider = ['openai', 'anthropic', 'openrouter'].map((providerId) => ({
+  const choicesByProvider = ["openai", "anthropic", "openrouter"].map((providerId) => ({
     providerId,
-    label: providerId === 'openai' ? 'OpenAI' : providerId === 'anthropic' ? 'Anthropic' : 'OpenRouter',
-    choices: choices.filter((choice) => choice.selection.providerId === providerId),
+    label: providerId === "openai" ? "OpenAI" : providerId === "anthropic" ? "Anthropic" : "OpenRouter",
+    choices: modelChoices.filter((choice) => choice.selection.providerId === providerId),
   })).filter((group) => group.choices.length > 0);
+  const liveText = chat.streamedText || chat.activeRun?.partialText || "";
+  const hasDurableAssistant = chat.activeRun?.assistantMessageId !== null
+    && chat.activeRun?.assistantMessageId !== undefined
+    && chat.messages.some((message) => message.id === chat.activeRun?.assistantMessageId);
+  const showLiveAssistant = chat.isRunning
+    || (chat.activeRun?.status === "completed" && Boolean(liveText) && !hasDurableAssistant);
+  const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
+  const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const content = draft.trim();
-    if (!content) return;
-
-    setMessages((current) => [
-      ...current,
-      { id: nextId, role: 'user', content },
-      { id: nextId + 1, role: 'assistant', content: '收到，我已把這項需求加入今天的工作摘要。' },
-    ]);
-    setNextId((current) => current + 2);
-    setDraft('');
+    if (!content || chat.isRunning || !modelSelection) return;
+    setDraft("");
+    void chat.send(content);
   };
 
   return (
@@ -207,55 +74,70 @@ export function ChatWorkspace({
           <div className="chat-workspace__header-actions">
             <select
               className="chat-workspace__model-select"
-              disabled={choices.length === 0 || modelSelectionSaving}
-              title={choices.length === 0 ? '尚無可用模型；請先在設定中連接模型廠家。' : currentSelectionIsAvailable ? '切換新對話使用的模型' : '目前模型暫時無法使用，請選擇可用模型。'}
-              aria-label={choices.length === 0 ? '目前沒有可用模型，請先在設定中連接模型廠家' : currentSelectionIsAvailable ? `目前模型 ${modelName}，切換新對話使用的模型` : `目前模型 ${modelName} 暫時無法使用，請選擇可用模型`}
+              disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}
+              title={modelChoices.length === 0 ? "尚無可切換的模型；請先在設定中連接模型廠家。" : currentSelectionIsAvailable ? "切換後續訊息使用的模型" : "目前模型未出現在清單中。"}
+              aria-label={modelChoices.length === 0 ? `目前模型 ${modelName}，沒有其他可切換模型` : currentSelectionIsAvailable ? `目前模型 ${modelName}，切換後續訊息使用的模型` : `目前模型 ${modelName} 未出現在清單中`}
               value={currentSelectionValue}
               onChange={(event) => {
                 try {
-                  const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection['providerId'], string];
-                  if (typeof modelId === 'string') void onModelSelectionChange({ providerId, modelId });
+                  const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
+                  if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId });
                 } catch {
-                  // A DOM value cannot create a selection outside the rendered grouped choices.
+                  // Values can only originate from the rendered strict choices.
                 }
               }}
             >
               {modelSelection === null ? <option value="">尚未選擇模型</option> : null}
               {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
-              {choicesByProvider.map((group) => <optgroup key={group.providerId} label={group.label}>{group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}</optgroup>)}
+              {choicesByProvider.map((group) => (
+                <optgroup key={group.providerId} label={group.label}>
+                  {group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}
+                </optgroup>
+              ))}
             </select>
-            <span className="chat-workspace__local-status"><i aria-hidden="true" />本機執行</span>
-            <button
-              type="button"
-              className="chat-workspace__icon-button"
-              disabled
-              title="Demo 中沒有更多對話選項"
-              aria-label="更多對話選項（Demo 中無法使用）"
-            >
-              ⋮
-            </button>
+            <span className="chat-workspace__local-status"><i aria-hidden="true" />本機 Agent</span>
+            <button type="button" className="chat-workspace__icon-button" disabled title="更多對話功能尚未上線" aria-label="更多對話功能（尚未上線）">⋮</button>
           </div>
         </header>
 
-        <div className="chat-workspace__conversation" aria-live="polite">
-          {messages.length === 0 ? (
+        <div className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning}>
+          {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
+          {chat.loading ? <div className="chat-workspace__loading">正在讀取對話…</div> : null}
+          {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
             <div className="chat-workspace__empty-state">
               <OpenSpriteMark />
               <h2>今天想完成什麼？</h2>
-              <p>輸入一件想處理的事，OpenSprite 會在這裡顯示 Demo 回應。</p>
+              <p>輸入一件想處理的事，OpenSprite 會建立對話並開始執行。</p>
             </div>
           ) : null}
-          {messages.map((message) => message.role === 'user' ? (
+          {chat.messages.map((message) => message.role === "user" ? (
             <div className="chat-workspace__user-row" key={message.id}>
-              <p className="chat-workspace__user-message">{message.content}</p>
+              <div>
+                <p className="chat-workspace__user-message">{message.content}</p>
+                {message.delivery === "sending" ? <span className="chat-workspace__delivery">正在送出…</span> : null}
+                {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">未能送出，訊息仍保留在畫面上。</span> : null}
+              </div>
               <span className="chat-workspace__user-avatar" aria-hidden="true">♙</span>
             </div>
           ) : (
             <div className="chat-workspace__assistant-row" key={message.id}>
               <OpenSpriteMark />
-              {message.id === 2 ? <AssistantSummary /> : <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>}
+              <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
             </div>
           ))}
+          {showLiveAssistant ? (
+            <div className="chat-workspace__assistant-row" data-testid="streaming-assistant">
+              <OpenSpriteMark />
+              <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
+                {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />正在準備回覆…</p>}
+              </div>
+            </div>
+          ) : null}
+          {showTerminalNotice ? (
+            <div className="chat-workspace__run-notice" role="status">
+              {chat.activeRun?.status === "cancelled" ? "這次執行已停止。" : chat.activeRun?.error?.message ?? "這次執行未完成。"}
+            </div>
+          ) : null}
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
@@ -264,36 +146,25 @@ export function ChatWorkspace({
             id="chat-message"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="輸入訊息，或描述你想完成的事..."
+            placeholder={modelSelection ? "輸入訊息，或描述你想完成的事..." : "請先在設定中選擇 AI 模型"}
             rows={2}
+            disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">
             <div>
-              <button
-                type="button"
-                className="chat-workspace__tool-button"
-                disabled
-                title="Demo 中無法附加檔案"
-                aria-label="附加檔案（Demo 中無法使用）"
-              >
-                ⌕
-              </button>
-              <button
-                type="button"
-                className="chat-workspace__tool-button"
-                disabled
-                title="Demo 中無法調整訊息選項"
-                aria-label="調整訊息選項（Demo 中無法使用）"
-              >
-                ☷
-              </button>
+              <button type="button" className="chat-workspace__tool-button" disabled title="附件功能尚未上線" aria-label="附加檔案（尚未上線）">⌕</button>
+              <button type="button" className="chat-workspace__tool-button" disabled title="訊息選項尚未上線" aria-label="訊息選項（尚未上線）">☷</button>
             </div>
-            <button type="submit" className="chat-workspace__send-button" disabled={!draft.trim()} aria-label="送出訊息">➤</button>
+            {chat.isRunning ? (
+              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label="停止回覆" title="停止回覆" onClick={() => void chat.cancel()}>■</button>
+            ) : (
+              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label="送出訊息">➤</button>
+            )}
           </div>
         </form>
       </div>
 
-      <ExecutionContext modelName={modelName} />
+      <ExecutionContext modelName={modelName} run={chat.activeRun} events={chat.events} />
     </section>
   );
 }

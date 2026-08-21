@@ -1,0 +1,292 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  agentChatErrorText,
+  cancelRun,
+  getRun,
+  listConversationMessages,
+  openRunEventStream,
+  startRun,
+  type ChatMessage,
+  type RunError,
+  type RunEvent,
+  type RunEventStream,
+  type RunEventStreamHandlers,
+  type RunSnapshot,
+} from "../../api/agentChat";
+
+
+export type DisplayMessage = Pick<ChatMessage, "id" | "role" | "content" | "createdAt"> & {
+  delivery: "persisted" | "sending" | "failed";
+};
+
+type UseConversationRunOptions = {
+  conversationId: string | null;
+  onConversationAccepted: (conversationId: string, firstMessage: string) => void;
+  onConversationUpdated: () => void;
+  requestIdFactory?: () => string;
+  eventStreamFactory?: (runId: string, handlers: RunEventStreamHandlers) => RunEventStream;
+};
+
+const terminalTypes = new Set(["run.completed", "run.failed", "run.cancelled", "run.interrupted"]);
+const activeStatuses = new Set(["queued", "running", "cancelling"]);
+
+const persistedMessages = (messages: ChatMessage[]): DisplayMessage[] => messages.map((message) => ({
+  id: message.id,
+  role: message.role,
+  content: message.content,
+  createdAt: message.createdAt,
+  delivery: "persisted",
+}));
+
+function applyTerminalEvent(current: RunSnapshot | null, event: RunEvent): RunSnapshot | null {
+  if (!current || current.id !== event.runId) return current;
+  const finishedAt = event.createdAt;
+  switch (event.type) {
+    case "run.completed":
+      return {
+        ...current,
+        status: "completed",
+        assistantMessageId: event.data.assistantMessageId as string,
+        startedAt: current.startedAt ?? finishedAt,
+        finishedAt,
+        error: null,
+      };
+    case "run.failed":
+      return {
+        ...current,
+        status: "failed",
+        assistantMessageId: null,
+        startedAt: current.startedAt ?? finishedAt,
+        finishedAt,
+        error: event.data.error as RunError,
+      };
+    case "run.cancelled":
+      return { ...current, status: "cancelled", assistantMessageId: null, finishedAt, error: null };
+    case "run.interrupted":
+      return { ...current, status: "interrupted", assistantMessageId: null, finishedAt, error: event.data.error as RunError };
+    default:
+      return current;
+  }
+}
+
+function defaultRequestId(): string {
+  if (typeof globalThis.crypto?.randomUUID !== "function") throw new Error("randomUUID unavailable");
+  return globalThis.crypto.randomUUID();
+}
+
+export function useConversationRun({
+  conversationId,
+  onConversationAccepted,
+  onConversationUpdated,
+  requestIdFactory = defaultRequestId,
+  eventStreamFactory = openRunEventStream,
+}: UseConversationRunOptions) {
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
+  const [activeRun, setActiveRun] = useState<RunSnapshot | null>(null);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [streamedText, setStreamedText] = useState("");
+  const [loading, setLoading] = useState(conversationId !== null);
+  const [error, setError] = useState<string | null>(null);
+  const generationRef = useRef(0);
+  const streamRef = useRef<RunEventStream | null>(null);
+  const activeRunRef = useRef<RunSnapshot | null>(null);
+  const resolvedConversationRef = useRef<string | null>(conversationId);
+  const seenEventSequencesRef = useRef(new Set<number>());
+  const finishingRunsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    activeRunRef.current = activeRun;
+  }, [activeRun]);
+
+  const closeStream = useCallback(() => {
+    streamRef.current?.close();
+    streamRef.current = null;
+  }, []);
+
+  const commitRun = useCallback((run: RunSnapshot | null) => {
+    activeRunRef.current = run;
+    setActiveRun(run);
+  }, []);
+
+  const updateRun = useCallback((updater: (current: RunSnapshot | null) => RunSnapshot | null) => {
+    setActiveRun((current) => {
+      const next = updater(current);
+      activeRunRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const refreshTerminal = useCallback(async (runId: string, eventConversationId: string, generation: number) => {
+    if (finishingRunsRef.current.has(runId)) return;
+    finishingRunsRef.current.add(runId);
+    try {
+      const [run, page] = await Promise.all([
+        getRun(runId),
+        listConversationMessages(eventConversationId),
+      ]);
+      if (generationRef.current !== generation || resolvedConversationRef.current !== eventConversationId) return;
+      commitRun(run);
+      setMessages(persistedMessages(page.messages));
+      setStreamedText(run.partialText);
+      setError(run.error ? run.error.message : null);
+      onConversationUpdated();
+      closeStream();
+    } catch (nextError) {
+      if (generationRef.current === generation) setError(agentChatErrorText(nextError));
+    } finally {
+      finishingRunsRef.current.delete(runId);
+    }
+  }, [closeStream, commitRun, onConversationUpdated]);
+
+  const watchRun = useCallback((runId: string, generation: number) => {
+    closeStream();
+    seenEventSequencesRef.current = new Set();
+    setEvents([]);
+    setStreamedText("");
+    try {
+      streamRef.current = eventStreamFactory(runId, {
+        onEvent: (event) => {
+          if (generationRef.current !== generation || seenEventSequencesRef.current.has(event.sequence)) return;
+          seenEventSequencesRef.current.add(event.sequence);
+          setError(null);
+          setEvents((current) => [...current, event].slice(-500));
+          if (event.type === "assistant.delta") {
+            setStreamedText((current) => current + String(event.data.text));
+          }
+          if (event.type === "run.started") {
+            updateRun((current) => current ? { ...current, status: "running", startedAt: current.startedAt ?? event.createdAt } : current);
+          }
+          if (terminalTypes.has(event.type)) {
+            closeStream();
+            updateRun((current) => applyTerminalEvent(current, event));
+            void refreshTerminal(runId, event.conversationId, generation);
+          }
+        },
+        onError: (streamError) => {
+          if (generationRef.current === generation) setError(agentChatErrorText(streamError));
+        },
+      });
+    } catch (streamError) {
+      if (generationRef.current === generation) setError(agentChatErrorText(streamError));
+    }
+  }, [closeStream, eventStreamFactory, refreshTerminal, updateRun]);
+
+  useEffect(() => {
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    closeStream();
+    resolvedConversationRef.current = conversationId;
+    finishingRunsRef.current.clear();
+    seenEventSequencesRef.current = new Set();
+    setEvents([]);
+    setStreamedText("");
+    setError(null);
+    if (conversationId === null) {
+      setMessages([]);
+      commitRun(null);
+      setLoading(false);
+      return () => { if (generationRef.current === generation) generationRef.current += 1; };
+    }
+    setLoading(true);
+    void listConversationMessages(conversationId)
+      .then(async (page) => {
+        if (generationRef.current !== generation) return;
+        setMessages(persistedMessages(page.messages));
+        const latest = page.messages.at(-1);
+        if (!latest) {
+          commitRun(null);
+          return;
+        }
+        const run = await getRun(latest.runId);
+        if (generationRef.current !== generation) return;
+        commitRun(run);
+        setStreamedText(run.partialText);
+        watchRun(run.id, generation);
+      })
+      .catch((nextError: unknown) => {
+        if (generationRef.current === generation) setError(agentChatErrorText(nextError));
+      })
+      .finally(() => {
+        if (generationRef.current === generation) setLoading(false);
+      });
+    return () => {
+      if (generationRef.current === generation) generationRef.current += 1;
+      closeStream();
+    };
+  }, [closeStream, commitRun, conversationId, watchRun]);
+
+  const send = useCallback(async (content: string): Promise<boolean> => {
+    const message = content.trim();
+    if (!message || (activeRunRef.current && activeStatuses.has(activeRunRef.current.status))) return false;
+    const generation = generationRef.current;
+    let clientRequestId: string;
+    try {
+      clientRequestId = requestIdFactory();
+    } catch (nextError) {
+      setError(agentChatErrorText(nextError));
+      return false;
+    }
+    setError(null);
+    setEvents([]);
+    setStreamedText("");
+    setMessages((current) => [...current, {
+      id: clientRequestId,
+      role: "user",
+      content: message,
+      createdAt: new Date().toISOString(),
+      delivery: "sending",
+    }]);
+    try {
+      const accepted = await startRun({
+        conversationId: resolvedConversationRef.current,
+        clientRequestId,
+        message,
+      });
+      if (generationRef.current !== generation) return false;
+      resolvedConversationRef.current = accepted.conversationId;
+      onConversationAccepted(accepted.conversationId, message);
+      const [page, run] = await Promise.all([
+        listConversationMessages(accepted.conversationId),
+        getRun(accepted.runId),
+      ]);
+      if (generationRef.current !== generation) return false;
+      setMessages(persistedMessages(page.messages));
+      commitRun(run);
+      setStreamedText(run.partialText);
+      watchRun(run.id, generation);
+      return true;
+    } catch (nextError) {
+      if (generationRef.current === generation) {
+        setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));
+        setError(agentChatErrorText(nextError));
+      }
+      return false;
+    }
+  }, [commitRun, onConversationAccepted, requestIdFactory, watchRun]);
+
+  const cancel = useCallback(async (): Promise<void> => {
+    const run = activeRunRef.current;
+    if (!run || !activeStatuses.has(run.status)) return;
+    try {
+      const result = await cancelRun(run.id);
+      updateRun((current) => current && current.id === run.id ? { ...current, status: result.status } : current);
+    } catch (nextError) {
+      setError(agentChatErrorText(nextError));
+    }
+  }, [updateRun]);
+
+  const isRunning = useMemo(() => activeRun !== null && activeStatuses.has(activeRun.status), [activeRun]);
+
+  return {
+    messages,
+    activeRun,
+    events,
+    streamedText,
+    loading,
+    error,
+    isRunning,
+    send,
+    cancel,
+  };
+}

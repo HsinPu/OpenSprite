@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { agentChatErrorText, isIdentifier, listConversations, type ConversationSummary } from "../api/agentChat";
 import { aiSettingsErrorText, getAiSettings, putAiSettings, type AiSettings, type ResponseMode } from "../api/aiSettings";
 import { listProviderConnections, type ProviderSummary } from "../api/providerConnections";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
@@ -22,36 +23,17 @@ function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): Readonly
     : []);
 }
 
-function chatTitleFromHash(): string {
-  if (window.location.hash === "#new-chat") {
-    return "新對話";
-  }
-
-  if (window.location.hash.startsWith("#chat=")) {
-    const encodedTitle = window.location.hash.slice("#chat=".length);
-    try {
-      return decodeURIComponent(encodedTitle);
-    } catch {
-      return recentConversations[0];
-    }
-  }
-
-  return recentConversations[0];
+function conversationIdFromHash(): string | null {
+  if (!window.location.hash.startsWith("#chat=")) return null;
+  const value = window.location.hash.slice("#chat=".length);
+  return isIdentifier(value) ? value : null;
 }
 
-const recentConversations = [
-  "整理今天的工作",
-  "規劃下週專案時程",
-  "整理會議重點",
-  "產品需求優先級評估",
-  "撰寫專案進度報告",
-];
-
-const olderConversations = [
-  "行銷活動成效分析",
-  "客戶回饋整理",
-  "學習筆記：Prompt 技巧",
-];
+function isToday(timestamp: string): boolean {
+  const value = new Date(timestamp);
+  const now = new Date();
+  return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
+}
 
 function OpenSpriteMark() {
   return (
@@ -83,7 +65,10 @@ function ConversationButton({
 }
 
 export function App() {
-  const [chatTitle, setChatTitle] = useState(chatTitleFromHash);
+  const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
+  const [conversations, setConversations] = useState<ReadonlyArray<ConversationSummary>>([]);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -107,6 +92,27 @@ export function App() {
   const modelLoadGenerationRef = useRef(0);
   const modelSaveGenerationRef = useRef(0);
   const modelSaveQueueRef = useRef(Promise.resolve());
+  const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
+  const chatTitle = conversationId === null ? "新對話" : activeConversation?.title ?? "對話";
+  const todayConversations = conversations.filter((conversation) => isToday(conversation.updatedAt));
+  const earlierConversations = conversations.filter((conversation) => !isToday(conversation.updatedAt));
+
+  const refreshConversations = useCallback(async () => {
+    setConversationsLoading(true);
+    try {
+      const page = await listConversations();
+      setConversations(page.conversations);
+      setConversationsError(null);
+    } catch (error) {
+      setConversationsError(agentChatErrorText(error));
+    } finally {
+      setConversationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshConversations();
+  }, [refreshConversations]);
 
   useEffect(() => {
     const generation = modelLoadGenerationRef.current + 1;
@@ -191,7 +197,7 @@ export function App() {
 
   useEffect(() => {
     const syncHash = () => {
-      setChatTitle(chatTitleFromHash());
+      setConversationId(conversationIdFromHash());
       setMenuOpen(false);
     };
     window.addEventListener("hashchange", syncHash);
@@ -243,17 +249,36 @@ export function App() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
-  const openChat = (title: string) => {
-    setChatTitle(title);
-    window.location.hash =
-      title === "新對話" ? "new-chat" : `chat=${encodeURIComponent(title)}`;
+  const openChat = (conversation: ConversationSummary) => {
+    setConversationId(conversation.id);
+    window.location.hash = `chat=${conversation.id}`;
     setMenuOpen(false);
   };
 
   const startNewChat = () => {
     setChatRevision((revision) => revision + 1);
-    openChat("新對話");
+    setConversationId(null);
+    window.location.hash = "new-chat";
+    setMenuOpen(false);
   };
+
+  const acceptConversation = useCallback((acceptedId: string, firstMessage: string) => {
+    setConversationId(acceptedId);
+    window.location.hash = `chat=${acceptedId}`;
+    const now = new Date().toISOString();
+    setConversations((current) => current.some((conversation) => conversation.id === acceptedId) ? current : [{
+      id: acceptedId,
+      title: firstMessage.slice(0, 160),
+      latestMessagePreview: firstMessage.slice(0, 280),
+      createdAt: now,
+      updatedAt: now,
+    }, ...current]);
+    void refreshConversations();
+  }, [refreshConversations]);
+
+  const conversationUpdated = useCallback(() => {
+    void refreshConversations();
+  }, [refreshConversations]);
 
   const openSettings = (section: SettingsSection = "general", opener?: HTMLElement) => {
     const activeElement = opener ?? document.activeElement;
@@ -341,24 +366,27 @@ export function App() {
           className="conversation-nav"
           aria-label="對話紀錄"
         >
-          <p className="nav-group-label">今天</p>
-          {recentConversations.map((title) => (
+          {conversationsLoading ? <p className="conversation-nav__status">正在讀取對話…</p> : null}
+          {conversationsError ? <p className="conversation-nav__status" aria-live="polite">{conversationsError}</p> : null}
+          {!conversationsLoading && conversations.length === 0 ? <p className="conversation-nav__status">還沒有對話。</p> : null}
+          {todayConversations.length > 0 ? <p className="nav-group-label">今天</p> : null}
+          {todayConversations.map((conversation) => (
             <ConversationButton
-              key={title}
-              title={title}
-              active={chatTitle === title}
-              onClick={() => openChat(title)}
+              key={conversation.id}
+              title={conversation.title}
+              active={conversationId === conversation.id}
+              onClick={() => openChat(conversation)}
             />
           ))}
 
-          <div className="nav-divider" />
-          <p className="nav-group-label">昨天</p>
-          {olderConversations.map((title) => (
+          {todayConversations.length > 0 && earlierConversations.length > 0 ? <div className="nav-divider" /> : null}
+          {earlierConversations.length > 0 ? <p className="nav-group-label">較早</p> : null}
+          {earlierConversations.map((conversation) => (
             <ConversationButton
-              key={title}
-              title={title}
-              active={chatTitle === title}
-              onClick={() => openChat(title)}
+              key={conversation.id}
+              title={conversation.title}
+              active={conversationId === conversation.id}
+              onClick={() => openChat(conversation)}
             />
           ))}
         </nav>
@@ -391,14 +419,16 @@ export function App() {
 
       <main className="app-content">
         <ChatWorkspace
-          key={`${chatTitle}-${chatRevision}`}
+          key={`${conversationId ?? "new"}-${chatRevision}`}
+          conversationId={conversationId}
           title={chatTitle}
-          initiallyEmpty={chatTitle === "新對話"}
           modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}
           modelSelection={modelSelection}
           modelChoices={modelChoices}
           modelSelectionSaving={aiSettingsSaving}
           onModelSelectionChange={saveModelSelection}
+          onConversationAccepted={acceptConversation}
+          onConversationUpdated={conversationUpdated}
         />
       </main>
 

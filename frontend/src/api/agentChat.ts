@@ -1,0 +1,288 @@
+export const runStatuses = ["queued", "running", "cancelling", "completed", "failed", "cancelled", "interrupted"] as const;
+export type RunStatus = (typeof runStatuses)[number];
+
+export const runEventTypes = ["run.started", "model.started", "assistant.delta", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export type RunEventType = (typeof runEventTypes)[number];
+
+export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "tool_failure", "invalid_provider_response", "internal_error"] as const;
+export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
+export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
+
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  latestMessagePreview: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationPage = {
+  conversations: ConversationSummary[];
+  nextCursor: string | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  conversationId: string;
+  runId: string;
+  role: "user" | "assistant";
+  content: string;
+  sequence: number;
+  createdAt: string;
+};
+
+export type MessagePage = {
+  messages: ChatMessage[];
+  nextBeforeSequence: number | null;
+};
+
+export type RunError = {
+  code: ChatServerErrorCode;
+  message: string;
+  retryable: boolean;
+};
+
+export type RunSnapshot = {
+  id: string;
+  conversationId: string;
+  userMessageId: string;
+  assistantMessageId: string | null;
+  providerId: "openai" | "anthropic" | "openrouter";
+  modelId: string;
+  responseMode: "default" | "fast" | "balanced" | "deep";
+  status: RunStatus;
+  error: RunError | null;
+  partialText: string;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+
+export type RunEvent = {
+  sequence: number;
+  type: RunEventType;
+  runId: string;
+  conversationId: string;
+  createdAt: string;
+  data: Record<string, unknown>;
+};
+
+export type StartRunInput = {
+  conversationId: string | null;
+  clientRequestId: string;
+  message: string;
+};
+
+export type StartRunResult = {
+  conversationId: string;
+  runId: string;
+  status: "queued";
+};
+
+export type CancelRunResult = {
+  runId: string;
+  status: "cancelling" | "cancelled";
+};
+
+export type RunEventStreamHandlers = {
+  onEvent: (event: RunEvent) => void;
+  onError: (error: AgentChatApiError) => void;
+};
+
+export type RunEventStream = { close: () => void };
+
+export class AgentChatApiError extends Error {
+  constructor(readonly code: AgentChatErrorCode) {
+    super(code);
+    this.name = "AgentChatApiError";
+  }
+}
+
+const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) => Object.keys(value).length === expected.length && Object.keys(value).every((key) => expected.includes(key));
+const codePointLength = (value: string) => Array.from(value).length;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function isIdentifier(value: unknown): value is string {
+  return typeof value === "string" && uuidPattern.test(value);
+}
+
+function utc(value: unknown): value is string {
+  const match = typeof value === "string" && /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.\d+)?Z$/.exec(value);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day && date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second;
+}
+
+function boundedString(value: unknown, minimum: number, maximum: number): value is string {
+  return typeof value === "string" && codePointLength(value) >= minimum && codePointLength(value) <= maximum;
+}
+
+function conversation(value: unknown): ConversationSummary {
+  if (!record(value) || !exactKeys(value, ["id", "title", "latestMessagePreview", "createdAt", "updatedAt"]) || !isIdentifier(value.id) || !boundedString(value.title, 1, 160) || (value.latestMessagePreview !== null && !boundedString(value.latestMessagePreview, 1, 280)) || !utc(value.createdAt) || !utc(value.updatedAt)) {
+    throw new AgentChatApiError("malformed_response");
+  }
+  return value as ConversationSummary;
+}
+
+function message(value: unknown, expectedConversationId?: string): ChatMessage {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "runId", "role", "content", "sequence", "createdAt"]) || !isIdentifier(value.id) || !isIdentifier(value.conversationId) || (expectedConversationId !== undefined && value.conversationId !== expectedConversationId) || !isIdentifier(value.runId) || (value.role !== "user" && value.role !== "assistant") || !boundedString(value.content, 1, 1048576) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || !utc(value.createdAt)) {
+    throw new AgentChatApiError("malformed_response");
+  }
+  return value as ChatMessage;
+}
+
+function runError(value: unknown): RunError {
+  if (!record(value) || !exactKeys(value, ["code", "message", "retryable"]) || !chatErrorCodes.includes(value.code as ChatServerErrorCode) || !boundedString(value.message, 1, 512) || typeof value.retryable !== "boolean") {
+    throw new AgentChatApiError("malformed_response");
+  }
+  return value as RunError;
+}
+
+function runSnapshot(value: unknown, expectedRunId?: string): RunSnapshot {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
+    throw new AgentChatApiError("malformed_response");
+  }
+  const parsedError = value.error === null ? null : runError(value.error);
+  const status = value.status as RunStatus;
+  if ((status === "queued" && (value.startedAt !== null || value.finishedAt !== null || parsedError !== null || value.assistantMessageId !== null)) || (["running", "cancelling"].includes(status) && (value.startedAt === null || value.finishedAt !== null || parsedError !== null || value.assistantMessageId !== null)) || (status === "completed" && (value.startedAt === null || value.finishedAt === null || value.assistantMessageId === null || parsedError !== null)) || (status === "failed" && (value.startedAt === null || value.finishedAt === null || value.assistantMessageId !== null || parsedError === null)) || (status === "cancelled" && (value.finishedAt === null || value.assistantMessageId !== null || parsedError !== null)) || (status === "interrupted" && (value.finishedAt === null || value.assistantMessageId !== null || parsedError === null))) {
+    throw new AgentChatApiError("malformed_response");
+  }
+  return { ...value, error: parsedError } as RunSnapshot;
+}
+
+function errorCode(value: unknown, allowed: readonly ChatServerErrorCode[]): ChatServerErrorCode {
+  if (!record(value) || !exactKeys(value, ["error"]) || !record(value.error) || !exactKeys(value.error, ["code", "message", "retryable"]) || !chatErrorCodes.includes(value.error.code as ChatServerErrorCode) || !allowed.includes(value.error.code as ChatServerErrorCode) || typeof value.error.message !== "string" || typeof value.error.retryable !== "boolean") {
+    throw new AgentChatApiError("malformed_response");
+  }
+  return value.error.code as ChatServerErrorCode;
+}
+
+async function jsonRequest(path: string, init: RequestInit | undefined, successStatus: number, errors: ReadonlyMap<number, readonly ChatServerErrorCode[]>): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(path, init);
+  } catch {
+    throw new AgentChatApiError("network_error");
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new AgentChatApiError("malformed_response");
+  }
+  if (response.status !== successStatus) {
+    if (response.ok) throw new AgentChatApiError("malformed_response");
+    throw new AgentChatApiError(errorCode(body, errors.get(response.status) ?? []));
+  }
+  return body;
+}
+
+export async function listConversations(options: { limit?: number; before?: string } = {}): Promise<ConversationPage> {
+  const limit = options.limit ?? 50;
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (options.before !== undefined) query.set("before", options.before);
+  const body = await jsonRequest(`/api/conversations?${query}`, undefined, 200, new Map([[400, ["invalid_request"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["conversations", "nextCursor"]) || !Array.isArray(body.conversations) || body.conversations.length > 100 || (body.nextCursor !== null && !boundedString(body.nextCursor, 1, 512))) throw new AgentChatApiError("malformed_response");
+  return { conversations: body.conversations.map(conversation), nextCursor: body.nextCursor as string | null };
+}
+
+export async function listConversationMessages(conversationId: string, options: { limit?: number; beforeSequence?: number } = {}): Promise<MessagePage> {
+  if (!isIdentifier(conversationId)) throw new AgentChatApiError("malformed_response");
+  const query = new URLSearchParams({ limit: String(options.limit ?? 100) });
+  if (options.beforeSequence !== undefined) query.set("beforeSequence", String(options.beforeSequence));
+  const body = await jsonRequest(`/api/conversations/${conversationId}/messages?${query}`, undefined, 200, new Map([[400, ["invalid_request"]], [404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["messages", "nextBeforeSequence"]) || !Array.isArray(body.messages) || body.messages.length > 200 || (body.nextBeforeSequence !== null && (!Number.isInteger(body.nextBeforeSequence) || (body.nextBeforeSequence as number) < 1))) throw new AgentChatApiError("malformed_response");
+  const messages = body.messages.map((item) => message(item, conversationId));
+  if (!messages.every((item, index) => index === 0 || messages[index - 1]!.sequence < item.sequence)) throw new AgentChatApiError("malformed_response");
+  return { messages, nextBeforeSequence: body.nextBeforeSequence as number | null };
+}
+
+export async function startRun(input: StartRunInput): Promise<StartRunResult> {
+  if ((input.conversationId !== null && !isIdentifier(input.conversationId)) || !isIdentifier(input.clientRequestId) || !boundedString(input.message, 1, 32768) || !input.message.trim()) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }, 202, new Map([[400, ["invalid_request"]], [409, ["run_busy", "model_not_selected", "provider_not_connected"]], [503, ["credential_store_unavailable", "settings_store_unavailable", "database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["conversationId", "runId", "status"]) || !isIdentifier(body.conversationId) || !isIdentifier(body.runId) || body.status !== "queued") throw new AgentChatApiError("malformed_response");
+  return body as StartRunResult;
+}
+
+export async function getRun(runId: string): Promise<RunSnapshot> {
+  if (!isIdentifier(runId)) throw new AgentChatApiError("malformed_response");
+  return runSnapshot(await jsonRequest(`/api/runs/${runId}`, undefined, 200, new Map([[404, ["not_found"]], [503, ["database_unavailable"]], [500, ["internal_error"]]])), runId);
+}
+
+export async function cancelRun(runId: string): Promise<CancelRunResult> {
+  if (!isIdentifier(runId)) throw new AgentChatApiError("malformed_response");
+  const body = await jsonRequest(`/api/runs/${runId}/cancel`, { method: "POST" }, 202, new Map([[400, ["invalid_request"]], [404, ["not_found"]], [409, ["run_not_active"]], [503, ["database_unavailable"]], [500, ["internal_error"]]]));
+  if (!record(body) || !exactKeys(body, ["runId", "status"]) || body.runId !== runId || (body.status !== "cancelling" && body.status !== "cancelled")) throw new AgentChatApiError("malformed_response");
+  return body as CancelRunResult;
+}
+
+function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: string): RunEvent {
+  if (!record(value) || !exactKeys(value, ["sequence", "type", "runId", "conversationId", "createdAt", "data"]) || !Number.isInteger(value.sequence) || (value.sequence as number) < 1 || value.type !== expectedType || value.runId !== expectedRunId || !isIdentifier(value.conversationId) || !utc(value.createdAt) || !record(value.data)) throw new AgentChatApiError("malformed_response");
+  const data = value.data;
+  const safeError = (candidate: unknown) => runError(candidate);
+  if (["run.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "model.started" && (!exactKeys(data, ["providerId", "modelId", "responseMode"]) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "tool.started" && (!exactKeys(data, ["callId", "toolName"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "tool.completed" && (!exactKeys(data, ["callId", "toolName", "summary"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !boundedString(data.summary, 1, 4096))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "tool.failed" && (!exactKeys(data, ["callId", "toolName", "error"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !record(data.error))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "tool.failed") safeError(data.error);
+  if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId"]) || !isIdentifier(data.assistantMessageId))) throw new AgentChatApiError("malformed_response");
+  if (["run.failed", "run.interrupted"].includes(expectedType) && (!exactKeys(data, ["error"]) || !record(data.error))) throw new AgentChatApiError("malformed_response");
+  if (["run.failed", "run.interrupted"].includes(expectedType)) safeError(data.error);
+  return value as RunEvent;
+}
+
+export function openRunEventStream(runId: string, handlers: RunEventStreamHandlers): RunEventStream {
+  if (!isIdentifier(runId)) throw new AgentChatApiError("malformed_response");
+  let source: EventSource;
+  try {
+    source = new EventSource(`/api/runs/${runId}/events`);
+  } catch {
+    throw new AgentChatApiError("network_error");
+  }
+  let closed = false;
+  const close = () => { if (!closed) { closed = true; source.close(); } };
+  for (const type of runEventTypes) {
+    source.addEventListener(type, (raw) => {
+      if (closed) return;
+      try {
+        if (!(raw instanceof MessageEvent) || (raw.lastEventId && raw.lastEventId !== String(JSON.parse(raw.data).sequence))) throw new AgentChatApiError("malformed_response");
+        const event = parseEvent(JSON.parse(raw.data), type, runId);
+        handlers.onEvent(event);
+      } catch {
+        close();
+        handlers.onError(new AgentChatApiError("malformed_response"));
+      }
+    });
+  }
+  source.onerror = () => { if (!closed) handlers.onError(new AgentChatApiError("network_error")); };
+  return { close };
+}
+
+export function agentChatErrorText(error: unknown): string {
+  const code = error instanceof AgentChatApiError ? error.code : "network_error";
+  return ({
+    invalid_request: "送出的訊息無法使用，請重新輸入。",
+    not_found: "找不到這個對話或執行紀錄。",
+    run_busy: "這個對話正在回覆中，請先等待或停止。",
+    run_not_active: "這次執行已經結束，無法再停止。",
+    model_not_selected: "請先在 AI 模型設定中選擇模型。",
+    provider_not_connected: "選擇的模型廠家尚未連線。",
+    invalid_credentials: "模型廠家的 API 金鑰無效或已失效。",
+    provider_rate_limited: "模型廠家目前限制請求，請稍後再試。",
+    provider_timeout: "模型廠家回應逾時，請稍後再試。",
+    provider_unreachable: "暫時無法連線到模型廠家。",
+    credential_store_unavailable: "安全憑證儲存暫時無法使用。",
+    settings_store_unavailable: "AI 設定暫時無法讀取。",
+    database_unavailable: "本機對話資料暫時無法使用。",
+    agent_limit_reached: "本次執行已達安全步驟上限。",
+    tool_failure: "工具執行失敗。",
+    invalid_provider_response: "模型廠家的回應無法安全使用。",
+    internal_error: "本機服務暫時無法完成這次回覆。",
+    malformed_response: "本機服務回傳的對話資料無法安全使用。",
+    network_error: "無法連線到本機服務，請確認 OpenSprite 正在執行。",
+  } satisfies Record<AgentChatErrorCode, string>)[code];
+}

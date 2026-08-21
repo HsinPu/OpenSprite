@@ -5,6 +5,7 @@ import { App } from "../src/app/App";
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value(this: HTMLDialogElement) { this.open = true; },
@@ -185,5 +186,39 @@ describe("persisted AI settings", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("AI 設定暫時無法讀取或儲存");
     expect(balanced.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("false");
+  });
+});
+
+describe("conversation navigation", () => {
+  it("renders backend conversations and uses only their UUID in the URL hash", async () => {
+    const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({
+        conversations: [{
+          id: conversationId,
+          title: "回顧進度",
+          latestMessagePreview: "整理本週完成項目",
+          createdAt: "2026-08-22T08:00:00Z",
+          updatedAt: "2026-08-22T08:30:00Z",
+        }],
+        nextCursor: null,
+      })));
+      if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "回顧進度" }));
+
+    await waitFor(() => expect(window.location.hash).toBe(`#chat=${conversationId}`));
+    expect(screen.getByRole("heading", { level: 1, name: "回顧進度" })).toBeTruthy();
+    expect(window.location.hash).not.toContain("回顧進度");
+
+    fireEvent.click(screen.getByRole("button", { name: "新對話" }));
+    expect(window.location.hash).toBe("#new-chat");
+    expect(screen.getByRole("heading", { level: 1, name: "新對話" })).toBeTruthy();
   });
 });
