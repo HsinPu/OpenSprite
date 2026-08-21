@@ -13,6 +13,14 @@ class AppPaths:
     home: Path
 
     @property
+    def credential_file(self) -> Path:
+        return self.home / "auth.json"
+
+    @property
+    def credential_key_file(self) -> Path:
+        return self.config_dir / "credential.key"
+
+    @property
     def config_dir(self) -> Path:
         return self.home / "config"
 

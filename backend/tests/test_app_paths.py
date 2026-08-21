@@ -19,6 +19,8 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     paths = build_app_paths(home)
 
     assert paths == AppPaths(home=home.resolve(strict=False))
+    assert paths.credential_file == home / "auth.json"
+    assert paths.credential_key_file == home / "config" / "credential.key"
     assert paths.config_dir == home / "config"
     assert paths.settings_file == home / "config" / "settings.json"
     assert paths.data_dir == home / "data"

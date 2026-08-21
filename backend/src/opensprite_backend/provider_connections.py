@@ -13,7 +13,7 @@ from typing import Protocol
 import httpx
 
 from .app_paths import AppPaths, build_app_paths
-from .credentials import CredentialStore, KeyringCredentialStore
+from .credentials import CredentialStore, EncryptedJsonCredentialStore
 from .models import (
     ErrorCode,
     OpenRouterModelListResponse,
@@ -126,21 +126,20 @@ class ProviderConnectionService:
         summaries: list[ProviderSummary] = []
         for provider_id, name in _CATALOG:
             async with self._locks[provider_id]:
-                snapshot = self._snapshot(provider_id)
-                if snapshot is None:
+                try:
+                    fingerprint = self._credentials.fingerprint(provider_id)
+                    state = self._states.get(provider_id)
+                except Exception:
                     raise self._store_unavailable()
-                if snapshot.credential is None:
+                if fingerprint is None:
                     summaries.append(self._disconnected(provider_id, name))
                     continue
                 if (
-                    snapshot.state is None
-                    or not self._state_matches_credential(
-                        snapshot.state,
-                        snapshot.credential,
-                    )
+                    state is None
+                    or not self._state_matches_fingerprint(state, fingerprint)
                 ):
                     raise self._store_unavailable()
-                summaries.append(self._summary(provider_id, name, snapshot.state))
+                summaries.append(self._summary(provider_id, name, state))
         return ProviderListResponse(providers=summaries)
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
@@ -377,10 +376,20 @@ class ProviderConnectionService:
         state: ProviderState,
         credential: str,
     ) -> bool:
+        return cls._state_matches_fingerprint(
+            state,
+            cls._fingerprint(credential),
+        )
+
+    @staticmethod
+    def _state_matches_fingerprint(
+        state: ProviderState,
+        credential_fingerprint: str,
+    ) -> bool:
         fingerprint = state.credential_fingerprint
         return type(fingerprint) is str and hmac.compare_digest(
             fingerprint,
-            cls._fingerprint(credential),
+            credential_fingerprint,
         )
 
     @staticmethod
@@ -454,14 +463,17 @@ def create_provider_runtime(
             transport=transport,
         )
     )
+    paths = app_paths if app_paths is not None else build_app_paths()
     store = (
         credential_store
         if credential_store is not None
-        else KeyringCredentialStore.from_system()
+        else EncryptedJsonCredentialStore(
+            paths.credential_file,
+            paths.credential_key_file,
+        )
     )
     states = state_repository
     if states is None:
-        paths = app_paths if app_paths is not None else build_app_paths()
         states = JsonProviderStateRepository(paths.provider_state_file)
     connections = ProviderConnectionService(
         store,

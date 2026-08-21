@@ -13,7 +13,7 @@ The current slice provides:
 - on-demand OpenRouter model discovery using the stored credential;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
-- a synchronous, injectable OS credential-store boundary backed by `keyring`;
+- a synchronous, injectable AES-256-GCM credential store below `.opensprite`;
 - a pure `AppPaths` contract rooted at `%USERPROFILE%\.opensprite` on Windows
   and `~/.opensprite` on Linux;
 - strict non-secret provider metadata at `state/providers.json`, written by
@@ -24,20 +24,23 @@ The current slice provides:
 - an injectable `create_app()` default that remains unchanged and fails closed
   with `credential_store_unavailable` unless a caller supplies dependencies.
 
-It deliberately does not contain credential persistence outside Windows
-Credential Manager or Linux Secret Service, a plaintext fallback, a database,
-an Agent runtime or an application CLI. Unit
-tests inject `httpx.MockTransport` and fake credential/state repositories; they
-make no real provider request or operating-system credential call.
+It stores provider secrets only as AES-256-GCM ciphertext in `auth.json`, using
+a random per-install key at `config/credential.key`. Windows and Linux share the
+same format and do not require a startup password. This protects an isolated
+`auth.json`, but not an attacker who obtains the complete `.opensprite` root
+including its key. It does not contain a database, an Agent runtime or an
+application CLI. Unit tests inject `httpx.MockTransport` and temporary data
+roots; they make no real provider request or credential operation.
 
 Constructing `AppPaths`, importing this package, starting the system app, and
-reading absent provider state are filesystem-side-effect free. The provider
-repository creates only `.opensprite/state` when metadata is first written.
+reading absent provider or credential state are filesystem-side-effect free.
+The credential and key files are created only after a provider key validates;
+the provider repository creates `.opensprite/state` when metadata is written.
 Configuration, database, conversation, log, and cache paths are reserved by the
 layout contract but are not created before an approved feature uses them.
 
-Importing or calling `create_system_app()` performs no keyring selection,
-credential operation, or provider request. Each successful FastAPI lifespan
+Importing or calling `create_system_app()` performs no credential file
+operation or provider request. Each successful FastAPI lifespan
 entry creates and binds one fresh provider runtime. Teardown first replaces the
 bound dependency with the fail-closed unavailable implementation, then closes
 that entry's client exactly once. Startup failure never binds a runtime;
@@ -94,13 +97,16 @@ fingerprint. The fingerprint binds metadata to the complete credential but is
 never exposed in `ProviderSummary`. Schema version 1 is rejected with no
 migration or fallback under the new-install policy.
 
-`KeyringCredentialStore.from_system().preflight()` checks backend capability
-without reading, writing, or deleting a credential. It accepts only keyring's
-native `WinVaultKeyring` on Windows or `SecretService.Keyring` on Linux and
-fails closed when selection fails, identity is overridden, the platform is
-unsupported, or backend priority is not positive. Preflight does not prove
-later read, write, unlock, or delete lifecycle usability; each operation still
-fails closed independently.
+`EncryptedJsonCredentialStore` accepts only the three fixed providers in strict
+schema version 1. Each secret uses a fresh 12-byte nonce and AAD binding the
+schema, provider id and full fingerprint. Reads are bounded to 1 MiB; malformed
+JSON, missing keys, altered ciphertext or failed authentication fail closed.
+Both files use fsync and atomic replacement. Linux applies `0700` directories
+and `0600` files; Windows relies on the user-profile ACL. Provider listing reads
+only the encrypted entry fingerprint and does not decrypt the API key.
+Its process-local lock protects cross-provider read-modify-write operations in
+the one owning desktop backend. Do not run multiple Uvicorn workers, reloaders,
+or concurrent backend processes against the same `.opensprite` root.
 
 After dependency synchronization, run the focused checks from this directory:
 

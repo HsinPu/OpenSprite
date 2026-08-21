@@ -13,7 +13,7 @@ class CredentialStoreError(Exception):
 
 
 class CredentialStoreUnavailableError(CredentialStoreError):
-    """The approved operating-system credential backend is unavailable."""
+    """The encrypted local credential store is unavailable."""
 
     message = "Secure credential storage is unavailable."
 
@@ -32,6 +32,8 @@ class InvalidCredentialSecretError(CredentialStoreError):
 
 class CredentialStore(Protocol):
     """Store one API credential for each supported provider."""
+
+    def fingerprint(self, provider_id: str) -> str | None: ...
 
     def get(self, provider_id: str) -> str | None: ...
 

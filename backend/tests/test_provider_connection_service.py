@@ -6,7 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 import hashlib
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import httpx
 from fastapi.testclient import TestClient
@@ -14,7 +14,10 @@ import pytest
 
 from opensprite_backend import create_app
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.credentials import CredentialStore, KeyringCredentialStore
+from opensprite_backend.credentials import (
+    CredentialStore,
+    EncryptedJsonCredentialStore,
+)
 from opensprite_backend.models import (
     ErrorCode,
     OpenRouterModel,
@@ -55,6 +58,12 @@ class FakeCredentialStore:
         self.calls.append(("get", provider_id))
         self._fail("get")
         return self.values.get(provider_id)
+
+    def fingerprint(self, provider_id: str) -> str | None:
+        self.calls.append(("fingerprint", provider_id))
+        self._fail("fingerprint")
+        value = self.values.get(provider_id)
+        return hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
 
     def set(self, provider_id: str, secret: str) -> None:
         self.calls.append(("set", provider_id))
@@ -467,6 +476,10 @@ def test_stored_credential_test_accepts_read_only_credential_store(
         def get(self, provider_id: str) -> str | None:
             return OLD_SECRET if provider_id == "openai" else None
 
+        def fingerprint(self, provider_id: str) -> str | None:
+            value = self.get(provider_id)
+            return hashlib.sha256(value.encode("utf-8")).hexdigest() if value else None
+
         def set(self, provider_id: str, secret: str) -> None:
             del provider_id, secret
             self.mutations += 1
@@ -497,48 +510,19 @@ def test_stored_credential_test_accepts_read_only_credential_store(
     [None, ErrorCode.PROVIDER_UNREACHABLE],
     ids=["success", "provider-failure"],
 )
-def test_stored_credential_test_uses_keyring_in_read_only_mode(
+def test_stored_credential_test_does_not_rewrite_encrypted_file(
+    tmp_path: Path,
     failure: ErrorCode | None,
 ) -> None:
-    class WinVaultKeyring:
-        priority = 5
-
-        def __init__(self) -> None:
-            self.mutations = 0
-
-        def get_password(self, service_name: str, username: str) -> str | None:
-            assert service_name == "OpenSprite"
-            assert username == "provider.openai.api-key"
-            return OLD_SECRET
-
-        def set_password(
-            self,
-            service_name: str,
-            username: str,
-            password: str,
-        ) -> None:
-            del service_name, username, password
-            self.mutations += 1
-            raise AssertionError("POST test attempted keyring write")
-
-        def delete_password(self, service_name: str, username: str) -> None:
-            del service_name, username
-            self.mutations += 1
-            raise AssertionError("POST test attempted keyring delete")
-
-    WinVaultKeyring.__module__ = "keyring.backends.Windows"
-    WinVaultKeyring.__qualname__ = "WinVaultKeyring"
-    backend = WinVaultKeyring()
-
-    class Facade:
-        @staticmethod
-        def get_keyring() -> object:
-            return backend
-
-    keyring_store = KeyringCredentialStore(cast(Any, Facade()), "win32")
+    credential_path = tmp_path / "auth.json"
+    key_path = tmp_path / "config" / "credential.key"
+    encrypted_store = EncryptedJsonCredentialStore(credential_path, key_path)
+    encrypted_store.set("openai", OLD_SECRET)
+    before_credentials = credential_path.read_bytes()
+    before_key = key_path.read_bytes()
     states = FakeStateRepository()
     states.values["openai"] = old_state()
-    runtime = service(keyring_store, states, FakeValidator(failure))
+    runtime = service(encrypted_store, states, FakeValidator(failure))
 
     if failure is None:
         summary = run(runtime.test("openai"))
@@ -547,7 +531,8 @@ def test_stored_credential_test_uses_keyring_in_read_only_mode(
         with pytest.raises(ProviderConnectionError) as raised:
             run(runtime.test("openai"))
         assert raised.value.code is failure
-    assert backend.mutations == 0
+    assert credential_path.read_bytes() == before_credentials
+    assert key_path.read_bytes() == before_key
 
 
 def test_test_credential_mutation_during_state_write_fails_closed() -> None:
@@ -808,11 +793,39 @@ def test_runtime_factory_uses_injected_app_paths_for_default_state_repository(
 
     assert summary.status is ProviderStatus.CONNECTED
     assert paths.provider_state_file.is_file()
+    assert not paths.credential_file.exists()
+    assert not paths.credential_key_file.exists()
     assert not paths.config_dir.exists()
     assert not paths.data_dir.exists()
     assert not paths.conversations_dir.exists()
     assert not paths.logs_dir.exists()
     assert not paths.cache_dir.exists()
+    run(runtime.aclose())
+
+
+def test_runtime_factory_uses_injected_paths_for_default_encrypted_store(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": []}, request=request)
+
+    runtime = create_provider_runtime(
+        app_paths=paths,
+        transport=httpx.MockTransport(handler),
+        clock=lambda: NOW,
+    )
+
+    assert not paths.home.exists()
+    summary = run(runtime.connections.connect("openai", NEW_SECRET))
+
+    assert summary.status is ProviderStatus.CONNECTED
+    assert paths.credential_file.is_file()
+    assert paths.credential_key_file.is_file()
+    assert paths.provider_state_file.is_file()
+    assert NEW_SECRET.encode() not in paths.credential_file.read_bytes()
+    assert NEW_SECRET.encode() not in paths.credential_key_file.read_bytes()
     run(runtime.aclose())
 
 

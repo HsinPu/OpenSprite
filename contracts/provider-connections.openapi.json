@@ -610,7 +610,7 @@
         }
       },
       "CredentialStoreUnavailable": {
-        "description": "The operating-system credential store is unavailable. No plaintext fallback is permitted.",
+        "description": "The encrypted local credential store or its per-install key is unavailable. No plaintext fallback is permitted.",
         "content": {
           "application/json": {
             "schema": {"$ref": "#/components/schemas/ErrorEnvelope"},

@@ -1,6 +1,6 @@
-"""Secure operating-system credential storage for fixed providers."""
+"""Encrypted user-local credential storage for fixed providers."""
 
-from .keyring_store import KeyringCredentialStore
+from .encrypted_json_store import EncryptedJsonCredentialStore
 from .store import (
     CredentialStore,
     CredentialStoreError,
@@ -14,6 +14,6 @@ __all__ = [
     "CredentialStoreError",
     "CredentialStoreUnavailableError",
     "InvalidCredentialSecretError",
-    "KeyringCredentialStore",
+    "EncryptedJsonCredentialStore",
     "UnsupportedCredentialProviderError",
 ]

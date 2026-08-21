@@ -22,7 +22,7 @@ Frontend -> Contracts <- Backend
 ## 目前階段
 
 Frontend 已有可執行的 fake-data demo。本階段已建立 provider connection HTTP 契約、最小
-FastAPI service foundation、作業系統 credential-store boundary、固定的 OpenAI／Anthropic／OpenRouter
+FastAPI service foundation、跨平台本機加密 credential-store boundary、固定的 OpenAI／Anthropic／OpenRouter
 validation adapters、負責 rollback 的 provider connection service，以及安全的本機 system
 runtime。匯入或呼叫 `create_system_app()` 本身維持離線；每次 FastAPI lifespan entry 才以
 `create_provider_runtime()` 建立並綁定全新的 dependency，teardown 先解除綁定再精確關閉該次
@@ -88,15 +88,19 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   固定訊息，不回傳 Pydantic detail 或輸入值。
 - Error envelope 固定為 `error.code/message/retryable`。Status mapping、retryability 與公開訊息
   都由 contract 定義；provider response 與 exception detail 不得透出。
-- 不提供 plaintext credential fallback。Credential store 不可用時必須回 `503`，不能降級儲存。
-- Credential store 固定使用 service namespace `OpenSprite`，並以
-  `provider.openai.api-key`、`provider.anthropic.api-key`、`provider.openrouter.api-key` 作為不可由 caller 指定的 credential
-  name。Windows 僅接受 keyring 的 `WinVaultKeyring`（Windows Credential Manager），Linux 僅
-  接受 `SecretService.Keyring`（Secret Service）。keyring 25.7.0 已依 platform 宣告 Windows 的
-  `pywin32-ctypes` 與 Linux 的 `SecretStorage`/`jeepney`；不另設 file fallback。
-- Backend preflight 只檢查 platform、backend identity 與 backend priority，不以測試寫入探測
-  可用性。Fake-backed unit tests 驗證 adapter selection policy，但不構成 Windows 或 Linux OS
-  integration 成功證明；installer/runtime 階段仍須在各目標 OS 做 read-only preflight 與人工驗證。
+- Credential store 的唯一預設實作是 AES-256-GCM encrypted JSON。`auth.json` 與
+  `config/credential.key` 都位於 `.opensprite`；每次安裝產生獨有 256-bit key，每次 secret
+  寫入產生新的 12-byte nonce，並以 version、provider id 與完整 fingerprint 作為 AAD。
+  Provider 清單只比較 ciphertext entry 的 fingerprint 與 metadata，不解密 API Key；test、模型
+  discovery、credential replace/rollback 與未來模型執行才短暫解密。Python 無法保證 immutable
+  string 的安全抹除，因此 plaintext 不快取、不記錄、不回傳且盡量縮短生命週期。
+- Encrypted store 只接受 strict schema version 1 與固定三個 provider；JSON 損壞、duplicate key、
+  未知欄位、ciphertext/tag/AAD 竄改、key 遺失或 I/O 失敗一律回 `503`，不得自動生成新 key
+  覆蓋既有 ciphertext。Linux 使用 `0700`/`0600`，Windows 依賴使用者 Profile ACL。
+- Encrypted store 的單一同步鎖只保護同一 runtime instance 內的跨 provider read-modify-write；
+  deployment 必須維持一個 desktop backend process，不得使用多 Uvicorn worker、reloader 或讓
+  多個 backend 共用同一 `.opensprite`。若未來批准 multi-process，必須先加入跨程序檔案鎖或
+  transactional store 與對應回歸測試。
 - PUT 與 test 的 provider deadline 是 30 秒；client retry 必須 bounded backoff。Draft v1
   不加 application rate limit，上游 rate limit 以固定 `provider_rate_limited` 錯誤呈現。
 - OpenAI 只以 `GET https://api.openai.com/v1/models` 驗證 Bearer credential；Anthropic 只以
@@ -142,7 +146,7 @@ signature 或 replay 保證。未來若加入，必須以獨立 message contract
 
 ## 決策與後續 handoff
 
-已拒絕：plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
+已拒絕：固定全域加密金鑰、plaintext fallback、先存後驗證、test request 攜帶 secret、動態 provider registry、
 過早加入 pagination/version alias，以及從 archived implementation 整批搬移。
 
 本切片已決定最小 validation request、per-provider serialization、non-secret metadata、runtime
