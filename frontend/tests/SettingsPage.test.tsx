@@ -91,6 +91,17 @@ describe("provider settings", () => {
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
   });
 
+  it("marks automatic model selection and model-name display as future features", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
+    render(<SettingsHarness />);
+
+    expect(screen.getAllByText("未來上線")).toHaveLength(2);
+    expect(screen.getByText("自動選擇可用模型")).toBeTruthy();
+    expect(screen.getByText("顯示模型名稱")).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "自動選擇可用模型" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "顯示模型名稱" })).toBeNull();
+  });
+
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
