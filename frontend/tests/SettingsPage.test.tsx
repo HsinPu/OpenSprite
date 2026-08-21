@@ -289,6 +289,32 @@ describe("provider settings", () => {
     expect(screen.queryByText("正在讀取 OpenRouter 可用模型…")).toBeNull();
   });
 
+  it("renders provider and model popup menus inside the settings surface", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [
+        { id: "acme/fast", name: "Acme Fast" },
+        { id: "acme/reasoning", name: "Acme Reasoning" },
+      ] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container } = render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast" }} />);
+
+    const settingsSurface = container.querySelector(".settings-page")!;
+    const providerSelect = document.getElementById("settings-model-provider")!;
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    fireEvent.mouseDown(providerSelect);
+    const providerOption = await screen.findByRole("option", { name: "OpenRouter" });
+    expect(settingsSurface.contains(providerOption)).toBe(true);
+    fireEvent.keyDown(providerSelect, { key: "Escape" });
+
+    const modelSelect = screen.getByLabelText("模型");
+    fireEvent.mouseDown(modelSelect);
+    const modelOptionLabel = await screen.findByText("Acme Reasoning");
+    const modelDropdown = modelOptionLabel.closest(".ant-select-dropdown");
+    expect(modelDropdown).toBeTruthy();
+    expect(settingsSurface.contains(modelDropdown)).toBe(true);
+  });
+
   it("loads connected OpenRouter models once, exposes a searchable selection, and retries an isolated catalog error", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
