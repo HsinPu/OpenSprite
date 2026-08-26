@@ -31,11 +31,12 @@
 .chat-workspace button { color: inherit; }
 
 .chat-workspace button:focus-visible,
-.chat-workspace textarea:focus-visible,
 .chat-workspace summary:focus-visible {
   outline: 2px solid var(--chat-muted);
   outline-offset: 1px;
 }
+
+.chat-workspace textarea:focus-visible { outline: none; }
 
 .chat-workspace__main {
   display: flex;
