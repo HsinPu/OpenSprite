@@ -18,6 +18,8 @@ Frontend -> Contracts <- Backend
 - Contracts 不包含 UI、資料庫或 provider implementation。
 - Installers 只處理部署與 lifecycle，不承擔產品行為。
 - Scripts 只承擔可重現的 repository 驗證與維護工作。
+- Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；Chat 與 Settings 可共同依賴
+  `features/ai-settings`，但不得互相 import，`api` 與 `i18n` 不得反向依賴畫面功能。
 
 ## 目前階段
 
