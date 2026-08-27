@@ -1,22 +1,20 @@
 export type SettingsSection = "general" | "models";
 
 export type DemoSettings = {
-  language: string;
-  timezone: string;
+  timezone: "system" | "asia-taipei" | "utc";
   newConversation: boolean;
   restoreConversation: boolean;
-  sendMode: string;
+  sendMode: "enter" | "ctrl-enter";
   taskNotifications: boolean;
   confirmNotifications: boolean;
   sound: boolean;
 };
 
 export const defaultDemoSettings: DemoSettings = {
-  language: "繁體中文",
-  timezone: "依照系統設定",
+  timezone: "system",
   newConversation: true,
   restoreConversation: false,
-  sendMode: "Enter 送出，Shift + Enter 換行",
+  sendMode: "enter",
   taskNotifications: true,
   confirmNotifications: true,
   sound: false,

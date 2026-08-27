@@ -16,6 +16,7 @@ import {
   type ModelChoice,
   type ModelSelection,
 } from "./modelCatalog";
+import { useI18n } from "../../i18n/I18nProvider";
 
 function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): ReadonlyArray<ModelChoice> {
   return providers.flatMap((provider) => provider.connected
@@ -27,6 +28,7 @@ function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): Readonly
 }
 
 export function useAiSettings() {
+  const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [loaded, setLoaded] = useState(false);
@@ -52,7 +54,7 @@ export function useAiSettings() {
       .catch((loadError: unknown) => {
         if (loadGenerationRef.current !== generation) return;
         setLoaded(false);
-        setError(aiSettingsErrorText(loadError));
+        setError(aiSettingsErrorText(loadError, t));
       });
 
     void listProviderConnections()
@@ -87,7 +89,7 @@ export function useAiSettings() {
         }
         return null;
       } catch (saveError) {
-        const message = aiSettingsErrorText(saveError);
+        const message = aiSettingsErrorText(saveError, t);
         if (saveGenerationRef.current === generation) setError(message);
         return message;
       } finally {
@@ -96,7 +98,7 @@ export function useAiSettings() {
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, []);
+  }, [t]);
 
   const saveModelSelection = useCallback(
     (next: ModelSelection | null) => save({ model: next, responseMode }),

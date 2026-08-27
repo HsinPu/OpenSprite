@@ -13,8 +13,10 @@ import {
   type ProviderSummary,
 } from "../../api/providerConnections";
 import type { ResponseMode } from "../../api/aiSettings";
+import type { MessageKey } from "../../i18n/catalog";
+import { useI18n } from "../../i18n/I18nProvider";
 import { GeneralSettings } from "./GeneralSettings";
-import { localModelCatalog, modelLabel, openRouterModelCatalog, type ModelCatalogItem, type ModelChoice, type ModelSelection } from "./modelCatalog";
+import { localModelCatalog, openRouterModelCatalog, type ModelCatalogItem, type ModelChoice, type ModelSelection } from "./modelCatalog";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { DemoSettings, SettingsSection } from "./settingsState";
 import "./settings.css";
@@ -35,15 +37,15 @@ type SettingsPageProps = {
   onProviderModalChange?: (open: boolean) => void;
 };
 
-const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; label: string; icon: IconName; enabled?: boolean }> = [
-  { id: "general", label: "一般", icon: "settings", enabled: true }, { id: "models", label: "AI 模型", icon: "robot", enabled: true },
-  { id: "memory", label: "記憶與資料", icon: "database" }, { id: "tools", label: "工具與連線", icon: "connections" },
-  { id: "appearance", label: "外觀", icon: "appearance" }, { id: "privacy", label: "隱私", icon: "privacy" }, { id: "about", label: "關於", icon: "info" },
+const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
+  { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true }, { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
+  { id: "memory", labelKey: "settings.category.memory", icon: "database" }, { id: "tools", labelKey: "settings.category.tools", icon: "connections" },
+  { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" }, { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy" }, { id: "about", labelKey: "settings.category.about", icon: "info" },
 ];
 
-const providerStatusText: Record<ProviderStatus, string> = {
-  disconnected: "尚未連線", connected: "已連線", invalid_credentials: "API 金鑰無效", provider_unreachable: "暫時無法連線",
-  provider_timeout: "連線逾時", provider_rate_limited: "請求受限", credential_store_unavailable: "安全儲存服務無法使用",
+const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
+  disconnected: "models.status.disconnected", connected: "models.status.connected", invalid_credentials: "models.status.invalidCredentials", provider_unreachable: "models.status.unreachable",
+  provider_timeout: "models.status.timeout", provider_rate_limited: "models.status.rateLimited", credential_store_unavailable: "models.status.storeUnavailable",
 };
 
 type ProviderFeedback = { message?: string; error?: string };
@@ -51,8 +53,6 @@ type ProviderOperation = Partial<Record<ProviderId, number>>;
 type ModelLoadStatus = "idle" | "loading" | "success" | "error";
 
 type ModelsSettingsProps = {
-  settings: DemoSettings;
-  onChange: <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => void;
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   aiSettingsSaving: boolean;
@@ -71,6 +71,7 @@ type ModelsSettingsProps = {
 };
 
 function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider: ProviderSummary; container: HTMLElement; onCancel: () => void; onSubmit: (apiKey: string) => Promise<string | null> }) {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +91,7 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
     if (submittingRef.current) return;
     if (!apiKey.trim()) {
       clearSecret();
-      setError("請輸入 API 金鑰。");
+      setError(t("models.keyRequired"));
       return;
     }
 
@@ -108,7 +109,7 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
     <Modal
       className="provider-connection-modal"
       open
-      title={`${provider.name} API 金鑰`}
+      title={t("models.keyTitle", { provider: provider.name })}
       footer={null}
       getContainer={() => container}
       onCancel={() => { if (!submittingRef.current) close(); }}
@@ -118,20 +119,21 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
       closable={!submitting}
     >
       <form onSubmit={submit} onKeyDownCapture={(event) => { if (submitting && event.key === "Escape") event.stopPropagation(); }}>
-        <p className="provider-modal-copy">輸入新的金鑰會先驗證，再安全地取代目前儲存的連線。OpenSprite 不會顯示或預先填入既有金鑰。</p>
-        <label className="provider-key-label" htmlFor="provider-api-key">API 金鑰</label>
+        <p className="provider-modal-copy">{t("models.keyDescription")}</p>
+        <label className="provider-key-label" htmlFor="provider-api-key">{t("models.keyLabel")}</label>
         <Input.Password id="provider-api-key" name="apiKey" autoFocus autoComplete="new-password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} disabled={submitting} aria-invalid={Boolean(error)} aria-errormessage={error ? "provider-key-error" : undefined} />
         {error ? <p id="provider-key-error" className="provider-modal-error" role="alert">{error}</p> : null}
         <div className="provider-modal-actions">
-          <button type="button" className="settings-secondary-button" onClick={close} disabled={submitting}>取消</button>
-          <button type="submit" className="settings-outline-button" disabled={submitting}>{submitting ? "驗證中…" : "驗證並儲存"}</button>
+          <button type="button" className="settings-secondary-button" onClick={close} disabled={submitting}>{t("common.cancel")}</button>
+          <button type="submit" className="settings-outline-button" disabled={submitting}>{submitting ? t("models.validating") : t("models.validateSave")}</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onModelChoicesChange, onProviderModalChange, modalContainer, openRouterModels, openRouterModelLoadStatus, openRouterModelError, onOpenRouterModelsChange, onOpenRouterModelLoadStateChange, onOpenRouterModelsReset }: ModelsSettingsProps) {
+function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onModelChoicesChange, onProviderModalChange, modalContainer, openRouterModels, openRouterModelLoadStatus, openRouterModelError, onOpenRouterModelsChange, onOpenRouterModelLoadStateChange, onOpenRouterModelsReset }: ModelsSettingsProps) {
+  const { t } = useI18n();
   const [providers, setProviders] = useState<ProviderSummary[] | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [operations, setOperations] = useState<ProviderOperation>({});
@@ -158,10 +160,10 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
       return summaries;
     } catch (requestError) {
       setProviders(null);
-      setCatalogError(providerErrorText(requestError));
+      setCatalogError(providerErrorText(requestError, t));
       return null;
     }
-  }, []);
+  }, [t]);
 
   const loadOpenRouterModels = useCallback(async (force = false) => {
     if (!force && openRouterModels !== null) return;
@@ -179,7 +181,7 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
       }
     } catch (requestError) {
       if (mountedRef.current && activeModelLoadsRef.current[providerId] === generation && modelGenerationsRef.current[providerId] === generation) {
-        onOpenRouterModelLoadStateChange("error", providerErrorText(requestError));
+        onOpenRouterModelLoadStateChange("error", providerErrorText(requestError, t));
       }
     } finally {
       if (activeModelLoadsRef.current[providerId] === generation) {
@@ -187,7 +189,7 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
         activeModelLoadsRef.current = remaining;
       }
     }
-  }, [onOpenRouterModelLoadStateChange, onOpenRouterModelsChange, openRouterModels]);
+  }, [onOpenRouterModelLoadStateChange, onOpenRouterModelsChange, openRouterModels, t]);
 
   useEffect(() => { void refreshProviders(); }, [refreshProviders]);
   useEffect(() => {
@@ -211,7 +213,7 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
     generationsRef.current[provider.id] = generation;
     activeOperationsRef.current = { ...activeOperationsRef.current, [provider.id]: generation };
     setOperations(activeOperationsRef.current);
-    setFeedback((current) => ({ ...current, [provider.id]: { message: `${provider.name} 正在${action}。` } }));
+    setFeedback((current) => ({ ...current, [provider.id]: { message: t("models.operationProgress", { provider: provider.name, action }) } }));
     return generation;
   };
   const isCurrentOperation = (providerId: ProviderId, generation: number) => activeOperationsRef.current[providerId] === generation;
@@ -241,17 +243,17 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
     }
   };
   const testConnection = async (provider: ProviderSummary) => {
-    const generation = beginOperation(provider, "測試連線");
+    const generation = beginOperation(provider, t("models.operationTesting"));
     if (generation === null) return;
     try {
       const summary = await testProviderConnection(provider.id);
       if (isCurrentOperation(provider.id, generation)) {
         replaceSummary(summary);
-        setProviderFeedback(provider.id, { message: `${provider.name}：${providerStatusText[summary.status]}` });
+        setProviderFeedback(provider.id, { message: t("models.feedback", { provider: provider.name, message: t(providerStatusKeys[summary.status]) }) });
       }
     } catch (requestError) {
       if (isCurrentOperation(provider.id, generation)) {
-        setProviderFeedback(provider.id, { error: `${provider.name}：${providerErrorText(requestError)}` });
+        setProviderFeedback(provider.id, { error: t("models.feedback", { provider: provider.name, message: providerErrorText(requestError, t) }) });
         await refreshFailedProvider(provider.id, generation);
       }
     } finally {
@@ -259,29 +261,29 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
     }
   };
   const disconnect = async (provider: ProviderSummary) => {
-    const generation = beginOperation(provider, "移除連線");
+    const generation = beginOperation(provider, t("models.operationRemoving"));
     if (generation === null) return;
     try {
       await deleteProviderConnection(provider.id);
       if (isCurrentOperation(provider.id, generation)) {
         replaceSummary({ ...provider, connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null });
         if (provider.id === "openrouter") invalidateOpenRouterModels();
-        setProviderFeedback(provider.id, { message: `${provider.name} 已移除連線。` });
+        setProviderFeedback(provider.id, { message: t("models.disconnected", { provider: provider.name }) });
       }
     } catch (requestError) {
-      if (isCurrentOperation(provider.id, generation)) setProviderFeedback(provider.id, { error: `${provider.name}：${providerErrorText(requestError)}` });
+      if (isCurrentOperation(provider.id, generation)) setProviderFeedback(provider.id, { error: t("models.feedback", { provider: provider.name, message: providerErrorText(requestError, t) }) });
     } finally {
       finishOperation(provider.id, generation);
     }
   };
   const connect = async (provider: ProviderSummary, apiKey: string): Promise<string | null> => {
-    const generation = beginOperation(provider, "驗證並儲存連線");
-    if (generation === null) return "這個模型廠家正在處理另一個操作。";
+    const generation = beginOperation(provider, t("models.operationSaving"));
+    if (generation === null) return t("models.operationBusy");
     try {
       const summary = await replaceProviderConnection(provider.id, apiKey);
-      if (!isCurrentOperation(provider.id, generation)) return "這個操作已被較新的連線狀態取代。";
+      if (!isCurrentOperation(provider.id, generation)) return t("models.operationSuperseded");
       replaceSummary(summary);
-      setProviderFeedback(provider.id, { message: `${summary.name} 已連線。` });
+      setProviderFeedback(provider.id, { message: t("models.connected", { provider: summary.name }) });
       if (summary.id === "openrouter") {
         invalidateOpenRouterModels();
         void loadOpenRouterModels(true);
@@ -289,7 +291,7 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
       setModalProvider((current) => current?.id === provider.id ? null : current);
       return null;
     } catch (requestError) {
-      const message = providerErrorText(requestError);
+      const message = providerErrorText(requestError, t);
       if (isCurrentOperation(provider.id, generation)) clearProviderFeedback(provider.id);
       return message;
     } finally {
@@ -339,23 +341,84 @@ function ModelsSettings({ settings, onChange, modelSelection, responseMode, aiSe
   const modelDisabled = !selectedProvider || (selectedProvider.id === "openrouter" && (openRouterModelsPending || selectedModels.length === 0));
   const openRouterConnected = connectedProviders.some((provider) => provider.id === "openrouter");
   const helperText = connectedProviders.length === 0
-    ? "請先連接至少一個模型廠家，才能選擇可用模型。"
-    : selectedProvider?.id === "openrouter" && openRouterModelsPending ? "正在讀取 OpenRouter 可用模型…"
-    : selectedProvider?.id === "openrouter" && selectedModels.length === 0 ? "OpenRouter 目前沒有可用模型。"
-    : modelSelection ? "新對話會優先使用這個模型" : "請選擇新對話要使用的模型。";
+    ? t("models.helper.connect")
+    : selectedProvider?.id === "openrouter" && openRouterModelsPending ? t("models.helper.loadingOpenRouter")
+    : selectedProvider?.id === "openrouter" && selectedModels.length === 0 ? t("models.helper.emptyOpenRouter")
+    : modelSelection ? t("models.helper.selected") : t("models.helper.select");
 
-  const responseModes: ReadonlyArray<{ value: ResponseMode; label: string }> = [{ value: "default", label: "預設" }, { value: "fast", label: "快速" }, { value: "balanced", label: "平衡" }, { value: "deep", label: "深入" }];
-  return <div className="settings-form-stack"><SettingsCard icon="connections" title="模型廠家"><p className="settings-card-description">管理已儲存在本機安全憑證服務中的模型廠家連線。</p>{providers === null && !catalogError ? <p className="settings-provider-feedback" role="status" aria-live="polite">正在讀取模型廠家連線…</p> : null}{catalogError ? <div className="settings-provider-feedback settings-provider-feedback--error" role="alert"><p>{catalogError}</p><button type="button" className="settings-secondary-button" onClick={() => void refreshProviders()}>重試</button></div> : null}{providers ? <div className="settings-service-list">{providers.map((provider) => { const busy = operations[provider.id] !== undefined; const statusClass = provider.status === "connected" ? "settings-online" : "settings-offline"; return <div className="settings-service-card" key={provider.id} aria-label={`${provider.name} 連線`} aria-busy={busy}><div className="settings-service-identity"><Icon name={provider.id} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{providerStatusText[provider.status]}</span>{provider.credentialPreview ? <small>{provider.credentialPreview}</small> : null}</span></div><div className="settings-service-actions" role="group" aria-label={`${provider.name} 操作`} aria-busy={busy}><button type="button" className="settings-secondary-button" onClick={() => setModalProvider(provider)} disabled={busy}>{provider.connected ? "管理" : "連接"}</button>{provider.connected ? <><button type="button" className="settings-secondary-button" onClick={() => void testConnection(provider)} disabled={busy}>{busy ? "處理中…" : "測試連線"}</button><Popconfirm title={`移除 ${provider.name} 的已儲存 API 金鑰？`} description="移除後，這個模型廠家將無法供新對話使用。" okText="移除" cancelText="取消" onConfirm={() => void disconnect(provider)} okButtonProps={{ loading: busy }}><button type="button" className="settings-danger-button" disabled={busy}>移除</button></Popconfirm></> : null}</div></div>; })}</div> : null}<div className="settings-provider-announcement" aria-live="polite">{Object.entries(feedback).map(([providerId, item]) => item ? <p key={providerId} className={item.error ? "settings-action-error" : "settings-action-status"}>{item.error ?? item.message}</p> : null)}</div></SettingsCard><SettingsCard icon="robot" title="選擇模型"><div className="settings-model-selection"><div className="settings-select-row"><label htmlFor="settings-model-provider">模型廠家</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder="選擇模型廠家" options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id }); }} /></div><div className="settings-select-row"><label htmlFor="settings-default-model">模型</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? "選擇模型" : "請先連接模型廠家"} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? "沒有可用模型" : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId }); }} /></div>{openRouterConnected && openRouterModelLoadStatus === "error" ? <div className="settings-model-load-error" role="alert"><p>{openRouterModelError}</p><button type="button" className="settings-secondary-button settings-model-retry" onClick={() => void loadOpenRouterModels(true)}>重試讀取模型</button></div> : null}{selectionError ?? aiSettingsError ? <p className="settings-model-load-error" role="alert">{selectionError ?? aiSettingsError}</p> : null}<p id="settings-model-helper" className="settings-helper-text">{helperText}</p></div><div className="settings-preference-row"><span>回應模式</span><div className="settings-segmented" role="group" aria-label="回應模式">{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div><FutureSettingRow label="自動選擇可用模型" description="模型路由與失效切換將在後續版本提供" /><FutureSettingRow label="顯示模型名稱" description="模型名稱顯示偏好將在後續版本提供" /></SettingsCard>{modalProvider && modalContainer ? <ConnectionModal provider={modalProvider} container={modalContainer} onCancel={() => setModalProvider(null)} onSubmit={(apiKey) => connect(modalProvider, apiKey)} /> : null}</div>;
+  const responseModes: ReadonlyArray<{ value: ResponseMode; label: string }> = [{ value: "default", label: t("models.response.default") }, { value: "fast", label: t("models.response.fast") }, { value: "balanced", label: t("models.response.balanced") }, { value: "deep", label: t("models.response.deep") }];
+  return (
+    <div className="settings-form-stack">
+      <SettingsCard icon="connections" title={t("models.providers")}>
+        <p className="settings-card-description">{t("models.providersDescription")}</p>
+        {providers === null && !catalogError ? <p className="settings-provider-feedback" role="status" aria-live="polite">{t("models.loadingProviders")}</p> : null}
+        {catalogError ? <div className="settings-provider-feedback settings-provider-feedback--error" role="alert"><p>{catalogError}</p><button type="button" className="settings-secondary-button" onClick={() => void refreshProviders()}>{t("common.retry")}</button></div> : null}
+        {providers ? (
+          <div className="settings-service-list">
+            {providers.map((provider) => {
+              const busy = operations[provider.id] !== undefined;
+              const statusClass = provider.status === "connected" ? "settings-online" : "settings-offline";
+              return (
+                <div className="settings-service-card" key={provider.id} aria-label={t("models.providerConnection", { provider: provider.name })} aria-busy={busy}>
+                  <div className="settings-service-identity"><Icon name={provider.id} /><span><strong>{provider.name}</strong><span className={statusClass}><i aria-hidden="true" />{t(providerStatusKeys[provider.status])}</span>{provider.credentialPreview ? <small>{provider.credentialPreview}</small> : null}</span></div>
+                  <div className="settings-service-actions" role="group" aria-label={t("models.providerActions", { provider: provider.name })} aria-busy={busy}>
+                    <button type="button" className="settings-secondary-button" onClick={() => setModalProvider(provider)} disabled={busy}>{provider.connected ? t("models.manage") : t("models.connect")}</button>
+                    {provider.connected ? <><button type="button" className="settings-secondary-button" onClick={() => void testConnection(provider)} disabled={busy}>{busy ? t("common.processing") : t("models.testConnection")}</button><Popconfirm title={t("models.removeConfirmTitle", { provider: provider.name })} description={t("models.removeConfirmDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => void disconnect(provider)} okButtonProps={{ loading: busy }}><button type="button" className="settings-danger-button" disabled={busy}>{t("common.remove")}</button></Popconfirm></> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+        <div className="settings-provider-announcement" aria-live="polite">{Object.entries(feedback).map(([providerId, item]) => item ? <p key={providerId} className={item.error ? "settings-action-error" : "settings-action-status"}>{item.error ?? item.message}</p> : null)}</div>
+      </SettingsCard>
+      <SettingsCard icon="robot" title={t("models.selectModel")}>
+        <div className="settings-model-selection">
+          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId }); }} /></div>
+          {openRouterConnected && openRouterModelLoadStatus === "error" ? <div className="settings-model-load-error" role="alert"><p>{openRouterModelError}</p><button type="button" className="settings-secondary-button settings-model-retry" onClick={() => void loadOpenRouterModels(true)}>{t("models.retryModels")}</button></div> : null}
+          {selectionError ?? aiSettingsError ? <p className="settings-model-load-error" role="alert">{selectionError ?? aiSettingsError}</p> : null}
+          <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
+        </div>
+        <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
+        <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
+        <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />
+      </SettingsCard>
+      {modalProvider && modalContainer ? <ConnectionModal provider={modalProvider} container={modalContainer} onCancel={() => setModalProvider(null)} onSubmit={(apiKey) => connect(modalProvider, apiKey)} /> : null}
+    </div>
+  );
 }
 
 export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onModelChoicesChange, onClose, onProviderModalChange }: SettingsPageProps) {
+  const { t } = useI18n();
   const [saved, setSaved] = useState(true); useEffect(() => { if (saved) return; const timeout = window.setTimeout(() => setSaved(true), 650); return () => window.clearTimeout(timeout); }, [saved]);
   const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
   const [openRouterModels, setOpenRouterModels] = useState<ReadonlyArray<ModelCatalogItem> | null>(null);
   const [openRouterModelLoadStatus, setOpenRouterModelLoadStatus] = useState<ModelLoadStatus>("idle");
   const [openRouterModelError, setOpenRouterModelError] = useState<string | null>(null);
   const updateSetting = <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => { onSettingsChange({ ...settings, [key]: value }); setSaved(false); };
-  return <section ref={setModalContainer} className="settings-page" aria-labelledby="settings-page-title"><header className="settings-header"><div><h1 id="settings-page-title">設定</h1><p>調整 OpenSprite 的使用方式</p></div><div className="settings-header-actions"><SaveStatus saved={saved && !aiSettingsSaving} /><button className="settings-close-button" type="button" onClick={onClose} aria-label="關閉設定" title="關閉設定"><span aria-hidden="true">×</span></button></div></header><div className="settings-layout"><nav className="settings-category-rail" aria-label="設定分類">{categories.map((category) => { const isSelected = category.id === section; const isEnabled = category.enabled === true; return <button key={category.id} type="button" className={`settings-category${isSelected ? " is-selected" : ""}${!isEnabled ? " is-disabled" : ""}`} onClick={() => { if (isEnabled) onSectionChange(category.id as SettingsSection); }} disabled={!isEnabled} aria-current={isSelected ? "page" : undefined}><Icon name={category.icon} /><span>{category.label}</span>{!isEnabled ? <small>Demo</small> : null}</button>; })}<p className="settings-rail-note">其他分類將在完整版本提供</p></nav><div className="settings-content">{section === "general" ? <><div className="settings-intro"><h2>一般</h2><p>設定語言、啟動方式與日常使用偏好。</p></div><GeneralSettings settings={settings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>AI 模型</h2><p>連接你要使用的 AI 服務，並選擇要使用的模型與回應模式。</p></div><ModelsSettings settings={settings} onChange={updateSetting} modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onModelChoicesChange={onModelChoicesChange} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} openRouterModels={openRouterModels} openRouterModelLoadStatus={openRouterModelLoadStatus} openRouterModelError={openRouterModelError} onOpenRouterModelsChange={setOpenRouterModels} onOpenRouterModelLoadStateChange={(status, error) => { setOpenRouterModelLoadStatus(status); setOpenRouterModelError(error); }} onOpenRouterModelsReset={() => { setOpenRouterModels(null); setOpenRouterModelLoadStatus("idle"); setOpenRouterModelError(null); }} /></>}<p className="settings-demo-note">一般偏好只在本次工作階段暫存；模型、回應模式與模型廠家連線由本機服務管理。</p></div></div></section>;
+  return (
+    <section ref={setModalContainer} className="settings-page" aria-labelledby="settings-page-title">
+      <header className="settings-header">
+        <div><h1 id="settings-page-title">{t("settings.title")}</h1><p>{t("settings.subtitle")}</p></div>
+        <div className="settings-header-actions"><SaveStatus saved={saved && !aiSettingsSaving} /><button className="settings-close-button" type="button" onClick={onClose} aria-label={t("settings.close")} title={t("settings.close")}><span aria-hidden="true">×</span></button></div>
+      </header>
+      <div className="settings-layout">
+        <nav className="settings-category-rail" aria-label={t("settings.categories")}>
+          {categories.map((category) => {
+            const isSelected = category.id === section;
+            const isEnabled = category.enabled === true;
+            return <button key={category.id} type="button" className={`settings-category${isSelected ? " is-selected" : ""}${!isEnabled ? " is-disabled" : ""}`} onClick={() => { if (isEnabled) onSectionChange(category.id as SettingsSection); }} disabled={!isEnabled} aria-current={isSelected ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span>{!isEnabled ? <small>{t("common.demo")}</small> : null}</button>;
+          })}
+          <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
+        </nav>
+        <div className="settings-content">
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onModelChoicesChange={onModelChoicesChange} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} openRouterModels={openRouterModels} openRouterModelLoadStatus={openRouterModelLoadStatus} openRouterModelError={openRouterModelError} onOpenRouterModelsChange={setOpenRouterModels} onOpenRouterModelLoadStateChange={(status, error) => { setOpenRouterModelLoadStatus(status); setOpenRouterModelError(error); }} onOpenRouterModelsReset={() => { setOpenRouterModels(null); setOpenRouterModelLoadStatus("idle"); setOpenRouterModelError(null); }} /></>}
+          <p className="settings-demo-note">{t("settings.sessionNote")}</p>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default SettingsPage;

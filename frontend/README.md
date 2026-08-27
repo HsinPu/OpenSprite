@@ -8,6 +8,7 @@
 - `src/api/`：Provider、AI settings 與 Agent chat 的 HTTP／SSE client。
 - `src/features/chat/`：Conversation 清單、Run 狀態、聊天畫面與 SSE 互動。
 - `src/features/settings/`：一般偏好、Provider、模型選擇與 AI settings 狀態。
+- `src/i18n/`：typed locale catalog、React locale context 與繁中／英文／日文資源。
 - `src/shared/`：不含業務邏輯的共用 UI 與基礎工具。
 - `tests/`：前端測試。
 
@@ -36,6 +37,10 @@ OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後
 
 「自動選擇可用模型」與「顯示模型名稱」目前只顯示為不可操作的
 「未來上線」項目，不建立 session-only 假設定，也不影響現有模型流程。
+
+介面語言目前支援 `zh-TW`、`en` 與 `ja`。切換會同步 React 介面、Ant Design
+元件、API 錯誤文字、時間格式與文件 `lang`；locale 只保存在目前瀏覽器工作
+階段，不寫入 localStorage、網址或後端設定。繁體中文是固定 fallback。
 
 聊天工作台上方與「AI 模型」設定頁共用同一份確認後的選擇。啟動時會讀取已保存的選擇與已連線的固定廠家；沒有選擇而有可用固定模型時，會保存固定順序中的第一個模型。儲存失敗會保留原選擇。OpenRouter 的暫時讀取失敗不會清除既有選擇；成功讀到模型清單後，才會處理已不存在模型的 fallback。
 

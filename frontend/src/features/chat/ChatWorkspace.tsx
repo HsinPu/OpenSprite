@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 
+import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../settings/modelCatalog";
+import { useI18n } from "../../i18n/I18nProvider";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
 
@@ -52,8 +54,9 @@ export function ChatWorkspace({
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
-  title = "新對話",
+  title,
 }: ChatWorkspaceProps) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const chat = useConversationRun({
     conversationId,
@@ -85,16 +88,16 @@ export function ChatWorkspace({
   };
 
   return (
-    <section className="chat-workspace" aria-label="AI 對話工作台">
+    <section className="chat-workspace" aria-label={t("chat.workspace")}>
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
-          <h1>{title}</h1>
+          <h1>{title ?? t("app.newConversationTitle")}</h1>
           <div className="chat-workspace__header-actions">
             <select
               className="chat-workspace__model-select"
               disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}
-              title={modelChoices.length === 0 ? "尚無可切換的模型；請先在設定中連接模型廠家。" : currentSelectionIsAvailable ? "切換後續訊息使用的模型" : "目前模型未出現在清單中。"}
-              aria-label={modelChoices.length === 0 ? `目前模型 ${modelName}，沒有其他可切換模型` : currentSelectionIsAvailable ? `目前模型 ${modelName}，切換後續訊息使用的模型` : `目前模型 ${modelName} 未出現在清單中`}
+              title={modelChoices.length === 0 ? t("chat.modelNoChoicesTitle") : currentSelectionIsAvailable ? t("chat.modelSwitchTitle") : t("chat.modelUnavailableTitle")}
+              aria-label={modelChoices.length === 0 ? t("chat.modelNoChoicesLabel", { model: modelName }) : currentSelectionIsAvailable ? t("chat.modelSwitchLabel", { model: modelName }) : t("chat.modelUnavailableLabel", { model: modelName })}
               value={currentSelectionValue}
               onChange={(event) => {
                 try {
@@ -105,7 +108,7 @@ export function ChatWorkspace({
                 }
               }}
             >
-              {modelSelection === null ? <option value="">尚未選擇模型</option> : null}
+              {modelSelection === null ? <option value="">{t("model.none")}</option> : null}
               {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
               {choicesByProvider.map((group) => (
                 <optgroup key={group.providerId} label={group.label}>
@@ -113,27 +116,27 @@ export function ChatWorkspace({
                 </optgroup>
               ))}
             </select>
-            <span className="chat-workspace__local-status"><i aria-hidden="true" />本機 Agent</span>
-            <button type="button" className="chat-workspace__icon-button" disabled title="更多對話功能尚未上線" aria-label="更多對話功能（尚未上線）">⋮</button>
+            <span className="chat-workspace__local-status"><i aria-hidden="true" />{t("chat.localAgent")}</span>
+            <button type="button" className="chat-workspace__icon-button" disabled title={t("chat.moreFutureTitle")} aria-label={t("chat.moreFutureLabel")}>⋮</button>
           </div>
         </header>
 
         <div className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning}>
           {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
-          {chat.loading ? <div className="chat-workspace__loading">正在讀取對話…</div> : null}
+          {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
           {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
             <div className="chat-workspace__empty-state">
               <OpenSpriteMark />
-              <h2>今天想完成什麼？</h2>
-              <p>輸入一件想處理的事，OpenSprite 會建立對話並開始執行。</p>
+              <h2>{t("chat.emptyTitle")}</h2>
+              <p>{t("chat.emptyDescription")}</p>
             </div>
           ) : null}
           {chat.messages.map((message) => message.role === "user" ? (
             <div className="chat-workspace__user-row" key={message.id}>
               <div>
                 <p className="chat-workspace__user-message">{message.content}</p>
-                {message.delivery === "sending" ? <span className="chat-workspace__delivery">正在送出…</span> : null}
-                {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">未能送出，訊息仍保留在畫面上。</span> : null}
+                {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
+                {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
               </div>
               <span className="chat-workspace__user-avatar" aria-hidden="true">♙</span>
             </div>
@@ -147,36 +150,40 @@ export function ChatWorkspace({
             <div className="chat-workspace__assistant-row" data-testid="streaming-assistant">
               <OpenSpriteMark />
               <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
-                {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />正在準備回覆…</p>}
+                {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
               </div>
             </div>
           ) : null}
           {showTerminalNotice ? (
             <div className="chat-workspace__run-notice" role="status">
-              {chat.activeRun?.status === "cancelled" ? "這次執行已停止。" : chat.activeRun?.error?.message ?? "這次執行未完成。"}
+              {chat.activeRun?.status === "cancelled"
+                ? t("chat.cancelled")
+                : chat.activeRun?.error
+                  ? agentChatErrorText(new AgentChatApiError(chat.activeRun.error.code), t)
+                  : t("chat.incomplete")}
             </div>
           ) : null}
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
-          <label htmlFor="chat-message" className="chat-workspace__composer-label">輸入訊息</label>
+          <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
             id="chat-message"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder={modelSelection ? "輸入訊息，或描述你想完成的事..." : "請先在設定中選擇 AI 模型"}
+            placeholder={modelSelection ? t("chat.inputPlaceholder") : t("chat.selectModelPlaceholder")}
             rows={2}
             disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">
             <div>
-              <button type="button" className="chat-workspace__tool-button" disabled title="附件功能尚未上線" aria-label="附加檔案（尚未上線）">⌕</button>
-              <button type="button" className="chat-workspace__tool-button" disabled title="訊息選項尚未上線" aria-label="訊息選項（尚未上線）">☷</button>
+              <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.attachmentTitle")} aria-label={t("chat.attachmentLabel")}>⌕</button>
+              <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.optionsTitle")} aria-label={t("chat.optionsLabel")}>☷</button>
             </div>
             {chat.isRunning ? (
-              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label="停止回覆" title="停止回覆" onClick={() => void chat.cancel()}><StopIcon /></button>
+              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label={t("chat.stop")} title={t("chat.stop")} onClick={() => void chat.cancel()}><StopIcon /></button>
             ) : (
-              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label="送出訊息" title="送出訊息"><SendIcon /></button>
+              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label={t("chat.send")} title={t("chat.send")}><SendIcon /></button>
             )}
           </div>
         </form>

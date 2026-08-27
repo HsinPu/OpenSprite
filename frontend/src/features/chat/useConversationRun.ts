@@ -14,6 +14,7 @@ import {
   type RunEventStreamHandlers,
   type RunSnapshot,
 } from "../../api/agentChat";
+import { useI18n } from "../../i18n/I18nProvider";
 
 
 export type DisplayMessage = Pick<ChatMessage, "id" | "role" | "content" | "createdAt"> & {
@@ -82,6 +83,7 @@ export function useConversationRun({
   requestIdFactory = defaultRequestId,
   eventStreamFactory = openRunEventStream,
 }: UseConversationRunOptions) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [activeRun, setActiveRun] = useState<RunSnapshot | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
@@ -133,11 +135,11 @@ export function useConversationRun({
       onConversationUpdated();
       closeStream();
     } catch (nextError) {
-      if (generationRef.current === generation) setError(agentChatErrorText(nextError));
+      if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
     } finally {
       finishingRunsRef.current.delete(runId);
     }
-  }, [closeStream, commitRun, onConversationUpdated]);
+  }, [closeStream, commitRun, onConversationUpdated, t]);
 
   const watchRun = useCallback((runId: string, generation: number) => {
     closeStream();
@@ -164,13 +166,13 @@ export function useConversationRun({
           }
         },
         onError: (streamError) => {
-          if (generationRef.current === generation) setError(agentChatErrorText(streamError));
+          if (generationRef.current === generation) setError(agentChatErrorText(streamError, t));
         },
       });
     } catch (streamError) {
-      if (generationRef.current === generation) setError(agentChatErrorText(streamError));
+      if (generationRef.current === generation) setError(agentChatErrorText(streamError, t));
     }
-  }, [closeStream, eventStreamFactory, refreshTerminal, updateRun]);
+  }, [closeStream, eventStreamFactory, refreshTerminal, t, updateRun]);
 
   useEffect(() => {
     const generation = generationRef.current + 1;
@@ -205,7 +207,7 @@ export function useConversationRun({
         watchRun(run.id, generation);
       })
       .catch((nextError: unknown) => {
-        if (generationRef.current === generation) setError(agentChatErrorText(nextError));
+        if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
       })
       .finally(() => {
         if (generationRef.current === generation) setLoading(false);
@@ -214,7 +216,7 @@ export function useConversationRun({
       if (generationRef.current === generation) generationRef.current += 1;
       closeStream();
     };
-  }, [closeStream, commitRun, conversationId, watchRun]);
+  }, [closeStream, commitRun, conversationId, t, watchRun]);
 
   const send = useCallback(async (content: string): Promise<boolean> => {
     const message = content.trim();
@@ -224,7 +226,7 @@ export function useConversationRun({
     try {
       clientRequestId = requestIdFactory();
     } catch (nextError) {
-      setError(agentChatErrorText(nextError));
+      setError(agentChatErrorText(nextError, t));
       return false;
     }
     setError(null);
@@ -259,11 +261,11 @@ export function useConversationRun({
     } catch (nextError) {
       if (generationRef.current === generation) {
         setMessages((current) => current.map((item) => item.id === clientRequestId ? { ...item, delivery: "failed" } : item));
-        setError(agentChatErrorText(nextError));
+        setError(agentChatErrorText(nextError, t));
       }
       return false;
     }
-  }, [commitRun, onConversationAccepted, requestIdFactory, watchRun]);
+  }, [commitRun, onConversationAccepted, requestIdFactory, t, watchRun]);
 
   const cancel = useCallback(async (): Promise<void> => {
     const run = activeRunRef.current;
@@ -272,9 +274,9 @@ export function useConversationRun({
       const result = await cancelRun(run.id);
       updateRun((current) => current && current.id === run.id ? { ...current, status: result.status } : current);
     } catch (nextError) {
-      setError(agentChatErrorText(nextError));
+      setError(agentChatErrorText(nextError, t));
     }
-  }, [updateRun]);
+  }, [t, updateRun]);
 
   const isRunning = useMemo(() => activeRun !== null && activeStatuses.has(activeRun.status), [activeRun]);
 

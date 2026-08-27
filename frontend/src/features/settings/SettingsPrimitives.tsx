@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+
+import { useI18n } from "../../i18n/I18nProvider";
 
 export type IconName = "settings" | "robot" | "database" | "connections" | "appearance" | "privacy" | "info" | "globe" | "rocket" | "bell" | "openai" | "anthropic" | "openrouter";
 
@@ -22,13 +24,16 @@ export function Icon({ name }: { name: IconName }) {
 }
 
 export function SaveStatus({ saved }: { saved: boolean }) {
-  return <p className={`settings-save-status${saved ? " settings-save-status--saved" : ""}`} role="status" aria-live="polite"><span className="settings-save-dot" aria-hidden="true">{saved ? "✓" : "•"}</span>{saved ? "已儲存" : "儲存中…"}</p>;
+  const { t } = useI18n();
+  return <p className={`settings-save-status${saved ? " settings-save-status--saved" : ""}`} role="status" aria-live="polite"><span className="settings-save-dot" aria-hidden="true">{saved ? "✓" : "•"}</span>{saved ? t("settings.saved") : t("settings.saving")}</p>;
 }
 
 export function FutureSettingRow({ label, description }: { label: string; description: string }) {
-  return <div className="settings-future-row" aria-label={`${label}，未來上線`}><span><span className="settings-control-label">{label}</span><span className="settings-control-description">{description}</span></span><span className="settings-future-badge">未來上線</span></div>;
+  const { t } = useI18n();
+  return <div className="settings-future-row" aria-label={t("settings.futureLabel", { label })}><span><span className="settings-control-label">{label}</span><span className="settings-control-description">{description}</span></span><span className="settings-future-badge">{t("settings.future")}</span></div>;
 }
 
 export function SettingsCard({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) {
-  return <section className="settings-card" aria-labelledby={`${title}-heading`}><h3 id={`${title}-heading`} className="settings-card-title"><Icon name={icon} />{title}</h3><div className="settings-card-body">{children}</div></section>;
+  const headingId = `${useId()}-heading`;
+  return <section className="settings-card" aria-labelledby={headingId}><h3 id={headingId} className="settings-card-title"><Icon name={icon} />{title}</h3><div className="settings-card-body">{children}</div></section>;
 }

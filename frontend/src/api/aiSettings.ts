@@ -1,4 +1,5 @@
 import { providerIds, type ProviderId } from "./providerConnections";
+import { defaultTranslator, type MessageKey, type Translator } from "../i18n/catalog";
 
 export type PersistedModelSelection = {
   providerId: ProviderId;
@@ -83,15 +84,16 @@ export function putAiSettings(next: AiSettings): Promise<AiSettings> {
   return request({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) }, new Map([[400, ["invalid_request"]], [409, ["not_connected"]], [503, ["credential_store_unavailable", "settings_store_unavailable"]], [500, ["internal_error"]]]));
 }
 
-export function aiSettingsErrorText(error: unknown): string {
+export function aiSettingsErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof AiSettingsApiError ? error.code : "network_error";
-  return ({
-    invalid_request: "AI 設定資料無效，請重新選擇。",
-    not_connected: "這個模型廠家目前尚未連線。",
-    credential_store_unavailable: "安全憑證儲存服務暫時無法使用。",
-    settings_store_unavailable: "AI 設定暫時無法讀取或儲存。",
-    internal_error: "本機服務暫時無法儲存 AI 設定，請稍後再試。",
-    malformed_response: "本機服務回傳的 AI 設定無法安全使用，請重試。",
-    network_error: "無法連線到本機服務，請確認 OpenSprite 正在執行。",
-  } satisfies Record<AiSettingsErrorCode, string>)[code];
+  const keys = {
+    invalid_request: "error.ai.invalidRequest",
+    not_connected: "error.ai.notConnected",
+    credential_store_unavailable: "error.ai.credentialStore",
+    settings_store_unavailable: "error.ai.settingsStore",
+    internal_error: "error.ai.internal",
+    malformed_response: "error.ai.malformed",
+    network_error: "error.network",
+  } satisfies Record<AiSettingsErrorCode, MessageKey>;
+  return t(keys[code]);
 }

@@ -1,4 +1,5 @@
 import type { OpenRouterModel, ProviderId } from "../../api/providerConnections";
+import { defaultTranslator, type Translator } from "../../i18n/catalog";
 
 export type ModelCatalogItem = {
   id: string;
@@ -27,8 +28,8 @@ export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogIte
   openrouter: [],
 };
 
-export function modelLabel(selection: ModelSelection | null, openRouterModels: ReadonlyArray<ModelCatalogItem> = []): string {
-  if (!selection) return "尚未選擇模型";
+export function modelLabel(selection: ModelSelection | null, openRouterModels: ReadonlyArray<ModelCatalogItem> = [], t: Translator = defaultTranslator): string {
+  if (!selection) return t("model.none");
   const catalog = selection.providerId === "openrouter" ? openRouterModels : localModelCatalog[selection.providerId];
   return catalog.find((model) => model.id === selection.modelId)?.label ?? selection.modelId;
 }

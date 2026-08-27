@@ -32,4 +32,21 @@ export async function replaceProviderConnection(id:ProviderId,key:string) { cons
 export async function testProviderConnection(id:ProviderId) { const result=summary(await call(`/api/providers/${id}/connection/test`,{method:"POST"},allow.test),id); if(!result.connected||result.status!=="connected") throw new ProviderApiError("malformed_response"); return result; }
 export async function listOpenRouterModels(): Promise<OpenRouterModel[]> { const body=await call("/api/providers/openrouter/models",{method:"POST"},allow.openrouterModels); if(!record(body)||!keys(body,["models"])||!Array.isArray(body.models)||body.models.length<1||body.models.length>1000) throw new ProviderApiError("malformed_response"); return body.models.map(openRouterModel); }
 export async function deleteProviderConnection(id:ProviderId) { let response:Response;try{response=await fetch(`/api/providers/${id}/connection`,{method:"DELETE"});}catch{throw new ProviderApiError("network_error");}if(response.status===204)return;let body:unknown;try{body=await response.json();}catch{throw new ProviderApiError("malformed_response");}throw new ProviderApiError(response.ok?"malformed_response":envelope(body,allow.delete.get(response.status)??[])); }
-export function providerErrorText(error:unknown) { const code=error instanceof ProviderApiError?error.code:"network_error"; return ({invalid_request:"送出的連線資料無效，請重新檢查。",unsupported_provider:"此模型廠家目前不受支援。",not_connected:"此模型廠家尚未連線。",invalid_credentials:"API 金鑰無效或已失效。",provider_unreachable:"暫時無法連線到模型廠家，請稍後再試。",provider_timeout:"模型廠家回應逾時，請稍後再試。",provider_rate_limited:"模型廠家目前限制請求，請稍後再試。",credential_store_unavailable:"安全憑證儲存服務暫時無法使用。",internal_error:"本機服務暫時無法完成操作，請稍後再試。",malformed_response:"本機服務回傳的資料無法安全使用，請重試。",network_error:"無法連線到本機服務，請確認 OpenSprite 正在執行。"} satisfies Record<ProviderErrorCode,string>)[code]; }
+export function providerErrorText(error: unknown, t: Translator = defaultTranslator) {
+  const code = error instanceof ProviderApiError ? error.code : "network_error";
+  const keys = {
+    invalid_request: "error.provider.invalidRequest",
+    unsupported_provider: "error.provider.unsupported",
+    not_connected: "error.provider.notConnected",
+    invalid_credentials: "error.provider.invalidCredentials",
+    provider_unreachable: "error.provider.unreachable",
+    provider_timeout: "error.provider.timeout",
+    provider_rate_limited: "error.provider.rateLimited",
+    credential_store_unavailable: "error.provider.storeUnavailable",
+    internal_error: "error.provider.internal",
+    malformed_response: "error.provider.malformed",
+    network_error: "error.network",
+  } satisfies Record<ProviderErrorCode, MessageKey>;
+  return t(keys[code]);
+}
+import { defaultTranslator, type MessageKey, type Translator } from "../i18n/catalog";

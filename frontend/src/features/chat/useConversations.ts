@@ -5,8 +5,10 @@ import {
   listConversations,
   type ConversationSummary,
 } from "../../api/agentChat";
+import { useI18n } from "../../i18n/I18nProvider";
 
 export function useConversations() {
+  const { t } = useI18n();
   const [conversations, setConversations] = useState<ReadonlyArray<ConversationSummary>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,11 +20,11 @@ export function useConversations() {
       setConversations(page.conversations);
       setError(null);
     } catch (refreshError) {
-      setError(agentChatErrorText(refreshError));
+      setError(agentChatErrorText(refreshError, t));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void refresh();

@@ -11,6 +11,7 @@ import {
   type SettingsSection,
 } from "../features/settings/settingsState";
 import { useAiSettings } from "../features/settings/useAiSettings";
+import { useI18n } from "../i18n/I18nProvider";
 
 function conversationIdFromHash(): string | null {
   if (!window.location.hash.startsWith("#chat=")) return null;
@@ -54,6 +55,7 @@ function ConversationButton({
 }
 
 export function App() {
+  const { t } = useI18n();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
   const {
     conversations,
@@ -86,7 +88,7 @@ export function App() {
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const menuWasOpen = useRef(false);
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
-  const chatTitle = conversationId === null ? "新對話" : activeConversation?.title ?? "對話";
+  const chatTitle = conversationId === null ? t("app.newConversationTitle") : activeConversation?.title ?? t("app.conversationTitle");
   const todayConversations = conversations.filter((conversation) => isToday(conversation.updatedAt));
   const earlierConversations = conversations.filter((conversation) => !isToday(conversation.updatedAt));
 
@@ -187,10 +189,10 @@ export function App() {
           ref={mobileMenuButtonRef}
           className="mobile-menu-button"
           type="button"
-          aria-label={menuOpen ? "關閉主選單" : "開啟主選單"}
+          aria-label={menuOpen ? t("app.closeMenu") : t("app.openMenu")}
           aria-expanded={menuOpen}
           aria-controls="main-navigation-sidebar"
-          title={menuOpen ? "關閉主選單" : "開啟主選單"}
+          title={menuOpen ? t("app.closeMenu") : t("app.openMenu")}
           onClick={() => setMenuOpen((open) => !open)}
         >
           ☰
@@ -205,7 +207,7 @@ export function App() {
         <button
           className="sidebar-backdrop"
           type="button"
-          aria-label="關閉主選單"
+          aria-label={t("app.closeMenu")}
           onClick={() => setMenuOpen(false)}
         />
       ) : null}
@@ -213,7 +215,7 @@ export function App() {
       <aside
         id="main-navigation-sidebar"
         className={`main-sidebar${menuOpen ? " is-open" : ""}${sidebarCollapsed ? " is-collapsed" : ""}`}
-        aria-label="主選單"
+        aria-label={t("app.mainMenu")}
       >
         <div className="sidebar-header">
           <div className="brand">
@@ -223,10 +225,10 @@ export function App() {
           <button
             className="sidebar-collapse-button"
             type="button"
-            aria-label={sidebarCollapsed ? "展開側邊欄" : "收合側邊欄"}
+            aria-label={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
             aria-expanded={!sidebarCollapsed}
             aria-controls="conversation-navigation"
-            title={sidebarCollapsed ? "展開側邊欄" : "收合側邊欄"}
+            title={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
             onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
           >
             <span
@@ -240,23 +242,23 @@ export function App() {
           ref={newChatButtonRef}
           className="new-chat-button"
           type="button"
-          aria-label="新對話"
-          title="新對話"
+          aria-label={t("app.newConversation")}
+          title={t("app.newConversation")}
           onClick={startNewChat}
         >
           <span aria-hidden="true">＋</span>
-          <span className="new-chat-label">新對話</span>
+          <span className="new-chat-label">{t("app.newConversation")}</span>
         </button>
 
         <nav
           id="conversation-navigation"
           className="conversation-nav"
-          aria-label="對話紀錄"
+          aria-label={t("app.conversationHistory")}
         >
-          {conversationsLoading ? <p className="conversation-nav__status">正在讀取對話…</p> : null}
+          {conversationsLoading ? <p className="conversation-nav__status">{t("app.loadingConversations")}</p> : null}
           {conversationsError ? <p className="conversation-nav__status" aria-live="polite">{conversationsError}</p> : null}
-          {!conversationsLoading && conversations.length === 0 ? <p className="conversation-nav__status">還沒有對話。</p> : null}
-          {todayConversations.length > 0 ? <p className="nav-group-label">今天</p> : null}
+          {!conversationsLoading && conversations.length === 0 ? <p className="conversation-nav__status">{t("app.noConversations")}</p> : null}
+          {todayConversations.length > 0 ? <p className="nav-group-label">{t("app.today")}</p> : null}
           {todayConversations.map((conversation) => (
             <ConversationButton
               key={conversation.id}
@@ -267,7 +269,7 @@ export function App() {
           ))}
 
           {todayConversations.length > 0 && earlierConversations.length > 0 ? <div className="nav-divider" /> : null}
-          {earlierConversations.length > 0 ? <p className="nav-group-label">較早</p> : null}
+          {earlierConversations.length > 0 ? <p className="nav-group-label">{t("app.earlier")}</p> : null}
           {earlierConversations.map((conversation) => (
             <ConversationButton
               key={conversation.id}
@@ -278,28 +280,28 @@ export function App() {
           ))}
         </nav>
 
-        <nav className="utility-nav" aria-label="應用程式功能">
+        <nav className="utility-nav" aria-label={t("app.features")}>
           <button
             type="button"
             disabled
-            aria-label="工具與連線"
-            title="此功能將在後續 Demo 加入"
+            aria-label={t("app.tools")}
+            title={t("app.toolsFuture")}
           >
             <span aria-hidden="true">⌘</span>
-            <span className="utility-label">工具與連線</span>
+            <span className="utility-label">{t("app.tools")}</span>
           </button>
           <button
             ref={settingsButtonRef}
             className={settingsOpen ? "is-active" : ""}
             type="button"
-            aria-label="設定"
-            title="設定"
+            aria-label={t("app.settings")}
+            title={t("app.settings")}
             aria-haspopup="dialog"
             aria-expanded={settingsOpen}
             onClick={(event) => openSettings("general", event.currentTarget)}
           >
             <span aria-hidden="true">⚙</span>
-            <span className="utility-label">設定</span>
+            <span className="utility-label">{t("app.settings")}</span>
           </button>
         </nav>
       </aside>
@@ -309,7 +311,7 @@ export function App() {
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
           title={chatTitle}
-          modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}
+          modelName={modelLabel(modelSelection, modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })), t)}
           modelSelection={modelSelection}
           modelChoices={modelChoices}
           modelSelectionSaving={aiSettingsSaving}

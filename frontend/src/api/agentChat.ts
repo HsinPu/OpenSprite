@@ -262,27 +262,29 @@ export function openRunEventStream(runId: string, handlers: RunEventStreamHandle
   return { close };
 }
 
-export function agentChatErrorText(error: unknown): string {
+export function agentChatErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof AgentChatApiError ? error.code : "network_error";
-  return ({
-    invalid_request: "送出的訊息無法使用，請重新輸入。",
-    not_found: "找不到這個對話或執行紀錄。",
-    run_busy: "這個對話正在回覆中，請先等待或停止。",
-    run_not_active: "這次執行已經結束，無法再停止。",
-    model_not_selected: "請先在 AI 模型設定中選擇模型。",
-    provider_not_connected: "選擇的模型廠家尚未連線。",
-    invalid_credentials: "模型廠家的 API 金鑰無效或已失效。",
-    provider_rate_limited: "模型廠家目前限制請求，請稍後再試。",
-    provider_timeout: "模型廠家回應逾時，請稍後再試。",
-    provider_unreachable: "暫時無法連線到模型廠家。",
-    credential_store_unavailable: "安全憑證儲存暫時無法使用。",
-    settings_store_unavailable: "AI 設定暫時無法讀取。",
-    database_unavailable: "本機對話資料暫時無法使用。",
-    agent_limit_reached: "本次執行已達安全步驟上限。",
-    tool_failure: "工具執行失敗。",
-    invalid_provider_response: "模型廠家的回應無法安全使用。",
-    internal_error: "本機服務暫時無法完成這次回覆。",
-    malformed_response: "本機服務回傳的對話資料無法安全使用。",
-    network_error: "無法連線到本機服務，請確認 OpenSprite 正在執行。",
-  } satisfies Record<AgentChatErrorCode, string>)[code];
+  const keys = {
+    invalid_request: "error.chat.invalidRequest",
+    not_found: "error.chat.notFound",
+    run_busy: "error.chat.runBusy",
+    run_not_active: "error.chat.runNotActive",
+    model_not_selected: "error.chat.modelNotSelected",
+    provider_not_connected: "error.chat.providerNotConnected",
+    invalid_credentials: "error.chat.invalidCredentials",
+    provider_rate_limited: "error.chat.rateLimited",
+    provider_timeout: "error.chat.timeout",
+    provider_unreachable: "error.chat.unreachable",
+    credential_store_unavailable: "error.chat.credentialStore",
+    settings_store_unavailable: "error.chat.settingsStore",
+    database_unavailable: "error.chat.database",
+    agent_limit_reached: "error.chat.agentLimit",
+    tool_failure: "error.chat.toolFailure",
+    invalid_provider_response: "error.chat.invalidProviderResponse",
+    internal_error: "error.chat.internal",
+    malformed_response: "error.chat.malformed",
+    network_error: "error.network",
+  } satisfies Record<AgentChatErrorCode, MessageKey>;
+  return t(keys[code]);
 }
+import { defaultTranslator, type MessageKey, type Translator } from "../i18n/catalog";
