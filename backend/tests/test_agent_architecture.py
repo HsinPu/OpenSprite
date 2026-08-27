@@ -98,3 +98,27 @@ def test_application_layer_has_no_http_or_storage_adapter_dependency() -> None:
         for source, module in imported_modules("application")
         if module.startswith(forbidden_prefixes)
     ] == []
+
+
+def test_app_factory_composes_feature_routers_instead_of_defining_api_routes() -> None:
+    app_path = PACKAGE_ROOT / "app.py"
+    tree = ast.parse(app_path.read_text(encoding="utf-8"), app_path)
+    api_routes: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if not isinstance(decorator, ast.Call) or not decorator.args:
+                continue
+            function = decorator.func
+            if (
+                isinstance(function, ast.Attribute)
+                and isinstance(function.value, ast.Name)
+                and function.value.id == "app"
+                and isinstance(decorator.args[0], ast.Constant)
+                and isinstance(decorator.args[0].value, str)
+                and decorator.args[0].value.startswith("/api/")
+            ):
+                api_routes.append(decorator.args[0].value)
+
+    assert api_routes == []

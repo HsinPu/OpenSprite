@@ -1,37 +1,30 @@
 """Typed FastAPI application factory for the local OpenSprite backend."""
 
 from collections.abc import Awaitable, Callable
-from typing import Annotated, cast
+from typing import cast
 
-from fastapi import Depends, FastAPI, Path, Request, Response, status
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import Lifespan
 
+from .api.ai_settings_routes import (
+    ai_settings_error_response,
+    router as ai_settings_router,
+)
 from .api.chat_models import chat_error_response
 from .api.chat_routes import router as chat_router
+from .api.provider_routes import (
+    provider_error_response,
+    router as provider_router,
+)
 from .application import (
     AgentChatError,
     AgentChatOperations,
     UnavailableAgentChat,
 )
 from .local_security import LocalRequestSecurityMiddleware
-from .models import (
-    AiSettings,
-    AiSettingsErrorCode,
-    AiSettingsErrorDetail,
-    AiSettingsErrorEnvelope,
-    ErrorCode,
-    ErrorDetail,
-    ErrorEnvelope,
-    HealthResponse,
-    OpenRouterModelListResponse,
-    ProviderId,
-    ProviderListResponse,
-    ProviderSummary,
-    PutAiSettingsRequest,
-    PutProviderConnectionRequest,
-)
+from .models import AiSettingsErrorCode, ErrorCode, HealthResponse
 from .ai_settings import (
     AiSettingsOperations,
     SettingsStoreError,
@@ -42,183 +35,6 @@ from .provider_connections import (
     ProviderConnections,
     UnavailableProviderConnections,
 )
-
-SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
-    {"openai", "anthropic", "openrouter"}
-)
-ProviderPathId = Annotated[
-    str,
-    Path(
-        description="Stable provider identifier.",
-        json_schema_extra={"enum": ["openai", "anthropic", "openrouter"]},
-    ),
-]
-
-ERROR_STATUS: dict[ErrorCode, int] = {
-    ErrorCode.INVALID_REQUEST: status.HTTP_400_BAD_REQUEST,
-    ErrorCode.UNSUPPORTED_PROVIDER: status.HTTP_404_NOT_FOUND,
-    ErrorCode.NOT_CONNECTED: status.HTTP_409_CONFLICT,
-    ErrorCode.INVALID_CREDENTIALS: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    ErrorCode.PROVIDER_RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
-    ErrorCode.PROVIDER_UNREACHABLE: status.HTTP_502_BAD_GATEWAY,
-    ErrorCode.CREDENTIAL_STORE_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
-    ErrorCode.PROVIDER_TIMEOUT: status.HTTP_504_GATEWAY_TIMEOUT,
-    ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
-}
-
-PUBLIC_ERRORS: dict[ErrorCode, tuple[str, bool]] = {
-    ErrorCode.INVALID_REQUEST: ("Request validation failed.", False),
-    ErrorCode.UNSUPPORTED_PROVIDER: (
-        "The requested provider is not supported.",
-        False,
-    ),
-    ErrorCode.NOT_CONNECTED: ("The provider is not connected.", False),
-    ErrorCode.INVALID_CREDENTIALS: (
-        "The provider rejected the credential.",
-        False,
-    ),
-    ErrorCode.PROVIDER_UNREACHABLE: (
-        "The provider is temporarily unreachable.",
-        True,
-    ),
-    ErrorCode.PROVIDER_TIMEOUT: (
-        "The provider did not respond before the timeout.",
-        True,
-    ),
-    ErrorCode.PROVIDER_RATE_LIMITED: (
-        "The provider rate limit was reached.",
-        True,
-    ),
-    ErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
-        "Secure credential storage is unavailable.",
-        True,
-    ),
-    ErrorCode.INTERNAL_ERROR: ("An internal error occurred.", False),
-}
-
-AI_SETTINGS_ERROR_STATUS: dict[AiSettingsErrorCode, int] = {
-    AiSettingsErrorCode.INVALID_REQUEST: status.HTTP_400_BAD_REQUEST,
-    AiSettingsErrorCode.NOT_CONNECTED: status.HTTP_409_CONFLICT,
-    AiSettingsErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
-        status.HTTP_503_SERVICE_UNAVAILABLE
-    ),
-    AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE: (
-        status.HTTP_503_SERVICE_UNAVAILABLE
-    ),
-    AiSettingsErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
-}
-
-AI_SETTINGS_PUBLIC_ERRORS: dict[
-    AiSettingsErrorCode, tuple[str, bool]
-] = {
-    AiSettingsErrorCode.INVALID_REQUEST: (
-        "Request validation failed.",
-        False,
-    ),
-    AiSettingsErrorCode.NOT_CONNECTED: (
-        "The provider is not connected.",
-        False,
-    ),
-    AiSettingsErrorCode.CREDENTIAL_STORE_UNAVAILABLE: (
-        "Secure credential storage is unavailable.",
-        True,
-    ),
-    AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE: (
-        "AI settings are unavailable.",
-        True,
-    ),
-    AiSettingsErrorCode.INTERNAL_ERROR: (
-        "An internal error occurred.",
-        False,
-    ),
-}
-
-PROVIDER_LIST_ERROR_RESPONSES = {
-    500: {"model": ErrorEnvelope},
-    503: {"model": ErrorEnvelope},
-}
-OPENROUTER_MODELS_ERROR_RESPONSES = {
-    400: {"model": ErrorEnvelope},
-    409: {"model": ErrorEnvelope},
-    422: {"model": ErrorEnvelope},
-    429: {"model": ErrorEnvelope},
-    500: {"model": ErrorEnvelope},
-    502: {"model": ErrorEnvelope},
-    503: {"model": ErrorEnvelope},
-    504: {"model": ErrorEnvelope},
-}
-PROVIDER_CONNECTION_ERROR_RESPONSES = {
-    400: {"model": ErrorEnvelope},
-    404: {"model": ErrorEnvelope},
-    422: {"model": ErrorEnvelope},
-    429: {"model": ErrorEnvelope},
-    500: {"model": ErrorEnvelope},
-    502: {"model": ErrorEnvelope},
-    503: {"model": ErrorEnvelope},
-    504: {"model": ErrorEnvelope},
-}
-PROVIDER_TEST_ERROR_RESPONSES = {
-    **PROVIDER_CONNECTION_ERROR_RESPONSES,
-    409: {"model": ErrorEnvelope},
-}
-PROVIDER_DELETE_ERROR_RESPONSES = {
-    404: {"model": ErrorEnvelope},
-    500: {"model": ErrorEnvelope},
-    503: {"model": ErrorEnvelope},
-}
-AI_SETTINGS_GET_ERROR_RESPONSES = {
-    500: {"model": AiSettingsErrorEnvelope},
-    503: {"model": AiSettingsErrorEnvelope},
-}
-AI_SETTINGS_PUT_ERROR_RESPONSES = {
-    400: {"model": AiSettingsErrorEnvelope},
-    409: {"model": AiSettingsErrorEnvelope},
-    500: {"model": AiSettingsErrorEnvelope},
-    503: {"model": AiSettingsErrorEnvelope},
-}
-
-
-def _error_response(code: ErrorCode) -> JSONResponse:
-    message, retryable = PUBLIC_ERRORS[code]
-    envelope = ErrorEnvelope(
-        error=ErrorDetail(code=code, message=message, retryable=retryable)
-    )
-    return JSONResponse(
-        status_code=ERROR_STATUS[code],
-        content=envelope.model_dump(mode="json", by_alias=True),
-    )
-
-
-def _ai_settings_error_response(
-    code: AiSettingsErrorCode,
-) -> JSONResponse:
-    message, retryable = AI_SETTINGS_PUBLIC_ERRORS[code]
-    envelope = AiSettingsErrorEnvelope(
-        error=AiSettingsErrorDetail(
-            code=code,
-            message=message,
-            retryable=retryable,
-        )
-    )
-    return JSONResponse(
-        status_code=AI_SETTINGS_ERROR_STATUS[code],
-        content=envelope.model_dump(mode="json", by_alias=True),
-    )
-
-
-def _provider_id(value: str) -> ProviderId:
-    if value not in SUPPORTED_PROVIDERS:
-        raise ProviderConnectionError(ErrorCode.UNSUPPORTED_PROVIDER)
-    return cast(ProviderId, value)
-
-
-def _provider_connections(request: Request) -> ProviderConnections:
-    return cast(ProviderConnections, request.app.state.provider_connections)
-
-
-def _ai_settings(request: Request) -> AiSettingsOperations:
-    return cast(AiSettingsOperations, request.app.state.ai_settings)
-
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
@@ -258,7 +74,7 @@ def create_app(
     if enforce_local_security:
         app.add_middleware(
             LocalRequestSecurityMiddleware,
-            rejection_response=lambda: _error_response(
+            rejection_response=lambda: provider_error_response(
                 ErrorCode.INVALID_REQUEST
             ),
         )
@@ -268,21 +84,21 @@ def create_app(
         exc: RequestValidationError,
     ) -> JSONResponse:
         del request, exc
-        return _error_response(ErrorCode.INVALID_REQUEST)
+        return provider_error_response(ErrorCode.INVALID_REQUEST)
 
     async def provider_error_handler(
         request: Request,
         exc: ProviderConnectionError,
     ) -> JSONResponse:
         del request
-        return _error_response(exc.code)
+        return provider_error_response(exc.code)
 
     async def settings_store_error_handler(
         request: Request,
         exc: SettingsStoreError,
     ) -> JSONResponse:
         del request, exc
-        return _ai_settings_error_response(
+        return ai_settings_error_response(
             AiSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
@@ -298,7 +114,7 @@ def create_app(
         exc: Exception,
     ) -> JSONResponse:
         del request, exc
-        return _error_response(ErrorCode.INTERNAL_ERROR)
+        return provider_error_response(ErrorCode.INTERNAL_ERROR)
 
     app.add_exception_handler(
         RequestValidationError,
@@ -330,104 +146,7 @@ def create_app(
     async def get_health() -> HealthResponse:
         return HealthResponse()
 
-    @app.get(
-        "/api/settings/ai",
-        operation_id="getAiSettings",
-        response_model=AiSettings,
-        responses=AI_SETTINGS_GET_ERROR_RESPONSES,
-        tags=["ai-settings"],
-    )
-    async def get_ai_settings(
-        settings: AiSettingsOperations = Depends(_ai_settings),
-    ) -> AiSettings:
-        return await settings.get()
-
-    @app.put(
-        "/api/settings/ai",
-        operation_id="putAiSettings",
-        response_model=AiSettings,
-        responses=AI_SETTINGS_PUT_ERROR_RESPONSES,
-        tags=["ai-settings"],
-    )
-    async def put_ai_settings(
-        payload: PutAiSettingsRequest,
-        settings: AiSettingsOperations = Depends(_ai_settings),
-    ) -> AiSettings:
-        return await settings.put(AiSettings.model_validate(payload.model_dump()))
-
-    @app.get(
-        "/api/providers",
-        operation_id="listProviders",
-        response_model=ProviderListResponse,
-        responses=PROVIDER_LIST_ERROR_RESPONSES,
-        tags=["provider-connections"],
-    )
-    async def list_providers(
-        connections: ProviderConnections = Depends(_provider_connections),
-    ) -> ProviderListResponse:
-        return await connections.list_providers()
-
-    @app.post(
-        "/api/providers/openrouter/models",
-        operation_id="listOpenRouterModels",
-        response_model=OpenRouterModelListResponse,
-        responses=OPENROUTER_MODELS_ERROR_RESPONSES,
-        tags=["provider-connections"],
-    )
-    async def list_openrouter_models(
-        request: Request,
-        connections: ProviderConnections = Depends(_provider_connections),
-    ) -> OpenRouterModelListResponse:
-        if await request.body():
-            raise ProviderConnectionError(ErrorCode.INVALID_REQUEST)
-        return await connections.list_openrouter_models()
-
-    @app.put(
-        "/api/providers/{provider_id}/connection",
-        operation_id="putProviderConnection",
-        response_model=ProviderSummary,
-        responses=PROVIDER_CONNECTION_ERROR_RESPONSES,
-        tags=["provider-connections"],
-    )
-    async def put_provider_connection(
-        provider_id: ProviderPathId,
-        payload: PutProviderConnectionRequest,
-        connections: ProviderConnections = Depends(_provider_connections),
-    ) -> ProviderSummary:
-        return await connections.connect(
-            _provider_id(provider_id),
-            payload.apiKey,
-        )
-
-    @app.post(
-        "/api/providers/{provider_id}/connection/test",
-        operation_id="testProviderConnection",
-        response_model=ProviderSummary,
-        responses=PROVIDER_TEST_ERROR_RESPONSES,
-        tags=["provider-connections"],
-    )
-    async def test_provider_connection(
-        provider_id: ProviderPathId,
-        request: Request,
-        connections: ProviderConnections = Depends(_provider_connections),
-    ) -> ProviderSummary:
-        if await request.body():
-            raise ProviderConnectionError(ErrorCode.INVALID_REQUEST)
-        return await connections.test(_provider_id(provider_id))
-
-    @app.delete(
-        "/api/providers/{provider_id}/connection",
-        operation_id="deleteProviderConnection",
-        status_code=status.HTTP_204_NO_CONTENT,
-        responses=PROVIDER_DELETE_ERROR_RESPONSES,
-        tags=["provider-connections"],
-    )
-    async def delete_provider_connection(
-        provider_id: ProviderPathId,
-        connections: ProviderConnections = Depends(_provider_connections),
-    ) -> Response:
-        await connections.disconnect(_provider_id(provider_id))
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-
+    app.include_router(ai_settings_router)
+    app.include_router(provider_router)
     app.include_router(chat_router)
     return app
