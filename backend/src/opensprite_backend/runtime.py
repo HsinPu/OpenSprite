@@ -25,8 +25,8 @@ from .inference import ModelGateway
 from .provider_connections import (
     ProviderConnections,
     UnavailableProviderConnections,
-    create_provider_runtime,
 )
+from .provider_runtime import create_provider_runtime
 from .tools import ReadOnlyToolPolicy, ToolRegistry
 
 

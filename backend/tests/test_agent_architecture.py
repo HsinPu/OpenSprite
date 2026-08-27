@@ -122,3 +122,38 @@ def test_app_factory_composes_feature_routers_instead_of_defining_api_routes() -
                 api_routes.append(decorator.args[0].value)
 
     assert api_routes == []
+
+
+def test_provider_connection_policy_has_no_concrete_runtime_composition() -> None:
+    source_path = PACKAGE_ROOT / "provider_connections.py"
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), source_path)
+    forbidden_modules = {"httpx", "app_paths", "inference.native_gateway"}
+    forbidden_names = {
+        "EncryptedJsonCredentialStore",
+        "JsonProviderStateRepository",
+        "NativeModelGateway",
+        "ProviderRuntime",
+        "ProviderValidator",
+        "create_provider_runtime",
+    }
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            violations.extend(
+                alias.name
+                for alias in node.names
+                if alias.name in forbidden_modules
+            )
+        elif isinstance(node, ast.ImportFrom):
+            if node.module in forbidden_modules:
+                violations.append(node.module)
+            violations.extend(
+                alias.name
+                for alias in node.names
+                if alias.name in forbidden_names
+            )
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name in forbidden_names:
+                violations.append(node.name)
+
+    assert violations == []

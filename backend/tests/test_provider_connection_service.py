@@ -28,8 +28,8 @@ from opensprite_backend.models import (
 from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnectionService,
-    create_provider_runtime,
 )
+from opensprite_backend.provider_runtime import create_provider_runtime
 from opensprite_backend.provider_state import (
     JsonProviderStateRepository,
     ProviderState,
