@@ -66,6 +66,7 @@ describe("live chat workspace", () => {
         modelSelection={{ providerId: "openrouter", modelId: run.modelId }}
         modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]}
         modelSelectionSaving={false}
+        timeZone="system"
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}
@@ -106,6 +107,7 @@ describe("live chat workspace", () => {
         modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }}
         modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]}
         modelSelectionSaving={false}
+        timeZone="system"
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}

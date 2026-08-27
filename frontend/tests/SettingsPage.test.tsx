@@ -7,6 +7,16 @@ import { defaultDemoSettings, type DemoSettings, type SettingsSection } from "..
 import type { ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
 import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatalog";
+import type { GeneralSettingsController } from "../src/features/general-settings/useGeneralSettings";
+
+const generalSettings: GeneralSettingsController = {
+  settings: { locale: "zh-TW", timeZone: "system" },
+  loaded: true,
+  saving: false,
+  error: null,
+  saveLocale: async () => null,
+  saveTimeZone: async () => null,
+};
 
 const disconnectedCatalog = {
   providers: [
@@ -63,7 +73,7 @@ function SettingsHarness({ initialSettings = defaultDemoSettings, initialSelecti
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
 }
 
 function GuardedDialogHarness() {
@@ -71,7 +81,7 @@ function GuardedDialogHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
@@ -79,7 +89,7 @@ function ToggleSectionHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /></>;
 }
 
 describe("provider settings", () => {

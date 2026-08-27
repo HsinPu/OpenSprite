@@ -95,8 +95,9 @@ Provider 推理強度參數，而不是轉成某個固定強度。顯示 label �
 OpenRouter 記憶體清單衍生。動態清單與 AI settings 都不寫入 browser storage 或 URL。
 
 Frontend localization 由 [`frontend-localization.md`](frontend-localization.md)
-定義。使用者可在同一工作階段切換繁體中文、英文與日文；穩定 locale ID 與
-message key 不使用顯示文字作為狀態或 DOM identity，且不改變任何後端契約。
+定義。使用者可保存繁體中文、英文或日文，並以 `system`、`Asia/Taipei` 或 `UTC`
+控制日期分組及顯示時間；穩定 locale/time-zone ID 與 message key 不使用顯示文字作為
+狀態或 DOM identity。
 
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值

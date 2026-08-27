@@ -15,6 +15,7 @@ import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
+import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { DemoSettings, SettingsSection } from "./settingsState";
@@ -32,6 +33,7 @@ type SettingsPageProps = {
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
+  generalSettings: GeneralSettingsController;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
 };
@@ -316,7 +318,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   );
 }
 
-export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const [saved, setSaved] = useState(true); useEffect(() => { if (saved) return; const timeout = window.setTimeout(() => setSaved(true), 650); return () => window.clearTimeout(timeout); }, [saved]);
   const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
@@ -325,7 +327,7 @@ export function SettingsPage({ section, onSectionChange, settings, onSettingsCha
     <section ref={setModalContainer} className="settings-page" aria-labelledby="settings-page-title">
       <header className="settings-header">
         <div><h1 id="settings-page-title">{t("settings.title")}</h1><p>{t("settings.subtitle")}</p></div>
-        <div className="settings-header-actions"><SaveStatus saved={saved && !aiSettingsSaving} /><button className="settings-close-button" type="button" onClick={onClose} aria-label={t("settings.close")} title={t("settings.close")}><span aria-hidden="true">×</span></button></div>
+        <div className="settings-header-actions"><SaveStatus saved={saved && !aiSettingsSaving && !generalSettings.saving} /><button className="settings-close-button" type="button" onClick={onClose} aria-label={t("settings.close")} title={t("settings.close")}><span aria-hidden="true">×</span></button></div>
       </header>
       <div className="settings-layout">
         <nav className="settings-category-rail" aria-label={t("settings.categories")}>
@@ -337,7 +339,7 @@ export function SettingsPage({ section, onSectionChange, settings, onSettingsCha
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} generalSettings={generalSettings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
           <p className="settings-demo-note">{t("settings.sessionNote")}</p>
         </div>
       </div>

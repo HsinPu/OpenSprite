@@ -3,6 +3,8 @@ import { useId, useMemo, useState } from "react";
 import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot } from "../../api/agentChat";
 import type { MessageKey, Translator } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
+import type { TimeZoneSetting } from "../../api/generalSettings";
+import { formatTime } from "../general-settings/dateTime";
 
 
 function OpenSpriteMark() {
@@ -25,11 +27,6 @@ const responseModeKeys: Record<RunSnapshot["responseMode"], MessageKey> = {
   balanced: "execution.mode.balanced",
   deep: "execution.mode.deep",
 };
-
-function timeText(value: string | null, locale: string): string {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(value));
-}
 
 function durationText(run: RunSnapshot | null): string {
   if (!run?.startedAt) return "—";
@@ -54,21 +51,21 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
   }
 }
 
-function processEvents(events: RunEvent[], t: Translator, locale: string): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> {
+function processEvents(events: RunEvent[], t: Translator, locale: string, timeZone: TimeZoneSetting): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> {
   const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> = [];
   let addedTextStep = false;
   for (const event of events) {
     if (event.type === "assistant.delta") {
       if (!addedTextStep) {
         addedTextStep = true;
-        steps.push({ key: "assistant-output", label: t("execution.event.output"), time: timeText(event.createdAt, locale), state: "active" });
+        steps.push({ key: "assistant-output", label: t("execution.event.output"), time: formatTime(event.createdAt, locale, timeZone), state: "active" });
       }
       continue;
     }
     const label = eventLabel(event, t);
     if (!label) continue;
     const terminalError = event.type === "run.failed" || event.type === "run.interrupted" || event.type === "tool.failed";
-    steps.push({ key: `${event.sequence}-${event.type}`, label, time: timeText(event.createdAt, locale), state: terminalError ? "error" : "complete" });
+    steps.push({ key: `${event.sequence}-${event.type}`, label, time: formatTime(event.createdAt, locale, timeZone), state: terminalError ? "error" : "complete" });
   }
   if (steps.length > 0 && !events.some((event) => ["run.completed", "run.failed", "run.cancelled", "run.interrupted"].includes(event.type))) {
     steps[steps.length - 1] = { ...steps[steps.length - 1]!, state: "active" };
@@ -80,9 +77,10 @@ type ExecutionContextProps = {
   modelName: string;
   run: RunSnapshot | null;
   events: RunEvent[];
+  timeZone: TimeZoneSetting;
 };
 
-export function ExecutionContext({ modelName, run, events }: ExecutionContextProps) {
+export function ExecutionContext({ modelName, run, events, timeZone }: ExecutionContextProps) {
   const { locale, t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
@@ -91,7 +89,7 @@ export function ExecutionContext({ modelName, run, events }: ExecutionContextPro
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
   const executionBodyId = `${contextId}-execution-body`;
-  const steps = useMemo(() => processEvents(events, t, locale), [events, locale, t]);
+  const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
   const toolNames = useMemo(() => Array.from(new Set(events.filter((event) => event.type.startsWith("tool.")).map((event) => String(event.data.toolName ?? "")).filter(Boolean))), [events]);
   const status = run ? t(statusKeys[run.status]) : t("execution.status.none");
 
@@ -144,7 +142,7 @@ export function ExecutionContext({ modelName, run, events }: ExecutionContextPro
             <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={`${contextId}-info-title`}>
               <h3 id={`${contextId}-info-title`}>{t("execution.info")}</h3>
               <dl className="chat-workspace__stats">
-                <div><dt>{t("execution.startTime")}</dt><dd>{timeText(run.startedAt, locale)}</dd></div>
+                <div><dt>{t("execution.startTime")}</dt><dd>{formatTime(run.startedAt, locale, timeZone)}</dd></div>
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
                 <div><dt>{t("execution.source")}</dt><dd>{t("execution.history")}</dd></div>

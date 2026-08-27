@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
+import type { TimeZoneSetting } from "../../api/generalSettings";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
@@ -15,6 +16,7 @@ type ChatWorkspaceProps = {
   modelSelection: ModelSelection | null;
   modelChoices: ReadonlyArray<ModelChoice>;
   modelSelectionSaving: boolean;
+  timeZone: TimeZoneSetting;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -51,6 +53,7 @@ export function ChatWorkspace({
   modelSelection,
   modelChoices,
   modelSelectionSaving,
+  timeZone,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -189,7 +192,7 @@ export function ChatWorkspace({
         </form>
       </div>
 
-      <ExecutionContext modelName={modelName} run={chat.activeRun} events={chat.events} />
+      <ExecutionContext modelName={modelName} run={chat.activeRun} events={chat.events} timeZone={timeZone} />
     </section>
   );
 }

@@ -6,6 +6,8 @@ import { useConversations } from "../features/chat/useConversations";
 import { modelLabel } from "../features/ai-settings/modelCatalog";
 import { useAiSettings } from "../features/ai-settings/useAiSettings";
 import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
+import { isTodayInTimeZone } from "../features/general-settings/dateTime";
+import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import {
   defaultDemoSettings,
@@ -18,12 +20,6 @@ function conversationIdFromHash(): string | null {
   if (!window.location.hash.startsWith("#chat=")) return null;
   const value = window.location.hash.slice("#chat=".length);
   return isIdentifier(value) ? value : null;
-}
-
-function isToday(timestamp: string): boolean {
-  const value = new Date(timestamp);
-  const now = new Date();
-  return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
 }
 
 function OpenSpriteMark() {
@@ -69,6 +65,7 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
+  const generalSettings = useGeneralSettings();
   const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
@@ -90,8 +87,8 @@ export function App() {
   const menuWasOpen = useRef(false);
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const chatTitle = conversationId === null ? t("app.newConversationTitle") : activeConversation?.title ?? t("app.conversationTitle");
-  const todayConversations = conversations.filter((conversation) => isToday(conversation.updatedAt));
-  const earlierConversations = conversations.filter((conversation) => !isToday(conversation.updatedAt));
+  const todayConversations = conversations.filter((conversation) => isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
+  const earlierConversations = conversations.filter((conversation) => !isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
 
   useEffect(() => {
     const syncHash = () => {
@@ -316,6 +313,7 @@ export function App() {
           modelSelection={modelSelection}
           modelChoices={modelChoices}
           modelSelectionSaving={aiSettingsSaving}
+          timeZone={generalSettings.settings.timeZone}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
@@ -355,6 +353,7 @@ export function App() {
           onModelSelectionChange={saveModelSelection}
           onResponseModeChange={saveResponseMode}
           providerCatalog={providerCatalog}
+          generalSettings={generalSettings}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

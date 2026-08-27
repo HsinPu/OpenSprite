@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-type Boundary = "api" | "i18n" | "ai-settings" | "chat" | "settings" | "app";
+type Boundary = "api" | "i18n" | "ai-settings" | "general-settings" | "chat" | "settings" | "app";
 
 const sourceFiles = import.meta.glob("../src/**/*.{ts,tsx}", {
   eager: true,
@@ -14,9 +14,10 @@ const allowedDependencies: Record<Boundary, ReadonlySet<Boundary>> = {
   api: new Set(["api", "i18n"]),
   i18n: new Set(["i18n"]),
   "ai-settings": new Set(["ai-settings", "api", "i18n"]),
-  chat: new Set(["chat", "ai-settings", "api", "i18n"]),
-  settings: new Set(["settings", "ai-settings", "api", "i18n"]),
-  app: new Set(["app", "ai-settings", "chat", "settings", "api", "i18n"]),
+  "general-settings": new Set(["general-settings", "api", "i18n"]),
+  chat: new Set(["chat", "ai-settings", "general-settings", "api", "i18n"]),
+  settings: new Set(["settings", "ai-settings", "general-settings", "api", "i18n"]),
+  app: new Set(["app", "ai-settings", "general-settings", "chat", "settings", "api", "i18n"]),
 };
 
 function boundary(path: string): Boundary | null {
@@ -24,6 +25,7 @@ function boundary(path: string): Boundary | null {
   if (normalized.includes("/src/api/")) return "api";
   if (normalized.includes("/src/i18n/")) return "i18n";
   if (normalized.includes("/src/features/ai-settings/")) return "ai-settings";
+  if (normalized.includes("/src/features/general-settings/")) return "general-settings";
   if (normalized.includes("/src/features/chat/")) return "chat";
   if (normalized.includes("/src/features/settings/")) return "settings";
   if (normalized.includes("/src/app/")) return "app";
@@ -77,5 +79,14 @@ describe("frontend architecture", () => {
       .map(([path]) => path);
 
     expect(consumers).toEqual(["../src/features/ai-settings/useProviderCatalog.ts"]);
+  });
+
+  it("keeps General settings persistence in one feature owner", () => {
+    const consumers = Object.entries(sourceFiles)
+      .filter(([path]) => !path.includes("/src/api/"))
+      .filter(([, source]) => source.includes("getGeneralSettings") || source.includes("putGeneralSettings"))
+      .map(([path]) => path);
+
+    expect(consumers).toEqual(["../src/features/general-settings/useGeneralSettings.ts"]);
   });
 });

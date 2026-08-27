@@ -14,14 +14,15 @@ every key present in the Traditional Chinese source catalog.
 
 ## Runtime behavior
 
-- The General settings language selector changes the locale for the current
-  browser session.
+- The General settings language selector saves through the local service and
+  changes the locale only after the PUT succeeds.
 - The document `lang`, React copy, Ant Design locale, API error text and
   `Intl.DateTimeFormat` locale change together.
-- Locale state is not written to localStorage, the URL, `.opensprite` or the
-  backend AI settings contract.
-- General timezone and send-mode preferences use stable identifiers rather than
-  translated option labels.
+- Locale and time-zone state are restored from `config/general.json`; they are
+  not written to localStorage, the URL, or the backend AI settings contract.
+- General time zone and send-mode preferences use stable identifiers rather than
+  translated option labels. UTC timestamps remain unchanged and are converted
+  only for Today grouping and visible time formatting.
 - Provider names, model identifiers, user messages and model responses are
   content and are not translated.
 
