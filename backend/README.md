@@ -21,6 +21,9 @@ The current slice provides:
 - strict non-secret provider metadata at `state/providers.json`, written by
   atomic JSON replacement;
 - an explicit `create_provider_runtime()` composition factory;
+- durable Conversation, Message, Run and semantic event persistence in SQLite;
+- one bounded Agent loop with an explicit Tool Registry and normalized native
+  Provider inference gateway;
 - a secured `create_system_app()` runtime factory that owns and closes the
   provider HTTP client through FastAPI lifespan; and
 - an injectable `create_app()` default that remains unchanged and fails closed
@@ -30,8 +33,8 @@ It stores provider secrets only as AES-256-GCM ciphertext in `auth.json`, using
 a random per-install key at `config/credential.key`. Windows and Linux share the
 same format and do not require a startup password. This protects an isolated
 `auth.json`, but not an attacker who obtains the complete `.opensprite` root
-including its key. It does not contain a database, an Agent runtime or an
-application CLI. Unit tests inject `httpx.MockTransport` and temporary data
+including its key. It does not contain an application CLI. Unit tests inject
+`httpx.MockTransport` and temporary data
 roots; they make no real provider request or credential operation.
 
 Constructing `AppPaths`, importing this package, starting the system app, and

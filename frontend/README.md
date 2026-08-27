@@ -1,11 +1,11 @@
 # Frontend
 
-這裡是 OpenSprite 瀏覽器介面的唯一來源。目前提供 React、TypeScript、Vite、Ant Design 實作的前端 Demo；模型廠家連線會透過本機 Provider Connections HTTP API 管理。
+這裡是 OpenSprite 瀏覽器介面的唯一來源。目前提供 React、TypeScript、Vite、Ant Design 實作的真實本機介面；模型廠家連線、AI 設定與 Agent chat 都透過同源 HTTP／SSE 契約連接本機服務。
 
 ## 責任
 
 - `src/app/`：應用組裝、路由與全域 provider。
-- `src/api/`：未來的 HTTP 與 WebSocket client。
+- `src/api/`：Provider、AI settings 與 Agent chat 的 HTTP／SSE client。
 - `src/features/`：依使用者功能劃分的畫面、狀態與互動。
 - `src/shared/`：不含業務邏輯的共用 UI 與基礎工具。
 - `tests/`：前端測試。
@@ -23,13 +23,13 @@ npm run dev
 npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 ```
 
-## Demo 範圍
+## 目前範圍
 
 - `/` 或 `/#chat`：AI 對話工作台。
 - `/#new-chat`：空白新對話。
 - 設定由主導覽的「設定」按鈕開啟彈出視窗，不改變目前網址或對話。
 
-對話與執行資訊仍為假資料，只存在目前瀏覽器工作階段。模型選擇與回應模式會透過同源 `GET`／`PUT /api/settings/ai` 以單一設定保存到本機服務；前端只處理 Provider ID、model ID 與 `default`／`fast`／`balanced`／`deep`，其中「預設」代表未來執行時不指定推理強度。前端不使用 localStorage、網址或瀏覽器 log 保存設定、動態模型清單或 API 金鑰。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
+對話清單、可見訊息、Run snapshot 與安全語意事件都來自本機服務；執行期間以 SSE 顯示增量文字與狀態，終止後重新讀取 durable Run 與 Messages。模型選擇與回應模式會透過同源 `GET`／`PUT /api/settings/ai` 以單一設定保存到本機服務；前端只處理 Provider ID、model ID 與 `default`／`fast`／`balanced`／`deep`，其中「預設」代表執行時不指定推理強度。前端不使用 localStorage、網址或瀏覽器 log 保存設定、動態模型清單或 API 金鑰。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
 
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
 

@@ -1,6 +1,7 @@
 # Local agent and code-index state
 .codex/
 .codegraph/
+.SymbolLattice/
 
 # Python environments and generated files
 .venv/
