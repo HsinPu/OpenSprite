@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
-import type { ModelChoice, ModelSelection } from "../settings/modelCatalog";
+import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";

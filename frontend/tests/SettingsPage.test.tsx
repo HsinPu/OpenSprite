@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../src/features/settings/SettingsPage";
 import { defaultDemoSettings, type DemoSettings, type SettingsSection } from "../src/features/settings/settingsState";
 import type { ResponseMode } from "../src/api/aiSettings";
-import { modelLabel, type ModelSelection } from "../src/features/settings/modelCatalog";
+import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
 
 const disconnectedCatalog = {
   providers: [

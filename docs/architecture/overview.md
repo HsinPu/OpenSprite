@@ -36,7 +36,8 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 `GET`／`PUT /api/settings/ai` 將 nullable model 與 `default`／`fast`／`balanced`／`deep` 回應模式視為一個
 atomic setting。後端以 strict schema-v2 保存在 `config/settings.json`，並在寫入 non-null model
 前確認該 provider 有已保存的連線。這個設定 API 不會解密 API key、不聯網驗證模型清單，也不
-保存 display label 或動態 catalog。前端設定頁與聊天工作台共用同一份確認後的設定；儲存失敗
+保存 display label 或動態 catalog。前端由 `features/ai-settings` 擁有模型目錄、確認後的模型選擇、
+回應模式與保存流程；設定頁與聊天工作台只消費這個明確邊界。儲存失敗
 保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
 
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見

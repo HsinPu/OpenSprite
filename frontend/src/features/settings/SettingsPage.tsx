@@ -15,8 +15,8 @@ import {
 import type { ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
+import { localModelCatalog, openRouterModelCatalog, type ModelCatalogItem, type ModelChoice, type ModelSelection } from "../ai-settings/modelCatalog";
 import { GeneralSettings } from "./GeneralSettings";
-import { localModelCatalog, openRouterModelCatalog, type ModelCatalogItem, type ModelChoice, type ModelSelection } from "./modelCatalog";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { DemoSettings, SettingsSection } from "./settingsState";
 import "./settings.css";

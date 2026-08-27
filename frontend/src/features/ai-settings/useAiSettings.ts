@@ -11,12 +11,12 @@ import {
   listProviderConnections,
   type ProviderSummary,
 } from "../../api/providerConnections";
+import { useI18n } from "../../i18n/I18nProvider";
 import {
   localModelCatalog,
   type ModelChoice,
   type ModelSelection,
 } from "./modelCatalog";
-import { useI18n } from "../../i18n/I18nProvider";
 
 function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): ReadonlyArray<ModelChoice> {
   return providers.flatMap((provider) => provider.connected

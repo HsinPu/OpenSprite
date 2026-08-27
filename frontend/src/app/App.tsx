@@ -3,14 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import { useConversations } from "../features/chat/useConversations";
+import { modelLabel } from "../features/ai-settings/modelCatalog";
+import { useAiSettings } from "../features/ai-settings/useAiSettings";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import { modelLabel } from "../features/settings/modelCatalog";
 import {
   defaultDemoSettings,
   type DemoSettings,
   type SettingsSection,
 } from "../features/settings/settingsState";
-import { useAiSettings } from "../features/settings/useAiSettings";
 import { useI18n } from "../i18n/I18nProvider";
 
 function conversationIdFromHash(): string | null {
