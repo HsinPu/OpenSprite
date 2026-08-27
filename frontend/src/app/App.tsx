@@ -5,6 +5,7 @@ import { ChatWorkspace } from "../features/chat/ChatWorkspace";
 import { useConversations } from "../features/chat/useConversations";
 import { modelLabel } from "../features/ai-settings/modelCatalog";
 import { useAiSettings } from "../features/ai-settings/useAiSettings";
+import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import {
   defaultDemoSettings,
@@ -68,16 +69,16 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
+  const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
     responseMode,
     saving: aiSettingsSaving,
     error: aiSettingsError,
-    modelChoices,
-    setModelChoices,
     saveModelSelection,
     saveResponseMode,
-  } = useAiSettings();
+  } = useAiSettings(providerCatalog.providers, providerCatalog.modelChoices);
+  const { modelChoices } = providerCatalog;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
@@ -353,7 +354,7 @@ export function App() {
           aiSettingsError={aiSettingsError}
           onModelSelectionChange={saveModelSelection}
           onResponseModeChange={saveResponseMode}
-          onModelChoicesChange={setModelChoices}
+          providerCatalog={providerCatalog}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

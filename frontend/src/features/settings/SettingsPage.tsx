@@ -3,8 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 
 import {
   deleteProviderConnection,
-  listOpenRouterModels,
-  listProviderConnections,
   providerErrorText,
   testProviderConnection,
   replaceProviderConnection,
@@ -15,7 +13,8 @@ import {
 import type { ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
-import { localModelCatalog, openRouterModelCatalog, type ModelCatalogItem, type ModelChoice, type ModelSelection } from "../ai-settings/modelCatalog";
+import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
+import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import { GeneralSettings } from "./GeneralSettings";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { DemoSettings, SettingsSection } from "./settingsState";
@@ -32,7 +31,7 @@ type SettingsPageProps = {
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
-  onModelChoicesChange: (choices: ReadonlyArray<ModelChoice>) => void;
+  providerCatalog: ProviderCatalogController;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
 };
@@ -50,7 +49,6 @@ const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
 
 type ProviderFeedback = { message?: string; error?: string };
 type ProviderOperation = Partial<Record<ProviderId, number>>;
-type ModelLoadStatus = "idle" | "loading" | "success" | "error";
 
 type ModelsSettingsProps = {
   modelSelection: ModelSelection | null;
@@ -59,15 +57,9 @@ type ModelsSettingsProps = {
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
-  onModelChoicesChange: (choices: ReadonlyArray<ModelChoice>) => void;
+  providerCatalog: ProviderCatalogController;
   onProviderModalChange?: (open: boolean) => void;
   modalContainer: HTMLElement | null;
-  openRouterModels: ReadonlyArray<ModelCatalogItem> | null;
-  openRouterModelLoadStatus: ModelLoadStatus;
-  openRouterModelError: string | null;
-  onOpenRouterModelsChange: (models: ReadonlyArray<ModelCatalogItem>) => void;
-  onOpenRouterModelLoadStateChange: (status: ModelLoadStatus, error: string | null) => void;
-  onOpenRouterModelsReset: () => void;
 };
 
 function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider: ProviderSummary; container: HTMLElement; onCancel: () => void; onSubmit: (apiKey: string) => Promise<string | null> }) {
@@ -132,81 +124,29 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
   );
 }
 
-function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onModelChoicesChange, onProviderModalChange, modalContainer, openRouterModels, openRouterModelLoadStatus, openRouterModelError, onOpenRouterModelsChange, onOpenRouterModelLoadStateChange, onOpenRouterModelsReset }: ModelsSettingsProps) {
+function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
   const { t } = useI18n();
-  const [providers, setProviders] = useState<ProviderSummary[] | null>(null);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const {
+    providers,
+    catalogError,
+    openRouterModels,
+    openRouterModelLoadStatus,
+    openRouterModelError,
+    refreshProviders,
+    readProviderSummary,
+    updateProviderSummary,
+    loadOpenRouterModels,
+    invalidateOpenRouterModels,
+  } = providerCatalog;
   const [operations, setOperations] = useState<ProviderOperation>({});
   const [feedback, setFeedback] = useState<Partial<Record<ProviderId, ProviderFeedback>>>({});
   const [modalProvider, setModalProvider] = useState<ProviderSummary | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const generationsRef = useRef<Record<ProviderId, number>>({ openai: 0, anthropic: 0, openrouter: 0 });
   const activeOperationsRef = useRef<ProviderOperation>({});
-  const modelGenerationsRef = useRef<Record<ProviderId, number>>({ openai: 0, anthropic: 0, openrouter: 0 });
-  const activeModelLoadsRef = useRef<ProviderOperation>({});
   const reconciliationRef = useRef<string | null>(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  const refreshProviders = useCallback(async () => {
-    setCatalogError(null);
-    try {
-      const summaries = await listProviderConnections();
-      setProviders(summaries);
-      return summaries;
-    } catch (requestError) {
-      setProviders(null);
-      setCatalogError(providerErrorText(requestError, t));
-      return null;
-    }
-  }, [t]);
-
-  const loadOpenRouterModels = useCallback(async (force = false) => {
-    if (!force && openRouterModels !== null) return;
-    if (activeModelLoadsRef.current.openrouter !== undefined) return;
-    const providerId: ProviderId = "openrouter";
-    const generation = modelGenerationsRef.current[providerId] + 1;
-    modelGenerationsRef.current[providerId] = generation;
-    activeModelLoadsRef.current = { ...activeModelLoadsRef.current, [providerId]: generation };
-    onOpenRouterModelLoadStateChange("loading", null);
-    try {
-      const models = await listOpenRouterModels();
-      if (mountedRef.current && activeModelLoadsRef.current[providerId] === generation && modelGenerationsRef.current[providerId] === generation) {
-        onOpenRouterModelsChange(openRouterModelCatalog(models));
-        onOpenRouterModelLoadStateChange("success", null);
-      }
-    } catch (requestError) {
-      if (mountedRef.current && activeModelLoadsRef.current[providerId] === generation && modelGenerationsRef.current[providerId] === generation) {
-        onOpenRouterModelLoadStateChange("error", providerErrorText(requestError, t));
-      }
-    } finally {
-      if (activeModelLoadsRef.current[providerId] === generation) {
-        const { [providerId]: _, ...remaining } = activeModelLoadsRef.current;
-        activeModelLoadsRef.current = remaining;
-      }
-    }
-  }, [onOpenRouterModelLoadStateChange, onOpenRouterModelsChange, openRouterModels, t]);
-
-  useEffect(() => { void refreshProviders(); }, [refreshProviders]);
-  useEffect(() => {
-    const openRouterConnected = providers?.some((provider) => provider.id === "openrouter" && provider.connected) ?? false;
-    if (openRouterConnected && openRouterModels === null && openRouterModelLoadStatus !== "error") void loadOpenRouterModels();
-  }, [loadOpenRouterModels, openRouterModelLoadStatus, openRouterModels, providers]);
   useEffect(() => { onProviderModalChange?.(modalProvider !== null); }, [modalProvider, onProviderModalChange]);
 
-  const replaceSummary = (summary: ProviderSummary) => {
-    setProviders((current) => current?.map((provider) => provider.id === summary.id ? summary : provider) ?? current);
-  };
-  const invalidateOpenRouterModels = () => {
-    modelGenerationsRef.current.openrouter += 1;
-    const { openrouter: _, ...remaining } = activeModelLoadsRef.current;
-    activeModelLoadsRef.current = remaining;
-    onOpenRouterModelsReset();
-  };
   const beginOperation = (provider: ProviderSummary, action: string) => {
     if (activeOperationsRef.current[provider.id] !== undefined) return null;
     const generation = generationsRef.current[provider.id] + 1;
@@ -233,14 +173,9 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     });
   };
   const refreshFailedProvider = async (providerId: ProviderId, generation: number) => {
-    try {
-      const summaries = await listProviderConnections();
-      if (!isCurrentOperation(providerId, generation)) return;
-      const persistedSummary = summaries.find((summary) => summary.id === providerId);
-      if (persistedSummary) replaceSummary(persistedSummary);
-    } catch {
-      // Keep the operation error: a refresh may not hide the cause of the failed action.
-    }
+    const persistedSummary = await readProviderSummary(providerId);
+    if (!isCurrentOperation(providerId, generation)) return;
+    if (persistedSummary) updateProviderSummary(persistedSummary);
   };
   const testConnection = async (provider: ProviderSummary) => {
     const generation = beginOperation(provider, t("models.operationTesting"));
@@ -248,7 +183,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     try {
       const summary = await testProviderConnection(provider.id);
       if (isCurrentOperation(provider.id, generation)) {
-        replaceSummary(summary);
+        updateProviderSummary(summary);
         setProviderFeedback(provider.id, { message: t("models.feedback", { provider: provider.name, message: t(providerStatusKeys[summary.status]) }) });
       }
     } catch (requestError) {
@@ -266,7 +201,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     try {
       await deleteProviderConnection(provider.id);
       if (isCurrentOperation(provider.id, generation)) {
-        replaceSummary({ ...provider, connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null });
+        updateProviderSummary({ ...provider, connected: false, status: "disconnected", credentialPreview: null, lastCheckedAt: null });
         if (provider.id === "openrouter") invalidateOpenRouterModels();
         setProviderFeedback(provider.id, { message: t("models.disconnected", { provider: provider.name }) });
       }
@@ -282,7 +217,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     try {
       const summary = await replaceProviderConnection(provider.id, apiKey);
       if (!isCurrentOperation(provider.id, generation)) return t("models.operationSuperseded");
-      replaceSummary(summary);
+      updateProviderSummary(summary);
       setProviderFeedback(provider.id, { message: t("models.connected", { provider: summary.name }) });
       if (summary.id === "openrouter") {
         invalidateOpenRouterModels();
@@ -313,14 +248,6 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     const error = await onModelSelectionChange(next);
     if (error) setSelectionError(error);
   }, [onModelSelectionChange]);
-
-  useEffect(() => {
-    const choices = connectedProviders.flatMap((provider) => {
-      const models = provider.id === "openrouter" ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : []) : localModelCatalog[provider.id];
-      return models.map((model) => ({ selection: { providerId: provider.id, modelId: model.id }, label: model.label }));
-    });
-    onModelChoicesChange(choices);
-  }, [connectedProviders, onModelChoicesChange, openRouterModelLoadStatus, openRouterModels]);
 
   useEffect(() => {
     if (providers === null || aiSettingsSaving) return;
@@ -389,13 +316,10 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   );
 }
 
-export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onModelChoicesChange, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const [saved, setSaved] = useState(true); useEffect(() => { if (saved) return; const timeout = window.setTimeout(() => setSaved(true), 650); return () => window.clearTimeout(timeout); }, [saved]);
   const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
-  const [openRouterModels, setOpenRouterModels] = useState<ReadonlyArray<ModelCatalogItem> | null>(null);
-  const [openRouterModelLoadStatus, setOpenRouterModelLoadStatus] = useState<ModelLoadStatus>("idle");
-  const [openRouterModelError, setOpenRouterModelError] = useState<string | null>(null);
   const updateSetting = <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => { onSettingsChange({ ...settings, [key]: value }); setSaved(false); };
   return (
     <section ref={setModalContainer} className="settings-page" aria-labelledby="settings-page-title">
@@ -413,7 +337,7 @@ export function SettingsPage({ section, onSectionChange, settings, onSettingsCha
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onModelChoicesChange={onModelChoicesChange} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} openRouterModels={openRouterModels} openRouterModelLoadStatus={openRouterModelLoadStatus} openRouterModelError={openRouterModelError} onOpenRouterModelsChange={setOpenRouterModels} onOpenRouterModelLoadStateChange={(status, error) => { setOpenRouterModelLoadStatus(status); setOpenRouterModelError(error); }} onOpenRouterModelsReset={() => { setOpenRouterModels(null); setOpenRouterModelLoadStatus("idle"); setOpenRouterModelError(null); }} /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
           <p className="settings-demo-note">{t("settings.sessionNote")}</p>
         </div>
       </div>

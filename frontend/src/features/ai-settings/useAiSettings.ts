@@ -7,35 +7,23 @@ import {
   type AiSettings,
   type ResponseMode,
 } from "../../api/aiSettings";
-import {
-  listProviderConnections,
-  type ProviderSummary,
-} from "../../api/providerConnections";
+import type { ProviderSummary } from "../../api/providerConnections";
 import { useI18n } from "../../i18n/I18nProvider";
 import {
-  localModelCatalog,
   type ModelChoice,
   type ModelSelection,
 } from "./modelCatalog";
 
-function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): ReadonlyArray<ModelChoice> {
-  return providers.flatMap((provider) => provider.connected
-    ? localModelCatalog[provider.id].map((model) => ({
-      selection: { providerId: provider.id, modelId: model.id },
-      label: model.label,
-    }))
-    : []);
-}
-
-export function useAiSettings() {
+export function useAiSettings(
+  providers: ReadonlyArray<ProviderSummary> | null,
+  modelChoices: ReadonlyArray<ModelChoice>,
+) {
   const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modelChoices, setModelChoices] = useState<ReadonlyArray<ModelChoice>>([]);
-  const [providerCatalog, setProviderCatalog] = useState<ReadonlyArray<ProviderSummary> | null>(null);
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
@@ -55,16 +43,6 @@ export function useAiSettings() {
         if (loadGenerationRef.current !== generation) return;
         setLoaded(false);
         setError(aiSettingsErrorText(loadError, t));
-      });
-
-    void listProviderConnections()
-      .then((providers) => {
-        setProviderCatalog(providers);
-        setModelChoices(staticModelChoices(providers));
-      })
-      .catch(() => {
-        setProviderCatalog(null);
-        setModelChoices([]);
       });
   }, []);
 
@@ -110,8 +88,8 @@ export function useAiSettings() {
   );
 
   useEffect(() => {
-    if (!loaded || providerCatalog === null || saving) return;
-    const connectedProviders = providerCatalog.filter((provider) => provider.connected);
+    if (!loaded || providers === null || saving) return;
+    const connectedProviders = providers.filter((provider) => provider.connected);
     if (modelSelection?.providerId === "openrouter") return;
     const selectionIsAvailable = modelSelection !== null
       && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId
@@ -123,15 +101,13 @@ export function useAiSettings() {
     } else if (modelSelection !== null && connectedProviders.length === 0) {
       void saveModelSelection(null);
     }
-  }, [loaded, modelChoices, modelSelection, providerCatalog, saveModelSelection, saving]);
+  }, [loaded, modelChoices, modelSelection, providers, saveModelSelection, saving]);
 
   return {
     modelSelection,
     responseMode,
     saving,
     error,
-    modelChoices,
-    setModelChoices,
     saveModelSelection,
     saveResponseMode,
   };

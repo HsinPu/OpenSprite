@@ -69,4 +69,13 @@ describe("frontend architecture", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("keeps Provider catalog reads in one feature owner", () => {
+    const consumers = Object.entries(sourceFiles)
+      .filter(([path]) => !path.includes("/src/api/"))
+      .filter(([, source]) => source.includes("listProviderConnections") || source.includes("listOpenRouterModels"))
+      .map(([path]) => path);
+
+    expect(consumers).toEqual(["../src/features/ai-settings/useProviderCatalog.ts"]);
+  });
 });
