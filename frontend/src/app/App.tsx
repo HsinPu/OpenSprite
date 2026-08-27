@@ -1,27 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { agentChatErrorText, isIdentifier, listConversations, type ConversationSummary } from "../api/agentChat";
-import { aiSettingsErrorText, getAiSettings, putAiSettings, type AiSettings, type ResponseMode } from "../api/aiSettings";
-import { listProviderConnections, type ProviderSummary } from "../api/providerConnections";
+import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
+import { useConversations } from "../features/chat/useConversations";
+import { SettingsPage } from "../features/settings/SettingsPage";
+import { modelLabel } from "../features/settings/modelCatalog";
 import {
   defaultDemoSettings,
-  SettingsPage,
   type DemoSettings,
   type SettingsSection,
-} from "../features/settings/SettingsPage";
-import { localModelCatalog, modelLabel, type ModelSelection } from "../features/settings/modelCatalog";
-
-type ModelChoice = { selection: ModelSelection; label: string };
-
-function staticModelChoices(providers: ReadonlyArray<ProviderSummary>): ReadonlyArray<ModelChoice> {
-  return providers.flatMap((provider) => provider.connected
-    ? localModelCatalog[provider.id].map((model) => ({
-      selection: { providerId: provider.id, modelId: model.id },
-      label: model.label,
-    }))
-    : []);
-}
+} from "../features/settings/settingsState";
+import { useAiSettings } from "../features/settings/useAiSettings";
 
 function conversationIdFromHash(): string | null {
   if (!window.location.hash.startsWith("#chat=")) return null;
@@ -66,20 +55,27 @@ function ConversationButton({
 
 export function App() {
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
-  const [conversations, setConversations] = useState<ReadonlyArray<ConversationSummary>>([]);
-  const [conversationsLoading, setConversationsLoading] = useState(true);
-  const [conversationsError, setConversationsError] = useState<string | null>(null);
+  const {
+    conversations,
+    loading: conversationsLoading,
+    error: conversationsError,
+    refresh: refreshConversations,
+    recordAcceptedConversation,
+  } = useConversations();
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
-  const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
-  const [responseMode, setResponseMode] = useState<ResponseMode>("default");
-  const [aiSettingsLoaded, setAiSettingsLoaded] = useState(false);
-  const [aiSettingsSaving, setAiSettingsSaving] = useState(false);
-  const [aiSettingsError, setAiSettingsError] = useState<string | null>(null);
-  const [modelChoices, setModelChoices] = useState<ReadonlyArray<ModelChoice>>([]);
-  const [providerCatalog, setProviderCatalog] = useState<ReadonlyArray<ProviderSummary> | null>(null);
+  const {
+    modelSelection,
+    responseMode,
+    saving: aiSettingsSaving,
+    error: aiSettingsError,
+    modelChoices,
+    setModelChoices,
+    saveModelSelection,
+    saveResponseMode,
+  } = useAiSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
@@ -89,111 +85,10 @@ export function App() {
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const menuWasOpen = useRef(false);
-  const modelLoadGenerationRef = useRef(0);
-  const modelSaveGenerationRef = useRef(0);
-  const modelSaveQueueRef = useRef(Promise.resolve());
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const chatTitle = conversationId === null ? "新對話" : activeConversation?.title ?? "對話";
   const todayConversations = conversations.filter((conversation) => isToday(conversation.updatedAt));
   const earlierConversations = conversations.filter((conversation) => !isToday(conversation.updatedAt));
-
-  const refreshConversations = useCallback(async () => {
-    setConversationsLoading(true);
-    try {
-      const page = await listConversations();
-      setConversations(page.conversations);
-      setConversationsError(null);
-    } catch (error) {
-      setConversationsError(agentChatErrorText(error));
-    } finally {
-      setConversationsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshConversations();
-  }, [refreshConversations]);
-
-  useEffect(() => {
-    const generation = modelLoadGenerationRef.current + 1;
-    modelLoadGenerationRef.current = generation;
-    void getAiSettings()
-      .then((savedSettings) => {
-        if (modelLoadGenerationRef.current !== generation) return;
-        setModelSelection(savedSettings.model);
-        setResponseMode(savedSettings.responseMode);
-        setAiSettingsLoaded(true);
-        setAiSettingsError(null);
-      })
-      .catch((error: unknown) => {
-        if (modelLoadGenerationRef.current !== generation) return;
-        setAiSettingsLoaded(false);
-        setAiSettingsError(aiSettingsErrorText(error));
-      });
-
-    void listProviderConnections()
-      .then((providers) => {
-        setProviderCatalog(providers);
-        setModelChoices(staticModelChoices(providers));
-      })
-      .catch(() => {
-        setProviderCatalog(null);
-        setModelChoices([]);
-      });
-  }, []);
-
-  const saveAiSettings = useCallback((next: AiSettings): Promise<string | null> => {
-    modelLoadGenerationRef.current += 1;
-    const generation = modelSaveGenerationRef.current + 1;
-    modelSaveGenerationRef.current = generation;
-    setAiSettingsSaving(true);
-    setAiSettingsError(null);
-    const operation = modelSaveQueueRef.current.then(async () => {
-      try {
-        const saved = await putAiSettings(next);
-        if ((saved.model?.providerId ?? null) !== (next.model?.providerId ?? null) || (saved.model?.modelId ?? null) !== (next.model?.modelId ?? null) || saved.responseMode !== next.responseMode) {
-          throw new Error("ai_settings_response_mismatch");
-        }
-        if (modelSaveGenerationRef.current === generation) {
-          setModelSelection(saved.model);
-          setResponseMode(saved.responseMode);
-          setAiSettingsError(null);
-        }
-        return null;
-      } catch (error) {
-        const message = aiSettingsErrorText(error);
-        if (modelSaveGenerationRef.current === generation) setAiSettingsError(message);
-        return message;
-      } finally {
-        if (modelSaveGenerationRef.current === generation) setAiSettingsSaving(false);
-      }
-    });
-    modelSaveQueueRef.current = operation.then(() => undefined, () => undefined);
-    return operation;
-  }, []);
-
-  const saveModelSelection = useCallback(
-    (next: ModelSelection | null) => saveAiSettings({ model: next, responseMode }),
-    [responseMode, saveAiSettings],
-  );
-  const saveResponseMode = useCallback(
-    (next: ResponseMode) => saveAiSettings({ model: modelSelection, responseMode: next }),
-    [modelSelection, saveAiSettings],
-  );
-
-  useEffect(() => {
-    if (!aiSettingsLoaded || providerCatalog === null || aiSettingsSaving) return;
-    const connectedProviders = providerCatalog.filter((provider) => provider.connected);
-    if (modelSelection?.providerId === "openrouter") return;
-    const selectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
-    if (selectionIsAvailable) return;
-    const fallback = modelChoices[0];
-    if (fallback) {
-      void saveModelSelection(fallback.selection);
-    } else if (modelSelection !== null && connectedProviders.length === 0) {
-      void saveModelSelection(null);
-    }
-  }, [aiSettingsLoaded, aiSettingsSaving, modelChoices, modelSelection, providerCatalog, saveModelSelection]);
 
   useEffect(() => {
     const syncHash = () => {
@@ -265,16 +160,8 @@ export function App() {
   const acceptConversation = useCallback((acceptedId: string, firstMessage: string) => {
     setConversationId(acceptedId);
     window.location.hash = `chat=${acceptedId}`;
-    const now = new Date().toISOString();
-    setConversations((current) => current.some((conversation) => conversation.id === acceptedId) ? current : [{
-      id: acceptedId,
-      title: firstMessage.slice(0, 160),
-      latestMessagePreview: firstMessage.slice(0, 280),
-      createdAt: now,
-      updatedAt: now,
-    }, ...current]);
-    void refreshConversations();
-  }, [refreshConversations]);
+    recordAcceptedConversation(acceptedId, firstMessage);
+  }, [recordAcceptedConversation]);
 
   const conversationUpdated = useCallback(() => {
     void refreshConversations();

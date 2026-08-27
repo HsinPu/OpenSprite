@@ -4,9 +4,10 @@
 
 ## 責任
 
-- `src/app/`：應用組裝、路由與全域 provider。
+- `src/app/`：應用外框、導覽、dialog 與 feature 組裝。
 - `src/api/`：Provider、AI settings 與 Agent chat 的 HTTP／SSE client。
-- `src/features/`：依使用者功能劃分的畫面、狀態與互動。
+- `src/features/chat/`：Conversation 清單、Run 狀態、聊天畫面與 SSE 互動。
+- `src/features/settings/`：一般偏好、Provider、模型選擇與 AI settings 狀態。
 - `src/shared/`：不含業務邏輯的共用 UI 與基礎工具。
 - `tests/`：前端測試。
 

@@ -10,6 +10,11 @@ export type ModelSelection = {
   modelId: string;
 };
 
+export type ModelChoice = {
+  selection: ModelSelection;
+  label: string;
+};
+
 export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogItem>> = {
   openai: [
     { id: "gpt-5.6", label: "GPT-5.6" },

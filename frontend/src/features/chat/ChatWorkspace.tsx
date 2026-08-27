@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 
-import type { ModelSelection } from "../settings/modelCatalog";
+import type { ModelChoice, ModelSelection } from "../settings/modelCatalog";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
 
@@ -11,7 +11,7 @@ type ChatWorkspaceProps = {
   conversationId: string | null;
   modelName: string;
   modelSelection: ModelSelection | null;
-  modelChoices: ReadonlyArray<{ selection: ModelSelection; label: string }>;
+  modelChoices: ReadonlyArray<ModelChoice>;
   modelSelectionSaving: boolean;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;

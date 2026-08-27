@@ -2,7 +2,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { StrictMode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { defaultDemoSettings, SettingsPage, type DemoSettings, type SettingsSection } from "../src/features/settings/SettingsPage";
+import { SettingsPage } from "../src/features/settings/SettingsPage";
+import { defaultDemoSettings, type DemoSettings, type SettingsSection } from "../src/features/settings/settingsState";
 import type { ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/settings/modelCatalog";
 
