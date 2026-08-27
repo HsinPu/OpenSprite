@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
@@ -61,6 +61,7 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { t } = useI18n();
   const [draft, setDraft] = useState("");
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const chat = useConversationRun({
     conversationId,
     onConversationAccepted,
@@ -81,6 +82,13 @@ export function ChatWorkspace({
     || (chat.activeRun?.status === "completed" && Boolean(liveText) && !hasDurableAssistant);
   const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
   const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
+
+  useLayoutEffect(() => {
+    const input = composerInputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(Math.max(input.scrollHeight, 36), 144)}px`;
+  }, [draft]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -125,57 +133,59 @@ export function ChatWorkspace({
         </header>
 
         <div className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning}>
-          {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
-          {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
-          {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
-            <div className="chat-workspace__empty-state">
-              <OpenSpriteMark />
-              <h2>{t("chat.emptyTitle")}</h2>
-              <p>{t("chat.emptyDescription")}</p>
-            </div>
-          ) : null}
-          {chat.messages.map((message) => message.role === "user" ? (
-            <div className="chat-workspace__user-row" key={message.id}>
-              <div>
-                <p className="chat-workspace__user-message">{message.content}</p>
-                {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
-                {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
+          <div className="chat-workspace__conversation-rail">
+            {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
+            {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
+            {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
+              <div className="chat-workspace__empty-state">
+                <OpenSpriteMark />
+                <h2>{t("chat.emptyTitle")}</h2>
+                <p>{t("chat.emptyDescription")}</p>
               </div>
-              <span className="chat-workspace__user-avatar" aria-hidden="true">♙</span>
-            </div>
-          ) : (
-            <div className="chat-workspace__assistant-row" key={message.id}>
-              <OpenSpriteMark />
-              <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
-            </div>
-          ))}
-          {showLiveAssistant ? (
-            <div className="chat-workspace__assistant-row" data-testid="streaming-assistant">
-              <OpenSpriteMark />
-              <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
-                {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
+            ) : null}
+            {chat.messages.map((message) => message.role === "user" ? (
+              <div className="chat-workspace__user-row" key={message.id}>
+                <div>
+                  <p className="chat-workspace__user-message">{message.content}</p>
+                  {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
+                  {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
+                </div>
               </div>
-            </div>
-          ) : null}
-          {showTerminalNotice ? (
-            <div className="chat-workspace__run-notice" role="status">
-              {chat.activeRun?.status === "cancelled"
-                ? t("chat.cancelled")
-                : chat.activeRun?.error
-                  ? agentChatErrorText(new AgentChatApiError(chat.activeRun.error.code), t)
-                  : t("chat.incomplete")}
-            </div>
-          ) : null}
+            ) : (
+              <div className="chat-workspace__assistant-row" key={message.id}>
+                <OpenSpriteMark />
+                <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
+              </div>
+            ))}
+            {showLiveAssistant ? (
+              <div className="chat-workspace__assistant-row" data-testid="streaming-assistant">
+                <OpenSpriteMark />
+                <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
+                  {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
+                </div>
+              </div>
+            ) : null}
+            {showTerminalNotice ? (
+              <div className="chat-workspace__run-notice" role="status">
+                {chat.activeRun?.status === "cancelled"
+                  ? t("chat.cancelled")
+                  : chat.activeRun?.error
+                    ? agentChatErrorText(new AgentChatApiError(chat.activeRun.error.code), t)
+                    : t("chat.incomplete")}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <form className="chat-workspace__composer" onSubmit={handleSubmit}>
           <label htmlFor="chat-message" className="chat-workspace__composer-label">{t("chat.inputLabel")}</label>
           <textarea
             id="chat-message"
+            ref={composerInputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             placeholder={modelSelection ? t("chat.inputPlaceholder") : t("chat.selectModelPlaceholder")}
-            rows={2}
+            rows={1}
             disabled={chat.isRunning}
           />
           <div className="chat-workspace__composer-actions">

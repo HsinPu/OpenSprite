@@ -118,7 +118,12 @@ describe("live chat workspace", () => {
     expect(sendButton.querySelector("svg")).toBeTruthy();
     expect(sendButton.hasAttribute("disabled")).toBe(true);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "輸入訊息" }), { target: { value: "hello" } });
+    const composer = screen.getByRole("textbox", { name: "輸入訊息" });
+    expect(composer.getAttribute("rows")).toBe("1");
+    expect(document.querySelector(".chat-workspace__conversation-rail")).toBeTruthy();
+    expect(document.querySelector(".chat-workspace__user-avatar")).toBeNull();
+
+    fireEvent.change(composer, { target: { value: "hello" } });
     expect(sendButton.hasAttribute("disabled")).toBe(false);
   });
 });
