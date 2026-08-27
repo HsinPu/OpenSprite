@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 ProviderId = Literal["openai", "anthropic", "openrouter"]
+InterfaceLocale = Literal["zh-TW", "en", "ja"]
+TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
 
 
 class ContractModel(BaseModel):
@@ -131,6 +133,16 @@ class PutAiSettingsRequest(ContractModel):
     responseMode: ResponseMode
 
 
+class GeneralSettings(ContractModel):
+    locale: InterfaceLocale
+    timeZone: TimeZoneSetting
+
+
+class PutGeneralSettingsRequest(ContractModel):
+    locale: InterfaceLocale
+    timeZone: TimeZoneSetting
+
+
 class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_PROVIDER = "unsupported_provider"
@@ -169,3 +181,19 @@ class AiSettingsErrorDetail(ContractModel):
 
 class AiSettingsErrorEnvelope(ContractModel):
     error: AiSettingsErrorDetail
+
+
+class GeneralSettingsErrorCode(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
+    INTERNAL_ERROR = "internal_error"
+
+
+class GeneralSettingsErrorDetail(ContractModel):
+    code: GeneralSettingsErrorCode
+    message: str
+    retryable: bool
+
+
+class GeneralSettingsErrorEnvelope(ContractModel):
+    error: GeneralSettingsErrorDetail

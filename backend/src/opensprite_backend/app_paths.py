@@ -29,6 +29,10 @@ class AppPaths:
         return self.config_dir / "settings.json"
 
     @property
+    def general_settings_file(self) -> Path:
+        return self.config_dir / "general.json"
+
+    @property
     def data_dir(self) -> Path:
         return self.home / "data"
 

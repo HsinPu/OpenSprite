@@ -2,7 +2,8 @@
 
 This directory contains the minimal Python 3.12+ FastAPI foundation for the
 local OpenSprite service. `contracts/provider-connections.openapi.json` and
-`contracts/ai-settings.openapi.json` are the authoritative HTTP contracts.
+`contracts/ai-settings.openapi.json` and
+`contracts/general-settings.openapi.json` are the authoritative HTTP contracts.
 
 The current slice provides:
 
@@ -13,6 +14,8 @@ The current slice provides:
 - on-demand OpenRouter model discovery using the stored credential;
 - strict persisted AI settings at `config/settings.json`, exposed through
   `GET`/`PUT /api/settings/ai`;
+- strict persisted locale and time-zone settings at `config/general.json`,
+  exposed through `GET`/`PUT /api/settings/general`;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable AES-256-GCM credential store below `.opensprite`;
@@ -50,6 +53,10 @@ any directory. The file never contains a
 raw API key, display label, or dynamic model catalog. Database, conversation,
 log, and cache paths remain reserved by the layout contract and are not created
 before an approved feature uses them.
+
+The general settings file is created only after a successful PUT. It uses
+strict schema v1 and is stored separately so locale and time-zone updates cannot
+overwrite AI model configuration.
 
 Importing or calling `create_system_app()` performs no credential file
 operation or provider request. Each successful FastAPI lifespan

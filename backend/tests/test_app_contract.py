@@ -142,6 +142,8 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/healthz", "get", "getHealth"),
         ("/api/settings/ai", "get", "getAiSettings"),
         ("/api/settings/ai", "put", "putAiSettings"),
+        ("/api/settings/general", "get", "getGeneralSettings"),
+        ("/api/settings/general", "put", "putGeneralSettings"),
         ("/api/conversations", "get", "listConversations"),
         (
             "/api/conversations/{conversation_id}/messages",

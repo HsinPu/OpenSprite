@@ -25,6 +25,7 @@ the user explicitly requests verified user-data deletion.
 ├─ auth.json
 ├─ config/
 │  ├─ settings.json
+│  ├─ general.json
 │  └─ credential.key
 ├─ data/
 │  └─ opensprite.db
@@ -44,7 +45,7 @@ importing the backend, starting the system app, and reading absent state do not
 create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
-`auth.json`, `config/credential.key`, `config/settings.json`,
+`auth.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
 `state/providers.json`, and `data/opensprite.db` are implemented today.
 `auth.json` contains only
 AES-256-GCM ciphertext; `credential.key` is a random per-install 256-bit key.
@@ -52,7 +53,8 @@ Both are sensitive and must be backed up, moved, or deleted together. An
 isolated `auth.json` cannot be decrypted, but a copy of the complete
 `.opensprite` root can be. Linux uses owner-only directory and file modes;
 Windows relies on the user-profile ACL. Files are created only after a provider
-key validates or AI settings are successfully saved.
+key validates, AI settings are successfully saved, or general settings are
+successfully saved.
 
 `config/settings.json` is a strict schema-v2, non-secret file containing one
 nullable `model` (`providerId` and `modelId`) plus one `responseMode` value:
@@ -63,6 +65,11 @@ provider model catalog. Reads of a missing file are side-effect free and return
 both values atomically; clearing the model preserves and persists the chosen
 response mode. `state/providers.json` remains strict non-secret metadata. Other
 paths are not created in advance.
+
+`config/general.json` is a separate strict schema-v1, non-secret file containing
+only `locale` and `timeZone`. A missing file returns `zh-TW` and `system`
+without creating a directory. Every successful change replaces both values
+atomically.
 
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns exactly the Conversation, visible Message, Run,

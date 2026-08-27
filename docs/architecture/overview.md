@@ -48,6 +48,11 @@ controller、模型目錄、確認後的模型選擇、回應模式與保存流�
 明確邊界，不各自重抓或保存另一份 Provider catalog。儲存失敗
 保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
 
+General settings 使用獨立的 `contracts/general-settings.openapi.json` 與
+`config/general.json`，原子保存 `locale`（`zh-TW`／`en`／`ja`）及 `timeZone`
+（`system`／`Asia/Taipei`／`UTC`）。它不與 AI settings 共檔；讀取缺少檔案時回傳
+繁體中文與系統時區，且不建立任何目錄。
+
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
 對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。
 所有訊息都進入同一個 Agent loop，不加入關鍵字分類、舊 Task lifecycle 或直接繞過 Run 的

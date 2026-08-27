@@ -22,6 +22,11 @@ from .ai_settings import (
 )
 from .conversations import SqliteConversationRepository
 from .inference import ModelGateway
+from .general_settings import (
+    GeneralSettingsOperations,
+    UnavailableGeneralSettings,
+    create_general_settings_service,
+)
 from .provider_connections import (
     ProviderConnections,
     UnavailableProviderConnections,
@@ -39,6 +44,7 @@ class LocalProviderRuntime(Protocol):
 
 class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     ai_settings: AiSettingsOperations
+    general_settings: GeneralSettingsOperations
     agent_chat: AgentChatOperations
 
     async def astart(self) -> None: ...
@@ -52,11 +58,13 @@ class _SystemRuntime:
         self,
         provider_runtime: LocalProviderRuntime,
         ai_settings: AiSettingsOperations,
+        general_settings: GeneralSettingsOperations,
         agent_chat: AgentChatService,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
         self.ai_settings = ai_settings
+        self.general_settings = general_settings
         self.agent_chat = agent_chat
 
     async def astart(self) -> None:
@@ -81,6 +89,7 @@ def create_system_runtime(
         paths,
         provider_runtime.connections,
     )
+    general_settings = create_general_settings_service(paths)
     repository = SqliteConversationRepository(paths.database_file)
     agent_loop = AgentLoop(
         repository=repository,
@@ -96,6 +105,7 @@ def create_system_runtime(
     return _SystemRuntime(
         provider_runtime,
         ai_settings,
+        general_settings,
         agent_chat,
     )
 
@@ -122,6 +132,7 @@ def create_system_app(
         try:
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
+            app.state.general_settings = UnavailableGeneralSettings()
             app.state.agent_chat = UnavailableAgentChat()
             runtime = factory()
             starter = getattr(runtime, "astart", None)
@@ -129,6 +140,7 @@ def create_system_app(
                 await starter()
             app.state.provider_connections = runtime.connections
             app.state.ai_settings = runtime.ai_settings
+            app.state.general_settings = runtime.general_settings
             app.state.agent_chat = getattr(
                 runtime,
                 "agent_chat",
@@ -138,6 +150,7 @@ def create_system_app(
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
+            app.state.general_settings = UnavailableGeneralSettings()
             app.state.agent_chat = UnavailableAgentChat()
             try:
                 if runtime is not None:

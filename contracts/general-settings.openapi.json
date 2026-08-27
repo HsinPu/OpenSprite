@@ -1,0 +1,84 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local general settings API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative HTTP contract for persisted interface language and time-zone settings."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {
+    "scope": "loopback-only local desktop service",
+    "applicationAuthentication": "none",
+    "browserOriginPolicy": "same-origin",
+    "cors": "disabled by default"
+  },
+  "x-compatibility": {
+    "policy": "This rebuild is new-install-only and does not migrate browser or legacy settings."
+  },
+  "x-events": {"supported": false},
+  "tags": [{"name": "general-settings", "description": "Persisted interface language and time-zone settings."}],
+  "paths": {
+    "/api/settings/general": {
+      "get": {
+        "operationId": "getGeneralSettings",
+        "summary": "Read general settings",
+        "tags": ["general-settings"],
+        "responses": {
+          "200": {"description": "The confirmed local general settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GeneralSettings"}}}},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      },
+      "put": {
+        "operationId": "putGeneralSettings",
+        "summary": "Replace general settings atomically",
+        "tags": ["general-settings"],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GeneralSettings"}}}},
+        "responses": {
+          "200": {"description": "The requested values are now confirmed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GeneralSettings"}}}},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Locale": {"type": "string", "enum": ["zh-TW", "en", "ja"]},
+      "TimeZone": {"type": "string", "enum": ["system", "Asia/Taipei", "UTC"]},
+      "GeneralSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["locale", "timeZone"],
+        "properties": {
+          "locale": {"$ref": "#/components/schemas/Locale"},
+          "timeZone": {"$ref": "#/components/schemas/TimeZone"}
+        }
+      },
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "settings_store_unavailable", "internal_error"]},
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {"$ref": "#/components/schemas/ErrorCode"},
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"}
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}
+      }
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed or noncanonical general settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "SettingsStoreUnavailable": {"description": "The local general settings file is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "An unexpected local backend error occurred.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}

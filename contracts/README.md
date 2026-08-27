@@ -15,6 +15,10 @@ contract for durable conversations, one-message agent runs, safe semantic Run
 events, and cancellation. It deliberately excludes raw Provider payloads,
 credentials, internal prompts, hidden reasoning, and unapproved tool surfaces.
 
+`general-settings.openapi.json` is the authoritative HTTP contract for the
+persisted interface locale and time-zone choice. It remains separate from AI
+model configuration.
+
 The contract currently covers:
 
 - backend liveness at `GET /healthz`;
@@ -29,6 +33,11 @@ The AI settings contract covers:
 - reading the confirmed model selection and response mode;
 - atomically saving both values for a connected Provider;
 - clearing the model while preserving a selected response mode.
+
+The general settings contract covers:
+
+- reading the confirmed interface locale and time-zone choice;
+- atomically replacing both values from fixed supported catalogs.
 
 The agent chat contract covers:
 
