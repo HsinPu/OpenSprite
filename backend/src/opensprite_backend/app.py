@@ -10,7 +10,7 @@ from starlette.types import Lifespan
 
 from .api.chat_models import chat_error_response
 from .api.chat_routes import router as chat_router
-from .api.chat_service import (
+from .application import (
     AgentChatError,
     AgentChatOperations,
     UnavailableAgentChat,

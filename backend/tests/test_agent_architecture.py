@@ -81,3 +81,20 @@ def test_core_agent_layers_never_depend_back_on_http_api() -> None:
     ]
 
     assert violations == []
+
+
+def test_application_layer_has_no_http_or_storage_adapter_dependency() -> None:
+    forbidden_prefixes = (
+        "fastapi",
+        "starlette",
+        "opensprite_backend.api",
+        "opensprite_backend.app",
+        "opensprite_backend.runtime",
+        "opensprite_backend.conversations.sqlite_repository",
+    )
+
+    assert [
+        (source, module)
+        for source, module in imported_modules("application")
+        if module.startswith(forbidden_prefixes)
+    ] == []

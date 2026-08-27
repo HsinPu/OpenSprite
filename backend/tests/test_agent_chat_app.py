@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from opensprite_backend.api.chat_service import AgentChatError, ChatErrorCode
+from opensprite_backend.application import AgentChatError, ChatErrorCode
 from opensprite_backend.app import create_app
 from opensprite_backend.conversations.models import (
     ConversationPage,

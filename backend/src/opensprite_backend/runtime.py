@@ -8,7 +8,7 @@ from typing import Protocol
 from fastapi import FastAPI
 
 from .agent import AgentLoop, RunManager
-from .api.chat_service import (
+from .application import (
     AgentChatOperations,
     AgentChatService,
     UnavailableAgentChat,

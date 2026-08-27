@@ -9,6 +9,7 @@ lifecycle, or alternate direct-to-model branch.
 ```text
 Browser UI
   -> Conversation and Run HTTP API
+  -> Application orchestration
   -> Run manager
   -> Agent loop
      -> Model gateway -> one Provider adapter
@@ -34,14 +35,17 @@ Browser UI
 The dependency direction is fixed:
 
 ```text
-API -> Agent -> Inference
-          |  -> Tools
-          `-> Conversations
+API -> Application -> Agent -> Inference
+                     |  -> Tools
+                     `-> Conversations
 ```
 
-`Conversations` must not import Provider adapters. `Tools` must not import the
-Agent loop. Provider adapters perform no persistence. The API composes these
-boundaries but does not implement model or tool behavior.
+`Application` owns the use-case coordination between AI settings, Provider
+connection state, durable Conversations and the Run manager. It does not import
+FastAPI, HTTP serializers or concrete persistence adapters. `Conversations`
+must not import Provider adapters. `Tools` must not import the Agent loop.
+Provider adapters perform no persistence. The API validates and serializes the
+contract but does not implement model, tool or persistence behavior.
 
 ## Public workflow
 

@@ -12,7 +12,7 @@ import pytest
 
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
-from opensprite_backend.api.chat_service import (
+from opensprite_backend.application import (
     AgentChatError,
     AgentChatService,
     ChatErrorCode,

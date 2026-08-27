@@ -23,7 +23,11 @@ from .chat_models import (
     message_list_response,
     run_response,
 )
-from .chat_service import AgentChatError, AgentChatOperations, ChatErrorCode
+from opensprite_backend.application import (
+    AgentChatError,
+    AgentChatOperations,
+    ChatErrorCode,
+)
 from .sse import run_event_frame
 
 

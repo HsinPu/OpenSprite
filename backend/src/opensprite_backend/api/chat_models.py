@@ -17,7 +17,7 @@ from opensprite_backend.conversations.models import (
     RunSnapshot,
 )
 
-from .chat_service import ChatErrorCode
+from opensprite_backend.application import ChatErrorCode
 
 
 class ChatContractModel(BaseModel):
