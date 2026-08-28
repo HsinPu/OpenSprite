@@ -72,7 +72,7 @@
 .chat-workspace__composer-actions,
 .chat-workspace__user-row { display: flex; align-items: center; }
 
-.chat-workspace__header-actions { min-width: 0; flex: 0 1 520px; gap: 10px; flex-wrap: nowrap; justify-content: flex-end; }
+.chat-workspace__header-actions { min-width: 0; flex: 0 0 auto; gap: 10px; flex-wrap: nowrap; justify-content: flex-end; }
 
 .chat-workspace__model-select,
 .chat-workspace__icon-button,
@@ -94,10 +94,8 @@
 
 .chat-workspace__model-select {
   display: inline-flex;
-  width: 0;
   min-width: 160px;
   max-width: 360px;
-  flex: 1 1 260px;
   align-items: center;
   gap: 12px;
   min-height: 42px;
@@ -105,6 +103,11 @@
   border-radius: 11px;
   color: var(--chat-text);
   font: inherit;
+}
+
+.chat-workspace__model-select--composer {
+  width: clamp(180px, 24vw, 280px);
+  min-height: 40px;
 }
 
 .chat-workspace__icon-button { width: 42px; height: 42px; border-radius: 11px; font-size: 1.5rem; line-height: 1; }
@@ -244,6 +247,7 @@
 .chat-workspace__composer textarea::placeholder { color: var(--chat-muted); opacity: 0.85; }
 .chat-workspace__composer-actions { justify-content: space-between; gap: 12px; }
 .chat-workspace__composer-actions > div { display: flex; gap: 10px; }
+.chat-workspace__composer-primary-actions { min-width: 0; align-items: center; }
 .chat-workspace__tool-button { width: 40px; height: 40px; border-radius: 10px; font-size: 1.15rem; }
 .chat-workspace .chat-workspace__send-button {
   display: grid;
@@ -355,6 +359,7 @@
   .chat-workspace__header { flex-direction: column; align-items: stretch; padding: 16px 18px; }
   .chat-workspace__header-actions { width: 100%; flex: 0 0 auto; gap: 6px; justify-content: flex-start; }
   .chat-workspace__model-select, .chat-workspace__local-status { min-height: 38px; padding: 0 10px; font-size: 0.86rem; }
+  .chat-workspace__model-select--composer { width: min(180px, calc(100vw - 190px)); min-width: 0; }
   .chat-workspace__local-status { font-size: 0; }
   .chat-workspace__icon-button { width: 38px; height: 38px; }
   .chat-workspace__conversation { overflow: visible; padding: 24px 16px 16px; }

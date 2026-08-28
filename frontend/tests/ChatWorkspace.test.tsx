@@ -115,8 +115,12 @@ describe("live chat workspace", () => {
     );
 
     const sendButton = screen.getByRole("button", { name: "送出訊息" });
+    const modelPicker = screen.getByRole("combobox", { name: /目前模型 GPT-5.6/ });
     expect(sendButton.querySelector("svg")).toBeTruthy();
     expect(sendButton.hasAttribute("disabled")).toBe(true);
+    expect(modelPicker.closest(".chat-workspace__composer")).toBeTruthy();
+    expect(modelPicker.parentElement?.classList.contains("chat-workspace__composer-primary-actions")).toBe(true);
+    expect(modelPicker.parentElement?.contains(sendButton)).toBe(true);
 
     const composer = screen.getByRole("textbox", { name: "輸入訊息" });
     expect(composer.getAttribute("rows")).toBe("1");

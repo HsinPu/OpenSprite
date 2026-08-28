@@ -104,29 +104,6 @@ export function ChatWorkspace({
         <header className="chat-workspace__header">
           <h1>{title ?? t("app.newConversationTitle")}</h1>
           <div className="chat-workspace__header-actions">
-            <select
-              className="chat-workspace__model-select"
-              disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}
-              title={modelChoices.length === 0 ? t("chat.modelNoChoicesTitle") : currentSelectionIsAvailable ? t("chat.modelSwitchTitle") : t("chat.modelUnavailableTitle")}
-              aria-label={modelChoices.length === 0 ? t("chat.modelNoChoicesLabel", { model: modelName }) : currentSelectionIsAvailable ? t("chat.modelSwitchLabel", { model: modelName }) : t("chat.modelUnavailableLabel", { model: modelName })}
-              value={currentSelectionValue}
-              onChange={(event) => {
-                try {
-                  const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
-                  if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId });
-                } catch {
-                  // Values can only originate from the rendered strict choices.
-                }
-              }}
-            >
-              {modelSelection === null ? <option value="">{t("model.none")}</option> : null}
-              {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
-              {choicesByProvider.map((group) => (
-                <optgroup key={group.providerId} label={group.label}>
-                  {group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
             <span className="chat-workspace__local-status"><i aria-hidden="true" />{t("chat.localAgent")}</span>
             <button type="button" className="chat-workspace__icon-button" disabled title={t("chat.moreFutureTitle")} aria-label={t("chat.moreFutureLabel")}>⋮</button>
           </div>
@@ -193,11 +170,36 @@ export function ChatWorkspace({
               <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.attachmentTitle")} aria-label={t("chat.attachmentLabel")}>⌕</button>
               <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.optionsTitle")} aria-label={t("chat.optionsLabel")}>☷</button>
             </div>
-            {chat.isRunning ? (
-              <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label={t("chat.stop")} title={t("chat.stop")} onClick={() => void chat.cancel()}><StopIcon /></button>
-            ) : (
-              <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label={t("chat.send")} title={t("chat.send")}><SendIcon /></button>
-            )}
+            <div className="chat-workspace__composer-primary-actions">
+              <select
+                className="chat-workspace__model-select chat-workspace__model-select--composer"
+                disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}
+                title={modelChoices.length === 0 ? t("chat.modelNoChoicesTitle") : currentSelectionIsAvailable ? t("chat.modelSwitchTitle") : t("chat.modelUnavailableTitle")}
+                aria-label={modelChoices.length === 0 ? t("chat.modelNoChoicesLabel", { model: modelName }) : currentSelectionIsAvailable ? t("chat.modelSwitchLabel", { model: modelName }) : t("chat.modelUnavailableLabel", { model: modelName })}
+                value={currentSelectionValue}
+                onChange={(event) => {
+                  try {
+                    const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
+                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId });
+                  } catch {
+                    // Values can only originate from the rendered strict choices.
+                  }
+                }}
+              >
+                {modelSelection === null ? <option value="">{t("model.none")}</option> : null}
+                {modelSelection !== null && !currentSelectionIsAvailable ? <option value={currentSelectionValue} disabled>{modelName}</option> : null}
+                {choicesByProvider.map((group) => (
+                  <optgroup key={group.providerId} label={group.label}>
+                    {group.choices.map((choice) => <option key={`${choice.selection.providerId}:${choice.selection.modelId}`} value={JSON.stringify([choice.selection.providerId, choice.selection.modelId])}>{choice.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              {chat.isRunning ? (
+                <button type="button" className="chat-workspace__send-button chat-workspace__send-button--stop" disabled={chat.activeRun?.status === "cancelling"} aria-label={t("chat.stop")} title={t("chat.stop")} onClick={() => void chat.cancel()}><StopIcon /></button>
+              ) : (
+                <button type="submit" className="chat-workspace__send-button" disabled={!canSend} aria-label={t("chat.send")} title={t("chat.send")}><SendIcon /></button>
+              )}
+            </div>
           </div>
         </form>
       </div>
