@@ -66,6 +66,16 @@ class ScriptedGateway:
             yield item
 
 
+class RecordingSystemPromptProvider:
+    def __init__(self, content: str = "dynamic system prompt") -> None:
+        self.content = content
+        self.run_ids: list[str] = []
+
+    async def build(self, *, run_id: str) -> str:
+        self.run_ids.append(run_id)
+        return self.content
+
+
 @dataclass
 class LookupTool:
     definition: ToolDefinition = field(
@@ -174,6 +184,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     repository = store(tmp_path)
     run = accepted_run(repository)
     tool = LookupTool()
+    prompt_provider = RecordingSystemPromptProvider()
     gateway = ScriptedGateway(
         [
             [
@@ -191,6 +202,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        system_prompt_provider=prompt_provider,
     )
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -198,6 +210,11 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     assert result.status is RunStatus.COMPLETED
     assert result.partial_text == "我先查詢。今天共有 3 項工作。"
     assert tool.calls == [{"query": "today"}]
+    assert prompt_provider.run_ids == [run.id]
+    assert [request.messages[0].content for request in gateway.requests] == [
+        "dynamic system prompt",
+        "dynamic system prompt",
+    ]
     second_roles = [message.role for message in gateway.requests[1].messages]
     assert second_roles == ["system", "user", "assistant", "tool"]
     assistant = gateway.requests[1].messages[-2]

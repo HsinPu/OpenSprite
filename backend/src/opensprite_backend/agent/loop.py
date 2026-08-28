@@ -42,7 +42,7 @@ from .events import (
     INVALID_PROVIDER_RESPONSE,
     inference_error,
 )
-from .prompt import SYSTEM_PROMPT
+from .prompt import StaticSystemPromptProvider, SystemPromptProvider
 
 
 class _RunCancelled(Exception):
@@ -59,6 +59,7 @@ class AgentLoop:
         repository: ConversationRepository,
         gateway: ModelGateway,
         tools: ToolRegistry,
+        system_prompt_provider: SystemPromptProvider | None = None,
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
         max_history_messages: int = 100,
@@ -75,6 +76,11 @@ class AgentLoop:
         self._repository = repository
         self._gateway = gateway
         self._tools = tools
+        self._system_prompt_provider = (
+            system_prompt_provider
+            if system_prompt_provider is not None
+            else StaticSystemPromptProvider()
+        )
         self._max_model_rounds = max_model_rounds
         self._max_tool_calls = max_tool_calls
         self._max_history_messages = max_history_messages
@@ -100,7 +106,8 @@ class AgentLoop:
                 limit=self._max_history_messages,
                 before_sequence=None,
             )
-            transcript = [ModelMessage(role="system", content=SYSTEM_PROMPT)]
+            system_prompt = await self._system_prompt_provider.build(run_id=run_id)
+            transcript = [ModelMessage(role="system", content=system_prompt)]
             transcript.extend(
                 ModelMessage(role=message.role, content=message.content)
                 for message in page.items
