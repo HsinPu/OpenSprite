@@ -36,9 +36,9 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
 
-設定視窗只顯示已上線的「一般」與「AI 模型」分類。未實作的模型偏好、啟動行為、
-通知、記憶、工具、外觀與隱私設定不建立 session-only 狀態，也不顯示停用入口；
-對應功能真正上線時才加入介面。
+設定視窗以「一般」與「AI 模型」作為可操作分類。未實作的模型偏好、啟動行為、
+通知、記憶、工具、外觀與隱私功能以停用的 `Demo` 分類或「未來上線」資訊列呈現，
+方便追蹤規劃，但不建立 session-only 假狀態或可操作控制項。
 
 介面語言支援 `zh-TW`、`en` 與 `ja`；時區支援系統設定、`Asia/Taipei` 與 `UTC`。
 兩者透過同源 General Settings API 保存在本機服務。語言切換會同步 React、Ant Design、

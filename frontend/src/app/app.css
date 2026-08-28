@@ -363,7 +363,7 @@ button {
 }
 
 .settings-dialog--general {
-  height: min(520px, calc(100dvh - 64px));
+  height: min(680px, calc(100dvh - 64px));
 }
 
 .settings-dialog::backdrop {

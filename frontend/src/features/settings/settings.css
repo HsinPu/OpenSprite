@@ -32,12 +32,15 @@
 .settings-save-dot { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; border: 2px solid currentColor; border-radius: 50%; font-size: 12px; line-height: 1; }
 .settings-close-button { display: grid; width: 40px; height: 40px; flex: 0 0 40px; place-items: center; padding: 0; border: 1px solid var(--settings-border); border-radius: 10px; background: var(--settings-surface); cursor: pointer; font-size: 26px; line-height: 1; transition: border-color 150ms ease, color 150ms ease, background 150ms ease; }
 .settings-close-button:hover { border-color: var(--settings-primary); color: var(--settings-primary); background: var(--settings-surface); }
-.settings-layout { min-width: 0; min-height: 0; flex: 1; display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 0; overflow: hidden; }
+.settings-layout { min-width: 0; min-height: 0; flex: 1; display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 0; overflow: hidden; }
 .settings-category-rail { min-width: 0; padding: 18px 16px 28px; overflow-y: auto; border-right: 1px solid var(--settings-border); background: var(--settings-surface); scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--settings-muted) 32%, transparent) transparent; }
 .settings-category { width: 100%; min-height: 48px; margin-bottom: 5px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer; font-size: 16px; transition: background 150ms ease, color 150ms ease; }
 .settings-category:hover:not(:disabled) { color: var(--settings-primary); background: color-mix(in srgb, var(--settings-primary-soft), white 45%); }
 .settings-category.is-selected, .settings-category.is-selected:hover { color: var(--settings-primary); background: var(--settings-primary-soft); }
+.settings-category.is-disabled { color: color-mix(in srgb, var(--settings-muted), transparent 25%); cursor: not-allowed; }
+.settings-category small { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; opacity: .75; }
 .settings-icon { width: 22px; height: 22px; flex: none; }
+.settings-rail-note { margin: 16px 8px 0; color: var(--settings-muted); font-size: 11px; line-height: 1.45; }
 .settings-content { min-width: 0; width: min(100%, 980px); padding: 26px clamp(22px, 3vw, 36px) 40px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--settings-muted) 32%, transparent) transparent; }
 .settings-category-rail::-webkit-scrollbar, .settings-content::-webkit-scrollbar { width: 8px; height: 8px; }
 .settings-category-rail::-webkit-scrollbar-thumb, .settings-content::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--settings-muted) 34%, transparent); background-clip: padding-box; }
@@ -52,6 +55,8 @@
 .settings-card-body { min-width: 0; }
 .settings-card-description { margin: 14px 0 12px; color: var(--settings-muted); font-size: 13px; line-height: 1.45; }
 .settings-select-row { min-height: 58px; padding: 8px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 15px; }
+.settings-future-row { min-height: 58px; padding: 9px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--settings-muted); font-size: 15px; }
+.settings-future-badge { flex: 0 0 auto; padding: 4px 9px; border: 1px solid var(--settings-border); border-radius: 999px; background: var(--settings-surface); color: var(--settings-muted); font-size: 12px; font-weight: 600; }
 .settings-card-body > :last-child { border-bottom: 0; }
 .settings-select-row select { min-width: min(350px, 52%); height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--settings-border); border-radius: 9px; background: var(--settings-surface); color: var(--settings-text); cursor: pointer; }
 .settings-select-row .ant-select { min-width: min(350px, 52%); }
@@ -62,7 +67,8 @@
 .settings-model-load-error p { margin: 0; font-size: 13px; }
 .settings-model-option { display: grid; gap: 2px; }
 .settings-model-option small { color: var(--settings-muted); font-size: 12px; overflow-wrap: anywhere; }
-.settings-helper-text { color: var(--settings-muted); font-size: 13px; margin-top: 4px; }
+.settings-control-label, .settings-control-description { display: block; }
+.settings-control-description, .settings-helper-text { color: var(--settings-muted); font-size: 13px; margin-top: 4px; }
 .settings-model-section { min-width: 0; }
 .settings-subheading { font-size: 18px; line-height: 1.2; margin-bottom: 12px; }
 .settings-model-select { min-height: 58px; padding: 0 15px; border: 1px solid var(--settings-border); border-radius: 10px; display: flex; align-items: center; gap: 12px; position: relative; cursor: pointer; }
@@ -122,13 +128,14 @@
   .settings-category-rail { display: flex; flex: none; gap: 7px; overflow-x: auto; overflow-y: hidden; padding: 12px 18px; border-right: 0; border-bottom: 1px solid var(--settings-border); scrollbar-width: thin; }
   .settings-category { width: auto; min-width: max-content; min-height: 42px; margin: 0; padding: 0 12px; gap: 8px; font-size: 13px; }
   .settings-category .settings-icon { width: 18px; height: 18px; }
+  .settings-category small, .settings-rail-note { display: none; }
   .settings-content { width: 100%; flex: 1; min-height: 0; padding: 22px 18px 36px; }
   .settings-intro h2 { font-size: 24px; }
   .settings-intro p { font-size: 14px; }
   .settings-card { padding: 15px 14px 6px; }
   .settings-card-description { margin-top: 12px; }
   .settings-card-title { font-size: 15px; }
-  .settings-select-row, .settings-preference-row { align-items: flex-start; min-height: 58px; gap: 14px; font-size: 14px; }
+  .settings-select-row, .settings-future-row, .settings-preference-row { align-items: flex-start; min-height: 58px; gap: 14px; font-size: 14px; }
   .settings-select-row { flex-direction: column; gap: 8px; }
   .settings-select-row select { width: 100%; min-width: 0; height: 42px; }
   .settings-select-row .ant-select { width: 100%; min-width: 0; }

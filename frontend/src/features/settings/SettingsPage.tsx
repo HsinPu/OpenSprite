@@ -17,7 +17,7 @@ import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCata
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import { GeneralSettings } from "./GeneralSettings";
-import { Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
+import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
 import "./settings.css";
 
@@ -36,9 +36,14 @@ type SettingsPageProps = {
   onProviderModalChange?: (open: boolean) => void;
 };
 
-const categories: Array<{ id: SettingsSection; labelKey: MessageKey; icon: IconName }> = [
-  { id: "general", labelKey: "settings.category.general", icon: "settings" },
-  { id: "models", labelKey: "settings.category.models", icon: "robot" },
+const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
+  { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true },
+  { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
+  { id: "memory", labelKey: "settings.category.memory", icon: "database" },
+  { id: "tools", labelKey: "settings.category.tools", icon: "connections" },
+  { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" },
+  { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy" },
+  { id: "about", labelKey: "settings.category.about", icon: "info" },
 ];
 
 const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
@@ -307,6 +312,8 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
+        <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
+        <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />
       </SettingsCard>
       {modalProvider && modalContainer ? <ConnectionModal provider={modalProvider} container={modalContainer} onCancel={() => setModalProvider(null)} onSubmit={(apiKey) => connect(modalProvider, apiKey)} /> : null}
     </div>
@@ -339,7 +346,12 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
       </header>
       <div className="settings-layout">
         <nav className="settings-category-rail" aria-label={t("settings.categories")}>
-          {categories.map((category) => <button key={category.id} type="button" className={`settings-category${category.id === section ? " is-selected" : ""}`} onClick={() => onSectionChange(category.id)} aria-current={category.id === section ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span></button>)}
+          {categories.map((category) => {
+            const enabled = category.enabled === true;
+            const selected = category.id === section;
+            return <button key={category.id} type="button" className={`settings-category${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}`} onClick={() => { if (enabled) onSectionChange(category.id as SettingsSection); }} disabled={!enabled} aria-current={selected ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span>{enabled ? null : <small>{t("common.demo")}</small>}</button>;
+          })}
+          <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
           {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}

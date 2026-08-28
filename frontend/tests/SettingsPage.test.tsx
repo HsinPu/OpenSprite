@@ -108,29 +108,30 @@ describe("provider settings", () => {
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
   });
 
-  it("does not render speculative model preferences", async () => {
+  it("shows speculative model preferences as non-interactive future items", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
 
-    expect(screen.queryByText("未來上線")).toBeNull();
-    expect(screen.queryByText("自動選擇可用模型")).toBeNull();
-    expect(screen.queryByText("顯示模型名稱")).toBeNull();
+    expect(screen.getAllByText("未來上線")).toHaveLength(2);
+    expect(screen.getByText("自動選擇可用模型")).toBeTruthy();
+    expect(screen.getByText("顯示模型名稱")).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "自動選擇可用模型" })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "顯示模型名稱" })).toBeNull();
     await waitFor(() => expect((screen.getAllByRole("button", { name: "連接" })[0] as HTMLButtonElement).disabled).toBe(false));
   });
 
-  it("shows only implemented settings and hides the initial save receipt", () => {
+  it("shows the planned settings inventory without fake controls", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具與連線Demo", "外觀Demo", "隱私Demo", "關於Demo"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
-    expect(screen.queryByText("DEMO")).toBeNull();
-    expect(screen.queryByText("啟動與對話")).toBeNull();
-    expect(screen.queryByText("通知")).toBeNull();
+    expect(screen.getAllByText("Demo")).toHaveLength(5);
+    expect(screen.getByRole("region", { name: "啟動與對話" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
+    expect(screen.getAllByText("未來上線")).toHaveLength(4);
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByText("已儲存")).toBeNull();
   });
