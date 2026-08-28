@@ -291,7 +291,7 @@
   border-color: var(--chat-border);
   border-radius: 10px;
   background: var(--chat-surface);
-  color: var(--chat-text);
+  color: var(--chat-muted);
   box-shadow: none;
   font-size: 1rem;
   line-height: 1;
