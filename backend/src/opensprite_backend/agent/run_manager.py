@@ -15,6 +15,7 @@ from opensprite_backend.conversations.repository import (
 )
 
 from .loop import AgentLoop
+from .events import INTERNAL_ERROR
 
 
 class RunManager:
@@ -44,7 +45,7 @@ class RunManager:
                 return False
             cancellation = asyncio.Event()
             task = asyncio.create_task(
-                self._loop.execute(run_id, cancellation),
+                self._execute(run_id, cancellation),
                 name=f"opensprite-run-{run_id}",
             )
             self._tasks[run_id] = task
@@ -56,6 +57,23 @@ class RunManager:
                 )
             )
             return True
+
+    async def _execute(
+        self,
+        run_id: str,
+        cancellation: asyncio.Event,
+    ) -> RunSnapshot:
+        try:
+            return await self._loop.execute(run_id, cancellation)
+        except ConversationStoreError as execution_error:
+            try:
+                return await asyncio.to_thread(
+                    self._repository.fail_run,
+                    run_id,
+                    INTERNAL_ERROR,
+                )
+            except ConversationStoreError:
+                raise execution_error
 
     async def cancel(self, run_id: str) -> RunSnapshot:
         async with self._lock:

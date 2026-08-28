@@ -11,6 +11,7 @@ from typing import Literal
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
 MessageRole = Literal["user", "assistant"]
+MAX_ASSISTANT_CHARS = 1_048_576
 
 
 class RunStatus(str, Enum):

@@ -14,6 +14,10 @@ from .provider_state import (
     JsonProviderStateRepository,
     ProviderStateRepository,
 )
+from .provider_transaction import (
+    JsonProviderTransactionJournal,
+    ProviderTransactionJournal,
+)
 from .providers import ProviderOperationLocks, ProviderValidator
 
 
@@ -26,6 +30,9 @@ class ProviderRuntime:
     operation_locks: ProviderOperationLocks
     http_client: httpx.AsyncClient
     owns_http_client: bool
+
+    async def astart(self) -> None:
+        await self.connections.recover_pending()
 
     async def aclose(self) -> None:
         if self.owns_http_client:
@@ -41,6 +48,7 @@ def create_provider_runtime(
     transport: httpx.AsyncBaseTransport | None = None,
     clock: Callable[[], datetime] | None = None,
     operation_locks: ProviderOperationLocks | None = None,
+    transaction_journal: ProviderTransactionJournal | None = None,
 ) -> ProviderRuntime:
     """Compose the provider runtime without accessing a secret or network."""
 
@@ -69,10 +77,16 @@ def create_provider_runtime(
     if states is None:
         states = JsonProviderStateRepository(paths.provider_state_file)
     locks = operation_locks or ProviderOperationLocks()
+    transactions = (
+        transaction_journal
+        if transaction_journal is not None
+        else JsonProviderTransactionJournal(paths.provider_transaction_file)
+    )
     connections = ProviderConnectionService(
         store,
         states,
         ProviderValidator(client),
+        transactions,
         clock,
         locks,
     )

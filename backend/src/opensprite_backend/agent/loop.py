@@ -10,6 +10,7 @@ from contextlib import suppress
 from typing import TypeVar
 
 from opensprite_backend.conversations.models import (
+    MAX_ASSISTANT_CHARS,
     PublicRunError,
     RunEventType,
     RunSnapshot,
@@ -61,6 +62,7 @@ class AgentLoop:
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
         max_history_messages: int = 100,
+        max_assistant_chars: int = MAX_ASSISTANT_CHARS,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
@@ -68,12 +70,15 @@ class AgentLoop:
             raise ValueError("invalid tool call bound")
         if not 1 <= max_history_messages <= 200:
             raise ValueError("invalid history bound")
+        if not 1 <= max_assistant_chars <= MAX_ASSISTANT_CHARS:
+            raise ValueError("invalid assistant output bound")
         self._repository = repository
         self._gateway = gateway
         self._tools = tools
         self._max_model_rounds = max_model_rounds
         self._max_tool_calls = max_tool_calls
         self._max_history_messages = max_history_messages
+        self._max_assistant_chars = max_assistant_chars
 
     async def execute(
         self,
@@ -147,6 +152,10 @@ class AgentLoop:
                                 run_id,
                                 INVALID_PROVIDER_RESPONSE,
                             )
+                        if len(accumulated_text) + len(event.text) > (
+                            self._max_assistant_chars
+                        ):
+                            return await self._fail(run_id, AGENT_LIMIT_ERROR)
                         round_text += event.text
                         accumulated_text += event.text
                         await asyncio.to_thread(

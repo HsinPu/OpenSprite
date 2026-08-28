@@ -13,7 +13,8 @@ import pytest
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.conversations.models import RunStatus
+from opensprite_backend.conversations.models import RunStatus, StoreFailure
+from opensprite_backend.conversations.repository import ConversationStoreError
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
@@ -159,3 +160,63 @@ async def test_close_marks_abandoned_running_work_interrupted(
     persisted = repository.get_run(run.id)
     assert persisted is not None
     assert persisted.status is RunStatus.INTERRUPTED
+
+
+@async_test
+async def test_execution_store_failure_is_persisted_as_terminal_failure(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = start(repository)
+
+    class FailingDeltaRepository:
+        def __init__(self, wrapped: SqliteConversationRepository) -> None:
+            self._wrapped = wrapped
+            self._failed = False
+
+        def append_assistant_delta(self, run_id: str, text: str):
+            if not self._failed:
+                self._failed = True
+                raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
+            return self._wrapped.append_assistant_delta(run_id, text)
+
+        def __getattr__(self, name: str):
+            return getattr(self._wrapped, name)
+
+    failing_repository = FailingDeltaRepository(repository)
+
+    class FinalGateway:
+        async def stream(
+            self,
+            request: ModelRequest,
+        ) -> AsyncIterator[ModelStreamEvent]:
+            del request
+            yield ModelTextDelta("done")
+            yield ModelCompleted(ModelFinishReason.FINAL)
+
+    manager = RunManager(
+        failing_repository,  # type: ignore[arg-type]
+        AgentLoop(
+            repository=failing_repository,  # type: ignore[arg-type]
+            gateway=FinalGateway(),
+            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        ),
+    )
+
+    assert await manager.start(run.id) is True
+    result = await manager.wait(run.id)
+
+    assert result is not None
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "internal_error"
+    follow_up = repository.start_run(
+        conversation_id=run.conversation_id,
+        client_request_id=str(uuid4()),
+        message="try again",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+    )
+    assert follow_up.run.status is RunStatus.QUEUED
+    await manager.close()

@@ -35,6 +35,10 @@ from opensprite_backend.provider_state import (
     ProviderState,
     ProviderStateRepository,
 )
+from opensprite_backend.provider_transaction import (
+    ProviderTransaction,
+    ProviderTransactionJournal,
+)
 from opensprite_backend.providers import (
     ProviderOperationLocks,
     ProviderValidationError,
@@ -113,6 +117,20 @@ class FakeStateRepository:
         self._fail("delete")
 
 
+class FakeTransactionJournal:
+    def __init__(self) -> None:
+        self.value: ProviderTransaction | None = None
+
+    def get(self) -> ProviderTransaction | None:
+        return self.value
+
+    def set(self, transaction: ProviderTransaction) -> None:
+        self.value = transaction
+
+    def clear(self) -> None:
+        self.value = None
+
+
 class FakeValidator:
     def __init__(self, failure: ErrorCode | None = None) -> None:
         self.failure = failure
@@ -154,11 +172,13 @@ def service(
     credentials: CredentialStore,
     states: ProviderStateRepository,
     validator: FakeValidator,
+    transactions: ProviderTransactionJournal | None = None,
 ) -> ProviderConnectionService:
     return ProviderConnectionService(
         credentials,
         states,
         cast(ProviderValidator, validator),
+        transactions or FakeTransactionJournal(),
         clock=lambda: NOW,
     )
 
@@ -390,6 +410,7 @@ def test_connection_service_uses_injected_provider_operation_locks() -> None:
             credentials,
             FakeStateRepository(credentials),
             cast(ProviderValidator, FakeValidator()),
+            FakeTransactionJournal(),
             clock=lambda: NOW,
             operation_locks=locks,
         )
@@ -791,6 +812,7 @@ def test_runtime_factory_is_offline_until_an_operation_and_owns_client() -> None
     runtime = create_provider_runtime(
         credential_store=credentials,
         state_repository=states,
+        transaction_journal=FakeTransactionJournal(),
         transport=httpx.MockTransport(handler),
         clock=lambda: NOW,
     )
@@ -826,6 +848,7 @@ def test_runtime_factory_uses_injected_app_paths_for_default_state_repository(
 
     assert summary.status is ProviderStatus.CONNECTED
     assert paths.provider_state_file.is_file()
+    assert not paths.provider_transaction_file.exists()
     assert not paths.credential_file.exists()
     assert not paths.credential_key_file.exists()
     assert not paths.config_dir.exists()
@@ -875,6 +898,7 @@ def test_http_routes_use_composed_runtime_without_secret_echo() -> None:
     runtime = create_provider_runtime(
         credential_store=credentials,
         state_repository=states,
+        transaction_journal=FakeTransactionJournal(),
         transport=httpx.MockTransport(handler),
         clock=lambda: NOW,
     )

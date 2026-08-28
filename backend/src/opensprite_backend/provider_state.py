@@ -8,11 +8,13 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from threading import RLock
 from typing import Final, Protocol
 
 from .models import ProviderId, ProviderStatus
 
 _SCHEMA_VERSION: Final = 2
+_MAX_STATE_BYTES: Final = 1024 * 1024
 _CATALOG: Final[tuple[ProviderId, ...]] = (
     "openai",
     "anthropic",
@@ -58,22 +60,26 @@ class JsonProviderStateRepository:
 
     def __init__(self, path: Path) -> None:
         self._path = path
+        self._lock = RLock()
 
     def get(self, provider_id: ProviderId) -> ProviderState | None:
-        return self._read().get(provider_id)
+        with self._lock:
+            return self._read().get(provider_id)
 
     def set(self, state: ProviderState) -> None:
         self._validate_state(state)
-        states = self._read()
-        states[state.provider_id] = state
-        self._write(states)
+        with self._lock:
+            states = self._read()
+            states[state.provider_id] = state
+            self._write(states)
 
     def delete(self, provider_id: ProviderId) -> None:
-        states = self._read()
-        if provider_id not in states:
-            return
-        del states[provider_id]
-        self._write(states)
+        with self._lock:
+            states = self._read()
+            if provider_id not in states:
+                return
+            del states[provider_id]
+            self._write(states)
 
     def _read(self) -> dict[ProviderId, ProviderState]:
         failed = False
@@ -88,12 +94,30 @@ class JsonProviderStateRepository:
             return {}
         raw: object = None
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
+            with self._path.open("rb") as stream:
+                encoded = stream.read(_MAX_STATE_BYTES + 1)
+            if len(encoded) > _MAX_STATE_BYTES:
+                raise ValueError("provider metadata is too large")
+            raw = json.loads(
+                encoded.decode("utf-8"),
+                object_pairs_hook=self._reject_duplicate_keys,
+            )
         except Exception:
             failed = True
         if failed:
             raise ProviderStateError
         return self._decode(raw)
+
+    @staticmethod
+    def _reject_duplicate_keys(
+        pairs: list[tuple[str, object]],
+    ) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate provider metadata key")
+            result[key] = value
+        return result
 
     def _decode(self, raw: object) -> dict[ProviderId, ProviderState]:
         if (
@@ -193,25 +217,27 @@ class JsonProviderStateRepository:
             {"version": _SCHEMA_VERSION, "providers": records},
             ensure_ascii=False,
             separators=(",", ":"),
-        )
+        ).encode("utf-8")
+        if len(payload) > _MAX_STATE_BYTES:
+            raise ProviderStateError
 
         failed = False
         temporary_path: Path | None = None
         file_descriptor: int | None = None
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if os.name != "nt":
+                self._path.parent.chmod(0o700)
             file_descriptor, temporary_name = tempfile.mkstemp(
                 dir=self._path.parent,
                 prefix=f".{self._path.name}.",
                 suffix=".tmp",
-                text=True,
+                text=False,
             )
             temporary_path = Path(temporary_name)
             with os.fdopen(
                 file_descriptor,
-                "w",
-                encoding="utf-8",
-                newline="\n",
+                "wb",
             ) as stream:
                 file_descriptor = None
                 stream.write(payload)
@@ -219,6 +245,13 @@ class JsonProviderStateRepository:
                 os.fsync(stream.fileno())
             os.replace(temporary_path, self._path)
             temporary_path = None
+            if os.name != "nt":
+                self._path.chmod(0o600)
+                directory_descriptor = os.open(self._path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_descriptor)
+                finally:
+                    os.close(directory_descriptor)
         except Exception:
             failed = True
         finally:

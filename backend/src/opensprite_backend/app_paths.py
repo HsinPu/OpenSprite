@@ -49,6 +49,10 @@ class AppPaths:
         return self.state_dir / "providers.json"
 
     @property
+    def provider_transaction_file(self) -> Path:
+        return self.state_dir / "provider-transaction.json"
+
+    @property
     def conversations_dir(self) -> Path:
         return self.home / "conversations"
 

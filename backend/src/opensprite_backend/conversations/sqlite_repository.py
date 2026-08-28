@@ -20,6 +20,7 @@ from .models import (
     ConversationSummary,
     Message,
     MessagePage,
+    MAX_ASSISTANT_CHARS,
     ProviderId,
     PublicRunError,
     ResponseMode,
@@ -69,7 +70,6 @@ _PUBLIC_ERROR_CODES = {
     "internal_error",
 }
 _MAX_EVENT_JSON_BYTES = 65536
-_MAX_ASSISTANT_LENGTH = 1048576
 
 
 _SCHEMA_SQL = """
@@ -581,7 +581,7 @@ class SqliteConversationRepository:
                 if row["status"] != RunStatus.RUNNING.value:
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
                 partial_text = row["partial_text"] + text
-                if len(partial_text) > _MAX_ASSISTANT_LENGTH:
+                if len(partial_text) > MAX_ASSISTANT_CHARS:
                     raise ConversationStoreError(StoreFailure.INVALID_STATE)
                 connection.execute(
                     "UPDATE runs SET partial_text = ? WHERE id = ?",
@@ -612,7 +612,7 @@ class SqliteConversationRepository:
         self._require_identifier(run_id)
         normalized_text = self._require_text(
             assistant_text,
-            maximum=_MAX_ASSISTANT_LENGTH,
+            maximum=MAX_ASSISTANT_CHARS,
         )
         with self._lock:
             connection = self._open_write()

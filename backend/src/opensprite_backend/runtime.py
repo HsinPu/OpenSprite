@@ -68,6 +68,9 @@ class _SystemRuntime:
         self.agent_chat = agent_chat
 
     async def astart(self) -> None:
+        provider_starter = getattr(self._provider_runtime, "astart", None)
+        if provider_starter is not None:
+            await provider_starter()
         await self.agent_chat.startup()
 
     async def aclose(self) -> None:

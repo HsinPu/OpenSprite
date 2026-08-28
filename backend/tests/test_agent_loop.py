@@ -297,6 +297,35 @@ async def test_model_round_limit_stops_infinite_tool_loop(tmp_path: Path) -> Non
 
 
 @async_test
+async def test_assistant_output_limit_fails_run_before_repository_overflow(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+
+    class OversizedGateway:
+        async def stream(
+            self,
+            request: ModelRequest,
+        ) -> AsyncIterator[ModelStreamEvent]:
+            del request
+            yield ModelTextDelta("1234")
+            yield ModelTextDelta("56")
+            yield ModelCompleted(ModelFinishReason.FINAL)
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=OversizedGateway(),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        max_assistant_chars=5,
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "agent_limit_reached"
+
+
+@async_test
 async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
     repository = store(tmp_path)
     run = accepted_run(repository)

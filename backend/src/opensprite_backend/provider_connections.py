@@ -22,6 +22,11 @@ from .provider_state import (
     ProviderState,
     ProviderStateRepository,
 )
+from .provider_transaction import (
+    ProviderTransaction,
+    ProviderTransactionJournal,
+    ProviderTransactionSide,
+)
 from .providers import (
     ProviderOperationLocks,
     ProviderValidationError,
@@ -49,6 +54,8 @@ class ProviderConnectionError(Exception):
 
 
 class ProviderConnections(Protocol):
+    async def recover_pending(self) -> None: ...
+
     async def list_providers(self) -> ProviderListResponse: ...
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse: ...
@@ -81,6 +88,9 @@ class UnavailableProviderConnections:
         return ProviderConnectionError(ErrorCode.CREDENTIAL_STORE_UNAVAILABLE)
 
     async def list_providers(self) -> ProviderListResponse:
+        raise self._unavailable()
+
+    async def recover_pending(self) -> None:
         raise self._unavailable()
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
@@ -121,16 +131,19 @@ class ProviderConnectionService:
         credential_store: CredentialStore,
         state_repository: ProviderStateRepository,
         validator: ProviderValidatorOperations,
+        transaction_journal: ProviderTransactionJournal,
         clock: Callable[[], datetime] | None = None,
         operation_locks: ProviderOperationLocks | None = None,
     ) -> None:
         self._credentials = credential_store
         self._states = state_repository
         self._validator = validator
+        self._transactions = transaction_journal
         self._clock = clock or (lambda: datetime.now(UTC))
         self._operation_locks = operation_locks or ProviderOperationLocks()
 
     async def list_providers(self) -> ProviderListResponse:
+        await self.recover_pending()
         summaries: list[ProviderSummary] = []
         for provider_id, name in _CATALOG:
             async with self._operation_locks.hold(provider_id):
@@ -151,6 +164,7 @@ class ProviderConnectionService:
         return ProviderListResponse(providers=summaries)
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
+        await self.recover_pending()
         async with self._operation_locks.hold("openrouter"):
             snapshot = self._snapshot("openrouter")
             if snapshot is None:
@@ -187,6 +201,7 @@ class ProviderConnectionService:
         provider_id: ProviderId,
         api_key: str,
     ) -> ProviderSummary:
+        await self.recover_pending()
         async with self._operation_locks.hold(provider_id):
             validation_error = await self._validate(provider_id, api_key)
             if validation_error is not None:
@@ -202,13 +217,19 @@ class ProviderConnectionService:
                 credential_fingerprint=self._fingerprint(api_key),
                 last_checked_at=self._now(),
             )
+            if before == _Snapshot(api_key, desired):
+                return self._summary(provider_id, self._name(provider_id), desired)
+            self._prepare_transaction(self._transaction(provider_id, before, desired))
             written = self._write_and_verify(provider_id, api_key, desired)
             if not written:
-                self._restore_and_verify(provider_id, before)
+                if self._restore_and_verify(provider_id, before):
+                    self._clear_transaction()
                 raise self._store_unavailable()
+            self._clear_transaction()
             return self._summary(provider_id, self._name(provider_id), desired)
 
     async def test(self, provider_id: ProviderId) -> ProviderSummary:
+        await self.recover_pending()
         async with self._operation_locks.hold(provider_id):
             before = self._snapshot(provider_id)
             if before is None:
@@ -244,10 +265,14 @@ class ProviderConnectionService:
             return self._summary(provider_id, self._name(provider_id), desired)
 
     async def disconnect(self, provider_id: ProviderId) -> None:
+        await self.recover_pending()
         async with self._operation_locks.hold(provider_id):
             before = self._snapshot(provider_id)
             if before is None:
                 raise self._store_unavailable()
+            if before.credential is None and before.state is None:
+                return
+            self._prepare_transaction(self._transaction(provider_id, before, None))
             failed = False
             try:
                 self._credentials.delete(provider_id)
@@ -261,7 +286,46 @@ class ProviderConnectionService:
             except Exception:
                 failed = True
             if failed:
-                self._restore_and_verify(provider_id, before)
+                if self._restore_and_verify(provider_id, before):
+                    self._clear_transaction()
+                raise self._store_unavailable()
+            self._clear_transaction()
+
+    async def recover_pending(self) -> None:
+        try:
+            transaction = self._transactions.get()
+        except Exception:
+            raise self._store_unavailable()
+        if transaction is None:
+            return
+        async with self._operation_locks.hold(transaction.provider_id):
+            try:
+                credential_fingerprint = self._credentials.fingerprint(
+                    transaction.provider_id
+                )
+                target = (
+                    transaction.after
+                    if credential_fingerprint == transaction.after.fingerprint
+                    else transaction.before
+                    if credential_fingerprint == transaction.before.fingerprint
+                    else None
+                )
+                if target is None:
+                    raise self._store_unavailable()
+                if target.state is None:
+                    self._states.delete(transaction.provider_id)
+                else:
+                    self._states.set(target.state)
+                if (
+                    self._credentials.fingerprint(transaction.provider_id)
+                    != target.fingerprint
+                    or self._states.get(transaction.provider_id) != target.state
+                ):
+                    raise self._store_unavailable()
+                self._transactions.clear()
+            except ProviderConnectionError:
+                raise
+            except Exception:
                 raise self._store_unavailable()
 
     async def _validate(
@@ -290,6 +354,48 @@ class ProviderConnectionService:
         if failed:
             return None
         return _Snapshot(credential, state)
+
+    def _transaction(
+        self,
+        provider_id: ProviderId,
+        before: _Snapshot,
+        after_state: ProviderState | None,
+    ) -> ProviderTransaction:
+        return ProviderTransaction(
+            provider_id=provider_id,
+            before=self._transaction_side(before.credential, before.state),
+            after=ProviderTransactionSide(
+                fingerprint=(
+                    None
+                    if after_state is None
+                    else after_state.credential_fingerprint
+                ),
+                state=after_state,
+            ),
+        )
+
+    @classmethod
+    def _transaction_side(
+        cls,
+        credential: str | None,
+        state: ProviderState | None,
+    ) -> ProviderTransactionSide:
+        return ProviderTransactionSide(
+            fingerprint=None if credential is None else cls._fingerprint(credential),
+            state=state,
+        )
+
+    def _prepare_transaction(self, transaction: ProviderTransaction) -> None:
+        try:
+            self._transactions.set(transaction)
+        except Exception:
+            raise self._store_unavailable()
+
+    def _clear_transaction(self) -> None:
+        try:
+            self._transactions.clear()
+        except Exception:
+            raise self._store_unavailable()
 
     def _write_and_verify(
         self,

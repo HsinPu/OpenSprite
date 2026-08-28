@@ -28,6 +28,9 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.database_file == home / "data" / "opensprite.db"
     assert paths.state_dir == home / "state"
     assert paths.provider_state_file == home / "state" / "providers.json"
+    assert paths.provider_transaction_file == (
+        home / "state" / "provider-transaction.json"
+    )
     assert paths.conversations_dir == home / "conversations"
     assert paths.logs_dir == home / "logs"
     assert paths.cache_dir == home / "cache"

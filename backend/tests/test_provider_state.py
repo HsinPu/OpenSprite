@@ -129,6 +129,29 @@ def test_corrupt_or_noncanonical_metadata_fails_closed(
     assert raised.value.__context__ is None
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"version":2,"version":2,"providers":[]}',
+        '{"version":2,"providers":[{"id":"openai","id":"openai","status":"connected","credentialPreview":"••••1234","credentialFingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","lastCheckedAt":"2026-08-20T09:30:00Z"}]}',
+    ],
+)
+def test_duplicate_json_keys_fail_closed(tmp_path: Path, payload: str) -> None:
+    path = tmp_path / "providers.json"
+    path.write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ProviderStateError):
+        JsonProviderStateRepository(path).get("openai")
+
+
+def test_oversized_metadata_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "providers.json"
+    path.write_bytes(b" " * (1024 * 1024 + 1))
+
+    with pytest.raises(ProviderStateError):
+        JsonProviderStateRepository(path).get("openai")
+
+
 def test_delete_is_idempotent(tmp_path: Path) -> None:
     repository = JsonProviderStateRepository(tmp_path / "providers.json")
     repository.delete("openai")

@@ -30,7 +30,8 @@ the user explicitly requests verified user-data deletion.
 ├─ data/
 │  └─ opensprite.db
 ├─ state/
-│  └─ providers.json
+│  ├─ providers.json
+│  └─ provider-transaction.json  # exists only during an in-flight mutation
 ├─ conversations/
 │  └─ <backend-generated-id>/
 │     ├─ uploads/
@@ -46,7 +47,8 @@ create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
 `auth.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
-`state/providers.json`, and `data/opensprite.db` are implemented today.
+`state/providers.json`, the transient `state/provider-transaction.json`, and
+`data/opensprite.db` are implemented today.
 `auth.json` contains only
 AES-256-GCM ciphertext; `credential.key` is a random per-install 256-bit key.
 Both are sensitive and must be backed up, moved, or deleted together. An
@@ -65,6 +67,14 @@ provider model catalog. Reads of a missing file are side-effect free and return
 both values atomically; clearing the model preserves and persists the chosen
 response mode. `state/providers.json` remains strict non-secret metadata. Other
 paths are not created in advance.
+
+Provider connect and disconnect update encrypted credentials and non-secret
+metadata in separate files. Before either mutation begins, the backend writes a
+strict non-secret recovery journal containing only the before/after
+fingerprints, masked preview, status, and timestamps. Normal completion removes
+the journal. If the process stops between the two atomic replacements, startup
+uses the credential fingerprint to finish or roll back the metadata side and
+then removes the journal. The journal never contains an API key or ciphertext.
 
 `config/general.json` is a separate strict schema-v1, non-secret file containing
 only `locale` and `timeZone`. A missing file returns `zh-TW` and `system`
