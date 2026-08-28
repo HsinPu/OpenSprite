@@ -32,6 +32,7 @@ from .provider_connections import (
     UnavailableProviderConnections,
 )
 from .provider_runtime import create_provider_runtime
+from .system_prompt import create_system_prompt_provider
 from .tools import ReadOnlyToolPolicy, ToolRegistry
 
 
@@ -98,6 +99,10 @@ def create_system_runtime(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        system_prompt_provider=create_system_prompt_provider(
+            paths,
+            general_settings,
+        ),
     )
     agent_chat = AgentChatService(
         repository,

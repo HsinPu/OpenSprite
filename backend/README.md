@@ -25,6 +25,8 @@ The current slice provides:
   atomic JSON replacement;
 - an explicit `create_provider_runtime()` composition factory;
 - durable Conversation, Message, Run and semantic event persistence in SQLite;
+- one bounded dynamic System Prompt per Run using locale, time zone and current
+  time, with a required full receipt below `.opensprite/logs/system-prompts`;
 - one bounded Agent loop with an explicit Tool Registry and normalized native
   Provider inference gateway;
 - a secured `create_system_app()` runtime factory that owns and closes the
@@ -57,6 +59,13 @@ before an approved feature uses them.
 The general settings file is created only after a successful PUT. It uses
 strict schema v1 and is stored separately so locale and time-zone updates cannot
 overwrite AI model configuration.
+
+The System Prompt log directory is created only when a Run reaches Prompt
+construction. Each create-only Markdown receipt contains the exact trusted
+Prompt sent to the Provider plus version, source and SHA-256 metadata. It does
+not contain the user message, conversation history, credentials, Provider
+response or hidden reasoning. A complete fsynced receipt is required before the
+first Provider request for that Run.
 
 Importing or calling `create_system_app()` performs no credential file
 operation or provider request. Each successful FastAPI lifespan

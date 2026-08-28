@@ -30,6 +30,7 @@ def test_agent_depends_on_interfaces_not_sqlite_or_provider_adapters() -> None:
         "opensprite_backend.provider_connections",
         "opensprite_backend.app",
         "opensprite_backend.runtime",
+        "opensprite_backend.system_prompt",
     }
 
     assert [
@@ -81,6 +82,29 @@ def test_core_agent_layers_never_depend_back_on_http_api() -> None:
     ]
 
     assert violations == []
+
+
+def test_system_prompt_feature_cannot_read_conversations_or_secrets() -> None:
+    source_path = PACKAGE_ROOT / "system_prompt.py"
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), source_path)
+    forbidden_prefixes = (
+        "opensprite_backend.conversations",
+        "opensprite_backend.credentials",
+        "opensprite_backend.inference",
+        "opensprite_backend.provider",
+        "opensprite_backend.tools",
+        "opensprite_backend.api",
+    )
+    imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.append(node.module)
+
+    assert [
+        module for module in imports if module.startswith(forbidden_prefixes)
+    ] == []
 
 
 def test_application_layer_has_no_http_or_storage_adapter_dependency() -> None:

@@ -74,6 +74,12 @@ credential metadata, commits the user Message and Run, and only then asks
 `RunManager` to schedule execution. The API layer validates and serializes the
 contract but does not call a Provider, execute a tool, or write SQLite directly.
 
+At Run start, the injected System Prompt provider renders one trusted snapshot
+from the confirmed locale, time-zone setting and current time. The exact same
+snapshot is used for every model round in that Run. Before the first Provider
+request, a complete create-only Prompt receipt must be fsynced below
+`.opensprite/logs/system-prompts`; logging failure prevents the Provider call.
+
 | Route | Responsibility |
 | --- | --- |
 | `GET /api/conversations` | Reverse-updated cursor page for the sidebar. |

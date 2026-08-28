@@ -33,6 +33,7 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     )
     assert paths.conversations_dir == home / "conversations"
     assert paths.logs_dir == home / "logs"
+    assert paths.system_prompt_logs_dir == home / "logs" / "system-prompts"
     assert paths.cache_dir == home / "cache"
     assert not home.exists()
 

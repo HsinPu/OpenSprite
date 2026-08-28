@@ -76,6 +76,12 @@ class RecordingSystemPromptProvider:
         return self.content
 
 
+class FailingSystemPromptProvider:
+    async def build(self, *, run_id: str) -> str:
+        del run_id
+        raise RuntimeError("prompt log failed")
+
+
 @dataclass
 class LookupTool:
     definition: ToolDefinition = field(
@@ -362,6 +368,30 @@ async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
     assert result.error.code == "provider_timeout"
     assert result.error.retryable is True
     assert "private" not in result.error.message.lower()
+
+
+@async_test
+async def test_prompt_log_failure_stops_before_any_model_request(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [[ModelTextDelta("must not run"), ModelCompleted(ModelFinishReason.FINAL)]]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        system_prompt_provider=FailingSystemPromptProvider(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "internal_error"
+    assert gateway.requests == []
 
 
 @async_test

@@ -38,6 +38,9 @@ the user explicitly requests verified user-data deletion.
 │     ├─ outputs/
 │     └─ memory/
 ├─ logs/
+│  └─ system-prompts/
+│     └─ <UTC-date>/
+│        └─ <run-id>.md
 └─ cache/
 ```
 
@@ -48,7 +51,9 @@ parent directory needed for an actual write.
 
 `auth.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
 `state/providers.json`, the transient `state/provider-transaction.json`, and
-`data/opensprite.db` are implemented today.
+`data/opensprite.db` are implemented today. Each Run also writes one complete,
+create-only System Prompt receipt below `logs/system-prompts/<UTC-date>` before
+its first Provider request.
 `auth.json` contains only
 AES-256-GCM ciphertext; `credential.key` is a random per-install 256-bit key.
 Both are sensitive and must be backed up, moved, or deleted together. An
@@ -88,8 +93,9 @@ backend import, and service startup do not create `data/` or the database.
 Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored
 relative to the data root; the database must not persist the absolute user
-profile path. Upload, output, memory, logs, and cache directories remain
-unimplemented and are not created in advance.
+profile path. Upload, output, memory, other logs, and cache directories remain
+unimplemented and are not created in advance. The System Prompt log directory
+is created only when the first Run reaches Prompt construction.
 
 This rebuild is new-install-only. It does not scan, migrate, import, or fall back
 to any earlier application-data location.
