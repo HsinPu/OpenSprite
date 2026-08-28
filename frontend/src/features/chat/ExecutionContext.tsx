@@ -1,4 +1,6 @@
 import { useId, useMemo, useState } from "react";
+import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 
 import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot } from "../../api/agentChat";
 import type { MessageKey, Translator } from "../../i18n/catalog";
@@ -96,18 +98,16 @@ export function ExecutionContext({ modelName, run, events, timeZone }: Execution
   return (
     <aside className={`chat-workspace__context${isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={executionTitleId}>
       <div className="chat-workspace__context-heading">
-        <button
-          type="button"
+        <Button
+          type="default"
           className="chat-workspace__context-toggle"
+          icon={isExpanded ? <RightOutlined /> : <LeftOutlined />}
           aria-expanded={isExpanded}
           aria-controls={executionBodyId}
           aria-label={isExpanded ? t("execution.collapse") : t("execution.expand")}
           title={isExpanded ? t("execution.collapse") : t("execution.expand")}
           onClick={() => setIsExpanded((current) => !current)}
-        >
-          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--horizontal">{isExpanded ? "›" : "‹"}</span>
-          <span aria-hidden="true" className="chat-workspace__context-toggle-icon chat-workspace__context-toggle-icon--vertical">{isExpanded ? "⌃" : "⌄"}</span>
-        </button>
+        />
         <h2 id={executionTitleId}>{t("execution.title")}</h2>
       </div>
 

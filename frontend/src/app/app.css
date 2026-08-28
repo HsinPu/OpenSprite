@@ -89,40 +89,23 @@ button {
   letter-spacing: -0.6px;
 }
 
-.sidebar-collapse-button {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
+.sidebar-collapse-button.ant-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   margin-top: 0;
-  border: 1px solid var(--os-border);
-  border-radius: 9px;
+  padding: 0;
+  border-color: var(--os-border);
+  border-radius: 10px;
   color: var(--os-muted);
   background: var(--os-surface);
-  cursor: pointer;
+  box-shadow: none;
 }
 
-.sidebar-collapse-button:hover {
+.sidebar-collapse-button.ant-btn:not(:disabled):hover {
+  border-color: var(--os-primary);
   color: var(--os-primary-strong);
   background: var(--os-primary-soft);
-}
-
-.sidebar-chevron {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border: solid currentColor;
-  border-width: 0 2px 2px 0;
-  transform-origin: center;
-}
-
-.sidebar-chevron.is-left {
-  transform: rotate(135deg);
-}
-
-.sidebar-chevron.is-right {
-  transform: rotate(-45deg);
 }
 
 .brand-mark {

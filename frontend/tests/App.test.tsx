@@ -62,6 +62,19 @@ describe("settings dialog focus restoration", () => {
   });
 });
 
+describe("Ant Design shell controls", () => {
+  it("uses Ant Design buttons and icons for both collapse controls", () => {
+    render(<App />);
+
+    const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
+    const executionToggle = screen.getByRole("button", { name: "收合本次執行" });
+    expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
+    expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
+    expect(executionToggle.classList.contains("ant-btn")).toBe(true);
+    expect(executionToggle.querySelector(".anticon-right")).toBeTruthy();
+  });
+});
+
 describe("persisted AI settings", () => {
   it("chooses the first available model when no selection exists", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {

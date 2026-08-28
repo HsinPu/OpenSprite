@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 
 import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
@@ -220,20 +222,16 @@ export function App() {
             <OpenSpriteMark />
             <span>OpenSprite</span>
           </div>
-          <button
+          <Button
             className="sidebar-collapse-button"
-            type="button"
+            type="default"
+            icon={sidebarCollapsed ? <RightOutlined /> : <LeftOutlined />}
             aria-label={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
             aria-expanded={!sidebarCollapsed}
             aria-controls="conversation-navigation"
             title={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
             onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          >
-            <span
-              className={`sidebar-chevron ${sidebarCollapsed ? "is-right" : "is-left"}`}
-              aria-hidden="true"
-            />
-          </button>
+          />
         </div>
 
         <button
