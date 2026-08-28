@@ -101,6 +101,12 @@ describe("Ant Design shell controls", () => {
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
     expect(executionToggle.querySelector(".anticon-right")).toBeTruthy();
   });
+
+  it("does not show the inactive tools and connections shortcut", () => {
+    render(<App />);
+
+    expect(screen.queryByRole("button", { name: "工具與連線" })).toBeNull();
+  });
 });
 
 describe("persisted AI settings", () => {

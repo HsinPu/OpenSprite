@@ -308,15 +308,6 @@ export function App() {
 
         <nav className="utility-nav" aria-label={t("app.features")}>
           <button
-            type="button"
-            disabled
-            aria-label={t("app.tools")}
-            title={t("app.toolsFuture")}
-          >
-            <span aria-hidden="true">⌘</span>
-            <span className="utility-label">{t("app.tools")}</span>
-          </button>
-          <button
             ref={settingsButtonRef}
             className={settingsOpen ? "is-active" : ""}
             type="button"

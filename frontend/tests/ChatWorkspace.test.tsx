@@ -83,6 +83,8 @@ describe("live chat workspace", () => {
     expect(screen.queryByText("Search")).toBeNull();
     expect(screen.queryByText("File")).toBeNull();
     expect(screen.queryByText("Memory")).toBeNull();
+    expect(screen.queryByText("本機 Agent")).toBeNull();
+    expect(screen.queryByRole("button", { name: "更多對話功能（尚未上線）" })).toBeNull();
 
     const stopButton = screen.getByRole("button", { name: "停止回覆" });
     expect(stopButton.querySelector("svg")).toBeTruthy();

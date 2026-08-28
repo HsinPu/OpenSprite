@@ -103,10 +103,6 @@ export function ChatWorkspace({
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
           <h1>{title ?? t("app.newConversationTitle")}</h1>
-          <div className="chat-workspace__header-actions">
-            <span className="chat-workspace__local-status"><i aria-hidden="true" />{t("chat.localAgent")}</span>
-            <button type="button" className="chat-workspace__icon-button" disabled title={t("chat.moreFutureTitle")} aria-label={t("chat.moreFutureLabel")}>⋮</button>
-          </div>
         </header>
 
         <div className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning}>
