@@ -62,6 +62,16 @@ function deferred<T>() {
 }
 
 describe("settings dialog focus restoration", () => {
+  it("uses compact General height and full Models height", () => {
+    const { container } = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "設定" }));
+    const dialog = container.querySelector("dialog")!;
+    expect(dialog.classList.contains("settings-dialog--general")).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
+    expect(dialog.classList.contains("settings-dialog--models")).toBe(true);
+  });
+
   it.each([[1440], [390]])("returns focus to the actual settings opener at %ipx after close", async (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     render(<App />);

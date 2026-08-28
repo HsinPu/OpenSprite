@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "../src/features/settings/SettingsPage";
-import { defaultDemoSettings, type DemoSettings, type SettingsSection } from "../src/features/settings/settingsState";
+import type { SettingsSection } from "../src/features/settings/settingsState";
 import type { ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
 import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatalog";
@@ -69,28 +69,30 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function SettingsHarness({ initialSettings = defaultDemoSettings, initialSelection = { providerId: "openai", modelId: "gpt-5.6" } }: { initialSettings?: DemoSettings; initialSelection?: ModelSelection | null }) {
-  const [settings, setSettings] = useState<DemoSettings>(initialSettings);
+function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6" } }: { initialSelection?: ModelSelection | null }) {
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
 }
 
 function GuardedDialogHarness() {
-  const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
-  const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} settings={settings} onSettingsChange={setSettings} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /></>;
+}
+
+function GeneralSettingsPageHarness({ saving = false }: { saving?: boolean }) {
+  const providerCatalog = useProviderCatalog();
+  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} onClose={() => undefined} />;
 }
 
 describe("provider settings", () => {
@@ -106,16 +108,48 @@ describe("provider settings", () => {
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
   });
 
-  it("marks automatic model selection and model-name display as future features", async () => {
+  it("does not render speculative model preferences", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);
 
-    expect(screen.getAllByText("未來上線")).toHaveLength(2);
-    expect(screen.getByText("自動選擇可用模型")).toBeTruthy();
-    expect(screen.getByText("顯示模型名稱")).toBeTruthy();
+    expect(screen.queryByText("未來上線")).toBeNull();
+    expect(screen.queryByText("自動選擇可用模型")).toBeNull();
+    expect(screen.queryByText("顯示模型名稱")).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "自動選擇可用模型" })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "顯示模型名稱" })).toBeNull();
     await waitFor(() => expect((screen.getAllByRole("button", { name: "連接" })[0] as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("shows only implemented settings and hides the initial save receipt", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    render(<GeneralSettingsPageHarness />);
+
+    const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型"]);
+    expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
+    expect(screen.queryByText("DEMO")).toBeNull();
+    expect(screen.queryByText("啟動與對話")).toBeNull();
+    expect(screen.queryByText("通知")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByText("已儲存")).toBeNull();
+  });
+
+  it("shows save progress and hides the completed receipt after two seconds", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    try {
+      const { rerender } = render(<GeneralSettingsPageHarness />);
+      rerender(<GeneralSettingsPageHarness saving />);
+      expect(screen.getByText("儲存中…")).toBeTruthy();
+
+      rerender(<GeneralSettingsPageHarness />);
+      expect(screen.getByText("已儲存")).toBeTruthy();
+      act(() => vi.advanceTimersByTime(2001));
+      expect(screen.queryByText("已儲存")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {

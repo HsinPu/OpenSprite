@@ -11,11 +11,7 @@ import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
 import { isTodayInTimeZone } from "../features/general-settings/dateTime";
 import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import {
-  defaultDemoSettings,
-  type DemoSettings,
-  type SettingsSection,
-} from "../features/settings/settingsState";
+import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
 
 function conversationIdFromHash(): string | null {
@@ -72,7 +68,6 @@ export function App() {
     () => window.innerWidth <= 900,
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const generalSettings = useGeneralSettings();
   const providerCatalog = useProviderCatalog();
   const {
@@ -345,7 +340,7 @@ export function App() {
 
       <dialog
         ref={settingsDialogRef}
-        className="settings-dialog"
+        className={`settings-dialog settings-dialog--${settingsSection}`}
         aria-labelledby="settings-page-title"
         onClose={() => {
           setSettingsOpen(false);
@@ -370,8 +365,6 @@ export function App() {
         <SettingsPage
           section={settingsSection}
           onSectionChange={setSettingsSection}
-          settings={settings}
-          onSettingsChange={setSettings}
           modelSelection={modelSelection}
           responseMode={responseMode}
           aiSettingsSaving={aiSettingsSaving}

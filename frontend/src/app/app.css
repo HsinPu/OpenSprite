@@ -362,6 +362,10 @@ button {
   box-shadow: 0 24px 72px rgb(38 33 29 / 24%);
 }
 
+.settings-dialog--general {
+  height: min(520px, calc(100dvh - 64px));
+}
+
 .settings-dialog::backdrop {
   background: rgb(34 30 27 / 34%);
   backdrop-filter: blur(3px);

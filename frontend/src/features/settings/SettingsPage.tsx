@@ -17,15 +17,13 @@ import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCata
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import { GeneralSettings } from "./GeneralSettings";
-import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
-import type { DemoSettings, SettingsSection } from "./settingsState";
+import { Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
+import type { SettingsSection } from "./settingsState";
 import "./settings.css";
 
 type SettingsPageProps = {
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
-  settings: DemoSettings;
-  onSettingsChange: (next: DemoSettings) => void;
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   aiSettingsSaving: boolean;
@@ -38,10 +36,9 @@ type SettingsPageProps = {
   onProviderModalChange?: (open: boolean) => void;
 };
 
-const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance" | "privacy" | "about"; labelKey: MessageKey; icon: IconName; enabled?: boolean }> = [
-  { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true }, { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
-  { id: "memory", labelKey: "settings.category.memory", icon: "database" }, { id: "tools", labelKey: "settings.category.tools", icon: "connections" },
-  { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" }, { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy" }, { id: "about", labelKey: "settings.category.about", icon: "info" },
+const categories: Array<{ id: SettingsSection; labelKey: MessageKey; icon: IconName }> = [
+  { id: "general", labelKey: "settings.category.general", icon: "settings" },
+  { id: "models", labelKey: "settings.category.models", icon: "robot" },
 ];
 
 const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
@@ -310,37 +307,42 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
-        <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
-        <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />
       </SettingsCard>
       {modalProvider && modalContainer ? <ConnectionModal provider={modalProvider} container={modalContainer} onCancel={() => setModalProvider(null)} onSubmit={(apiKey) => connect(modalProvider, apiKey)} /> : null}
     </div>
   );
 }
 
-export function SettingsPage({ section, onSectionChange, settings, onSettingsChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
-  const [saved, setSaved] = useState(true); useEffect(() => { if (saved) return; const timeout = window.setTimeout(() => setSaved(true), 650); return () => window.clearTimeout(timeout); }, [saved]);
+  const saving = aiSettingsSaving || generalSettings.saving;
+  const wasSavingRef = useRef(false);
+  const [showSaveStatus, setShowSaveStatus] = useState(false);
+  useEffect(() => {
+    if (saving) {
+      wasSavingRef.current = true;
+      setShowSaveStatus(true);
+      return;
+    }
+    if (!wasSavingRef.current) return;
+    wasSavingRef.current = false;
+    setShowSaveStatus(true);
+    const timeout = window.setTimeout(() => setShowSaveStatus(false), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [saving]);
   const [modalContainer, setModalContainer] = useState<HTMLElement | null>(null);
-  const updateSetting = <K extends keyof DemoSettings>(key: K, value: DemoSettings[K]) => { onSettingsChange({ ...settings, [key]: value }); setSaved(false); };
   return (
     <section ref={setModalContainer} className="settings-page" aria-labelledby="settings-page-title">
       <header className="settings-header">
         <div><h1 id="settings-page-title">{t("settings.title")}</h1><p>{t("settings.subtitle")}</p></div>
-        <div className="settings-header-actions"><SaveStatus saved={saved && !aiSettingsSaving && !generalSettings.saving} /><button className="settings-close-button" type="button" onClick={onClose} aria-label={t("settings.close")} title={t("settings.close")}><span aria-hidden="true">×</span></button></div>
+        <div className="settings-header-actions">{showSaveStatus ? <SaveStatus saved={!saving} /> : null}<button className="settings-close-button" type="button" onClick={onClose} aria-label={t("settings.close")} title={t("settings.close")}><span aria-hidden="true">×</span></button></div>
       </header>
       <div className="settings-layout">
         <nav className="settings-category-rail" aria-label={t("settings.categories")}>
-          {categories.map((category) => {
-            const isSelected = category.id === section;
-            const isEnabled = category.enabled === true;
-            return <button key={category.id} type="button" className={`settings-category${isSelected ? " is-selected" : ""}${!isEnabled ? " is-disabled" : ""}`} onClick={() => { if (isEnabled) onSectionChange(category.id as SettingsSection); }} disabled={!isEnabled} aria-current={isSelected ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span>{!isEnabled ? <small>{t("common.demo")}</small> : null}</button>;
-          })}
-          <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
+          {categories.map((category) => <button key={category.id} type="button" className={`settings-category${category.id === section ? " is-selected" : ""}`} onClick={() => onSectionChange(category.id)} aria-current={category.id === section ? "page" : undefined}><Icon name={category.icon} /><span>{t(category.labelKey)}</span></button>)}
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings settings={settings} generalSettings={generalSettings} onChange={updateSetting} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
-          <p className="settings-demo-note">{t("settings.sessionNote")}</p>
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
         </div>
       </div>
     </section>
