@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   agentChatErrorText,
@@ -11,20 +11,60 @@ export function useConversations() {
   const { t } = useI18n();
   const [conversations, setConversations] = useState<ReadonlyArray<ConversationSummary>>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const requestGenerationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   const refresh = useCallback(async () => {
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
     setLoading(true);
     try {
       const page = await listConversations();
+      if (requestGenerationRef.current !== generation) return;
       setConversations(page.conversations);
+      setNextCursor(page.nextCursor);
       setError(null);
     } catch (refreshError) {
-      setError(agentChatErrorText(refreshError, t));
+      if (requestGenerationRef.current === generation) {
+        setError(agentChatErrorText(refreshError, t));
+      }
     } finally {
-      setLoading(false);
+      if (requestGenerationRef.current === generation) setLoading(false);
     }
   }, [t]);
+
+  const loadMore = useCallback(async () => {
+    const cursor = nextCursor;
+    if (cursor === null || loadingMoreRef.current) return;
+    const generation = requestGenerationRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await listConversations({ before: cursor });
+      if (requestGenerationRef.current !== generation) return;
+      setConversations((current) => {
+        const known = new Set(current.map((conversation) => conversation.id));
+        return [
+          ...current,
+          ...page.conversations.filter((conversation) => !known.has(conversation.id)),
+        ];
+      });
+      setNextCursor(page.nextCursor);
+      setError(null);
+    } catch (loadError) {
+      if (requestGenerationRef.current === generation) {
+        setError(agentChatErrorText(loadError, t));
+      }
+    } finally {
+      loadingMoreRef.current = false;
+      if (requestGenerationRef.current === generation) setLoadingMore(false);
+    }
+  }, [nextCursor, t]);
 
   useEffect(() => {
     void refresh();
@@ -48,7 +88,10 @@ export function useConversations() {
     conversations,
     loading,
     error,
+    hasMore: nextCursor !== null,
+    loadingMore,
     refresh,
+    loadMore,
     recordAcceptedConversation,
   };
 }

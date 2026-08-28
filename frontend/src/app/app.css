@@ -191,6 +191,27 @@ button {
   line-height: 1.45;
 }
 
+.conversation-load-more {
+  width: calc(100% - 20px);
+  min-height: 38px;
+  margin: 12px 10px 0;
+  border: 1px solid var(--os-border);
+  border-radius: 9px;
+  background: var(--os-surface);
+  color: var(--os-muted);
+  cursor: pointer;
+}
+
+.conversation-load-more:hover:not(:disabled) {
+  color: var(--os-primary-strong);
+  border-color: var(--os-primary);
+}
+
+.conversation-load-more:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .nav-group-label {
   margin: 0 10px 8px;
   color: #4d5055;

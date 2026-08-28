@@ -141,6 +141,27 @@
   margin-inline: auto;
 }
 
+.chat-workspace__load-older {
+  justify-self: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--chat-border);
+  border-radius: 999px;
+  background: var(--chat-surface);
+  color: var(--chat-muted);
+  cursor: pointer;
+}
+
+.chat-workspace__load-older:hover:not(:disabled) {
+  color: var(--chat-primary-strong);
+  border-color: var(--chat-primary);
+}
+
+.chat-workspace__load-older:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .chat-workspace__error,
 .chat-workspace__run-notice {
   margin: 0 0 20px;

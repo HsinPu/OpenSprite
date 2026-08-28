@@ -95,6 +95,20 @@ describe("frontend internationalization", () => {
     expect(document.documentElement.lang).toBe("zh-TW");
   });
 
+  it("retries an initial General settings load failure", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "UTC" })));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<I18nHarness />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("語言與時區設定暫時無法讀取或儲存");
+    fireEvent.click(screen.getByRole("button", { name: "重試" }));
+
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "日期與時間" }) as HTMLSelectElement).value).toBe("UTC"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("translates stable API error codes without exposing upstream detail", () => {
     const english = createTranslator("en");
     const japanese = createTranslator("ja");

@@ -61,10 +61,16 @@ export function App() {
     loading: conversationsLoading,
     error: conversationsError,
     refresh: refreshConversations,
+    hasMore: hasMoreConversations,
+    loadingMore: conversationsLoadingMore,
+    loadMore: loadMoreConversations,
     recordAcceptedConversation,
   } = useConversations();
   const [chatRevision, setChatRevision] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileNavigation, setMobileNavigation] = useState(
+    () => window.innerWidth <= 900,
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settings, setSettings] = useState<DemoSettings>(defaultDemoSettings);
   const generalSettings = useGeneralSettings();
@@ -99,6 +105,16 @@ export function App() {
     };
     window.addEventListener("hashchange", syncHash);
     return () => window.removeEventListener("hashchange", syncHash);
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const mobile = window.innerWidth <= 900;
+      setMobileNavigation(mobile);
+      if (!mobile) setMenuOpen(false);
+    };
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
   useEffect(() => {
@@ -216,6 +232,8 @@ export function App() {
         id="main-navigation-sidebar"
         className={`main-sidebar${menuOpen ? " is-open" : ""}${sidebarCollapsed ? " is-collapsed" : ""}`}
         aria-label={t("app.mainMenu")}
+        aria-hidden={mobileNavigation && !menuOpen ? true : undefined}
+        inert={mobileNavigation && !menuOpen}
       >
         <div className="sidebar-header">
           <div className="brand">
@@ -274,6 +292,18 @@ export function App() {
               onClick={() => openChat(conversation)}
             />
           ))}
+          {hasMoreConversations ? (
+            <button
+              type="button"
+              className="conversation-load-more"
+              disabled={conversationsLoadingMore}
+              onClick={() => void loadMoreConversations()}
+            >
+              {conversationsLoadingMore
+                ? t("app.loadingMoreConversations")
+                : t("app.loadMoreConversations")}
+            </button>
+          ) : null}
         </nav>
 
         <nav className="utility-nav" aria-label={t("app.features")}>
@@ -302,7 +332,11 @@ export function App() {
         </nav>
       </aside>
 
-      <main className="app-content">
+      <main
+        className="app-content"
+        aria-hidden={mobileNavigation && menuOpen ? true : undefined}
+        inert={mobileNavigation && menuOpen}
+      >
         <ChatWorkspace
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
@@ -324,8 +358,11 @@ export function App() {
         aria-labelledby="settings-page-title"
         onClose={() => {
           setSettingsOpen(false);
+          const opener = settingsOpenerRef.current;
+          if (mobileNavigation && opener?.closest(".main-sidebar")) {
+            setMenuOpen(true);
+          }
           window.requestAnimationFrame(() => {
-            const opener = settingsOpenerRef.current;
             if (opener?.isConnected) opener.focus();
             else settingsButtonRef.current?.focus();
           });

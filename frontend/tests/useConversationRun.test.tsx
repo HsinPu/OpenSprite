@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { RunEvent, RunEventStream, RunEventStreamHandlers } from "../src/api/agentChat";
+import { AgentChatApiError, type RunEvent, type RunEventStream, type RunEventStreamHandlers } from "../src/api/agentChat";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
 
 
@@ -10,6 +10,16 @@ const runId = "e7527bf5-81c9-4534-908c-a9a9bc501f26";
 const userMessageId = "c01956dc-fdf0-435c-a3be-e7eb5fd65f22";
 const assistantMessageId = "7e660e86-4838-4af5-99d5-ab926428b1c0";
 const requestId = "ba66c043-6229-469c-84b1-36f617cfc328";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 
 const userMessage = {
@@ -73,8 +83,10 @@ function Harness({ activeConversationId, streamFactory, onAccepted, onUpdated }:
       <div data-testid="streamed">{state.streamedText}</div>
       <div data-testid="status">{state.activeRun?.status ?? "none"}</div>
       <div data-testid="error">{state.error ?? ""}</div>
+      <div data-testid="has-older">{String(state.hasOlderMessages)}</div>
       <button type="button" onClick={() => void state.send("hello")}>send</button>
       <button type="button" onClick={() => void state.cancel()}>cancel</button>
+      <button type="button" onClick={() => void state.loadOlderMessages()}>load older</button>
     </div>
   );
 }
@@ -133,7 +145,7 @@ describe("useConversationRun", () => {
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
 
     const delta: RunEvent = { sequence: 3, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "完成" } };
-    handlers!.onEvent(delta);
+    act(() => handlers!.onEvent(delta));
     await waitFor(() => expect(screen.getByTestId("streamed").textContent).toBe("完成"));
     act(() => {
       handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId } });
@@ -182,10 +194,72 @@ describe("useConversationRun", () => {
     render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
 
-    handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId } });
+    act(() => handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId } }));
 
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("completed"));
     expect(close).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.getByTestId("error").textContent).toContain("無法連線到本機服務"));
+  });
+
+  it("keeps persisted partial text when SSE cannot start replaying", async () => {
+    const fetchMock = vi.fn((path: string) => {
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify({ ...run("running"), partialText: "既有部分回覆" })));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const streamFactory = vi.fn((_runId: string, handlers: RunEventStreamHandlers) => {
+      handlers.onError(new AgentChatApiError("network_error"));
+      return { close: vi.fn() };
+    });
+
+    render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+
+    await waitFor(() => expect(screen.getByTestId("streamed").textContent).toBe("既有部分回覆"));
+  });
+
+  it("does not show a stale cancellation error after switching conversations", async () => {
+    const cancellation = deferred<Response>();
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify(run("running"))));
+      if (path === `/api/runs/${runId}/cancel` && init?.method === "POST") return cancellation.promise;
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const streamFactory = vi.fn(() => ({ close: vi.fn() }));
+    const rendered = render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    fireEvent.click(screen.getByRole("button", { name: "cancel" }));
+
+    rendered.rerender(<Harness activeConversationId={null} streamFactory={streamFactory} />);
+    cancellation.reject(new Error("old request failed"));
+
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("none"));
+    expect(screen.getByTestId("error").textContent).toBe("");
+  });
+
+  it("loads and prepends an older message page", async () => {
+    const olderMessage = {
+      ...userMessage,
+      id: "8e56f1ba-2ec1-49ea-a414-cb59f50350cb",
+      content: "older",
+      sequence: 1,
+    };
+    const latestMessage = { ...userMessage, sequence: 101 };
+    const fetchMock = vi.fn((path: string) => {
+      if (path.endsWith("/messages?limit=100")) return Promise.resolve(new Response(JSON.stringify({ messages: [latestMessage], nextBeforeSequence: 101 })));
+      if (path.endsWith("/messages?limit=100&beforeSequence=101")) return Promise.resolve(new Response(JSON.stringify({ messages: [olderMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify(run("completed"))));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Harness activeConversationId={conversationId} streamFactory={() => ({ close: vi.fn() })} />);
+    await waitFor(() => expect(screen.getByTestId("has-older").textContent).toBe("true"));
+
+    fireEvent.click(screen.getByRole("button", { name: "load older" }));
+
+    await waitFor(() => expect(screen.getByTestId("messages").textContent).toContain("user:older|user:hello"));
+    expect(screen.getByTestId("has-older").textContent).toBe("false");
   });
 });

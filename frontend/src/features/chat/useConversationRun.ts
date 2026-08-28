@@ -89,6 +89,8 @@ export function useConversationRun({
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [streamedText, setStreamedText] = useState("");
   const [loading, setLoading] = useState(conversationId !== null);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [nextBeforeSequence, setNextBeforeSequence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const generationRef = useRef(0);
   const streamRef = useRef<RunEventStream | null>(null);
@@ -130,6 +132,7 @@ export function useConversationRun({
       if (generationRef.current !== generation || resolvedConversationRef.current !== eventConversationId) return;
       commitRun(run);
       setMessages(persistedMessages(page.messages));
+      setNextBeforeSequence(page.nextBeforeSequence);
       setStreamedText(run.partialText);
       setError(run.error ? run.error.message : null);
       onConversationUpdated();
@@ -141,11 +144,12 @@ export function useConversationRun({
     }
   }, [closeStream, commitRun, onConversationUpdated, t]);
 
-  const watchRun = useCallback((runId: string, generation: number) => {
+  const watchRun = useCallback((runId: string, generation: number, initialText = "") => {
     closeStream();
     seenEventSequencesRef.current = new Set();
     setEvents([]);
-    setStreamedText("");
+    setStreamedText(initialText);
+    let receivedDelta = false;
     try {
       streamRef.current = eventStreamFactory(runId, {
         onEvent: (event) => {
@@ -154,7 +158,12 @@ export function useConversationRun({
           setError(null);
           setEvents((current) => [...current, event].slice(-500));
           if (event.type === "assistant.delta") {
-            setStreamedText((current) => current + String(event.data.text));
+            const text = String(event.data.text);
+            setStreamedText((current) => {
+              const prefix = receivedDelta ? current : "";
+              receivedDelta = true;
+              return prefix + text;
+            });
           }
           if (event.type === "run.started") {
             updateRun((current) => current ? { ...current, status: "running", startedAt: current.startedAt ?? event.createdAt } : current);
@@ -183,6 +192,8 @@ export function useConversationRun({
     seenEventSequencesRef.current = new Set();
     setEvents([]);
     setStreamedText("");
+    setNextBeforeSequence(null);
+    setLoadingOlderMessages(false);
     setError(null);
     if (conversationId === null) {
       setMessages([]);
@@ -195,6 +206,7 @@ export function useConversationRun({
       .then(async (page) => {
         if (generationRef.current !== generation) return;
         setMessages(persistedMessages(page.messages));
+        setNextBeforeSequence(page.nextBeforeSequence);
         const latest = page.messages.at(-1);
         if (!latest) {
           commitRun(null);
@@ -204,7 +216,7 @@ export function useConversationRun({
         if (generationRef.current !== generation) return;
         commitRun(run);
         setStreamedText(run.partialText);
-        watchRun(run.id, generation);
+        watchRun(run.id, generation, run.partialText);
       })
       .catch((nextError: unknown) => {
         if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
@@ -254,9 +266,10 @@ export function useConversationRun({
       ]);
       if (generationRef.current !== generation) return false;
       setMessages(persistedMessages(page.messages));
+      setNextBeforeSequence(page.nextBeforeSequence);
       commitRun(run);
       setStreamedText(run.partialText);
-      watchRun(run.id, generation);
+      watchRun(run.id, generation, run.partialText);
       return true;
     } catch (nextError) {
       if (generationRef.current === generation) {
@@ -270,13 +283,60 @@ export function useConversationRun({
   const cancel = useCallback(async (): Promise<void> => {
     const run = activeRunRef.current;
     if (!run || !activeStatuses.has(run.status)) return;
+    const generation = generationRef.current;
     try {
       const result = await cancelRun(run.id);
+      if (generationRef.current !== generation) return;
       updateRun((current) => current && current.id === run.id ? { ...current, status: result.status } : current);
     } catch (nextError) {
-      setError(agentChatErrorText(nextError, t));
+      if (
+        generationRef.current === generation
+        && activeRunRef.current?.id === run.id
+      ) {
+        setError(agentChatErrorText(nextError, t));
+      }
     }
   }, [t, updateRun]);
+
+  const loadOlderMessages = useCallback(async (): Promise<void> => {
+    const beforeSequence = nextBeforeSequence;
+    const targetConversation = resolvedConversationRef.current;
+    const generation = generationRef.current;
+    if (
+      beforeSequence === null
+      || targetConversation === null
+      || loadingOlderMessages
+    ) {
+      return;
+    }
+    setLoadingOlderMessages(true);
+    try {
+      const page = await listConversationMessages(targetConversation, {
+        beforeSequence,
+      });
+      if (
+        generationRef.current !== generation
+        || resolvedConversationRef.current !== targetConversation
+      ) {
+        return;
+      }
+      setMessages((current) => {
+        const known = new Set(current.map((message) => message.id));
+        return [
+          ...persistedMessages(page.messages).filter((message) => !known.has(message.id)),
+          ...current,
+        ];
+      });
+      setNextBeforeSequence(page.nextBeforeSequence);
+      setError(null);
+    } catch (nextError) {
+      if (generationRef.current === generation) {
+        setError(agentChatErrorText(nextError, t));
+      }
+    } finally {
+      if (generationRef.current === generation) setLoadingOlderMessages(false);
+    }
+  }, [loadingOlderMessages, nextBeforeSequence, t]);
 
   const isRunning = useMemo(() => activeRun !== null && activeStatuses.has(activeRun.status), [activeRun]);
 
@@ -286,9 +346,12 @@ export function useConversationRun({
     events,
     streamedText,
     loading,
+    loadingOlderMessages,
+    hasOlderMessages: nextBeforeSequence !== null,
     error,
     isRunning,
     send,
     cancel,
+    loadOlderMessages,
   };
 }

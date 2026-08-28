@@ -102,6 +102,20 @@ the stream buffer as authoritative. Duplicate replayed event sequences and
 events belonging to an obsolete selected conversation are ignored. An active
 Run exposes a stop action through the bodyless cancellation operation.
 
+Conversation and Message cursors are explicit browser state. The sidebar can
+append older Conversation pages without replacing the current page, while an
+open Conversation can prepend older Message pages without changing ascending
+message order. Refresh, pagination, cancellation, and stream callbacks carry a
+selection generation; a result from an older generation cannot overwrite or
+surface an error in the newly selected Conversation. A stored partial assistant
+response remains visible until replayed deltas replace it or durable terminal
+Messages become authoritative.
+
+On narrow screens the sidebar behaves as a modal navigation surface. While it
+is closed it is removed from keyboard and accessibility-tree interaction; while
+it is open, the conversation workspace is inert until navigation is dismissed.
+Desktop sidebars keep their independent collapse behavior.
+
 The execution panel is a projection of the selected Run and its semantic
 events. It displays the fixed Provider/model/mode snapshot, safe status and
 timing, and only tool names that actually appeared in persisted tool events.
@@ -134,9 +148,16 @@ The initial loop is intentionally small:
 
 - at most 8 model rounds;
 - at most 16 tool calls;
+- at most 1,048,576 characters of accumulated assistant output;
 - duplicate failed calls stop instead of retrying forever;
 - each tool has an explicit timeout and output cap;
 - cancellation is checked before model and tool boundaries.
+
+The Agent checks the shared assistant-output limit before every durable delta,
+so a Provider cannot push the SQLite Run beyond its storage contract. If an
+otherwise recoverable repository write fails during background execution, the
+Run manager makes one fail-closed terminal transition with a safe internal
+error; it does not silently discard the task while leaving an active Run.
 
 The production registry initially contains only explicitly composed read-only
 tools. Local writes, external writes, destructive actions, shell access, MCP,

@@ -113,6 +113,18 @@ export function ChatWorkspace({
           <div className="chat-workspace__conversation-rail">
             {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
             {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
+            {chat.hasOlderMessages ? (
+              <button
+                type="button"
+                className="chat-workspace__load-older"
+                disabled={chat.loadingOlderMessages}
+                onClick={() => void chat.loadOlderMessages()}
+              >
+                {chat.loadingOlderMessages
+                  ? t("chat.loadingOlderMessages")
+                  : t("chat.loadOlderMessages")}
+              </button>
+            ) : null}
             {!chat.loading && chat.messages.length === 0 && !showLiveAssistant ? (
               <div className="chat-workspace__empty-state">
                 <OpenSpriteMark />

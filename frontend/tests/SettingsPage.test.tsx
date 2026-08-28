@@ -16,6 +16,7 @@ const generalSettings: GeneralSettingsController = {
   error: null,
   saveLocale: async () => null,
   saveTimeZone: async () => null,
+  reload: async () => undefined,
 };
 
 const disconnectedCatalog = {
@@ -114,6 +115,7 @@ describe("provider settings", () => {
     expect(screen.getByText("顯示模型名稱")).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "自動選擇可用模型" })).toBeNull();
     expect(screen.queryByRole("checkbox", { name: "顯示模型名稱" })).toBeNull();
+    await waitFor(() => expect((screen.getAllByRole("button", { name: "連接" })[0] as HTMLButtonElement).disabled).toBe(false));
   });
 
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {

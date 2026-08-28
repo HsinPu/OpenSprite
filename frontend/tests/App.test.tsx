@@ -1,11 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../src/app/App";
 
 beforeEach(() => {
   vi.unstubAllGlobals();
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
   window.history.replaceState(null, "", "/");
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value(this: HTMLDialogElement) { this.open = true; },
@@ -16,6 +18,28 @@ beforeEach(() => {
       this.open = false;
       this.dispatchEvent(new Event("close"));
     },
+  });
+});
+
+describe("mobile navigation accessibility", () => {
+  it("removes the closed drawer from interaction and isolates page content while open", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const { container } = render(<App />);
+    const sidebar = container.querySelector(".main-sidebar")!;
+    const main = container.querySelector("main")!;
+
+    expect(sidebar.hasAttribute("inert")).toBe(true);
+    expect(sidebar.getAttribute("aria-hidden")).toBe("true");
+    expect(main.hasAttribute("inert")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
+    expect(sidebar.hasAttribute("inert")).toBe(false);
+    expect(sidebar.hasAttribute("aria-hidden")).toBe(false);
+    expect(main.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "關閉主選單" })[0]!);
+    expect(sidebar.hasAttribute("inert")).toBe(true);
+    expect(main.hasAttribute("inert")).toBe(false);
   });
 });
 
@@ -41,6 +65,7 @@ describe("settings dialog focus restoration", () => {
   it.each([[1440], [390]])("returns focus to the actual settings opener at %ipx after close", async (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     render(<App />);
+    if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
     const opener = screen.getByRole("button", { name: "設定" });
     fireEvent.click(opener);
     fireEvent.click(screen.getByRole("button", { name: "關閉設定" }));
@@ -51,12 +76,15 @@ describe("settings dialog focus restoration", () => {
   it.each([[1440], [390]])("returns focus to the opener after native-dialog Escape at %ipx", async (width) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     const { container } = render(<App />);
+    if (width <= 900) fireEvent.click(screen.getByRole("button", { name: "開啟主選單" }));
     const opener = screen.getByRole("button", { name: "設定" });
     fireEvent.click(opener);
     const dialog = container.querySelector("dialog")!;
     const cancel = new Event("cancel", { cancelable: true });
-    dialog.dispatchEvent(cancel);
-    if (!cancel.defaultPrevented) dialog.close();
+    act(() => {
+      dialog.dispatchEvent(cancel);
+      if (!cancel.defaultPrevented) dialog.close();
+    });
 
     await waitFor(() => expect(document.activeElement).toBe(opener));
   });
@@ -205,6 +233,7 @@ describe("persisted AI settings", () => {
 describe("conversation navigation", () => {
   it("renders backend conversations and uses only their UUID in the URL hash", async () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
@@ -215,6 +244,16 @@ describe("conversation navigation", () => {
           latestMessagePreview: "整理本週完成項目",
           createdAt: "2026-08-22T08:00:00Z",
           updatedAt: "2026-08-22T08:30:00Z",
+        }],
+        nextCursor: "older-cursor",
+      })));
+      if (path === "/api/conversations?limit=50&before=older-cursor") return Promise.resolve(new Response(JSON.stringify({
+        conversations: [{
+          id: olderConversationId,
+          title: "較早的對話",
+          latestMessagePreview: "舊內容",
+          createdAt: "2026-08-01T08:00:00Z",
+          updatedAt: "2026-08-01T08:30:00Z",
         }],
         nextCursor: null,
       })));
@@ -229,6 +268,9 @@ describe("conversation navigation", () => {
     await waitFor(() => expect(window.location.hash).toBe(`#chat=${conversationId}`));
     expect(screen.getByRole("heading", { level: 1, name: "回顧進度" })).toBeTruthy();
     expect(window.location.hash).not.toContain("回顧進度");
+
+    fireEvent.click(screen.getByRole("button", { name: "載入更多對話" }));
+    expect(await screen.findByRole("button", { name: "較早的對話" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "新對話" }));
     expect(window.location.hash).toBe("#new-chat");

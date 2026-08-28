@@ -19,6 +19,7 @@ export type GeneralSettingsController = {
   error: string | null;
   saveLocale: (locale: Locale) => Promise<string | null>;
   saveTimeZone: (timeZone: TimeZoneSetting) => Promise<string | null>;
+  reload: () => Promise<void>;
 };
 
 export function useGeneralSettings(): GeneralSettingsController {
@@ -30,24 +31,34 @@ export function useGeneralSettings(): GeneralSettingsController {
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
+  const translatorRef = useRef(t);
 
   useEffect(() => {
+    translatorRef.current = t;
+  }, [t]);
+
+  const reload = useCallback(async (): Promise<void> => {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
-    void getGeneralSettings()
-      .then((saved) => {
-        if (loadGenerationRef.current !== generation) return;
-        setSettings(saved);
-        setLocale(saved.locale);
-        setLoaded(true);
-        setError(null);
-      })
-      .catch((loadError: unknown) => {
-        if (loadGenerationRef.current !== generation) return;
-        setLoaded(false);
-        setError(generalSettingsErrorText(loadError, t));
-      });
-  }, []);
+    setLoaded(false);
+    setError(null);
+    try {
+      const saved = await getGeneralSettings();
+      if (loadGenerationRef.current !== generation) return;
+      setSettings(saved);
+      setLocale(saved.locale);
+      setLoaded(true);
+      setError(null);
+    } catch (loadError) {
+      if (loadGenerationRef.current !== generation) return;
+      setLoaded(false);
+      setError(generalSettingsErrorText(loadError, translatorRef.current));
+    }
+  }, [setLocale]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const save = useCallback((next: GeneralSettings): Promise<string | null> => {
     loadGenerationRef.current += 1;
@@ -81,5 +92,5 @@ export function useGeneralSettings(): GeneralSettingsController {
   const saveLocale = useCallback((locale: Locale) => save({ ...settings, locale }), [save, settings]);
   const saveTimeZone = useCallback((timeZone: TimeZoneSetting) => save({ ...settings, timeZone }), [save, settings]);
 
-  return { settings, loaded, saving, error, saveLocale, saveTimeZone };
+  return { settings, loaded, saving, error, saveLocale, saveTimeZone, reload };
 }

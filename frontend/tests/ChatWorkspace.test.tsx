@@ -53,10 +53,13 @@ describe("live chat workspace", () => {
       events,
       streamedText: "正在整理",
       loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
       error: null,
       isRunning: true,
       send: vi.fn(async () => true),
       cancel,
+      loadOlderMessages: vi.fn(async () => undefined),
     });
 
     render(
@@ -94,10 +97,13 @@ describe("live chat workspace", () => {
       events: [],
       streamedText: "",
       loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
       error: null,
       isRunning: false,
       send: vi.fn(async () => true),
       cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
     });
 
     render(
