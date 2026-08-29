@@ -453,6 +453,7 @@ describe("provider settings", () => {
     fireEvent.click(within(openRouterActions).getByRole("button", { name: "移除" }));
     const confirmation = await screen.findByText("移除 OpenRouter 的已儲存 API 金鑰？");
     const popover = confirmation.closest(".ant-popover")!;
+    expect(document.querySelector(".settings-page")?.contains(popover)).toBe(true);
     fireEvent.click(within(popover as HTMLElement).getByRole("button", { name: /移\s*除/ }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6"));
