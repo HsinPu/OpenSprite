@@ -23,12 +23,13 @@ const generalSettings: GeneralSettingsController = {
 const saveStartupView = vi.fn(async () => null);
 const saveSendBehavior = vi.fn(async () => null);
 const conversationSettings: ConversationSettingsController = {
-  settings: { startupView: "new", sendBehavior: "enter" },
+  settings: { startupView: "new", sendBehavior: "enter", autoScroll: true },
   loaded: true,
   saving: false,
   error: null,
   saveStartupView,
   saveSendBehavior,
+  saveAutoScroll: async () => null,
   reload: async () => undefined,
 };
 

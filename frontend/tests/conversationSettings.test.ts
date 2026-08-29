@@ -11,25 +11,27 @@ afterEach(() => vi.unstubAllGlobals());
 
 
 describe("conversation settings API", () => {
-  it("reads and writes only the strict startup and send shape", async () => {
+  it("reads and writes only the strict startup, send and auto-scroll shape", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter" })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "modifier-enter" })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ startupView: "new", sendBehavior: "enter", autoScroll: true })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "modifier-enter", autoScroll: false })));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(getConversationSettings()).resolves.toEqual({ startupView: "new", sendBehavior: "enter" });
-    await expect(putConversationSettings({ startupView: "recent", sendBehavior: "modifier-enter" })).resolves.toEqual({ startupView: "recent", sendBehavior: "modifier-enter" });
+    await expect(getConversationSettings()).resolves.toEqual({ startupView: "new", sendBehavior: "enter", autoScroll: true });
+    await expect(putConversationSettings({ startupView: "recent", sendBehavior: "modifier-enter", autoScroll: false })).resolves.toEqual({ startupView: "recent", sendBehavior: "modifier-enter", autoScroll: false });
     expect(fetchMock).toHaveBeenLastCalledWith("/api/settings/conversation", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startupView: "recent", sendBehavior: "modifier-enter" }),
+      body: JSON.stringify({ startupView: "recent", sendBehavior: "modifier-enter", autoScroll: false }),
     });
   });
 
   it.each([
-    { startupView: "last", sendBehavior: "enter" },
-    { startupView: "new", sendBehavior: "shift-enter" },
-    { startupView: "new", sendBehavior: "enter", extra: true },
+    { startupView: "last", sendBehavior: "enter", autoScroll: true },
+    { startupView: "new", sendBehavior: "shift-enter", autoScroll: true },
+    { startupView: "new", sendBehavior: "enter" },
+    { startupView: "new", sendBehavior: "enter", autoScroll: "yes" },
+    { startupView: "new", sendBehavior: "enter", autoScroll: true, extra: true },
   ])("rejects malformed responses", async (body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
     await expect(getConversationSettings()).rejects.toBeInstanceOf(ConversationSettingsApiError);

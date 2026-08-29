@@ -19,7 +19,7 @@ def test_contract_and_generated_openapi_have_exact_conversation_shape() -> None:
     contract_schema = contract["components"]["schemas"]["ConversationSettings"]
     generated_schema = generated["components"]["schemas"]["ConversationSettings"]
 
-    assert contract_schema["required"] == ["startupView", "sendBehavior"]
+    assert contract_schema["required"] == ["startupView", "sendBehavior", "autoScroll"]
     assert generated_schema["required"] == contract_schema["required"]
     assert generated_schema["properties"]["startupView"]["enum"] == [
         "new",
@@ -29,6 +29,7 @@ def test_contract_and_generated_openapi_have_exact_conversation_shape() -> None:
         "enter",
         "modifier-enter",
     ]
+    assert generated_schema["properties"]["autoScroll"] == {"type": "boolean", "title": "Autoscroll"}
     assert set(contract["paths"]) == {"/api/settings/conversation"}
     assert generated["paths"]["/api/settings/conversation"]["get"][
         "operationId"

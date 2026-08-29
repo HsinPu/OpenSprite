@@ -253,7 +253,7 @@ describe("conversation navigation", () => {
   ])("keeps an explicit startup URL instead of applying the recent preference (%s)", async (hash, explicitConversationId) => {
     window.history.replaceState(null, "", hash);
     const fetchMock = vi.fn((path: string) => {
-      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter" })));
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
@@ -274,7 +274,7 @@ describe("conversation navigation", () => {
   it("opens the most recently updated conversation when startup preference is recent", async () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter" })));
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));

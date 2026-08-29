@@ -12,7 +12,7 @@ from .app_paths import AppPaths
 from .models import ConversationSettings
 
 
-_SCHEMA_VERSION: Final = 1
+_SCHEMA_VERSION: Final = 2
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
 
 
@@ -36,7 +36,11 @@ class ConversationSettingsOperations(Protocol):
 
 
 def default_conversation_settings() -> ConversationSettings:
-    return ConversationSettings(startupView="new", sendBehavior="enter")
+    return ConversationSettings(
+        startupView="new",
+        sendBehavior="enter",
+        autoScroll=True,
+    )
 
 
 class JsonConversationSettingsStore:
@@ -95,7 +99,7 @@ class JsonConversationSettingsStore:
     def _decode(raw: object) -> ConversationSettings:
         if (
             type(raw) is not dict
-            or set(raw) != {"version", "startupView", "sendBehavior"}
+            or set(raw) != {"version", "startupView", "sendBehavior", "autoScroll"}
             or type(raw["version"]) is not int
             or raw["version"] != _SCHEMA_VERSION
         ):
@@ -105,6 +109,7 @@ class JsonConversationSettingsStore:
                 {
                     "startupView": raw["startupView"],
                     "sendBehavior": raw["sendBehavior"],
+                    "autoScroll": raw["autoScroll"],
                 }
             )
         except Exception:

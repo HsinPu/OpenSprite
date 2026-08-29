@@ -23,10 +23,12 @@ from opensprite_backend.models import ConversationSettings
 def settings(
     startup_view: str = "new",
     send_behavior: str = "enter",
+    auto_scroll: bool = True,
 ) -> ConversationSettings:
     return ConversationSettings(  # type: ignore[arg-type]
         startupView=startup_view,
         sendBehavior=send_behavior,
+        autoScroll=auto_scroll,
     )
 
 
@@ -36,16 +38,17 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
 
     assert store.get() == settings()
     assert not paths.home.exists()
-    saved = settings("recent", "modifier-enter")
+    saved = settings("recent", "modifier-enter", False)
     store.set(saved)
 
     assert store.get() == saved
     assert json.loads(
         paths.conversation_settings_file.read_text(encoding="utf-8")
     ) == {
-        "version": 1,
+        "version": 2,
         "startupView": "recent",
         "sendBehavior": "modifier-enter",
+        "autoScroll": False,
     }
     assert sorted(
         path.relative_to(paths.home).as_posix()
@@ -58,11 +61,13 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     [
         "not-json",
         "{}",
-        '{"version":1,"startupView":"new","sendBehavior":"enter","extra":true}',
-        '{"version":1,"version":1,"startupView":"new","sendBehavior":"enter"}',
+        '{"version":2,"startupView":"new","sendBehavior":"enter","autoScroll":true,"extra":true}',
+        '{"version":2,"version":2,"startupView":"new","sendBehavior":"enter","autoScroll":true}',
+        '{"version":1,"startupView":"new","sendBehavior":"enter","autoScroll":true}',
         '{"version":2,"startupView":"new","sendBehavior":"enter"}',
-        '{"version":1,"startupView":"last","sendBehavior":"enter"}',
-        '{"version":1,"startupView":"new","sendBehavior":"shift-enter"}',
+        '{"version":2,"startupView":"last","sendBehavior":"enter","autoScroll":true}',
+        '{"version":2,"startupView":"new","sendBehavior":"shift-enter","autoScroll":true}',
+        '{"version":2,"startupView":"new","sendBehavior":"enter","autoScroll":1}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -99,7 +104,7 @@ def test_atomic_failure_cleans_temp_and_preserves_old_data(
 
     monkeypatch.setattr(os, "replace", fail_replace)
     with pytest.raises(ConversationSettingsStoreError):
-        store.set(settings("recent", "modifier-enter"))
+        store.set(settings("recent", "modifier-enter", False))
 
     assert path.read_bytes() == before
     assert list(path.parent.glob("*.tmp")) == []
@@ -115,17 +120,18 @@ def test_service_api_validation_and_same_origin(tmp_path: Path) -> None:
         initial = client.get("/api/settings/conversation")
         saved = client.put(
             "/api/settings/conversation",
-            json={"startupView": "recent", "sendBehavior": "modifier-enter"},
+            json={"startupView": "recent", "sendBehavior": "modifier-enter", "autoScroll": False},
         )
         invalid = client.put(
             "/api/settings/conversation",
-            json={"startupView": "last", "sendBehavior": "enter"},
+            json={"startupView": "last", "sendBehavior": "enter", "autoScroll": True},
         )
 
-    assert initial.json() == {"startupView": "new", "sendBehavior": "enter"}
+    assert initial.json() == {"startupView": "new", "sendBehavior": "enter", "autoScroll": True}
     assert saved.json() == {
         "startupView": "recent",
         "sendBehavior": "modifier-enter",
+        "autoScroll": False,
     }
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_request"
@@ -138,7 +144,7 @@ def test_service_api_validation_and_same_origin(tmp_path: Path) -> None:
         rejected = client.put(
             "/api/settings/conversation",
             headers={"Origin": "http://evil.example"},
-            json={"startupView": "new", "sendBehavior": "enter"},
+            json={"startupView": "new", "sendBehavior": "enter", "autoScroll": True},
         )
     assert rejected.status_code == 400
 

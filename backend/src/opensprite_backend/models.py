@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
@@ -148,11 +148,13 @@ class PutGeneralSettingsRequest(ContractModel):
 class ConversationSettings(ContractModel):
     startupView: StartupView
     sendBehavior: SendBehavior
+    autoScroll: StrictBool
 
 
 class PutConversationSettingsRequest(ContractModel):
     startupView: StartupView
     sendBehavior: SendBehavior
+    autoScroll: StrictBool
 
 
 class ErrorCode(StrEnum):

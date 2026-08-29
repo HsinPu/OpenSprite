@@ -47,7 +47,8 @@ The conversation settings contract covers:
 
 - choosing a new or most-recent conversation at application startup;
 - choosing Enter or Ctrl/Cmd+Enter message sending behavior;
-- atomically replacing both values from fixed supported catalogs.
+- enabling or disabling automatic following of new chat output;
+- atomically replacing all three values.
 
 The agent chat contract covers:
 

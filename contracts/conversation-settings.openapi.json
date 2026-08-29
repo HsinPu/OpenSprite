@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenSprite local conversation settings API",
     "version": "0.1.0-draft",
-    "description": "Authoritative HTTP contract for persisted startup and message sending behavior."
+    "description": "Authoritative HTTP contract for persisted startup, message sending and chat auto-scroll behavior."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [],
@@ -17,7 +17,7 @@
     "policy": "This independent resource does not alter or migrate General Settings."
   },
   "x-events": {"supported": false},
-  "tags": [{"name": "conversation-settings", "description": "Persisted startup and message sending behavior."}],
+  "tags": [{"name": "conversation-settings", "description": "Persisted startup, message sending and chat auto-scroll behavior."}],
   "paths": {
     "/api/settings/conversation": {
       "get": {
@@ -51,10 +51,11 @@
       "ConversationSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["startupView", "sendBehavior"],
+        "required": ["startupView", "sendBehavior", "autoScroll"],
         "properties": {
           "startupView": {"$ref": "#/components/schemas/StartupView"},
-          "sendBehavior": {"$ref": "#/components/schemas/SendBehavior"}
+          "sendBehavior": {"$ref": "#/components/schemas/SendBehavior"},
+          "autoScroll": {"type": "boolean"}
         }
       },
       "ErrorCode": {"type": "string", "enum": ["invalid_request", "settings_store_unavailable", "internal_error"]},
