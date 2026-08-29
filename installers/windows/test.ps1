@@ -4,6 +4,32 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Remove-DirectoryWithRetry([string]$Path, [int]$Attempts = 120) {
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq $Attempts) { throw }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+}
+
+function Move-FileWithRetry([string]$Path, [string]$Destination, [int]$Attempts = 120) {
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Move-Item -LiteralPath $Path -Destination $Destination -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq $Attempts) { throw }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+}
+
 $installScript = Join-Path $PSScriptRoot "install.ps1"
 $uninstallScript = Join-Path $PSScriptRoot "uninstall.ps1"
 $launchScript = Join-Path $PSScriptRoot "launch.ps1"
@@ -23,6 +49,7 @@ if (-not $testRoot.StartsWith($tempRoot + "\", [System.StringComparison]::Ordina
 }
 $installRoot = Join-Path $testRoot "app"
 $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+$quarantinedRuntimes = @()
 try {
     & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -AllowCustomInstallRoot -SkipStartupRegistration -NoStart | Out-Null
     foreach ($required in @(
@@ -43,6 +70,13 @@ try {
     & $python -c "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()"
     if ($LASTEXITCODE -ne 0) { throw "Installed Python runtime check failed." }
 
+    $nativeRuntimeBinaries = @(Get-ChildItem -LiteralPath (Join-Path $installRoot "backend\.venv") -File -Recurse -Filter "*.pyd")
+    foreach ($nativeRuntimeBinary in $nativeRuntimeBinaries) {
+        $quarantinedRuntime = Join-Path $tempRoot ("OpenSprite-installer-quarantine-" + [Guid]::NewGuid().ToString("N") + ".pyd")
+        Move-FileWithRetry $nativeRuntimeBinary.FullName $quarantinedRuntime
+        $quarantinedRuntimes += $quarantinedRuntime
+    }
+
     & $uninstallScript -InstallRoot $installRoot -AllowCustomInstallRoot -StartupName ("OpenSprite-Test-" + [Guid]::NewGuid().ToString("N")) -Confirm:$false | Out-Null
     if (Test-Path -LiteralPath $installRoot) {
         throw "Isolated uninstall did not remove the application root."
@@ -51,7 +85,13 @@ try {
 finally {
     if (Test-Path -LiteralPath $testRoot) {
         if (-not $testRoot.StartsWith($tempRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) { throw "Refusing unsafe test cleanup." }
-        Remove-Item -LiteralPath $testRoot -Recurse -Force
+        Remove-DirectoryWithRetry $testRoot
+    }
+    foreach ($quarantinedRuntime in $quarantinedRuntimes) {
+        if (Test-Path -LiteralPath $quarantinedRuntime) {
+            try { Remove-Item -LiteralPath $quarantinedRuntime -Force -ErrorAction Stop }
+            catch { Write-Warning "Windows still holds an isolated native test binary: $quarantinedRuntime" }
+        }
     }
 }
 

@@ -15,6 +15,18 @@ removing any legacy installation or user data.
   a guarded hidden PowerShell launcher, and verifies health plus the browser index.
 - Added rollback of the application directory for dependency, startup registration, launch or
   health failure.
+- Existing installations stop only their path-matched installed runtime before
+  application-directory replacement, allowing Windows venv files to move safely.
+- Runtime stop tolerates an already-exited matching child, and failed cutover
+  restores the previous Run value and relaunches the prior installed app.
+- Successful cutover retries transient rollback-directory locks and does not
+  undo a healthy new installation solely because cleanup is temporarily locked.
+- Frontend-path validation no longer imports system composition or cryptography;
+  uninstall and isolation cleanup retry transient Windows DLL scan locks.
+- The isolation test quarantines production `.pyd` binaries before exercising
+  full-root uninstall because this host's security scanner can retain newly
+  created native modules after every process has exited. A remaining quarantine
+  emits an explicit warning rather than a false cleanup claim.
 - Added a guarded uninstaller that preserves `.opensprite` unless explicit
   permanent data removal is requested.
 - Scheduled Task registration was rejected by this non-admin Windows account;
@@ -36,3 +48,6 @@ removing any legacy installation or user data.
 - All Windows PowerShell files passed the parser.
 - The isolated Windows build/install/uninstall test passed outside the official
   application and user-data roots.
+- A live application update preserved encrypted credentials and the current
+  SQLite database, restarted healthy on port 8765, and removed the prior app
+  tree after a short service stop released the final Windows DLL lock.

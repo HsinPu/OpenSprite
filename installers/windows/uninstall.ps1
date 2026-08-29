@@ -24,6 +24,19 @@ function Test-SamePath([string]$Left, [string]$Right) {
     )
 }
 
+function Remove-DirectoryWithRetry([string]$Path, [int]$Attempts = 120) {
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq $Attempts) { throw }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+}
+
 $installRootPath = Resolve-AbsolutePath $InstallRoot
 $dataRootPath = Resolve-AbsolutePath $DataRoot
 $expectedInstallRoot = Resolve-AbsolutePath (Join-Path $env:LOCALAPPDATA "OpenSprite\app")
@@ -49,10 +62,10 @@ Get-CimInstance Win32_Process | Where-Object {
 }
 
 if ((Test-Path -LiteralPath $installRootPath) -and $PSCmdlet.ShouldProcess($installRootPath, "Remove OpenSprite application files")) {
-    Remove-Item -LiteralPath $installRootPath -Recurse -Force
+    Remove-DirectoryWithRetry $installRootPath
 }
 if ($RemoveUserData -and (Test-Path -LiteralPath $dataRootPath) -and $PSCmdlet.ShouldProcess($dataRootPath, "Permanently remove all OpenSprite user data")) {
-    Remove-Item -LiteralPath $dataRootPath -Recurse -Force
+    Remove-DirectoryWithRetry $dataRootPath
 }
 
 $remainingStartup = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -ErrorAction SilentlyContinue

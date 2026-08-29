@@ -69,7 +69,25 @@ function Stop-InstalledRuntime([string]$Root) {
     $escapedRoot = [Regex]::Escape($Root)
     Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -match $escapedRoot -and $_.CommandLine -match "opensprite_backend\.installed_runtime"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+function Remove-DirectoryWithRetry([string]$Path, [string]$Parent, [int]$Attempts = 120) {
+    Assert-ChildPath $Path $Parent
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            return $true
+        }
+        catch {
+            if ($attempt -eq $Attempts) {
+                Write-Warning "Installed successfully, but a temporary rollback directory remains locked: $Path"
+                return $false
+            }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    return $false
 }
 
 function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 20) {
@@ -117,6 +135,8 @@ $previousRoot = Join-Path $installParent (".app-previous-" + [Guid]::NewGuid().T
 $hadPreviousInstall = Test-Path -LiteralPath $installRootPath
 $previousStartupValue = Get-OpenSpriteStartup $StartupName
 $installedNewRoot = $false
+$cutoverStarted = $false
+$previousCleanupComplete = $true
 
 if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite")) {
     return
@@ -151,7 +171,11 @@ try {
         throw "Frontend build did not produce dist/index.html."
     }
 
-    if (-not $SkipStartupRegistration) { Remove-OpenSpriteStartup $StartupName }
+    if (-not $SkipStartupRegistration) {
+        $cutoverStarted = $true
+        Remove-OpenSpriteStartup $StartupName
+        if ($hadPreviousInstall) { Stop-InstalledRuntime $installRootPath }
+    }
     if ($hadPreviousInstall) { Move-Item -LiteralPath $installRootPath -Destination $previousRoot }
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
@@ -171,18 +195,19 @@ try {
     }
 
     if (Test-Path -LiteralPath $previousRoot) {
-        Assert-ChildPath $previousRoot $installParent
-        Remove-Item -LiteralPath $previousRoot -Recurse -Force
+        $previousCleanupComplete = Remove-DirectoryWithRetry $previousRoot $installParent
     }
     [pscustomobject]@{
         InstallRoot = $installRootPath
         StartupName = if ($SkipStartupRegistration) { $null } else { $StartupName }
         Started = -not $NoStart
+        PreviousCleanupComplete = $previousCleanupComplete
         Url = "http://127.0.0.1:$Port/"
     }
 }
 catch {
-    if (-not $SkipStartupRegistration) {
+    $failure = $_
+    if (-not $SkipStartupRegistration -and $cutoverStarted) {
         Remove-OpenSpriteStartup $StartupName
         Stop-InstalledRuntime $installRootPath
     }
@@ -192,11 +217,14 @@ catch {
     }
     if (Test-Path -LiteralPath $previousRoot) {
         Move-Item -LiteralPath $previousRoot -Destination $installRootPath
-        if (-not $SkipStartupRegistration -and $null -ne $previousStartupValue) {
-            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue
+    }
+    if (-not $SkipStartupRegistration -and $cutoverStarted -and $null -ne $previousStartupValue -and (Test-Path -LiteralPath $installRootPath)) {
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue
+        if (-not $NoStart) {
+            & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port
         }
     }
-    throw
+    throw $failure
 }
 finally {
     if (Test-Path -LiteralPath $stagingRoot) {

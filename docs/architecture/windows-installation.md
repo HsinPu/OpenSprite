@@ -33,6 +33,18 @@ moved after creation.
 An existing application root is held in a temporary rollback directory. Startup
 registration, launch and health failure remove the new root and restore the
 previous root. The rollback root is deleted only after success.
+Before replacing an existing root, the installer removes its Run entry and
+stops only a process whose command line contains both that resolved install root
+and the installed-runtime module. Process exit is idempotent when a parent stop
+causes a matching child to exit. If cutover fails before or after directory
+replacement, the previous Run value and prior installed runtime are restored.
+After a successful health check, rollback-directory deletion uses bounded retry
+for transient DLL or antivirus locks. Exhausted cleanup reports a warning but
+does not tear down the already-healthy new installation.
+The installed factory resolves frontend paths without importing system
+composition; backend, inference and cryptography modules are loaded only when
+the ASGI app is actually composed. Uninstall and isolation cleanup use the same
+bounded strategy for transient Windows DLL scanning locks.
 
 ## Background lifecycle
 

@@ -6,9 +6,6 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from .runtime import create_system_app
-
-
 SystemAppFactory = Callable[[], FastAPI]
 
 
@@ -23,7 +20,7 @@ def default_frontend_dist() -> Path:
 def create_installed_app(
     *,
     frontend_dist: str | Path | None = None,
-    system_app_factory: SystemAppFactory = create_system_app,
+    system_app_factory: SystemAppFactory | None = None,
 ) -> FastAPI:
     """Create the secured local runtime with the built frontend mounted last."""
 
@@ -35,7 +32,12 @@ def create_installed_app(
     if not dist.is_dir() or not (dist / "index.html").is_file():
         raise RuntimeError("OpenSprite frontend distribution is unavailable.")
 
-    app = system_app_factory()
+    factory = system_app_factory
+    if factory is None:
+        from .runtime import create_system_app
+
+        factory = create_system_app
+    app = factory()
     app.mount(
         "/",
         StaticFiles(directory=dist, html=True, check_dir=True),
