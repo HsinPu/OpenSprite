@@ -70,7 +70,14 @@ class RecordingProviderConnections:
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
         return OpenRouterModelListResponse(
-            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+            models=[
+                OpenRouterModel(
+                    id="openai/gpt-4",
+                    name="GPT-4",
+                    contextWindowTokens=8192,
+                    maxOutputTokens=4096,
+                )
+            ]
         )
 
     async def connect(
@@ -491,7 +498,16 @@ def test_openrouter_model_discovery_returns_fixed_model_shape() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json() == {"models": [{"id": "openai/gpt-4", "name": "GPT-4"}]}
+    assert response.json() == {
+        "models": [
+            {
+                "id": "openai/gpt-4",
+                "name": "GPT-4",
+                "contextWindowTokens": 8192,
+                "maxOutputTokens": 4096,
+            }
+        ]
+    }
 
 
 def test_delete_is_no_content() -> None:

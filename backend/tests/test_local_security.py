@@ -49,7 +49,7 @@ class RecordingConnections:
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
         self.models_calls += 1
         return OpenRouterModelListResponse(
-            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4", contextWindowTokens=8192, maxOutputTokens=4096)]
         )
 
     async def connect(

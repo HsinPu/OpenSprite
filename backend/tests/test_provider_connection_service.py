@@ -150,7 +150,7 @@ class FakeValidator:
         if self.failure is not None:
             raise ProviderValidationError(self.failure)
         return OpenRouterModelListResponse(
-            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+            models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4", contextWindowTokens=8192, maxOutputTokens=4096)]
         )
 
 
@@ -367,7 +367,7 @@ def test_openrouter_model_discovery_serializes_with_disconnect() -> None:
             self.started.set()
             await self.release.wait()
             return OpenRouterModelListResponse(
-                models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4")]
+                models=[OpenRouterModel(id="openai/gpt-4", name="GPT-4", contextWindowTokens=8192, maxOutputTokens=4096)]
             )
 
     async def scenario() -> None:

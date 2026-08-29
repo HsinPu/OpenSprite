@@ -62,7 +62,12 @@ def test_public_summary_and_error_fields_are_fixed() -> None:
         "message",
         "retryable",
     ]
-    assert schemas["OpenRouterModel"]["required"] == ["id", "name"]
+    assert schemas["OpenRouterModel"]["required"] == [
+        "id",
+        "name",
+        "contextWindowTokens",
+        "maxOutputTokens",
+    ]
     assert schemas["OpenRouterModel"]["additionalProperties"] is False
     assert schemas["OpenRouterModelListResponse"]["required"] == ["models"]
     assert schemas["OpenRouterModelListResponse"]["properties"]["models"][

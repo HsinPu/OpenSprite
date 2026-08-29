@@ -26,6 +26,8 @@ const disconnectedOpenAi = {
   lastCheckedAt: null,
 };
 
+const capability = { contextWindowTokens: 131_072, maxOutputTokens: 8_192 };
+
 describe("provider connection client", () => {
   it("validates the fixed catalog order and sends only the contracted request shapes", async () => {
     const fetchMock = vi.fn()
@@ -49,13 +51,13 @@ describe("provider connection client", () => {
   });
 
   it("posts without a body for the OpenRouter model catalog and validates its exact shape", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6" }] })));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6", ...capability }] })));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(listOpenRouterModels()).resolves.toEqual([{ id: "openai/gpt-5.6", name: "GPT-5.6" }]);
+    await expect(listOpenRouterModels()).resolves.toEqual([{ id: "openai/gpt-5.6", name: "GPT-5.6", ...capability }]);
     expect(fetchMock).toHaveBeenCalledWith("/api/providers/openrouter/models", { method: "POST" });
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6", extra: true }] }))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "openai/gpt-5.6", name: "GPT-5.6", ...capability, extra: true }] }))));
     await expect(listOpenRouterModels()).rejects.toMatchObject({ code: "malformed_response" });
   });
 
@@ -71,10 +73,10 @@ describe("provider connection client", () => {
 
   it("counts OpenRouter model identifiers by Unicode code point", async () => {
     const accepted = "😀".repeat(256);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: accepted, name: "name" }] }))));
-    await expect(listOpenRouterModels()).resolves.toEqual([{ id: accepted, name: "name" }]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: accepted, name: "name", ...capability }] }))));
+    await expect(listOpenRouterModels()).resolves.toEqual([{ id: accepted, name: "name", ...capability }]);
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "😀".repeat(257), name: "name" }] }))));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [{ id: "😀".repeat(257), name: "name", ...capability }] }))));
     await expect(listOpenRouterModels()).rejects.toMatchObject({ code: "malformed_response" });
   });
 

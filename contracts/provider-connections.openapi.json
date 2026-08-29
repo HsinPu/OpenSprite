@@ -289,7 +289,9 @@
                   "models": [
                     {
                       "id": "openai/gpt-4",
-                      "name": "GPT-4"
+                      "name": "GPT-4",
+                      "contextWindowTokens": 8192,
+                      "maxOutputTokens": 4096
                     }
                   ]
                 }
@@ -457,7 +459,7 @@
       "OpenRouterModel": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name"],
+        "required": ["id", "name", "contextWindowTokens", "maxOutputTokens"],
         "properties": {
           "id": {
             "type": "string",
@@ -470,6 +472,19 @@
             "minLength": 1,
             "maxLength": 256,
             "description": "Display-only OpenRouter model name."
+          },
+          "contextWindowTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000000,
+            "description": "OpenRouter-reported total context window for this model."
+          },
+          "maxOutputTokens": {
+            "anyOf": [
+              {"type": "integer", "minimum": 1, "maximum": 4000000},
+              {"type": "null"}
+            ],
+            "description": "OpenRouter-reported maximum completion size when available."
           }
         }
       },

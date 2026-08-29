@@ -149,13 +149,13 @@ describe("persisted AI settings", () => {
     render(<App />);
 
     const modelPicker = await screen.findByRole("combobox", { name: /尚未選擇模型/ });
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
     hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "deep" })));
 
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "default" }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "default" }),
     });
   });
 
@@ -163,7 +163,7 @@ describe("persisted AI settings", () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" })));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "balanced" })));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -174,10 +174,10 @@ describe("persisted AI settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
-    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 mini" })).toBeTruthy());
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
-    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-mini"])));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-mini" }, responseMode: "balanced" }) });
+    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 Luna" })).toBeTruthy());
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
+    await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "balanced" }) });
   });
 
   it("keeps the confirmed model when the PUT fails", async () => {
@@ -194,8 +194,8 @@ describe("persisted AI settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "設定" }));
     fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
     await screen.findAllByText("OpenAI");
-    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 mini" })).toBeTruthy());
-    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-mini"]) } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 Luna" })).toBeTruthy());
+    fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
     expect((await screen.findByRole("alert")).textContent).toContain("尚未連線");
     expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
   });

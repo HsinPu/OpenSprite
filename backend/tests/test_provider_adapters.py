@@ -115,10 +115,12 @@ def test_openrouter_model_discovery_uses_exact_endpoint_and_bearer_only() -> Non
             200,
             json={
                 "data": [
-                    {
-                        "id": "openai/gpt-4",
-                        "name": "GPT-4",
-                        "architecture": {
+                        {
+                            "id": "openai/gpt-4",
+                            "name": "GPT-4",
+                            "context_length": 8192,
+                            "top_provider": {"max_completion_tokens": 4096},
+                            "architecture": {
                             "input_modalities": ["text"],
                             "output_modalities": ["text"],
                         },
@@ -158,9 +160,9 @@ def test_openrouter_model_discovery_skips_invalid_records_deduplicates_and_sorts
     payload = {
         "data": [
             {"id": "skip/not-text", "name": "Skip", "architecture": {"input_modalities": ["image"], "output_modalities": ["text"]}},
-            {"id": "z/model", "name": "alpha", "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
-            {"id": "a/model", "name": "Alpha", "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
-            {"id": "z/model", "name": "Changed duplicate", "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
+            {"id": "z/model", "name": "alpha", "context_length": 131072, "top_provider": {"max_completion_tokens": 8192}, "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
+            {"id": "a/model", "name": "Alpha", "context_length": 65536, "top_provider": {"max_completion_tokens": 4096}, "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
+            {"id": "z/model", "name": "Changed duplicate", "context_length": 32768, "architecture": {"input_modalities": ["text"], "output_modalities": ["text"]}},
             {"id": "missing/architecture", "name": "Skip"},
         ]
     }
@@ -176,6 +178,11 @@ def test_openrouter_model_discovery_skips_invalid_records_deduplicates_and_sorts
             ("a/model", "Alpha"),
             ("z/model", "alpha"),
         ]
+        assert [model.context_window_tokens for model in result.models] == [
+            65536,
+            131072,
+        ]
+        assert [model.max_output_tokens for model in result.models] == [4096, 8192]
 
     run(scenario())
 
@@ -218,6 +225,8 @@ def test_openrouter_model_discovery_enforces_model_count_limit(count: int) -> No
         {
             "id": f"provider/model-{index}",
             "name": f"Model {index:04d}",
+            "context_length": 131072,
+            "top_provider": {"max_completion_tokens": 8192},
             "architecture": {
                 "input_modalities": ["text"],
                 "output_modalities": ["text"],
@@ -299,7 +308,8 @@ def test_openrouter_model_discovery_enforces_exact_response_limit(
     extra_bytes: int,
 ) -> None:
     payload = (
-        b'{"data":[{"id":"a","name":"A","architecture":'
+        b'{"data":[{"id":"a","name":"A","context_length":8192,'
+        b'"top_provider":{"max_completion_tokens":4096},"architecture":'
         b'{"input_modalities":["text"],"output_modalities":["text"]}}]}'
     )
     payload += b" " * (

@@ -74,6 +74,13 @@ const connectedOpenAiAndOpenRouterCatalog = {
   ],
 };
 
+const dynamicModel = (id: string, name: string) => ({
+  id,
+  name,
+  contextWindowTokens: 131_072,
+  maxOutputTokens: 8_192,
+});
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -254,7 +261,7 @@ describe("provider settings", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expect((screen.getByLabelText("模型") as HTMLInputElement).closest(".ant-select")?.className).not.toContain("ant-select-disabled");
     fireEvent.mouseDown(screen.getByLabelText("模型"));
-    expect(screen.queryByText("Claude Sonnet 4")).toBeNull();
+    expect(screen.queryByText("Claude Sonnet 4.6")).toBeNull();
   });
 
   it("keeps per-provider operations independent and ignores a stale failed-test refresh", async () => {
@@ -369,7 +376,7 @@ describe("provider settings", () => {
     expect(screen.getByText("正在讀取 OpenRouter 可用模型…")).toBeTruthy();
     expect(screen.getByLabelText("模型").closest(".ant-select")?.className).toContain("ant-select-disabled");
 
-    pendingModels.resolve(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] })));
+    pendingModels.resolve(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast")] })));
     const modelSelect = screen.getByLabelText("模型");
     await waitFor(() => expect(modelSelect.closest(".ant-select")?.className).not.toContain("ant-select-disabled"));
     fireEvent.mouseDown(modelSelect);
@@ -380,7 +387,7 @@ describe("provider settings", () => {
     const fetchMock = vi.fn(async (path: string | URL | Request) => {
       if (path === "/api/providers") return new Response(JSON.stringify(connectedOpenRouterCatalog));
       if (path === "/api/providers/openrouter/models") {
-        return new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] }));
+        return new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast")] }));
       }
       throw new Error(`Unexpected request: ${String(path)}`);
     });
@@ -397,8 +404,8 @@ describe("provider settings", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
       .mockResolvedValueOnce(new Response(JSON.stringify({ models: [
-        { id: "acme/fast", name: "Acme Fast" },
-        { id: "acme/reasoning", name: "Acme Reasoning" },
+        dynamicModel("acme/fast", "Acme Fast"),
+        dynamicModel("acme/reasoning", "Acme Reasoning"),
       ] })));
     vi.stubGlobal("fetch", fetchMock);
     const { container } = render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast" }} />);
@@ -423,7 +430,7 @@ describe("provider settings", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }, { id: "acme/reasoning", name: "Acme Reasoning" }] })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast"), dynamicModel("acme/reasoning", "Acme Reasoning")] })));
     vi.stubGlobal("fetch", fetchMock);
     render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "missing" }} />);
 
@@ -459,7 +466,7 @@ describe("provider settings", () => {
   it("keeps the OpenRouter catalog cache across a general/models section toggle", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenRouterCatalog)))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [{ id: "acme/fast", name: "Acme Fast" }] })));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast")] })));
     vi.stubGlobal("fetch", fetchMock);
     render(<ToggleSectionHarness />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
@@ -488,7 +495,7 @@ describe("provider settings", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6"));
 
-    pendingModels.resolve(new Response(JSON.stringify({ models: [{ id: "stale/model", name: "Stale model" }] })));
+    pendingModels.resolve(new Response(JSON.stringify({ models: [dynamicModel("stale/model", "Stale model")] })));
     await waitFor(() => expect(screen.queryByText("Stale model")).toBeNull());
     expect(screen.getByTestId("selected-model").textContent).toBe("GPT-5.6");
   });

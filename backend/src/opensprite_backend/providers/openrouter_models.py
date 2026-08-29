@@ -104,12 +104,17 @@ class OpenRouterModelDiscovery:
         model_id = record.get("id")
         name = record.get("name")
         architecture = record.get("architecture")
+        context_length = record.get("context_length")
+        top_provider = record.get("top_provider")
         if (
             type(model_id) is not str
             or not 1 <= len(model_id) <= 256
             or type(name) is not str
             or not 1 <= len(name) <= 256
             or type(architecture) is not dict
+            or type(context_length) is not int
+            or isinstance(context_length, bool)
+            or not 1 <= context_length <= 4_000_000
         ):
             return None
 
@@ -123,4 +128,19 @@ class OpenRouterModelDiscovery:
         ):
             return None
 
-        return OpenRouterModel(id=model_id, name=name)
+        max_output_tokens: int | None = None
+        if type(top_provider) is dict:
+            candidate = top_provider.get("max_completion_tokens")
+            if (
+                type(candidate) is int
+                and not isinstance(candidate, bool)
+                and 1 <= candidate <= context_length
+            ):
+                max_output_tokens = candidate
+
+        return OpenRouterModel(
+            id=model_id,
+            name=name,
+            contextWindowTokens=context_length,
+            maxOutputTokens=max_output_tokens,
+        )

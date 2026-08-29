@@ -89,6 +89,26 @@ class ProviderListResponse(ContractModel):
 class OpenRouterModel(ContractModel):
     id: str = Field(min_length=1, max_length=256)
     name: str = Field(min_length=1, max_length=256)
+    context_window_tokens: int = Field(
+        alias="contextWindowTokens",
+        ge=1,
+        le=4_000_000,
+    )
+    max_output_tokens: int | None = Field(
+        alias="maxOutputTokens",
+        default=None,
+        ge=1,
+        le=4_000_000,
+    )
+
+    @model_validator(mode="after")
+    def require_output_within_context(self) -> "OpenRouterModel":
+        if (
+            self.max_output_tokens is not None
+            and self.max_output_tokens > self.context_window_tokens
+        ):
+            raise ValueError("maxOutputTokens must fit within contextWindowTokens")
+        return self
 
 
 class OpenRouterModelListResponse(ContractModel):
