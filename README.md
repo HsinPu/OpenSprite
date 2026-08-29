@@ -2,6 +2,10 @@
 
 OpenSprite 正在從乾淨的 repository 基礎重新設計。目前已建立可啟動的 React 前端與 Python 本機服務，提供真實的 Provider 連線、AI 設定、Conversation、Run、SSE 串流與 bounded Agent loop。
 
+Windows 可從 repository root 執行 `./installers/windows/install.ps1`，安裝後以
+`http://127.0.0.1:8765/` 使用。程式位於 `%LOCALAPPDATA%\OpenSprite\app`，使用者資料固定在
+`%USERPROFILE%\.opensprite`。
+
 ## 目前狀態
 
 - 前端：React、TypeScript、Vite、Ant Design，透過同源 `/api` 與本機服務溝通。

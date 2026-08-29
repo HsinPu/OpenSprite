@@ -82,9 +82,16 @@ git diff --check
 git status --short --branch
 ```
 
-Browser verification remains manual against the local Vite server. Frontend,
-backend and API contract tests are committed; installer execution tests do not
-exist yet and must not be claimed.
+Windows installer checks:
+
+```powershell
+./installers/windows/test.ps1
+```
+
+Browser verification remains manual against the local Vite server or installed
+single-origin runtime. Frontend, backend, API contract and Windows installer
+isolation tests are committed; Linux installer execution tests do not exist yet
+and must not be claimed.
 
 ## Generated and local files
 
