@@ -90,7 +90,7 @@ export const enMessages = {
   "execution.mode.fast": "Fast",
   "execution.mode.balanced": "Balanced",
   "execution.mode.deep": "Deep",
-  "execution.event.runStarted": "Run started",
+  "execution.event.runStarted": "Prepare conversation context",
   "execution.event.modelStarted": "Request model {model}",
   "execution.event.output": "Generate response",
   "execution.event.toolStarted": "Run tool {tool}",

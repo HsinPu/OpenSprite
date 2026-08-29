@@ -504,6 +504,131 @@ async def test_required_recent_history_overflow_fails_without_model_request(
 
 
 @async_test
+async def test_first_request_context_rejection_compacts_once_and_retries(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(repository, 7, assistant_size=20)
+    current = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="auto",
+    ).run
+    gateway = ScriptedGateway(
+        [
+            [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
+            [
+                ModelTextDelta(
+                    "Goals and constraints\nKeep context.\nDecisions\nNone.\n"
+                    "Facts and artifacts\nNone.\nOpen questions\nNone.\n"
+                    "Next actions\nAnswer the current request."
+                ),
+                ModelUsage(100, 40),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+            [
+                ModelTextDelta("final answer"),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+        max_model_rounds=1,
+    ).execute(current.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "final answer"
+    assert len(gateway.requests) == 3
+    assert gateway.requests[1].max_output_tokens == 2_048
+    assert repository.get_latest_compaction(conversation_id) is not None
+    visible = repository.list_messages(
+        conversation_id,
+        limit=100,
+        before_sequence=None,
+    ).items
+    assert [message.content for message in visible].count("final answer") == 1
+
+
+@async_test
+async def test_context_rejection_after_partial_output_is_not_retried(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [[
+            ModelTextDelta("partial"),
+            ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED),
+        ]]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "context_limit_exceeded"
+    assert result.partial_text == "partial"
+    assert len(gateway.requests) == 1
+
+
+@async_test
+async def test_second_context_rejection_stops_after_one_compaction_retry(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(repository, 7, assistant_size=20)
+    current = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="auto",
+    ).run
+    gateway = ScriptedGateway(
+        [
+            [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
+            [
+                ModelTextDelta(
+                    "Goals and constraints\nKeep context.\nDecisions\nNone.\n"
+                    "Facts and artifacts\nNone.\nOpen questions\nNone.\n"
+                    "Next actions\nAnswer the current request."
+                ),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+            [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(current.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "context_limit_exceeded"
+    assert len(gateway.requests) == 3
+
+
+@async_test
 async def test_prompt_log_failure_stops_before_any_model_request(
     tmp_path: Path,
 ) -> None:

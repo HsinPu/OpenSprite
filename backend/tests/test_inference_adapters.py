@@ -572,6 +572,7 @@ async def test_tool_transcript_serialization_is_native_for_each_provider() -> No
         (401, InferenceFailure.INVALID_CREDENTIALS),
         (403, InferenceFailure.INVALID_CREDENTIALS),
         (429, InferenceFailure.PROVIDER_RATE_LIMITED),
+        (413, InferenceFailure.CONTEXT_LIMIT_EXCEEDED),
         (500, InferenceFailure.PROVIDER_UNREACHABLE),
         (307, InferenceFailure.PROVIDER_UNREACHABLE),
     ],
@@ -600,6 +601,48 @@ def test_http_statuses_are_sanitized_and_redirects_are_not_followed(
 
     asyncio.run(scenario())
     assert calls == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"error": {"code": "context_length_exceeded", "message": "too long"}},
+        {"error": {"type": "invalid_request_error", "message": "Prompt is too long"}},
+        {"error": {"code": 400, "message": "Maximum context length exceeded"}},
+    ],
+)
+def test_bounded_provider_error_body_identifies_context_limit(payload: object) -> None:
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json=payload, request=outbound)
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+            with pytest.raises(ModelGatewayError) as captured:
+                await collect(gateway.stream(request("openrouter")))
+            assert captured.value.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
+
+    asyncio.run(scenario())
+
+
+def test_unrecognized_or_oversized_bad_request_stays_provider_unreachable() -> None:
+    payloads = [
+        b'{"error":{"code":"invalid_request","message":"bad model"}}',
+        b'{"error":{"message":"Prompt is too long' + (b"x" * 70_000) + b'"}}',
+    ]
+
+    async def scenario() -> None:
+        for payload in payloads:
+            def handler(outbound: httpx.Request) -> httpx.Response:
+                return httpx.Response(400, content=payload, request=outbound)
+
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+                with pytest.raises(ModelGatewayError) as captured:
+                    await collect(gateway.stream(request("openrouter")))
+                assert captured.value.failure is InferenceFailure.PROVIDER_UNREACHABLE
+
+    asyncio.run(scenario())
 
 
 @async_test

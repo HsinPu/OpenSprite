@@ -90,7 +90,7 @@ export const jaMessages = {
   "execution.mode.fast": "高速",
   "execution.mode.balanced": "バランス",
   "execution.mode.deep": "詳細",
-  "execution.event.runStarted": "実行開始",
+  "execution.event.runStarted": "会話コンテキストを準備",
   "execution.event.modelStarted": "モデル {model} をリクエスト",
   "execution.event.output": "応答を生成",
   "execution.event.toolStarted": "ツール {tool} を実行",

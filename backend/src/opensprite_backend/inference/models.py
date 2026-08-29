@@ -21,6 +21,7 @@ class InferenceFailure(str, Enum):
     PROVIDER_RATE_LIMITED = "provider_rate_limited"
     PROVIDER_TIMEOUT = "provider_timeout"
     PROVIDER_UNREACHABLE = "provider_unreachable"
+    CONTEXT_LIMIT_EXCEEDED = "context_limit_exceeded"
     CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
 

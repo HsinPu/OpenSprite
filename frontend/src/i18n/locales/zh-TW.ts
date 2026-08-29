@@ -91,7 +91,7 @@ export const zhTWMessages = {
   "execution.mode.fast": "快速",
   "execution.mode.balanced": "平衡",
   "execution.mode.deep": "深入",
-  "execution.event.runStarted": "開始執行",
+  "execution.event.runStarted": "準備對話內容",
   "execution.event.modelStarted": "請求模型 {model}",
   "execution.event.output": "產生回覆",
   "execution.event.toolStarted": "執行工具 {tool}",

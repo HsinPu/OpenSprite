@@ -74,4 +74,6 @@ INTERNAL_ERROR = PublicRunError(
 
 
 def inference_error(failure: InferenceFailure) -> PublicRunError:
+    if failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED:
+        return CONTEXT_LIMIT_ERROR
     return _INFERENCE_ERRORS[failure]

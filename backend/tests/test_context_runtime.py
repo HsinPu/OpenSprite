@@ -22,19 +22,18 @@ from opensprite_backend.models import OpenRouterModel, OpenRouterModelListRespon
 class RecordingConnections:
     def __init__(self) -> None:
         self.calls = 0
+        self.models = [
+            OpenRouterModel(
+                id="acme/model",
+                name="Acme",
+                contextWindowTokens=131_072,
+                maxOutputTokens=None,
+            )
+        ]
 
     async def list_openrouter_models(self) -> OpenRouterModelListResponse:
         self.calls += 1
-        return OpenRouterModelListResponse(
-            models=[
-                OpenRouterModel(
-                    id="acme/model",
-                    name="Acme",
-                    contextWindowTokens=131_072,
-                    maxOutputTokens=None,
-                )
-            ]
-        )
+        return OpenRouterModelListResponse(models=self.models)
 
 
 def test_capability_resolver_uses_fixed_catalog_and_session_cache() -> None:
@@ -62,6 +61,31 @@ def test_capability_resolver_rejects_unknown_models() -> None:
             await resolver.resolve("anthropic", "unknown")
         with pytest.raises(ModelCapabilityNotFound):
             await resolver.resolve("openrouter", "unknown")
+
+    asyncio.run(scenario())
+
+
+def test_capability_resolver_refreshes_once_when_a_fresh_cache_misses() -> None:
+    async def scenario() -> None:
+        connections = RecordingConnections()
+        resolver = ProviderModelCapabilityResolver(connections)  # type: ignore[arg-type]
+
+        await resolver.resolve("openrouter", "acme/model")
+        connections.models = [
+            OpenRouterModel(
+                id="new-account/model",
+                name="New account model",
+                contextWindowTokens=262_144,
+                maxOutputTokens=16_384,
+            )
+        ]
+
+        refreshed = await resolver.resolve("openrouter", "new-account/model")
+        cached = await resolver.resolve("openrouter", "new-account/model")
+
+        assert refreshed == cached
+        assert refreshed.context_window_tokens == 262_144
+        assert connections.calls == 2
 
     asyncio.run(scenario())
 

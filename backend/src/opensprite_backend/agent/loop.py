@@ -27,6 +27,7 @@ from opensprite_backend.conversations.repository import (
 )
 from opensprite_backend.inference.gateway import ModelGateway, ModelGatewayError
 from opensprite_backend.inference.models import (
+    InferenceFailure,
     ModelCompleted,
     ModelFinishReason,
     ModelMessage,
@@ -149,10 +150,13 @@ class AgentLoop:
             tool_definitions = prepared.tools
             accumulated_text = run.partial_text
             tool_call_count = 0
+            context_retry_used = False
             failed_calls: Counter[str] = Counter()
             used_call_ids: set[str] = set()
 
-            for _round in range(self._max_model_rounds):
+            for _round in range(self._max_model_rounds + 1):
+                if _round >= self._max_model_rounds and not context_retry_used:
+                    break
                 self._raise_if_cancelled(cancellation_event)
                 estimated_round_tokens = self._counter.request(
                     tuple(transcript),
@@ -182,10 +186,42 @@ class AgentLoop:
                 tool_calls: list[ModelToolCall] = []
                 completion: ModelCompleted | None = None
                 stream = self._gateway.stream(request)
-                async for event in self._with_cancellation(
+                events = self._with_cancellation(
                     stream,
                     cancellation_event,
-                ):
+                )
+                retry_with_compaction = False
+                while True:
+                    try:
+                        event = await anext(events)
+                    except StopAsyncIteration:
+                        break
+                    except ModelGatewayError as error:
+                        if (
+                            error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
+                            and _round == 0
+                            and not context_retry_used
+                            and not accumulated_text
+                            and not round_text
+                            and not tool_calls
+                        ):
+                            context_retry_used = True
+                            _LOGGER.info(
+                                "context retrying after provider limit run_id=%s",
+                                run_id,
+                            )
+                            prepared = await self._prepare_context(
+                                run=run,
+                                system_prompt=system_prompt,
+                                cancellation_event=cancellation_event,
+                                force_compaction=True,
+                                compaction_limit=1,
+                            )
+                            transcript = list(prepared.messages)
+                            tool_definitions = prepared.tools
+                            retry_with_compaction = True
+                            break
+                        raise
                     if completion is not None:
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                     if isinstance(event, ModelTextDelta):
@@ -225,6 +261,8 @@ class AgentLoop:
                         )
                     else:
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
+                if retry_with_compaction:
+                    continue
                 if completion is None:
                     return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
 
@@ -349,8 +387,25 @@ class AgentLoop:
         run: RunSnapshot,
         system_prompt: str,
         cancellation_event: asyncio.Event,
+        force_compaction: bool = False,
+        compaction_limit: int | None = None,
     ) -> _PreparedContext:
         self._raise_if_cancelled(cancellation_event)
+        limit = (
+            self._max_compactions_per_run
+            if compaction_limit is None
+            else compaction_limit
+        )
+        if not 0 <= limit <= self._max_compactions_per_run:
+            raise ValueError("invalid Context compaction limit")
+        _LOGGER.info(
+            "context preparing run_id=%s provider_id=%s model_id=%s budget=%s force_compaction=%s",
+            run.id,
+            run.provider_id,
+            run.model_id,
+            run.context_budget,
+            force_compaction,
+        )
         capability = await self._await_with_cancellation(
             self._capability_resolver.resolve(
                 run.provider_id,
@@ -378,7 +433,8 @@ class AgentLoop:
             run.conversation_id,
         )
 
-        for compaction_index in range(self._max_compactions_per_run + 1):
+        force_compaction_pending = force_compaction
+        for compaction_index in range(limit + 1):
             coverage = 0 if summary is None else summary.covers_through_sequence
             uncovered = tuple(
                 message for message in page.items if message.sequence > coverage
@@ -401,7 +457,7 @@ class AgentLoop:
                 raise
             except ValueError as error:
                 raise _ContextPreparationFailed from error
-            if not assembled.needs_compaction:
+            if not assembled.needs_compaction and not force_compaction_pending:
                 _LOGGER.info(
                     "context prepared run_id=%s context_limit=%s input_budget=%s estimated_input=%s messages=%s compacted_through=%s",
                     run.id,
@@ -416,7 +472,7 @@ class AgentLoop:
                     tools=tool_definitions,
                     budget=budget,
                 )
-            if compaction_index >= self._max_compactions_per_run:
+            if compaction_index >= limit:
                 raise ContextLimitExceeded
 
             protected_sequence = (
@@ -456,6 +512,7 @@ class AgentLoop:
                     ),
                     cancellation_event,
                 )
+                force_compaction_pending = False
             except ContextLimitExceeded:
                 raise
             except ValueError as error:

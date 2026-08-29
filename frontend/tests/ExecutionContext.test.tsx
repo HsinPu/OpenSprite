@@ -56,6 +56,12 @@ describe("execution context disclosure", () => {
     expect(screen.getByRole("button", { name: "展開本次執行" })).toBeTruthy();
   });
 
+  it("uses the existing Run start event as minimal Context preparation progress", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("準備對話內容")).toBeTruthy();
+  });
+
   it("opens historical inspection and restores the latest default", () => {
     const { rerender } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
 
