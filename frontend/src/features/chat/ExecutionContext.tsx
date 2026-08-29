@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 
@@ -80,23 +80,41 @@ type ExecutionContextProps = {
   run: RunSnapshot | null;
   events: RunEvent[];
   timeZone: TimeZoneSetting;
+  historical?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  onReturnToLatest?: () => void;
+  inspectionRunId?: string | null;
 };
 
-export function ExecutionContext({ modelName, run, events, timeZone }: ExecutionContextProps) {
+export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null }: ExecutionContextProps) {
   const { locale, t } = useI18n();
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
     return !window.matchMedia("(max-width: 767px)").matches;
   });
+  const contextRef = useRef<HTMLElement>(null);
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
   const executionBodyId = `${contextId}-execution-body`;
   const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
   const toolNames = useMemo(() => Array.from(new Set(events.filter((event) => event.type.startsWith("tool.")).map((event) => String(event.data.toolName ?? "")).filter(Boolean))), [events]);
   const status = run ? t(statusKeys[run.status]) : t("execution.status.none");
+  const title = t(historical ? "execution.detailsTitle" : "execution.title");
+
+  useEffect(() => {
+    if (!historical || inspectionRunId === null) return;
+    setIsExpanded(true);
+    if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 767px)").matches) return;
+    window.requestAnimationFrame(() => {
+      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+      contextRef.current?.scrollIntoView?.({ behavior, block: "start" });
+    });
+  }, [historical, inspectionRunId]);
 
   return (
-    <aside className={`chat-workspace__context${isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={executionTitleId}>
+    <aside ref={contextRef} className={`chat-workspace__context${isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={executionTitleId} aria-busy={historical && loading}>
       <div className="chat-workspace__context-heading">
         <Button
           type="default"
@@ -104,11 +122,11 @@ export function ExecutionContext({ modelName, run, events, timeZone }: Execution
           icon={isExpanded ? <RightOutlined /> : <LeftOutlined />}
           aria-expanded={isExpanded}
           aria-controls={executionBodyId}
-          aria-label={isExpanded ? t("execution.collapse") : t("execution.expand")}
-          title={isExpanded ? t("execution.collapse") : t("execution.expand")}
+          aria-label={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+          title={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
           onClick={() => setIsExpanded((current) => !current)}
         />
-        <h2 id={executionTitleId}>{t("execution.title")}</h2>
+        <h2 id={executionTitleId}>{title}</h2>
       </div>
 
       <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
@@ -118,7 +136,8 @@ export function ExecutionContext({ modelName, run, events, timeZone }: Execution
       </div>
 
       <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isExpanded}>
-        {run ? (
+        {historical ? <div className="chat-workspace__history-toolbar"><span>{t("execution.historical")}</span><button type="button" onClick={onReturnToLatest}>{t("execution.backToLatest")}</button></div> : null}
+        {historical && loading ? <div className="chat-workspace__context-message" role="status">{t("execution.loadingHistory")}</div> : historical && error ? <div className="chat-workspace__context-message chat-workspace__context-message--error" role="alert"><p>{error}</p>{onRetry ? <button type="button" onClick={onRetry}>{t("common.retry")}</button> : null}</div> : run ? (
           <>
             <section className="chat-workspace__context-section" aria-labelledby={`${contextId}-model-title`}>
               <h3 id={`${contextId}-model-title`}>{t("execution.model")}</h3>
@@ -145,7 +164,7 @@ export function ExecutionContext({ modelName, run, events, timeZone }: Execution
                 <div><dt>{t("execution.startTime")}</dt><dd>{formatTime(run.startedAt, locale, timeZone)}</dd></div>
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
-                <div><dt>{t("execution.source")}</dt><dd>{t("execution.history")}</dd></div>
+                <div><dt>{t("execution.source")}</dt><dd>{t(historical ? "execution.history" : "execution.currentConversation")}</dd></div>
               </dl>
             </section>
 

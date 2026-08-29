@@ -1,13 +1,17 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import { ChatWorkspace } from "../src/features/chat/ChatWorkspace";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
+import { useRunInspection } from "../src/features/chat/useRunInspection";
 
 
 vi.mock("../src/features/chat/useConversationRun", () => ({
   useConversationRun: vi.fn(),
+}));
+vi.mock("../src/features/chat/useRunInspection", () => ({
+  useRunInspection: vi.fn(),
 }));
 
 const run: RunSnapshot = {
@@ -33,17 +37,33 @@ const events: RunEvent[] = [
 ];
 
 const mockedUseConversationRun = vi.mocked(useConversationRun);
+const mockedUseRunInspection = vi.mocked(useRunInspection);
+const inspectRun = vi.fn(async () => undefined);
+const returnToLatest = vi.fn();
 
 beforeEach(() => {
   mockedUseConversationRun.mockReset();
+  mockedUseRunInspection.mockReset();
+  inspectRun.mockClear();
+  returnToLatest.mockClear();
+  mockedUseRunInspection.mockReturnValue({
+    selectedRunId: null,
+    run: null,
+    events: [],
+    loading: false,
+    error: null,
+    inspectRun,
+    retry: vi.fn(async () => undefined),
+    returnToLatest,
+  });
 });
 
 describe("live chat workspace", () => {
   it("shows localized timestamps beneath persisted user and assistant messages", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [
-        { id: run.userMessageId, role: "user", content: "你好", createdAt: "2026-08-22T08:00:00Z", delivery: "persisted" },
-        { id: "44444444-4444-4444-8444-444444444444", role: "assistant", content: "你好！", createdAt: "2026-08-22T08:00:07Z", delivery: "persisted" },
+        { id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: "2026-08-22T08:00:00Z", delivery: "persisted" },
+        { id: "44444444-4444-4444-8444-444444444444", runId: run.id, role: "assistant", content: "你好！", createdAt: "2026-08-22T08:00:07Z", delivery: "persisted" },
       ],
       activeRun: null,
       events: [],
@@ -66,6 +86,43 @@ describe("live chat workspace", () => {
       "2026-08-22T08:00:00Z",
       "2026-08-22T08:00:07Z",
     ]);
+    const viewExecution = screen.getByRole("button", { name: "查看這次執行" });
+    fireEvent.click(viewExecution);
+    expect(inspectRun).toHaveBeenCalledWith(run.id);
+  });
+
+  it("shows a fallback inspection action for a terminal Run without an assistant reply", () => {
+    const failedRun: RunSnapshot = { ...run, status: "failed", assistantMessageId: null, finishedAt: "2026-08-22T08:00:04Z", error: { code: "provider_unreachable", message: "safe", retryable: true } };
+    mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }], activeRun: failedRun, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "查看這次執行" }));
+    expect(inspectRun).toHaveBeenCalledWith(run.id);
+  });
+
+  it("shows the selected historical Run and returns to the latest execution", () => {
+    const historicalRun: RunSnapshot = { ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", modelId: "historic/model", partialText: "歷史完成", finishedAt: "2026-08-22T08:00:07Z" };
+    mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: historicalRun, events, loading: false, error: null, inspectRun, retry: vi.fn(async () => undefined), returnToLatest });
+    mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }, { id: historicalRun.assistantMessageId!, runId: run.id, role: "assistant", content: "歷史完成", createdAt: historicalRun.finishedAt!, delivery: "persisted" }], activeRun: run, events: [], streamedText: "正在整理", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: true, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }, { selection: { providerId: "openrouter", modelId: historicalRun.modelId }, label: "歷史模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "正在查看這次執行" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("heading", { level: 2, name: "執行詳情" })).toBeTruthy();
+    expect(within(screen.getByRole("complementary", { name: "執行詳情" })).getAllByText("歷史模型").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "回到最新執行" }));
+    expect(returnToLatest).toHaveBeenCalledOnce();
+  });
+
+  it("shows a safe historical inspection error and retries without affecting chat", () => {
+    const retry = vi.fn(async () => undefined);
+    mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: null, events: [], loading: false, error: "執行紀錄暫時無法讀取。", inspectRun, retry, returnToLatest });
+    mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }, { id: "44444444-4444-4444-8444-444444444444", runId: run.id, role: "assistant", content: "你好！", createdAt: "2026-08-22T08:00:07Z", delivery: "persisted" }], activeRun: run, events, streamedText: "正在整理", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: true, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    expect(screen.getByRole("alert").textContent).toContain("執行紀錄暫時無法讀取");
+    fireEvent.click(screen.getByRole("button", { name: "重試" }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.getByText("你好！")).toBeTruthy();
   });
 
   it("shows the real run, exposes cancellation, and does not advertise fake tools", () => {
@@ -73,6 +130,7 @@ describe("live chat workspace", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [{
         id: run.userMessageId,
+        runId: run.id,
         role: "user",
         content: "整理今天的工作",
         createdAt: run.createdAt,
@@ -115,6 +173,7 @@ describe("live chat workspace", () => {
     expect(screen.queryByText("Memory")).toBeNull();
     expect(screen.queryByText("本機 Agent")).toBeNull();
     expect(screen.queryByRole("button", { name: "更多對話功能（尚未上線）" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "查看這次執行" })).toBeNull();
 
     const stopButton = screen.getByRole("button", { name: "停止回覆" });
     expect(stopButton.querySelector("svg")).toBeTruthy();

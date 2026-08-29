@@ -8,6 +8,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { formatMessageTime } from "../general-settings/dateTime";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
+import { useRunInspection } from "./useRunInspection";
 
 import "./ChatWorkspace.css";
 
@@ -71,6 +72,7 @@ export function ChatWorkspace({
     onConversationAccepted,
     onConversationUpdated,
   });
+  const inspection = useRunInspection({ conversationId });
   const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : "";
   const currentSelectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
   const choicesByProvider = ["openai", "anthropic", "openrouter"].map((providerId) => ({
@@ -86,6 +88,24 @@ export function ChatWorkspace({
     || (chat.activeRun?.status === "completed" && Boolean(liveText) && !hasDurableAssistant);
   const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
   const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
+  const assistantRunIds = new Set(chat.messages.filter((message) => message.role === "assistant" && message.runId !== null).map((message) => message.runId));
+  const historical = inspection.selectedRunId !== null;
+  const displayedRun = historical ? inspection.run : chat.activeRun;
+  const displayedEvents = historical ? inspection.events : chat.events;
+  const displayedModelName = historical && displayedRun
+    ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
+    : modelName;
+
+  const inspectionButton = (runId: string) => {
+    const selected = inspection.selectedRunId === runId;
+    return <button
+      type="button"
+      className={`chat-workspace__inspection-button${selected ? " is-selected" : ""}`}
+      aria-label={t(selected ? "chat.viewingExecutionLabel" : "chat.viewExecutionLabel")}
+      aria-pressed={selected}
+      onClick={() => { if (selected) inspection.returnToLatest(); else void inspection.inspectRun(runId); }}
+    >{t(selected ? "chat.viewingExecution" : "chat.viewExecution")}</button>;
+  };
 
   useLayoutEffect(() => {
     const input = composerInputRef.current;
@@ -150,6 +170,7 @@ export function ChatWorkspace({
                     <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
                     {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
                     {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
+                    {message.runId !== null && !assistantRunIds.has(message.runId) && !(chat.activeRun?.id === message.runId && chat.isRunning) ? inspectionButton(message.runId) : null}
                   </div>
                 </div>
               </div>
@@ -158,7 +179,10 @@ export function ChatWorkspace({
                 <OpenSpriteMark />
                 <div className="chat-workspace__assistant-content">
                   <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
-                  <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
+                  <div className="chat-workspace__assistant-meta">
+                    <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
+                    {message.runId !== null ? inspectionButton(message.runId) : null}
+                  </div>
                 </div>
               </div>
             ))}
@@ -236,7 +260,18 @@ export function ChatWorkspace({
         </form>
       </div>
 
-      <ExecutionContext modelName={modelName} run={chat.activeRun} events={chat.events} timeZone={timeZone} />
+      <ExecutionContext
+        modelName={displayedModelName}
+        run={displayedRun}
+        events={displayedEvents}
+        timeZone={timeZone}
+        historical={historical}
+        loading={inspection.loading}
+        error={inspection.error}
+        inspectionRunId={inspection.selectedRunId}
+        onRetry={() => void inspection.retry()}
+        onReturnToLatest={inspection.returnToLatest}
+      />
     </section>
   );
 }

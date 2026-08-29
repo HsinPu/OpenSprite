@@ -18,6 +18,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 
 
 export type DisplayMessage = Pick<ChatMessage, "id" | "role" | "content" | "createdAt"> & {
+  runId: string | null;
   delivery: "persisted" | "sending" | "failed";
 };
 
@@ -37,6 +38,7 @@ const persistedMessages = (messages: ChatMessage[]): DisplayMessage[] => message
   role: message.role,
   content: message.content,
   createdAt: message.createdAt,
+  runId: message.runId,
   delivery: "persisted",
 }));
 
@@ -249,6 +251,7 @@ export function useConversationRun({
       role: "user",
       content: message,
       createdAt: new Date().toISOString(),
+      runId: null,
       delivery: "sending",
     }]);
     try {

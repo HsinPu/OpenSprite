@@ -203,7 +203,12 @@
 }
 
 .chat-workspace__message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 7px; }
+.chat-workspace__assistant-meta { display: flex; align-items: center; gap: 8px; }
 .chat-workspace__message-time { color: var(--chat-muted); font-size: 0.75rem; line-height: 1.2; }
+.chat-workspace__inspection-button { padding: 0; border: 0; background: transparent; color: var(--chat-muted); cursor: pointer; font: inherit; font-size: 0.75rem; line-height: 1.2; }
+.chat-workspace__inspection-button:hover, .chat-workspace__inspection-button:focus-visible, .chat-workspace__inspection-button.is-selected { color: var(--chat-primary-strong); }
+.chat-workspace__inspection-button:focus-visible { outline: 2px solid color-mix(in srgb, var(--chat-primary) 55%, transparent); outline-offset: 2px; border-radius: 3px; }
+.chat-workspace__inspection-button.is-selected { font-weight: 650; }
 .chat-workspace__delivery { color: var(--chat-muted); font-size: 0.78rem; }
 .chat-workspace__delivery--failed { color: #a64534; }
 
@@ -315,6 +320,11 @@
 .chat-workspace__context-summary { display: none; }
 .chat-workspace__context-body { min-width: 0; }
 .chat-workspace__context-body[hidden] { display: none; }
+.chat-workspace__history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 22px 4px; padding: 10px 12px; border-radius: 10px; background: var(--chat-primary-soft); color: var(--chat-primary-strong); font-size: 0.8rem; }
+.chat-workspace__history-toolbar button, .chat-workspace__context-message button { padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 650; }
+.chat-workspace__context-message { margin: 18px 22px; padding: 16px; border-radius: 11px; background: var(--chat-bg); color: var(--chat-muted); font-size: 0.88rem; line-height: 1.5; }
+.chat-workspace__context-message p { margin: 0 0 10px; }
+.chat-workspace__context-message--error { background: #fff5f2; color: #9c3d2c; }
 .chat-workspace__context--collapsed .chat-workspace__context-heading { justify-content: center; padding: 18px 14px; }
 .chat-workspace__context--collapsed .chat-workspace__context-heading h2 {
   position: absolute;

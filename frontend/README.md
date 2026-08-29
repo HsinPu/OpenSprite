@@ -37,6 +37,9 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 
 每則使用者與 AI 訊息下方會顯示建立時間，依確認後的介面語言與時區格式化到分鐘；
 資料來源仍是訊息契約的 UTC `createdAt`，不另存一份前端時間。
+AI 回覆的時間旁可開啟該回覆對應的歷史 Run；沒有 AI 回覆的終止 Run 則從使用者
+訊息旁開啟。歷史 snapshot 與 events 使用既有 Run API/SSE 即時讀取，與目前 Agent
+Run 使用不同的前端狀態，因此查看歷史不會停止或取代目前執行。
 
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
 

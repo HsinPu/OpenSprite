@@ -80,6 +80,7 @@ function Harness({ activeConversationId, streamFactory, onAccepted, onUpdated }:
   return (
     <div>
       <div data-testid="messages">{state.messages.map((message) => `${message.role}:${message.content}`).join("|")}</div>
+      <div data-testid="message-runs">{state.messages.map((message) => message.runId ?? "pending").join("|")}</div>
       <div data-testid="streamed">{state.streamedText}</div>
       <div data-testid="status">{state.activeRun?.status ?? "none"}</div>
       <div data-testid="error">{state.error ?? ""}</div>
@@ -110,6 +111,7 @@ describe("useConversationRun", () => {
     render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
 
     await waitFor(() => expect(screen.getByTestId("messages").textContent).toContain("assistant:完成"));
+    expect(screen.getByTestId("message-runs").textContent).toBe(`${runId}|${runId}`);
     expect(screen.getByTestId("status").textContent).toBe("completed");
     expect(streamFactory).toHaveBeenCalledWith(runId, expect.any(Object));
   });

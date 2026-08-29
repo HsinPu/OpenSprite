@@ -108,6 +108,15 @@ the stream buffer as authoritative. Duplicate replayed event sequences and
 events belonging to an obsolete selected conversation are ignored. An active
 Run exposes a stop action through the bodyless cancellation operation.
 
+Persisted Messages retain their authoritative `runId` in frontend display
+state. An assistant Message exposes one history-inspection action beside its
+timestamp; a terminal Run without an assistant Message exposes the fallback
+action beside its user Message. Inspection reads the existing Run snapshot and
+replays its events through a separate EventSource, so selection, retry and
+cleanup cannot close or replace the live Run stream. The execution panel uses
+the inspected Run's provider/model identity and can return to the latest Run.
+No additional API, database table, browser storage or persisted cache is used.
+
 Conversation and Message cursors are explicit browser state. The sidebar can
 append older Conversation pages without replacing the current page, while an
 open Conversation can prepend older Message pages without changing ascending
