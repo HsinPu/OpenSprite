@@ -10,6 +10,7 @@ from typing import Literal
 
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
+ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 MessageRole = Literal["user", "assistant"]
 MAX_ASSISTANT_CHARS = 1_048_576
 
@@ -101,6 +102,22 @@ class RunSnapshot:
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    context_budget: ContextBudget = "auto"
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationCompaction:
+    id: str
+    conversation_id: str
+    covers_through_sequence: int
+    summary: str
+    summary_version: int
+    source_hash: str
+    provider_id: ProviderId
+    model_id: str
+    input_tokens: int
+    output_tokens: int
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

@@ -257,6 +257,7 @@ class AgentChatService:
                 provider_id=settings.model.provider_id,
                 model_id=settings.model.model_id,
                 response_mode=settings.responseMode.value,
+                context_budget=settings.model.context_budget,
             )
         except ConversationStoreError as error:
             raise _store_error(error) from error

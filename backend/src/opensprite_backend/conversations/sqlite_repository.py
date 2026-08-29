@@ -16,6 +16,8 @@ from uuid import UUID, uuid4
 
 from .models import (
     CompletedRun,
+    ContextBudget,
+    ConversationCompaction,
     ConversationPage,
     ConversationSummary,
     Message,
@@ -34,7 +36,7 @@ from .models import (
 from .repository import ConversationStoreError
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -50,6 +52,7 @@ _TERMINAL_EVENT_TYPES = {
 }
 _PROVIDER_IDS = {"openai", "anthropic", "openrouter"}
 _RESPONSE_MODES = {"default", "fast", "balanced", "deep"}
+_CONTEXT_BUDGETS = {"auto", "32k", "64k", "128k", "256k", "max"}
 _PUBLIC_ERROR_CODES = {
     "invalid_request",
     "not_found",
@@ -106,6 +109,7 @@ CREATE TABLE runs (
     provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
     model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
     response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep')),
+    context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
     status TEXT NOT NULL CHECK(status IN (
         'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
     )),
@@ -120,6 +124,21 @@ CREATE TABLE runs (
         (error_code IS NULL AND error_message IS NULL AND error_retryable IS NULL) OR
         (error_code IS NOT NULL AND error_message IS NOT NULL AND error_retryable IS NOT NULL)
     )
+) STRICT;
+
+CREATE TABLE conversation_compactions (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    covers_through_sequence INTEGER NOT NULL CHECK(covers_through_sequence >= 1),
+    summary TEXT NOT NULL CHECK(length(summary) BETWEEN 1 AND 262144),
+    summary_version INTEGER NOT NULL CHECK(summary_version = 1),
+    source_hash TEXT NOT NULL CHECK(length(source_hash) = 64),
+    provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
+    model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
+    input_tokens INTEGER NOT NULL CHECK(input_tokens >= 0),
+    output_tokens INTEGER NOT NULL CHECK(output_tokens >= 0),
+    created_at TEXT NOT NULL,
+    UNIQUE(conversation_id, covers_through_sequence)
 ) STRICT;
 
 CREATE TABLE run_events (
@@ -145,7 +164,34 @@ ON conversations(updated_at DESC, id DESC);
 CREATE INDEX messages_by_conversation_sequence
 ON messages(conversation_id, sequence DESC);
 
-PRAGMA user_version = 1;
+CREATE INDEX compactions_by_conversation_coverage
+ON conversation_compactions(conversation_id, covers_through_sequence DESC);
+
+PRAGMA user_version = 2;
+COMMIT;
+"""
+
+_MIGRATE_V1_TO_V2_SQL = """
+BEGIN IMMEDIATE;
+ALTER TABLE runs ADD COLUMN context_budget TEXT NOT NULL DEFAULT 'auto'
+CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max'));
+CREATE TABLE conversation_compactions (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    covers_through_sequence INTEGER NOT NULL CHECK(covers_through_sequence >= 1),
+    summary TEXT NOT NULL CHECK(length(summary) BETWEEN 1 AND 262144),
+    summary_version INTEGER NOT NULL CHECK(summary_version = 1),
+    source_hash TEXT NOT NULL CHECK(length(source_hash) = 64),
+    provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
+    model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
+    input_tokens INTEGER NOT NULL CHECK(input_tokens >= 0),
+    output_tokens INTEGER NOT NULL CHECK(output_tokens >= 0),
+    created_at TEXT NOT NULL,
+    UNIQUE(conversation_id, covers_through_sequence)
+) STRICT;
+CREATE INDEX compactions_by_conversation_coverage
+ON conversation_compactions(conversation_id, covers_through_sequence DESC);
+PRAGMA user_version = 2;
 COMMIT;
 """
 
@@ -297,6 +343,138 @@ class SqliteConversationRepository:
             finally:
                 connection.close()
 
+    def get_latest_compaction(
+        self,
+        conversation_id: str,
+    ) -> ConversationCompaction | None:
+        self._require_identifier(conversation_id)
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return None
+            try:
+                row = connection.execute(
+                    """
+                    SELECT * FROM conversation_compactions
+                    WHERE conversation_id = ?
+                    ORDER BY covers_through_sequence DESC
+                    LIMIT 1
+                    """,
+                    (conversation_id,),
+                ).fetchone()
+                return None if row is None else self._compaction(row)
+            except (sqlite3.Error, TypeError, ValueError) as error:
+                raise ConversationStoreError(
+                    StoreFailure.DATABASE_UNAVAILABLE
+                ) from error
+            finally:
+                connection.close()
+
+    def append_compaction(
+        self,
+        *,
+        conversation_id: str,
+        covers_through_sequence: int,
+        summary: str,
+        source_hash: str,
+        provider_id: ProviderId,
+        model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> ConversationCompaction:
+        self._require_identifier(conversation_id)
+        normalized_summary = self._require_text(summary, maximum=262_144)
+        normalized_model = self._require_text(model_id, maximum=256)
+        if (
+            not isinstance(covers_through_sequence, int)
+            or isinstance(covers_through_sequence, bool)
+            or covers_through_sequence < 1
+            or not isinstance(source_hash, str)
+            or re.fullmatch(r"[0-9a-f]{64}", source_hash) is None
+            or provider_id not in _PROVIDER_IDS
+            or not isinstance(input_tokens, int)
+            or isinstance(input_tokens, bool)
+            or input_tokens < 0
+            or not isinstance(output_tokens, int)
+            or isinstance(output_tokens, bool)
+            or output_tokens < 0
+        ):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        with self._lock:
+            connection = self._open_write()
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                conversation = connection.execute(
+                    "SELECT 1 FROM conversations WHERE id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                covered_message = connection.execute(
+                    """
+                    SELECT 1 FROM messages
+                    WHERE conversation_id = ? AND sequence = ?
+                    """,
+                    (conversation_id, covers_through_sequence),
+                ).fetchone()
+                if conversation is None or covered_message is None:
+                    raise ConversationStoreError(StoreFailure.NOT_FOUND)
+                latest = connection.execute(
+                    """
+                    SELECT MAX(covers_through_sequence)
+                    FROM conversation_compactions
+                    WHERE conversation_id = ?
+                    """,
+                    (conversation_id,),
+                ).fetchone()[0]
+                if latest is not None and covers_through_sequence <= int(latest):
+                    raise ConversationStoreError(StoreFailure.INVALID_STATE)
+                item = ConversationCompaction(
+                    id=self._new_identifier(),
+                    conversation_id=conversation_id,
+                    covers_through_sequence=covers_through_sequence,
+                    summary=normalized_summary,
+                    summary_version=1,
+                    source_hash=source_hash,
+                    provider_id=provider_id,
+                    model_id=normalized_model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    created_at=self._now(),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO conversation_compactions(
+                        id, conversation_id, covers_through_sequence, summary,
+                        summary_version, source_hash, provider_id, model_id,
+                        input_tokens, output_tokens, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item.id,
+                        item.conversation_id,
+                        item.covers_through_sequence,
+                        item.summary,
+                        item.summary_version,
+                        item.source_hash,
+                        item.provider_id,
+                        item.model_id,
+                        item.input_tokens,
+                        item.output_tokens,
+                        self._timestamp(item.created_at),
+                    ),
+                )
+                connection.commit()
+                return item
+            except ConversationStoreError:
+                connection.rollback()
+                raise
+            except (sqlite3.Error, OSError, TypeError, ValueError) as error:
+                connection.rollback()
+                raise ConversationStoreError(
+                    StoreFailure.DATABASE_UNAVAILABLE
+                ) from error
+            finally:
+                connection.close()
+
     def get_run(self, run_id: str) -> RunSnapshot | None:
         self._require_identifier(run_id)
         with self._lock:
@@ -325,6 +503,7 @@ class SqliteConversationRepository:
         provider_id: ProviderId,
         model_id: str,
         response_mode: ResponseMode,
+        context_budget: ContextBudget = "auto",
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -334,6 +513,8 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         normalized_model = self._require_text(model_id, maximum=256)
         if response_mode not in _RESPONSE_MODES:
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if context_budget not in _CONTEXT_BUDGETS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
@@ -438,9 +619,9 @@ class SqliteConversationRepository:
                     INSERT INTO runs(
                         id, conversation_id, client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
-                        response_mode, status, partial_text, created_at,
+                        response_mode, context_budget, status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
@@ -451,6 +632,7 @@ class SqliteConversationRepository:
                         provider_id,
                         normalized_model,
                         response_mode,
+                        context_budget,
                         now_text,
                     ),
                 )
@@ -995,6 +1177,11 @@ class SqliteConversationRepository:
                 if os.name != "nt":
                     os.chmod(self._database_file, 0o600)
             else:
+                version = int(
+                    connection.execute("PRAGMA user_version").fetchone()[0]
+                )
+                if version == 1:
+                    connection.executescript(_MIGRATE_V1_TO_V2_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1020,7 +1207,13 @@ class SqliteConversationRepository:
                 """
             ).fetchall()
         }
-        if tables != {"conversations", "messages", "runs", "run_events"}:
+        if tables != {
+            "conversations",
+            "conversation_compactions",
+            "messages",
+            "runs",
+            "run_events",
+        }:
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
 
     @staticmethod
@@ -1121,6 +1314,24 @@ class SqliteConversationRepository:
         )
 
     @staticmethod
+    def _compaction(row: sqlite3.Row) -> ConversationCompaction:
+        return ConversationCompaction(
+            id=row["id"],
+            conversation_id=row["conversation_id"],
+            covers_through_sequence=int(row["covers_through_sequence"]),
+            summary=row["summary"],
+            summary_version=int(row["summary_version"]),
+            source_hash=row["source_hash"],
+            provider_id=row["provider_id"],
+            model_id=row["model_id"],
+            input_tokens=int(row["input_tokens"]),
+            output_tokens=int(row["output_tokens"]),
+            created_at=SqliteConversationRepository._parse_timestamp(
+                row["created_at"]
+            ),
+        )
+
+    @staticmethod
     def _run(row: sqlite3.Row) -> RunSnapshot:
         error = None
         if row["error_code"] is not None:
@@ -1137,6 +1348,7 @@ class SqliteConversationRepository:
             provider_id=row["provider_id"],
             model_id=row["model_id"],
             response_mode=row["response_mode"],
+            context_budget=row["context_budget"],
             status=RunStatus(row["status"]),
             error=error,
             partial_text=row["partial_text"],

@@ -7,6 +7,8 @@ from typing import Protocol
 
 from .models import (
     CompletedRun,
+    ContextBudget,
+    ConversationCompaction,
     ConversationPage,
     ConversationSummary,
     MessagePage,
@@ -61,7 +63,26 @@ class ConversationRepository(Protocol):
         provider_id: ProviderId,
         model_id: str,
         response_mode: ResponseMode,
+        context_budget: ContextBudget = "auto",
     ) -> StartRunResult: ...
+
+    def get_latest_compaction(
+        self,
+        conversation_id: str,
+    ) -> ConversationCompaction | None: ...
+
+    def append_compaction(
+        self,
+        *,
+        conversation_id: str,
+        covers_through_sequence: int,
+        summary: str,
+        source_hash: str,
+        provider_id: ProviderId,
+        model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> ConversationCompaction: ...
 
     def mark_run_started(self, run_id: str) -> RunSnapshot: ...
 

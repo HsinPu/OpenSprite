@@ -40,6 +40,7 @@ def start(
     conversation_id: str | None = None,
     client_request_id: str | None = None,
     message: str = "整理今天的工作",
+    context_budget: str = "auto",
 ):
     return store.start_run(
         conversation_id=conversation_id,
@@ -48,6 +49,7 @@ def start(
         provider_id="openrouter",
         model_id="openrouter/auto",
         response_mode="default",
+        context_budget=context_budget,
     )
 
 
@@ -80,6 +82,7 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert accepted.run.provider_id == "openrouter"
     assert accepted.run.model_id == "openrouter/auto"
     assert accepted.run.response_mode == "default"
+    assert accepted.run.context_budget == "auto"
     assert accepted.run.partial_text == ""
     conversation = store.get_conversation(accepted.conversation.id)
     assert conversation is not None
@@ -375,6 +378,69 @@ def test_unknown_schema_version_and_corrupt_database_fail_closed(
     with pytest.raises(ConversationStoreError) as corrupt:
         store.get_run(str(uuid4()))
     assert corrupt.value.failure is StoreFailure.DATABASE_UNAVAILABLE
+
+
+def test_context_budget_and_compactions_are_durable_and_monotonic(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store, context_budget="128k")
+    assert accepted.run.context_budget == "128k"
+
+    first = store.append_compaction(
+        conversation_id=accepted.conversation.id,
+        covers_through_sequence=1,
+        summary="Goals and constraints\nKeep the recent conversation.",
+        source_hash="a" * 64,
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        input_tokens=120,
+        output_tokens=30,
+    )
+    assert store.get_latest_compaction(accepted.conversation.id) == first
+
+    with pytest.raises(ConversationStoreError) as captured:
+        store.append_compaction(
+            conversation_id=accepted.conversation.id,
+            covers_through_sequence=1,
+            summary="duplicate",
+            source_hash="b" * 64,
+            provider_id="openrouter",
+            model_id="openrouter/auto",
+            input_tokens=1,
+            output_tokens=1,
+        )
+    assert captured.value.failure is StoreFailure.INVALID_STATE
+    assert store.list_messages(
+        accepted.conversation.id,
+        limit=100,
+        before_sequence=None,
+    ).items[0].content == "整理今天的工作"
+
+
+def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute("DROP TABLE conversation_compactions")
+        connection.execute("ALTER TABLE runs DROP COLUMN context_budget")
+        connection.execute("PRAGMA user_version = 1")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute(
+            "SELECT context_budget FROM runs WHERE id = ?",
+            (accepted.run.id,),
+        ).fetchone()[0] == "auto"
+        assert connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'conversation_compactions'"
+        ).fetchone()[0] == "conversation_compactions"
 
 
 def test_concurrent_starts_on_distinct_conversations_do_not_lose_updates(
