@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite local conversation settings API",
-    "version": "0.1.0-draft",
-    "description": "Authoritative HTTP contract for persisted startup, message sending and chat auto-scroll behavior."
+    "version": "0.2.0-draft",
+    "description": "Authoritative HTTP contract for persisted startup, message sending, chat auto-scroll and execution-panel default behavior."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [],
@@ -14,10 +14,10 @@
     "cors": "disabled by default"
   },
   "x-compatibility": {
-    "policy": "This independent resource does not alter or migrate General Settings."
+    "policy": "This independent resource does not alter General Settings. Current on-disk schema v2 is read with executionPanelDefaultExpanded=false and the next successful PUT writes schema v3; older schemas remain unsupported."
   },
   "x-events": {"supported": false},
-  "tags": [{"name": "conversation-settings", "description": "Persisted startup, message sending and chat auto-scroll behavior."}],
+  "tags": [{"name": "conversation-settings", "description": "Persisted startup, message sending, chat auto-scroll and execution-panel default behavior."}],
   "paths": {
     "/api/settings/conversation": {
       "get": {
@@ -51,11 +51,12 @@
       "ConversationSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["startupView", "sendBehavior", "autoScroll"],
+        "required": ["startupView", "sendBehavior", "autoScroll", "executionPanelDefaultExpanded"],
         "properties": {
           "startupView": {"$ref": "#/components/schemas/StartupView"},
           "sendBehavior": {"$ref": "#/components/schemas/SendBehavior"},
-          "autoScroll": {"type": "boolean"}
+          "autoScroll": {"type": "boolean"},
+          "executionPanelDefaultExpanded": {"type": "boolean"}
         }
       },
       "ErrorCode": {"type": "string", "enum": ["invalid_request", "settings_store_unavailable", "internal_error"]},

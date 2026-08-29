@@ -17,7 +17,7 @@ The current slice provides:
   `GET`/`PUT /api/settings/ai`;
 - strict persisted locale and time-zone settings at `config/general.json`,
   exposed through `GET`/`PUT /api/settings/general`;
-- strict persisted startup, message sending and chat auto-scroll settings at
+- strict persisted startup, message sending, chat auto-scroll and execution-panel settings at
   `config/conversation.json`, exposed through
   `GET`/`PUT /api/settings/conversation`;
 - a transactional `ProviderConnectionService` behind the injectable
@@ -66,9 +66,10 @@ strict schema v1 and is stored separately so locale and time-zone updates cannot
 overwrite AI model configuration.
 
 The conversation settings file is also created only after a successful PUT. It
-uses independent strict schema v2 for startup, composer and chat auto-scroll
-behavior, so it cannot invalidate General Settings. Schema v1 is rejected and
-is not migrated or accepted as a partial record.
+uses independent strict schema v3 for startup, composer, chat auto-scroll and
+execution-panel default behavior, so it cannot invalidate General Settings.
+Current schema v2 reads with the panel collapsed and is rewritten only after a
+successful PUT; schema v1 remains rejected.
 
 The System Prompt log directory is created only when a Run reaches Prompt
 construction. Each create-only Markdown receipt contains the exact trusted

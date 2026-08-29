@@ -15,6 +15,7 @@ const defaults: ConversationSettings = {
   startupView: "new",
   sendBehavior: "enter",
   autoScroll: true,
+  executionPanelDefaultExpanded: false,
 };
 
 export type ConversationSettingsController = {
@@ -25,6 +26,7 @@ export type ConversationSettingsController = {
   saveStartupView: (startupView: StartupView) => Promise<string | null>;
   saveSendBehavior: (sendBehavior: SendBehavior) => Promise<string | null>;
   saveAutoScroll: (autoScroll: boolean) => Promise<string | null>;
+  saveExecutionPanelDefaultExpanded: (expanded: boolean) => Promise<string | null>;
   reload: () => Promise<void>;
 };
 
@@ -72,7 +74,7 @@ export function useConversationSettings(): ConversationSettingsController {
     const operation = saveQueueRef.current.then(async () => {
       try {
         const saved = await putConversationSettings(next);
-        if (saved.startupView !== next.startupView || saved.sendBehavior !== next.sendBehavior || saved.autoScroll !== next.autoScroll) throw new Error("conversation_settings_response_mismatch");
+        if (saved.startupView !== next.startupView || saved.sendBehavior !== next.sendBehavior || saved.autoScroll !== next.autoScroll || saved.executionPanelDefaultExpanded !== next.executionPanelDefaultExpanded) throw new Error("conversation_settings_response_mismatch");
         if (saveGenerationRef.current === generation) {
           setSettings(saved);
           setLoaded(true);
@@ -93,6 +95,7 @@ export function useConversationSettings(): ConversationSettingsController {
   const saveStartupView = useCallback((startupView: StartupView) => save({ ...settings, startupView }), [save, settings]);
   const saveSendBehavior = useCallback((sendBehavior: SendBehavior) => save({ ...settings, sendBehavior }), [save, settings]);
   const saveAutoScroll = useCallback((autoScroll: boolean) => save({ ...settings, autoScroll }), [save, settings]);
+  const saveExecutionPanelDefaultExpanded = useCallback((executionPanelDefaultExpanded: boolean) => save({ ...settings, executionPanelDefaultExpanded }), [save, settings]);
 
   return {
     settings,
@@ -102,6 +105,7 @@ export function useConversationSettings(): ConversationSettingsController {
     saveStartupView,
     saveSendBehavior,
     saveAutoScroll,
+    saveExecutionPanelDefaultExpanded,
     reload,
   };
 }

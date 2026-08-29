@@ -12,7 +12,8 @@ from .app_paths import AppPaths
 from .models import ConversationSettings
 
 
-_SCHEMA_VERSION: Final = 2
+_SCHEMA_VERSION: Final = 3
+_PREVIOUS_SCHEMA_VERSION: Final = 2
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
 
 
@@ -40,6 +41,7 @@ def default_conversation_settings() -> ConversationSettings:
         startupView="new",
         sendBehavior="enter",
         autoScroll=True,
+        executionPanelDefaultExpanded=False,
     )
 
 
@@ -97,12 +99,25 @@ class JsonConversationSettingsStore:
 
     @staticmethod
     def _decode(raw: object) -> ConversationSettings:
-        if (
-            type(raw) is not dict
-            or set(raw) != {"version", "startupView", "sendBehavior", "autoScroll"}
-            or type(raw["version"]) is not int
-            or raw["version"] != _SCHEMA_VERSION
-        ):
+        if type(raw) is not dict or type(raw.get("version")) is not int:
+            raise ConversationSettingsStoreError
+        if raw["version"] == _PREVIOUS_SCHEMA_VERSION:
+            if set(raw) != {"version", "startupView", "sendBehavior", "autoScroll"}:
+                raise ConversationSettingsStoreError
+            execution_panel_default_expanded: object = False
+        elif raw["version"] == _SCHEMA_VERSION:
+            if set(raw) != {
+                "version",
+                "startupView",
+                "sendBehavior",
+                "autoScroll",
+                "executionPanelDefaultExpanded",
+            }:
+                raise ConversationSettingsStoreError
+            execution_panel_default_expanded = raw[
+                "executionPanelDefaultExpanded"
+            ]
+        else:
             raise ConversationSettingsStoreError
         try:
             return ConversationSettings.model_validate(
@@ -110,6 +125,7 @@ class JsonConversationSettingsStore:
                     "startupView": raw["startupView"],
                     "sendBehavior": raw["sendBehavior"],
                     "autoScroll": raw["autoScroll"],
+                    "executionPanelDefaultExpanded": execution_panel_default_expanded,
                 }
             )
         except Exception:

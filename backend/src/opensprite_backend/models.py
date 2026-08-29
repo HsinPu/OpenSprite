@@ -171,12 +171,14 @@ class ConversationSettings(ContractModel):
     startupView: StartupView
     sendBehavior: SendBehavior
     autoScroll: StrictBool
+    executionPanelDefaultExpanded: StrictBool
 
 
 class PutConversationSettingsRequest(ContractModel):
     startupView: StartupView
     sendBehavior: SendBehavior
     autoScroll: StrictBool
+    executionPanelDefaultExpanded: StrictBool
 
 
 class ErrorCode(StrEnum):

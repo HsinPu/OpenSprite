@@ -86,14 +86,14 @@ type ExecutionContextProps = {
   onRetry?: () => void;
   onReturnToLatest?: () => void;
   inspectionRunId?: string | null;
+  defaultExpanded: boolean;
 };
 
-export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null }: ExecutionContextProps) {
+export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null, defaultExpanded }: ExecutionContextProps) {
   const { locale, t } = useI18n();
-  const [isExpanded, setIsExpanded] = useState(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
-    return !window.matchMedia("(max-width: 767px)").matches;
-  });
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const previousDefaultExpandedRef = useRef(defaultExpanded);
+  const wasHistoricalRef = useRef(historical);
   const contextRef = useRef<HTMLElement>(null);
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
@@ -104,14 +104,22 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
   const title = t(historical ? "execution.detailsTitle" : "execution.title");
 
   useEffect(() => {
-    if (!historical || inspectionRunId === null) return;
-    setIsExpanded(true);
-    if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 767px)").matches) return;
-    window.requestAnimationFrame(() => {
-      const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-      contextRef.current?.scrollIntoView?.({ behavior, block: "start" });
-    });
-  }, [historical, inspectionRunId]);
+    const defaultChanged = previousDefaultExpandedRef.current !== defaultExpanded;
+    const returnedToLatest = wasHistoricalRef.current && !historical;
+    previousDefaultExpandedRef.current = defaultExpanded;
+    wasHistoricalRef.current = historical;
+
+    if (historical && inspectionRunId !== null) {
+      setIsExpanded(true);
+      if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 767px)").matches) return;
+      window.requestAnimationFrame(() => {
+        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+        contextRef.current?.scrollIntoView?.({ behavior, block: "start" });
+      });
+      return;
+    }
+    if (defaultChanged || returnedToLatest) setIsExpanded(defaultExpanded);
+  }, [defaultExpanded, historical, inspectionRunId]);
 
   return (
     <aside ref={contextRef} className={`chat-workspace__context${isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={executionTitleId} aria-busy={historical && loading}>

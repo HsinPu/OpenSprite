@@ -10,6 +10,7 @@ export type ConversationSettings = {
   startupView: StartupView;
   sendBehavior: SendBehavior;
   autoScroll: boolean;
+  executionPanelDefaultExpanded: boolean;
 };
 
 export type ConversationSettingsErrorCode = "invalid_request" | "settings_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
@@ -27,18 +28,20 @@ const serverCodes = ["invalid_request", "settings_store_unavailable", "internal_
 
 function responseBody(value: unknown): ConversationSettings {
   if (!record(value)
-    || !exactKeys(value, ["startupView", "sendBehavior", "autoScroll"])
+    || !exactKeys(value, ["startupView", "sendBehavior", "autoScroll", "executionPanelDefaultExpanded"])
     || typeof value.startupView !== "string"
     || !startupViews.includes(value.startupView as StartupView)
     || typeof value.sendBehavior !== "string"
     || !sendBehaviors.includes(value.sendBehavior as SendBehavior)
-    || typeof value.autoScroll !== "boolean") {
+    || typeof value.autoScroll !== "boolean"
+    || typeof value.executionPanelDefaultExpanded !== "boolean") {
     throw new ConversationSettingsApiError("malformed_response");
   }
   return {
     startupView: value.startupView as StartupView,
     sendBehavior: value.sendBehavior as SendBehavior,
     autoScroll: value.autoScroll,
+    executionPanelDefaultExpanded: value.executionPanelDefaultExpanded,
   };
 }
 

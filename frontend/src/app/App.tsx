@@ -363,6 +363,7 @@ export function App() {
           timeZone={generalSettings.settings.timeZone}
           sendBehavior={conversationSettings.settings.sendBehavior}
           autoScroll={conversationSettings.settings.autoScroll}
+          executionPanelDefaultExpanded={conversationSettings.settings.executionPanelDefaultExpanded}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}

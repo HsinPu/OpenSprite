@@ -136,6 +136,8 @@ export const zhTWMessages = {
   "general.send.modifierEnter": "Ctrl / Cmd + Enter 傳送",
   "general.autoScroll": "自動捲動至最新訊息",
   "general.autoScrollDescription": "送出訊息及 AI 回覆時，自動跟隨最新內容",
+  "general.executionPanelDefaultExpanded": "預設展開執行資訊",
+  "general.executionPanelDefaultExpandedDescription": "開啟對話時，自動顯示右側「本次執行」內容",
   "general.notifications": "通知",
   "general.notificationPlan": "桌面通知與提示音",
   "general.notificationPlanDescription": "在任務完成或需要確認時通知",

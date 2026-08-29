@@ -101,15 +101,16 @@ describe("settings dialog focus restoration", () => {
 });
 
 describe("Ant Design shell controls", () => {
-  it("uses Ant Design buttons and icons for both collapse controls", () => {
+  it("uses Ant Design controls with execution details collapsed by default", () => {
     render(<App />);
 
     const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
-    const executionToggle = screen.getByRole("button", { name: "收合本次執行" });
+    const executionToggle = screen.getByRole("button", { name: "展開本次執行" });
     expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
     expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
-    expect(executionToggle.querySelector(".anticon-right")).toBeTruthy();
+    expect(executionToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(executionToggle.querySelector(".anticon-left")).toBeTruthy();
   });
 
   it("does not show the inactive tools and connections shortcut", () => {
@@ -253,7 +254,7 @@ describe("conversation navigation", () => {
   ])("keeps an explicit startup URL instead of applying the recent preference (%s)", async (hash, explicitConversationId) => {
     window.history.replaceState(null, "", hash);
     const fetchMock = vi.fn((path: string) => {
-      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
@@ -274,7 +275,7 @@ describe("conversation navigation", () => {
   it("opens the most recently updated conversation when startup preference is recent", async () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
       if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));

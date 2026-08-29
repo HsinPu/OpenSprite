@@ -133,6 +133,8 @@ export const enMessages = {
   "general.send.modifierEnter": "Ctrl / Cmd + Enter to send",
   "general.autoScroll": "Auto-scroll to latest messages",
   "general.autoScrollDescription": "Follow the latest content when sending messages and receiving AI responses",
+  "general.executionPanelDefaultExpanded": "Expand execution details by default",
+  "general.executionPanelDefaultExpandedDescription": "Automatically show the current execution panel when opening a conversation",
   "general.notifications": "Notifications",
   "general.notificationPlan": "Desktop notifications and sounds",
   "general.notificationPlanDescription": "Notify when a task completes or needs confirmation",

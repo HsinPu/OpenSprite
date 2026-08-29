@@ -133,6 +133,8 @@ export const jaMessages = {
   "general.send.modifierEnter": "Ctrl / Cmd + Enter で送信",
   "general.autoScroll": "最新メッセージへ自動スクロール",
   "general.autoScrollDescription": "メッセージ送信時と AI 応答時に最新内容を追跡します",
+  "general.executionPanelDefaultExpanded": "実行情報を既定で展開",
+  "general.executionPanelDefaultExpandedDescription": "会話を開いたときに右側の今回の実行内容を自動表示します",
   "general.notifications": "通知",
   "general.notificationPlan": "デスクトップ通知とサウンド",
   "general.notificationPlanDescription": "タスク完了時または確認が必要なときに通知します",

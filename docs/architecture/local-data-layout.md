@@ -88,11 +88,13 @@ only `locale` and `timeZone`. A missing file returns `zh-TW` and `system`
 without creating a directory. Every successful change replaces both values
 atomically.
 
-`config/conversation.json` is an independent strict schema-v2, non-secret file
+`config/conversation.json` is an independent strict schema-v3, non-secret file
 containing `startupView` (`new` or `recent`), `sendBehavior` (`enter` or
-`modifier-enter`) and boolean `autoScroll`. A missing file returns `new`,
-`enter` and `true` without creating a directory. Schema-v1 is rejected rather
-than migrated or treated as a partial record. It does not alter
+`modifier-enter`), boolean `autoScroll`, and boolean
+`executionPanelDefaultExpanded`. A missing file returns `new`, `enter`, `true`
+and `false` without creating a directory. Current schema-v2 is read as a
+collapsed execution-panel preference without rewriting the file; the next
+successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `config/general.json`.
 
 `data/opensprite.db` is created only when the first user message and Run are

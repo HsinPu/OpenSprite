@@ -11,13 +11,14 @@ import { useGeneralSettings } from "../src/features/general-settings/useGeneralS
 import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
 
 const conversationSettings: ConversationSettingsController = {
-  settings: { startupView: "new", sendBehavior: "enter", autoScroll: true },
+  settings: { startupView: "new", sendBehavior: "enter", autoScroll: true, executionPanelDefaultExpanded: false },
   loaded: true,
   saving: false,
   error: null,
   saveStartupView: async () => null,
   saveSendBehavior: async () => null,
   saveAutoScroll: async () => null,
+  saveExecutionPanelDefaultExpanded: async () => null,
   reload: async () => undefined,
 };
 

@@ -23,6 +23,7 @@ type ChatWorkspaceProps = {
   timeZone: TimeZoneSetting;
   sendBehavior: SendBehavior;
   autoScroll: boolean;
+  executionPanelDefaultExpanded: boolean;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -62,6 +63,7 @@ export function ChatWorkspace({
   timeZone,
   sendBehavior,
   autoScroll,
+  executionPanelDefaultExpanded,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -283,6 +285,7 @@ export function ChatWorkspace({
         inspectionRunId={inspection.selectedRunId}
         onRetry={() => void inspection.retry()}
         onReturnToLatest={inspection.returnToLatest}
+        defaultExpanded={executionPanelDefaultExpanded}
       />
     </section>
   );
