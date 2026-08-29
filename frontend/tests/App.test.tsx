@@ -247,6 +247,49 @@ describe("persisted AI settings", () => {
 });
 
 describe("conversation navigation", () => {
+  it.each([
+    ["#new-chat", null],
+    ["#chat=49d6c5e3-1724-44a7-9e69-0c0103176461", "49d6c5e3-1724-44a7-9e69-0c0103176461"],
+  ])("keeps an explicit startup URL instead of applying the recent preference (%s)", async (hash, explicitConversationId) => {
+    window.history.replaceState(null, "", hash);
+    const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter" })));
+      if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByText("最近對話");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/settings/conversation", undefined));
+    expect(window.location.hash).toBe(hash);
+    expect(window.location.hash).not.toContain("c7d17356");
+  });
+
+  it("opens the most recently updated conversation when startup preference is recent", async () => {
+    const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter" })));
+      if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
+      if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
+      if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
+      throw new Error(`unexpected request ${path} ${init?.method ?? "GET"}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await waitFor(() => expect(window.location.hash).toBe(`#chat=${conversationId}`));
+    expect(screen.getByRole("heading", { level: 1, name: "最近對話" })).toBeTruthy();
+  });
+
   it("renders backend conversations and uses only their UUID in the URL hash", async () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";

@@ -8,6 +8,7 @@ import type { ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
 import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../src/features/general-settings/useGeneralSettings";
+import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
 
 const generalSettings: GeneralSettingsController = {
   settings: { locale: "zh-TW", timeZone: "system" },
@@ -16,6 +17,18 @@ const generalSettings: GeneralSettingsController = {
   error: null,
   saveLocale: async () => null,
   saveTimeZone: async () => null,
+  reload: async () => undefined,
+};
+
+const saveStartupView = vi.fn(async () => null);
+const saveSendBehavior = vi.fn(async () => null);
+const conversationSettings: ConversationSettingsController = {
+  settings: { startupView: "new", sendBehavior: "enter" },
+  loaded: true,
+  saving: false,
+  error: null,
+  saveStartupView,
+  saveSendBehavior,
   reload: async () => undefined,
 };
 
@@ -73,30 +86,34 @@ function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output></>;
 }
 
 function GuardedDialogHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
 }
 
 function GeneralSettingsPageHarness({ saving = false }: { saving?: boolean }) {
   const providerCatalog = useProviderCatalog();
-  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} onClose={() => undefined} />;
+  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
 }
 
 describe("provider settings", () => {
-  beforeEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    saveStartupView.mockClear();
+    saveSendBehavior.mockClear();
+  });
 
   it("presents provider default plus the three explicit response modes", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
@@ -131,9 +148,15 @@ describe("provider settings", () => {
     expect(screen.getAllByText("Demo")).toHaveLength(5);
     expect(screen.getByRole("region", { name: "啟動與對話" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
-    expect(screen.getAllByText("未來上線")).toHaveLength(4);
+    expect(screen.getByRole("combobox", { name: "啟動時開啟" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "訊息傳送方式" })).toBeTruthy();
+    expect(screen.getAllByText("未來上線")).toHaveLength(1);
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByText("已儲存")).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "啟動時開啟" }), { target: { value: "recent" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "訊息傳送方式" }), { target: { value: "modifier-enter" } });
+    expect(saveStartupView).toHaveBeenCalledWith("recent");
+    expect(saveSendBehavior).toHaveBeenCalledWith("modifier-enter");
   });
 
   it("shows save progress and hides the completed receipt after two seconds", () => {

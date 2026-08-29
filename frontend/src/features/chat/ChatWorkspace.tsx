@@ -1,8 +1,9 @@
-import { FormEvent, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
+import type { SendBehavior } from "../../api/conversationSettings";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
@@ -17,6 +18,7 @@ type ChatWorkspaceProps = {
   modelChoices: ReadonlyArray<ModelChoice>;
   modelSelectionSaving: boolean;
   timeZone: TimeZoneSetting;
+  sendBehavior: SendBehavior;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -54,6 +56,7 @@ export function ChatWorkspace({
   modelChoices,
   modelSelectionSaving,
   timeZone,
+  sendBehavior,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -96,6 +99,16 @@ export function ChatWorkspace({
     if (!content || chat.isRunning || !modelSelection) return;
     setDraft("");
     void chat.send(content);
+  };
+
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    const shouldSend = sendBehavior === "enter"
+      ? !event.shiftKey
+      : !event.shiftKey && (event.ctrlKey || event.metaKey);
+    if (!shouldSend) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
   };
 
   return (
@@ -169,6 +182,7 @@ export function ChatWorkspace({
             ref={composerInputRef}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
             placeholder={modelSelection ? t("chat.inputPlaceholder") : t("chat.selectModelPlaceholder")}
             rows={1}
             disabled={chat.isRunning}

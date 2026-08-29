@@ -6,6 +6,7 @@
 
 - `src/app/`：應用外框、導覽、dialog 與 feature 組裝。
 - `src/api/`：Provider、General/AI settings 與 Agent chat 的 HTTP／SSE client。
+- `src/features/conversation-settings/`：持久化啟動目的地與鍵盤傳送偏好。
 - `src/features/chat/`：Conversation 清單、Run 狀態、聊天畫面與 SSE 互動。
 - `src/features/settings/`：設定視窗與尚未上線的一般偏好呈現。
 - `src/features/general-settings/`：持久化語言、時區與日期時間格式。
@@ -36,7 +37,7 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
 
-設定視窗以「一般」與「AI 模型」作為可操作分類。未實作的模型偏好、啟動行為、
+設定視窗以「一般」與「AI 模型」作為可操作分類。未實作的模型偏好、
 通知、記憶、工具、外觀與隱私功能以停用的 `Demo` 分類或「未來上線」資訊列呈現，
 方便追蹤規劃，但不建立 session-only 假狀態或可操作控制項。
 
@@ -44,6 +45,11 @@ OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後
 兩者透過同源 General Settings API 保存在本機服務。語言切換會同步 React、Ant Design、
 API 錯誤文字與文件 `lang`；時區控制 Today 分組及 Execution 時間。前端不寫入
 localStorage 或網址，繁體中文是固定 fallback。
+
+「啟動與對話」設定透過獨立 Conversation Settings API 保存。啟動時若網址已有有效的
+`#chat=<uuid>` 或 `#new-chat`，網址優先；否則可選擇開啟新對話或最近更新的對話。
+訊息可設定為 Enter 傳送（Shift + Enter 換行），或 Ctrl/Cmd + Enter 傳送（Enter 換行）；
+IME 組字期間不會誤送。
 
 聊天工作台上方與「AI 模型」設定頁共用同一份確認後的選擇。啟動時會讀取已保存的選擇與已連線的固定廠家；沒有選擇而有可用固定模型時，會保存固定順序中的第一個模型。儲存失敗會保留原選擇。OpenRouter 的暫時讀取失敗不會清除既有選擇；成功讀到模型清單後，才會處理已不存在模型的 fallback。
 

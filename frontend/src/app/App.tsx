@@ -10,6 +10,7 @@ import { useAiSettings } from "../features/ai-settings/useAiSettings";
 import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
 import { isTodayInTimeZone } from "../features/general-settings/dateTime";
 import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
+import { useConversationSettings } from "../features/conversation-settings/useConversationSettings";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
@@ -69,6 +70,7 @@ export function App() {
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const generalSettings = useGeneralSettings();
+  const conversationSettings = useConversationSettings();
   const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
@@ -88,10 +90,37 @@ export function App() {
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsOpenerRef = useRef<HTMLElement | null>(null);
   const menuWasOpen = useRef(false);
+  const startupResolvedRef = useRef(false);
   const activeConversation = conversations.find((conversation) => conversation.id === conversationId);
   const chatTitle = conversationId === null ? t("app.newConversationTitle") : activeConversation?.title ?? t("app.conversationTitle");
   const todayConversations = conversations.filter((conversation) => isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
   const earlierConversations = conversations.filter((conversation) => !isTodayInTimeZone(conversation.updatedAt, generalSettings.settings.timeZone));
+
+  useEffect(() => {
+    if (startupResolvedRef.current
+      || conversationsLoading
+      || (!conversationSettings.loaded && !conversationSettings.error)) return;
+
+    const hash = window.location.hash;
+    if (hash === "#new-chat" || conversationIdFromHash() !== null) {
+      startupResolvedRef.current = true;
+      return;
+    }
+
+    startupResolvedRef.current = true;
+    const recentConversation = conversationSettings.error === null
+      && conversationSettings.settings.startupView === "recent"
+      ? conversations[0]
+      : undefined;
+    if (recentConversation) {
+      setConversationId(recentConversation.id);
+      window.history.replaceState(null, "", `#chat=${recentConversation.id}`);
+      return;
+    }
+
+    setConversationId(null);
+    window.history.replaceState(null, "", "#new-chat");
+  }, [conversationSettings.error, conversationSettings.loaded, conversationSettings.settings.startupView, conversations, conversationsLoading]);
 
   useEffect(() => {
     const syncHash = () => {
@@ -332,6 +361,7 @@ export function App() {
           modelChoices={modelChoices}
           modelSelectionSaving={aiSettingsSaving}
           timeZone={generalSettings.settings.timeZone}
+          sendBehavior={conversationSettings.settings.sendBehavior}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
@@ -373,6 +403,7 @@ export function App() {
           onResponseModeChange={saveResponseMode}
           providerCatalog={providerCatalog}
           generalSettings={generalSettings}
+          conversationSettings={conversationSettings}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

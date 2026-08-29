@@ -16,6 +16,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
+import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
@@ -32,6 +33,7 @@ type SettingsPageProps = {
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
+  conversationSettings: ConversationSettingsController;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
 };
@@ -320,9 +322,9 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
-  const saving = aiSettingsSaving || generalSettings.saving;
+  const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
   const wasSavingRef = useRef(false);
   const [showSaveStatus, setShowSaveStatus] = useState(false);
   useEffect(() => {
@@ -354,7 +356,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
         </div>
       </div>
     </section>

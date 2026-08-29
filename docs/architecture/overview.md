@@ -56,7 +56,11 @@ General settings 使用獨立的 `contracts/general-settings.openapi.json` 與
 Conversation settings 使用獨立的
 `contracts/conversation-settings.openapi.json` 與
 `config/conversation.json`，原子保存啟動目的地與訊息傳送方式，不修改
-General Settings schema。
+General Settings schema。前端只在 application mount 時解析一次啟動目的地：有效的
+`#chat=<uuid>` 或 `#new-chat` 永遠優先；沒有可辨識 hash 時，才依設定開啟新對話或
+Conversation 清單中最近更新的一筆。`recent` 沒有可用對話或設定讀取失敗時安全回到新對話。
+輸入框的 `enter` 模式以 Enter 傳送、Shift + Enter 換行；`modifier-enter` 模式以
+Ctrl/Cmd + Enter 傳送、Enter 換行。IME composition 期間不觸發傳送，送出按鈕不受此偏好影響。
 
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
 對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。

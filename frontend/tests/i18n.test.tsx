@@ -8,10 +8,21 @@ import { GeneralSettings } from "../src/features/settings/GeneralSettings";
 import { createTranslator } from "../src/i18n/catalog";
 import { I18nProvider } from "../src/i18n/I18nProvider";
 import { useGeneralSettings } from "../src/features/general-settings/useGeneralSettings";
+import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
+
+const conversationSettings: ConversationSettingsController = {
+  settings: { startupView: "new", sendBehavior: "enter" },
+  loaded: true,
+  saving: false,
+  error: null,
+  saveStartupView: async () => null,
+  saveSendBehavior: async () => null,
+  reload: async () => undefined,
+};
 
 function GeneralSettingsHarness() {
   const generalSettings = useGeneralSettings();
-  return <GeneralSettings generalSettings={generalSettings} />;
+  return <GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} />;
 }
 
 function I18nHarness() {

@@ -70,6 +70,7 @@ describe("live chat workspace", () => {
         modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]}
         modelSelectionSaving={false}
         timeZone="system"
+        sendBehavior="enter"
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}
@@ -116,6 +117,7 @@ describe("live chat workspace", () => {
         modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]}
         modelSelectionSaving={false}
         timeZone="system"
+        sendBehavior="enter"
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}
@@ -137,5 +139,32 @@ describe("live chat workspace", () => {
 
     fireEvent.change(composer, { target: { value: "hello" } });
     expect(sendButton.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("sends with Enter but preserves Shift+Enter and IME composition", () => {
+    const send = vi.fn(async () => true);
+    mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send, cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    const composer = screen.getByRole("textbox", { name: "輸入訊息" });
+    fireEvent.change(composer, { target: { value: "hello" } });
+    fireEvent.keyDown(composer, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(composer, { key: "Enter", isComposing: true });
+    expect(send).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(send).toHaveBeenCalledWith("hello");
+  });
+
+  it("uses Ctrl or Cmd Enter in modifier mode", () => {
+    const send = vi.fn(async () => true);
+    mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send, cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="modifier-enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    const composer = screen.getByRole("textbox", { name: "輸入訊息" });
+    fireEvent.change(composer, { target: { value: "hello" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(send).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(composer, { key: "Enter", ctrlKey: true });
+    expect(send).toHaveBeenCalledWith("hello");
   });
 });
