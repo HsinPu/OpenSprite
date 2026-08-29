@@ -14,6 +14,10 @@ from .api.ai_settings_routes import (
 )
 from .api.chat_models import chat_error_response
 from .api.chat_routes import router as chat_router
+from .api.conversation_settings_routes import (
+    conversation_settings_error_response,
+    router as conversation_settings_router,
+)
 from .api.general_settings_routes import (
     general_settings_error_response,
     router as general_settings_router,
@@ -30,6 +34,7 @@ from .application import (
 from .local_security import LocalRequestSecurityMiddleware
 from .models import (
     AiSettingsErrorCode,
+    ConversationSettingsErrorCode,
     ErrorCode,
     GeneralSettingsErrorCode,
     HealthResponse,
@@ -49,6 +54,11 @@ from .general_settings import (
     GeneralSettingsStoreError,
     UnavailableGeneralSettings,
 )
+from .conversation_settings import (
+    ConversationSettingsOperations,
+    ConversationSettingsStoreError,
+    UnavailableConversationSettings,
+)
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 
@@ -58,6 +68,7 @@ def create_app(
     *,
     ai_settings: AiSettingsOperations | None = None,
     general_settings: GeneralSettingsOperations | None = None,
+    conversation_settings: ConversationSettingsOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
@@ -87,6 +98,11 @@ def create_app(
         general_settings
         if general_settings is not None
         else UnavailableGeneralSettings()
+    )
+    app.state.conversation_settings = (
+        conversation_settings
+        if conversation_settings is not None
+        else UnavailableConversationSettings()
     )
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
@@ -131,6 +147,15 @@ def create_app(
             GeneralSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
+    async def conversation_settings_store_error_handler(
+        request: Request,
+        exc: ConversationSettingsStoreError,
+    ) -> JSONResponse:
+        del request, exc
+        return conversation_settings_error_response(
+            ConversationSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
+        )
+
     async def agent_chat_error_handler(
         request: Request,
         exc: AgentChatError,
@@ -162,6 +187,10 @@ def create_app(
         cast(ExceptionHandler, general_settings_store_error_handler),
     )
     app.add_exception_handler(
+        ConversationSettingsStoreError,
+        cast(ExceptionHandler, conversation_settings_store_error_handler),
+    )
+    app.add_exception_handler(
         AgentChatError,
         cast(ExceptionHandler, agent_chat_error_handler),
     )
@@ -181,6 +210,7 @@ def create_app(
 
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
+    app.include_router(conversation_settings_router)
     app.include_router(provider_router)
     app.include_router(chat_router)
     return app

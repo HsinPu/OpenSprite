@@ -19,6 +19,10 @@ credentials, internal prompts, hidden reasoning, and unapproved tool surfaces.
 persisted interface locale and time-zone choice. It remains separate from AI
 model configuration.
 
+`conversation-settings.openapi.json` is the authoritative HTTP contract for
+startup destination and message sending behavior. It remains separate from
+General Settings so the existing locale/time-zone schema does not change.
+
 The contract currently covers:
 
 - backend liveness at `GET /healthz`;
@@ -37,6 +41,12 @@ The AI settings contract covers:
 The general settings contract covers:
 
 - reading the confirmed interface locale and time-zone choice;
+- atomically replacing both values from fixed supported catalogs.
+
+The conversation settings contract covers:
+
+- choosing a new or most-recent conversation at application startup;
+- choosing Enter or Ctrl/Cmd+Enter message sending behavior;
 - atomically replacing both values from fixed supported catalogs.
 
 The agent chat contract covers:

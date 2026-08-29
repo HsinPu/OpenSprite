@@ -33,6 +33,10 @@ class AppPaths:
         return self.config_dir / "general.json"
 
     @property
+    def conversation_settings_file(self) -> Path:
+        return self.config_dir / "conversation.json"
+
+    @property
     def data_dir(self) -> Path:
         return self.home / "data"
 

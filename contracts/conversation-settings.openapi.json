@@ -1,0 +1,84 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local conversation settings API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative HTTP contract for persisted startup and message sending behavior."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {
+    "scope": "loopback-only local desktop service",
+    "applicationAuthentication": "none",
+    "browserOriginPolicy": "same-origin",
+    "cors": "disabled by default"
+  },
+  "x-compatibility": {
+    "policy": "This independent resource does not alter or migrate General Settings."
+  },
+  "x-events": {"supported": false},
+  "tags": [{"name": "conversation-settings", "description": "Persisted startup and message sending behavior."}],
+  "paths": {
+    "/api/settings/conversation": {
+      "get": {
+        "operationId": "getConversationSettings",
+        "summary": "Read conversation settings",
+        "tags": ["conversation-settings"],
+        "responses": {
+          "200": {"description": "The confirmed local conversation settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSettings"}}}},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      },
+      "put": {
+        "operationId": "putConversationSettings",
+        "summary": "Replace conversation settings atomically",
+        "tags": ["conversation-settings"],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSettings"}}}},
+        "responses": {
+          "200": {"description": "The requested values are now confirmed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ConversationSettings"}}}},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StartupView": {"type": "string", "enum": ["new", "recent"]},
+      "SendBehavior": {"type": "string", "enum": ["enter", "modifier-enter"]},
+      "ConversationSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["startupView", "sendBehavior"],
+        "properties": {
+          "startupView": {"$ref": "#/components/schemas/StartupView"},
+          "sendBehavior": {"$ref": "#/components/schemas/SendBehavior"}
+        }
+      },
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "settings_store_unavailable", "internal_error"]},
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {"$ref": "#/components/schemas/ErrorCode"},
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"}
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}
+      }
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed or noncanonical conversation settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "SettingsStoreUnavailable": {"description": "The local conversation settings file is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "An unexpected local backend error occurred.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}

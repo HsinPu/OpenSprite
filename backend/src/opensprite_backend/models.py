@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
 TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
+StartupView = Literal["new", "recent"]
+SendBehavior = Literal["enter", "modifier-enter"]
 
 
 class ContractModel(BaseModel):
@@ -143,6 +145,16 @@ class PutGeneralSettingsRequest(ContractModel):
     timeZone: TimeZoneSetting
 
 
+class ConversationSettings(ContractModel):
+    startupView: StartupView
+    sendBehavior: SendBehavior
+
+
+class PutConversationSettingsRequest(ContractModel):
+    startupView: StartupView
+    sendBehavior: SendBehavior
+
+
 class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_PROVIDER = "unsupported_provider"
@@ -197,3 +209,19 @@ class GeneralSettingsErrorDetail(ContractModel):
 
 class GeneralSettingsErrorEnvelope(ContractModel):
     error: GeneralSettingsErrorDetail
+
+
+class ConversationSettingsErrorCode(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
+    INTERNAL_ERROR = "internal_error"
+
+
+class ConversationSettingsErrorDetail(ContractModel):
+    code: ConversationSettingsErrorCode
+    message: str
+    retryable: bool
+
+
+class ConversationSettingsErrorEnvelope(ContractModel):
+    error: ConversationSettingsErrorDetail

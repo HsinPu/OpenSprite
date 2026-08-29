@@ -26,6 +26,7 @@ the user explicitly requests verified user-data deletion.
 ├─ config/
 │  ├─ settings.json
 │  ├─ general.json
+│  ├─ conversation.json
 │  └─ credential.key
 ├─ data/
 │  └─ opensprite.db
@@ -50,6 +51,7 @@ create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
 `auth.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
+`config/conversation.json`,
 `state/providers.json`, the transient `state/provider-transaction.json`, and
 `data/opensprite.db` are implemented today. Each Run also writes one complete,
 create-only System Prompt receipt below `logs/system-prompts/<UTC-date>` before
@@ -85,6 +87,11 @@ then removes the journal. The journal never contains an API key or ciphertext.
 only `locale` and `timeZone`. A missing file returns `zh-TW` and `system`
 without creating a directory. Every successful change replaces both values
 atomically.
+
+`config/conversation.json` is an independent strict schema-v1, non-secret file
+containing `startupView` (`new` or `recent`) and `sendBehavior` (`enter` or
+`modifier-enter`). A missing file returns `new` and `enter` without creating a
+directory. It does not alter or migrate `config/general.json`.
 
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns exactly the Conversation, visible Message, Run,

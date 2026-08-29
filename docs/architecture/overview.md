@@ -53,6 +53,11 @@ General settings 使用獨立的 `contracts/general-settings.openapi.json` 與
 （`system`／`Asia/Taipei`／`UTC`）。它不與 AI settings 共檔；讀取缺少檔案時回傳
 繁體中文與系統時區，且不建立任何目錄。
 
+Conversation settings 使用獨立的
+`contracts/conversation-settings.openapi.json` 與
+`config/conversation.json`，原子保存啟動目的地與訊息傳送方式，不修改
+General Settings schema。
+
 已實作的 runtime 邊界由 [`agent-chat.md`](agent-chat.md) 定義：Conversation 保存可見
 對話，Run 表示單次使用者訊息的 bounded Agent 執行，Run event 只保存可安全顯示的語意事件。
 所有訊息都進入同一個 Agent loop，不加入關鍵字分類、舊 Task lifecycle 或直接繞過 Run 的

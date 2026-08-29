@@ -3,7 +3,8 @@
 This directory contains the minimal Python 3.12+ FastAPI foundation for the
 local OpenSprite service. `contracts/provider-connections.openapi.json` and
 `contracts/ai-settings.openapi.json` and
-`contracts/general-settings.openapi.json` are the authoritative HTTP contracts.
+`contracts/general-settings.openapi.json` and
+`contracts/conversation-settings.openapi.json` are the authoritative HTTP contracts.
 
 The current slice provides:
 
@@ -16,6 +17,9 @@ The current slice provides:
   `GET`/`PUT /api/settings/ai`;
 - strict persisted locale and time-zone settings at `config/general.json`,
   exposed through `GET`/`PUT /api/settings/general`;
+- strict persisted startup and message sending settings at
+  `config/conversation.json`, exposed through
+  `GET`/`PUT /api/settings/conversation`;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable AES-256-GCM credential store below `.opensprite`;
@@ -59,6 +63,10 @@ before an approved feature uses them.
 The general settings file is created only after a successful PUT. It uses
 strict schema v1 and is stored separately so locale and time-zone updates cannot
 overwrite AI model configuration.
+
+The conversation settings file is also created only after a successful PUT. It
+uses an independent strict schema v1 so startup and composer behavior cannot
+invalidate General Settings.
 
 The System Prompt log directory is created only when a Run reaches Prompt
 construction. Each create-only Markdown receipt contains the exact trusted

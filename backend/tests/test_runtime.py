@@ -10,6 +10,7 @@ from opensprite_backend.models import ProviderListResponse
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.ai_settings import UnavailableAiSettings
 from opensprite_backend.general_settings import UnavailableGeneralSettings
+from opensprite_backend.conversation_settings import UnavailableConversationSettings
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
@@ -57,6 +58,7 @@ class FakeRuntime:
         self.connections = RuntimeConnections(self.client)
         self.ai_settings = UnavailableAiSettings()
         self.general_settings = UnavailableGeneralSettings()
+        self.conversation_settings = UnavailableConversationSettings()
 
     async def aclose(self) -> None:
         await self.client.aclose()
