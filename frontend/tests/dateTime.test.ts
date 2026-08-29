@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatTime, isTodayInTimeZone } from "../src/features/general-settings/dateTime";
+import { formatMessageTime, formatTime, isTodayInTimeZone } from "../src/features/general-settings/dateTime";
 
 describe("localized date and time", () => {
   it("uses the selected time zone for Today boundaries", () => {
@@ -22,5 +22,16 @@ describe("localized date and time", () => {
 
     expect(formatTime(timestamp, "en", "Asia/Taipei")).toBe(expected);
     expect(formatTime(null, "en", "UTC")).toBe("—");
+  });
+
+  it("formats message time without seconds", () => {
+    const timestamp = "2026-08-20T16:00:42Z";
+    const expected = new Intl.DateTimeFormat("zh-TW", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Taipei",
+    }).format(new Date(timestamp));
+
+    expect(formatMessageTime(timestamp, "zh-TW", "Asia/Taipei")).toBe(expected);
   });
 });

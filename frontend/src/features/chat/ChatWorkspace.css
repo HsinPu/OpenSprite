@@ -202,10 +202,13 @@
   line-height: 1.55;
 }
 
-.chat-workspace__delivery { margin-top: 6px; color: var(--chat-muted); font-size: 0.78rem; }
+.chat-workspace__message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 7px; }
+.chat-workspace__message-time { color: var(--chat-muted); font-size: 0.75rem; line-height: 1.2; }
+.chat-workspace__delivery { color: var(--chat-muted); font-size: 0.78rem; }
 .chat-workspace__delivery--failed { color: #a64534; }
 
 .chat-workspace__assistant-row { display: flex; align-items: flex-start; gap: 14px; margin: 0 0 24px; }
+.chat-workspace__assistant-content { display: grid; width: fit-content; min-width: 0; max-width: min(78%, 680px); justify-items: start; gap: 7px; }
 
 .chat-workspace__mark {
   display: block;
@@ -222,7 +225,7 @@
 
 .chat-workspace__mark--small { width: 28px; height: 28px; flex-basis: 28px; border-width: 4px; margin: 0; }
 
-.chat-workspace__assistant-card { min-width: 0; max-width: min(78%, 680px); padding: 22px 24px; border: 1px solid var(--chat-border); border-radius: 16px; background: var(--chat-surface); box-shadow: 0 5px 18px rgba(36, 31, 28, 0.035); }
+.chat-workspace__assistant-card { width: fit-content; min-width: 0; max-width: 100%; padding: 22px 24px; border: 1px solid var(--chat-border); border-radius: 16px; background: var(--chat-surface); box-shadow: 0 5px 18px rgba(36, 31, 28, 0.035); }
 .chat-workspace__assistant-card--compact { padding: 14px 18px; }
 .chat-workspace__assistant-card--compact p { margin: 0; line-height: 1.6; }
 .chat-workspace__assistant-card--streaming { border-color: color-mix(in srgb, var(--chat-primary) 32%, var(--chat-border)); }
@@ -373,8 +376,9 @@
   .chat-workspace__user-row > div { max-width: 82%; }
   .chat-workspace__user-message { min-width: 0; max-width: 100%; padding: 13px 15px; overflow-wrap: anywhere; font-size: 0.96rem; }
   .chat-workspace__assistant-row { gap: 12px; }
+  .chat-workspace__assistant-content { width: 0; max-width: none; flex: 1; }
   .chat-workspace__mark { flex-basis: 34px; width: 34px; height: 34px; border-width: 5px; }
-  .chat-workspace__assistant-card { width: 0; max-width: none; flex: 1; padding: 20px 16px; overflow-wrap: anywhere; border-radius: 14px; }
+  .chat-workspace__assistant-card { width: 100%; max-width: 100%; padding: 20px 16px; overflow-wrap: anywhere; border-radius: 14px; }
   .chat-workspace__assistant-intro { font-size: 0.98rem; }
   .chat-workspace__process-item { grid-template-columns: 22px 1fr; padding: 5px 0; }
   .chat-workspace__process-item time, .chat-workspace__process-status { grid-column: 2; }

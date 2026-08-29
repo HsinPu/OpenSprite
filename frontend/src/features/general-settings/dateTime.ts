@@ -29,3 +29,11 @@ export function formatTime(timestamp: string | null, locale: string, timeZone: T
     timeZone: timeZoneOption(timeZone),
   }).format(new Date(timestamp));
 }
+
+export function formatMessageTime(timestamp: string, locale: string, timeZone: TimeZoneSetting): string {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timeZoneOption(timeZone),
+  }).format(new Date(timestamp));
+}

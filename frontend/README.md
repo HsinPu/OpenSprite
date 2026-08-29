@@ -35,6 +35,9 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 
 對話清單、可見訊息、Run snapshot 與安全語意事件都來自本機服務；執行期間以 SSE 顯示增量文字與狀態，終止後重新讀取 durable Run 與 Messages。模型選擇與回應模式會透過同源 `GET`／`PUT /api/settings/ai` 以單一設定保存到本機服務；前端只處理 Provider ID、model ID 與 `default`／`fast`／`balanced`／`deep`，其中「預設」代表執行時不指定推理強度。前端不使用 localStorage、網址或瀏覽器 log 保存設定、動態模型清單或 API 金鑰。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
 
+每則使用者與 AI 訊息下方會顯示建立時間，依確認後的介面語言與時區格式化到分鐘；
+資料來源仍是訊息契約的 UTC `createdAt`，不另存一份前端時間。
+
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
 
 設定視窗以「一般」與「AI 模型」作為可操作分類。未實作的模型偏好、

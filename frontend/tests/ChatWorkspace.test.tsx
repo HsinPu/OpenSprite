@@ -39,6 +39,35 @@ beforeEach(() => {
 });
 
 describe("live chat workspace", () => {
+  it("shows localized timestamps beneath persisted user and assistant messages", () => {
+    mockedUseConversationRun.mockReturnValue({
+      messages: [
+        { id: run.userMessageId, role: "user", content: "你好", createdAt: "2026-08-22T08:00:00Z", delivery: "persisted" },
+        { id: "44444444-4444-4444-8444-444444444444", role: "assistant", content: "你好！", createdAt: "2026-08-22T08:00:07Z", delivery: "persisted" },
+      ],
+      activeRun: null,
+      events: [],
+      streamedText: "",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: false,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="Asia/Taipei" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    const timestamps = Array.from(document.querySelectorAll("time.chat-workspace__message-time"));
+    expect(timestamps).toHaveLength(2);
+    expect(timestamps.map((element) => element.getAttribute("datetime"))).toEqual([
+      "2026-08-22T08:00:00Z",
+      "2026-08-22T08:00:07Z",
+    ]);
+  });
+
   it("shows the real run, exposes cancellation, and does not advertise fake tools", () => {
     const cancel = vi.fn(async () => undefined);
     mockedUseConversationRun.mockReturnValue({

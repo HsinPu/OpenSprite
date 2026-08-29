@@ -5,6 +5,7 @@ import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import type { SendBehavior } from "../../api/conversationSettings";
 import { useI18n } from "../../i18n/I18nProvider";
+import { formatMessageTime } from "../general-settings/dateTime";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
 
@@ -62,7 +63,7 @@ export function ChatWorkspace({
   onConversationUpdated,
   title,
 }: ChatWorkspaceProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [draft, setDraft] = useState("");
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const chat = useConversationRun({
@@ -145,21 +146,30 @@ export function ChatWorkspace({
               <div className="chat-workspace__user-row" key={message.id}>
                 <div>
                   <p className="chat-workspace__user-message">{message.content}</p>
-                  {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
-                  {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
+                  <div className="chat-workspace__message-meta">
+                    <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
+                    {message.delivery === "sending" ? <span className="chat-workspace__delivery">{t("chat.sending")}</span> : null}
+                    {message.delivery === "failed" ? <span className="chat-workspace__delivery chat-workspace__delivery--failed">{t("chat.sendFailed")}</span> : null}
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="chat-workspace__assistant-row" key={message.id}>
                 <OpenSpriteMark />
-                <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
+                <div className="chat-workspace__assistant-content">
+                  <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
+                  <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
+                </div>
               </div>
             ))}
             {showLiveAssistant ? (
               <div className="chat-workspace__assistant-row" data-testid="streaming-assistant">
                 <OpenSpriteMark />
-                <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
-                  {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
+                <div className="chat-workspace__assistant-content">
+                  <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
+                    {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
+                  </div>
+                  {chat.activeRun ? <time className="chat-workspace__message-time" dateTime={chat.activeRun.createdAt}>{formatMessageTime(chat.activeRun.createdAt, locale, timeZone)}</time> : null}
                 </div>
               </div>
             ) : null}
