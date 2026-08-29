@@ -12,7 +12,8 @@ from .app_paths import AppPaths
 from .models import AiSettings, ErrorCode
 from .provider_connections import ProviderConnectionError, ProviderConnections
 
-_SCHEMA_VERSION: Final = 2
+_SCHEMA_VERSION: Final = 3
+_PREVIOUS_SCHEMA_VERSION: Final = 2
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
 
 
@@ -100,18 +101,24 @@ class JsonAiSettingsStore:
 
     @staticmethod
     def _decode(raw: object) -> AiSettings:
-        if (
-            type(raw) is not dict
-            or set(raw) != {"version", "model", "responseMode"}
-            or type(raw["version"]) is not int
-            or raw["version"] != _SCHEMA_VERSION
-        ):
+        if type(raw) is not dict or set(raw) != {
+            "version",
+            "model",
+            "responseMode",
+        } or type(raw["version"]) is not int:
+            raise SettingsStoreError
+        model = raw["model"]
+        if raw["version"] == _PREVIOUS_SCHEMA_VERSION and type(model) is dict:
+            if set(model) != {"providerId", "modelId"}:
+                raise SettingsStoreError
+            model = {**model, "contextBudget": "auto"}
+        elif raw["version"] != _SCHEMA_VERSION:
             raise SettingsStoreError
         failed = False
         settings: AiSettings | None = None
         try:
             settings = AiSettings.model_validate(
-                {"model": raw["model"], "responseMode": raw["responseMode"]}
+                {"model": model, "responseMode": raw["responseMode"]}
             )
         except Exception:
             failed = True

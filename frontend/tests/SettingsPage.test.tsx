@@ -91,7 +91,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6" } }: { initialSelection?: ModelSelection | null }) {
+function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" } }: { initialSelection?: ModelSelection | null }) {
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const providerCatalog = useProviderCatalog();
@@ -99,14 +99,14 @@ function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "
 }
 
 function GuardedDialogHarness() {
-  const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6" });
+  const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
   return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
-  const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing" });
+  const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing", contextBudget: "auto" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
   return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
@@ -118,6 +118,19 @@ function GeneralSettingsPageHarness({ saving = false }: { saving?: boolean }) {
 }
 
 describe("provider settings", () => {
+  it("changes and explains the selected model context budget", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
+    render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k" }} />);
+
+    expect(await screen.findByText("模型支援上限：1.05M · 目前使用上限：128K · 預留回應空間：8K")).toBeTruthy();
+    const contextSelect = screen.getByLabelText("對話內容上限");
+    fireEvent.mouseDown(contextSelect);
+    const option = await screen.findByText("256K");
+    fireEvent.click(option.closest(".ant-select-item-option")!);
+
+    await waitFor(() => expect(screen.getByText("模型支援上限：1.05M · 目前使用上限：256K · 預留回應空間：8K")).toBeTruthy());
+  });
+
   beforeEach(() => {
     vi.unstubAllGlobals();
     saveStartupView.mockClear();
@@ -408,7 +421,7 @@ describe("provider settings", () => {
         dynamicModel("acme/reasoning", "Acme Reasoning"),
       ] })));
     vi.stubGlobal("fetch", fetchMock);
-    const { container } = render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast" }} />);
+    const { container } = render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "acme/fast", contextBudget: "auto" }} />);
 
     const settingsSurface = container.querySelector(".settings-page")!;
     const providerSelect = document.getElementById("settings-model-provider")!;
@@ -432,7 +445,7 @@ describe("provider settings", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ models: [dynamicModel("acme/fast", "Acme Fast"), dynamicModel("acme/reasoning", "Acme Reasoning")] })));
     vi.stubGlobal("fetch", fetchMock);
-    render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "missing" }} />);
+    render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "missing", contextBudget: "auto" }} />);
 
     expect((await screen.findByRole("alert")).textContent).toContain("模型廠家回應逾時");
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -455,7 +468,7 @@ describe("provider settings", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(connectedOpenAiAndOpenRouterCatalog)))
       .mockImplementationOnce(() => pendingModels.promise);
     vi.stubGlobal("fetch", fetchMock);
-    render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6" }} />);
+    render(<SettingsHarness initialSelection={{ providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }} />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText("模型").closest(".ant-select")?.className).not.toContain("ant-select-disabled");
     pendingModels.resolve(new Response(JSON.stringify({ error: { code: "provider_timeout", message: "private", retryable: true } }), { status: 504 }));
@@ -483,7 +496,7 @@ describe("provider settings", () => {
       .mockImplementationOnce(() => pendingModels.promise)
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
-    render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "old/model" }} />);
+    render(<SettingsHarness initialSelection={{ providerId: "openrouter", modelId: "old/model", contextBudget: "auto" }} />);
 
     const openRouterActions = await screen.findByRole("group", { name: "OpenRouter 操作" });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));

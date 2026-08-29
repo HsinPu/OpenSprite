@@ -131,6 +131,7 @@ def service(tmp_path: Path, *, model: bool = True, connected: bool = True):
             ModelSelection(
                 providerId="openrouter",
                 modelId="openrouter/auto",
+                contextBudget="auto",
             )
             if model
             else None

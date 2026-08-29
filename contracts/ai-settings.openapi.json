@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite local AI settings API",
-    "version": "0.2.0-draft",
-    "description": "Authoritative HTTP contract for one atomic local model selection and response mode setting."
+    "version": "0.3.0-draft",
+    "description": "Authoritative HTTP contract for one atomic local model selection, context budget and response mode setting."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [],
@@ -35,7 +35,7 @@
       "get": {
         "operationId": "getAiSettings",
         "summary": "Read AI settings",
-        "description": "Returns a null model and balanced response mode when no settings file exists. The read is side-effect free.",
+        "description": "Returns a null model and default response mode when no settings file exists. The read is side-effect free.",
         "tags": ["ai-settings"],
         "responses": {
           "200": {
@@ -75,10 +75,15 @@
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["providerId", "modelId"],
+        "required": ["providerId", "modelId", "contextBudget"],
         "properties": {
           "providerId": {"$ref": "#/components/schemas/ProviderId"},
-          "modelId": {"type": "string", "minLength": 1, "maxLength": 256}
+          "modelId": {"type": "string", "minLength": 1, "maxLength": 256},
+          "contextBudget": {
+            "type": "string",
+            "enum": ["auto", "32k", "64k", "128k", "256k", "max"],
+            "description": "OpenSprite context-use ceiling for this model selection; max still reserves output and safety space."
+          }
         }
       },
       "AiSettings": {

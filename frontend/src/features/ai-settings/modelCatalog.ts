@@ -1,4 +1,5 @@
 import type { OpenRouterModel, ProviderId } from "../../api/providerConnections";
+import type { PersistedModelSelection } from "../../api/aiSettings";
 import { defaultTranslator, type Translator } from "../../i18n/catalog";
 
 export type ModelCatalogItem = {
@@ -8,10 +9,7 @@ export type ModelCatalogItem = {
   maxOutputTokens: number;
 };
 
-export type ModelSelection = {
-  providerId: ProviderId;
-  modelId: string;
-};
+export type ModelSelection = PersistedModelSelection;
 
 export type ModelChoice = {
   selection: ModelSelection;

@@ -133,7 +133,7 @@ describe("persisted AI settings", () => {
     const modelPicker = await screen.findByRole("combobox", { name: /目前模型 GPT-5.6/ });
     expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6"]));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "balanced" }),
     });
   });
 
@@ -151,19 +151,19 @@ describe("persisted AI settings", () => {
     const modelPicker = await screen.findByRole("combobox", { name: /尚未選擇模型/ });
     fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
-    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "deep" })));
+    hydration.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "128k" }, responseMode: "deep" })));
 
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "default" }),
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto" }, responseMode: "default" }),
     });
   });
 
   it("hydrates the saved model and changes it only after the PUT succeeds", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
-      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "balanced" })));
+      if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto" }, responseMode: "balanced" })));
       throw new Error(`unexpected request ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -177,12 +177,12 @@ describe("persisted AI settings", () => {
     await waitFor(() => expect(screen.getByRole("option", { name: "GPT-5.6 Luna" })).toBeTruthy());
     fireEvent.change(modelPicker, { target: { value: JSON.stringify(["openai", "gpt-5.6-luna"]) } });
     await waitFor(() => expect((modelPicker as HTMLSelectElement).value).toBe(JSON.stringify(["openai", "gpt-5.6-luna"])));
-    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna" }, responseMode: "balanced" }) });
+    expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6-luna", contextBudget: "auto" }, responseMode: "balanced" }) });
   });
 
   it("keeps the confirmed model when the PUT fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "not_connected", message: "private", retryable: false } }), { status: 409 }));
       throw new Error(`unexpected request ${path}`);
@@ -202,7 +202,7 @@ describe("persisted AI settings", () => {
 
   it("hydrates and persists the response mode with the confirmed model", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "deep" })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k" }, responseMode: "deep" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -220,13 +220,13 @@ describe("persisted AI settings", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "fast" }),
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k" }, responseMode: "fast" }),
     });
   });
 
   it("keeps the confirmed response mode when saving fails", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "balanced" })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "balanced" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(JSON.stringify({ error: { code: "settings_store_unavailable", message: "private", retryable: true } }), { status: 503 }));
       throw new Error(`unexpected request ${path}`);
@@ -255,7 +255,7 @@ describe("conversation navigation", () => {
     const fetchMock = vi.fn((path: string) => {
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875", title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (explicitConversationId && path === `/api/conversations/${explicitConversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -276,7 +276,7 @@ describe("conversation navigation", () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
       if (path === "/api/settings/conversation") return Promise.resolve(new Response(JSON.stringify({ startupView: "recent", sendBehavior: "enter", autoScroll: true })));
       if (path === "/api/settings/general") return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
-      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/settings/ai") return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({ conversations: [{ id: conversationId, title: "最近對話", latestMessagePreview: "最近內容", createdAt: "2026-08-22T08:00:00Z", updatedAt: "2026-08-22T08:30:00Z" }], nextCursor: null })));
       if (path === `/api/conversations/${conversationId}/messages?limit=100`) return Promise.resolve(new Response(JSON.stringify({ messages: [], nextBeforeSequence: null })));
@@ -294,7 +294,7 @@ describe("conversation navigation", () => {
     const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
     const olderConversationId = "c7d17356-d2e6-4a5f-bbd7-7b5d6ac37875";
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6" }, responseMode: "default" })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" }, responseMode: "default" })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/conversations?limit=50") return Promise.resolve(new Response(JSON.stringify({
         conversations: [{

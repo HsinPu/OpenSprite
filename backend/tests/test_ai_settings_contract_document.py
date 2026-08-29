@@ -22,7 +22,7 @@ def test_contract_is_openapi_31_json() -> None:
     contract = load_contract()
 
     assert contract["openapi"] == "3.1.0"
-    assert contract["info"]["version"] == "0.2.0-draft"
+    assert contract["info"]["version"] == "0.3.0-draft"
     assert contract["security"] == []
 
 
@@ -46,8 +46,20 @@ def test_ai_settings_schema_persists_only_model_and_response_mode() -> None:
     selection = schemas["ModelSelection"]
 
     assert selection["additionalProperties"] is False
-    assert selection["required"] == ["providerId", "modelId"]
-    assert set(selection["properties"]) == {"providerId", "modelId"}
+    assert selection["required"] == ["providerId", "modelId", "contextBudget"]
+    assert set(selection["properties"]) == {
+        "providerId",
+        "modelId",
+        "contextBudget",
+    }
+    assert selection["properties"]["contextBudget"]["enum"] == [
+        "auto",
+        "32k",
+        "64k",
+        "128k",
+        "256k",
+        "max",
+    ]
     assert selection["properties"]["modelId"]["minLength"] == 1
     assert selection["properties"]["modelId"]["maxLength"] == 256
     settings = schemas["AiSettings"]

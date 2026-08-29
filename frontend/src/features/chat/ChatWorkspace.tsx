@@ -248,7 +248,7 @@ export function ChatWorkspace({
                 onChange={(event) => {
                   try {
                     const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
-                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId });
+                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId, contextBudget: "auto" });
                   } catch {
                     // Values can only originate from the rendered strict choices.
                   }

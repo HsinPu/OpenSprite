@@ -11,6 +11,7 @@ InterfaceLocale = Literal["zh-TW", "en", "ja"]
 TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
 StartupView = Literal["new", "recent"]
 SendBehavior = Literal["enter", "modifier-enter"]
+ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 
 
 class ContractModel(BaseModel):
@@ -129,6 +130,7 @@ class PutProviderConnectionRequest(ContractModel):
 class ModelSelection(ContractModel):
     provider_id: ProviderId = Field(alias="providerId")
     model_id: str = Field(alias="modelId", min_length=1, max_length=256)
+    context_budget: ContextBudget = Field(alias="contextBudget")
 
     @field_validator("model_id")
     @classmethod

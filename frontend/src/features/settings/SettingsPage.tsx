@@ -10,10 +10,11 @@ import {
   type ProviderStatus,
   type ProviderSummary,
 } from "../../api/providerConnections";
-import type { ResponseMode } from "../../api/aiSettings";
+import type { ContextBudget, ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
+import { contextBudgetAvailable, contextBudgetLimit, contextBudgetValues, formatTokenLimit } from "../ai-settings/contextBudget";
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
@@ -51,6 +52,15 @@ const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance
 const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
   disconnected: "models.status.disconnected", connected: "models.status.connected", invalid_credentials: "models.status.invalidCredentials", provider_unreachable: "models.status.unreachable",
   provider_timeout: "models.status.timeout", provider_rate_limited: "models.status.rateLimited", credential_store_unavailable: "models.status.storeUnavailable",
+};
+
+const contextBudgetLabelKeys: Record<ContextBudget, MessageKey> = {
+  auto: "models.context.auto",
+  "32k": "models.context.32k",
+  "64k": "models.context.64k",
+  "128k": "models.context.128k",
+  "256k": "models.context.256k",
+  max: "models.context.max",
 };
 
 type ProviderFeedback = { message?: string; error?: string };
@@ -264,13 +274,22 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     reconciliationRef.current = key;
     const fallback = connectedProviders.map((provider) => ({ provider, models: provider.id === "openrouter" ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : []) : localModelCatalog[provider.id] })).find((candidate) => candidate.models.length > 0);
     const model = fallback?.models[0];
-    if (fallback && model) void requestSelection({ providerId: fallback.provider.id, modelId: model.id });
+    if (fallback && model) void requestSelection({ providerId: fallback.provider.id, modelId: model.id, contextBudget: "auto" });
     else if (modelSelection !== null && connectedProviders.length === 0) void requestSelection(null);
   }, [aiSettingsSaving, connectedProviders, modelSelection, openRouterModelLoadStatus, openRouterModels, providers, requestSelection, selectedModelIsAvailable, selectedProvider]);
 
   const getSettingsPopupContainer = () => modalContainer ?? document.body;
   const providerOptions = connectedProviders.map((provider) => ({ value: provider.id, label: provider.name }));
   const modelOptions = selectedModels.map((model) => ({ value: model.id, label: <span className="settings-model-option"><strong>{model.label}</strong><small>{model.id}</small></span>, searchText: `${model.label} ${model.id}` }));
+  const selectedModel = modelSelection ? selectedModels.find((model) => model.id === modelSelection.modelId) : undefined;
+  const contextOptions = selectedModel ? contextBudgetValues.map((value) => ({
+    value,
+    label: t(contextBudgetLabelKeys[value]),
+    disabled: !contextBudgetAvailable(value, selectedModel.contextWindowTokens),
+  })) : [];
+  const effectiveContextLimit = selectedModel && modelSelection
+    ? contextBudgetLimit(modelSelection.contextBudget, selectedModel.contextWindowTokens)
+    : null;
   const modelDisabled = !selectedProvider || (selectedProvider.id === "openrouter" && (openRouterModelsPending || selectedModels.length === 0));
   const openRouterConnected = connectedProviders.some((provider) => provider.id === "openrouter");
   const helperText = connectedProviders.length === 0
@@ -307,8 +326,10 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
       </SettingsCard>
       <SettingsCard icon="robot" title={t("models.selectModel")}>
         <div className="settings-model-selection">
-          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id }); }} /></div>
-          <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto" }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto" }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-context-budget">{t("models.contextBudget")}</label><Select id="settings-context-budget" aria-describedby="settings-context-helper" value={modelSelection?.contextBudget ?? "auto"} options={contextOptions} getPopupContainer={getSettingsPopupContainer} disabled={!selectedModel || !modelSelection || aiSettingsSaving} onChange={(contextBudget: ContextBudget) => { if (modelSelection) void requestSelection({ ...modelSelection, contextBudget }); }} /></div>
+          {selectedModel && effectiveContextLimit !== null ? <p id="settings-context-helper" className="settings-helper-text">{t("models.contextSummary", { maximum: formatTokenLimit(selectedModel.contextWindowTokens), effective: formatTokenLimit(effectiveContextLimit) })}</p> : null}
           {openRouterConnected && openRouterModelLoadStatus === "error" ? <div className="settings-model-load-error" role="alert"><p>{openRouterModelError}</p><button type="button" className="settings-secondary-button settings-model-retry" onClick={() => void loadOpenRouterModels(true)}>{t("models.retryModels")}</button></div> : null}
           {selectionError ?? aiSettingsError ? <p className="settings-model-load-error" role="alert">{selectionError ?? aiSettingsError}</p> : null}
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>

@@ -4,9 +4,11 @@ import { defaultTranslator, type MessageKey, type Translator } from "../i18n/cat
 export type PersistedModelSelection = {
   providerId: ProviderId;
   modelId: string;
+  contextBudget: ContextBudget;
 };
 
 export type ResponseMode = "default" | "fast" | "balanced" | "deep";
+export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
 
 export type AiSettings = {
   model: PersistedModelSelection | null;
@@ -27,13 +29,14 @@ const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) 
 const codePointLength = (value: string) => Array.from(value).length;
 const errorCodes = ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"] as const;
 const responseModes = ["default", "fast", "balanced", "deep"] as const;
+const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {
   if (value === null) return null;
-  if (!record(value) || !exactKeys(value, ["providerId", "modelId"]) || !providerIds.includes(value.providerId as ProviderId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim()) {
+  if (!record(value) || !exactKeys(value, ["providerId", "modelId", "contextBudget"]) || !providerIds.includes(value.providerId as ProviderId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim() || typeof value.contextBudget !== "string" || !contextBudgets.includes(value.contextBudget as ContextBudget)) {
     throw new AiSettingsApiError("malformed_response");
   }
-  return { providerId: value.providerId as ProviderId, modelId: value.modelId };
+  return { providerId: value.providerId as ProviderId, modelId: value.modelId, contextBudget: value.contextBudget as ContextBudget };
 }
 
 function responseBody(value: unknown): AiSettings {

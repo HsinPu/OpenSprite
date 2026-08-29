@@ -32,7 +32,11 @@ from opensprite_backend.runtime import create_system_app, create_system_runtime
 
 
 def selection() -> ModelSelection:
-    return ModelSelection(providerId="openai", modelId="gpt-5.6")
+    return ModelSelection(
+        providerId="openai",
+        modelId="gpt-5.6",
+        contextBudget="auto",
+    )
 
 
 def settings(
@@ -88,8 +92,12 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 2,
-        "model": {"providerId": "openai", "modelId": "gpt-5.6"},
+        "version": 3,
+        "model": {
+            "providerId": "openai",
+            "modelId": "gpt-5.6",
+            "contextBudget": "auto",
+        },
         "responseMode": "deep",
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
@@ -103,18 +111,34 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     assert paths.settings_file.exists()
 
 
+def test_store_reads_current_v2_selection_as_auto_without_rewriting(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    previous = (
+        b'{"version":2,"model":{"providerId":"openai",'
+        b'"modelId":"gpt-5.6"},"responseMode":"balanced"}'
+    )
+    path.write_bytes(previous)
+
+    assert JsonAiSettingsStore(path).get() == settings(
+        model=selection(),
+        response_mode=ResponseMode.BALANCED,
+    )
+    assert path.read_bytes() == previous
+
+
 @pytest.mark.parametrize(
     "payload",
     [
         "not-json",
         "{}",
-        '{"version":2,"model":null,"responseMode":"balanced","extra":true}',
-        '{"version":2,"version":2,"model":null,"responseMode":"balanced"}',
+        '{"version":3,"model":null,"responseMode":"balanced","extra":true}',
+        '{"version":3,"version":3,"model":null,"responseMode":"balanced"}',
         '{"version":2,"model":{"providerId":"openai","modelId":"gpt-5.6","extra":true},"responseMode":"balanced"}',
         '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":2,"model":{"providerId":"other","modelId":"gpt-5.6"},"responseMode":"balanced"}',
-        '{"version":2,"model":{"providerId":"openai","modelId":"   "},"responseMode":"balanced"}',
-        '{"version":2,"model":null,"responseMode":"other"}',
+        '{"version":3,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto"},"responseMode":"balanced"}',
+        '{"version":3,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto"},"responseMode":"balanced"}',
+        '{"version":3,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other"},"responseMode":"balanced"}',
+        '{"version":3,"model":null,"responseMode":"other"}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -155,7 +179,15 @@ def test_atomic_failure_cleans_temp_and_preserves_old_data(
 
     monkeypatch.setattr(os, "replace", fail_replace)
     with pytest.raises(SettingsStoreError) as raised:
-        store.set(settings(model=ModelSelection(providerId="anthropic", modelId="claude")))
+        store.set(
+            settings(
+                model=ModelSelection(
+                    providerId="anthropic",
+                    modelId="claude",
+                    contextBudget="128k",
+                )
+            )
+        )
 
     assert str(raised.value) == "AI settings are unavailable."
     assert path.read_bytes() == before
@@ -191,17 +223,17 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6"}, "responseMode": "deep"},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k"}, "responseMode": "deep"},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   "}, "responseMode": "deep"},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto"}, "responseMode": "deep"},
         )
 
     assert initial.json() == {"model": None, "responseMode": "default"}
     assert saved.status_code == 200
     assert saved.json() == {
-        "model": {"providerId": "openai", "modelId": "gpt-5.6"},
+        "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k"},
         "responseMode": "deep",
     }
     assert invalid.status_code == 400

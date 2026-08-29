@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AiSettingsApiError, aiSettingsErrorText, getAiSettings, putAiSettings } from "../src/api/aiSettings";
 
-const selection = { providerId: "openai", modelId: "gpt-5.6" } as const;
+const selection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto" } as const;
 
 describe("AI settings client", () => {
   it("uses the exact GET and PUT shapes", async () => {
@@ -22,6 +22,7 @@ describe("AI settings client", () => {
   it.each([
     [{ model: { ...selection, extra: true }, responseMode: "balanced" }, 200],
     [{ model: { providerId: "openai", modelId: "   " }, responseMode: "balanced" }, 200],
+    [{ model: { ...selection, contextBudget: "other" }, responseMode: "balanced" }, 200],
     [{ model: selection, responseMode: "other" }, 200],
     [{ model: selection, responseMode: "balanced", extra: true }, 200],
     [{ error: { code: "not_connected", message: "private", retryable: false } }, 500],

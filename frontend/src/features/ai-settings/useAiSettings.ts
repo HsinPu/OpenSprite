@@ -57,6 +57,7 @@ export function useAiSettings(
         const saved = await putAiSettings(next);
         if ((saved.model?.providerId ?? null) !== (next.model?.providerId ?? null)
           || (saved.model?.modelId ?? null) !== (next.model?.modelId ?? null)
+          || (saved.model?.contextBudget ?? null) !== (next.model?.contextBudget ?? null)
           || saved.responseMode !== next.responseMode) {
           throw new Error("ai_settings_response_mismatch");
         }
