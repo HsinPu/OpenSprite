@@ -2,7 +2,7 @@
 param(
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "OpenSprite\app"),
     [string]$DataRoot = (Join-Path $env:USERPROFILE ".opensprite"),
-    [string]$TaskName = "OpenSprite",
+    [string]$StartupName = "OpenSprite",
     [switch]$RemoveUserData,
     [switch]$AllowCustomInstallRoot,
     [switch]$AllowCustomDataRoot
@@ -35,12 +35,8 @@ if ($RemoveUserData -and -not $AllowCustomDataRoot -and -not (Test-SamePath $dat
     throw "DataRoot must be the official OpenSprite user-data path: $expectedDataRoot"
 }
 
-if ($PSCmdlet.ShouldProcess($TaskName, "Stop and remove the OpenSprite scheduled task")) {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if ($null -ne $task) {
-        Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-    }
+if ($PSCmdlet.ShouldProcess($StartupName, "Remove the OpenSprite current-user startup entry")) {
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -ErrorAction SilentlyContinue
 }
 
 $escapedRoot = [Regex]::Escape($installRootPath)
@@ -59,8 +55,9 @@ if ($RemoveUserData -and (Test-Path -LiteralPath $dataRootPath) -and $PSCmdlet.S
     Remove-Item -LiteralPath $dataRootPath -Recurse -Force
 }
 
+$remainingStartup = Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -ErrorAction SilentlyContinue
 [pscustomobject]@{
     InstallRootRemoved = -not (Test-Path -LiteralPath $installRootPath)
     UserDataRemoved = if ($RemoveUserData) { -not (Test-Path -LiteralPath $dataRootPath) } else { $false }
-    ScheduledTaskRemoved = $null -eq (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
+    StartupEntryRemoved = $null -eq $remainingStartup
 }

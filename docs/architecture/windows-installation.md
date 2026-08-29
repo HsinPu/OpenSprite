@@ -30,22 +30,25 @@ moved to the final application path before `uv sync --no-dev`, because Windows
 virtual-environment launchers contain final-path information and must not be
 moved after creation.
 
-An existing application root is held in a temporary rollback directory. Task
-registration, startup and health failure remove the new root and restore the
+An existing application root is held in a temporary rollback directory. Startup
+registration, launch and health failure remove the new root and restore the
 previous root. The rollback root is deleted only after success.
 
 ## Background lifecycle
 
-One current-user Scheduled Task named `OpenSprite` starts Uvicorn directly at
-logon with:
+One `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value named
+`OpenSprite` invokes the installed `launch.ps1` through hidden Windows
+PowerShell at logon. The launcher verifies the official install root, rejects a
+port owned by another process, treats the matching installed backend as already
+running, and otherwise starts Uvicorn with:
 
 ```text
 opensprite_backend.installed_runtime:create_installed_app
 --factory --host 127.0.0.1 --port 8765 --no-proxy-headers
 ```
 
-No reloader, additional worker, proxy-header trust, Run registry entry or
-legacy Startup file is created. Installation succeeds only after both
+No reloader, additional worker, proxy-header trust, Scheduled Task, VBS/CMD
+launcher or legacy Startup file is created. Installation succeeds only after both
 `/healthz` and `/` respond correctly.
 
 ## Safety

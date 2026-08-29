@@ -2,10 +2,10 @@
 param(
     [string]$SourceRoot = (Join-Path $PSScriptRoot "..\.."),
     [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "OpenSprite\app"),
-    [string]$TaskName = "OpenSprite",
+    [string]$StartupName = "OpenSprite",
     [int]$Port = 8765,
     [switch]$NoStart,
-    [switch]$SkipScheduledTask,
+    [switch]$SkipStartupRegistration,
     [switch]$AllowCustomInstallRoot
 )
 
@@ -46,25 +46,30 @@ function Copy-RequiredItem([string]$Source, [string]$Destination) {
     Copy-Item -LiteralPath $Source -Destination $Destination -Recurse -Force
 }
 
-function Stop-OpenSpriteTask([string]$Name) {
-    $task = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
-    if ($null -ne $task) {
-        Stop-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
-        Unregister-ScheduledTask -TaskName $Name -Confirm:$false
-    }
+function Get-OpenSpriteStartup([string]$Name) {
+    $runPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    $item = Get-ItemProperty -Path $runPath -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $item) { return $null }
+    return $item.PSObject.Properties[$Name].Value
 }
 
-function Register-OpenSpriteTask([string]$Root, [string]$Name, [int]$ListenPort) {
-    $uvicorn = Join-Path $Root "backend\.venv\Scripts\uvicorn.exe"
-    if (-not (Test-Path -LiteralPath $uvicorn -PathType Leaf)) {
-        throw "Installed Uvicorn executable is missing: $uvicorn"
-    }
-    $arguments = "opensprite_backend.installed_runtime:create_installed_app --factory --host 127.0.0.1 --port $ListenPort --no-proxy-headers"
-    $action = New-ScheduledTaskAction -Execute $uvicorn -Argument $arguments -WorkingDirectory (Join-Path $Root "backend")
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-    Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+function Remove-OpenSpriteStartup([string]$Name) {
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $Name -ErrorAction SilentlyContinue
+}
+
+function Register-OpenSpriteStartup([string]$Root, [string]$Name, [int]$ListenPort) {
+    $launcher = Join-Path $Root "installers\windows\launch.ps1"
+    if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Installed launcher is missing." }
+    $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $value = "`"$powershell`" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$launcher`" -InstallRoot `"$Root`" -Port $ListenPort"
+    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $Name -Value $value
+}
+
+function Stop-InstalledRuntime([string]$Root) {
+    $escapedRoot = [Regex]::Escape($Root)
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.CommandLine -match $escapedRoot -and $_.CommandLine -match "opensprite_backend\.installed_runtime"
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 }
 
 function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 20) {
@@ -91,8 +96,8 @@ $expectedRoot = Resolve-AbsolutePath (Join-Path $env:LOCALAPPDATA "OpenSprite\ap
 if (-not $AllowCustomInstallRoot -and -not (Test-SamePath $installRootPath $expectedRoot)) {
     throw "InstallRoot must be the official OpenSprite app path: $expectedRoot"
 }
-if ($SkipScheduledTask -and -not $NoStart) {
-    throw "SkipScheduledTask requires NoStart."
+if ($SkipStartupRegistration -and -not $NoStart) {
+    throw "SkipStartupRegistration requires NoStart."
 }
 if ($Port -lt 1024 -or $Port -gt 65535) {
     throw "Port must be between 1024 and 65535."
@@ -110,7 +115,7 @@ if (-not $AllowCustomInstallRoot) {
 $stagingRoot = Join-Path $installParent (".app-staging-" + [Guid]::NewGuid().ToString("N"))
 $previousRoot = Join-Path $installParent (".app-previous-" + [Guid]::NewGuid().ToString("N"))
 $hadPreviousInstall = Test-Path -LiteralPath $installRootPath
-$hadPreviousTask = $null -ne (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
+$previousStartupValue = Get-OpenSpriteStartup $StartupName
 $installedNewRoot = $false
 
 if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite")) {
@@ -132,6 +137,7 @@ try {
         Copy-RequiredItem (Join-Path $sourceRootPath "frontend\$file") (Join-Path $stagingRoot "frontend")
     }
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\install.ps1") (Join-Path $stagingRoot "installers\windows")
+    Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\launch.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\uninstall.ps1") (Join-Path $stagingRoot "installers\windows")
 
     $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
@@ -145,7 +151,7 @@ try {
         throw "Frontend build did not produce dist/index.html."
     }
 
-    if (-not $SkipScheduledTask) { Stop-OpenSpriteTask $TaskName }
+    if (-not $SkipStartupRegistration) { Remove-OpenSpriteStartup $StartupName }
     if ($hadPreviousInstall) { Move-Item -LiteralPath $installRootPath -Destination $previousRoot }
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
@@ -156,10 +162,10 @@ try {
     $installedPython = Join-Path $installRootPath "backend\.venv\Scripts\python.exe"
     Invoke-Checked $installedPython @("-c", "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()")
 
-    if (-not $SkipScheduledTask) {
-        Register-OpenSpriteTask $installRootPath $TaskName $Port
+    if (-not $SkipStartupRegistration) {
+        Register-OpenSpriteStartup $installRootPath $StartupName $Port
         if (-not $NoStart) {
-            Start-ScheduledTask -TaskName $TaskName
+            & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port
             Wait-OpenSpriteHealth $Port
         }
     }
@@ -170,22 +176,24 @@ try {
     }
     [pscustomobject]@{
         InstallRoot = $installRootPath
-        TaskName = if ($SkipScheduledTask) { $null } else { $TaskName }
+        StartupName = if ($SkipStartupRegistration) { $null } else { $StartupName }
         Started = -not $NoStart
         Url = "http://127.0.0.1:$Port/"
     }
 }
 catch {
-    if (-not $SkipScheduledTask) { Stop-OpenSpriteTask $TaskName }
+    if (-not $SkipStartupRegistration) {
+        Remove-OpenSpriteStartup $StartupName
+        Stop-InstalledRuntime $installRootPath
+    }
     if ($installedNewRoot -and (Test-Path -LiteralPath $installRootPath)) {
         Assert-ChildPath $installRootPath $installParent
         Remove-Item -LiteralPath $installRootPath -Recurse -Force
     }
     if (Test-Path -LiteralPath $previousRoot) {
         Move-Item -LiteralPath $previousRoot -Destination $installRootPath
-        if (-not $SkipScheduledTask -and $hadPreviousTask) {
-            Register-OpenSpriteTask $installRootPath $TaskName $Port
-            if (-not $NoStart) { Start-ScheduledTask -TaskName $TaskName }
+        if (-not $SkipStartupRegistration -and $null -ne $previousStartupValue) {
+            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue
         }
     }
     throw

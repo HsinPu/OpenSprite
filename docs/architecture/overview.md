@@ -20,7 +20,8 @@ Frontend -> Contracts <- Backend
 - Scripts 只承擔可重現的 repository 驗證與維護工作。
 - Windows installed runtime 由 [`windows-installation.md`](windows-installation.md)
   定義：單一 secured Uvicorn 程序同源提供 API、SSE 與 built frontend，並由
-  `%LOCALAPPDATA%\OpenSprite\app` 下的程式與 current-user Scheduled Task 擁有 lifecycle。
+  `%LOCALAPPDATA%\OpenSprite\app` 下的程式、受限 PowerShell launcher 與 current-user Run entry
+  擁有 lifecycle。
 - Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；Chat 與 Settings 可共同依賴
   `features/ai-settings`，但不得互相 import，`api` 與 `i18n` 不得反向依賴畫面功能。
 - Backend 的 `app.py` 只建立 FastAPI application、middleware、exception handlers、health route 與

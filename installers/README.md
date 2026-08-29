@@ -19,4 +19,5 @@
   `.opensprite/auth.json`。
 
 Windows 安裝後由同一個 secured FastAPI/Uvicorn 程序提供 `/api`、SSE 與已建置的前端，網址為
-`http://127.0.0.1:8765/`。Windows Scheduled Task 只啟動該單一程序。
+`http://127.0.0.1:8765/`。current-user Run entry 透過受路徑限制的隱藏 PowerShell launcher
+只啟動該單一程序，不需要系統管理員權限。

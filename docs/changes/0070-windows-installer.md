@@ -11,12 +11,14 @@ removing any legacy installation or user data.
   routes and fails closed when `frontend/dist/index.html` is unavailable.
 - Added a guarded Windows installer that stages source, builds the frontend,
   removes build-only Node dependencies, moves to the final app root, creates
-  the production Python environment, registers one current-user Scheduled Task
-  and verifies health plus the browser index.
-- Added rollback of the application directory for dependency, task, startup or
+  the production Python environment, registers one current-user Run entry with
+  a guarded hidden PowerShell launcher, and verifies health plus the browser index.
+- Added rollback of the application directory for dependency, startup registration, launch or
   health failure.
 - Added a guarded uninstaller that preserves `.opensprite` unless explicit
   permanent data removal is requested.
+- Scheduled Task registration was rejected by this non-admin Windows account;
+  the final design uses the per-user Run registry and requires no elevation.
 - Added a system-temporary isolation test covering build, install shape,
   installed Python import, absence of runtime `node_modules` and uninstall.
 - Documented the single-process installed runtime, official paths and the
