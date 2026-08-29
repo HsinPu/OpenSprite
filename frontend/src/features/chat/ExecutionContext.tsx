@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { DownOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button } from "antd";
 
 import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot } from "../../api/agentChat";
@@ -169,7 +169,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
             </section>
 
             <details className="chat-workspace__record-details" open={run.status === "failed" || run.status === "interrupted"}>
-              <summary><span>{t("execution.record")}</span><span aria-hidden="true">⌄</span></summary>
+              <summary><span>{t("execution.record")}</span><DownOutlined className="chat-workspace__record-chevron" /></summary>
               {steps.length > 0 ? (
                 <ol className="chat-workspace__process-list" aria-label={t("execution.eventList")}>
                   {steps.map((step) => (

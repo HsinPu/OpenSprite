@@ -249,6 +249,8 @@
 .chat-workspace__record-details summary { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 18px; cursor: pointer; font-weight: 650; list-style: none; }
 .chat-workspace__process summary::-webkit-details-marker,
 .chat-workspace__record-details summary::-webkit-details-marker { display: none; }
+.chat-workspace__record-chevron { font-size: 0.78rem; transition: transform 160ms ease; }
+.chat-workspace__record-details[open] .chat-workspace__record-chevron { transform: rotate(180deg); }
 .chat-workspace__chevron { font-size: 1.25rem; }
 .chat-workspace__process-list { display: grid; gap: 0; margin: 0; padding: 0 18px 8px; list-style: none; }
 .chat-workspace__process-item { position: relative; display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; min-height: 42px; border-top: 1px solid var(--chat-border); font-size: 0.92rem; }

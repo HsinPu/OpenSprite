@@ -185,6 +185,9 @@ describe("live chat workspace", () => {
     expect(screen.getByText("正在整理")).toBeTruthy();
     expect(screen.getByText("openrouter · openai/gpt-5.6 · 廠商預設")).toBeTruthy();
     expect(screen.getByText("本次執行沒有使用額外工具。")).toBeTruthy();
+    const recordSummary = screen.getByText("執行紀錄").closest("summary");
+    expect(recordSummary?.querySelector(".anticon-down")).toBeTruthy();
+    expect(recordSummary?.textContent).not.toContain("⌄");
     expect(screen.queryByText("Search")).toBeNull();
     expect(screen.queryByText("File")).toBeNull();
     expect(screen.queryByText("Memory")).toBeNull();
