@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import TypeVar
 
 from opensprite_backend.conversations.models import (
+    ConversationCompaction,
     MAX_ASSISTANT_CHARS,
+    Message,
     PublicRunError,
     RunEventType,
     RunSnapshot,
@@ -38,9 +42,24 @@ from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
 
 from .events import (
     AGENT_LIMIT_ERROR,
+    CONTEXT_LIMIT_ERROR,
+    CONTEXT_PREPARATION_ERROR,
     INTERNAL_ERROR,
     INVALID_PROVIDER_RESPONSE,
     inference_error,
+)
+from .context import (
+    ConservativeTokenCounter,
+    ContextAssembler,
+    ContextBudgetPlan,
+    ContextLimitExceeded,
+    ConversationCompactionService,
+    GatewaySummaryGenerator,
+    ModelCapabilityNotFound,
+    ModelCapabilityProviderError,
+    ModelCapabilityResolver,
+    prepare_compaction_source,
+    resolve_context_budget,
 )
 from .prompt import StaticSystemPromptProvider, SystemPromptProvider
 
@@ -49,7 +68,19 @@ class _RunCancelled(Exception):
     pass
 
 
+class _ContextPreparationFailed(Exception):
+    pass
+
+
 _Result = TypeVar("_Result")
+_LOGGER = logging.getLogger("opensprite.agent.context")
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedContext:
+    messages: tuple[ModelMessage, ...]
+    tools: tuple[ModelToolDefinition, ...]
+    budget: ContextBudgetPlan
 
 
 class AgentLoop:
@@ -59,23 +90,31 @@ class AgentLoop:
         repository: ConversationRepository,
         gateway: ModelGateway,
         tools: ToolRegistry,
+        capability_resolver: ModelCapabilityResolver,
         system_prompt_provider: SystemPromptProvider | None = None,
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
-        max_history_messages: int = 100,
+        max_compactions_per_run: int = 8,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
         if not 0 <= max_tool_calls <= 64:
             raise ValueError("invalid tool call bound")
-        if not 1 <= max_history_messages <= 200:
-            raise ValueError("invalid history bound")
+        if not 1 <= max_compactions_per_run <= 32:
+            raise ValueError("invalid compaction bound")
         if not 1 <= max_assistant_chars <= MAX_ASSISTANT_CHARS:
             raise ValueError("invalid assistant output bound")
         self._repository = repository
         self._gateway = gateway
         self._tools = tools
+        self._capability_resolver = capability_resolver
+        self._counter = ConservativeTokenCounter()
+        self._context_assembler = ContextAssembler(self._counter)
+        self._compaction_service = ConversationCompactionService(
+            repository,
+            GatewaySummaryGenerator(gateway),
+        )
         self._system_prompt_provider = (
             system_prompt_provider
             if system_prompt_provider is not None
@@ -83,7 +122,7 @@ class AgentLoop:
         )
         self._max_model_rounds = max_model_rounds
         self._max_tool_calls = max_tool_calls
-        self._max_history_messages = max_history_messages
+        self._max_compactions_per_run = max_compactions_per_run
         self._max_assistant_chars = max_assistant_chars
 
     async def execute(
@@ -100,18 +139,14 @@ class AgentLoop:
             return await asyncio.to_thread(self._repository.request_cancel, run_id)
         try:
             run = await asyncio.to_thread(self._repository.mark_run_started, run_id)
-            page = await asyncio.to_thread(
-                self._repository.list_messages,
-                run.conversation_id,
-                limit=self._max_history_messages,
-                before_sequence=None,
-            )
             system_prompt = await self._system_prompt_provider.build(run_id=run_id)
-            transcript = [ModelMessage(role="system", content=system_prompt)]
-            transcript.extend(
-                ModelMessage(role=message.role, content=message.content)
-                for message in page.items
+            prepared = await self._prepare_context(
+                run=run,
+                system_prompt=system_prompt,
+                cancellation_event=cancellation_event,
             )
+            transcript = list(prepared.messages)
+            tool_definitions = prepared.tools
             accumulated_text = run.partial_text
             tool_call_count = 0
             failed_calls: Counter[str] = Counter()
@@ -119,6 +154,12 @@ class AgentLoop:
 
             for _round in range(self._max_model_rounds):
                 self._raise_if_cancelled(cancellation_event)
+                estimated_round_tokens = self._counter.request(
+                    tuple(transcript),
+                    tool_definitions,
+                )
+                if estimated_round_tokens > prepared.budget.input_budget_tokens:
+                    return await self._fail(run_id, CONTEXT_LIMIT_ERROR)
                 await asyncio.to_thread(
                     self._repository.append_run_event,
                     run_id,
@@ -134,14 +175,8 @@ class AgentLoop:
                     model_id=run.model_id,
                     response_mode=run.response_mode,
                     messages=tuple(transcript),
-                    tools=tuple(
-                        ModelToolDefinition(
-                            name=definition.name,
-                            description=definition.description,
-                            input_schema=dict(definition.input_schema),
-                        )
-                        for definition in self._tools.definitions()
-                    ),
+                    tools=tool_definitions,
+                    max_output_tokens=prepared.budget.output_reserve_tokens,
                 )
                 round_text = ""
                 tool_calls: list[ModelToolCall] = []
@@ -181,7 +216,13 @@ class AgentLoop:
                     elif isinstance(event, ModelCompleted):
                         completion = event
                     elif isinstance(event, ModelUsage):
-                        continue
+                        _LOGGER.info(
+                            "model usage run_id=%s round=%s input_tokens=%s output_tokens=%s",
+                            run_id,
+                            _round + 1,
+                            event.input_tokens,
+                            event.output_tokens,
+                        )
                     else:
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                 if completion is None:
@@ -287,12 +328,170 @@ class AgentLoop:
             return await self._cancel(run_id)
         except ModelGatewayError as error:
             return await self._fail(run_id, inference_error(error.failure))
+        except ContextLimitExceeded:
+            return await self._fail(run_id, CONTEXT_LIMIT_ERROR)
+        except ModelCapabilityNotFound:
+            return await self._fail(run_id, CONTEXT_PREPARATION_ERROR)
+        except _ContextPreparationFailed:
+            return await self._fail(run_id, CONTEXT_PREPARATION_ERROR)
+        except ModelCapabilityProviderError as error:
+            return await self._fail(run_id, inference_error(error.failure))
         except asyncio.CancelledError:
             raise
         except ConversationStoreError:
             raise
         except Exception:
             return await self._fail(run_id, INTERNAL_ERROR)
+
+    async def _prepare_context(
+        self,
+        *,
+        run: RunSnapshot,
+        system_prompt: str,
+        cancellation_event: asyncio.Event,
+    ) -> _PreparedContext:
+        self._raise_if_cancelled(cancellation_event)
+        capability = await self._await_with_cancellation(
+            self._capability_resolver.resolve(
+                run.provider_id,
+                run.model_id,
+            ),
+            cancellation_event,
+        )
+        budget = resolve_context_budget(run.context_budget, capability)
+        tool_definitions = tuple(
+            ModelToolDefinition(
+                name=definition.name,
+                description=definition.description,
+                input_schema=dict(definition.input_schema),
+            )
+            for definition in self._tools.definitions()
+        )
+        page = await asyncio.to_thread(
+            self._repository.list_messages,
+            run.conversation_id,
+            limit=200,
+            before_sequence=None,
+        )
+        summary = await asyncio.to_thread(
+            self._repository.get_latest_compaction,
+            run.conversation_id,
+        )
+
+        for compaction_index in range(self._max_compactions_per_run + 1):
+            coverage = 0 if summary is None else summary.covers_through_sequence
+            uncovered = tuple(
+                message for message in page.items if message.sequence > coverage
+            )
+            has_older = bool(
+                page.next_before_sequence is not None
+                and page.items
+                and coverage < page.items[0].sequence - 1
+            )
+            try:
+                assembled = self._context_assembler.assemble(
+                    system_prompt=system_prompt,
+                    history=uncovered,
+                    tools=tool_definitions,
+                    budget=budget,
+                    summary=summary,
+                    has_older_history=has_older,
+                )
+            except ContextLimitExceeded:
+                raise
+            except ValueError as error:
+                raise _ContextPreparationFailed from error
+            if not assembled.needs_compaction:
+                _LOGGER.info(
+                    "context prepared run_id=%s context_limit=%s input_budget=%s estimated_input=%s messages=%s compacted_through=%s",
+                    run.id,
+                    budget.context_limit_tokens,
+                    budget.input_budget_tokens,
+                    assembled.estimated_input_tokens,
+                    assembled.included_message_count,
+                    coverage,
+                )
+                return _PreparedContext(
+                    messages=assembled.messages,
+                    tools=tool_definitions,
+                    budget=budget,
+                )
+            if compaction_index >= self._max_compactions_per_run:
+                raise ContextLimitExceeded
+
+            protected_sequence = (
+                uncovered[-12].sequence
+                if len(uncovered) >= 12
+                else uncovered[0].sequence
+                if uncovered
+                else page.items[-1].sequence + 1
+            )
+            candidates = await asyncio.to_thread(
+                self._repository.list_messages_after,
+                run.conversation_id,
+                after_sequence=coverage,
+                limit=200,
+            )
+            candidates = tuple(
+                message
+                for message in candidates
+                if message.sequence < protected_sequence
+            )
+            if not candidates:
+                raise ContextLimitExceeded
+            try:
+                self._raise_if_cancelled(cancellation_event)
+                candidates = self._fit_compaction_source(
+                    summary,
+                    candidates,
+                    budget.input_budget_tokens,
+                )
+                summary = await self._await_with_cancellation(
+                    self._compaction_service.compact(
+                        conversation_id=run.conversation_id,
+                        provider_id=run.provider_id,
+                        model_id=run.model_id,
+                        previous=summary,
+                        messages=candidates,
+                    ),
+                    cancellation_event,
+                )
+            except ContextLimitExceeded:
+                raise
+            except ValueError as error:
+                raise _ContextPreparationFailed from error
+            _LOGGER.info(
+                "context compacted run_id=%s through_sequence=%s input_tokens=%s output_tokens=%s",
+                run.id,
+                summary.covers_through_sequence,
+                summary.input_tokens,
+                summary.output_tokens,
+            )
+        raise ContextLimitExceeded  # pragma: no cover
+
+    def _fit_compaction_source(
+        self,
+        previous: ConversationCompaction | None,
+        candidates: tuple[Message, ...],
+        input_budget_tokens: int,
+    ) -> tuple[Message, ...]:
+        selected: list[Message] = []
+        source_characters = 0 if previous is None else len(previous.summary)
+        for candidate in candidates:
+            if source_characters + len(candidate.content) > 400_000:
+                break
+            selected.append(candidate)
+            source_characters += len(candidate.content)
+        while selected:
+            source = prepare_compaction_source(previous, tuple(selected))
+            if (
+                len(source.prompt) <= 1_000_000
+                and self._counter.text(source.prompt) + 64 <= input_budget_tokens
+            ):
+                return tuple(selected)
+            selected.pop()
+        raise ContextLimitExceeded
+
 
     async def _fail(
         self,

@@ -47,7 +47,7 @@ class AnthropicInferenceAdapter:
         system, messages = _messages(request.messages)
         body: dict[str, object] = {
             "model": request.model_id,
-            "max_tokens": 8192,
+            "max_tokens": request.max_output_tokens,
             "messages": messages,
             "stream": True,
         }

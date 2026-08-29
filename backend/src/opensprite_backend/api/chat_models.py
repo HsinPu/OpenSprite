@@ -139,6 +139,8 @@ _ERRORS: dict[ChatErrorCode, tuple[int, str, bool]] = {
     ChatErrorCode.SETTINGS_STORE_UNAVAILABLE: (503, "AI 設定暫時無法讀取。", True),
     ChatErrorCode.DATABASE_UNAVAILABLE: (503, "本機對話資料暫時無法使用。", True),
     ChatErrorCode.AGENT_LIMIT_REACHED: (409, "本次執行已達安全步驟上限。", False),
+    ChatErrorCode.CONTEXT_LIMIT_EXCEEDED: (409, "必要的近期對話超過目前選擇的內容上限。", False),
+    ChatErrorCode.CONTEXT_PREPARATION_FAILED: (502, "暫時無法準備這次對話的模型內容。", True),
     ChatErrorCode.TOOL_FAILURE: (502, "工具執行失敗。", False),
     ChatErrorCode.INVALID_PROVIDER_RESPONSE: (502, "模型廠家的回應無法安全使用。", False),
     ChatErrorCode.INTERNAL_ERROR: (500, "本機服務暫時無法完成操作。", True),

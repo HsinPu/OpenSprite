@@ -28,11 +28,12 @@ The current slice provides:
 - strict non-secret provider metadata at `state/providers.json`, written by
   atomic JSON replacement;
 - an explicit `create_provider_runtime()` composition factory;
-- durable Conversation, Message, Run and semantic event persistence in SQLite;
+- durable Conversation, Message, Run, rebuildable compaction and semantic event persistence in SQLite;
 - one bounded dynamic System Prompt per Run using locale, time zone and current
   time, with a required full receipt below `.opensprite/logs/system-prompts`;
-- one bounded Agent loop with an explicit Tool Registry and normalized native
-  Provider inference gateway;
+- one token-budgeted Agent loop with explicit recent-history retention,
+  rebuildable older-history compaction, an explicit Tool Registry and normalized
+  native Provider inference gateway;
 - a secured `create_system_app()` runtime factory that owns and closes the
   provider HTTP client through FastAPI lifespan; and
 - an injectable `create_app()` default that remains unchanged and fails closed
@@ -118,9 +119,10 @@ the 1 MiB validation-body limit and no response content is persisted.
 Connected OpenRouter accounts can load their available text models through
 bodyless `POST /api/providers/openrouter/models`. The backend calls
 `GET https://openrouter.ai/api/v1/models/user` with the stored Bearer credential,
-keeps only text-input/text-output models, deduplicates by id, sorts by name then
-id, and returns at most 1000 entries. The upstream response is capped at 4 MiB
-and is never cached or written to `.opensprite`.
+keeps only text-input/text-output models with valid Context capability,
+deduplicates by id, sorts by name then id, and returns at most 1000 entries. The
+upstream response is capped at 4 MiB and is never written to `.opensprite`;
+sanitized capabilities may be cached in process memory for ten minutes.
 
 `GET /api/settings/ai` reads the confirmed model and response mode without
 creating a file, decrypting a credential, or calling a provider. `PUT

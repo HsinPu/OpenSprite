@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from context_test_support import TestCapabilityResolver
+
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.application import (
@@ -142,6 +144,7 @@ def service(tmp_path: Path, *, model: bool = True, connected: bool = True):
         repository=repository,
         gateway=FinalGateway(),
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
     )
     manager = RunManager(repository, loop)
     chat = AgentChatService(

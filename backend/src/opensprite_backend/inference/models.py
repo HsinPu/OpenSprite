@@ -107,6 +107,7 @@ class ModelRequest:
     response_mode: ResponseMode
     messages: tuple[ModelMessage, ...]
     tools: tuple[ModelToolDefinition, ...]
+    max_output_tokens: int = 8192
 
     def __post_init__(self) -> None:
         if self.provider_id not in {"openai", "anthropic", "openrouter"}:
@@ -117,6 +118,12 @@ class ModelRequest:
             raise ValueError("invalid request response mode")
         if not self.messages or len(self.messages) > 256 or len(self.tools) > 64:
             raise ValueError("invalid request bounds")
+        if (
+            not isinstance(self.max_output_tokens, int)
+            or isinstance(self.max_output_tokens, bool)
+            or not 1 <= self.max_output_tokens <= 131_072
+        ):
+            raise ValueError("invalid request output bound")
         names = [tool.name for tool in self.tools]
         if len(names) != len(set(names)):
             raise ValueError("duplicate request tool")

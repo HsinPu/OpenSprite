@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import pytest
 
+from context_test_support import TestCapabilityResolver
+
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.agent.run_manager import RunManager
 from opensprite_backend.app_paths import build_app_paths
@@ -76,6 +78,7 @@ async def test_manager_owns_one_task_per_run_and_waits_for_completion(
             repository=repository,
             gateway=FinalGateway(),
             tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
         ),
     )
 
@@ -111,6 +114,7 @@ async def test_user_cancel_stops_running_task(tmp_path: Path) -> None:
             repository=repository,
             gateway=BlockingGateway(),
             tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
         ),
     )
     assert await manager.start(run.id) is True
@@ -150,6 +154,7 @@ async def test_close_marks_abandoned_running_work_interrupted(
             repository=repository,
             gateway=BlockingGateway(),
             tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
         ),
     )
     assert await manager.start(run.id) is True
@@ -200,6 +205,7 @@ async def test_execution_store_failure_is_persisted_as_terminal_failure(
             repository=failing_repository,  # type: ignore[arg-type]
             gateway=FinalGateway(),
             tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
         ),
     )
 

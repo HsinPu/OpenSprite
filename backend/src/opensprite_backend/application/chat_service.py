@@ -44,6 +44,8 @@ class ChatErrorCode(StrEnum):
     SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
     DATABASE_UNAVAILABLE = "database_unavailable"
     AGENT_LIMIT_REACHED = "agent_limit_reached"
+    CONTEXT_LIMIT_EXCEEDED = "context_limit_exceeded"
+    CONTEXT_PREPARATION_FAILED = "context_preparation_failed"
     TOOL_FAILURE = "tool_failure"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INTERNAL_ERROR = "internal_error"

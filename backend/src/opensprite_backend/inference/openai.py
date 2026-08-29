@@ -41,6 +41,7 @@ class OpenAIInferenceAdapter:
             "input": _input(request.messages),
             "stream": True,
             "store": False,
+            "max_output_tokens": request.max_output_tokens,
         }
         if request.tools:
             body["tools"] = _tools(request.tools)

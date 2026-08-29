@@ -127,7 +127,7 @@ class ConversationCompactionService:
         summary = generated.summary.strip()
         if (
             not summary
-            or len(summary) > 262_144
+            or len(summary) > 65_536
             or generated.input_tokens < 0
             or generated.output_tokens < 0
         ):

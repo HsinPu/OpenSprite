@@ -238,6 +238,8 @@ export const jaMessages = {
   "error.chat.settingsStore": "AI 設定を一時的に読み込めません。",
   "error.chat.database": "ローカル会話データを一時的に利用できません。",
   "error.chat.agentLimit": "今回の実行は安全なステップ上限に達しました。",
+  "error.chat.contextLimit": "必要な最近の履歴が選択したコンテキスト上限を超えています。上限を上げるか、新しい会話を開始してください。",
+  "error.chat.contextPreparation": "モデル用コンテキストを準備できませんでした。しばらくしてから再試行してください。",
   "error.chat.toolFailure": "ツールの実行に失敗しました。",
   "error.chat.invalidProviderResponse": "モデルプロバイダーの応答を安全に使用できません。",
   "error.chat.internal": "ローカルサービスが今回の応答を完了できませんでした。",

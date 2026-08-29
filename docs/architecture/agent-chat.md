@@ -25,7 +25,9 @@ Browser UI
   raw Provider payloads, tool arguments, secrets, and hidden reasoning are not
   messages.
 - A **Run** is the execution caused by one user message. It snapshots Provider,
-  model, response mode, status, safe error, partial assistant text, and timing.
+  model, response mode, Context budget, status, safe error, partial assistant
+  text, and timing. Context budget remains internal and does not expand the
+  public Run payload.
 - A **Run event** is a small durable semantic projection used for replay and UI
   status. Events never contain credentials, raw upstream bodies, or hidden
   chain-of-thought.
@@ -55,13 +57,16 @@ contract but does not implement model, tool or persistence behavior.
    conversation, and queued Run are committed in one SQLite transaction.
 3. The Run manager starts the bounded Agent loop after the durable start
    transaction succeeds.
-4. The browser opens `GET /api/runs/{run_id}/events`. Persisted events replay in
+4. The loop resolves the selected model capability, converts the Run's Context
+   policy into an input budget, retains the recent message floor, and compacts
+   only older history when required.
+5. The browser opens `GET /api/runs/{run_id}/events`. Persisted events replay in
    sequence and then stream over SSE; reconnect uses `Last-Event-ID`.
-5. Text deltas update the Run partial text and UI. A final answer creates one
+6. Text deltas update the Run partial text and UI. A final answer creates one
    durable assistant Message and completes the Run atomically.
-6. A structured model tool request must match an explicitly registered tool and
+7. A structured model tool request must match an explicitly registered tool and
    pass policy before execution. Tool output returns to the same Agent loop.
-7. Cancellation, limits, Provider failure, or shutdown move the Run to an
+8. Cancellation, limits, Provider failure, or shutdown move the Run to an
    explicit terminal state. They do not fabricate an assistant success message.
 
 The request id is the idempotency boundary for retries. A conversation may have
@@ -178,6 +183,24 @@ The initial loop is intentionally small:
 - duplicate failed calls stop instead of retrying forever;
 - each tool has an explicit timeout and output cap;
 - cancellation is checked before model and tool boundaries.
+
+Context is bounded by tokens rather than a fixed number of Messages. `auto`,
+32K, 64K, 128K, 256K and model-maximum choices resolve against a backend-trusted
+model capability. Every request reserves at most 8K output tokens plus a 10%
+safety margin of at least 4K. Compaction begins at 75% of the remaining input
+budget and targets 55%. The current user message and recent 12 visible Messages
+are mandatory; if they cannot fit, the Run fails with `context_limit_exceeded`
+instead of silently dropping them.
+
+Older history is summarized through the selected model with tools disabled and
+a 2K output limit. Append-only compaction records keep monotonic sequence
+coverage, a source hash, model provenance and usage counts. Raw Messages are
+never deleted or replaced and can rebuild every summary. The summary enters the
+model transcript as explicitly marked historical user data, never as a trusted
+System instruction. Each tool round is recounted before its Provider request.
+Safe structured logs contain only limits, estimated or reported token counts,
+message counts and compaction coverage; they never contain prompt or Message
+content.
 
 The Agent checks the shared assistant-output limit before every durable delta,
 so a Provider cannot push the SQLite Run beyond its storage contract. If an

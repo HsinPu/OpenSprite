@@ -244,6 +244,8 @@ export const zhTWMessages = {
   "error.chat.settingsStore": "AI 設定暫時無法讀取。",
   "error.chat.database": "本機對話資料暫時無法使用。",
   "error.chat.agentLimit": "本次執行已達安全步驟上限。",
+  "error.chat.contextLimit": "必要的近期對話超過目前選擇的內容上限，請提高上限或建立新對話。",
+  "error.chat.contextPreparation": "暫時無法準備這次對話的模型內容，請稍後再試。",
   "error.chat.toolFailure": "工具執行失敗。",
   "error.chat.invalidProviderResponse": "模型廠家的回應無法安全使用。",
   "error.chat.internal": "本機服務暫時無法完成這次回覆。",

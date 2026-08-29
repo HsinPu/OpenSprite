@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   AgentChatApiError,
+  agentChatErrorText,
   cancelRun,
   getRun,
   listConversations,
@@ -22,6 +23,11 @@ beforeEach(() => {
 
 
 describe("Agent chat HTTP contract", () => {
+  it("maps Context failures to stable local guidance", () => {
+    expect(agentChatErrorText(new AgentChatApiError("context_limit_exceeded"))).toContain("提高上限");
+    expect(agentChatErrorText(new AgentChatApiError("context_preparation_failed"))).toContain("稍後再試");
+  });
+
   it("strictly parses conversation and message pages", async () => {
     const fetchMock = vi.fn((path: string) => {
       if (path === "/api/conversations?limit=50") {

@@ -398,6 +398,14 @@ def test_context_budget_and_compactions_are_durable_and_monotonic(
         output_tokens=30,
     )
     assert store.get_latest_compaction(accepted.conversation.id) == first
+    assert [
+        item.sequence
+        for item in store.list_messages_after(
+            accepted.conversation.id,
+            after_sequence=0,
+            limit=10,
+        )
+    ] == [1]
 
     with pytest.raises(ConversationStoreError) as captured:
         store.append_compaction(

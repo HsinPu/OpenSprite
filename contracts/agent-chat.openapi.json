@@ -507,6 +507,8 @@
           "settings_store_unavailable",
           "database_unavailable",
           "agent_limit_reached",
+          "context_limit_exceeded",
+          "context_preparation_failed",
           "tool_failure",
           "invalid_provider_response",
           "internal_error"

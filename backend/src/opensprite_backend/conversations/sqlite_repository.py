@@ -68,6 +68,8 @@ _PUBLIC_ERROR_CODES = {
     "settings_store_unavailable",
     "database_unavailable",
     "agent_limit_reached",
+    "context_limit_exceeded",
+    "context_preparation_failed",
     "tool_failure",
     "invalid_provider_response",
     "internal_error",
@@ -363,6 +365,45 @@ class SqliteConversationRepository:
                     (conversation_id,),
                 ).fetchone()
                 return None if row is None else self._compaction(row)
+            except (sqlite3.Error, TypeError, ValueError) as error:
+                raise ConversationStoreError(
+                    StoreFailure.DATABASE_UNAVAILABLE
+                ) from error
+            finally:
+                connection.close()
+
+    def list_messages_after(
+        self,
+        conversation_id: str,
+        *,
+        after_sequence: int,
+        limit: int,
+    ) -> tuple[Message, ...]:
+        self._require_identifier(conversation_id)
+        if (
+            not isinstance(after_sequence, int)
+            or isinstance(after_sequence, bool)
+            or after_sequence < 0
+            or not isinstance(limit, int)
+            or isinstance(limit, bool)
+            or not 1 <= limit <= 200
+        ):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        with self._lock:
+            connection = self._open_read()
+            if connection is None:
+                return ()
+            try:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM messages
+                    WHERE conversation_id = ? AND sequence > ?
+                    ORDER BY sequence ASC
+                    LIMIT ?
+                    """,
+                    (conversation_id, after_sequence, limit),
+                ).fetchall()
+                return tuple(self._message(row) for row in rows)
             except (sqlite3.Error, TypeError, ValueError) as error:
                 raise ConversationStoreError(
                     StoreFailure.DATABASE_UNAVAILABLE

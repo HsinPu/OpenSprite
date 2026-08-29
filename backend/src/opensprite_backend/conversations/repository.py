@@ -11,6 +11,7 @@ from .models import (
     ConversationCompaction,
     ConversationPage,
     ConversationSummary,
+    Message,
     MessagePage,
     ProviderId,
     PublicRunError,
@@ -51,6 +52,14 @@ class ConversationRepository(Protocol):
         limit: int,
         before_sequence: int | None,
     ) -> MessagePage: ...
+
+    def list_messages_after(
+        self,
+        conversation_id: str,
+        *,
+        after_sequence: int,
+        limit: int,
+    ) -> tuple[Message, ...]: ...
 
     def get_run(self, run_id: str) -> RunSnapshot | None: ...
 

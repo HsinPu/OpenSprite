@@ -96,8 +96,9 @@ than migrated or treated as a partial record. It does not alter
 `config/general.json`.
 
 `data/opensprite.db` is created only when the first user message and Run are
-successfully accepted. It owns exactly the Conversation, visible Message, Run,
-and safe semantic Run-event tables described by `agent-chat.md`. Empty reads,
+successfully accepted. It owns Conversation, visible Message, Run, append-only
+conversation compaction, and safe semantic Run-event tables described by
+`agent-chat.md`. Empty reads,
 backend import, and service startup do not create `data/` or the database.
 Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored

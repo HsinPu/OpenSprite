@@ -27,6 +27,7 @@ from .conversation_settings import (
     create_conversation_settings_service,
 )
 from .inference import ModelGateway
+from .model_capability_resolver import ProviderModelCapabilityResolver
 from .general_settings import (
     GeneralSettingsOperations,
     UnavailableGeneralSettings,
@@ -108,6 +109,9 @@ def create_system_runtime(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=ProviderModelCapabilityResolver(
+            provider_runtime.connections
+        ),
         system_prompt_provider=create_system_prompt_provider(
             paths,
             general_settings,

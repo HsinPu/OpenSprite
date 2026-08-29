@@ -4,7 +4,7 @@ export type RunStatus = (typeof runStatuses)[number];
 export const runEventTypes = ["run.started", "model.started", "assistant.delta", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "tool_failure", "invalid_provider_response", "internal_error"] as const;
+export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "invalid_provider_response", "internal_error"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
 export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
 
@@ -279,6 +279,8 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     settings_store_unavailable: "error.chat.settingsStore",
     database_unavailable: "error.chat.database",
     agent_limit_reached: "error.chat.agentLimit",
+    context_limit_exceeded: "error.chat.contextLimit",
+    context_preparation_failed: "error.chat.contextPreparation",
     tool_failure: "error.chat.toolFailure",
     invalid_provider_response: "error.chat.invalidProviderResponse",
     internal_error: "error.chat.internal",

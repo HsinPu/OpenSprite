@@ -12,6 +12,8 @@ from uuid import uuid4
 
 import pytest
 
+from context_test_support import TestCapabilityResolver
+
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunEventType, RunStatus
@@ -27,6 +29,7 @@ from opensprite_backend.inference.models import (
     ModelStreamEvent,
     ModelTextDelta,
     ModelToolCall,
+    ModelUsage,
 )
 from opensprite_backend.tools.definition import (
     ToolContext,
@@ -130,6 +133,30 @@ def accepted_run(repository: SqliteConversationRepository):
     ).run
 
 
+def seed_completed_turns(
+    repository: SqliteConversationRepository,
+    count: int,
+    *,
+    assistant_size: int,
+) -> str:
+    conversation_id: str | None = None
+    for index in range(count):
+        accepted = repository.start_run(
+            conversation_id=conversation_id,
+            client_request_id=str(uuid4()),
+            message=f"seed {index}",
+            provider_id="openrouter",
+            model_id="openrouter/auto",
+            response_mode="default",
+            context_budget="auto",
+        )
+        conversation_id = accepted.conversation.id
+        repository.mark_run_started(accepted.run.id)
+        repository.complete_run(accepted.run.id, "x" * assistant_size)
+    assert conversation_id is not None
+    return conversation_id
+
+
 @async_test
 async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
     tmp_path: Path,
@@ -148,6 +175,7 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
     )
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -208,6 +236,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
         system_prompt_provider=prompt_provider,
     )
 
@@ -271,6 +300,7 @@ async def test_repeated_identical_tool_failure_stops_bounded_loop(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
     )
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -309,6 +339,7 @@ async def test_model_round_limit_stops_infinite_tool_loop(tmp_path: Path) -> Non
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
         max_model_rounds=2,
     )
 
@@ -340,6 +371,7 @@ async def test_assistant_output_limit_fails_run_before_repository_overflow(
         repository=repository,
         gateway=OversizedGateway(),
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
         max_assistant_chars=5,
     ).execute(run.id, asyncio.Event())
 
@@ -359,6 +391,7 @@ async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
     )
 
     result = await loop.execute(run.id, asyncio.Event())
@@ -368,6 +401,106 @@ async def test_provider_failure_maps_to_safe_run_error(tmp_path: Path) -> None:
     assert result.error.code == "provider_timeout"
     assert result.error.retryable is True
     assert "private" not in result.error.message.lower()
+
+
+@async_test
+async def test_long_history_is_compacted_without_deleting_raw_messages(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(
+        repository,
+        14,
+        assistant_size=30_000,
+    )
+    current = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="auto",
+    ).run
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelTextDelta(
+                    "Goals and constraints\nKeep context.\nDecisions\nNone.\n"
+                    "Facts and artifacts\nNone.\nOpen questions\nNone.\n"
+                    "Next actions\nAnswer the current request."
+                ),
+                ModelUsage(80_000, 60),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+            [
+                ModelTextDelta("final answer"),
+                ModelUsage(61_000, 3),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(current.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "final answer"
+    assert len(gateway.requests) == 2
+    assert gateway.requests[0].max_output_tokens == 2_048
+    assert gateway.requests[1].max_output_tokens == 8_192
+    assert any(
+        message.content.startswith("Earlier conversation summary")
+        for message in gateway.requests[1].messages
+    )
+    compaction = repository.get_latest_compaction(conversation_id)
+    assert compaction is not None
+    assert compaction.covers_through_sequence < 18
+    assert len(
+        repository.list_messages(
+            conversation_id,
+            limit=100,
+            before_sequence=None,
+        ).items
+    ) == 30
+
+
+@async_test
+async def test_required_recent_history_overflow_fails_without_model_request(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(
+        repository,
+        6,
+        assistant_size=30_000,
+    )
+    current = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="auto",
+    ).run
+    gateway = ScriptedGateway([])
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(32_768),
+    ).execute(current.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "context_limit_exceeded"
+    assert gateway.requests == []
 
 
 @async_test
@@ -383,6 +516,7 @@ async def test_prompt_log_failure_stops_before_any_model_request(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
         system_prompt_provider=FailingSystemPromptProvider(),
     )
 
@@ -415,6 +549,7 @@ async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) ->
         repository=repository,
         gateway=BlockingGateway(),
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
     )
     cancellation = asyncio.Event()
     task = asyncio.create_task(loop.execute(run.id, cancellation))
@@ -427,3 +562,53 @@ async def test_cancellation_interrupts_a_blocked_model_stream(tmp_path: Path) ->
     assert repository.list_run_events(run.id, after_sequence=0, limit=100)[
         -1
     ].type is RunEventType.RUN_CANCELLED
+
+
+@async_test
+async def test_cancellation_interrupts_context_compaction_request(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(
+        repository,
+        14,
+        assistant_size=30_000,
+    )
+    run = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="auto",
+    ).run
+    entered = asyncio.Event()
+
+    class BlockingSummaryGateway:
+        async def stream(
+            self,
+            request: ModelRequest,
+        ) -> AsyncIterator[ModelStreamEvent]:
+            assert request.max_output_tokens == 2_048
+            entered.set()
+            await asyncio.Event().wait()
+            if False:
+                yield ModelCompleted(ModelFinishReason.FINAL)
+
+    cancellation = asyncio.Event()
+    task = asyncio.create_task(
+        AgentLoop(
+            repository=repository,
+            gateway=BlockingSummaryGateway(),
+            tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
+        ).execute(run.id, cancellation)
+    )
+    await asyncio.wait_for(entered.wait(), timeout=1)
+
+    cancellation.set()
+    result = await asyncio.wait_for(task, timeout=1)
+
+    assert result.status is RunStatus.CANCELLED
+    assert repository.get_latest_compaction(conversation_id) is None

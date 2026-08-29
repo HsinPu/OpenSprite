@@ -44,8 +44,9 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 只代表 HTTP process liveness，不代表 credential store 或上游 provider 可用。
 
 目前 AI 設定的 authoritative contract 是 `contracts/ai-settings.openapi.json`：
-`GET`／`PUT /api/settings/ai` 將 nullable model 與 `default`／`fast`／`balanced`／`deep` 回應模式視為一個
-atomic setting。後端以 strict schema-v2 保存在 `config/settings.json`，並在寫入 non-null model
+`GET`／`PUT /api/settings/ai` 將 nullable model、模型所屬 Context budget 與
+`default`／`fast`／`balanced`／`deep` 回應模式視為一個 atomic setting。後端以 strict schema-v3
+保存在 `config/settings.json`，並在寫入 non-null model
 前確認該 provider 有已保存的連線。這個設定 API 不會解密 API key、不聯網驗證模型清單，也不
 保存 display label 或動態 catalog。前端由 `features/ai-settings` 擁有唯一的 Provider/model catalog
 controller、模型目錄、確認後的模型選擇、回應模式與保存流程；設定頁與聊天工作台只消費這個
@@ -163,8 +164,10 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
 - OpenRouter 模型清單只透過 bodyless `POST /api/providers/openrouter/models` 觸發，並與該
   provider 的 PUT/test/DELETE 共用 process-local lock。Backend 使用已儲存 Bearer credential
   呼叫 `GET https://openrouter.ai/api/v1/models/user`，成功 body 上限 4 MiB，只保留同時支援
-  text input/output 的有效項目，依 id 去重、依 name 再 id 排序，最多回傳 1000 筆。請求不改寫
-  credential、metadata 或其他 `.opensprite` 路徑；上游回應與模型清單均不落盤。
+  text input/output 且具有有效 Context window 的項目，保留 bounded Context/output capability，依 id
+  去重、依 name 再 id 排序，最多回傳 1000 筆。請求不改寫 credential、metadata 或其他
+  `.opensprite` 路徑；上游回應與模型清單均不落盤。Agent runtime 只將 sanitized capability 保留在
+  process memory 十分鐘，避免每個 Run 重複 discovery。
 - 本機資料位置由 [`local-data-layout.md`](local-data-layout.md) 的 `AppPaths` 單一管理；建立路徑
   mapping、匯入 backend、啟動 system app 與讀取不存在的狀態都不建立任何目錄。Provider metadata
   只在實際寫入時建立 `%USERPROFILE%\.opensprite\state\providers.json`（Linux 為
@@ -173,8 +176,9 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。
-- `config/settings.json` 是 strict schema-v2 的非秘密 AI settings 檔，包含 nullable `model` 與
-  `responseMode`。讀取不存在檔案不建立目錄，並回傳 null model 與 default；成功 PUT 才以 fsync
+- `config/settings.json` 是 strict schema-v3 的非秘密 AI settings 檔，包含 nullable `model`、該模型的
+  `contextBudget` 與 `responseMode`。目前 schema-v2 會在記憶體補為 `auto` 且不於 GET 寫檔；下一次
+  成功 PUT 才寫成 canonical v3。讀取不存在檔案不建立目錄，並回傳 null model 與 default；成功 PUT 才以 fsync
   + atomic replacement 建立或替換整份設定。清除 model 仍保留 response mode，不接觸 credential
   或 provider model catalog。AI-settings route 以獨立 error enum 描述其可觀察錯誤，避免將
   settings-only code 洩漏到 provider API schema。

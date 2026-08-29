@@ -3,6 +3,11 @@
 from .assembler import AssembledContext, ContextAssembler, ContextLimitExceeded
 from .budget import ContextBudgetPlan, resolve_context_budget
 from .counter import ConservativeTokenCounter
+from .capability_resolver import (
+    ModelCapabilityNotFound,
+    ModelCapabilityProviderError,
+    ModelCapabilityResolver,
+)
 from .compactor import (
     CompactionGeneration,
     CompactionSource,
@@ -10,6 +15,7 @@ from .compactor import (
     SummaryGenerator,
     prepare_compaction_source,
 )
+from .summary_generator import GatewaySummaryGenerator
 
 __all__ = [
     "AssembledContext",
@@ -17,6 +23,10 @@ __all__ = [
     "ContextAssembler",
     "ContextBudgetPlan",
     "ContextLimitExceeded",
+    "GatewaySummaryGenerator",
+    "ModelCapabilityNotFound",
+    "ModelCapabilityProviderError",
+    "ModelCapabilityResolver",
     "CompactionGeneration",
     "CompactionSource",
     "ConversationCompactionService",

@@ -10,6 +10,7 @@ from opensprite_backend.agent.context import (
     resolve_context_budget,
 )
 from opensprite_backend.conversations.models import Message
+from opensprite_backend.conversations.models import ConversationCompaction
 from opensprite_backend.inference.capabilities import ModelCapability
 from opensprite_backend.inference.models import (
     ModelMessage,
@@ -151,3 +152,40 @@ def test_assembler_rejects_unordered_history() -> None:
             tools=(),
             budget=plan(input_budget=1000, trigger=750),
         )
+
+
+def test_existing_summary_uses_compaction_target_and_stays_historical_user_data() -> None:
+    history = tuple(message(sequence, "x" * 90) for sequence in range(5, 13))
+    summary = ConversationCompaction(
+        id="summary",
+        conversation_id="conversation",
+        covers_through_sequence=4,
+        summary="Goals and constraints\nKeep context.",
+        summary_version=1,
+        source_hash="a" * 64,
+        provider_id="openai",
+        model_id="test",
+        input_tokens=100,
+        output_tokens=20,
+        created_at=datetime(2026, 8, 29, tzinfo=UTC),
+    )
+    result = ContextAssembler(recent_message_floor=2).assemble(
+        system_prompt="System",
+        history=history,
+        tools=(),
+        budget=ContextBudgetPlan(
+            requested="auto",
+            context_limit_tokens=1000,
+            output_reserve_tokens=100,
+            safety_reserve_tokens=100,
+            input_budget_tokens=800,
+            compaction_trigger_tokens=600,
+            compaction_target_tokens=180,
+        ),
+        summary=summary,
+    )
+
+    assert result.messages[1].role == "user"
+    assert result.messages[1].content.startswith("Earlier conversation summary")
+    assert result.estimated_input_tokens <= 180
+    assert result.needs_compaction is True

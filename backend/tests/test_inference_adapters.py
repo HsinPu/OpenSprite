@@ -11,6 +11,8 @@ from pathlib import Path
 import httpx
 import pytest
 
+from context_test_support import TestCapabilityResolver
+
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunStatus
@@ -197,6 +199,7 @@ async def test_openrouter_streams_text_usage_and_final_without_reasoning_leak() 
         ],
         "stream": True,
         "stream_options": {"include_usage": True},
+        "max_tokens": 8192,
     }
     assert b"openrouter-secret" not in outbound.content
 
@@ -330,6 +333,7 @@ async def test_openai_responses_stream_text_tool_calls_usage_and_completion() ->
     assert body["model"] == "gpt-5.6"
     assert body["stream"] is True
     assert body["store"] is False
+    assert body["max_output_tokens"] == 8192
     assert "reasoning" not in body
     assert body["tools"] == [
         {
@@ -799,6 +803,7 @@ async def test_native_gateway_to_agent_persists_text_not_secret_or_reasoning(
                 ProviderOperationLocks(),
             ),
             tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+            capability_resolver=TestCapabilityResolver(),
         )
         result = await loop.execute(accepted.run.id, asyncio.Event())
 

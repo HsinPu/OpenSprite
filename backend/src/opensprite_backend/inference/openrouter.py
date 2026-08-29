@@ -49,6 +49,7 @@ class OpenRouterInferenceAdapter:
             "messages": _messages(request.messages),
             "stream": True,
             "stream_options": {"include_usage": True},
+            "max_tokens": request.max_output_tokens,
         }
         if request.tools:
             body["tools"] = _tools(request.tools)

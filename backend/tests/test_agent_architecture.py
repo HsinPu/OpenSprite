@@ -11,14 +11,16 @@ PACKAGE_ROOT = Path(__file__).parents[1] / "src" / "opensprite_backend"
 
 def imported_modules(directory: str) -> list[tuple[str, str]]:
     imports: list[tuple[str, str]] = []
-    for source_path in (PACKAGE_ROOT / directory).glob("*.py"):
+    directory_path = PACKAGE_ROOT / directory
+    for source_path in directory_path.rglob("*.py"):
+        source_name = source_path.relative_to(directory_path).as_posix()
         tree = ast.parse(source_path.read_text(encoding="utf-8"), source_path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
-                imports.append((source_path.name, node.module))
+                imports.append((source_name, node.module))
             elif isinstance(node, ast.Import):
                 imports.extend(
-                    (source_path.name, alias.name) for alias in node.names
+                    (source_name, alias.name) for alias in node.names
                 )
     return imports
 

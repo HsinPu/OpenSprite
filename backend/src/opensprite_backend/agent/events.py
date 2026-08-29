@@ -50,6 +50,18 @@ AGENT_LIMIT_ERROR = PublicRunError(
     retryable=False,
 )
 
+CONTEXT_LIMIT_ERROR = PublicRunError(
+    code="context_limit_exceeded",
+    message="必要的近期對話超過目前選擇的內容上限。",
+    retryable=False,
+)
+
+CONTEXT_PREPARATION_ERROR = PublicRunError(
+    code="context_preparation_failed",
+    message="暫時無法準備這次對話的模型內容。",
+    retryable=True,
+)
+
 INVALID_PROVIDER_RESPONSE = _INFERENCE_ERRORS[
     InferenceFailure.INVALID_PROVIDER_RESPONSE
 ]

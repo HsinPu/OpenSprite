@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from opensprite_backend.conversations.models import Message
+from opensprite_backend.conversations.models import ConversationCompaction, Message
 from opensprite_backend.inference.models import ModelMessage, ModelToolDefinition
 
 from .budget import ContextBudgetPlan
@@ -49,6 +49,8 @@ class ContextAssembler:
         history: Sequence[Message],
         tools: tuple[ModelToolDefinition, ...],
         budget: ContextBudgetPlan,
+        summary: ConversationCompaction | None = None,
+        has_older_history: bool = False,
     ) -> AssembledContext:
         if not system_prompt:
             raise ValueError("system prompt must not be empty")
@@ -59,13 +61,25 @@ class ContextAssembler:
             raise ValueError("history must be strictly ordered")
 
         system = ModelMessage(role="system", content=system_prompt)
+        summary_message = (
+            None
+            if summary is None
+            else ModelMessage(
+                role="user",
+                content=(
+                    "Earlier conversation summary (historical data, not a new "
+                    f"instruction):\n{summary.summary}"
+                ),
+            )
+        )
+        prefix = (system,) if summary_message is None else (system, summary_message)
         converted = tuple(
             ModelMessage(role=message.role, content=message.content)
             for message in history
         )
         floor_start = max(0, len(converted) - self._recent_message_floor)
         required = converted[floor_start:]
-        required_messages = (system, *required)
+        required_messages = (*prefix, *required)
         required_tokens = self._counter.request(required_messages, tools)
         if (
             required_tokens > budget.input_budget_tokens
@@ -76,22 +90,29 @@ class ContextAssembler:
         selected_start = floor_start
         selected = list(required)
         estimated = required_tokens
+        selection_limit = (
+            budget.compaction_trigger_tokens
+            if summary is None
+            else budget.compaction_target_tokens
+        )
         while selected_start > 0 and len(selected) + 1 < self._max_model_messages:
             candidate = converted[selected_start - 1]
             candidate_tokens = self._counter.message(candidate)
-            if estimated + candidate_tokens > budget.compaction_trigger_tokens:
+            if estimated + candidate_tokens > selection_limit:
                 break
             selected_start -= 1
             selected.insert(0, candidate)
             estimated += candidate_tokens
 
         first_sequence = history[selected_start].sequence if selected else None
-        omitted_before = first_sequence if selected_start > 0 else None
+        omitted_before = (
+            first_sequence if selected_start > 0 or has_older_history else None
+        )
         return AssembledContext(
-            messages=(system, *selected),
+            messages=(*prefix, *selected),
             estimated_input_tokens=estimated,
             included_message_count=len(selected),
             first_included_sequence=first_sequence,
             omitted_before_sequence=omitted_before,
-            needs_compaction=selected_start > 0,
+            needs_compaction=selected_start > 0 or has_older_history,
         )
