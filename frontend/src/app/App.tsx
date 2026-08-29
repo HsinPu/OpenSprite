@@ -362,6 +362,7 @@ export function App() {
           modelSelectionSaving={aiSettingsSaving}
           timeZone={generalSettings.settings.timeZone}
           sendBehavior={conversationSettings.settings.sendBehavior}
+          autoScroll={conversationSettings.settings.autoScroll}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}

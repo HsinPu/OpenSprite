@@ -9,6 +9,7 @@ import { formatMessageTime } from "../general-settings/dateTime";
 import { ExecutionContext } from "./ExecutionContext";
 import { useConversationRun } from "./useConversationRun";
 import { useRunInspection } from "./useRunInspection";
+import { useConversationAutoScroll } from "./useConversationAutoScroll";
 
 import "./ChatWorkspace.css";
 
@@ -21,6 +22,7 @@ type ChatWorkspaceProps = {
   modelSelectionSaving: boolean;
   timeZone: TimeZoneSetting;
   sendBehavior: SendBehavior;
+  autoScroll: boolean;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -59,6 +61,7 @@ export function ChatWorkspace({
   modelSelectionSaving,
   timeZone,
   sendBehavior,
+  autoScroll,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -95,6 +98,14 @@ export function ChatWorkspace({
   const displayedModelName = historical && displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
+  const scrolling = useConversationAutoScroll({
+    enabled: autoScroll,
+    conversationId,
+    loading: chat.loading,
+    messageCount: chat.messages.length,
+    streamedText: liveText,
+    showLiveAssistant,
+  });
 
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;
@@ -118,6 +129,7 @@ export function ChatWorkspace({
     event.preventDefault();
     const content = draft.trim();
     if (!content || chat.isRunning || !modelSelection) return;
+    scrolling.followLatest();
     setDraft("");
     void chat.send(content);
   };
@@ -139,7 +151,7 @@ export function ChatWorkspace({
           <h1>{title ?? t("app.newConversationTitle")}</h1>
         </header>
 
-        <div className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning}>
+        <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
           <div className="chat-workspace__conversation-rail">
             {chat.error ? <div className="chat-workspace__error" role="alert">{chat.error}</div> : null}
             {chat.loading ? <div className="chat-workspace__loading">{t("chat.loadingConversation")}</div> : null}
@@ -148,7 +160,7 @@ export function ChatWorkspace({
                 type="button"
                 className="chat-workspace__load-older"
                 disabled={chat.loadingOlderMessages}
-                onClick={() => void chat.loadOlderMessages()}
+                onClick={() => void scrolling.preservePositionWhilePrepending(chat.loadOlderMessages)}
               >
                 {chat.loadingOlderMessages
                   ? t("chat.loadingOlderMessages")

@@ -134,6 +134,8 @@ export const zhTWMessages = {
   "general.sendBehavior": "訊息傳送方式",
   "general.send.enter": "Enter 傳送，Shift + Enter 換行",
   "general.send.modifierEnter": "Ctrl / Cmd + Enter 傳送",
+  "general.autoScroll": "自動捲動至最新訊息",
+  "general.autoScrollDescription": "送出訊息及 AI 回覆時，自動跟隨最新內容",
   "general.notifications": "通知",
   "general.notificationPlan": "桌面通知與提示音",
   "general.notificationPlanDescription": "在任務完成或需要確認時通知",

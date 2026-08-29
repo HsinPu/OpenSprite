@@ -131,6 +131,8 @@ export const jaMessages = {
   "general.sendBehavior": "メッセージ送信方法",
   "general.send.enter": "Enter で送信、Shift + Enter で改行",
   "general.send.modifierEnter": "Ctrl / Cmd + Enter で送信",
+  "general.autoScroll": "最新メッセージへ自動スクロール",
+  "general.autoScrollDescription": "メッセージ送信時と AI 応答時に最新内容を追跡します",
   "general.notifications": "通知",
   "general.notificationPlan": "デスクトップ通知とサウンド",
   "general.notificationPlanDescription": "タスク完了時または確認が必要なときに通知します",

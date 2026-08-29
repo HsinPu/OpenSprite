@@ -5,6 +5,7 @@ import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import { ChatWorkspace } from "../src/features/chat/ChatWorkspace";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
 import { useRunInspection } from "../src/features/chat/useRunInspection";
+import { useConversationAutoScroll } from "../src/features/chat/useConversationAutoScroll";
 
 
 vi.mock("../src/features/chat/useConversationRun", () => ({
@@ -12,6 +13,9 @@ vi.mock("../src/features/chat/useConversationRun", () => ({
 }));
 vi.mock("../src/features/chat/useRunInspection", () => ({
   useRunInspection: vi.fn(),
+}));
+vi.mock("../src/features/chat/useConversationAutoScroll", () => ({
+  useConversationAutoScroll: vi.fn(),
 }));
 
 const run: RunSnapshot = {
@@ -38,14 +42,26 @@ const events: RunEvent[] = [
 
 const mockedUseConversationRun = vi.mocked(useConversationRun);
 const mockedUseRunInspection = vi.mocked(useRunInspection);
+const mockedUseConversationAutoScroll = vi.mocked(useConversationAutoScroll);
 const inspectRun = vi.fn(async () => undefined);
 const returnToLatest = vi.fn();
+const followLatest = vi.fn();
+const preservePositionWhilePrepending = vi.fn(async (load: () => Promise<void>) => load());
 
 beforeEach(() => {
   mockedUseConversationRun.mockReset();
   mockedUseRunInspection.mockReset();
   inspectRun.mockClear();
   returnToLatest.mockClear();
+  followLatest.mockClear();
+  preservePositionWhilePrepending.mockClear();
+  mockedUseConversationAutoScroll.mockReset();
+  mockedUseConversationAutoScroll.mockReturnValue({
+    containerRef: { current: null },
+    onScroll: vi.fn(),
+    followLatest,
+    preservePositionWhilePrepending,
+  });
   mockedUseRunInspection.mockReturnValue({
     selectedRunId: null,
     run: null,
@@ -78,7 +94,7 @@ describe("live chat workspace", () => {
       loadOlderMessages: vi.fn(async () => undefined),
     });
 
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="Asia/Taipei" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="Asia/Taipei" sendBehavior="enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
     const timestamps = Array.from(document.querySelectorAll("time.chat-workspace__message-time"));
     expect(timestamps).toHaveLength(2);
@@ -94,7 +110,7 @@ describe("live chat workspace", () => {
   it("shows a fallback inspection action for a terminal Run without an assistant reply", () => {
     const failedRun: RunSnapshot = { ...run, status: "failed", assistantMessageId: null, finishedAt: "2026-08-22T08:00:04Z", error: { code: "provider_unreachable", message: "safe", retryable: true } };
     mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }], activeRun: failedRun, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "查看這次執行" }));
     expect(inspectRun).toHaveBeenCalledWith(run.id);
@@ -104,7 +120,7 @@ describe("live chat workspace", () => {
     const historicalRun: RunSnapshot = { ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", modelId: "historic/model", partialText: "歷史完成", finishedAt: "2026-08-22T08:00:07Z" };
     mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: historicalRun, events, loading: false, error: null, inspectRun, retry: vi.fn(async () => undefined), returnToLatest });
     mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }, { id: historicalRun.assistantMessageId!, runId: run.id, role: "assistant", content: "歷史完成", createdAt: historicalRun.finishedAt!, delivery: "persisted" }], activeRun: run, events: [], streamedText: "正在整理", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: true, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }, { selection: { providerId: "openrouter", modelId: historicalRun.modelId }, label: "歷史模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }, { selection: { providerId: "openrouter", modelId: historicalRun.modelId }, label: "歷史模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "正在查看這次執行" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("heading", { level: 2, name: "執行詳情" })).toBeTruthy();
@@ -117,7 +133,7 @@ describe("live chat workspace", () => {
     const retry = vi.fn(async () => undefined);
     mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: null, events: [], loading: false, error: "執行紀錄暫時無法讀取。", inspectRun, retry, returnToLatest });
     mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }, { id: "44444444-4444-4444-8444-444444444444", runId: run.id, role: "assistant", content: "你好！", createdAt: "2026-08-22T08:00:07Z", delivery: "persisted" }], activeRun: run, events, streamedText: "正在整理", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: true, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "目前模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
 
     expect(screen.getByRole("alert").textContent).toContain("執行紀錄暫時無法讀取");
     fireEvent.click(screen.getByRole("button", { name: "重試" }));
@@ -158,6 +174,7 @@ describe("live chat workspace", () => {
         modelSelectionSaving={false}
         timeZone="system"
         sendBehavior="enter"
+        autoScroll
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}
@@ -206,6 +223,7 @@ describe("live chat workspace", () => {
         modelSelectionSaving={false}
         timeZone="system"
         sendBehavior="enter"
+        autoScroll
         onModelSelectionChange={vi.fn(async () => null)}
         onConversationAccepted={vi.fn()}
         onConversationUpdated={vi.fn()}
@@ -229,10 +247,21 @@ describe("live chat workspace", () => {
     expect(sendButton.hasAttribute("disabled")).toBe(false);
   });
 
+  it("preserves the reading position while loading older messages", () => {
+    const loadOlderMessages = vi.fn(async () => undefined);
+    mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: true, error: null, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={{ providerId: "openrouter", modelId: run.modelId }} modelChoices={[{ selection: { providerId: "openrouter", modelId: run.modelId }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "載入較早訊息" }));
+    expect(preservePositionWhilePrepending).toHaveBeenCalledOnce();
+    expect(loadOlderMessages).toHaveBeenCalledOnce();
+  });
+
   it("sends with Enter but preserves Shift+Enter and IME composition", () => {
     const send = vi.fn(async () => true);
     mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send, cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
-    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    expect(mockedUseConversationAutoScroll).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
     const composer = screen.getByRole("textbox", { name: "輸入訊息" });
     fireEvent.change(composer, { target: { value: "hello" } });
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: true });
@@ -241,12 +270,13 @@ describe("live chat workspace", () => {
 
     fireEvent.keyDown(composer, { key: "Enter" });
     expect(send).toHaveBeenCalledWith("hello");
+    expect(followLatest).toHaveBeenCalledOnce();
   });
 
   it("uses Ctrl or Cmd Enter in modifier mode", () => {
     const send = vi.fn(async () => true);
     mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: null, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send, cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
-    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="modifier-enter" onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+    render(<ChatWorkspace conversationId={null} modelName="GPT-5.6" modelSelection={{ providerId: "openai", modelId: "gpt-5.6" }} modelChoices={[{ selection: { providerId: "openai", modelId: "gpt-5.6" }, label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="modifier-enter" autoScroll onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
     const composer = screen.getByRole("textbox", { name: "輸入訊息" });
     fireEvent.change(composer, { target: { value: "hello" } });
     fireEvent.keyDown(composer, { key: "Enter" });

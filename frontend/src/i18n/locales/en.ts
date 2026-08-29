@@ -131,6 +131,8 @@ export const enMessages = {
   "general.sendBehavior": "Message sending behavior",
   "general.send.enter": "Enter to send, Shift + Enter for a new line",
   "general.send.modifierEnter": "Ctrl / Cmd + Enter to send",
+  "general.autoScroll": "Auto-scroll to latest messages",
+  "general.autoScrollDescription": "Follow the latest content when sending messages and receiving AI responses",
   "general.notifications": "Notifications",
   "general.notificationPlan": "Desktop notifications and sounds",
   "general.notificationPlanDescription": "Notify when a task completes or needs confirmation",

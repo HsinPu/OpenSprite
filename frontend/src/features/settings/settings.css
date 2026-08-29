@@ -55,6 +55,9 @@
 .settings-card-body { min-width: 0; }
 .settings-card-description { margin: 14px 0 12px; color: var(--settings-muted); font-size: 13px; line-height: 1.45; }
 .settings-select-row { min-height: 58px; padding: 8px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 15px; }
+.settings-toggle-row { min-height: 64px; padding: 9px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 15px; }
+.settings-toggle-row > span { min-width: 0; }
+.settings-toggle-row .ant-switch { flex: none; }
 .settings-future-row { min-height: 58px; padding: 9px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--settings-muted); font-size: 15px; }
 .settings-future-badge { flex: 0 0 auto; padding: 4px 9px; border: 1px solid var(--settings-border); border-radius: 999px; background: var(--settings-surface); color: var(--settings-muted); font-size: 12px; font-weight: 600; }
 .settings-card-body > :last-child { border-bottom: 0; }
@@ -135,7 +138,7 @@
   .settings-card { padding: 15px 14px 6px; }
   .settings-card-description { margin-top: 12px; }
   .settings-card-title { font-size: 15px; }
-  .settings-select-row, .settings-future-row, .settings-preference-row { align-items: flex-start; min-height: 58px; gap: 14px; font-size: 14px; }
+  .settings-select-row, .settings-toggle-row, .settings-future-row, .settings-preference-row { align-items: flex-start; min-height: 58px; gap: 14px; font-size: 14px; }
   .settings-select-row { flex-direction: column; gap: 8px; }
   .settings-select-row select { width: 100%; min-width: 0; height: 42px; }
   .settings-select-row .ant-select { width: 100%; min-width: 0; }

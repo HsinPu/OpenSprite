@@ -22,6 +22,7 @@ const generalSettings: GeneralSettingsController = {
 
 const saveStartupView = vi.fn(async () => null);
 const saveSendBehavior = vi.fn(async () => null);
+const saveAutoScroll = vi.fn(async () => null);
 const conversationSettings: ConversationSettingsController = {
   settings: { startupView: "new", sendBehavior: "enter", autoScroll: true },
   loaded: true,
@@ -29,7 +30,7 @@ const conversationSettings: ConversationSettingsController = {
   error: null,
   saveStartupView,
   saveSendBehavior,
-  saveAutoScroll: async () => null,
+  saveAutoScroll,
   reload: async () => undefined,
 };
 
@@ -114,6 +115,7 @@ describe("provider settings", () => {
     vi.unstubAllGlobals();
     saveStartupView.mockClear();
     saveSendBehavior.mockClear();
+    saveAutoScroll.mockClear();
   });
 
   it("presents provider default plus the three explicit response modes", async () => {
@@ -151,13 +153,17 @@ describe("provider settings", () => {
     expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "啟動時開啟" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "訊息傳送方式" })).toBeTruthy();
+    const autoScroll = screen.getByRole("switch", { name: "自動捲動至最新訊息" });
+    expect(autoScroll.getAttribute("aria-checked")).toBe("true");
     expect(screen.getAllByText("未來上線")).toHaveLength(1);
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByText("已儲存")).toBeNull();
     fireEvent.change(screen.getByRole("combobox", { name: "啟動時開啟" }), { target: { value: "recent" } });
     fireEvent.change(screen.getByRole("combobox", { name: "訊息傳送方式" }), { target: { value: "modifier-enter" } });
+    fireEvent.click(autoScroll);
     expect(saveStartupView).toHaveBeenCalledWith("recent");
     expect(saveSendBehavior).toHaveBeenCalledWith("modifier-enter");
+    expect(saveAutoScroll).toHaveBeenCalledWith(false);
   });
 
   it("shows save progress and hides the completed receipt after two seconds", () => {

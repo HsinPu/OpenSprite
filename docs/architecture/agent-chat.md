@@ -126,6 +126,17 @@ surface an error in the newly selected Conversation. A stored partial assistant
 response remains visible until replayed deltas replace it or durable terminal
 Messages become authoritative.
 
+The conversation viewport owns auto-follow independently from Run and SSE
+state. Opening a Conversation positions its latest Message once. With
+`autoScroll` enabled, an explicit local send follows the new optimistic Message;
+streaming output continues to follow only while the viewport remains within 96
+pixels of the bottom. Manual upward scrolling pauses follow and returning near
+the bottom resumes it. Disabling the preference prevents send and streaming
+updates from changing scroll position. Prepending older Messages always
+compensates for the inserted height so the visible anchor does not move. These
+updates are coalesced through one animation frame and do not alter the mobile
+history-inspection navigation behavior.
+
 On narrow screens the sidebar behaves as a modal navigation surface. While it
 is closed it is removed from keyboard and accessibility-tree interaction; while
 it is open, the conversation workspace is inert until navigation is dismissed.
