@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button } from "antd";
 
 import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
@@ -84,6 +82,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [mobileHeaderActionTarget, setMobileHeaderActionTarget] = useState<HTMLDivElement | null>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const newChatButtonRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -241,6 +240,12 @@ export function App() {
           <OpenSpriteMark />
           <span>OpenSprite</span>
         </div>
+        <div
+          ref={setMobileHeaderActionTarget}
+          className="mobile-header-actions"
+          aria-hidden={menuOpen ? true : undefined}
+          inert={menuOpen}
+        />
       </header>
 
       {menuOpen ? (
@@ -264,16 +269,6 @@ export function App() {
             <OpenSpriteMark />
             <span>OpenSprite</span>
           </div>
-          <Button
-            className="sidebar-collapse-button"
-            type="default"
-            icon={sidebarCollapsed ? <RightOutlined /> : <LeftOutlined />}
-            aria-label={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="conversation-navigation"
-            title={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-          />
         </div>
 
         <button
@@ -364,6 +359,9 @@ export function App() {
           sendBehavior={conversationSettings.settings.sendBehavior}
           autoScroll={conversationSettings.settings.autoScroll}
           executionPanelDefaultExpanded={conversationSettings.settings.executionPanelDefaultExpanded}
+          mobileHeaderActionTarget={mobileHeaderActionTarget}
+          navigationCollapsed={sidebarCollapsed}
+          onNavigationToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}

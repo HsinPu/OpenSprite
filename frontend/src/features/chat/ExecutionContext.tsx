@@ -1,6 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { DownOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { DownOutlined } from "@ant-design/icons";
 
 import { AgentChatApiError, agentChatErrorText, type RunEvent, type RunSnapshot } from "../../api/agentChat";
 import type { MessageKey, Translator } from "../../i18n/catalog";
@@ -88,18 +87,25 @@ type ExecutionContextProps = {
   inspectionRunId?: string | null;
   defaultExpanded: boolean;
   mode?: "sidebar" | "drawer";
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
+  bodyId?: string;
 };
 
-export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null, defaultExpanded, mode = "sidebar" }: ExecutionContextProps) {
+export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null, defaultExpanded, mode = "sidebar", expanded, onExpandedChange, bodyId }: ExecutionContextProps) {
   const { locale, t } = useI18n();
   const isDrawerMode = mode === "drawer";
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const isExpanded = expanded ?? internalExpanded;
+  const setExpanded = useCallback((nextExpanded: boolean) => {
+    if (expanded === undefined) setInternalExpanded(nextExpanded);
+    onExpandedChange?.(nextExpanded);
+  }, [expanded, onExpandedChange]);
   const previousDefaultExpandedRef = useRef(defaultExpanded);
   const wasHistoricalRef = useRef(historical);
-  const contextRef = useRef<HTMLElement>(null);
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
-  const executionBodyId = `${contextId}-execution-body`;
+  const executionBodyId = bodyId ?? `${contextId}-execution-body`;
   const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
   const toolNames = useMemo(() => Array.from(new Set(events.filter((event) => event.type.startsWith("tool.")).map((event) => String(event.data.toolName ?? "")).filter(Boolean))), [events]);
   const status = run ? t(statusKeys[run.status]) : t("execution.status.none");
@@ -112,32 +118,16 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
     wasHistoricalRef.current = historical;
 
     if (historical && inspectionRunId !== null) {
-      setIsExpanded(true);
-      if (isDrawerMode) return;
-      if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 767px)").matches) return;
-      window.requestAnimationFrame(() => {
-        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
-        contextRef.current?.scrollIntoView?.({ behavior, block: "start" });
-      });
+      setExpanded(true);
       return;
     }
-    if (defaultChanged || returnedToLatest) setIsExpanded(defaultExpanded);
-  }, [defaultExpanded, historical, inspectionRunId, isDrawerMode]);
+    if (defaultChanged || returnedToLatest) setExpanded(defaultExpanded);
+  }, [defaultExpanded, historical, inspectionRunId, setExpanded]);
 
   return (
-    <aside ref={contextRef} className={`chat-workspace__context${isDrawerMode ? " chat-workspace__context--drawer" : isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={isDrawerMode ? undefined : executionTitleId} aria-busy={historical && loading}>
+    <aside className={`chat-workspace__context${isDrawerMode ? " chat-workspace__context--drawer" : isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={isDrawerMode ? undefined : executionTitleId} aria-busy={historical && loading}>
       {!isDrawerMode ? <>
         <div className="chat-workspace__context-heading">
-          <Button
-            type="default"
-            className="chat-workspace__context-toggle"
-            icon={isExpanded ? <RightOutlined /> : <LeftOutlined />}
-            aria-expanded={isExpanded}
-            aria-controls={executionBodyId}
-            aria-label={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-            title={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-            onClick={() => setIsExpanded((current) => !current)}
-          />
           <h2 id={executionTitleId}>{title}</h2>
         </div>
 

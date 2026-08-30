@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
@@ -31,29 +31,26 @@ const event: RunEvent = {
 };
 
 describe("execution context disclosure", () => {
-  it("starts collapsed and preserves a manual choice across Run updates", () => {
-    const { rerender } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
-    const toggle = screen.getByRole("button", { name: "展開本次執行" });
-    const body = document.getElementById(toggle.getAttribute("aria-controls")!);
+  it("starts collapsed and preserves its controlled state across Run updates", () => {
+    const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} expanded={false} />);
+    const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");
 
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(body?.hidden).toBe(true);
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
-    rerender(<ExecutionContext modelName="GPT-5.6" run={{ ...run, partialText: "更新" }} events={[event]} timeZone="system" defaultExpanded={false} />);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    rerender(<ExecutionContext modelName="GPT-5.6" run={{ ...run, partialText: "更新" }} events={[event]} timeZone="system" defaultExpanded={false} expanded={true} />);
+    expect(body?.hidden).toBe(false);
   });
 
   it("applies a confirmed preference change", () => {
-    const { rerender } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
-    expect(screen.getByRole("button", { name: "展開本次執行" })).toBeTruthy();
+    const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
+    const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");
+    expect(body?.hidden).toBe(true);
 
     rerender(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded />);
-    expect(screen.getByRole("button", { name: "收合本次執行" })).toBeTruthy();
+    expect(body?.hidden).toBe(false);
 
     rerender(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
-    expect(screen.getByRole("button", { name: "展開本次執行" })).toBeTruthy();
+    expect(body?.hidden).toBe(true);
   });
 
   it("uses the existing Run start event as minimal Context preparation progress", () => {
@@ -65,17 +62,19 @@ describe("execution context disclosure", () => {
   it("renders a Drawer mode without a second collapse control", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);
 
-    expect(screen.queryByRole("button", { name: "展開本次執行" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /展開本次執行|收合本次執行/ })).toBeNull();
     expect(screen.getByText("openai · gpt-5.6 · 廠商預設")).toBeTruthy();
   });
 
   it("opens historical inspection and restores the latest default", () => {
-    const { rerender } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
+    const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
+    const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");
+    expect(body?.hidden).toBe(true);
 
     rerender(<ExecutionContext modelName="GPT-5.6" run={{ ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", finishedAt: "2026-08-29T08:00:02Z" }} events={[event]} timeZone="system" defaultExpanded={false} historical inspectionRunId={run.id} />);
-    expect(screen.getByRole("button", { name: "收合執行詳情" })).toBeTruthy();
+    expect(body?.hidden).toBe(false);
 
     rerender(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
-    expect(screen.getByRole("button", { name: "展開本次執行" })).toBeTruthy();
+    expect(body?.hidden).toBe(true);
   });
 });

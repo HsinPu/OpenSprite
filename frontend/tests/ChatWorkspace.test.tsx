@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
 import { ChatWorkspace } from "../src/features/chat/ChatWorkspace";
@@ -50,6 +50,13 @@ const returnToLatest = vi.fn();
 const followLatest = vi.fn();
 const preservePositionWhilePrepending = vi.fn(async (load: () => Promise<void>) => load());
 
+function createMobileHeaderActionTarget(): HTMLDivElement {
+  const target = document.createElement("div");
+  target.dataset.testMobileHeaderActionTarget = "true";
+  document.body.append(target);
+  return target;
+}
+
 beforeEach(() => {
   mockedUseConversationRun.mockReset();
   mockedUseRunInspection.mockReset();
@@ -74,6 +81,10 @@ beforeEach(() => {
     retry: vi.fn(async () => undefined),
     returnToLatest,
   });
+});
+
+afterEach(() => {
+  document.querySelectorAll("[data-test-mobile-header-action-target]").forEach((target) => target.remove());
 });
 
 describe("live chat workspace", () => {
@@ -118,7 +129,7 @@ describe("live chat workspace", () => {
     expect(inspectRun).toHaveBeenCalledWith(run.id);
   });
 
-  it("opens the mobile execution drawer from the header and restores focus on close", async () => {
+  it("opens the mobile execution drawer from the global header and restores focus on close", async () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [],
       activeRun: run,
@@ -134,10 +145,14 @@ describe("live chat workspace", () => {
       loadOlderMessages: vi.fn(async () => undefined),
     });
 
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={true} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
+    const mobileHeaderActionTarget = createMobileHeaderActionTarget();
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={true} mobileHeaderActionTarget={mobileHeaderActionTarget} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
 
     const trigger = screen.getByRole("button", { name: "開啟本次執行" });
-    expect(trigger.className).toContain("chat-workspace__mobile-execution-trigger");
+    expect(trigger.className).toContain("mobile-execution-button");
+    expect(mobileHeaderActionTarget.contains(trigger)).toBe(true);
+    expect(trigger.textContent).toBe("");
+    expect(trigger.querySelector(".anticon-left")).toBeTruthy();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(trigger);
@@ -152,9 +167,46 @@ describe("live chat workspace", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("places both desktop shell toggles around the chat title", () => {
+    mockedUseConversationRun.mockReturnValue({
+      messages: [],
+      activeRun: run,
+      events,
+      streamedText: "正在整理",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: true,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+
+    const onNavigationToggle = vi.fn();
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} navigationCollapsed={false} onNavigationToggle={onNavigationToggle} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
+
+    const header = screen.getByRole("heading", { level: 1, name: "整理今天的工作" }).closest("header")!;
+    const navigation = screen.getByRole("button", { name: "收合側邊欄" });
+    const expand = screen.getByRole("button", { name: "展開本次執行" });
+    expect(header.firstElementChild).toBe(navigation);
+    expect(header.lastElementChild).toBe(expand);
+    fireEvent.click(navigation);
+    expect(onNavigationToggle).toHaveBeenCalledOnce();
+    expect(expand.className).toContain("chat-workspace__header-context-toggle");
+    expect(expand.closest("header")).toBeTruthy();
+    const body = document.getElementById(expand.getAttribute("aria-controls")!);
+    expect(body?.hidden).toBe(true);
+
+    fireEvent.click(expand);
+    const collapse = screen.getByRole("button", { name: "收合本次執行" });
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+    expect(body?.hidden).toBe(false);
+  });
+
   it("opens the mobile drawer when inspecting a historical execution", async () => {
     const matchMedia = vi.fn((query: string) => ({
-      matches: query === "(max-width: 767px)",
+      matches: query === "(max-width: 900px)",
       media: query,
       onchange: null,
       addEventListener: vi.fn(),

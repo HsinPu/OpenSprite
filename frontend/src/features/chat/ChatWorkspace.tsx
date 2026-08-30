@@ -1,6 +1,7 @@
-import { FormEvent, KeyboardEvent, useId, useLayoutEffect, useRef, useState } from "react";
-import { CloseOutlined, RightOutlined } from "@ant-design/icons";
+import { FormEvent, KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
+import { createPortal } from "react-dom";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
@@ -26,6 +27,9 @@ type ChatWorkspaceProps = {
   sendBehavior: SendBehavior;
   autoScroll: boolean;
   executionPanelDefaultExpanded: boolean;
+  mobileHeaderActionTarget?: HTMLElement | null;
+  navigationCollapsed?: boolean;
+  onNavigationToggle?: () => void;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -66,6 +70,9 @@ export function ChatWorkspace({
   sendBehavior,
   autoScroll,
   executionPanelDefaultExpanded,
+  mobileHeaderActionTarget = null,
+  navigationCollapsed = false,
+  onNavigationToggle,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -73,9 +80,11 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { locale, t } = useI18n();
   const [draft, setDraft] = useState("");
+  const [executionPanelExpanded, setExecutionPanelExpanded] = useState(executionPanelDefaultExpanded);
   const [mobileExecutionOpen, setMobileExecutionOpen] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const mobileExecutionTriggerRef = useRef<HTMLButtonElement>(null);
+  const executionPanelId = `execution-panel-${useId()}`;
   const mobileExecutionId = `mobile-execution-${useId()}`;
   const mobileExecutionPanelId = `${mobileExecutionId}-panel`;
   const mobileExecutionTitleId = `${mobileExecutionId}-title`;
@@ -116,10 +125,14 @@ export function ChatWorkspace({
     showLiveAssistant,
   });
 
+  useEffect(() => {
+    if (!historical) setExecutionPanelExpanded(executionPanelDefaultExpanded);
+  }, [executionPanelDefaultExpanded, historical]);
+
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;
     const openMobileExecutionIfNeeded = () => {
-      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches) {
+      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches) {
         setMobileExecutionOpen(true);
       }
     };
@@ -170,20 +183,29 @@ export function ChatWorkspace({
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
+          {onNavigationToggle ? (
+            <Button
+              type="default"
+              className="chat-workspace__header-navigation-toggle"
+              icon={navigationCollapsed ? <RightOutlined /> : <LeftOutlined />}
+              aria-expanded={!navigationCollapsed}
+              aria-controls="conversation-navigation"
+              aria-label={navigationCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
+              title={navigationCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
+              onClick={onNavigationToggle}
+            />
+          ) : null}
           <h1>{title ?? t("app.newConversationTitle")}</h1>
           <Button
-            ref={mobileExecutionTriggerRef}
             type="default"
-            className="chat-workspace__mobile-execution-trigger"
-            icon={<RightOutlined />}
-            aria-expanded={mobileExecutionOpen}
-            aria-controls={mobileExecutionPanelId}
-            aria-label={t("chat.openExecution")}
-            title={t("chat.openExecution")}
-            onClick={() => setMobileExecutionOpen(true)}
-          >
-            {t("chat.viewExecution")}
-          </Button>
+            className="chat-workspace__header-context-toggle"
+            icon={executionPanelExpanded ? <RightOutlined /> : <LeftOutlined />}
+            aria-expanded={executionPanelExpanded}
+            aria-controls={executionPanelId}
+            aria-label={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+            title={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+            onClick={() => setExecutionPanelExpanded((expanded) => !expanded)}
+          />
         </header>
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
@@ -319,7 +341,25 @@ export function ChatWorkspace({
         onRetry={() => void inspection.retry()}
         onReturnToLatest={inspection.returnToLatest}
         defaultExpanded={executionPanelDefaultExpanded}
+        expanded={executionPanelExpanded}
+        onExpandedChange={setExecutionPanelExpanded}
+        bodyId={executionPanelId}
       />
+
+      {mobileHeaderActionTarget ? createPortal(
+        <Button
+          ref={mobileExecutionTriggerRef}
+          type="default"
+          className="mobile-execution-button"
+          icon={<LeftOutlined />}
+          aria-expanded={mobileExecutionOpen}
+          aria-controls={mobileExecutionPanelId}
+          aria-label={t("chat.openExecution")}
+          title={t("chat.openExecution")}
+          onClick={() => setMobileExecutionOpen(true)}
+        />,
+        mobileHeaderActionTarget,
+      ) : null}
 
       <Drawer
         className="chat-workspace__mobile-execution-drawer"

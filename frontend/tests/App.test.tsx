@@ -22,6 +22,19 @@ beforeEach(() => {
 });
 
 describe("mobile navigation accessibility", () => {
+  it("places the execution action at the far right of the global mobile header", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    const { container } = render(<App />);
+    const header = container.querySelector(".mobile-header");
+    const actions = container.querySelector(".mobile-header-actions");
+    const executionAction = await screen.findByRole("button", { name: "開啟本次執行" });
+
+    expect(header?.lastElementChild).toBe(actions);
+    expect(actions?.contains(executionAction)).toBe(true);
+    expect(executionAction.classList.contains("ant-btn")).toBe(true);
+    expect(executionAction.querySelector(".anticon-left")).toBeTruthy();
+  });
+
   it("removes the closed drawer from interaction and isolates page content while open", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     const { container } = render(<App />);
@@ -36,6 +49,7 @@ describe("mobile navigation accessibility", () => {
     expect(sidebar.hasAttribute("inert")).toBe(false);
     expect(sidebar.hasAttribute("aria-hidden")).toBe(false);
     expect(main.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector(".mobile-header-actions")?.hasAttribute("inert")).toBe(true);
 
     fireEvent.click(screen.getAllByRole("button", { name: "關閉主選單" })[0]!);
     expect(sidebar.hasAttribute("inert")).toBe(true);
@@ -101,16 +115,24 @@ describe("settings dialog focus restoration", () => {
 });
 
 describe("Ant Design shell controls", () => {
-  it("uses Ant Design controls with execution details collapsed by default", () => {
-    render(<App />);
+  it("places both desktop collapse controls in the chat title bar", () => {
+    const { container } = render(<App />);
 
     const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
     const executionToggle = screen.getByRole("button", { name: "展開本次執行" });
     expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
+    expect(sidebarToggle.classList.contains("chat-workspace__header-navigation-toggle")).toBe(true);
+    expect(sidebarToggle.closest(".chat-workspace__header")).toBe(executionToggle.closest(".chat-workspace__header"));
+    expect(container.querySelector(".sidebar-header button")).toBeNull();
     expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
     expect(executionToggle.getAttribute("aria-expanded")).toBe("false");
     expect(executionToggle.querySelector(".anticon-left")).toBeTruthy();
+
+    fireEvent.click(sidebarToggle);
+    const expandSidebar = screen.getByRole("button", { name: "展開側邊欄" });
+    expect(container.querySelector(".app-shell")?.classList.contains("is-sidebar-collapsed")).toBe(true);
+    expect(expandSidebar.querySelector(".anticon-right")).toBeTruthy();
   });
 
   it("does not show the inactive tools and connections shortcut", () => {

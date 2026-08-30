@@ -78,8 +78,7 @@ button {
 .sidebar-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
   margin-bottom: 28px;
 }
 
@@ -91,29 +90,6 @@ button {
   font-size: 23px;
   font-weight: 720;
   letter-spacing: -0.6px;
-}
-
-.sidebar-collapse-button.ant-btn {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  place-items: center;
-  margin-top: 0;
-  padding: 0;
-  border-color: var(--os-border);
-  border-radius: 10px;
-  color: var(--os-muted);
-  background: var(--os-surface);
-  box-shadow: none;
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.sidebar-collapse-button.ant-btn:not(:disabled):hover {
-  border-color: var(--os-primary);
-  color: var(--os-primary-strong);
-  background: var(--os-primary-soft);
 }
 
 .brand-mark {
@@ -174,7 +150,7 @@ button {
 .new-chat-button:focus-visible,
 .conversation-link:focus-visible,
 .utility-nav button:focus-visible,
-.sidebar-collapse-button:focus-visible,
+.mobile-execution-button:focus-visible,
 .mobile-menu-button:focus-visible {
   outline: 3px solid rgb(255 101 69 / 28%);
   outline-offset: 2px;
@@ -301,9 +277,7 @@ button {
 }
 
 .app-shell.is-sidebar-collapsed .sidebar-header {
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
+  justify-content: center;
 }
 
 .app-shell.is-sidebar-collapsed .brand {
@@ -387,14 +361,14 @@ button {
 
 @media (max-width: 900px) {
   body {
-    overflow: auto;
+    overflow: hidden;
   }
 
   .app-shell {
     display: block;
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
     padding-top: 60px;
   }
 
@@ -418,6 +392,12 @@ button {
     backdrop-filter: blur(12px);
   }
 
+  .mobile-header-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
   .mobile-menu-button {
     display: grid;
     width: 40px;
@@ -430,8 +410,26 @@ button {
     font-size: 19px;
   }
 
-  .sidebar-collapse-button {
-    display: none;
+  .mobile-execution-button.ant-btn {
+    display: grid;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    padding: 0;
+    border-color: var(--os-border);
+    border-radius: 10px;
+    background: var(--os-surface);
+    color: var(--os-muted);
+    box-shadow: none;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .mobile-execution-button.ant-btn:not(:disabled):hover {
+    border-color: var(--os-primary);
+    color: var(--os-primary-strong);
+    background: var(--os-primary-soft);
   }
 
   .brand--mobile {
@@ -448,15 +446,21 @@ button {
 
   .main-sidebar {
     position: fixed;
-    top: 0;
+    top: 60px;
     bottom: 0;
     left: 0;
     height: auto;
     min-height: 0;
     width: min(86vw, 290px);
+    padding: 18px 16px;
+    background: var(--os-surface);
     transform: translateX(-102%);
     transition: transform 180ms ease;
     box-shadow: 18px 0 48px rgb(38 33 29 / 14%);
+  }
+
+  .main-sidebar .sidebar-header {
+    display: none;
   }
 
   .main-sidebar.is-open {
@@ -464,13 +468,12 @@ button {
   }
 
   .app-shell.is-sidebar-collapsed .main-sidebar {
-    padding: 28px 16px 18px;
+    padding: 18px 16px;
   }
 
   .app-shell.is-sidebar-collapsed .sidebar-header {
-    flex-direction: row;
+    justify-content: flex-start;
     align-items: flex-start;
-    gap: 4px;
   }
 
   .app-shell.is-sidebar-collapsed .brand {
@@ -501,15 +504,16 @@ button {
   .sidebar-backdrop {
     position: fixed;
     z-index: 15;
-    inset: 0;
+    inset: 60px 0 0;
     display: block;
     border: 0;
     background: rgb(25 23 21 / 26%);
   }
 
   .app-content {
-    height: auto;
-    min-height: calc(100dvh - 60px);
+    height: calc(100dvh - 60px);
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
