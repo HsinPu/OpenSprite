@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RunEvent, RunSnapshot } from "../src/api/agentChat";
@@ -116,6 +116,74 @@ describe("live chat workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "查看這次執行" }));
     expect(inspectRun).toHaveBeenCalledWith(run.id);
+  });
+
+  it("opens the mobile execution drawer from the header and restores focus on close", async () => {
+    mockedUseConversationRun.mockReturnValue({
+      messages: [],
+      activeRun: run,
+      events,
+      streamedText: "正在整理",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: true,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={true} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
+
+    const trigger = screen.getByRole("button", { name: "開啟本次執行" });
+    expect(trigger.className).toContain("chat-workspace__mobile-execution-trigger");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(trigger);
+    const drawer = await screen.findByRole("dialog");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(within(drawer).getByText("本次執行")).toBeTruthy();
+    expect(within(drawer).getByText("openrouter · openai/gpt-5.6 · 廠商預設")).toBeTruthy();
+    expect(within(drawer).queryByRole("button", { name: "收合本次執行" })).toBeNull();
+
+    fireEvent.keyDown(drawer, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens the mobile drawer when inspecting a historical execution", async () => {
+    const matchMedia = vi.fn((query: string) => ({
+      matches: query === "(max-width: 767px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    vi.stubGlobal("matchMedia", matchMedia);
+    mockedUseConversationRun.mockReturnValue({
+      messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }],
+      activeRun: null,
+      events: [],
+      streamedText: "",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: false,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={true} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "查看這次執行" }));
+    expect(inspectRun).toHaveBeenCalledWith(run.id);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 
   it("shows the selected historical Run and returns to the latest execution", () => {

@@ -62,6 +62,13 @@ describe("execution context disclosure", () => {
     expect(screen.getByText("準備對話內容")).toBeTruthy();
   });
 
+  it("renders a Drawer mode without a second collapse control", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);
+
+    expect(screen.queryByRole("button", { name: "展開本次執行" })).toBeNull();
+    expect(screen.getByText("openai · gpt-5.6 · 廠商預設")).toBeTruthy();
+  });
+
   it("opens historical inspection and restores the latest default", () => {
     const { rerender } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);
 

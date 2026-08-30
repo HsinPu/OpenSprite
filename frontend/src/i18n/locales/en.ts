@@ -50,6 +50,8 @@ export const enMessages = {
   "chat.optionsLabel": "Message options (coming later)",
   "chat.stop": "Stop response",
   "chat.send": "Send message",
+  "chat.openExecution": "Open current execution",
+  "chat.closeExecution": "Close current execution",
   "chat.viewExecution": "View execution",
   "chat.viewExecutionLabel": "View this execution",
   "chat.viewingExecution": "Viewing",

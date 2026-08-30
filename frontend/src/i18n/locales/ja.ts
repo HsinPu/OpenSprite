@@ -50,6 +50,8 @@ export const jaMessages = {
   "chat.optionsLabel": "メッセージオプション（今後提供）",
   "chat.stop": "応答を停止",
   "chat.send": "メッセージを送信",
+  "chat.openExecution": "今回の実行を開く",
+  "chat.closeExecution": "今回の実行を閉じる",
   "chat.viewExecution": "実行を表示",
   "chat.viewExecutionLabel": "この実行を表示",
   "chat.viewingExecution": "表示中",

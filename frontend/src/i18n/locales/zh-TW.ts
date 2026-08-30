@@ -50,6 +50,8 @@ export const zhTWMessages = {
   "chat.optionsLabel": "訊息選項（尚未上線）",
   "chat.stop": "停止回覆",
   "chat.send": "送出訊息",
+  "chat.openExecution": "開啟本次執行",
+  "chat.closeExecution": "關閉本次執行",
   "chat.viewExecution": "查看執行",
   "chat.viewExecutionLabel": "查看這次執行",
   "chat.viewingExecution": "正在查看",

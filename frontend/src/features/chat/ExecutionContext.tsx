@@ -87,10 +87,12 @@ type ExecutionContextProps = {
   onReturnToLatest?: () => void;
   inspectionRunId?: string | null;
   defaultExpanded: boolean;
+  mode?: "sidebar" | "drawer";
 };
 
-export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null, defaultExpanded }: ExecutionContextProps) {
+export function ExecutionContext({ modelName, run, events, timeZone, historical = false, loading = false, error = null, onRetry, onReturnToLatest, inspectionRunId = null, defaultExpanded, mode = "sidebar" }: ExecutionContextProps) {
   const { locale, t } = useI18n();
+  const isDrawerMode = mode === "drawer";
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const previousDefaultExpandedRef = useRef(defaultExpanded);
   const wasHistoricalRef = useRef(historical);
@@ -111,6 +113,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
 
     if (historical && inspectionRunId !== null) {
       setIsExpanded(true);
+      if (isDrawerMode) return;
       if (typeof window.matchMedia !== "function" || !window.matchMedia("(max-width: 767px)").matches) return;
       window.requestAnimationFrame(() => {
         const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -119,31 +122,33 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
       return;
     }
     if (defaultChanged || returnedToLatest) setIsExpanded(defaultExpanded);
-  }, [defaultExpanded, historical, inspectionRunId]);
+  }, [defaultExpanded, historical, inspectionRunId, isDrawerMode]);
 
   return (
-    <aside ref={contextRef} className={`chat-workspace__context${isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={executionTitleId} aria-busy={historical && loading}>
-      <div className="chat-workspace__context-heading">
-        <Button
-          type="default"
-          className="chat-workspace__context-toggle"
-          icon={isExpanded ? <RightOutlined /> : <LeftOutlined />}
-          aria-expanded={isExpanded}
-          aria-controls={executionBodyId}
-          aria-label={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-          title={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-          onClick={() => setIsExpanded((current) => !current)}
-        />
-        <h2 id={executionTitleId}>{title}</h2>
-      </div>
+    <aside ref={contextRef} className={`chat-workspace__context${isDrawerMode ? " chat-workspace__context--drawer" : isExpanded ? "" : " chat-workspace__context--collapsed"}`} aria-labelledby={isDrawerMode ? undefined : executionTitleId} aria-busy={historical && loading}>
+      {!isDrawerMode ? <>
+        <div className="chat-workspace__context-heading">
+          <Button
+            type="default"
+            className="chat-workspace__context-toggle"
+            icon={isExpanded ? <RightOutlined /> : <LeftOutlined />}
+            aria-expanded={isExpanded}
+            aria-controls={executionBodyId}
+            aria-label={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+            title={isExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+            onClick={() => setIsExpanded((current) => !current)}
+          />
+          <h2 id={executionTitleId}>{title}</h2>
+        </div>
 
-      <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
-        <span>{status}</span>
-        <span>{run ? modelName : "—"}</span>
-        <span>{steps.length}</span>
-      </div>
+        <div className="chat-workspace__context-summary" aria-hidden={isExpanded}>
+          <span>{status}</span>
+          <span>{run ? modelName : "—"}</span>
+          <span>{steps.length}</span>
+        </div>
+      </> : null}
 
-      <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isExpanded}>
+      <div id={executionBodyId} className="chat-workspace__context-body" hidden={!isDrawerMode && !isExpanded}>
         {historical ? <div className="chat-workspace__history-toolbar"><span>{t("execution.historical")}</span><button type="button" onClick={onReturnToLatest}>{t("execution.backToLatest")}</button></div> : null}
         {historical && loading ? <div className="chat-workspace__context-message" role="status">{t("execution.loadingHistory")}</div> : historical && error ? <div className="chat-workspace__context-message chat-workspace__context-message--error" role="alert"><p>{error}</p>{onRetry ? <button type="button" onClick={onRetry}>{t("common.retry")}</button> : null}</div> : run ? (
           <>

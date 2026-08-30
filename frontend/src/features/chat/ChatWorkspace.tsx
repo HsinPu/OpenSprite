@@ -1,4 +1,6 @@
-import { FormEvent, KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useId, useLayoutEffect, useRef, useState } from "react";
+import { CloseOutlined, RightOutlined } from "@ant-design/icons";
+import { Button, Drawer } from "antd";
 
 import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
@@ -71,7 +73,12 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { locale, t } = useI18n();
   const [draft, setDraft] = useState("");
+  const [mobileExecutionOpen, setMobileExecutionOpen] = useState(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const mobileExecutionTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileExecutionId = `mobile-execution-${useId()}`;
+  const mobileExecutionPanelId = `${mobileExecutionId}-panel`;
+  const mobileExecutionTitleId = `${mobileExecutionId}-title`;
   const chat = useConversationRun({
     conversationId,
     onConversationAccepted,
@@ -111,12 +118,17 @@ export function ChatWorkspace({
 
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;
+    const openMobileExecutionIfNeeded = () => {
+      if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 767px)").matches) {
+        setMobileExecutionOpen(true);
+      }
+    };
     return <button
       type="button"
       className={`chat-workspace__inspection-button${selected ? " is-selected" : ""}`}
       aria-label={t(selected ? "chat.viewingExecutionLabel" : "chat.viewExecutionLabel")}
       aria-pressed={selected}
-      onClick={() => { if (selected) inspection.returnToLatest(); else void inspection.inspectRun(runId); }}
+      onClick={() => { if (selected) inspection.returnToLatest(); else { openMobileExecutionIfNeeded(); void inspection.inspectRun(runId); } }}
     >{t(selected ? "chat.viewingExecution" : "chat.viewExecution")}</button>;
   };
 
@@ -146,11 +158,32 @@ export function ChatWorkspace({
     event.currentTarget.form?.requestSubmit();
   };
 
+  const handleMobileExecutionClose = () => setMobileExecutionOpen(false);
+  const handleMobileExecutionAfterOpenChange = (open: boolean) => {
+    if (open) return;
+    const restoreFocus = () => mobileExecutionTriggerRef.current?.focus();
+    if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(restoreFocus);
+    else restoreFocus();
+  };
+
   return (
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
           <h1>{title ?? t("app.newConversationTitle")}</h1>
+          <Button
+            ref={mobileExecutionTriggerRef}
+            type="default"
+            className="chat-workspace__mobile-execution-trigger"
+            icon={<RightOutlined />}
+            aria-expanded={mobileExecutionOpen}
+            aria-controls={mobileExecutionPanelId}
+            aria-label={t("chat.openExecution")}
+            title={t("chat.openExecution")}
+            onClick={() => setMobileExecutionOpen(true)}
+          >
+            {t("chat.viewExecution")}
+          </Button>
         </header>
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
@@ -287,6 +320,52 @@ export function ChatWorkspace({
         onReturnToLatest={inspection.returnToLatest}
         defaultExpanded={executionPanelDefaultExpanded}
       />
+
+      <Drawer
+        className="chat-workspace__mobile-execution-drawer"
+        rootClassName="chat-workspace__mobile-execution-drawer-root"
+        open={mobileExecutionOpen}
+        placement="right"
+        closable={false}
+        maskClosable
+        keyboard
+        aria-labelledby={mobileExecutionTitleId}
+        title={(
+          <div className="chat-workspace__mobile-execution-title">
+            <span id={mobileExecutionTitleId}>{t("execution.title")}</span>
+            <Button
+              type="text"
+              className="chat-workspace__mobile-execution-close"
+              icon={<CloseOutlined />}
+              aria-label={t("chat.closeExecution")}
+              title={t("chat.closeExecution")}
+              onClick={handleMobileExecutionClose}
+            />
+          </div>
+        )}
+        styles={{ body: { padding: 0 } }}
+        onClose={handleMobileExecutionClose}
+        afterOpenChange={handleMobileExecutionAfterOpenChange}
+      >
+        {mobileExecutionOpen ? (
+          <div id={mobileExecutionPanelId} className="chat-workspace__mobile-execution-surface">
+            <ExecutionContext
+              modelName={displayedModelName}
+              run={displayedRun}
+              events={displayedEvents}
+              timeZone={timeZone}
+              historical={historical}
+              loading={inspection.loading}
+              error={inspection.error}
+              inspectionRunId={inspection.selectedRunId}
+              onRetry={() => void inspection.retry()}
+              onReturnToLatest={inspection.returnToLatest}
+              defaultExpanded
+              mode="drawer"
+            />
+          </div>
+        ) : null}
+      </Drawer>
     </section>
   );
 }
