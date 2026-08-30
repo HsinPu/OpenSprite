@@ -50,9 +50,14 @@ bounded strategy for transient Windows DLL scanning locks.
 
 One `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` value named
 `OpenSprite` invokes the installed `launch.ps1` through hidden Windows
-PowerShell at logon. The launcher verifies the official install root, rejects a
-port owned by another process, treats the matching installed backend as already
-running, and otherwise starts Uvicorn with:
+PowerShell at logon. The registered command keeps the absolute Windows
+PowerShell and launcher paths while relying on the launcher's official install
+root and port defaults. Non-default test roots or ports receive explicit
+arguments. Every generated command must remain within Windows' 260-character
+Run-value limit; installation fails before registration if that limit is
+exceeded. The launcher verifies the official install root, rejects a port owned
+by another process, treats the matching installed backend as already running,
+and otherwise starts Uvicorn with:
 
 ```text
 opensprite_backend.installed_runtime:create_installed_app

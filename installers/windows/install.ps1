@@ -57,11 +57,27 @@ function Remove-OpenSpriteStartup([string]$Name) {
     Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $Name -ErrorAction SilentlyContinue
 }
 
+function New-OpenSpriteStartupValue([string]$Root, [int]$ListenPort) {
+    $launcher = Join-Path $Root "installers\windows\launch.ps1"
+    $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $value = "`"$powershell`" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$launcher`""
+    $expectedRoot = Resolve-AbsolutePath (Join-Path $env:LOCALAPPDATA "OpenSprite\app")
+    if (-not (Test-SamePath $Root $expectedRoot)) {
+        $value += " -InstallRoot `"$Root`" -AllowCustomInstallRoot"
+    }
+    if ($ListenPort -ne 8765) {
+        $value += " -Port $ListenPort"
+    }
+    return $value
+}
+
 function Register-OpenSpriteStartup([string]$Root, [string]$Name, [int]$ListenPort) {
     $launcher = Join-Path $Root "installers\windows\launch.ps1"
     if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) { throw "Installed launcher is missing." }
-    $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
-    $value = "`"$powershell`" -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$launcher`" -InstallRoot `"$Root`" -Port $ListenPort"
+    $value = New-OpenSpriteStartupValue $Root $ListenPort
+    if ($value.Length -gt 260) {
+        throw "OpenSprite Run command exceeds the Windows 260-character limit."
+    }
     Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $Name -Value $value
 }
 

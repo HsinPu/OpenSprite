@@ -42,6 +42,31 @@ foreach ($script in @($installScript, $uninstallScript, $launchScript)) {
     }
 }
 
+$officialInstallRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $env:LOCALAPPDATA "OpenSprite\app")
+)
+$sourceRootForCommand = [System.IO.Path]::GetFullPath(
+    (Join-Path $PSScriptRoot "..\..")
+)
+$command = @"
+. '$($installScript.Replace("'", "''"))' -SourceRoot '$($sourceRootForCommand.Replace("'", "''"))' -InstallRoot '$($officialInstallRoot.Replace("'", "''"))' -WhatIf | Out-Null
+New-OpenSpriteStartupValue '$($officialInstallRoot.Replace("'", "''"))' 8765
+"@
+$startupValue = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command $command
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to render the official Windows Run command."
+}
+if ($startupValue.Length -gt 260) {
+    throw "Official Windows Run command exceeds 260 characters: $($startupValue.Length)"
+}
+$expectedPowerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+if (-not $startupValue.StartsWith("`"$expectedPowerShell`" ", [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Official Windows Run command must use the absolute Windows PowerShell path."
+}
+if ($startupValue.Contains(" -InstallRoot ") -or $startupValue.Contains(" -Port ")) {
+    throw "Official Windows Run command must omit redundant default arguments."
+}
+
 $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd("\")
 $testRoot = [System.IO.Path]::GetFullPath((Join-Path $tempRoot ("opensprite-installer-test-" + [Guid]::NewGuid().ToString("N"))))
 if (-not $testRoot.StartsWith($tempRoot + "\", [System.StringComparison]::OrdinalIgnoreCase) -or (Split-Path -Leaf $testRoot) -notlike "opensprite-installer-test-*") {
