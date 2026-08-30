@@ -49,7 +49,7 @@ class OpenRouterInferenceAdapter:
             "messages": _messages(request.messages),
             "stream": True,
             "stream_options": {"include_usage": True},
-            "max_tokens": request.max_output_tokens,
+            "max_completion_tokens": request.max_output_tokens,
         }
         if request.tools:
             body["tools"] = _tools(request.tools)
@@ -133,6 +133,9 @@ class OpenRouterInferenceAdapter:
                 except ValueError as error:
                     raise invalid_response() from error
             yield ModelCompleted(ModelFinishReason.TOOL_CALLS)
+            return
+        if finish_reason == "length":
+            yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)
             return
         if finish_reason != "stop":
             raise invalid_response()

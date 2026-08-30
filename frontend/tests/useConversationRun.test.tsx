@@ -55,6 +55,7 @@ function run(status: "running" | "cancelling" | "completed") {
     modelId: "openrouter/auto",
     responseMode: "default",
     status,
+    completionReason: status === "completed" ? "stop" : null,
     error: null,
     partialText: status === "completed" ? "完成" : "",
     createdAt: "2026-08-21T08:30:00Z",
@@ -163,7 +164,7 @@ describe("useConversationRun", () => {
     act(() => handlers!.onEvent(delta));
     await waitFor(() => expect(screen.getByTestId("streamed").textContent).toBe("完成"));
     act(() => {
-      handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId } });
+      handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId, completionReason: "stop" } });
     });
 
     await waitFor(() => expect(screen.getByTestId("messages").textContent).toContain("assistant:完成"));
@@ -209,7 +210,7 @@ describe("useConversationRun", () => {
     render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
 
-    act(() => handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId } }));
+    act(() => handlers!.onEvent({ sequence: 4, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId, completionReason: "stop" } }));
 
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("completed"));
     expect(close).toHaveBeenCalledOnce();
@@ -226,7 +227,7 @@ describe("useConversationRun", () => {
         runReads += 1;
         const snapshot = runReads === 1
           ? run("running")
-          : { ...run("completed"), status: "failed", assistantMessageId: null, error: terminalError };
+          : { ...run("completed"), status: "failed", assistantMessageId: null, completionReason: null, error: terminalError };
         return Promise.resolve(new Response(JSON.stringify(snapshot)));
       }
       throw new Error(`unexpected request ${path}`);

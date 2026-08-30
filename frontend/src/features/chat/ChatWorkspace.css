@@ -230,6 +230,7 @@
 
 .chat-workspace__message-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 7px; }
 .chat-workspace__assistant-meta { display: flex; align-items: center; gap: 8px; }
+.chat-workspace__output-limit { margin: 0; color: #9b5b16; font-size: 0.78rem; line-height: 1.35; }
 .chat-workspace__message-time { color: var(--chat-muted); font-size: 0.75rem; line-height: 1.2; }
 .chat-workspace__inspection-button { padding: 0; border: 0; background: transparent; color: var(--chat-muted); cursor: pointer; font: inherit; font-size: 0.75rem; line-height: 1.2; }
 .chat-workspace__inspection-button:hover, .chat-workspace__inspection-button:focus-visible, .chat-workspace__inspection-button.is-selected { color: var(--chat-primary-strong); }

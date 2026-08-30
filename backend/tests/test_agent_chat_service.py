@@ -120,6 +120,7 @@ class FinalGateway:
         assert request.provider_id == "openrouter"
         assert request.model_id == "openrouter/auto"
         assert request.response_mode == "default"
+        assert request.max_output_tokens == 8_192
         yield ModelTextDelta("真實流程回覆")
         yield ModelCompleted(ModelFinishReason.FINAL)
 
@@ -134,6 +135,7 @@ def service(tmp_path: Path, *, model: bool = True, connected: bool = True):
                 providerId="openrouter",
                 modelId="openrouter/auto",
                 contextBudget="auto",
+                outputBudget="auto",
             )
             if model
             else None
@@ -172,6 +174,7 @@ async def test_start_run_persists_then_executes_and_lists_real_data(
 
     assert completed is not None
     assert completed.status is RunStatus.COMPLETED
+    assert completed.output_budget == "auto"
     conversations = await chat.list_conversations(limit=50, before=None)
     assert [item.id for item in conversations.items] == [accepted.conversation.id]
     messages = await chat.list_messages(

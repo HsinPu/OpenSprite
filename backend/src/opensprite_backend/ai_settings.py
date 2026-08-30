@@ -12,8 +12,9 @@ from .app_paths import AppPaths
 from .models import AiSettings, ErrorCode
 from .provider_connections import ProviderConnectionError, ProviderConnections
 
-_SCHEMA_VERSION: Final = 3
-_PREVIOUS_SCHEMA_VERSION: Final = 2
+_SCHEMA_VERSION: Final = 5
+_PREVIOUS_SCHEMA_VERSION: Final = 4
+_LEGACY_SCHEMA_VERSION: Final = 3
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
 
 
@@ -37,7 +38,11 @@ class AiSettingsOperations(Protocol):
 
 
 def default_ai_settings() -> AiSettings:
-    return AiSettings(model=None, responseMode="default")
+    return AiSettings(
+        model=None,
+        responseMode="default",
+        autoContinueOutput=True,
+    )
 
 
 class JsonAiSettingsStore:
@@ -101,24 +106,50 @@ class JsonAiSettingsStore:
 
     @staticmethod
     def _decode(raw: object) -> AiSettings:
-        if type(raw) is not dict or set(raw) != {
-            "version",
-            "model",
-            "responseMode",
-        } or type(raw["version"]) is not int:
+        if (
+            type(raw) is not dict
+            or type(raw.get("version")) is not int
+            or not {"model", "responseMode"}.issubset(raw)
+        ):
             raise SettingsStoreError
         model = raw["model"]
-        if raw["version"] == _PREVIOUS_SCHEMA_VERSION and type(model) is dict:
-            if set(model) != {"providerId", "modelId"}:
+        auto_continue_output: object
+        if raw["version"] == _LEGACY_SCHEMA_VERSION:
+            if set(raw) != {"version", "model", "responseMode"}:
                 raise SettingsStoreError
-            model = {**model, "contextBudget": "auto"}
-        elif raw["version"] != _SCHEMA_VERSION:
+            if model is not None:
+                if type(model) is not dict or set(model) != {
+                    "providerId",
+                    "modelId",
+                    "contextBudget",
+                }:
+                    raise SettingsStoreError
+                model = {**model, "outputBudget": "auto"}
+            auto_continue_output = True
+        elif raw["version"] == _PREVIOUS_SCHEMA_VERSION:
+            if set(raw) != {"version", "model", "responseMode"}:
+                raise SettingsStoreError
+            auto_continue_output = True
+        elif raw["version"] == _SCHEMA_VERSION:
+            if set(raw) != {
+                "version",
+                "model",
+                "responseMode",
+                "autoContinueOutput",
+            }:
+                raise SettingsStoreError
+            auto_continue_output = raw["autoContinueOutput"]
+        else:
             raise SettingsStoreError
         failed = False
         settings: AiSettings | None = None
         try:
             settings = AiSettings.model_validate(
-                {"model": model, "responseMode": raw["responseMode"]}
+                {
+                    "model": model,
+                    "responseMode": raw["responseMode"],
+                    "autoContinueOutput": auto_continue_output,
+                }
             )
         except Exception:
             failed = True

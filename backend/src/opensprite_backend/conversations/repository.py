@@ -7,12 +7,14 @@ from typing import Protocol
 
 from .models import (
     CompletedRun,
+    CompletionReason,
     ContextBudget,
     ConversationCompaction,
     ConversationPage,
     ConversationSummary,
     Message,
     MessagePage,
+    OutputBudget,
     ProviderId,
     PublicRunError,
     ResponseMode,
@@ -73,6 +75,8 @@ class ConversationRepository(Protocol):
         model_id: str,
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
+        output_budget: OutputBudget = "auto",
+        auto_continue_output: bool = True,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(
@@ -104,7 +108,12 @@ class ConversationRepository(Protocol):
 
     def append_assistant_delta(self, run_id: str, text: str) -> RunEvent: ...
 
-    def complete_run(self, run_id: str, assistant_text: str) -> CompletedRun: ...
+    def complete_run(
+        self,
+        run_id: str,
+        assistant_text: str,
+        completion_reason: CompletionReason = CompletionReason.STOP,
+    ) -> CompletedRun: ...
 
     def fail_run(self, run_id: str, error: PublicRunError) -> RunSnapshot: ...
 

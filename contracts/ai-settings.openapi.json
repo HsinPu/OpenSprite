@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite local AI settings API",
-    "version": "0.3.0-draft",
-    "description": "Authoritative HTTP contract for one atomic local model selection, context budget and response mode setting."
+    "version": "0.5.0-draft",
+    "description": "Authoritative HTTP contract for one atomic local model selection, context budget, output budget, bounded output continuation and response mode setting."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [],
@@ -75,7 +75,7 @@
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["providerId", "modelId", "contextBudget"],
+        "required": ["providerId", "modelId", "contextBudget", "outputBudget"],
         "properties": {
           "providerId": {"$ref": "#/components/schemas/ProviderId"},
           "modelId": {"type": "string", "minLength": 1, "maxLength": 256},
@@ -83,16 +83,22 @@
             "type": "string",
             "enum": ["auto", "32k", "64k", "128k", "256k", "max"],
             "description": "OpenSprite context-use ceiling for this model selection; max still reserves output and safety space."
+          },
+          "outputBudget": {
+            "type": "string",
+            "enum": ["auto", "8k", "16k", "32k", "64k", "max"],
+            "description": "Requested response-token budget; the backend still caps it to the selected model and safe Context capacity."
           }
         }
       },
       "AiSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["model", "responseMode"],
+        "required": ["model", "responseMode", "autoContinueOutput"],
         "properties": {
           "model": {"anyOf": [{"$ref": "#/components/schemas/ModelSelection"}, {"type": "null"}]},
-          "responseMode": {"$ref": "#/components/schemas/ResponseMode"}
+          "responseMode": {"$ref": "#/components/schemas/ResponseMode"},
+          "autoContinueOutput": {"type": "boolean", "description": "Whether output-limited responses may continue automatically for at most two bounded attempts."}
         }
       },
       "ErrorCode": {

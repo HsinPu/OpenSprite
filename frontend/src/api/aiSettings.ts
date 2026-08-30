@@ -5,14 +5,17 @@ export type PersistedModelSelection = {
   providerId: ProviderId;
   modelId: string;
   contextBudget: ContextBudget;
+  outputBudget: OutputBudget;
 };
 
 export type ResponseMode = "default" | "fast" | "balanced" | "deep";
 export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
+export type OutputBudget = "auto" | "8k" | "16k" | "32k" | "64k" | "max";
 
 export type AiSettings = {
   model: PersistedModelSelection | null;
   responseMode: ResponseMode;
+  autoContinueOutput: boolean;
 };
 
 export type AiSettingsErrorCode = "invalid_request" | "not_connected" | "credential_store_unavailable" | "settings_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
@@ -30,20 +33,21 @@ const codePointLength = (value: string) => Array.from(value).length;
 const errorCodes = ["invalid_request", "not_connected", "credential_store_unavailable", "settings_store_unavailable", "internal_error"] as const;
 const responseModes = ["default", "fast", "balanced", "deep"] as const;
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
+const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {
   if (value === null) return null;
-  if (!record(value) || !exactKeys(value, ["providerId", "modelId", "contextBudget"]) || !providerIds.includes(value.providerId as ProviderId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim() || typeof value.contextBudget !== "string" || !contextBudgets.includes(value.contextBudget as ContextBudget)) {
+  if (!record(value) || !exactKeys(value, ["providerId", "modelId", "contextBudget", "outputBudget"]) || !providerIds.includes(value.providerId as ProviderId) || typeof value.modelId !== "string" || codePointLength(value.modelId) < 1 || codePointLength(value.modelId) > 256 || !value.modelId.trim() || typeof value.contextBudget !== "string" || !contextBudgets.includes(value.contextBudget as ContextBudget) || typeof value.outputBudget !== "string" || !outputBudgets.includes(value.outputBudget as OutputBudget)) {
     throw new AiSettingsApiError("malformed_response");
   }
-  return { providerId: value.providerId as ProviderId, modelId: value.modelId, contextBudget: value.contextBudget as ContextBudget };
+  return { providerId: value.providerId as ProviderId, modelId: value.modelId, contextBudget: value.contextBudget as ContextBudget, outputBudget: value.outputBudget as OutputBudget };
 }
 
 function responseBody(value: unknown): AiSettings {
-  if (!record(value) || !exactKeys(value, ["model", "responseMode"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode)) {
+  if (!record(value) || !exactKeys(value, ["model", "responseMode", "autoContinueOutput"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.autoContinueOutput !== "boolean") {
     throw new AiSettingsApiError("malformed_response");
   }
-  return { model: model(value.model), responseMode: value.responseMode as ResponseMode };
+  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, autoContinueOutput: value.autoContinueOutput };
 }
 
 function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorCode {

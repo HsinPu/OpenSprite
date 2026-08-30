@@ -1,7 +1,10 @@
 export const runStatuses = ["queued", "running", "cancelling", "completed", "failed", "cancelled", "interrupted"] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
-export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "assistant.delta", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
+export const completionReasons = ["stop", "output_limit", "context_limit"] as const;
+export type CompletionReason = (typeof completionReasons)[number];
+
+export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
 export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "invalid_provider_response", "internal_error"] as const;
@@ -51,6 +54,7 @@ export type RunSnapshot = {
   modelId: string;
   responseMode: "default" | "fast" | "balanced" | "deep";
   status: RunStatus;
+  completionReason: CompletionReason | null;
   error: RunError | null;
   partialText: string;
   createdAt: string;
@@ -141,12 +145,12 @@ function runError(value: unknown): RunError {
 }
 
 function runSnapshot(value: unknown, expectedRunId?: string): RunSnapshot {
-  if (!record(value) || !exactKeys(value, ["id", "conversationId", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
+  if (!record(value) || !exactKeys(value, ["id", "conversationId", "userMessageId", "assistantMessageId", "providerId", "modelId", "responseMode", "status", "completionReason", "error", "partialText", "createdAt", "startedAt", "finishedAt"]) || !isIdentifier(value.id) || (expectedRunId !== undefined && value.id !== expectedRunId) || !isIdentifier(value.conversationId) || !isIdentifier(value.userMessageId) || (value.assistantMessageId !== null && !isIdentifier(value.assistantMessageId)) || !["openai", "anthropic", "openrouter"].includes(value.providerId as string) || !boundedString(value.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(value.responseMode as string) || !runStatuses.includes(value.status as RunStatus) || (value.completionReason !== null && !completionReasons.includes(value.completionReason as CompletionReason)) || (value.error !== null && !record(value.error)) || !boundedString(value.partialText, 0, 1048576) || !utc(value.createdAt) || (value.startedAt !== null && !utc(value.startedAt)) || (value.finishedAt !== null && !utc(value.finishedAt))) {
     throw new AgentChatApiError("malformed_response");
   }
   const parsedError = value.error === null ? null : runError(value.error);
   const status = value.status as RunStatus;
-  if ((status === "queued" && (value.startedAt !== null || value.finishedAt !== null || parsedError !== null || value.assistantMessageId !== null)) || (["running", "cancelling"].includes(status) && (value.startedAt === null || value.finishedAt !== null || parsedError !== null || value.assistantMessageId !== null)) || (status === "completed" && (value.startedAt === null || value.finishedAt === null || value.assistantMessageId === null || parsedError !== null)) || (status === "failed" && (value.startedAt === null || value.finishedAt === null || value.assistantMessageId !== null || parsedError === null)) || (status === "cancelled" && (value.finishedAt === null || value.assistantMessageId !== null || parsedError !== null)) || (status === "interrupted" && (value.finishedAt === null || value.assistantMessageId !== null || parsedError === null))) {
+  if ((status === "queued" && (value.startedAt !== null || value.finishedAt !== null || value.completionReason !== null || parsedError !== null || value.assistantMessageId !== null)) || (["running", "cancelling"].includes(status) && (value.startedAt === null || value.finishedAt !== null || value.completionReason !== null || parsedError !== null || value.assistantMessageId !== null)) || (status === "completed" && (value.startedAt === null || value.finishedAt === null || value.completionReason === null || value.assistantMessageId === null || parsedError !== null)) || (status === "failed" && (value.startedAt === null || value.finishedAt === null || value.completionReason !== null || value.assistantMessageId !== null || parsedError === null)) || (status === "cancelled" && (value.finishedAt === null || value.completionReason !== null || value.assistantMessageId !== null || parsedError !== null)) || (status === "interrupted" && (value.finishedAt === null || value.completionReason !== null || value.assistantMessageId !== null || parsedError === null))) {
     throw new AgentChatApiError("malformed_response");
   }
   return { ...value, error: parsedError } as RunSnapshot;
@@ -223,13 +227,14 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   const data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
   if (["run.started", "context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "model.started" && (!exactKeys(data, ["providerId", "modelId", "responseMode"]) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "model.started" && (!exactKeys(data, ["providerId", "modelId", "responseMode", "maxOutputTokens"]) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072)) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "response.continuation.started" && (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 2 || data.maxAttempts !== 2)) throw new AgentChatApiError("malformed_response");
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.started" && (!exactKeys(data, ["callId", "toolName"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.completed" && (!exactKeys(data, ["callId", "toolName", "summary"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !boundedString(data.summary, 1, 4096))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.failed" && (!exactKeys(data, ["callId", "toolName", "error"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64) || !record(data.error))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.failed") safeError(data.error);
-  if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId"]) || !isIdentifier(data.assistantMessageId))) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "run.completed" && (!exactKeys(data, ["assistantMessageId", "completionReason"]) || !isIdentifier(data.assistantMessageId) || !completionReasons.includes(data.completionReason as CompletionReason))) throw new AgentChatApiError("malformed_response");
   if (["run.failed", "run.interrupted"].includes(expectedType) && (!exactKeys(data, ["error"]) || !record(data.error))) throw new AgentChatApiError("malformed_response");
   if (["run.failed", "run.interrupted"].includes(expectedType)) safeError(data.error);
   return value as RunEvent;

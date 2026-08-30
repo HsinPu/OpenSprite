@@ -20,6 +20,7 @@ function snapshot(id: string): RunSnapshot {
     modelId: "openrouter/auto",
     responseMode: "default",
     status: "completed",
+    completionReason: "stop",
     error: null,
     partialText: "完成",
     createdAt: "2026-08-21T08:30:00Z",
@@ -35,7 +36,7 @@ function event(runId: string, sequence: number, type: RunEvent["type"]): RunEven
     runId,
     conversationId,
     createdAt: `2026-08-21T08:30:0${sequence}Z`,
-    data: type === "run.completed" ? { assistantMessageId: "7e660e86-4838-4af5-99d5-ab926428b1c0" } : {},
+    data: type === "run.completed" ? { assistantMessageId: "7e660e86-4838-4af5-99d5-ab926428b1c0", completionReason: "stop" } : {},
   };
 }
 

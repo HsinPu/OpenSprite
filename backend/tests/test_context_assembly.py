@@ -73,11 +73,51 @@ def test_budget_resolves_user_choices_with_output_and_safety_reserves(
     result = resolve_context_budget(requested, capability(maximum))  # type: ignore[arg-type]
 
     assert result.context_limit_tokens == expected
-    assert result.output_reserve_tokens <= 8_192
+    assert result.output_reserve_tokens <= 32_768
     assert result.safety_reserve_tokens >= 4_096
     assert result.input_budget_tokens > 0
     assert result.compaction_target_tokens < result.compaction_trigger_tokens
     assert result.compaction_trigger_tokens < result.input_budget_tokens
+
+
+@pytest.mark.parametrize(
+    ("context_budget", "output_budget", "maximum", "model_output", "expected"),
+    [
+        ("32k", "auto", 262_144, 128_000, 8_192),
+        ("64k", "auto", 262_144, 128_000, 16_384),
+        ("128k", "auto", 262_144, 128_000, 32_768),
+        ("256k", "auto", 262_144, 128_000, 32_768),
+        ("128k", "64k", 262_144, 128_000, 65_536),
+        ("128k", "max", 262_144, 128_000, 85_196),
+        ("128k", "64k", 262_144, 4_096, 4_096),
+        ("32k", "max", 262_144, 128_000, 20_480),
+    ],
+)
+def test_output_budget_respects_context_safety_and_model_capability(
+    context_budget: str,
+    output_budget: str,
+    maximum: int,
+    model_output: int,
+    expected: int,
+) -> None:
+    selected = capability(maximum)
+    selected = ModelCapability(
+        provider_id=selected.provider_id,
+        model_id=selected.model_id,
+        name=selected.name,
+        context_window_tokens=selected.context_window_tokens,
+        max_output_tokens=model_output,
+    )
+
+    result = resolve_context_budget(
+        context_budget,  # type: ignore[arg-type]
+        selected,
+        output_budget,  # type: ignore[arg-type]
+    )
+
+    assert result.output_reserve_tokens == expected
+    assert result.output_requested == output_budget
+    assert result.input_budget_tokens >= result.context_limit_tokens // 4
 
 
 def test_counter_includes_tool_definitions_calls_and_results() -> None:

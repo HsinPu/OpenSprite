@@ -25,9 +25,9 @@ Browser UI
   raw Provider payloads, tool arguments, secrets, and hidden reasoning are not
   messages.
 - A **Run** is the execution caused by one user message. It snapshots Provider,
-  model, response mode, Context budget, status, safe error, partial assistant
-  text, and timing. Context budget remains internal and does not expand the
-  public Run payload.
+  model, response mode, Context budget, status, completion reason, safe error,
+  partial assistant text, and timing. Context budget remains internal and does
+  not expand the public Run payload.
 - A **Run event** is a small durable semantic projection used for replay and UI
   status. Events never contain credentials, raw upstream bodies, or hidden
   chain-of-thought.
@@ -62,8 +62,9 @@ contract but does not implement model, tool or persistence behavior.
    only older history when required.
 5. The browser opens `GET /api/runs/{run_id}/events`. Persisted events replay in
    sequence and then stream over SSE; reconnect uses `Last-Event-ID`.
-6. Text deltas update the Run partial text and UI. A final answer creates one
-   durable assistant Message and completes the Run atomically.
+6. Text deltas update the Run partial text and UI. A natural stop completes the
+   Run. An output limit may enter at most two configured continuation attempts;
+   every attempt appends to the same Run and eventual assistant Message.
 7. A structured model tool request must match an explicitly registered tool and
    pass policy before execution. Tool output returns to the same Agent loop.
 8. Cancellation, limits, Provider failure, or shutdown move the Run to an
@@ -90,7 +91,7 @@ request, a complete create-only Prompt receipt must be fsynced below
 | `GET /api/conversations` | Reverse-updated cursor page for the sidebar. |
 | `GET /api/conversations/{id}/messages` | Visible Message page in ascending sequence. |
 | `POST /api/runs` | Idempotently accept one user message and queued Run. |
-| `GET /api/runs/{id}` | Read the durable snapshot, partial text, status, and safe error. |
+| `GET /api/runs/{id}` | Read the durable snapshot, partial text, completion reason, status, and safe error. |
 | `GET /api/runs/{id}/events` | Replay and follow events after `Last-Event-ID`. |
 | `POST /api/runs/{id}/cancel` | Bodyless cancellation of queued or running work. |
 
@@ -191,8 +192,10 @@ The initial loop is intentionally small:
 
 Context is bounded by tokens rather than a fixed number of Messages. `auto`,
 32K, 64K, 128K, 256K and model-maximum choices resolve against a backend-trusted
-model capability. Every request reserves at most 8K output tokens plus a 10%
-safety margin of at least 4K. Compaction begins at 75% of the remaining input
+model capability. Output choices are Auto, 8K, 16K, 32K, 64K, and model
+maximum. Auto targets one quarter of the selected Context with a 32K ceiling;
+all modes remain capped by model capability and reserve at least 25% of Context
+for input plus a 10% safety margin of at least 4K. Compaction begins at 75% of the remaining input
 budget and targets 55%. The current user message and recent 12 visible Messages
 are mandatory; if they cannot fit, the Run fails with `context_limit_exceeded`
 instead of silently dropping them.
@@ -207,6 +210,18 @@ Safe structured logs contain only limits, estimated or reported token counts,
 message counts and compaction coverage; they never contain prompt or Message
 content.
 
+When OpenRouter omits `max_completion_tokens` for router-style model aliases,
+the capability boundary uses a Context-bounded 32K fallback on both backend and
+frontend. Explicit model capability always wins. Provider truncation still
+flows through the durable `output_limit` completion path.
+
+Each Run snapshots the requested output budget and automatic-continuation
+preference in SQLite schema v6. The
+resolved token number is persisted on every `model.started` event and shown in
+the execution record, so later settings changes cannot rewrite historical
+execution behavior. Existing Runs migrate to `auto`; pre-v5 model events record
+the former product limit of 8,192 tokens.
+
 Immediately before a real compaction model request, the Agent appends the
 empty-payload semantic event `context.compaction.started`. The browser uses it
 only as transient progress and as a safe execution-record step. It never becomes
@@ -218,6 +233,25 @@ so a Provider cannot push the SQLite Run beyond its storage contract. If an
 otherwise recoverable repository write fails during background execution, the
 Run manager makes one fail-closed terminal transition with a safe internal
 error; it does not silently discard the task while leaving an active Run.
+
+Automatic continuation is owned by the backend Agent loop, not by the browser.
+It defaults on, is limited to two attempts, disables tools, and adds no
+synthetic user Message. Each attempt records `response.continuation.started`.
+The continuation request retains the original transcript plus at most 4K
+estimated tokens from the current assistant tail. If that cannot fit, the loop
+may compact older conversation history once before the attempt. A remaining
+Context limit with existing text completes one durable partial response with
+reason `context_limit`; no-text Context failures remain failed Runs.
+
+Provider output limits are normalized separately from malformed responses.
+OpenRouter `length`, OpenAI incomplete max-token responses, and Anthropic
+`max_tokens` or `model_context_window_exceeded` become `output_limit`. When
+bounded text exists and no tool call is incomplete, that text is committed as
+a visible assistant Message with completion reason `output_limit` when
+continuation is disabled or exhausted. Missing
+text, incomplete tool data, conflicting terminal states, and unknown reasons
+remain fail-closed. SQLite schema v4 adds the nullable completion reason and
+backfills existing completed Runs and their completion events as `stop`.
 
 The production registry initially contains only explicitly composed read-only
 tools. Local writes, external writes, destructive actions, shell access, MCP,
@@ -261,6 +295,8 @@ are disabled; connect/write/pool timeouts are 30 seconds, a model stream is
 bounded to 300 seconds and 16 MiB, and one upstream SSE event is bounded to
 1 MiB. Status, transport, timeout, malformed stream, duplicate JSON key, and
 incomplete terminal failures are reduced to fixed safe inference errors.
+Normal output-limit terminal reasons are instead preserved as successful but
+explicitly truncated completions.
 
 For explicit modes, OpenRouter receives `reasoning.effort` with reasoning output
 excluded, OpenAI reasoning-capable models receive `reasoning.effort`, and

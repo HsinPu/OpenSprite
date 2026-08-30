@@ -22,7 +22,7 @@ def test_contract_is_openapi_31_json() -> None:
     contract = load_contract()
 
     assert contract["openapi"] == "3.1.0"
-    assert contract["info"]["version"] == "0.3.0-draft"
+    assert contract["info"]["version"] == "0.5.0-draft"
     assert contract["security"] == []
 
 
@@ -41,16 +41,22 @@ def test_contract_has_only_the_approved_ai_settings_operations() -> None:
     }
 
 
-def test_ai_settings_schema_persists_only_model_and_response_mode() -> None:
+def test_ai_settings_schema_persists_model_response_and_continuation() -> None:
     schemas = load_contract()["components"]["schemas"]
     selection = schemas["ModelSelection"]
 
     assert selection["additionalProperties"] is False
-    assert selection["required"] == ["providerId", "modelId", "contextBudget"]
+    assert selection["required"] == [
+        "providerId",
+        "modelId",
+        "contextBudget",
+        "outputBudget",
+    ]
     assert set(selection["properties"]) == {
         "providerId",
         "modelId",
         "contextBudget",
+        "outputBudget",
     }
     assert selection["properties"]["contextBudget"]["enum"] == [
         "auto",
@@ -60,12 +66,21 @@ def test_ai_settings_schema_persists_only_model_and_response_mode() -> None:
         "256k",
         "max",
     ]
+    assert selection["properties"]["outputBudget"]["enum"] == [
+        "auto",
+        "8k",
+        "16k",
+        "32k",
+        "64k",
+        "max",
+    ]
     assert selection["properties"]["modelId"]["minLength"] == 1
     assert selection["properties"]["modelId"]["maxLength"] == 256
     settings = schemas["AiSettings"]
     assert settings["additionalProperties"] is False
-    assert settings["required"] == ["model", "responseMode"]
-    assert set(settings["properties"]) == {"model", "responseMode"}
+    assert settings["required"] == ["model", "responseMode", "autoContinueOutput"]
+    assert set(settings["properties"]) == {"model", "responseMode", "autoContinueOutput"}
+    assert settings["properties"]["autoContinueOutput"]["type"] == "boolean"
     assert schemas["ResponseMode"]["enum"] == ["default", "fast", "balanced", "deep"]
     assert schemas["ErrorCode"]["enum"] == [
         "invalid_request",

@@ -36,6 +36,7 @@ def selection() -> ModelSelection:
         providerId="openai",
         modelId="gpt-5.6",
         contextBudget="auto",
+        outputBudget="auto",
     )
 
 
@@ -43,8 +44,13 @@ def settings(
     *,
     model: ModelSelection | None = None,
     response_mode: ResponseMode = ResponseMode.BALANCED,
+    auto_continue_output: bool = True,
 ) -> AiSettings:
-    return AiSettings(model=model, responseMode=response_mode)
+    return AiSettings(
+        model=model,
+        responseMode=response_mode,
+        autoContinueOutput=auto_continue_output,
+    )
 
 
 class RecordingConnections:
@@ -85,20 +91,22 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == AiSettings(model=None, responseMode="default")
+    assert store.get() == AiSettings(model=None, responseMode="default", autoContinueOutput=True)
     assert not paths.home.exists()
     saved = settings(model=selection(), response_mode=ResponseMode.DEEP)
     store.set(saved)
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 3,
+        "version": 5,
         "model": {
             "providerId": "openai",
             "modelId": "gpt-5.6",
             "contextBudget": "auto",
+            "outputBudget": "auto",
         },
         "responseMode": "deep",
+        "autoContinueOutput": True,
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
         "config",
@@ -111,11 +119,11 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     assert paths.settings_file.exists()
 
 
-def test_store_reads_current_v2_selection_as_auto_without_rewriting(tmp_path: Path) -> None:
+def test_store_reads_current_v3_selection_as_auto_output_without_rewriting(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     previous = (
-        b'{"version":2,"model":{"providerId":"openai",'
-        b'"modelId":"gpt-5.6"},"responseMode":"balanced"}'
+        b'{"version":3,"model":{"providerId":"openai",'
+        b'"modelId":"gpt-5.6","contextBudget":"auto"},"responseMode":"balanced"}'
     )
     path.write_bytes(previous)
 
@@ -126,19 +134,46 @@ def test_store_reads_current_v2_selection_as_auto_without_rewriting(tmp_path: Pa
     assert path.read_bytes() == previous
 
 
+def test_store_reads_v3_null_model_without_rewriting(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    previous = b'{"version":3,"model":null,"responseMode":"deep"}'
+    path.write_bytes(previous)
+
+    assert JsonAiSettingsStore(path).get() == settings(
+        model=None,
+        response_mode=ResponseMode.DEEP,
+    )
+    assert path.read_bytes() == previous
+
+
+def test_store_reads_v4_as_auto_continue_without_rewriting(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    previous = (
+        b'{"version":4,"model":{"providerId":"openai",'
+        b'"modelId":"gpt-5.6","contextBudget":"auto",'
+        b'"outputBudget":"auto"},"responseMode":"balanced"}'
+    )
+    path.write_bytes(previous)
+
+    assert JsonAiSettingsStore(path).get() == settings(model=selection())
+    assert path.read_bytes() == previous
+
+
 @pytest.mark.parametrize(
     "payload",
     [
         "not-json",
         "{}",
-        '{"version":3,"model":null,"responseMode":"balanced","extra":true}',
-        '{"version":3,"version":3,"model":null,"responseMode":"balanced"}',
-        '{"version":2,"model":{"providerId":"openai","modelId":"gpt-5.6","extra":true},"responseMode":"balanced"}',
+        '{"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":true,"extra":true}',
+        '{"version":5,"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":3,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","extra":true},"responseMode":"balanced"}',
         '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":3,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto"},"responseMode":"balanced"}',
-        '{"version":3,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto"},"responseMode":"balanced"}',
-        '{"version":3,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other"},"responseMode":"balanced"}',
-        '{"version":3,"model":null,"responseMode":"other"}',
+        '{"version":5,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":5,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":5,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":5,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"other"},"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":5,"model":null,"responseMode":"other","autoContinueOutput":true}',
+        '{"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":"true"}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -185,6 +220,7 @@ def test_atomic_failure_cleans_temp_and_preserves_old_data(
                     providerId="anthropic",
                     modelId="claude",
                     contextBudget="128k",
+                    outputBudget="32k",
                 )
             )
         )
@@ -223,18 +259,19 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k"}, "responseMode": "deep"},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "autoContinueOutput": False},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto"}, "responseMode": "deep"},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "autoContinueOutput": True},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default"}
+    assert initial.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True}
     assert saved.status_code == 200
     assert saved.json() == {
-        "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k"},
+        "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
         "responseMode": "deep",
+        "autoContinueOutput": False,
     }
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_request"
@@ -255,7 +292,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "balanced"},
+            json={"model": None, "responseMode": "balanced", "autoContinueOutput": True},
         )
 
     assert response.status_code == 400
@@ -283,6 +320,6 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default"}
+        assert response.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True}
 
     assert not paths.home.exists()

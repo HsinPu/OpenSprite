@@ -14,6 +14,7 @@ const run: RunSnapshot = {
   modelId: "gpt-5.6",
   responseMode: "default",
   status: "running",
+  completionReason: null,
   error: null,
   partialText: "",
   createdAt: "2026-08-29T08:00:00Z",
@@ -42,10 +43,68 @@ const modelEvent: RunEvent = {
   sequence: 4,
   type: "model.started",
   createdAt: "2026-08-29T08:00:04Z",
-  data: { providerId: "openai", modelId: run.modelId, responseMode: "default" },
+  data: { providerId: "openai", modelId: run.modelId, responseMode: "default", maxOutputTokens: 32_768 },
 };
 
 describe("execution context disclosure", () => {
+  it("labels an output-limited completion without treating it as a failure", () => {
+    const completed = {
+      ...run,
+      status: "completed" as const,
+      assistantMessageId: "44444444-4444-4444-8444-444444444444",
+      completionReason: "output_limit" as const,
+      partialText: "partial",
+      finishedAt: "2026-08-29T08:00:02Z",
+    };
+    const completedEvent: RunEvent = {
+      sequence: 3,
+      type: "run.completed",
+      runId: run.id,
+      conversationId: run.conversationId,
+      createdAt: "2026-08-29T08:00:02Z",
+      data: { assistantMessageId: completed.assistantMessageId, completionReason: "output_limit" },
+    };
+
+    render(<ExecutionContext modelName="Auto Router" run={completed} events={[completedEvent]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getAllByText("已達輸出上限").length).toBeGreaterThan(0);
+    expect(screen.getByText("回覆達到輸出上限")).toBeTruthy();
+    expect(document.querySelector(".chat-workspace__process-item--error")).toBeNull();
+  });
+
+  it("shows continuation progress and a preserved Context-limited completion", () => {
+    const completed = {
+      ...run,
+      status: "completed" as const,
+      assistantMessageId: "44444444-4444-4444-8444-444444444444",
+      completionReason: "context_limit" as const,
+      partialText: "partial",
+      finishedAt: "2026-08-29T08:00:03Z",
+    };
+    const continuation: RunEvent = {
+      sequence: 2,
+      type: "response.continuation.started",
+      runId: run.id,
+      conversationId: run.conversationId,
+      createdAt: "2026-08-29T08:00:02Z",
+      data: { attempt: 1, maxAttempts: 2 },
+    };
+    const completedEvent: RunEvent = {
+      sequence: 3,
+      type: "run.completed",
+      runId: run.id,
+      conversationId: run.conversationId,
+      createdAt: "2026-08-29T08:00:03Z",
+      data: { assistantMessageId: completed.assistantMessageId, completionReason: "context_limit" },
+    };
+
+    render(<ExecutionContext modelName="Auto Router" run={completed} events={[continuation, completedEvent]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("繼續產生回覆（1/2）")).toBeTruthy();
+    expect(screen.getAllByText("對話內容空間不足").length).toBeGreaterThan(0);
+    expect(screen.getByText("對話內容空間不足，保留目前回覆")).toBeTruthy();
+  });
+
   it("starts collapsed and preserves its controlled state across Run updates", () => {
     const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} expanded={false} />);
     const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");
@@ -79,6 +138,7 @@ describe("execution context disclosure", () => {
 
     expect(screen.getAllByText("整理較早的對話內容")).toHaveLength(1);
     expect(screen.getByText("請求模型 gpt-5.6")).toBeTruthy();
+    expect(screen.getByText("32K")).toBeTruthy();
     expect(document.querySelector(".chat-workspace__process-item--active")?.textContent).toContain("整理較早的對話內容");
   });
 
@@ -94,7 +154,7 @@ describe("execution context disclosure", () => {
     const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");
     expect(body?.hidden).toBe(true);
 
-    rerender(<ExecutionContext modelName="GPT-5.6" run={{ ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", finishedAt: "2026-08-29T08:00:02Z" }} events={[event]} timeZone="system" defaultExpanded={false} historical inspectionRunId={run.id} />);
+    rerender(<ExecutionContext modelName="GPT-5.6" run={{ ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", completionReason: "stop", finishedAt: "2026-08-29T08:00:02Z" }} events={[event]} timeZone="system" defaultExpanded={false} historical inspectionRunId={run.id} />);
     expect(body?.hidden).toBe(false);
 
     rerender(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} />);

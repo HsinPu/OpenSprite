@@ -52,6 +52,7 @@ function applyTerminalEvent(current: RunSnapshot | null, event: RunEvent): RunSn
         ...current,
         status: "completed",
         assistantMessageId: event.data.assistantMessageId as string,
+        completionReason: event.data.completionReason as RunSnapshot["completionReason"],
         startedAt: current.startedAt ?? finishedAt,
         finishedAt,
         error: null,
@@ -61,14 +62,15 @@ function applyTerminalEvent(current: RunSnapshot | null, event: RunEvent): RunSn
         ...current,
         status: "failed",
         assistantMessageId: null,
+        completionReason: null,
         startedAt: current.startedAt ?? finishedAt,
         finishedAt,
         error: event.data.error as RunError,
       };
     case "run.cancelled":
-      return { ...current, status: "cancelled", assistantMessageId: null, finishedAt, error: null };
+      return { ...current, status: "cancelled", assistantMessageId: null, completionReason: null, finishedAt, error: null };
     case "run.interrupted":
-      return { ...current, status: "interrupted", assistantMessageId: null, finishedAt, error: event.data.error as RunError };
+      return { ...current, status: "interrupted", assistantMessageId: null, completionReason: null, finishedAt, error: event.data.error as RunError };
     default:
       return current;
   }

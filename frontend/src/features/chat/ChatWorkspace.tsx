@@ -10,6 +10,7 @@ import type { SendBehavior } from "../../api/conversationSettings";
 import { useI18n } from "../../i18n/I18nProvider";
 import { formatMessageTime } from "../general-settings/dateTime";
 import { ExecutionContext } from "./ExecutionContext";
+import { MarkdownMessage } from "./MarkdownMessage";
 import { useConversationRun } from "./useConversationRun";
 import { useRunInspection } from "./useRunInspection";
 import { useConversationAutoScroll } from "./useConversationAutoScroll";
@@ -110,6 +111,12 @@ export function ChatWorkspace({
   const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
   const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
   const assistantRunIds = new Set(chat.messages.filter((message) => message.role === "assistant" && message.runId !== null).map((message) => message.runId));
+  const outputLimitedMessageId = chat.activeRun?.completionReason === "output_limit"
+    ? chat.activeRun.assistantMessageId
+    : null;
+  const contextLimitedMessageId = chat.activeRun?.completionReason === "context_limit"
+    ? chat.activeRun.assistantMessageId
+    : null;
   const historical = inspection.selectedRunId !== null;
   const displayedRun = historical ? inspection.run : chat.activeRun;
   const displayedEvents = historical ? inspection.events : chat.events;
@@ -248,7 +255,9 @@ export function ChatWorkspace({
               <div className="chat-workspace__assistant-row" key={message.id}>
                 <OpenSpriteMark />
                 <div className="chat-workspace__assistant-content">
-                  <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><p>{message.content}</p></div>
+                  <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><MarkdownMessage content={message.content} /></div>
+                  {message.id === outputLimitedMessageId ? <p className="chat-workspace__output-limit" role="status">{t("chat.outputLimit")}</p> : null}
+                  {message.id === contextLimitedMessageId ? <p className="chat-workspace__output-limit" role="status">{t("chat.contextLimitPreserved")}</p> : null}
                   <div className="chat-workspace__assistant-meta">
                     <time className="chat-workspace__message-time" dateTime={message.createdAt}>{formatMessageTime(message.createdAt, locale, timeZone)}</time>
                     {message.runId !== null ? inspectionButton(message.runId) : null}
@@ -261,7 +270,7 @@ export function ChatWorkspace({
                 <OpenSpriteMark />
                 <div className="chat-workspace__assistant-content">
                   <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
-                    {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t(isCompactingContext ? "chat.compactingContext" : "chat.thinking")}</p>}
+                    {liveText ? <MarkdownMessage content={liveText} /> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t(isCompactingContext ? "chat.compactingContext" : "chat.thinking")}</p>}
                   </div>
                   {chat.activeRun ? <time className="chat-workspace__message-time" dateTime={chat.activeRun.createdAt}>{formatMessageTime(chat.activeRun.createdAt, locale, timeZone)}</time> : null}
                 </div>
@@ -306,7 +315,7 @@ export function ChatWorkspace({
                 onChange={(event) => {
                   try {
                     const [providerId, modelId] = JSON.parse(event.target.value) as [ModelSelection["providerId"], string];
-                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId, contextBudget: "auto" });
+                    if (typeof modelId === "string") void onModelSelectionChange({ providerId, modelId, contextBudget: "auto", outputBudget: "auto" });
                   } catch {
                     // Values can only originate from the rendered strict choices.
                   }

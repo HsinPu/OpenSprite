@@ -73,10 +73,12 @@ export function App() {
   const {
     modelSelection,
     responseMode,
+    autoContinueOutput,
     saving: aiSettingsSaving,
     error: aiSettingsError,
     saveModelSelection,
     saveResponseMode,
+    saveAutoContinueOutput,
   } = useAiSettings(providerCatalog.providers, providerCatalog.modelChoices);
   const { modelChoices } = providerCatalog;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -397,10 +399,12 @@ export function App() {
           onSectionChange={setSettingsSection}
           modelSelection={modelSelection}
           responseMode={responseMode}
+          autoContinueOutput={autoContinueOutput}
           aiSettingsSaving={aiSettingsSaving}
           aiSettingsError={aiSettingsError}
           onModelSelectionChange={saveModelSelection}
           onResponseModeChange={saveResponseMode}
+          onAutoContinueOutputChange={saveAutoContinueOutput}
           providerCatalog={providerCatalog}
           generalSettings={generalSettings}
           conversationSettings={conversationSettings}

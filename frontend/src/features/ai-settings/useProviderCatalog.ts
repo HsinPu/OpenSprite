@@ -126,7 +126,7 @@ export function useProviderCatalog(): ProviderCatalogController {
       ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : [])
       : localModelCatalog[provider.id];
     return models.map((model) => ({
-      selection: { providerId: provider.id, modelId: model.id, contextBudget: "auto" as const },
+      selection: { providerId: provider.id, modelId: model.id, contextBudget: "auto" as const, outputBudget: "auto" as const },
       label: model.label,
     }));
   }), [openRouterModelLoadStatus, openRouterModels, providers]);

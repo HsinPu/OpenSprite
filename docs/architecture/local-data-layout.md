@@ -65,11 +65,14 @@ Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
 
-`config/settings.json` is a strict schema-v2, non-secret file containing one
-nullable `model` (`providerId` and `modelId`) plus one `responseMode` value:
+`config/settings.json` is a strict schema-v5, non-secret file containing one
+nullable `model` (`providerId`, `modelId`, `contextBudget`, and `outputBudget`)
+plus `responseMode` and the `autoContinueOutput` boolean:
 `default`, `fast`, `balanced`, or `deep`. `default` means future inference omits
 the Provider reasoning-strength parameter. It never contains a display label, API key, or
-provider model catalog. Reads of a missing file are side-effect free and return
+provider model catalog. Schema-v3 is read with `outputBudget: auto` and
+schema-v4 is read with `autoContinueOutput: true` in memory
+without rewriting until the next successful PUT. Reads of a missing file are side-effect free and return
 `model: null` with `responseMode: default`. Every successful change replaces
 both values atomically; clearing the model preserves and persists the chosen
 response mode. `state/providers.json` remains strict non-secret metadata. Other
@@ -100,7 +103,9 @@ successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns Conversation, visible Message, Run, append-only
 conversation compaction, and safe semantic Run-event tables described by
-`agent-chat.md`. Empty reads,
+`agent-chat.md`. SQLite schema v6 snapshots each Run's requested output budget
+and automatic-continuation preference
+and stores the resolved maximum in its `model.started` event. Empty reads,
 backend import, and service startup do not create `data/` or the database.
 Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored

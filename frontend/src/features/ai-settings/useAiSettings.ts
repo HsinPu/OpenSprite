@@ -21,6 +21,7 @@ export function useAiSettings(
   const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
+  const [autoContinueOutput, setAutoContinueOutput] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export function useAiSettings(
         if (loadGenerationRef.current !== generation) return;
         setModelSelection(savedSettings.model);
         setResponseMode(savedSettings.responseMode);
+        setAutoContinueOutput(savedSettings.autoContinueOutput);
         setLoaded(true);
         setError(null);
       })
@@ -58,12 +60,15 @@ export function useAiSettings(
         if ((saved.model?.providerId ?? null) !== (next.model?.providerId ?? null)
           || (saved.model?.modelId ?? null) !== (next.model?.modelId ?? null)
           || (saved.model?.contextBudget ?? null) !== (next.model?.contextBudget ?? null)
-          || saved.responseMode !== next.responseMode) {
+          || (saved.model?.outputBudget ?? null) !== (next.model?.outputBudget ?? null)
+          || saved.responseMode !== next.responseMode
+          || saved.autoContinueOutput !== next.autoContinueOutput) {
           throw new Error("ai_settings_response_mismatch");
         }
         if (saveGenerationRef.current === generation) {
           setModelSelection(saved.model);
           setResponseMode(saved.responseMode);
+          setAutoContinueOutput(saved.autoContinueOutput);
           setError(null);
         }
         return null;
@@ -80,12 +85,16 @@ export function useAiSettings(
   }, [t]);
 
   const saveModelSelection = useCallback(
-    (next: ModelSelection | null) => save({ model: next, responseMode }),
-    [responseMode, save],
+    (next: ModelSelection | null) => save({ model: next, responseMode, autoContinueOutput }),
+    [autoContinueOutput, responseMode, save],
   );
   const saveResponseMode = useCallback(
-    (next: ResponseMode) => save({ model: modelSelection, responseMode: next }),
-    [modelSelection, save],
+    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, autoContinueOutput }),
+    [autoContinueOutput, modelSelection, save],
+  );
+  const saveAutoContinueOutput = useCallback(
+    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput: next }),
+    [modelSelection, responseMode, save],
   );
 
   useEffect(() => {
@@ -107,9 +116,11 @@ export function useAiSettings(
   return {
     modelSelection,
     responseMode,
+    autoContinueOutput,
     saving,
     error,
     saveModelSelection,
     saveResponseMode,
+    saveAutoContinueOutput,
   };
 }

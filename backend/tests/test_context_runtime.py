@@ -48,7 +48,7 @@ def test_capability_resolver_uses_fixed_catalog_and_session_cache() -> None:
         assert fixed.context_window_tokens == 1_050_000
         assert first == second
         assert first.context_window_tokens == 131_072
-        assert first.max_output_tokens == 8_192
+        assert first.max_output_tokens == 32_768
         assert connections.calls == 1
 
     asyncio.run(scenario())

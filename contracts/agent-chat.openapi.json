@@ -336,6 +336,14 @@
           "deep"
         ]
       },
+      "CompletionReason": {
+        "type": "string",
+        "enum": [
+          "stop",
+          "output_limit",
+          "context_limit"
+        ]
+      },
       "ConversationSummary": {
         "type": "object",
         "additionalProperties": false,
@@ -560,6 +568,7 @@
           "modelId",
           "responseMode",
           "status",
+          "completionReason",
           "error",
           "partialText",
           "createdAt",
@@ -599,6 +608,16 @@
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
+          },
+          "completionReason": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompletionReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "error": {
             "oneOf": [
@@ -715,6 +734,7 @@
           "run.started",
           "context.compaction.started",
           "model.started",
+          "response.continuation.started",
           "assistant.delta",
           "tool.started",
           "tool.completed",
@@ -736,7 +756,8 @@
         "required": [
           "providerId",
           "modelId",
-          "responseMode"
+          "responseMode",
+          "maxOutputTokens"
         ],
         "properties": {
           "providerId": {
@@ -749,7 +770,21 @@
           },
           "responseMode": {
             "$ref": "#/components/schemas/ResponseMode"
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 131072
           }
+        }
+      },
+      "ContinuationStartedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt", "maxAttempts"],
+        "properties": {
+          "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+          "maxAttempts": {"type": "integer", "const": 2}
         }
       },
       "AssistantDeltaEventData": {
@@ -837,11 +872,15 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "assistantMessageId"
+          "assistantMessageId",
+          "completionReason"
         ],
         "properties": {
           "assistantMessageId": {
             "$ref": "#/components/schemas/Identifier"
+          },
+          "completionReason": {
+            "$ref": "#/components/schemas/CompletionReason"
           }
         }
       },
@@ -892,6 +931,9 @@
               },
               {
                 "$ref": "#/components/schemas/ModelStartedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ContinuationStartedEventData"
               },
               {
                 "$ref": "#/components/schemas/AssistantDeltaEventData"

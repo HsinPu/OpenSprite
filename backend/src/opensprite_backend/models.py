@@ -12,6 +12,7 @@ TimeZoneSetting = Literal["system", "Asia/Taipei", "UTC"]
 StartupView = Literal["new", "recent"]
 SendBehavior = Literal["enter", "modifier-enter"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
+OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
 
 
 class ContractModel(BaseModel):
@@ -131,6 +132,7 @@ class ModelSelection(ContractModel):
     provider_id: ProviderId = Field(alias="providerId")
     model_id: str = Field(alias="modelId", min_length=1, max_length=256)
     context_budget: ContextBudget = Field(alias="contextBudget")
+    output_budget: OutputBudget = Field(alias="outputBudget")
 
     @field_validator("model_id")
     @classmethod
@@ -150,11 +152,13 @@ class ResponseMode(StrEnum):
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
+    autoContinueOutput: StrictBool = True
 
 
 class PutAiSettingsRequest(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
+    autoContinueOutput: StrictBool
 
 
 class GeneralSettings(ContractModel):

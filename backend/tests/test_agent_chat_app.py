@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from opensprite_backend.application import AgentChatError, ChatErrorCode
 from opensprite_backend.app import create_app
 from opensprite_backend.conversations.models import (
+    CompletionReason,
     ConversationPage,
     ConversationSummary,
     Message,
@@ -46,6 +47,9 @@ def run_snapshot(status: RunStatus = RunStatus.QUEUED) -> RunSnapshot:
         created_at=NOW,
         started_at=NOW if status is not RunStatus.QUEUED else None,
         finished_at=NOW if status is RunStatus.COMPLETED else None,
+        completion_reason=(
+            CompletionReason.STOP if status is RunStatus.COMPLETED else None
+        ),
     )
 
 
@@ -211,6 +215,7 @@ def test_conversation_and_run_json_shapes_match_contract() -> None:
     )
     assert run.status_code == 200
     assert run.json()["status"] == "completed"
+    assert run.json()["completionReason"] == "stop"
     assert run.json()["providerId"] == "openrouter"
     assert run.json()["responseMode"] == "default"
 

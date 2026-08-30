@@ -6,6 +6,7 @@ import type { MessageKey, Translator } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import { formatTime } from "../general-settings/dateTime";
+import { formatTokenLimit } from "../ai-settings/contextBudget";
 
 
 function OpenSpriteMark() {
@@ -42,11 +43,18 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
     case "run.started": return t("execution.event.runStarted");
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
+    case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
     case "tool.started": return t("execution.event.toolStarted", { tool: String(event.data.toolName ?? "") }).trim();
     case "tool.completed": return t("execution.event.toolCompleted", { tool: String(event.data.toolName ?? "") }).trim();
     case "tool.failed": return t("execution.event.toolFailed", { tool: String(event.data.toolName ?? "") }).trim();
-    case "run.completed": return t("execution.event.runCompleted");
+    case "run.completed": return t(
+      event.data.completionReason === "output_limit"
+        ? "execution.event.outputLimit"
+        : event.data.completionReason === "context_limit"
+          ? "execution.event.contextLimit"
+          : "execution.event.runCompleted",
+    );
     case "run.failed": return t("execution.event.runFailed");
     case "run.cancelled": return t("execution.event.runCancelled");
     case "run.interrupted": return t("execution.event.runInterrupted");
@@ -117,7 +125,13 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
   const executionBodyId = bodyId ?? `${contextId}-execution-body`;
   const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
   const toolNames = useMemo(() => Array.from(new Set(events.filter((event) => event.type.startsWith("tool.")).map((event) => String(event.data.toolName ?? "")).filter(Boolean))), [events]);
-  const status = run ? t(statusKeys[run.status]) : t("execution.status.none");
+  const maxOutputTokens = useMemo(() => {
+    const event = [...events].reverse().find((item) => item.type === "model.started");
+    return typeof event?.data.maxOutputTokens === "number" ? event.data.maxOutputTokens : null;
+  }, [events]);
+  const status = run
+    ? t(run.completionReason === "output_limit" ? "execution.status.outputLimit" : run.completionReason === "context_limit" ? "execution.status.contextLimit" : statusKeys[run.status])
+    : t("execution.status.none");
   const title = t(historical ? "execution.detailsTitle" : "execution.title");
 
   useEffect(() => {
@@ -176,6 +190,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 <div><dt>{t("execution.startTime")}</dt><dd>{formatTime(run.startedAt, locale, timeZone)}</dd></div>
                 <div><dt>{t("execution.duration")}</dt><dd>{durationText(run)}</dd></div>
                 <div><dt>{t("execution.events")}</dt><dd>{events.length}</dd></div>
+                {maxOutputTokens !== null ? <div><dt>{t("execution.maxOutputTokens")}</dt><dd>{formatTokenLimit(maxOutputTokens)}</dd></div> : null}
                 <div><dt>{t("execution.source")}</dt><dd>{t(historical ? "execution.history" : "execution.currentConversation")}</dd></div>
               </dl>
             </section>

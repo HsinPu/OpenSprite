@@ -1,4 +1,4 @@
-import { Input, Modal, Popconfirm, Select } from "antd";
+import { Input, Modal, Popconfirm, Select, Switch } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import {
@@ -10,11 +10,12 @@ import {
   type ProviderStatus,
   type ProviderSummary,
 } from "../../api/providerConnections";
-import type { ContextBudget, ResponseMode } from "../../api/aiSettings";
+import type { ContextBudget, OutputBudget, ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
 import { contextBudgetAvailable, contextBudgetLimit, contextBudgetValues, formatTokenLimit } from "../ai-settings/contextBudget";
+import { outputBudgetAvailable, outputBudgetLimit, outputBudgetValues } from "../ai-settings/outputBudget";
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
@@ -28,10 +29,12 @@ type SettingsPageProps = {
   onSectionChange: (section: SettingsSection) => void;
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
+  autoContinueOutput: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
+  onAutoContinueOutputChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
   conversationSettings: ConversationSettingsController;
@@ -63,16 +66,27 @@ const contextBudgetLabelKeys: Record<ContextBudget, MessageKey> = {
   max: "models.context.max",
 };
 
+const outputBudgetLabelKeys: Record<OutputBudget, MessageKey> = {
+  auto: "models.output.auto",
+  "8k": "models.output.8k",
+  "16k": "models.output.16k",
+  "32k": "models.output.32k",
+  "64k": "models.output.64k",
+  max: "models.output.max",
+};
+
 type ProviderFeedback = { message?: string; error?: string };
 type ProviderOperation = Partial<Record<ProviderId, number>>;
 
 type ModelsSettingsProps = {
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
+  autoContinueOutput: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
+  onAutoContinueOutputChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   onProviderModalChange?: (open: boolean) => void;
   modalContainer: HTMLElement | null;
@@ -140,7 +154,7 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
   );
 }
 
-function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
+function ModelsSettings({ modelSelection, responseMode, autoContinueOutput, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
   const { t } = useI18n();
   const {
     providers,
@@ -161,6 +175,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   const generationsRef = useRef<Record<ProviderId, number>>({ openai: 0, anthropic: 0, openrouter: 0 });
   const activeOperationsRef = useRef<ProviderOperation>({});
   const reconciliationRef = useRef<string | null>(null);
+  const outputReconciliationRef = useRef<string | null>(null);
   useEffect(() => { onProviderModalChange?.(modalProvider !== null); }, [modalProvider, onProviderModalChange]);
 
   const beginOperation = (provider: ProviderSummary, action: string) => {
@@ -274,7 +289,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
     reconciliationRef.current = key;
     const fallback = connectedProviders.map((provider) => ({ provider, models: provider.id === "openrouter" ? (openRouterModelLoadStatus === "success" ? openRouterModels ?? [] : []) : localModelCatalog[provider.id] })).find((candidate) => candidate.models.length > 0);
     const model = fallback?.models[0];
-    if (fallback && model) void requestSelection({ providerId: fallback.provider.id, modelId: model.id, contextBudget: "auto" });
+    if (fallback && model) void requestSelection({ providerId: fallback.provider.id, modelId: model.id, contextBudget: "auto", outputBudget: "auto" });
     else if (modelSelection !== null && connectedProviders.length === 0) void requestSelection(null);
   }, [aiSettingsSaving, connectedProviders, modelSelection, openRouterModelLoadStatus, openRouterModels, providers, requestSelection, selectedModelIsAvailable, selectedProvider]);
 
@@ -290,6 +305,25 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   const effectiveContextLimit = selectedModel && modelSelection
     ? contextBudgetLimit(modelSelection.contextBudget, selectedModel.contextWindowTokens)
     : null;
+  const outputOptions = selectedModel && effectiveContextLimit !== null ? outputBudgetValues.map((value) => ({
+    value,
+    label: t(outputBudgetLabelKeys[value]),
+    disabled: !outputBudgetAvailable(value, effectiveContextLimit, selectedModel.maxOutputTokens),
+  })) : [];
+  const effectiveOutputLimit = selectedModel && modelSelection && effectiveContextLimit !== null
+    ? outputBudgetLimit(modelSelection.outputBudget, effectiveContextLimit, selectedModel.maxOutputTokens)
+    : null;
+  useEffect(() => {
+    if (!modelSelection || !selectedModel || effectiveContextLimit === null || aiSettingsSaving) return;
+    if (outputBudgetAvailable(modelSelection.outputBudget, effectiveContextLimit, selectedModel.maxOutputTokens)) {
+      outputReconciliationRef.current = null;
+      return;
+    }
+    const key = `${modelSelection.providerId}:${modelSelection.modelId}:${modelSelection.contextBudget}:${modelSelection.outputBudget}:${selectedModel.maxOutputTokens}`;
+    if (outputReconciliationRef.current === key) return;
+    outputReconciliationRef.current = key;
+    void requestSelection({ ...modelSelection, outputBudget: "auto" });
+  }, [aiSettingsSaving, effectiveContextLimit, modelSelection, requestSelection, selectedModel]);
   const modelDisabled = !selectedProvider || (selectedProvider.id === "openrouter" && (openRouterModelsPending || selectedModels.length === 0));
   const openRouterConnected = connectedProviders.some((provider) => provider.id === "openrouter");
   const helperText = connectedProviders.length === 0
@@ -326,15 +360,18 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
       </SettingsCard>
       <SettingsCard icon="robot" title={t("models.selectModel")}>
         <div className="settings-model-selection">
-          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto" }); }} /></div>
-          <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto" }); }} /></div>
-          <div className="settings-select-row"><label htmlFor="settings-context-budget">{t("models.contextBudget")}</label><Select id="settings-context-budget" aria-describedby="settings-context-helper" value={modelSelection?.contextBudget ?? "auto"} options={contextOptions} getPopupContainer={getSettingsPopupContainer} disabled={!selectedModel || !modelSelection || aiSettingsSaving} onChange={(contextBudget: ContextBudget) => { if (modelSelection) void requestSelection({ ...modelSelection, contextBudget }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-model-provider">{t("models.provider")}</label><Select id="settings-model-provider" aria-describedby="settings-model-helper" value={selectedProvider?.id} placeholder={t("models.selectProvider")} options={providerOptions} getPopupContainer={getSettingsPopupContainer} disabled={providers === null || connectedProviders.length === 0 || aiSettingsSaving} onChange={(providerId) => { const provider = providerOptions.find((option) => option.value === providerId); const models = providerId === "openrouter" ? openRouterModels ?? [] : localModelCatalog[providerId as ProviderId]; const model = models[0]; if (provider && model) void requestSelection({ providerId: providerId as ProviderId, modelId: model.id, contextBudget: "auto", outputBudget: "auto" }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-default-model">{t("models.model")}</label><Select id="settings-default-model" aria-describedby="settings-model-helper" showSearch value={selectedModelIsAvailable && modelSelection ? modelSelection.modelId : undefined} placeholder={selectedProvider ? t("models.selectModelPlaceholder") : t("models.connectProviderFirst")} options={modelOptions} getPopupContainer={getSettingsPopupContainer} filterOption={(input, option) => String((option as { searchText?: string } | undefined)?.searchText).toLowerCase().includes(input.toLowerCase())} disabled={modelDisabled || aiSettingsSaving} loading={openRouterModelsPending || aiSettingsSaving} notFoundContent={selectedProvider?.id === "openrouter" && !openRouterModelsPending ? t("models.noModels") : undefined} onChange={(modelId) => { if (selectedProvider) void requestSelection({ providerId: selectedProvider.id, modelId, contextBudget: "auto", outputBudget: "auto" }); }} /></div>
+          <div className="settings-select-row"><label htmlFor="settings-context-budget">{t("models.contextBudget")}</label><Select id="settings-context-budget" aria-describedby="settings-context-helper" value={modelSelection?.contextBudget ?? "auto"} options={contextOptions} getPopupContainer={getSettingsPopupContainer} disabled={!selectedModel || !modelSelection || aiSettingsSaving} onChange={(contextBudget: ContextBudget) => { if (modelSelection && selectedModel) { const contextLimit = contextBudgetLimit(contextBudget, selectedModel.contextWindowTokens); const outputBudget = outputBudgetAvailable(modelSelection.outputBudget, contextLimit, selectedModel.maxOutputTokens) ? modelSelection.outputBudget : "auto"; void requestSelection({ ...modelSelection, contextBudget, outputBudget }); } }} /></div>
           {selectedModel && effectiveContextLimit !== null ? <p id="settings-context-helper" className="settings-helper-text">{t("models.contextSummary", { maximum: formatTokenLimit(selectedModel.contextWindowTokens), effective: formatTokenLimit(effectiveContextLimit) })}</p> : null}
+          <div className="settings-select-row"><label htmlFor="settings-output-budget">{t("models.outputBudget")}</label><Select id="settings-output-budget" aria-describedby="settings-output-helper" value={modelSelection?.outputBudget ?? "auto"} options={outputOptions} getPopupContainer={getSettingsPopupContainer} disabled={!selectedModel || !modelSelection || aiSettingsSaving} onChange={(outputBudget: OutputBudget) => { if (modelSelection) void requestSelection({ ...modelSelection, outputBudget }); }} /></div>
+          {selectedModel && effectiveOutputLimit !== null ? <p id="settings-output-helper" className="settings-helper-text">{t("models.outputSummary", { maximum: formatTokenLimit(selectedModel.maxOutputTokens), effective: formatTokenLimit(effectiveOutputLimit) })}</p> : null}
           {openRouterConnected && openRouterModelLoadStatus === "error" ? <div className="settings-model-load-error" role="alert"><p>{openRouterModelError}</p><button type="button" className="settings-secondary-button settings-model-retry" onClick={() => void loadOpenRouterModels(true)}>{t("models.retryModels")}</button></div> : null}
           {selectionError ?? aiSettingsError ? <p className="settings-model-load-error" role="alert">{selectionError ?? aiSettingsError}</p> : null}
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
+        <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.autoContinueOutput")}</span><span className="settings-control-description">{t("models.autoContinueOutputDescription")}</span></span><Switch aria-label={t("models.autoContinueOutput")} checked={autoContinueOutput} disabled={aiSettingsSaving} onChange={(enabled) => void onAutoContinueOutputChange(enabled)} /></div>
         <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
         <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />
       </SettingsCard>
@@ -343,7 +380,7 @@ function ModelsSettings({ modelSelection, responseMode, aiSettingsSaving, aiSett
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, autoContinueOutput, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
   const wasSavingRef = useRef(false);
@@ -377,7 +414,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} autoContinueOutput={autoContinueOutput} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onAutoContinueOutputChange={onAutoContinueOutputChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
         </div>
       </div>
     </section>

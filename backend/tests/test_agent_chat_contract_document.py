@@ -80,6 +80,7 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "modelId",
         "responseMode",
         "status",
+        "completionReason",
         "error",
         "partialText",
         "createdAt",
@@ -95,6 +96,8 @@ def test_run_snapshot_and_persisted_message_fields_are_fixed() -> None:
         "cancelled",
         "interrupted",
     ]
+    assert schemas["CompletionReason"]["enum"] == ["stop", "output_limit", "context_limit"]
+    assert schemas["RunSnapshot"]["properties"]["completionReason"]["oneOf"][0]["$ref"].endswith("/CompletionReason")
     assert schemas["Message"]["additionalProperties"] is False
     assert schemas["Message"]["required"] == [
         "id",
@@ -116,6 +119,7 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "run.started",
         "context.compaction.started",
         "model.started",
+        "response.continuation.started",
         "assistant.delta",
         "tool.started",
         "tool.completed",
@@ -129,6 +133,16 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         term in json.dumps(schemas["RunEvent"], sort_keys=True).lower()
         for term in ("chain_of_thought", "chainofthought", "reasoning_content")
     )
+    assert schemas["RunCompletedEventData"]["required"] == [
+        "assistantMessageId",
+        "completionReason",
+    ]
+    assert schemas["ModelStartedEventData"]["required"] == [
+        "providerId",
+        "modelId",
+        "responseMode",
+        "maxOutputTokens",
+    ]
     stream = load_contract()["paths"]["/api/runs/{run_id}/events"]["get"]
     assert "Last-Event-ID" in {
         parameter["name"]

@@ -35,5 +35,5 @@ export function modelLabel(selection: ModelSelection | null, openRouterModels: R
 }
 
 export function openRouterModelCatalog(models: ReadonlyArray<OpenRouterModel>): ReadonlyArray<ModelCatalogItem> {
-  return models.map((model) => ({ id: model.id, label: model.name, contextWindowTokens: model.contextWindowTokens, maxOutputTokens: model.maxOutputTokens ?? 8_192 }));
+  return models.map((model) => ({ id: model.id, label: model.name, contextWindowTokens: model.contextWindowTokens, maxOutputTokens: model.maxOutputTokens ?? Math.min(32_768, model.contextWindowTokens) }));
 }

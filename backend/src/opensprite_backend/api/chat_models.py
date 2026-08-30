@@ -102,6 +102,7 @@ class RunResponse(ChatContractModel):
         "cancelled",
         "interrupted",
     ]
+    completion_reason: Literal["stop", "output_limit", "context_limit"] | None
     error: RunErrorResponse | None
     partial_text: str
     created_at: datetime
@@ -214,6 +215,11 @@ def run_response(item: RunSnapshot) -> RunResponse:
         modelId=item.model_id,
         responseMode=item.response_mode,
         status=item.status.value,
+        completionReason=(
+            None
+            if item.completion_reason is None
+            else item.completion_reason.value
+        ),
         error=error,
         partialText=item.partial_text,
         createdAt=item.created_at,

@@ -199,9 +199,36 @@ async def test_openrouter_streams_text_usage_and_final_without_reasoning_leak() 
         ],
         "stream": True,
         "stream_options": {"include_usage": True},
-        "max_tokens": 8192,
+        "max_completion_tokens": 8192,
     }
     assert b"openrouter-secret" not in outbound.content
+
+
+@async_test
+async def test_openrouter_normalizes_length_finish_as_output_limit() -> None:
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return response(
+            outbound,
+            {
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": "partial answer"},
+                        "finish_reason": "length",
+                    }
+                ]
+            },
+            "[DONE]",
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+        events = await collect(gateway.stream(request("openrouter")))
+
+    assert events == [
+        ModelTextDelta("partial answer"),
+        ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
+    ]
 
 
 @async_test
@@ -347,6 +374,34 @@ async def test_openai_responses_stream_text_tool_calls_usage_and_completion() ->
 
 
 @async_test
+async def test_openai_normalizes_incomplete_max_output_as_output_limit() -> None:
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return response(
+            outbound,
+            {"type": "response.output_text.delta", "delta": "partial answer"},
+            {
+                "type": "response.incomplete",
+                "response": {
+                    "status": "incomplete",
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "output": [],
+                    "usage": {"input_tokens": 6, "output_tokens": 8192},
+                },
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+        events = await collect(gateway.stream(request("openai")))
+
+    assert events == [
+        ModelTextDelta("partial answer"),
+        ModelUsage(input_tokens=6, output_tokens=8192),
+        ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
+    ]
+
+
+@async_test
 async def test_anthropic_streams_text_tool_input_usage_and_tool_stop() -> None:
     captured: list[httpx.Request] = []
 
@@ -418,6 +473,40 @@ async def test_anthropic_streams_text_tool_input_usage_and_tool_stop() -> None:
     assert body["max_tokens"] == 8192
     assert "output_config" not in body
     assert "thinking" not in body
+
+
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
+@async_test
+async def test_anthropic_normalizes_output_limits(
+    stop_reason: str,
+) -> None:
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return response(
+            outbound,
+            {"type": "message_start", "message": {"usage": {"input_tokens": 7}}},
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": "partial answer"},
+            },
+            {"type": "content_block_stop", "index": 0},
+            {
+                "type": "message_delta",
+                "delta": {"stop_reason": stop_reason},
+                "usage": {"output_tokens": 8192},
+            },
+            {"type": "message_stop"},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+        events = await collect(gateway.stream(request("anthropic")))
+
+    assert events == [
+        ModelTextDelta("partial answer"),
+        ModelUsage(input_tokens=7, output_tokens=8192),
+        ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
+    ]
 
 
 @pytest.mark.parametrize(

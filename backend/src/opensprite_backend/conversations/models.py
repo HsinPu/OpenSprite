@@ -11,6 +11,7 @@ from typing import Literal
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
+OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
 MessageRole = Literal["user", "assistant"]
 MAX_ASSISTANT_CHARS = 1_048_576
 
@@ -25,10 +26,17 @@ class RunStatus(str, Enum):
     INTERRUPTED = "interrupted"
 
 
+class CompletionReason(str, Enum):
+    STOP = "stop"
+    OUTPUT_LIMIT = "output_limit"
+    CONTEXT_LIMIT = "context_limit"
+
+
 class RunEventType(str, Enum):
     RUN_STARTED = "run.started"
     CONTEXT_COMPACTION_STARTED = "context.compaction.started"
     MODEL_STARTED = "model.started"
+    RESPONSE_CONTINUATION_STARTED = "response.continuation.started"
     ASSISTANT_DELTA = "assistant.delta"
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
@@ -104,6 +112,9 @@ class RunSnapshot:
     started_at: datetime | None
     finished_at: datetime | None
     context_budget: ContextBudget = "auto"
+    output_budget: OutputBudget = "auto"
+    auto_continue_output: bool = True
+    completion_reason: CompletionReason | None = None
 
 
 @dataclass(frozen=True, slots=True)

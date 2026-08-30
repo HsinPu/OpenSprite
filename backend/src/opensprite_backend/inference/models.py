@@ -29,6 +29,7 @@ class InferenceFailure(str, Enum):
 class ModelFinishReason(str, Enum):
     FINAL = "final"
     TOOL_CALLS = "tool_calls"
+    OUTPUT_LIMIT = "output_limit"
 
 
 @dataclass(frozen=True, slots=True)

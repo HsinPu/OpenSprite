@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ import pytest
 
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import (
+    CompletionReason,
     PublicRunError,
     RunEventType,
     RunStatus,
@@ -41,6 +43,8 @@ def start(
     client_request_id: str | None = None,
     message: str = "整理今天的工作",
     context_budget: str = "auto",
+    output_budget: str = "auto",
+    auto_continue_output: bool = True,
 ):
     return store.start_run(
         conversation_id=conversation_id,
@@ -50,6 +54,8 @@ def start(
         model_id="openrouter/auto",
         response_mode="default",
         context_budget=context_budget,
+        output_budget=output_budget,
+        auto_continue_output=auto_continue_output,
     )
 
 
@@ -83,6 +89,8 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert accepted.run.model_id == "openrouter/auto"
     assert accepted.run.response_mode == "default"
     assert accepted.run.context_budget == "auto"
+    assert accepted.run.output_budget == "auto"
+    assert accepted.run.auto_continue_output is True
     assert accepted.run.partial_text == ""
     conversation = store.get_conversation(accepted.conversation.id)
     assert conversation is not None
@@ -100,6 +108,17 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert {path.name for path in paths.home.iterdir()} == {"data"}
     assert not paths.credential_file.exists()
     assert not paths.conversations_dir.exists()
+
+
+def test_start_snapshots_disabled_auto_continue(tmp_path: Path) -> None:
+    store = repository(tmp_path)
+
+    accepted = start(store, auto_continue_output=False)
+
+    assert accepted.run.auto_continue_output is False
+    persisted = store.get_run(accepted.run.id)
+    assert persisted is not None
+    assert persisted.auto_continue_output is False
 
 
 def test_client_request_id_replays_exact_request_without_duplicates(
@@ -162,6 +181,7 @@ def test_run_events_deltas_and_completion_are_atomic_visible_state(
             "providerId": "openrouter",
             "modelId": "openrouter/auto",
             "responseMode": "default",
+            "maxOutputTokens": 32_768,
         },
     )
     store.append_assistant_delta(accepted.run.id, "完成")
@@ -169,6 +189,7 @@ def test_run_events_deltas_and_completion_are_atomic_visible_state(
     completed = store.complete_run(accepted.run.id, "完成整理")
 
     assert completed.run.status is RunStatus.COMPLETED
+    assert completed.run.completion_reason is CompletionReason.STOP
     assert completed.run.partial_text == "完成整理"
     assert completed.run.assistant_message_id == completed.message.id
     assert completed.message.role == "assistant"
@@ -182,7 +203,10 @@ def test_run_events_deltas_and_completion_are_atomic_visible_state(
         RunEventType.RUN_COMPLETED,
     ]
     assert events[2].data == {"text": "完成"}
-    assert events[-1].data == {"assistantMessageId": completed.message.id}
+    assert events[-1].data == {
+        "assistantMessageId": completed.message.id,
+        "completionReason": "stop",
+    }
     messages = store.list_messages(
         accepted.conversation.id,
         limit=100,
@@ -209,6 +233,7 @@ def test_event_payloads_reject_extra_secret_or_uncontracted_fields(
                 "providerId": "openrouter",
                 "modelId": "openrouter/auto",
                 "responseMode": "default",
+                "maxOutputTokens": 32_768,
                 "apiKey": "must-never-persist",
             },
         )
@@ -434,6 +459,8 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     database = store.database_file
     with sqlite3.connect(database) as connection:
         connection.execute("DROP TABLE conversation_compactions")
+        connection.execute("ALTER TABLE runs DROP COLUMN output_budget")
+        connection.execute("ALTER TABLE runs DROP COLUMN completion_reason")
         connection.execute("ALTER TABLE runs DROP COLUMN context_budget")
         connection.execute("PRAGMA user_version = 1")
 
@@ -441,7 +468,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -459,6 +486,8 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
     store.mark_run_started(accepted.run.id)
     database = store.database_file
     with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE runs DROP COLUMN output_budget")
+        connection.execute("ALTER TABLE runs DROP COLUMN completion_reason")
         connection.executescript(
             """
             BEGIN IMMEDIATE;
@@ -505,7 +534,103 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+
+
+def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    completed = store.complete_run(accepted.run.id, "existing answer")
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE runs DROP COLUMN output_budget")
+        connection.execute("ALTER TABLE runs DROP COLUMN completion_reason")
+        connection.execute(
+            "UPDATE run_events SET payload_json = ? WHERE run_id = ? AND type = 'run.completed'",
+            (
+                json.dumps(
+                    {"assistantMessageId": completed.message.id},
+                    separators=(",", ":"),
+                ),
+                accepted.run.id,
+            ),
+        )
+        connection.execute("PRAGMA user_version = 3")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+
+    run = upgraded.get_run(accepted.run.id)
+    assert run is not None
+    assert run.status is RunStatus.COMPLETED
+    assert run.completion_reason is CompletionReason.STOP
+    events = upgraded.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+    assert events[-1].data == {
+        "assistantMessageId": completed.message.id,
+        "completionReason": "stop",
+    }
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+
+
+def test_schema_v4_output_budget_and_model_event_are_upgraded(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    store.append_run_event(
+        accepted.run.id,
+        RunEventType.MODEL_STARTED,
+        {
+            "providerId": "openrouter",
+            "modelId": "openrouter/auto",
+            "responseMode": "default",
+            "maxOutputTokens": 8_192,
+        },
+    )
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE runs DROP COLUMN output_budget")
+        connection.execute(
+            "UPDATE run_events SET payload_json = json_remove(payload_json, '$.maxOutputTokens') WHERE type = 'model.started'"
+        )
+        connection.execute("PRAGMA user_version = 4")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+
+    run = upgraded.get_run(accepted.run.id)
+    assert run is not None
+    assert run.output_budget == "auto"
+    events = upgraded.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+    model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
+    assert model_event.data["maxOutputTokens"] == 8_192
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
+
+
+def test_schema_v5_adds_auto_continue_snapshot_without_losing_run(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute("ALTER TABLE runs DROP COLUMN auto_continue_output")
+        connection.execute("PRAGMA user_version = 5")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+    run = upgraded.get_run(accepted.run.id)
+
+    assert run is not None
+    assert run.auto_continue_output is True
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 6
 
 
 def test_concurrent_starts_on_distinct_conversations_do_not_lose_updates(

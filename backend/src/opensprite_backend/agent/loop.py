@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 from opensprite_backend.conversations.models import (
+    CompletionReason,
     ConversationCompaction,
     MAX_ASSISTANT_CHARS,
     Message,
@@ -75,6 +76,13 @@ class _ContextPreparationFailed(Exception):
 
 _Result = TypeVar("_Result")
 _LOGGER = logging.getLogger("opensprite.agent.context")
+_MAX_OUTPUT_CONTINUATIONS = 2
+_CONTINUATION_TAIL_TOKENS = 4_096
+_CONTINUATION_INSTRUCTION = (
+    "Continue the assistant response from the exact point where it stopped. "
+    "Do not repeat or summarize text that was already produced. Do not call "
+    "tools. Return only the continuation of the response."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +180,7 @@ class AgentLoop:
                         "providerId": run.provider_id,
                         "modelId": run.model_id,
                         "responseMode": run.response_mode,
+                        "maxOutputTokens": prepared.budget.output_reserve_tokens,
                     },
                 )
                 request = ModelRequest(
@@ -266,14 +275,45 @@ class AgentLoop:
                 if completion is None:
                     return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
 
-                if completion.reason is ModelFinishReason.FINAL:
-                    if tool_calls or not accumulated_text.strip():
+                if completion.reason in {
+                    ModelFinishReason.FINAL,
+                    ModelFinishReason.OUTPUT_LIMIT,
+                }:
+                    if (
+                        tool_calls
+                        or not accumulated_text.strip()
+                        or (
+                            completion.reason is ModelFinishReason.OUTPUT_LIMIT
+                            and not round_text.strip()
+                        )
+                    ):
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                     self._raise_if_cancelled(cancellation_event)
+                    completion_reason = (
+                        CompletionReason.STOP
+                        if completion.reason is ModelFinishReason.FINAL
+                        else CompletionReason.OUTPUT_LIMIT
+                    )
+                    if completion_reason is CompletionReason.OUTPUT_LIMIT:
+                        _LOGGER.info(
+                            "model output limit reached run_id=%s chars=%s",
+                            run_id,
+                            len(accumulated_text),
+                        )
+                        if run.auto_continue_output:
+                            return await self._continue_output(
+                                run=run,
+                                system_prompt=system_prompt,
+                                base_transcript=tuple(transcript),
+                                prepared=prepared,
+                                accumulated_text=accumulated_text,
+                                cancellation_event=cancellation_event,
+                            )
                     completed = await asyncio.to_thread(
                         self._repository.complete_run,
                         run_id,
                         accumulated_text,
+                        completion_reason,
                     )
                     return completed.run
 
@@ -381,6 +421,226 @@ class AgentLoop:
         except Exception:
             return await self._fail(run_id, INTERNAL_ERROR)
 
+    async def _continue_output(
+        self,
+        *,
+        run: RunSnapshot,
+        system_prompt: str,
+        base_transcript: tuple[ModelMessage, ...],
+        prepared: _PreparedContext,
+        accumulated_text: str,
+        cancellation_event: asyncio.Event,
+    ) -> RunSnapshot:
+        continuation_base = base_transcript
+        for attempt in range(1, _MAX_OUTPUT_CONTINUATIONS + 1):
+            self._raise_if_cancelled(cancellation_event)
+            await asyncio.to_thread(
+                self._repository.append_run_event,
+                run.id,
+                RunEventType.RESPONSE_CONTINUATION_STARTED,
+                {"attempt": attempt, "maxAttempts": _MAX_OUTPUT_CONTINUATIONS},
+            )
+            context_retry_used = False
+            while True:
+                try:
+                    transcript = self._continuation_transcript(
+                        continuation_base,
+                        accumulated_text,
+                        prepared.budget,
+                    )
+                except ContextLimitExceeded:
+                    if context_retry_used:
+                        return await self._complete_partial(
+                            run.id,
+                            accumulated_text,
+                            CompletionReason.CONTEXT_LIMIT,
+                            cancellation_event,
+                        )
+                    context_retry_used = True
+                    try:
+                        prepared = await self._prepare_context(
+                            run=run,
+                            system_prompt=system_prompt,
+                            cancellation_event=cancellation_event,
+                            force_compaction=True,
+                            compaction_limit=1,
+                        )
+                    except ContextLimitExceeded:
+                        return await self._complete_partial(
+                            run.id,
+                            accumulated_text,
+                            CompletionReason.CONTEXT_LIMIT,
+                            cancellation_event,
+                        )
+                    continuation_base = prepared.messages
+                    continue
+
+                await asyncio.to_thread(
+                    self._repository.append_run_event,
+                    run.id,
+                    RunEventType.MODEL_STARTED,
+                    {
+                        "providerId": run.provider_id,
+                        "modelId": run.model_id,
+                        "responseMode": run.response_mode,
+                        "maxOutputTokens": prepared.budget.output_reserve_tokens,
+                    },
+                )
+                request = ModelRequest(
+                    provider_id=run.provider_id,
+                    model_id=run.model_id,
+                    response_mode=run.response_mode,
+                    messages=transcript,
+                    tools=(),
+                    max_output_tokens=prepared.budget.output_reserve_tokens,
+                )
+                round_text = ""
+                completion: ModelCompleted | None = None
+                events = self._with_cancellation(
+                    self._gateway.stream(request),
+                    cancellation_event,
+                )
+                retry_with_compaction = False
+                while True:
+                    try:
+                        event = await anext(events)
+                    except StopAsyncIteration:
+                        break
+                    except ModelGatewayError as error:
+                        if (
+                            error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED
+                            and not round_text
+                            and not context_retry_used
+                        ):
+                            context_retry_used = True
+                            try:
+                                prepared = await self._prepare_context(
+                                    run=run,
+                                    system_prompt=system_prompt,
+                                    cancellation_event=cancellation_event,
+                                    force_compaction=True,
+                                    compaction_limit=1,
+                                )
+                            except ContextLimitExceeded:
+                                return await self._complete_partial(
+                                    run.id,
+                                    accumulated_text,
+                                    CompletionReason.CONTEXT_LIMIT,
+                                    cancellation_event,
+                                )
+                            continuation_base = prepared.messages
+                            retry_with_compaction = True
+                            break
+                        if error.failure is InferenceFailure.CONTEXT_LIMIT_EXCEEDED:
+                            return await self._complete_partial(
+                                run.id,
+                                accumulated_text,
+                                CompletionReason.CONTEXT_LIMIT,
+                                cancellation_event,
+                            )
+                        raise
+                    if completion is not None:
+                        return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                    if isinstance(event, ModelTextDelta):
+                        if len(accumulated_text) + len(event.text) > self._max_assistant_chars:
+                            return await self._fail(run.id, AGENT_LIMIT_ERROR)
+                        round_text += event.text
+                        accumulated_text += event.text
+                        await asyncio.to_thread(
+                            self._repository.append_assistant_delta,
+                            run.id,
+                            event.text,
+                        )
+                    elif isinstance(event, ModelCompleted):
+                        completion = event
+                    elif isinstance(event, ModelUsage):
+                        _LOGGER.info(
+                            "model continuation usage run_id=%s attempt=%s input_tokens=%s output_tokens=%s",
+                            run.id,
+                            attempt,
+                            event.input_tokens,
+                            event.output_tokens,
+                        )
+                    else:
+                        return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                if retry_with_compaction:
+                    continue
+                if completion is None or not round_text.strip():
+                    return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                if completion.reason is ModelFinishReason.FINAL:
+                    return await self._complete_partial(
+                        run.id,
+                        accumulated_text,
+                        CompletionReason.STOP,
+                        cancellation_event,
+                    )
+                if completion.reason is not ModelFinishReason.OUTPUT_LIMIT:
+                    return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                break
+        return await self._complete_partial(
+            run.id,
+            accumulated_text,
+            CompletionReason.OUTPUT_LIMIT,
+            cancellation_event,
+        )
+
+    async def _complete_partial(
+        self,
+        run_id: str,
+        accumulated_text: str,
+        reason: CompletionReason,
+        cancellation_event: asyncio.Event,
+    ) -> RunSnapshot:
+        self._raise_if_cancelled(cancellation_event)
+        completed = await asyncio.to_thread(
+            self._repository.complete_run,
+            run_id,
+            accumulated_text,
+            reason,
+        )
+        return completed.run
+
+    def _continuation_transcript(
+        self,
+        base_transcript: tuple[ModelMessage, ...],
+        accumulated_text: str,
+        budget: ContextBudgetPlan,
+    ) -> tuple[ModelMessage, ...]:
+        if not base_transcript or base_transcript[0].role != "system":
+            raise ContextLimitExceeded
+        instructed = (
+            ModelMessage(
+                role="system",
+                content=f"{base_transcript[0].content}\n\n{_CONTINUATION_INSTRUCTION}",
+            ),
+            *base_transcript[1:],
+        )
+        base_tokens = self._counter.request(instructed, ())
+        available = min(
+            _CONTINUATION_TAIL_TOKENS,
+            budget.input_budget_tokens - base_tokens - 8,
+        )
+        if available < 1:
+            raise ContextLimitExceeded
+        low = 1
+        high = len(accumulated_text)
+        best: str | None = None
+        while low <= high:
+            middle = (low + high) // 2
+            candidate_text = accumulated_text[-middle:]
+            candidate = ModelMessage(role="assistant", content=candidate_text)
+            if self._counter.message(candidate) <= available:
+                best = candidate_text
+                low = middle + 1
+            else:
+                high = middle - 1
+        if best is None:
+            raise ContextLimitExceeded
+        result = (*instructed, ModelMessage(role="assistant", content=best))
+        if self._counter.request(result, ()) > budget.input_budget_tokens:
+            raise ContextLimitExceeded
+        return result
+
     async def _prepare_context(
         self,
         *,
@@ -413,7 +673,11 @@ class AgentLoop:
             ),
             cancellation_event,
         )
-        budget = resolve_context_budget(run.context_budget, capability)
+        budget = resolve_context_budget(
+            run.context_budget,
+            capability,
+            run.output_budget,
+        )
         tool_definitions = tuple(
             ModelToolDefinition(
                 name=definition.name,

@@ -171,6 +171,8 @@ class AnthropicInferenceAdapter:
                     yield ModelCompleted(ModelFinishReason.TOOL_CALLS)
                 elif stop_reason == "end_turn":
                     yield ModelCompleted(ModelFinishReason.FINAL)
+                elif stop_reason in {"max_tokens", "model_context_window_exceeded"}:
+                    yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)
                 else:
                     raise invalid_response()
             elif event_type == "ping":

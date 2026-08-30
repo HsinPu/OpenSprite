@@ -16,7 +16,11 @@ from context_test_support import TestCapabilityResolver
 
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.conversations.models import RunEventType, RunStatus
+from opensprite_backend.conversations.models import (
+    CompletionReason,
+    RunEventType,
+    RunStatus,
+)
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
@@ -122,7 +126,11 @@ def store(tmp_path: Path) -> SqliteConversationRepository:
     )
 
 
-def accepted_run(repository: SqliteConversationRepository):
+def accepted_run(
+    repository: SqliteConversationRepository,
+    *,
+    auto_continue_output: bool = True,
+):
     return repository.start_run(
         conversation_id=None,
         client_request_id=str(uuid4()),
@@ -130,6 +138,7 @@ def accepted_run(repository: SqliteConversationRepository):
         provider_id="openrouter",
         model_id="openrouter/auto",
         response_mode="default",
+        auto_continue_output=auto_continue_output,
     ).run
 
 
@@ -181,6 +190,7 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
     result = await loop.execute(run.id, asyncio.Event())
 
     assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.STOP
     assert result.partial_text == "整理完成"
     messages = repository.list_messages(
         run.conversation_id,
@@ -208,6 +218,326 @@ async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
         RunEventType.MODEL_STARTED,
         RunEventType.ASSISTANT_DELTA,
         RunEventType.RUN_COMPLETED,
+    ]
+
+
+@async_test
+async def test_run_uses_its_snapshotted_output_budget(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = repository.start_run(
+        conversation_id=None,
+        client_request_id=str(uuid4()),
+        message="generate a long response",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        context_budget="128k",
+        output_budget="64k",
+    ).run
+    gateway = ScriptedGateway(
+        [[ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)]]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(max_output=128_000),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.output_budget == "64k"
+    assert gateway.requests[0].max_output_tokens == 65_536
+    model_event = next(
+        event
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+        if event.type is RunEventType.MODEL_STARTED
+    )
+    assert model_event.data["maxOutputTokens"] == 65_536
+
+
+@async_test
+async def test_output_limit_persists_partial_text_as_visible_answer(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository, auto_continue_output=False)
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelTextDelta("partial **answer**"),
+                ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
+            ]
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
+    assert result.error is None
+    assert result.partial_text == "partial **answer**"
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert [(item.role, item.content) for item in messages.items] == [
+        ("user", "整理今天的工作"),
+        ("assistant", "partial **answer**"),
+    ]
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    assert events[-1].data == {
+        "assistantMessageId": result.assistant_message_id,
+        "completionReason": "output_limit",
+    }
+
+
+@async_test
+async def test_output_limit_continues_twice_into_one_visible_answer(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("part one "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("part two "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.STOP
+    assert result.partial_text == "part one part two done"
+    assert len(gateway.requests) == 3
+    assert gateway.requests[1].tools == ()
+    assert gateway.requests[2].tools == ()
+    assert "Do not repeat" in gateway.requests[1].messages[0].content
+    assert gateway.requests[1].messages[-1].role == "assistant"
+    assert gateway.requests[1].messages[-1].content == "part one "
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert [(item.role, item.content) for item in messages.items] == [
+        ("user", "整理今天的工作"),
+        ("assistant", "part one part two done"),
+    ]
+    continuation_events = [
+        event
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
+    ]
+    assert [event.data for event in continuation_events] == [
+        {"attempt": 1, "maxAttempts": 2},
+        {"attempt": 2, "maxAttempts": 2},
+    ]
+
+
+@async_test
+async def test_output_limit_stops_after_two_continuations(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("one "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("two "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("three"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
+    assert result.partial_text == "one two three"
+    assert len(gateway.requests) == 3
+
+
+@async_test
+async def test_continuation_context_rejection_preserves_existing_text(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("partial"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.CONTEXT_LIMIT
+    assert result.partial_text == "partial"
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert messages.items[-1].content == "partial"
+
+
+@async_test
+async def test_continuation_context_rejection_compacts_once_then_retries(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    conversation_id = seed_completed_turns(repository, 7, assistant_size=20)
+    run = repository.start_run(
+        conversation_id=conversation_id,
+        client_request_id=str(uuid4()),
+        message="current request",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+    ).run
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("partial "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelGatewayError(InferenceFailure.CONTEXT_LIMIT_EXCEEDED)],
+            [
+                ModelTextDelta(
+                    "Goals and constraints\nContinue safely.\nDecisions\nNone.\n"
+                    "Facts and artifacts\nNone.\nOpen questions\nNone.\n"
+                    "Next actions\nFinish the response."
+                ),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+            [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.STOP
+    assert result.partial_text == "partial done"
+    assert len(gateway.requests) == 4
+    assert repository.get_latest_compaction(conversation_id) is not None
+    event_types = [
+        event.type
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+    ]
+    assert event_types.count(RunEventType.RESPONSE_CONTINUATION_STARTED) == 1
+    assert event_types.count(RunEventType.CONTEXT_COMPACTION_STARTED) == 1
+
+
+@pytest.mark.parametrize(
+    "events",
+    [
+        [ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+        [
+            ModelTextDelta("partial"),
+            ModelToolCall("call-1", "lookup_note", {"query": "today"}),
+            ModelCompleted(ModelFinishReason.OUTPUT_LIMIT),
+        ],
+    ],
+)
+@async_test
+async def test_output_limit_without_safe_final_text_fails_closed(
+    tmp_path: Path,
+    events: list[ModelStreamEvent],
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    loop = AgentLoop(
+        repository=repository,
+        gateway=ScriptedGateway([events]),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.completion_reason is None
+    assert result.error is not None
+    assert result.error.code == "invalid_provider_response"
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert [(item.role, item.content) for item in messages.items] == [
+        ("user", "整理今天的工作"),
+    ]
+
+
+@async_test
+async def test_output_limit_after_tool_round_requires_current_round_text(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    tool = LookupTool()
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelTextDelta("我先查詢。"),
+                ModelToolCall("call-1", "lookup_note", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "invalid_provider_response"
+    messages = repository.list_messages(
+        run.conversation_id,
+        limit=100,
+        before_sequence=None,
+    )
+    assert [(item.role, item.content) for item in messages.items] == [
+        ("user", "整理今天的工作"),
     ]
 
 

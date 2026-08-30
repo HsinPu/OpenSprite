@@ -144,6 +144,27 @@ class OpenAIInferenceAdapter:
                     if calls
                     else ModelFinishReason.FINAL
                 )
+            elif event_type == "response.incomplete":
+                if terminal:
+                    raise invalid_response()
+                response = payload.get("response")
+                if type(response) is not dict or response.get("status") != "incomplete":
+                    raise invalid_response()
+                details = response.get("incomplete_details")
+                if (
+                    type(details) is not dict
+                    or details.get("reason") not in {"max_tokens", "max_output_tokens"}
+                ):
+                    raise invalid_response()
+                for call in _completed_calls(response.get("output"), call_ids):
+                    call_ids.add(call.call_id)
+                    calls.append(call)
+                    yield call
+                usage = _usage(response.get("usage"))
+                if usage is not None:
+                    yield usage
+                terminal = True
+                yield ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)
             elif event_type in {
                 "response.created",
                 "response.in_progress",

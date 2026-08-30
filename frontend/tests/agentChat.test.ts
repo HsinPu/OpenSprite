@@ -15,6 +15,7 @@ import {
 const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
 const runId = "e7527bf5-81c9-4534-908c-a9a9bc501f26";
 const userMessageId = "c01956dc-fdf0-435c-a3be-e7eb5fd65f22";
+const assistantMessageId = "7e660e86-4838-4af5-99d5-ab926428b1c0";
 
 
 beforeEach(() => {
@@ -96,6 +97,7 @@ describe("Agent chat HTTP contract", () => {
           modelId: "openrouter/auto",
           responseMode: "default",
           status: "running",
+          completionReason: null,
           error: null,
           partialText: "回",
           createdAt: "2026-08-21T08:30:00Z",
@@ -112,6 +114,32 @@ describe("Agent chat HTTP contract", () => {
 
     expect(accepted).toEqual({ conversationId, runId, status: "queued" });
     expect(run.partialText).toBe("回");
+    expect(run.completionReason).toBeNull();
+  });
+
+  it("strictly parses an output-limited completed Run", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({
+      id: runId,
+      conversationId,
+      userMessageId,
+      assistantMessageId,
+      providerId: "openrouter",
+      modelId: "openrouter/auto",
+      responseMode: "default",
+      status: "completed",
+      completionReason: "output_limit",
+      error: null,
+      partialText: "partial **answer**",
+      createdAt: "2026-08-21T08:30:00Z",
+      startedAt: "2026-08-21T08:30:01Z",
+      finishedAt: "2026-08-21T08:30:03Z",
+    })))));
+
+    const run = await getRun(runId);
+
+    expect(run.completionReason).toBe("output_limit");
+    expect(run.partialText).toBe("partial **answer**");
+    expect(run.error).toBeNull();
   });
 
   it("maps only allowed status/code pairs and sends bodyless cancel", async () => {
@@ -175,6 +203,16 @@ describe("Agent chat SSE contract", () => {
       onError: (error) => errors.push(error),
     });
     const source = FakeEventSource.instance;
+    source.listeners.get("model.started")?.(new MessageEvent("model.started", {
+      data: JSON.stringify({
+        sequence: 1,
+        type: "model.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:01Z",
+        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768 },
+      }),
+    }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
       data: JSON.stringify({
         sequence: 2,
@@ -187,7 +225,7 @@ describe("Agent chat SSE contract", () => {
     }));
     source.listeners.get("assistant.delta")?.(new MessageEvent("assistant.delta", {
       data: JSON.stringify({
-        sequence: 3,
+        sequence: 4,
         type: "assistant.delta",
         runId,
         conversationId,
@@ -195,10 +233,36 @@ describe("Agent chat SSE contract", () => {
         data: { text: "完成" },
       }),
     }));
+    source.listeners.get("response.continuation.started")?.(new MessageEvent("response.continuation.started", {
+      data: JSON.stringify({
+        sequence: 3,
+        type: "response.continuation.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:02Z",
+        data: { attempt: 1, maxAttempts: 2 },
+      }),
+    }));
+    source.listeners.get("run.completed")?.(new MessageEvent("run.completed", {
+      data: JSON.stringify({
+        sequence: 5,
+        type: "run.completed",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:03Z",
+        data: { assistantMessageId, completionReason: "output_limit" },
+      }),
+    }));
 
     expect(source.url).toBe(`/api/runs/${runId}/events`);
-    expect(events).toHaveLength(2);
-    expect(events[0]).toMatchObject({ type: "context.compaction.started", data: {} });
+    expect(events).toHaveLength(5);
+    expect(events[0]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768 } });
+    expect(events[1]).toMatchObject({ type: "context.compaction.started", data: {} });
+    expect(events[3]).toMatchObject({ type: "response.continuation.started", data: { attempt: 1, maxAttempts: 2 } });
+    expect(events[4]).toMatchObject({
+      type: "run.completed",
+      data: { assistantMessageId, completionReason: "output_limit" },
+    });
     expect(errors).toEqual([]);
     stream.close();
     expect(source.closed).toBe(true);
