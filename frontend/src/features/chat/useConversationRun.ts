@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  AgentChatApiError,
   agentChatErrorText,
   cancelRun,
   getRun,
@@ -136,7 +137,7 @@ export function useConversationRun({
       setMessages(persistedMessages(page.messages));
       setNextBeforeSequence(page.nextBeforeSequence);
       setStreamedText(run.partialText);
-      setError(run.error ? run.error.message : null);
+      setError(run.error ? agentChatErrorText(new AgentChatApiError(run.error.code), t) : null);
       onConversationUpdated();
       closeStream();
     } catch (nextError) {

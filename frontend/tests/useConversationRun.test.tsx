@@ -1,8 +1,11 @@
+import { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgentChatApiError, type RunEvent, type RunEventStream, type RunEventStreamHandlers } from "../src/api/agentChat";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
+import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
+import type { Locale } from "../src/i18n/catalog";
 
 
 const conversationId = "49d6c5e3-1724-44a7-9e69-0c0103176461";
@@ -68,6 +71,16 @@ type HarnessProps = {
 };
 
 const noop = () => undefined;
+
+function LocaleSetter({ locale }: { locale: Locale }) {
+  const { setLocale } = useI18n();
+
+  useEffect(() => {
+    setLocale(locale);
+  }, [locale, setLocale]);
+
+  return null;
+}
 
 function Harness({ activeConversationId, streamFactory, onAccepted, onUpdated }: HarnessProps) {
   const state = useConversationRun({
@@ -201,6 +214,50 @@ describe("useConversationRun", () => {
     await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("completed"));
     expect(close).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.getByTestId("error").textContent).toContain("無法連線到本機服務"));
+  });
+
+  it("localizes a terminal Run error from its code instead of exposing the backend message", async () => {
+    let runReads = 0;
+    const backendMessage = "private backend detail";
+    const terminalError = { code: "provider_unreachable", message: backendMessage, retryable: true } as const;
+    const fetchMock = vi.fn((path: string) => {
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) {
+        runReads += 1;
+        const snapshot = runReads === 1
+          ? run("running")
+          : { ...run("completed"), status: "failed", assistantMessageId: null, error: terminalError };
+        return Promise.resolve(new Response(JSON.stringify(snapshot)));
+      }
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    let handlers: RunEventStreamHandlers | null = null;
+    const streamFactory = vi.fn((_runId: string, nextHandlers: RunEventStreamHandlers) => {
+      handlers = nextHandlers;
+      return { close: vi.fn() };
+    });
+
+    render(
+      <I18nProvider>
+        <LocaleSetter locale="en" />
+        <Harness activeConversationId={conversationId} streamFactory={streamFactory} />
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(document.documentElement.lang).toBe("en"));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+
+    act(() => handlers!.onEvent({
+      sequence: 4,
+      type: "run.failed",
+      runId,
+      conversationId,
+      createdAt: "2026-08-21T08:30:03Z",
+      data: { error: terminalError },
+    }));
+
+    await waitFor(() => expect(screen.getByTestId("error").textContent).toBe("The model provider is temporarily unreachable."));
+    expect(screen.getByTestId("error").textContent).not.toContain(backendMessage);
   });
 
   it("keeps persisted partial text when SSE cannot start replaying", async () => {
