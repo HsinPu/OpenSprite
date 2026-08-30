@@ -30,6 +30,21 @@ const event: RunEvent = {
   data: {},
 };
 
+const compactionEvent: RunEvent = {
+  ...event,
+  sequence: 2,
+  type: "context.compaction.started",
+  createdAt: "2026-08-29T08:00:02Z",
+};
+
+const modelEvent: RunEvent = {
+  ...event,
+  sequence: 4,
+  type: "model.started",
+  createdAt: "2026-08-29T08:00:04Z",
+  data: { providerId: "openai", modelId: run.modelId, responseMode: "default" },
+};
+
 describe("execution context disclosure", () => {
   it("starts collapsed and preserves its controlled state across Run updates", () => {
     const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} expanded={false} />);
@@ -57,6 +72,14 @@ describe("execution context disclosure", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded />);
 
     expect(screen.getByText("準備對話內容")).toBeTruthy();
+  });
+
+  it("shows repeated Context compactions as one execution step", () => {
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, compactionEvent, modelEvent, { ...compactionEvent, sequence: 5, createdAt: "2026-08-29T08:00:05Z" }]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getAllByText("整理較早的對話內容")).toHaveLength(1);
+    expect(screen.getByText("請求模型 gpt-5.6")).toBeTruthy();
+    expect(document.querySelector(".chat-workspace__process-item--active")?.textContent).toContain("整理較早的對話內容");
   });
 
   it("renders a Drawer mode without a second collapse control", () => {

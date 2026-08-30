@@ -41,6 +41,15 @@ const events: RunEvent[] = [
   { sequence: 3, type: "assistant.delta", runId: run.id, conversationId: run.conversationId, createdAt: "2026-08-22T08:00:03Z", data: { text: "正在整理" } },
 ];
 
+const compactionStartedEvent: RunEvent = {
+  sequence: 2,
+  type: "context.compaction.started",
+  runId: run.id,
+  conversationId: run.conversationId,
+  createdAt: "2026-08-22T08:00:02Z",
+  data: {},
+};
+
 const mockedUseConversationRun = vi.mocked(useConversationRun);
 const mockedUseRunInspection = vi.mocked(useRunInspection);
 const mockedUseConversationAutoScroll = vi.mocked(useConversationAutoScroll);
@@ -127,6 +136,35 @@ describe("live chat workspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "查看這次執行" }));
     expect(inspectRun).toHaveBeenCalledWith(run.id);
+  });
+
+  it("shows Context compaction as a temporary reply status", () => {
+    const activeRun = { ...run, partialText: "" };
+    const state = (runEvents: RunEvent[]) => ({
+      messages: [{ id: run.userMessageId, runId: run.id, role: "user" as const, content: "你好", createdAt: run.createdAt, delivery: "persisted" as const }],
+      activeRun,
+      events: runEvents,
+      streamedText: "",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: true,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+    mockedUseConversationRun.mockReturnValue(state([events[0]!, compactionStartedEvent]));
+    const workspace = () => <ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />;
+    const { rerender } = render(workspace());
+
+    expect(screen.getByText("正在整理較早的對話內容…")).toBeTruthy();
+    expect(screen.queryByText("正在準備回覆…")).toBeNull();
+
+    mockedUseConversationRun.mockReturnValue(state([events[0]!, compactionStartedEvent, events[1]!]));
+    rerender(workspace());
+    expect(screen.getByText("正在準備回覆…")).toBeTruthy();
+    expect(screen.queryByText("正在整理較早的對話內容…")).toBeNull();
   });
 
   it("opens the mobile execution drawer from the global header and restores focus on close", async () => {

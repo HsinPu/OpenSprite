@@ -207,6 +207,12 @@ Safe structured logs contain only limits, estimated or reported token counts,
 message counts and compaction coverage; they never contain prompt or Message
 content.
 
+Immediately before a real compaction model request, the Agent appends the
+empty-payload semantic event `context.compaction.started`. The browser uses it
+only as transient progress and as a safe execution-record step. It never becomes
+a Conversation Message, never contains the generated summary, and is cleared by
+the next model or terminal Run event.
+
 The Agent checks the shared assistant-output limit before every durable delta,
 so a Provider cannot push the SQLite Run beyond its storage contract. If an
 otherwise recoverable repository write fails during background execution, the

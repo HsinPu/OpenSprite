@@ -502,6 +502,12 @@ class AgentLoop:
                     candidates,
                     budget.input_budget_tokens,
                 )
+                await asyncio.to_thread(
+                    self._repository.append_run_event,
+                    run.id,
+                    RunEventType.CONTEXT_COMPACTION_STARTED,
+                    {},
+                )
                 summary = await self._await_with_cancellation(
                     self._compaction_service.compact(
                         conversation_id=run.conversation_id,

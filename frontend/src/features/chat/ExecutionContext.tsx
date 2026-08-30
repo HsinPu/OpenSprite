@@ -40,6 +40,7 @@ function durationText(run: RunSnapshot | null): string {
 function eventLabel(event: RunEvent, t: Translator): string | null {
   switch (event.type) {
     case "run.started": return t("execution.event.runStarted");
+    case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "assistant.delta": return null;
     case "tool.started": return t("execution.event.toolStarted", { tool: String(event.data.toolName ?? "") }).trim();
@@ -55,12 +56,20 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
 function processEvents(events: RunEvent[], t: Translator, locale: string, timeZone: TimeZoneSetting): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> {
   const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> = [];
   let addedTextStep = false;
+  let compactionStepIndex: number | null = null;
   for (const event of events) {
     if (event.type === "assistant.delta") {
       if (!addedTextStep) {
         addedTextStep = true;
         steps.push({ key: "assistant-output", label: t("execution.event.output"), time: formatTime(event.createdAt, locale, timeZone), state: "active" });
       }
+      continue;
+    }
+    if (event.type === "context.compaction.started") {
+      const step = { key: "context-compaction", label: eventLabel(event, t)!, time: formatTime(event.createdAt, locale, timeZone), state: "complete" as const };
+      if (compactionStepIndex !== null) steps.splice(compactionStepIndex, 1);
+      steps.push(step);
+      compactionStepIndex = steps.length - 1;
       continue;
     }
     const label = eventLabel(event, t);

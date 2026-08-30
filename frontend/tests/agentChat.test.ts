@@ -175,6 +175,16 @@ describe("Agent chat SSE contract", () => {
       onError: (error) => errors.push(error),
     });
     const source = FakeEventSource.instance;
+    source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
+      data: JSON.stringify({
+        sequence: 2,
+        type: "context.compaction.started",
+        runId,
+        conversationId,
+        createdAt: "2026-08-21T08:30:01Z",
+        data: {},
+      }),
+    }));
     source.listeners.get("assistant.delta")?.(new MessageEvent("assistant.delta", {
       data: JSON.stringify({
         sequence: 3,
@@ -187,7 +197,8 @@ describe("Agent chat SSE contract", () => {
     }));
 
     expect(source.url).toBe(`/api/runs/${runId}/events`);
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ type: "context.compaction.started", data: {} });
     expect(errors).toEqual([]);
     stream.close();
     expect(source.closed).toBe(true);

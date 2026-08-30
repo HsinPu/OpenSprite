@@ -114,6 +114,7 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
 
     assert event_types == [
         "run.started",
+        "context.compaction.started",
         "model.started",
         "assistant.delta",
         "tool.started",

@@ -713,6 +713,7 @@
         "type": "string",
         "enum": [
           "run.started",
+          "context.compaction.started",
           "model.started",
           "assistant.delta",
           "tool.started",

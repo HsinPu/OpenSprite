@@ -461,6 +461,18 @@ async def test_long_history_is_compacted_without_deleting_raw_messages(
     compaction = repository.get_latest_compaction(conversation_id)
     assert compaction is not None
     assert compaction.covers_through_sequence < 18
+    event_types = [
+        event.type
+        for event in repository.list_run_events(
+            current.id,
+            after_sequence=0,
+            limit=100,
+        )
+    ]
+    assert event_types.count(RunEventType.CONTEXT_COMPACTION_STARTED) == 1
+    assert event_types.index(RunEventType.CONTEXT_COMPACTION_STARTED) < (
+        event_types.index(RunEventType.MODEL_STARTED)
+    )
     assert len(
         repository.list_messages(
             conversation_id,
@@ -550,6 +562,22 @@ async def test_first_request_context_rejection_compacts_once_and_retries(
     assert len(gateway.requests) == 3
     assert gateway.requests[1].max_output_tokens == 2_048
     assert repository.get_latest_compaction(conversation_id) is not None
+    event_types = [
+        event.type
+        for event in repository.list_run_events(
+            current.id,
+            after_sequence=0,
+            limit=100,
+        )
+    ]
+    assert event_types == [
+        RunEventType.RUN_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.RUN_COMPLETED,
+    ]
     visible = repository.list_messages(
         conversation_id,
         limit=100,
@@ -737,3 +765,15 @@ async def test_cancellation_interrupts_context_compaction_request(
 
     assert result.status is RunStatus.CANCELLED
     assert repository.get_latest_compaction(conversation_id) is None
+    assert [
+        event.type
+        for event in repository.list_run_events(
+            run.id,
+            after_sequence=0,
+            limit=100,
+        )
+    ] == [
+        RunEventType.RUN_STARTED,
+        RunEventType.CONTEXT_COMPACTION_STARTED,
+        RunEventType.RUN_CANCELLED,
+    ]

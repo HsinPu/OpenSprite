@@ -36,7 +36,7 @@ from .models import (
 from .repository import ConversationStoreError
 
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -147,9 +147,9 @@ CREATE TABLE run_events (
     run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     sequence INTEGER NOT NULL CHECK(sequence >= 1),
     type TEXT NOT NULL CHECK(type IN (
-        'run.started', 'model.started', 'assistant.delta', 'tool.started',
-        'tool.completed', 'tool.failed', 'run.completed', 'run.failed',
-        'run.cancelled', 'run.interrupted'
+        'run.started', 'context.compaction.started', 'model.started',
+        'assistant.delta', 'tool.started', 'tool.completed', 'tool.failed',
+        'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
     )),
     payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
     created_at TEXT NOT NULL,
@@ -169,7 +169,7 @@ ON messages(conversation_id, sequence DESC);
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 3;
 COMMIT;
 """
 
@@ -194,6 +194,29 @@ CREATE TABLE conversation_compactions (
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 PRAGMA user_version = 2;
+COMMIT;
+"""
+
+_MIGRATE_V2_TO_V3_SQL = """
+BEGIN IMMEDIATE;
+ALTER TABLE run_events RENAME TO run_events_v2;
+CREATE TABLE run_events (
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK(sequence >= 1),
+    type TEXT NOT NULL CHECK(type IN (
+        'run.started', 'context.compaction.started', 'model.started',
+        'assistant.delta', 'tool.started', 'tool.completed', 'tool.failed',
+        'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
+    )),
+    payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(run_id, sequence)
+) STRICT;
+INSERT INTO run_events(run_id, sequence, type, payload_json, created_at)
+SELECT run_id, sequence, type, payload_json, created_at
+FROM run_events_v2;
+DROP TABLE run_events_v2;
+PRAGMA user_version = 3;
 COMMIT;
 """
 
@@ -1223,6 +1246,9 @@ class SqliteConversationRepository:
                 )
                 if version == 1:
                     connection.executescript(_MIGRATE_V1_TO_V2_SQL)
+                    version = 2
+                if version == 2:
+                    connection.executescript(_MIGRATE_V2_TO_V3_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1556,6 +1582,7 @@ class SqliteConversationRepository:
         keys = set(data)
         if event_type in {
             RunEventType.RUN_STARTED,
+            RunEventType.CONTEXT_COMPACTION_STARTED,
             RunEventType.RUN_CANCELLED,
         }:
             if keys:

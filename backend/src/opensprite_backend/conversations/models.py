@@ -27,6 +27,7 @@ class RunStatus(str, Enum):
 
 class RunEventType(str, Enum):
     RUN_STARTED = "run.started"
+    CONTEXT_COMPACTION_STARTED = "context.compaction.started"
     MODEL_STARTED = "model.started"
     ASSISTANT_DELTA = "assistant.delta"
     TOOL_STARTED = "tool.started"

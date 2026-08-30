@@ -113,6 +113,7 @@ export function ChatWorkspace({
   const historical = inspection.selectedRunId !== null;
   const displayedRun = historical ? inspection.run : chat.activeRun;
   const displayedEvents = historical ? inspection.events : chat.events;
+  const isCompactingContext = chat.events.at(-1)?.type === "context.compaction.started";
   const displayedModelName = historical && displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
@@ -260,7 +261,7 @@ export function ChatWorkspace({
                 <OpenSpriteMark />
                 <div className="chat-workspace__assistant-content">
                   <div className={`chat-workspace__assistant-card chat-workspace__assistant-card--compact${chat.isRunning ? " chat-workspace__assistant-card--streaming" : ""}`}>
-                    {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t("chat.thinking")}</p>}
+                    {liveText ? <p>{liveText}</p> : <p className="chat-workspace__thinking"><span aria-hidden="true" />{t(isCompactingContext ? "chat.compactingContext" : "chat.thinking")}</p>}
                   </div>
                   {chat.activeRun ? <time className="chat-workspace__message-time" dateTime={chat.activeRun.createdAt}>{formatMessageTime(chat.activeRun.createdAt, locale, timeZone)}</time> : null}
                 </div>
