@@ -61,6 +61,11 @@
 .settings-future-row { min-height: 58px; padding: 9px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--settings-muted); font-size: 15px; }
 .settings-future-badge { flex: 0 0 auto; padding: 4px 9px; border: 1px solid var(--settings-border); border-radius: 999px; background: var(--settings-surface); color: var(--settings-muted); font-size: 12px; font-weight: 600; }
 .settings-card-body > :last-child { border-bottom: 0; }
+.settings-about-details { margin: 0; }
+.settings-about-details > div { min-height: 58px; padding: 10px 0; border-bottom: 1px solid var(--settings-border); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-about-details > div:last-child { border-bottom: 0; }
+.settings-about-details dt { color: var(--settings-muted); }
+.settings-about-details dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 .settings-select-row select { min-width: min(350px, 52%); height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--settings-border); border-radius: 9px; background: var(--settings-surface); color: var(--settings-text); cursor: pointer; }
 .settings-select-row .ant-select { min-width: min(350px, 52%); }
 .settings-select-row .ant-select-selector { min-height: 44px !important; border-color: var(--settings-border) !important; border-radius: 9px !important; }

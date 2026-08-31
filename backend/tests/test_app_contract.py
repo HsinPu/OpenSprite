@@ -147,6 +147,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
 
     assert operations == {
         ("/healthz", "get", "getHealth"),
+        ("/api/app-info", "get", "getAppInfo"),
         ("/api/settings/ai", "get", "getAiSettings"),
         ("/api/settings/ai", "put", "putAiSettings"),
         ("/api/settings/general", "get", "getGeneralSettings"),
@@ -289,6 +290,19 @@ def test_health_is_liveness_only() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_app_info_uses_the_package_version() -> None:
+    response = TestClient(create_app()).get("/api/app-info")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "version": "0.1.0",
+        "revision": "development",
+        "buildType": "development",
+        "dirty": True,
+        "installedAt": None,
+    }
 
 
 def test_default_provider_dependency_fails_closed() -> None:

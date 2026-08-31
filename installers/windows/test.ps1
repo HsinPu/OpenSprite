@@ -78,6 +78,7 @@ $quarantinedRuntimes = @()
 try {
     & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -AllowCustomInstallRoot -SkipStartupRegistration -NoStart | Out-Null
     foreach ($required in @(
+        "build-info.json",
         "backend\.venv\Scripts\python.exe",
         "backend\src\opensprite_backend\installed_runtime.py",
         "frontend\dist\index.html",
@@ -94,6 +95,14 @@ try {
     $python = Join-Path $installRoot "backend\.venv\Scripts\python.exe"
     & $python -c "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()"
     if ($LASTEXITCODE -ne 0) { throw "Installed Python runtime check failed." }
+    $buildInfo = Get-Content -LiteralPath (Join-Path $installRoot "build-info.json") -Raw | ConvertFrom-Json
+    $installedVersion = (& $python -c "from importlib.metadata import version; print(version('opensprite-backend'))").Trim()
+    if ($LASTEXITCODE -ne 0 -or $buildInfo.version -ne $installedVersion) {
+        throw "Installed build metadata version mismatch."
+    }
+    if ($buildInfo.revision -notmatch '^(?:[0-9a-f]{7,40}|unknown)$' -or $buildInfo.dirty -isnot [bool] -or [String]::IsNullOrWhiteSpace($buildInfo.installedAt)) {
+        throw "Installed build metadata is malformed."
+    }
 
     $nativeRuntimeBinaries = @(Get-ChildItem -LiteralPath (Join-Path $installRoot "backend\.venv") -File -Recurse -Filter "*.pyd")
     foreach ($nativeRuntimeBinary in $nativeRuntimeBinaries) {

@@ -204,10 +204,10 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具與連線Demo", "外觀Demo", "隱私Demo", "關於Demo"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具與連線Demo", "外觀Demo", "隱私Demo", "關於"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
-    expect(screen.getAllByText("Demo")).toHaveLength(5);
+    expect(screen.getAllByText("Demo")).toHaveLength(4);
     expect(screen.getByRole("region", { name: "啟動與對話" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "啟動時開啟" })).toBeTruthy();

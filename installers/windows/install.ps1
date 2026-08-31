@@ -141,6 +141,26 @@ foreach ($required in @("backend\pyproject.toml", "backend\uv.lock", "backend\sr
         throw "SourceRoot is not a complete OpenSprite checkout: $required"
     }
 }
+$pyprojectText = Get-Content -LiteralPath (Join-Path $sourceRootPath "backend\pyproject.toml") -Raw
+$versionMatch = [Regex]::Match($pyprojectText, '(?m)^version\s*=\s*"([^\"]+)"\s*$')
+if (-not $versionMatch.Success) { throw "Unable to resolve the OpenSprite product version." }
+$productVersion = $versionMatch.Groups[1].Value
+$revision = "unknown"
+$dirty = $true
+$gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+if ($null -eq $gitCommand) { $gitCommand = Get-Command git -ErrorAction SilentlyContinue }
+if ($null -ne $gitCommand) {
+    $resolvedRevision = (& $gitCommand.Source -C $sourceRootPath rev-parse --short=8 HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and -not [String]::IsNullOrWhiteSpace($resolvedRevision)) {
+        $revision = $resolvedRevision.Trim().ToLowerInvariant()
+        $gitStatus = (& $gitCommand.Source -C $sourceRootPath status --porcelain -- `
+            backend/src backend/pyproject.toml backend/uv.lock `
+            frontend/src frontend/package.json frontend/package-lock.json `
+            frontend/index.html frontend/tsconfig.json frontend/vite.config.ts `
+            installers/windows 2>$null)
+        $dirty = $LASTEXITCODE -ne 0 -or -not [String]::IsNullOrWhiteSpace(($gitStatus -join "`n"))
+    }
+}
 
 $installParent = Split-Path -Parent $installRootPath
 if (-not $AllowCustomInstallRoot) {
@@ -175,6 +195,18 @@ try {
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\install.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\launch.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\uninstall.ps1") (Join-Path $stagingRoot "installers\windows")
+    $installedAt = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+    $buildInfo = [ordered]@{
+        version = $productVersion
+        revision = $revision
+        dirty = [bool]$dirty
+        installedAt = $installedAt
+    } | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText(
+        (Join-Path $stagingRoot "build-info.json"),
+        $buildInfo,
+        [Text.UTF8Encoding]::new($false)
+    )
 
     $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
     if ($null -eq $npmCommand) { $npmCommand = Get-Command npm -ErrorAction Stop }
@@ -201,6 +233,10 @@ try {
     Invoke-Checked $uvCommand.Source @("sync", "--project", (Join-Path $installRootPath "backend"), "--no-dev")
     $installedPython = Join-Path $installRootPath "backend\.venv\Scripts\python.exe"
     Invoke-Checked $installedPython @("-c", "from opensprite_backend.installed_runtime import default_frontend_dist; assert default_frontend_dist().joinpath('index.html').is_file()")
+    $installedVersion = (& $installedPython -c "from importlib.metadata import version; print(version('opensprite-backend'))").Trim()
+    if ($LASTEXITCODE -ne 0 -or $installedVersion -ne $productVersion) {
+        throw "Installed package version does not match build metadata."
+    }
 
     if (-not $SkipStartupRegistration) {
         Register-OpenSpriteStartup $installRootPath $StartupName $Port
@@ -218,6 +254,9 @@ try {
         StartupName = if ($SkipStartupRegistration) { $null } else { $StartupName }
         Started = -not $NoStart
         PreviousCleanupComplete = $previousCleanupComplete
+        Version = $productVersion
+        Revision = $revision
+        Dirty = [bool]$dirty
         Url = "http://127.0.0.1:$Port/"
     }
 }

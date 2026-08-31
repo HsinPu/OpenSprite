@@ -23,9 +23,15 @@ model configuration.
 startup destination and message sending behavior. It remains separate from
 General Settings so the existing locale/time-zone schema does not change.
 
+`app-info.openapi.json` is the authoritative read-only contract for the running
+product version and installed build identity. The backend package version is
+the single product-version source; the frontend does not maintain another app
+version.
+
 The contract currently covers:
 
 - backend liveness at `GET /healthz`;
+- product/build identity at `GET /api/app-info`;
 - the fixed `openai`, `anthropic`, and `openrouter` provider catalog;
 - validate-then-save connection replacement;
 - testing and deleting a stored provider connection;

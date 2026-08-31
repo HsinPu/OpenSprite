@@ -18,6 +18,7 @@ from .api.conversation_settings_routes import (
     conversation_settings_error_response,
     router as conversation_settings_router,
 )
+from .api.app_info_routes import router as app_info_router
 from .api.general_settings_routes import (
     general_settings_error_response,
     router as general_settings_router,
@@ -33,6 +34,7 @@ from .application import (
 )
 from .local_security import LocalRequestSecurityMiddleware
 from .models import (
+    AppInfo,
     AiSettingsErrorCode,
     ConversationSettingsErrorCode,
     ErrorCode,
@@ -54,6 +56,7 @@ from .general_settings import (
     GeneralSettingsStoreError,
     UnavailableGeneralSettings,
 )
+from .build_info import load_app_info
 from .conversation_settings import (
     ConversationSettingsOperations,
     ConversationSettingsStoreError,
@@ -70,14 +73,16 @@ def create_app(
     general_settings: GeneralSettingsOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
+    app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
 ) -> FastAPI:
     """Create the ASGI app with an injectable provider-connection boundary."""
 
+    resolved_app_info = app_info if app_info is not None else load_app_info()
     app = FastAPI(
         title="OpenSprite local backend",
-        version="0.1.0",
+        version=resolved_app_info.version,
         description="Loopback-only local desktop service foundation.",
         openapi_url=None,
         docs_url=None,
@@ -99,6 +104,7 @@ def create_app(
         if general_settings is not None
         else UnavailableGeneralSettings()
     )
+    app.state.app_info = resolved_app_info
     app.state.conversation_settings = (
         conversation_settings
         if conversation_settings is not None
@@ -208,6 +214,7 @@ def create_app(
     async def get_health() -> HealthResponse:
         return HealthResponse()
 
+    app.include_router(app_info_router)
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
     app.include_router(conversation_settings_router)

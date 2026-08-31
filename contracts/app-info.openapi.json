@@ -1,0 +1,39 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite application information API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative local product version and installed-build identity contract."
+  },
+  "security": [],
+  "paths": {
+    "/api/app-info": {
+      "get": {
+        "operationId": "getAppInfo",
+        "summary": "Read application build information",
+        "responses": {
+          "200": {
+            "description": "The running OpenSprite product and build identity.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AppInfo"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "revision", "buildType", "dirty", "installedAt"],
+        "properties": {
+          "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"},
+          "revision": {"type": "string", "pattern": "^(?:[0-9a-f]{7,40}|development|unknown)$"},
+          "buildType": {"type": "string", "enum": ["development", "installed"]},
+          "dirty": {"type": "boolean"},
+          "installedAt": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]}
+        }
+      }
+    }
+  }
+}

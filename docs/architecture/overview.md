@@ -42,6 +42,9 @@ entry 擁有的 HTTP client。startup/close 失敗後維持 fail closed，下一
 concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` 未注入 dependency 時仍以
 `credential_store_unavailable` fail closed，方便 contract test 與明確 composition。`GET /healthz`
 只代表 HTTP process liveness，不代表 credential store 或上游 provider 可用。
+產品版號只以 `backend/pyproject.toml` 的 package version 為來源；`GET /api/app-info`
+另外回傳 installer 產生的 Git revision、dirty 狀態與 UTC 安裝時間，讓前端「關於」頁與測試
+可以確認目前實際執行的 Build。Frontend `package.json` 的版本只屬於內部 npm package。
 
 目前 AI 設定的 authoritative contract 是 `contracts/ai-settings.openapi.json`：
 `GET`／`PUT /api/settings/ai` 將 nullable model、模型所屬 Context budget 與

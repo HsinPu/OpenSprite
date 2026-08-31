@@ -68,6 +68,12 @@ No reloader, additional worker, proxy-header trust, Scheduled Task, VBS/CMD
 launcher or legacy Startup file is created. Installation succeeds only after both
 `/healthz` and `/` respond correctly.
 
+The installer reads the product version from `backend/pyproject.toml`, records
+the source Git revision, dirty state and UTC installation time in
+`build-info.json`, then verifies the installed Python package reports the same
+version. The backend exposes that exact identity through `GET /api/app-info`;
+the settings About page and installer result use the same response fields.
+
 ## Safety
 
 - Official install and data roots are resolved to absolute paths and compared

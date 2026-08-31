@@ -29,6 +29,14 @@ class HealthResponse(ContractModel):
     status: Literal["ok"] = "ok"
 
 
+class AppInfo(ContractModel):
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
+    revision: str = Field(pattern=r"^(?:[0-9a-f]{7,40}|development|unknown)$")
+    buildType: Literal["development", "installed"]
+    dirty: StrictBool
+    installedAt: datetime | None
+
+
 class ProviderStatus(StrEnum):
     DISCONNECTED = "disconnected"
     CONNECTED = "connected"

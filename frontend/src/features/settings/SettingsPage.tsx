@@ -20,6 +20,7 @@ import type { ProviderCatalogController } from "../ai-settings/useProviderCatalo
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
 import { GeneralSettings } from "./GeneralSettings";
+import { AboutSettings } from "./AboutSettings";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
 import "./settings.css";
@@ -49,7 +50,7 @@ const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance
   { id: "tools", labelKey: "settings.category.tools", icon: "connections" },
   { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" },
   { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy" },
-  { id: "about", labelKey: "settings.category.about", icon: "info" },
+  { id: "about", labelKey: "settings.category.about", icon: "info", enabled: true },
 ];
 
 const providerStatusKeys: Record<ProviderStatus, MessageKey> = {
@@ -414,7 +415,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} autoContinueOutput={autoContinueOutput} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onAutoContinueOutputChange={onAutoContinueOutputChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} autoContinueOutput={autoContinueOutput} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onAutoContinueOutputChange={onAutoContinueOutputChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>
