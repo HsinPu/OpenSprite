@@ -241,6 +241,9 @@ frontend. Explicit model capability always wins. Provider truncation still
 flows through the durable `output_limit` completion path.
 
 Each Run snapshots the requested output budget and output-continuation policy.
+Response delivery is a browser presentation preference: the backend and all
+Provider adapters continue to stream semantic events, while the browser may
+buffer assistant deltas until the Run reaches a terminal state.
 SQLite schema v8 converts the former boolean to `2` or `off` while preserving
 Messages, Runs and events. The
 resolved token number is persisted on every `model.started` event and shown in

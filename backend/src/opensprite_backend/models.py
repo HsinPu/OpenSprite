@@ -166,10 +166,16 @@ class OutputContinuation(StrEnum):
     UNLIMITED = "unlimited"
 
 
+class ResponseDelivery(StrEnum):
+    STREAM = "stream"
+    COMPLETE = "complete"
+
+
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     outputContinuation: OutputContinuation = OutputContinuation.TWO
+    responseDelivery: ResponseDelivery = ResponseDelivery.STREAM
     logFullPrompts: StrictBool = False
 
 
@@ -177,6 +183,7 @@ class PutAiSettingsRequest(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     outputContinuation: OutputContinuation
+    responseDelivery: ResponseDelivery
     logFullPrompts: StrictBool
 
 

@@ -65,17 +65,23 @@ Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
 
-`config/settings.json` is a strict schema-v7, non-secret file containing one
+`config/settings.json` is a strict schema-v8, non-secret file containing one
 nullable `model` (`providerId`, `modelId`, `contextBudget`, and `outputBudget`)
-plus `responseMode`, strict `outputContinuation` policy and the opt-in
-`logFullPrompts` boolean. The continuation policy is `off`, `1`, `2`, `3`, `5`,
-or `unlimited`, with `2` as the default. The response mode is `default`, `fast`,
-`balanced`, or `deep`. `default` means future inference omits
+plus `responseMode`, strict `outputContinuation` policy, strict
+`responseDelivery` preference and the opt-in `logFullPrompts` boolean. The
+continuation policy is `off`, `1`, `2`, `3`, `5`, or `unlimited`, with `2` as
+the default. The response delivery is `stream` or `complete`, with `stream` as
+the default. The response mode is `default`, `fast`, `balanced`, or `deep`.
+`default` means future inference omits
 the Provider reasoning-strength parameter. It never contains a display label, API key, or
 provider model catalog. Schema-v6 booleans are converted in memory to `2` or
-`off` without rewriting until the next successful PUT. Reads of a missing file
-are side-effect free and return `model: null`, `responseMode: default`, and
-`outputContinuation: 2`. Every successful change replaces the full settings
+`off` without rewriting until the next successful PUT. Schema-v7 settings are
+read with `responseDelivery: stream` without rewriting. Reads of a missing file
+are side-effect free and return `model: null`, `responseMode: default`,
+`outputContinuation: 2`, and `responseDelivery: stream`. `stream` is the
+default browser presentation and `complete` buffers streamed deltas until the
+Run is terminal; Provider requests and SSE remain streaming in either mode.
+Every successful change replaces the full settings
 document atomically; clearing the model preserves the other selected settings.
 `state/providers.json` remains strict non-secret metadata. Other
 paths are not created in advance.

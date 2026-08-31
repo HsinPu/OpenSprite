@@ -41,7 +41,7 @@ def test_contract_has_only_the_approved_ai_settings_operations() -> None:
     }
 
 
-def test_ai_settings_schema_persists_model_response_and_continuation() -> None:
+def test_ai_settings_schema_persists_model_response_continuation_and_delivery() -> None:
     schemas = load_contract()["components"]["schemas"]
     selection = schemas["ModelSelection"]
 
@@ -78,9 +78,10 @@ def test_ai_settings_schema_persists_model_response_and_continuation() -> None:
     assert selection["properties"]["modelId"]["maxLength"] == 256
     settings = schemas["AiSettings"]
     assert settings["additionalProperties"] is False
-    assert settings["required"] == ["model", "responseMode", "outputContinuation", "logFullPrompts"]
-    assert set(settings["properties"]) == {"model", "responseMode", "outputContinuation", "logFullPrompts"}
+    assert settings["required"] == ["model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"]
+    assert set(settings["properties"]) == {"model", "responseMode", "outputContinuation", "responseDelivery", "logFullPrompts"}
     assert schemas["OutputContinuation"]["enum"] == ["off", "1", "2", "3", "5", "unlimited"]
+    assert schemas["ResponseDelivery"]["enum"] == ["stream", "complete"]
     assert settings["properties"]["logFullPrompts"]["type"] == "boolean"
     assert schemas["ResponseMode"]["enum"] == ["default", "fast", "balanced", "deep"]
     assert schemas["ErrorCode"]["enum"] == [

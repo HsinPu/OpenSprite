@@ -74,12 +74,14 @@ export function App() {
     modelSelection,
     responseMode,
     outputContinuation,
+    responseDelivery,
     logFullPrompts,
     saving: aiSettingsSaving,
     error: aiSettingsError,
     saveModelSelection,
     saveResponseMode,
     saveOutputContinuation,
+    saveResponseDelivery,
     saveLogFullPrompts,
   } = useAiSettings(providerCatalog.providers, providerCatalog.modelChoices);
   const { modelChoices } = providerCatalog;
@@ -402,12 +404,14 @@ export function App() {
           modelSelection={modelSelection}
           responseMode={responseMode}
           outputContinuation={outputContinuation}
+          responseDelivery={responseDelivery}
           logFullPrompts={logFullPrompts}
           aiSettingsSaving={aiSettingsSaving}
           aiSettingsError={aiSettingsError}
           onModelSelectionChange={saveModelSelection}
           onResponseModeChange={saveResponseMode}
           onOutputContinuationChange={saveOutputContinuation}
+          onResponseDeliveryChange={saveResponseDelivery}
           onLogFullPromptsChange={saveLogFullPrompts}
           providerCatalog={providerCatalog}
           generalSettings={generalSettings}

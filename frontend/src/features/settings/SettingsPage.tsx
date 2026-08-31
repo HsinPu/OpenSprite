@@ -10,7 +10,7 @@ import {
   type ProviderStatus,
   type ProviderSummary,
 } from "../../api/providerConnections";
-import type { ContextBudget, OutputBudget, OutputContinuation, ResponseMode } from "../../api/aiSettings";
+import type { ContextBudget, OutputBudget, OutputContinuation, ResponseDelivery, ResponseMode } from "../../api/aiSettings";
 import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import { localModelCatalog, type ModelSelection } from "../ai-settings/modelCatalog";
@@ -31,12 +31,14 @@ type SettingsPageProps = {
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   outputContinuation: OutputContinuation;
+  responseDelivery: ResponseDelivery;
   logFullPrompts: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   onOutputContinuationChange: (policy: OutputContinuation) => Promise<string | null>;
+  onResponseDeliveryChange: (delivery: ResponseDelivery) => Promise<string | null>;
   onLogFullPromptsChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
@@ -87,6 +89,15 @@ const outputContinuationLabelKeys: Record<OutputContinuation, MessageKey> = {
   unlimited: "models.outputContinuation.unlimited",
 };
 const outputContinuationValues: readonly OutputContinuation[] = ["off", "1", "2", "3", "5", "unlimited"];
+const responseDeliveryValues: readonly ResponseDelivery[] = ["stream", "complete"];
+const responseDeliveryLabelKeys: Record<ResponseDelivery, MessageKey> = {
+  stream: "models.responseDelivery.stream",
+  complete: "models.responseDelivery.complete",
+};
+const responseDeliveryDescriptionKeys: Record<ResponseDelivery, MessageKey> = {
+  stream: "models.responseDelivery.streamDescription",
+  complete: "models.responseDelivery.completeDescription",
+};
 
 type ProviderFeedback = { message?: string; error?: string };
 type ProviderOperation = Partial<Record<ProviderId, number>>;
@@ -95,12 +106,14 @@ type ModelsSettingsProps = {
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   outputContinuation: OutputContinuation;
+  responseDelivery: ResponseDelivery;
   logFullPrompts: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   onOutputContinuationChange: (policy: OutputContinuation) => Promise<string | null>;
+  onResponseDeliveryChange: (delivery: ResponseDelivery) => Promise<string | null>;
   onLogFullPromptsChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   onProviderModalChange?: (open: boolean) => void;
@@ -169,7 +182,7 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
   );
 }
 
-function ModelsSettings({ modelSelection, responseMode, outputContinuation, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onLogFullPromptsChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
+function ModelsSettings({ modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
   const { t } = useI18n();
   const {
     providers,
@@ -357,6 +370,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
     : modelSelection ? t("models.helper.selected") : t("models.helper.select");
 
   const responseModes: ReadonlyArray<{ value: ResponseMode; label: string }> = [{ value: "default", label: t("models.response.default") }, { value: "fast", label: t("models.response.fast") }, { value: "balanced", label: t("models.response.balanced") }, { value: "deep", label: t("models.response.deep") }];
+  const responseDeliveryOptions = responseDeliveryValues.map((value) => ({ value, label: t(responseDeliveryLabelKeys[value]) }));
   return (
     <div className="settings-form-stack">
       <SettingsCard icon="connections" title={t("models.providers")}>
@@ -395,6 +409,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
+        <div className="settings-select-row"><label className="settings-continuation-label" htmlFor="settings-response-delivery"><span className="settings-control-label">{t("models.responseDelivery")}</span><span className="settings-control-description">{t(responseDeliveryDescriptionKeys[responseDelivery])}</span></label><Select id="settings-response-delivery" aria-label={t("models.responseDelivery")} value={responseDelivery} options={responseDeliveryOptions} getPopupContainer={getSettingsPopupContainer} disabled={aiSettingsSaving} onChange={(delivery: ResponseDelivery) => void onResponseDeliveryChange(delivery)} /></div>
         <div className="settings-select-row"><label className="settings-continuation-label" htmlFor="settings-output-continuation"><span className="settings-control-label">{t("models.outputContinuation")}</span><span className="settings-control-description">{outputContinuationDescription}</span></label><Select id="settings-output-continuation" aria-label={t("models.outputContinuation")} value={outputContinuation} options={outputContinuationOptions} getPopupContainer={getSettingsPopupContainer} disabled={aiSettingsSaving} onChange={(policy: OutputContinuation) => void onOutputContinuationChange(policy)} /></div>
         <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.logFullPrompts")}</span><span className="settings-control-description">{t("models.logFullPromptsDescription")}</span></span><Switch aria-label={t("models.logFullPrompts")} checked={logFullPrompts} disabled={aiSettingsSaving} onChange={(enabled) => void onLogFullPromptsChange(enabled)} /></div>
         <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
@@ -405,7 +420,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
   const wasSavingRef = useRef(false);
@@ -439,7 +454,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} logFullPrompts={logFullPrompts} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>

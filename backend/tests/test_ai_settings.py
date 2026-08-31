@@ -25,6 +25,7 @@ from opensprite_backend.models import (
     ProviderListResponse,
     ProviderStatus,
     ProviderSummary,
+    ResponseDelivery,
     ResponseMode,
     OutputContinuation,
 )
@@ -46,11 +47,13 @@ def settings(
     model: ModelSelection | None = None,
     response_mode: ResponseMode = ResponseMode.BALANCED,
     output_continuation: OutputContinuation = OutputContinuation.TWO,
+    response_delivery: ResponseDelivery = ResponseDelivery.STREAM,
 ) -> AiSettings:
     return AiSettings(
         model=model,
         responseMode=response_mode,
         outputContinuation=output_continuation,
+        responseDelivery=response_delivery,
     )
 
 
@@ -92,14 +95,14 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == AiSettings(model=None, responseMode="default", outputContinuation="2")
+    assert store.get() == AiSettings(model=None, responseMode="default", outputContinuation="2", responseDelivery="stream")
     assert not paths.home.exists()
-    saved = settings(model=selection(), response_mode=ResponseMode.DEEP)
+    saved = settings(model=selection(), response_mode=ResponseMode.DEEP, response_delivery=ResponseDelivery.COMPLETE)
     store.set(saved)
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 7,
+        "version": 8,
         "model": {
             "providerId": "openai",
             "modelId": "gpt-5.6",
@@ -108,6 +111,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
         },
         "responseMode": "deep",
         "outputContinuation": "2",
+        "responseDelivery": "complete",
         "logFullPrompts": False,
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
@@ -187,21 +191,40 @@ def test_store_reads_v6_boolean_continuation_without_rewriting(
     assert path.read_bytes() == previous
 
 
+def test_store_reads_v7_without_response_delivery_as_stream_without_rewriting(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    previous = json.dumps(
+        {
+            "version": 7,
+            "model": None,
+            "responseMode": "balanced",
+            "outputContinuation": "2",
+            "logFullPrompts": False,
+        },
+        separators=(",", ":"),
+    ).encode()
+    path.write_bytes(previous)
+
+    assert JsonAiSettingsStore(path).get() == settings()
+    assert path.read_bytes() == previous
+
+
 @pytest.mark.parametrize(
     "payload",
     [
         "not-json",
         "{}",
-        '{"version":7,"model":null,"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false,"extra":true}',
-        '{"version":7,"version":7,"model":null,"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":8,"model":null,"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false,"extra":true}',
+        '{"version":8,"version":8,"model":null,"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
         '{"version":3,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","extra":true},"responseMode":"balanced"}',
         '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":7,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
-        '{"version":7,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
-        '{"version":7,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
-        '{"version":7,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"other"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
-        '{"version":7,"model":null,"responseMode":"other","outputContinuation":"2","logFullPrompts":false}',
-        '{"version":7,"model":null,"responseMode":"balanced","outputContinuation":"other","logFullPrompts":false}',
+        '{"version":8,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"other"},"responseMode":"balanced","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":null,"responseMode":"other","outputContinuation":"2","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":null,"responseMode":"balanced","outputContinuation":"other","responseDelivery":"stream","logFullPrompts":false}',
+        '{"version":8,"model":null,"responseMode":"balanced","outputContinuation":"2","responseDelivery":"other","logFullPrompts":false}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -287,19 +310,20 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "outputContinuation": "5", "logFullPrompts": True},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "outputContinuation": "5", "responseDelivery": "complete", "logFullPrompts": True},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "outputContinuation": "2", "logFullPrompts": False},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "logFullPrompts": False}
+    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False}
     assert saved.status_code == 200
     assert saved.json() == {
         "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
         "responseMode": "deep",
         "outputContinuation": "5",
+        "responseDelivery": "complete",
         "logFullPrompts": True,
     }
     assert invalid.status_code == 400
@@ -321,7 +345,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "balanced", "outputContinuation": "2", "logFullPrompts": False},
+            json={"model": None, "responseMode": "balanced", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False},
         )
 
     assert response.status_code == 400
@@ -349,7 +373,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "logFullPrompts": False}
+        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "responseDelivery": "stream", "logFullPrompts": False}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()
