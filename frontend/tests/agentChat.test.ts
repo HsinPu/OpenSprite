@@ -210,7 +210,7 @@ describe("Agent chat SSE contract", () => {
         runId,
         conversationId,
         createdAt: "2026-08-21T08:30:01Z",
-        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768 },
+        data: { providerId: "openrouter", modelId: "openrouter/auto", responseMode: "default", maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 },
       }),
     }));
     source.listeners.get("context.compaction.started")?.(new MessageEvent("context.compaction.started", {
@@ -256,7 +256,7 @@ describe("Agent chat SSE contract", () => {
 
     expect(source.url).toBe(`/api/runs/${runId}/events`);
     expect(events).toHaveLength(5);
-    expect(events[0]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768 } });
+    expect(events[0]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 } });
     expect(events[1]).toMatchObject({ type: "context.compaction.started", data: {} });
     expect(events[3]).toMatchObject({ type: "response.continuation.started", data: { attempt: 1, maxAttempts: 2 } });
     expect(events[4]).toMatchObject({

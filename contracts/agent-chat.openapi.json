@@ -775,6 +775,24 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 131072
+          },
+          "contextTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000000,
+            "description": "Optional conservative estimate of the input Context used by this model request. Omitted on legacy events."
+          },
+          "contextLimitTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000000,
+            "description": "Optional effective Context limit selected for this model request. Omitted on legacy events."
+          },
+          "inputBudgetTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4000000,
+            "description": "Optional safe input budget after output and safety reserves. Omitted on legacy events."
           }
         }
       },

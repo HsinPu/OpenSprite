@@ -227,7 +227,12 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   const data = value.data;
   const safeError = (candidate: unknown) => runError(candidate);
   if (["run.started", "context.compaction.started", "run.cancelled"].includes(expectedType) && !exactKeys(data, [])) throw new AgentChatApiError("malformed_response");
-  if (expectedType === "model.started" && (!exactKeys(data, ["providerId", "modelId", "responseMode", "maxOutputTokens"]) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072)) throw new AgentChatApiError("malformed_response");
+  if (expectedType === "model.started") {
+    const legacyKeys = ["providerId", "modelId", "responseMode", "maxOutputTokens"] as const;
+    const contextKeys = [...legacyKeys, "contextTokens", "contextLimitTokens", "inputBudgetTokens"] as const;
+    if ((!exactKeys(data, legacyKeys) && !exactKeys(data, contextKeys)) || !["openai", "anthropic", "openrouter"].includes(data.providerId as string) || !boundedString(data.modelId, 1, 256) || !["default", "fast", "balanced", "deep"].includes(data.responseMode as string) || !Number.isInteger(data.maxOutputTokens) || (data.maxOutputTokens as number) < 1 || (data.maxOutputTokens as number) > 131_072) throw new AgentChatApiError("malformed_response");
+    if (exactKeys(data, contextKeys) && (!Number.isInteger(data.contextTokens) || (data.contextTokens as number) < 1 || !Number.isInteger(data.contextLimitTokens) || (data.contextLimitTokens as number) < 1 || (data.contextLimitTokens as number) > 4_000_000 || !Number.isInteger(data.inputBudgetTokens) || (data.inputBudgetTokens as number) < 1 || (data.inputBudgetTokens as number) > (data.contextLimitTokens as number) || (data.contextTokens as number) > (data.inputBudgetTokens as number))) throw new AgentChatApiError("malformed_response");
+  }
   if (expectedType === "response.continuation.started" && (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 2 || data.maxAttempts !== 2)) throw new AgentChatApiError("malformed_response");
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.started" && (!exactKeys(data, ["callId", "toolName"]) || !boundedString(data.callId, 1, 128) || !boundedString(data.toolName, 1, 64))) throw new AgentChatApiError("malformed_response");

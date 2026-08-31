@@ -233,7 +233,9 @@ preference in SQLite schema v6. The
 resolved token number is persisted on every `model.started` event and shown in
 the execution record, so later settings changes cannot rewrite historical
 execution behavior. Existing Runs migrate to `auto`; pre-v5 model events record
-the former product limit of 8,192 tokens.
+the former product limit of 8,192 tokens. New `model.started` events also carry
+the conservative input estimate, effective Context limit and safe input budget;
+these fields are optional so older persisted events remain replayable.
 
 Immediately before a real compaction model request, the Agent appends the
 empty-payload semantic event `context.compaction.started`. The browser uses it

@@ -143,6 +143,18 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "responseMode",
         "maxOutputTokens",
     ]
+    assert set(schemas["ModelStartedEventData"]["properties"]) == {
+        "providerId",
+        "modelId",
+        "responseMode",
+        "maxOutputTokens",
+        "contextTokens",
+        "contextLimitTokens",
+        "inputBudgetTokens",
+    }
+    for field in ("contextTokens", "contextLimitTokens", "inputBudgetTokens"):
+        assert schemas["ModelStartedEventData"]["properties"][field]["minimum"] == 1
+        assert schemas["ModelStartedEventData"]["properties"][field]["maximum"] == 4_000_000
     stream = load_contract()["paths"]["/api/runs/{run_id}/events"]["get"]
     assert "Last-Event-ID" in {
         parameter["name"]

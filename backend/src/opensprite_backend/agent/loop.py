@@ -182,12 +182,11 @@ class AgentLoop:
                     self._repository.append_run_event,
                     run_id,
                     RunEventType.MODEL_STARTED,
-                    {
-                        "providerId": run.provider_id,
-                        "modelId": run.model_id,
-                        "responseMode": run.response_mode,
-                        "maxOutputTokens": prepared.budget.output_reserve_tokens,
-                    },
+                    self._model_started_event_data(
+                        run=run,
+                        budget=prepared.budget,
+                        context_tokens=estimated_round_tokens,
+                    ),
                 )
                 request = ModelRequest(
                     provider_id=run.provider_id,
@@ -491,16 +490,16 @@ class AgentLoop:
                     continuation_base = prepared.messages
                     continue
 
+                estimated_round_tokens = self._counter.request(transcript, ())
                 await asyncio.to_thread(
                     self._repository.append_run_event,
                     run.id,
                     RunEventType.MODEL_STARTED,
-                    {
-                        "providerId": run.provider_id,
-                        "modelId": run.model_id,
-                        "responseMode": run.response_mode,
-                        "maxOutputTokens": prepared.budget.output_reserve_tokens,
-                    },
+                    self._model_started_event_data(
+                        run=run,
+                        budget=prepared.budget,
+                        context_tokens=estimated_round_tokens,
+                    ),
                 )
                 request = ModelRequest(
                     provider_id=run.provider_id,
@@ -653,6 +652,23 @@ class AgentLoop:
                 run.id,
                 request_kind,
             )
+
+    @staticmethod
+    def _model_started_event_data(
+        *,
+        run: RunSnapshot,
+        budget: ContextBudgetPlan,
+        context_tokens: int,
+    ) -> dict[str, object]:
+        return {
+            "providerId": run.provider_id,
+            "modelId": run.model_id,
+            "responseMode": run.response_mode,
+            "maxOutputTokens": budget.output_reserve_tokens,
+            "contextTokens": context_tokens,
+            "contextLimitTokens": budget.context_limit_tokens,
+            "inputBudgetTokens": budget.input_budget_tokens,
+        }
 
     def _continuation_transcript(
         self,

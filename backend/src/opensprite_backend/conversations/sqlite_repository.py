@@ -1757,7 +1757,13 @@ class SqliteConversationRepository:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         if event_type is RunEventType.MODEL_STARTED:
-            if keys != {"providerId", "modelId", "responseMode", "maxOutputTokens"}:
+            legacy_keys = {"providerId", "modelId", "responseMode", "maxOutputTokens"}
+            context_keys = legacy_keys | {
+                "contextTokens",
+                "contextLimitTokens",
+                "inputBudgetTokens",
+            }
+            if keys != legacy_keys and keys != context_keys:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             if data["providerId"] not in _PROVIDER_IDS:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
@@ -1775,6 +1781,23 @@ class SqliteConversationRepository:
                 or not 1 <= max_output_tokens <= 131_072
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            if keys == context_keys:
+                context_tokens = data["contextTokens"]
+                context_limit_tokens = data["contextLimitTokens"]
+                input_budget_tokens = data["inputBudgetTokens"]
+                if (
+                    not isinstance(context_tokens, int)
+                    or isinstance(context_tokens, bool)
+                    or context_tokens < 1
+                    or not isinstance(context_limit_tokens, int)
+                    or isinstance(context_limit_tokens, bool)
+                    or not 1 <= context_limit_tokens <= 4_000_000
+                    or not isinstance(input_budget_tokens, int)
+                    or isinstance(input_budget_tokens, bool)
+                    or not 1 <= input_budget_tokens <= context_limit_tokens
+                    or context_tokens > input_budget_tokens
+                ):
+                    raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         if event_type is RunEventType.RESPONSE_CONTINUATION_STARTED:
             if keys != {"attempt", "maxAttempts"}:

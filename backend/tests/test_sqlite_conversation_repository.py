@@ -218,6 +218,41 @@ def test_run_events_deltas_and_completion_are_atomic_visible_state(
     ]
 
 
+def test_model_event_context_usage_is_persisted_and_bounded(tmp_path: Path) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    data = {
+        "providerId": "openrouter",
+        "modelId": "openrouter/auto",
+        "responseMode": "default",
+        "maxOutputTokens": 32_768,
+        "contextTokens": 4_096,
+        "contextLimitTokens": 262_144,
+        "inputBudgetTokens": 196_608,
+    }
+
+    event = store.append_run_event(
+        accepted.run.id,
+        RunEventType.MODEL_STARTED,
+        data,
+    )
+
+    assert event.data == data
+    for invalid in (
+        {**data, "contextTokens": 0},
+        {**data, "contextTokens": 200_000, "inputBudgetTokens": 100},
+        {**data, "contextLimitTokens": 4_000_001},
+    ):
+        with pytest.raises(ConversationStoreError) as captured:
+            store.append_run_event(
+                accepted.run.id,
+                RunEventType.MODEL_STARTED,
+                invalid,
+            )
+        assert captured.value.failure is StoreFailure.INVALID_REQUEST
+
+
 def test_event_payloads_reject_extra_secret_or_uncontracted_fields(
     tmp_path: Path,
 ) -> None:

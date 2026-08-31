@@ -314,6 +314,8 @@ async def test_run_uses_its_snapshotted_output_budget(
         if event.type is RunEventType.MODEL_STARTED
     )
     assert model_event.data["maxOutputTokens"] == 65_536
+    assert 1 <= model_event.data["contextTokens"] <= model_event.data["inputBudgetTokens"]
+    assert model_event.data["contextLimitTokens"] == 131_072
 
 
 @async_test
@@ -697,6 +699,13 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         "toolName": "lookup_note",
         "summary": "找到 3 項工作",
     }
+    model_events = [event for event in events if event.type is RunEventType.MODEL_STARTED]
+    assert len(model_events) == 2
+    assert all(
+        1 <= event.data["contextTokens"] <= event.data["inputBudgetTokens"] <= event.data["contextLimitTokens"]
+        for event in model_events
+    )
+    assert model_events[1].data["contextTokens"] > model_events[0].data["contextTokens"]
     database_bytes = repository.database_file.read_bytes()
     assert b'"query"' not in database_bytes
     assert b'"today"' not in database_bytes
