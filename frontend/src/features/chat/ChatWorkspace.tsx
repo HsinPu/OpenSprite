@@ -201,6 +201,11 @@ export function ChatWorkspace({
     if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(restoreFocus);
     else restoreFocus();
   };
+  const handleExecutionPanelToggle = () => {
+    const nextExpanded = !executionPanelExpanded;
+    if (historical && !nextExpanded) inspection.returnToLatest();
+    setExecutionPanelExpanded(nextExpanded);
+  };
 
   return (
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
@@ -227,7 +232,7 @@ export function ChatWorkspace({
             aria-controls={executionPanelId}
             aria-label={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
             title={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-            onClick={() => setExecutionPanelExpanded((expanded) => !expanded)}
+            onClick={handleExecutionPanelToggle}
           />
         </header>
 

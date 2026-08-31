@@ -414,6 +414,7 @@ describe("live chat workspace", () => {
     const expand = screen.getByRole("button", { name: "展開執行詳情" });
     expect(expand.getAttribute("aria-expanded")).toBe("false");
     expect(body?.hidden).toBe(true);
+    expect(returnToLatest).toHaveBeenCalledOnce();
   });
 
   it("shows a safe historical inspection error and retries without affecting chat", () => {
