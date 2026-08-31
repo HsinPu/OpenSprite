@@ -15,6 +15,7 @@ import {
   type RunEventStreamHandlers,
   type RunSnapshot,
 } from "../../api/agentChat";
+import type { ResponseDelivery } from "../../api/aiSettings";
 import { useI18n } from "../../i18n/I18nProvider";
 
 
@@ -27,6 +28,7 @@ type UseConversationRunOptions = {
   conversationId: string | null;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
+  responseDelivery: ResponseDelivery;
   requestIdFactory?: () => string;
   eventStreamFactory?: (runId: string, handlers: RunEventStreamHandlers) => RunEventStream;
 };
@@ -85,6 +87,7 @@ export function useConversationRun({
   conversationId,
   onConversationAccepted,
   onConversationUpdated,
+  responseDelivery,
   requestIdFactory = defaultRequestId,
   eventStreamFactory = openRunEventStream,
 }: UseConversationRunOptions) {
@@ -103,6 +106,11 @@ export function useConversationRun({
   const resolvedConversationRef = useRef<string | null>(conversationId);
   const seenEventSequencesRef = useRef(new Set<number>());
   const finishingRunsRef = useRef(new Set<string>());
+  const responseDeliveryRef = useRef(responseDelivery);
+
+  useEffect(() => {
+    responseDeliveryRef.current = responseDelivery;
+  }, [responseDelivery]);
 
   useEffect(() => {
     activeRunRef.current = activeRun;
@@ -138,7 +146,7 @@ export function useConversationRun({
       commitRun(run);
       setMessages(persistedMessages(page.messages));
       setNextBeforeSequence(page.nextBeforeSequence);
-      setStreamedText(run.partialText);
+      setStreamedText((current) => run.partialText || current);
       setError(run.error ? agentChatErrorText(new AgentChatApiError(run.error.code), t) : null);
       onConversationUpdated();
       closeStream();
@@ -149,11 +157,12 @@ export function useConversationRun({
     }
   }, [closeStream, commitRun, onConversationUpdated, t]);
 
-  const watchRun = useCallback((runId: string, generation: number, initialText = "") => {
+  const watchRun = useCallback((runId: string, generation: number, initialText = "", delivery: ResponseDelivery = responseDeliveryRef.current) => {
     closeStream();
     seenEventSequencesRef.current = new Set();
     setEvents([]);
-    setStreamedText(initialText);
+    setStreamedText(delivery === "stream" ? initialText : "");
+    let bufferedText = initialText;
     let receivedDelta = false;
     try {
       streamRef.current = eventStreamFactory(runId, {
@@ -164,26 +173,28 @@ export function useConversationRun({
           setEvents((current) => [...current, event].slice(-500));
           if (event.type === "assistant.delta") {
             const text = String(event.data.text);
-            setStreamedText((current) => {
-              const prefix = receivedDelta ? current : "";
-              receivedDelta = true;
-              return prefix + text;
-            });
+            if (!receivedDelta) bufferedText = "";
+            receivedDelta = true;
+            bufferedText += text;
+            if (delivery === "stream") setStreamedText(bufferedText);
           }
           if (event.type === "run.started") {
             updateRun((current) => current ? { ...current, status: "running", startedAt: current.startedAt ?? event.createdAt } : current);
           }
           if (terminalTypes.has(event.type)) {
+            if (delivery === "complete") setStreamedText(bufferedText);
             closeStream();
             updateRun((current) => applyTerminalEvent(current, event));
             void refreshTerminal(runId, event.conversationId, generation);
           }
         },
         onError: (streamError) => {
+          if (delivery === "complete" && bufferedText) setStreamedText(bufferedText);
           if (generationRef.current === generation) setError(agentChatErrorText(streamError, t));
         },
       });
     } catch (streamError) {
+      if (delivery === "complete" && bufferedText) setStreamedText(bufferedText);
       if (generationRef.current === generation) setError(agentChatErrorText(streamError, t));
     }
   }, [closeStream, eventStreamFactory, refreshTerminal, t, updateRun]);
@@ -220,8 +231,8 @@ export function useConversationRun({
         const run = await getRun(latest.runId);
         if (generationRef.current !== generation) return;
         commitRun(run);
-        setStreamedText(run.partialText);
-        watchRun(run.id, generation, run.partialText);
+        setStreamedText(responseDeliveryRef.current === "stream" ? run.partialText : "");
+        watchRun(run.id, generation, run.partialText, responseDeliveryRef.current);
       })
       .catch((nextError: unknown) => {
         if (generationRef.current === generation) setError(agentChatErrorText(nextError, t));
@@ -274,8 +285,8 @@ export function useConversationRun({
       setMessages(persistedMessages(page.messages));
       setNextBeforeSequence(page.nextBeforeSequence);
       commitRun(run);
-      setStreamedText(run.partialText);
-      watchRun(run.id, generation, run.partialText);
+      setStreamedText(responseDeliveryRef.current === "stream" ? run.partialText : "");
+      watchRun(run.id, generation, run.partialText, responseDeliveryRef.current);
       return true;
     } catch (nextError) {
       if (generationRef.current === generation) {

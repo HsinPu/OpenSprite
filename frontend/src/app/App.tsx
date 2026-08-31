@@ -361,6 +361,7 @@ export function App() {
           modelSelection={modelSelection}
           modelChoices={modelChoices}
           modelSelectionSaving={aiSettingsSaving}
+          responseDelivery={responseDelivery}
           timeZone={generalSettings.settings.timeZone}
           sendBehavior={conversationSettings.settings.sendBehavior}
           autoScroll={conversationSettings.settings.autoScroll}

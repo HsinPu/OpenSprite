@@ -7,6 +7,7 @@ import { AgentChatApiError, agentChatErrorText } from "../../api/agentChat";
 import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import type { SendBehavior } from "../../api/conversationSettings";
+import type { ResponseDelivery } from "../../api/aiSettings";
 import { useI18n } from "../../i18n/I18nProvider";
 import { contextBudgetLimit } from "../ai-settings/contextBudget";
 import { formatMessageTime } from "../general-settings/dateTime";
@@ -26,6 +27,7 @@ type ChatWorkspaceProps = {
   modelSelection: ModelSelection | null;
   modelChoices: ReadonlyArray<ModelChoice>;
   modelSelectionSaving: boolean;
+  responseDelivery?: ResponseDelivery;
   timeZone: TimeZoneSetting;
   sendBehavior: SendBehavior;
   autoScroll: boolean;
@@ -69,6 +71,7 @@ export function ChatWorkspace({
   modelSelection,
   modelChoices,
   modelSelectionSaving,
+  responseDelivery = "stream",
   timeZone,
   sendBehavior,
   autoScroll,
@@ -95,6 +98,7 @@ export function ChatWorkspace({
     conversationId,
     onConversationAccepted,
     onConversationUpdated,
+    responseDelivery,
   });
   const inspection = useRunInspection({ conversationId });
   const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : "";
@@ -122,7 +126,10 @@ export function ChatWorkspace({
     && chat.activeRun?.assistantMessageId !== undefined
     && chat.messages.some((message) => message.id === chat.activeRun?.assistantMessageId);
   const showLiveAssistant = chat.isRunning
-    || (chat.activeRun?.status === "completed" && Boolean(liveText) && !hasDurableAssistant);
+    || (chat.activeRun !== null
+      && ["completed", "failed", "cancelled", "interrupted"].includes(chat.activeRun.status)
+      && Boolean(liveText)
+      && !hasDurableAssistant);
   const showTerminalNotice = chat.activeRun !== null && ["failed", "cancelled", "interrupted"].includes(chat.activeRun.status);
   const canSend = Boolean(draft.trim() && modelSelection && !modelSelectionSaving && !chat.loading);
   const assistantRunIds = new Set(chat.messages.filter((message) => message.role === "assistant" && message.runId !== null).map((message) => message.runId));

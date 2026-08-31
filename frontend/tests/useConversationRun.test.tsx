@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgentChatApiError, type RunEvent, type RunEventStream, type RunEventStreamHandlers } from "../src/api/agentChat";
+import type { ResponseDelivery } from "../src/api/aiSettings";
 import { useConversationRun } from "../src/features/chat/useConversationRun";
 import { I18nProvider, useI18n } from "../src/i18n/I18nProvider";
 import type { Locale } from "../src/i18n/catalog";
@@ -67,6 +68,7 @@ function run(status: "running" | "cancelling" | "completed") {
 type HarnessProps = {
   activeConversationId: string | null;
   streamFactory: (runId: string, handlers: RunEventStreamHandlers) => RunEventStream;
+  responseDelivery?: ResponseDelivery;
   onAccepted?: (conversationId: string, firstMessage: string) => void;
   onUpdated?: () => void;
 };
@@ -83,11 +85,12 @@ function LocaleSetter({ locale }: { locale: Locale }) {
   return null;
 }
 
-function Harness({ activeConversationId, streamFactory, onAccepted, onUpdated }: HarnessProps) {
+function Harness({ activeConversationId, streamFactory, responseDelivery = "stream", onAccepted, onUpdated }: HarnessProps) {
   const state = useConversationRun({
     conversationId: activeConversationId,
     onConversationAccepted: onAccepted ?? noop,
     onConversationUpdated: onUpdated ?? noop,
+    responseDelivery,
     requestIdFactory: () => requestId,
     eventStreamFactory: streamFactory,
   });
@@ -170,6 +173,71 @@ describe("useConversationRun", () => {
     await waitFor(() => expect(screen.getByTestId("messages").textContent).toContain("assistant:完成"));
     expect(screen.getByTestId("status").textContent).toBe("completed");
     expect(updated).toHaveBeenCalled();
+  });
+
+  it("buffers deltas and reveals the assembled response in complete mode", async () => {
+    let runReads = 0;
+    let messageReads = 0;
+    const completed = { ...run("completed"), partialText: "一次" };
+    const completedAssistant = { ...assistantMessage, content: "一次" };
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, runId, status: "queued" }), { status: 202 }));
+      if (path === `/api/runs/${runId}`) {
+        runReads += 1;
+        return Promise.resolve(new Response(JSON.stringify(runReads === 1 ? run("running") : completed)));
+      }
+      if (path.includes("/messages")) {
+        messageReads += 1;
+        return Promise.resolve(new Response(JSON.stringify({ messages: messageReads === 1 ? [userMessage] : [userMessage, completedAssistant], nextBeforeSequence: null })));
+      }
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    let handlers: RunEventStreamHandlers | null = null;
+    const streamFactory = vi.fn((_runId: string, nextHandlers: RunEventStreamHandlers) => {
+      handlers = nextHandlers;
+      return { close: vi.fn() };
+    });
+    render(<Harness activeConversationId={null} streamFactory={streamFactory} responseDelivery="complete" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "send" }));
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+    act(() => handlers!.onEvent({ sequence: 3, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "一" } }));
+    act(() => handlers!.onEvent({ sequence: 4, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "次" } }));
+    expect(screen.getByTestId("streamed").textContent).toBe("");
+
+    act(() => handlers!.onEvent({ sequence: 5, type: "run.completed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { assistantMessageId, completionReason: "stop" } }));
+    await waitFor(() => expect(screen.getByTestId("streamed").textContent).toBe("一次"));
+    expect(screen.getByTestId("messages").textContent).toContain("assistant:一次");
+  });
+
+  it("keeps buffered partial text visible when complete mode ends with an error", async () => {
+    let runReads = 0;
+    const terminalError = { code: "provider_unreachable", message: "private", retryable: true } as const;
+    const failed = { ...run("completed"), status: "failed", assistantMessageId: null, completionReason: null, partialText: "部分", error: terminalError };
+    const fetchMock = vi.fn((path: string) => {
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) {
+        runReads += 1;
+        return Promise.resolve(new Response(JSON.stringify(runReads === 1 ? run("running") : failed)));
+      }
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    let handlers: RunEventStreamHandlers | null = null;
+    const streamFactory = vi.fn((_runId: string, nextHandlers: RunEventStreamHandlers) => {
+      handlers = nextHandlers;
+      return { close: vi.fn() };
+    });
+    render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} responseDelivery="complete" />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+
+    act(() => handlers!.onEvent({ sequence: 3, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "部分" } }));
+    expect(screen.getByTestId("streamed").textContent).toBe("");
+    act(() => handlers!.onEvent({ sequence: 4, type: "run.failed", runId, conversationId, createdAt: "2026-08-21T08:30:03Z", data: { error: terminalError } }));
+
+    await waitFor(() => expect(screen.getByTestId("streamed").textContent).toBe("部分"));
+    expect(screen.getByTestId("status").textContent).toBe("failed");
   });
 
   it("requests cancellation and exposes cancelling state", async () => {

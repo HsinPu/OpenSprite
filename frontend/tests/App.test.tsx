@@ -225,7 +225,7 @@ describe("persisted AI settings", () => {
 
   it("hydrates and persists the response mode with the confirmed model", async () => {
     const fetchMock = vi.fn((path: string, init?: RequestInit) => {
-      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false })));
+      if (path === "/api/settings/ai" && !init) return Promise.resolve(new Response(JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "deep", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false })));
       if (path === "/api/providers") return Promise.resolve(new Response(JSON.stringify(connectedOpenAi)));
       if (path === "/api/settings/ai" && init?.method === "PUT") return Promise.resolve(new Response(init.body));
       throw new Error(`unexpected request ${path}`);
@@ -237,13 +237,14 @@ describe("persisted AI settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "AI 模型" }));
     const deep = await screen.findByRole("button", { name: "深入" });
     expect(deep.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).parentElement?.textContent).toContain("一次回答");
     fireEvent.click(screen.getByRole("button", { name: "快速" }));
 
     await waitFor(() => expect(screen.getByRole("button", { name: "快速" }).getAttribute("aria-pressed")).toBe("true"));
     expect(fetchMock).toHaveBeenCalledWith("/api/settings/ai", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "fast", outputContinuation: "2", responseDelivery: "stream", logFullPrompts: false }),
+      body: JSON.stringify({ model: { providerId: "openai", modelId: "gpt-5.6", contextBudget: "256k", outputBudget: "64k" }, responseMode: "fast", outputContinuation: "2", responseDelivery: "complete", logFullPrompts: false }),
     });
   });
 
