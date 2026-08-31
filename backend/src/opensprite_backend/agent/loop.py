@@ -78,7 +78,8 @@ class _ContextPreparationFailed(Exception):
 
 _Result = TypeVar("_Result")
 _LOGGER = logging.getLogger("opensprite.agent.context")
-_MAX_OUTPUT_CONTINUATIONS = 2
+_MAX_UNLIMITED_CONTINUATIONS = 64
+_BOUNDED_CONTINUATIONS = {"1": 1, "2": 2, "3": 3, "5": 5}
 _CONTINUATION_TAIL_TOKENS = 4_096
 _CONTINUATION_INSTRUCTION = (
     "Continue the assistant response from the exact point where it stopped. "
@@ -312,7 +313,7 @@ class AgentLoop:
                             run_id,
                             len(accumulated_text),
                         )
-                        if run.auto_continue_output:
+                        if run.output_continuation != "off":
                             return await self._continue_output(
                                 run=run,
                                 system_prompt=system_prompt,
@@ -446,13 +447,19 @@ class AgentLoop:
         prompt_log_sequence: list[int],
     ) -> RunSnapshot:
         continuation_base = base_transcript
-        for attempt in range(1, _MAX_OUTPUT_CONTINUATIONS + 1):
+        configured_max = (
+            None
+            if run.output_continuation == "unlimited"
+            else _BOUNDED_CONTINUATIONS[run.output_continuation]
+        )
+        attempt_limit = configured_max or _MAX_UNLIMITED_CONTINUATIONS
+        for attempt in range(1, attempt_limit + 1):
             self._raise_if_cancelled(cancellation_event)
             await asyncio.to_thread(
                 self._repository.append_run_event,
                 run.id,
                 RunEventType.RESPONSE_CONTINUATION_STARTED,
-                {"attempt": attempt, "maxAttempts": _MAX_OUTPUT_CONTINUATIONS},
+                {"attempt": attempt, "maxAttempts": configured_max},
             )
             context_retry_used = False
             while True:
@@ -599,6 +606,12 @@ class AgentLoop:
                 if completion.reason is not ModelFinishReason.OUTPUT_LIMIT:
                     return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
                 break
+        if configured_max is None:
+            _LOGGER.warning(
+                "unlimited continuation safety cap reached run_id=%s attempts=%s",
+                run.id,
+                attempt_limit,
+            )
         return await self._complete_partial(
             run.id,
             accumulated_text,

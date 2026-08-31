@@ -15,6 +15,7 @@ import pytest
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import (
     CompletionReason,
+    OutputContinuation,
     PublicRunError,
     RunEventType,
     RunStatus,
@@ -44,7 +45,7 @@ def start(
     message: str = "整理今天的工作",
     context_budget: str = "auto",
     output_budget: str = "auto",
-    auto_continue_output: bool = True,
+    output_continuation: OutputContinuation = "2",
 ):
     return store.start_run(
         conversation_id=conversation_id,
@@ -55,7 +56,7 @@ def start(
         response_mode="default",
         context_budget=context_budget,
         output_budget=output_budget,
-        auto_continue_output=auto_continue_output,
+        output_continuation=output_continuation,
     )
 
 
@@ -90,7 +91,7 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert accepted.run.response_mode == "default"
     assert accepted.run.context_budget == "auto"
     assert accepted.run.output_budget == "auto"
-    assert accepted.run.auto_continue_output is True
+    assert accepted.run.output_continuation == "2"
     assert accepted.run.partial_text == ""
     conversation = store.get_conversation(accepted.conversation.id)
     assert conversation is not None
@@ -110,15 +111,15 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert not paths.conversations_dir.exists()
 
 
-def test_start_snapshots_disabled_auto_continue(tmp_path: Path) -> None:
+def test_start_snapshots_output_continuation_policy(tmp_path: Path) -> None:
     store = repository(tmp_path)
 
-    accepted = start(store, auto_continue_output=False)
+    accepted = start(store, output_continuation="unlimited")
 
-    assert accepted.run.auto_continue_output is False
+    assert accepted.run.output_continuation == "unlimited"
     persisted = store.get_run(accepted.run.id)
     assert persisted is not None
-    assert persisted.auto_continue_output is False
+    assert persisted.output_continuation == "unlimited"
 
 
 def test_client_request_id_replays_exact_request_without_duplicates(
@@ -503,7 +504,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -569,7 +570,7 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
 
 
 def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
@@ -608,7 +609,7 @@ def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
         "completionReason": "stop",
     }
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
 
 
 def test_schema_v4_output_budget_and_model_event_are_upgraded(
@@ -645,17 +646,18 @@ def test_schema_v4_output_budget_and_model_event_are_upgraded(
     model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
     assert model_event.data["maxOutputTokens"] == 8_192
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
 
 
-def test_schema_v5_adds_auto_continue_snapshot_without_losing_run(
+def test_schema_v5_adds_default_continuation_policy_without_losing_run(
     tmp_path: Path,
 ) -> None:
     store = repository(tmp_path)
     accepted = start(store)
     database = store.database_file
     with sqlite3.connect(database) as connection:
-        connection.execute("ALTER TABLE runs DROP COLUMN auto_continue_output")
+        connection.execute("ALTER TABLE runs DROP COLUMN output_continuation")
+        connection.execute("ALTER TABLE runs DROP COLUMN log_full_prompts")
         connection.execute("PRAGMA user_version = 5")
 
     upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
@@ -663,9 +665,42 @@ def test_schema_v5_adds_auto_continue_snapshot_without_losing_run(
     run = upgraded.get_run(accepted.run.id)
 
     assert run is not None
-    assert run.auto_continue_output is True
+    assert run.output_continuation == "2"
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 7
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+
+
+@pytest.mark.parametrize(("enabled", "expected"), [(0, "off"), (1, "2")])
+def test_schema_v7_converts_boolean_continuation_without_losing_run(
+    tmp_path: Path,
+    enabled: int,
+    expected: OutputContinuation,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "ALTER TABLE runs ADD COLUMN auto_continue_output INTEGER NOT NULL "
+            f"DEFAULT {enabled} CHECK(auto_continue_output IN (0, 1))"
+        )
+        connection.execute("ALTER TABLE runs DROP COLUMN output_continuation")
+        connection.execute("PRAGMA user_version = 7")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+    run = upgraded.get_run(accepted.run.id)
+
+    assert run is not None
+    assert run.output_continuation == expected
+    with sqlite3.connect(database) as connection:
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        assert "output_continuation" in columns
+        assert "auto_continue_output" not in columns
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
 
 
 def test_concurrent_starts_on_distinct_conversations_do_not_lose_updates(

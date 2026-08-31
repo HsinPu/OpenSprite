@@ -157,17 +157,26 @@ class ResponseMode(StrEnum):
     DEEP = "deep"
 
 
+class OutputContinuation(StrEnum):
+    OFF = "off"
+    ONE = "1"
+    TWO = "2"
+    THREE = "3"
+    FIVE = "5"
+    UNLIMITED = "unlimited"
+
+
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
-    autoContinueOutput: StrictBool = True
+    outputContinuation: OutputContinuation = OutputContinuation.TWO
     logFullPrompts: StrictBool = False
 
 
 class PutAiSettingsRequest(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
-    autoContinueOutput: StrictBool
+    outputContinuation: OutputContinuation
     logFullPrompts: StrictBool
 
 

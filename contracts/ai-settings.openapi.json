@@ -72,6 +72,7 @@
     "schemas": {
       "ProviderId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]},
       "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
+      "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "unlimited"]},
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,
@@ -94,11 +95,11 @@
       "AiSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["model", "responseMode", "autoContinueOutput", "logFullPrompts"],
+        "required": ["model", "responseMode", "outputContinuation", "logFullPrompts"],
         "properties": {
           "model": {"anyOf": [{"$ref": "#/components/schemas/ModelSelection"}, {"type": "null"}]},
           "responseMode": {"$ref": "#/components/schemas/ResponseMode"},
-          "autoContinueOutput": {"type": "boolean", "description": "Whether output-limited responses may continue automatically for at most two bounded attempts."},
+          "outputContinuation": {"$ref": "#/components/schemas/OutputContinuation"},
           "logFullPrompts": {"type": "boolean", "description": "Whether complete model request messages are written to local per-request Prompt logs."}
         }
       },

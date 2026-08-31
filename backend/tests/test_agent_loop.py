@@ -19,6 +19,7 @@ from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.prompt_logging import FilePromptLogWriter
 from opensprite_backend.conversations.models import (
     CompletionReason,
+    OutputContinuation,
     RunEventType,
     RunStatus,
 )
@@ -130,7 +131,7 @@ def store(tmp_path: Path) -> SqliteConversationRepository:
 def accepted_run(
     repository: SqliteConversationRepository,
     *,
-    auto_continue_output: bool = True,
+    output_continuation: OutputContinuation = "2",
 ):
     return repository.start_run(
         conversation_id=None,
@@ -139,7 +140,7 @@ def accepted_run(
         provider_id="openrouter",
         model_id="openrouter/auto",
         response_mode="default",
-        auto_continue_output=auto_continue_output,
+        output_continuation=output_continuation,
     ).run
 
 
@@ -323,7 +324,7 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
     tmp_path: Path,
 ) -> None:
     repository = store(tmp_path)
-    run = accepted_run(repository, auto_continue_output=False)
+    run = accepted_run(repository, output_continuation="off")
     gateway = ScriptedGateway(
         [
             [
@@ -472,6 +473,110 @@ async def test_output_limit_stops_after_two_continuations(
     assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
     assert result.partial_text == "one two three"
     assert len(gateway.requests) == 3
+
+
+@pytest.mark.parametrize(("policy", "maximum"), [("1", 1), ("3", 3), ("5", 5)])
+@async_test
+async def test_output_limit_uses_the_snapshotted_continuation_limit(
+    tmp_path: Path,
+    policy: OutputContinuation,
+    maximum: int,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository, output_continuation=policy)
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta(f"part {index} "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
+            for index in range(maximum + 1)
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
+    assert len(gateway.requests) == maximum + 1
+    continuation_events = [
+        event.data
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
+    ]
+    assert continuation_events == [
+        {"attempt": attempt, "maxAttempts": maximum}
+        for attempt in range(1, maximum + 1)
+    ]
+
+
+@async_test
+async def test_unlimited_continuation_runs_until_the_model_finishes(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository, output_continuation="unlimited")
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("one "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("two "), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)],
+            [ModelTextDelta("done"), ModelCompleted(ModelFinishReason.FINAL)],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.STOP
+    assert result.partial_text == "one two done"
+    continuation_events = [
+        event.data
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
+    ]
+    assert continuation_events == [
+        {"attempt": 1, "maxAttempts": None},
+        {"attempt": 2, "maxAttempts": None},
+    ]
+
+
+@async_test
+async def test_unlimited_continuation_stops_at_the_backend_safety_cap(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository, output_continuation="unlimited")
+    gateway = ScriptedGateway(
+        [
+            [ModelTextDelta("x"), ModelCompleted(ModelFinishReason.OUTPUT_LIMIT)]
+            for _ in range(65)
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
+    assert len(gateway.requests) == 65
+    continuation_events = [
+        event
+        for event in repository.list_run_events(run.id, after_sequence=0, limit=500)
+        if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
+    ]
+    assert len(continuation_events) == 64
+    assert continuation_events[-1].data == {"attempt": 64, "maxAttempts": None}
 
 
 @async_test

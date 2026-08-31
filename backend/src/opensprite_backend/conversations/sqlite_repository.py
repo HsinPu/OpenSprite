@@ -24,6 +24,7 @@ from .models import (
     Message,
     MessagePage,
     OutputBudget,
+    OutputContinuation,
     MAX_ASSISTANT_CHARS,
     ProviderId,
     PublicRunError,
@@ -38,7 +39,7 @@ from .models import (
 from .repository import ConversationStoreError
 
 
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -56,6 +57,7 @@ _PROVIDER_IDS = {"openai", "anthropic", "openrouter"}
 _RESPONSE_MODES = {"default", "fast", "balanced", "deep"}
 _CONTEXT_BUDGETS = {"auto", "32k", "64k", "128k", "256k", "max"}
 _OUTPUT_BUDGETS = {"auto", "8k", "16k", "32k", "64k", "max"}
+_OUTPUT_CONTINUATIONS = {"off", "1", "2", "3", "5", "unlimited"}
 _PUBLIC_ERROR_CODES = {
     "invalid_request",
     "not_found",
@@ -116,7 +118,7 @@ CREATE TABLE runs (
     response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep')),
     context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
     output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
-    auto_continue_output INTEGER NOT NULL CHECK(auto_continue_output IN (0, 1)),
+    output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', 'unlimited')),
     log_full_prompts INTEGER NOT NULL CHECK(log_full_prompts IN (0, 1)),
     status TEXT NOT NULL CHECK(status IN (
         'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
@@ -177,7 +179,7 @@ ON messages(conversation_id, sequence DESC);
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
-PRAGMA user_version = 7;
+PRAGMA user_version = 8;
 COMMIT;
 """
 
@@ -332,6 +334,83 @@ ALTER TABLE runs ADD COLUMN log_full_prompts INTEGER NOT NULL DEFAULT 0
 CHECK(log_full_prompts IN (0, 1));
 PRAGMA user_version = 7;
 COMMIT;
+"""
+
+_MIGRATE_V7_TO_V8_SQL = """
+PRAGMA foreign_keys = OFF;
+BEGIN IMMEDIATE;
+DROP INDEX one_active_run_per_conversation;
+ALTER TABLE run_events RENAME TO run_events_v7;
+ALTER TABLE runs RENAME TO runs_v7;
+CREATE TABLE runs (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    client_request_id TEXT NOT NULL UNIQUE,
+    request_fingerprint TEXT NOT NULL CHECK(length(request_fingerprint) = 64),
+    user_message_id TEXT NOT NULL REFERENCES messages(id),
+    assistant_message_id TEXT,
+    provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
+    model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
+    response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep')),
+    context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
+    output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
+    output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', 'unlimited')),
+    log_full_prompts INTEGER NOT NULL CHECK(log_full_prompts IN (0, 1)),
+    status TEXT NOT NULL CHECK(status IN (
+        'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
+    )),
+    completion_reason TEXT CHECK(completion_reason IN ('stop', 'output_limit', 'context_limit')),
+    error_code TEXT,
+    error_message TEXT,
+    error_retryable INTEGER CHECK(error_retryable IN (0, 1)),
+    partial_text TEXT NOT NULL DEFAULT '' CHECK(length(partial_text) <= 1048576),
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT,
+    CHECK(
+        (error_code IS NULL AND error_message IS NULL AND error_retryable IS NULL) OR
+        (error_code IS NOT NULL AND error_message IS NOT NULL AND error_retryable IS NOT NULL)
+    )
+) STRICT;
+INSERT INTO runs(
+    id, conversation_id, client_request_id, request_fingerprint,
+    user_message_id, assistant_message_id, provider_id, model_id,
+    response_mode, context_budget, output_budget, output_continuation,
+    log_full_prompts, status, completion_reason, error_code, error_message,
+    error_retryable, partial_text, created_at, started_at, finished_at
+)
+SELECT
+    id, conversation_id, client_request_id, request_fingerprint,
+    user_message_id, assistant_message_id, provider_id, model_id,
+    response_mode, context_budget, output_budget,
+    CASE auto_continue_output WHEN 1 THEN '2' ELSE 'off' END,
+    log_full_prompts, status, completion_reason, error_code, error_message,
+    error_retryable, partial_text, created_at, started_at, finished_at
+FROM runs_v7;
+CREATE TABLE run_events (
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK(sequence >= 1),
+    type TEXT NOT NULL CHECK(type IN (
+        'run.started', 'context.compaction.started', 'model.started',
+        'response.continuation.started',
+        'assistant.delta', 'tool.started', 'tool.completed', 'tool.failed',
+        'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
+    )),
+    payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(run_id, sequence)
+) STRICT;
+INSERT INTO run_events(run_id, sequence, type, payload_json, created_at)
+SELECT run_id, sequence, type, payload_json, created_at
+FROM run_events_v7;
+DROP TABLE run_events_v7;
+DROP TABLE runs_v7;
+CREATE UNIQUE INDEX one_active_run_per_conversation
+ON runs(conversation_id)
+WHERE status IN ('queued', 'running', 'cancelling');
+PRAGMA user_version = 8;
+COMMIT;
+PRAGMA foreign_keys = ON;
 """
 
 
@@ -683,7 +762,7 @@ class SqliteConversationRepository:
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
-        auto_continue_output: bool = True,
+        output_continuation: OutputContinuation = "2",
         log_full_prompts: bool = False,
     ) -> StartRunResult:
         if conversation_id is not None:
@@ -699,7 +778,7 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if output_budget not in _OUTPUT_BUDGETS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-        if not isinstance(auto_continue_output, bool):
+        if output_continuation not in _OUTPUT_CONTINUATIONS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if not isinstance(log_full_prompts, bool):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
@@ -806,7 +885,7 @@ class SqliteConversationRepository:
                     INSERT INTO runs(
                         id, conversation_id, client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
-                        response_mode, context_budget, output_budget, auto_continue_output,
+                        response_mode, context_budget, output_budget, output_continuation,
                         log_full_prompts,
                         status, partial_text, created_at,
                         started_at, finished_at
@@ -823,7 +902,7 @@ class SqliteConversationRepository:
                         response_mode,
                         context_budget,
                         output_budget,
-                        int(auto_continue_output),
+                        output_continuation,
                         int(log_full_prompts),
                         now_text,
                     ),
@@ -1405,6 +1484,9 @@ class SqliteConversationRepository:
                     version = 6
                 if version == 6:
                     connection.executescript(_MIGRATE_V6_TO_V7_SQL)
+                    version = 7
+                if version == 7:
+                    connection.executescript(_MIGRATE_V7_TO_V8_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1581,7 +1663,7 @@ class SqliteConversationRepository:
             response_mode=row["response_mode"],
             context_budget=row["context_budget"],
             output_budget=row["output_budget"],
-            auto_continue_output=bool(row["auto_continue_output"]),
+            output_continuation=row["output_continuation"],
             log_full_prompts=bool(row["log_full_prompts"]),
             status=status,
             error=error,
@@ -1807,8 +1889,16 @@ class SqliteConversationRepository:
             if (
                 not isinstance(attempt, int)
                 or isinstance(attempt, bool)
-                or not 1 <= attempt <= 2
-                or maximum != 2
+                or not 1 <= attempt <= 64
+                or (
+                    maximum is not None
+                    and (
+                        not isinstance(maximum, int)
+                        or isinstance(maximum, bool)
+                        or maximum not in {1, 2, 3, 5}
+                        or attempt > maximum
+                    )
+                )
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

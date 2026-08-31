@@ -5,6 +5,7 @@ import {
   getAiSettings,
   putAiSettings,
   type AiSettings,
+  type OutputContinuation,
   type ResponseMode,
 } from "../../api/aiSettings";
 import type { ProviderSummary } from "../../api/providerConnections";
@@ -21,7 +22,7 @@ export function useAiSettings(
   const { t } = useI18n();
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
-  const [autoContinueOutput, setAutoContinueOutput] = useState(true);
+  const [outputContinuation, setOutputContinuation] = useState<OutputContinuation>("2");
   const [logFullPrompts, setLogFullPrompts] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,7 +39,7 @@ export function useAiSettings(
         if (loadGenerationRef.current !== generation) return;
         setModelSelection(savedSettings.model);
         setResponseMode(savedSettings.responseMode);
-        setAutoContinueOutput(savedSettings.autoContinueOutput);
+        setOutputContinuation(savedSettings.outputContinuation);
         setLogFullPrompts(savedSettings.logFullPrompts);
         setLoaded(true);
         setError(null);
@@ -64,7 +65,7 @@ export function useAiSettings(
           || (saved.model?.contextBudget ?? null) !== (next.model?.contextBudget ?? null)
           || (saved.model?.outputBudget ?? null) !== (next.model?.outputBudget ?? null)
           || saved.responseMode !== next.responseMode
-          || saved.autoContinueOutput !== next.autoContinueOutput) {
+          || saved.outputContinuation !== next.outputContinuation) {
           throw new Error("ai_settings_response_mismatch");
         }
         if (saved.logFullPrompts !== next.logFullPrompts) {
@@ -73,7 +74,7 @@ export function useAiSettings(
         if (saveGenerationRef.current === generation) {
           setModelSelection(saved.model);
           setResponseMode(saved.responseMode);
-          setAutoContinueOutput(saved.autoContinueOutput);
+          setOutputContinuation(saved.outputContinuation);
           setLogFullPrompts(saved.logFullPrompts);
           setError(null);
         }
@@ -91,20 +92,20 @@ export function useAiSettings(
   }, [t]);
 
   const saveModelSelection = useCallback(
-    (next: ModelSelection | null) => save({ model: next, responseMode, autoContinueOutput, logFullPrompts }),
-    [autoContinueOutput, logFullPrompts, responseMode, save],
+    (next: ModelSelection | null) => save({ model: next, responseMode, outputContinuation, logFullPrompts }),
+    [logFullPrompts, outputContinuation, responseMode, save],
   );
   const saveResponseMode = useCallback(
-    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, autoContinueOutput, logFullPrompts }),
-    [autoContinueOutput, logFullPrompts, modelSelection, save],
+    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, outputContinuation, logFullPrompts }),
+    [logFullPrompts, modelSelection, outputContinuation, save],
   );
-  const saveAutoContinueOutput = useCallback(
-    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput: next, logFullPrompts }),
+  const saveOutputContinuation = useCallback(
+    (next: OutputContinuation) => save({ model: modelSelection, responseMode, outputContinuation: next, logFullPrompts }),
     [logFullPrompts, modelSelection, responseMode, save],
   );
   const saveLogFullPrompts = useCallback(
-    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput, logFullPrompts: next }),
-    [autoContinueOutput, modelSelection, responseMode, save],
+    (next: boolean) => save({ model: modelSelection, responseMode, outputContinuation, logFullPrompts: next }),
+    [modelSelection, outputContinuation, responseMode, save],
   );
 
   useEffect(() => {
@@ -126,13 +127,13 @@ export function useAiSettings(
   return {
     modelSelection,
     responseMode,
-    autoContinueOutput,
+    outputContinuation,
     logFullPrompts,
     saving,
     error,
     saveModelSelection,
     saveResponseMode,
-    saveAutoContinueOutput,
+    saveOutputContinuation,
     saveLogFullPrompts,
   };
 }

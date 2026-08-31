@@ -15,6 +15,7 @@ from .models import (
     Message,
     MessagePage,
     OutputBudget,
+    OutputContinuation,
     ProviderId,
     PublicRunError,
     ResponseMode,
@@ -76,7 +77,7 @@ class ConversationRepository(Protocol):
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
-        auto_continue_output: bool = True,
+        output_continuation: OutputContinuation = "2",
         log_full_prompts: bool = False,
     ) -> StartRunResult: ...
 

@@ -26,6 +26,7 @@ from opensprite_backend.models import (
     ProviderStatus,
     ProviderSummary,
     ResponseMode,
+    OutputContinuation,
 )
 from opensprite_backend.provider_connections import ProviderConnectionError
 from opensprite_backend.runtime import create_system_app, create_system_runtime
@@ -44,12 +45,12 @@ def settings(
     *,
     model: ModelSelection | None = None,
     response_mode: ResponseMode = ResponseMode.BALANCED,
-    auto_continue_output: bool = True,
+    output_continuation: OutputContinuation = OutputContinuation.TWO,
 ) -> AiSettings:
     return AiSettings(
         model=model,
         responseMode=response_mode,
-        autoContinueOutput=auto_continue_output,
+        outputContinuation=output_continuation,
     )
 
 
@@ -91,14 +92,14 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAiSettingsStore(paths.settings_file)
 
-    assert store.get() == AiSettings(model=None, responseMode="default", autoContinueOutput=True)
+    assert store.get() == AiSettings(model=None, responseMode="default", outputContinuation="2")
     assert not paths.home.exists()
     saved = settings(model=selection(), response_mode=ResponseMode.DEEP)
     store.set(saved)
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 6,
+        "version": 7,
         "model": {
             "providerId": "openai",
             "modelId": "gpt-5.6",
@@ -106,7 +107,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
             "outputBudget": "auto",
         },
         "responseMode": "deep",
-        "autoContinueOutput": True,
+        "outputContinuation": "2",
         "logFullPrompts": False,
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
@@ -161,20 +162,46 @@ def test_store_reads_v4_as_auto_continue_without_rewriting(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize(
+    ("enabled", "expected"),
+    [(True, OutputContinuation.TWO), (False, OutputContinuation.OFF)],
+)
+def test_store_reads_v6_boolean_continuation_without_rewriting(
+    tmp_path: Path,
+    enabled: bool,
+    expected: OutputContinuation,
+) -> None:
+    path = tmp_path / "settings.json"
+    previous = json.dumps(
+        {
+            "version": 6,
+            "model": None,
+            "responseMode": "balanced",
+            "autoContinueOutput": enabled,
+            "logFullPrompts": False,
+        },
+        separators=(",", ":"),
+    ).encode()
+    path.write_bytes(previous)
+
+    assert JsonAiSettingsStore(path).get() == settings(output_continuation=expected)
+    assert path.read_bytes() == previous
+
+
+@pytest.mark.parametrize(
     "payload",
     [
         "not-json",
         "{}",
-        '{"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":true,"extra":true}',
-        '{"version":5,"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":true}',
+        '{"version":7,"model":null,"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false,"extra":true}',
+        '{"version":7,"version":7,"model":null,"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
         '{"version":3,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","extra":true},"responseMode":"balanced"}',
         '{"version":1,"defaultModel":{"providerId":"openai","modelId":"gpt-5.6"}}',
-        '{"version":5,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
-        '{"version":5,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
-        '{"version":5,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other","outputBudget":"auto"},"responseMode":"balanced","autoContinueOutput":true}',
-        '{"version":5,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"other"},"responseMode":"balanced","autoContinueOutput":true}',
-        '{"version":5,"model":null,"responseMode":"other","autoContinueOutput":true}',
-        '{"version":5,"model":null,"responseMode":"balanced","autoContinueOutput":"true"}',
+        '{"version":7,"model":{"providerId":"other","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":7,"model":{"providerId":"openai","modelId":"   ","contextBudget":"auto","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":7,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"other","outputBudget":"auto"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":7,"model":{"providerId":"openai","modelId":"gpt-5.6","contextBudget":"auto","outputBudget":"other"},"responseMode":"balanced","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":7,"model":null,"responseMode":"other","outputContinuation":"2","logFullPrompts":false}',
+        '{"version":7,"model":null,"responseMode":"balanced","outputContinuation":"other","logFullPrompts":false}',
     ],
 )
 def test_store_rejects_malformed_or_noncanonical_json(
@@ -260,19 +287,19 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "autoContinueOutput": False, "logFullPrompts": True},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "outputContinuation": "5", "logFullPrompts": True},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "autoContinueOutput": True, "logFullPrompts": False},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "outputContinuation": "2", "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True, "logFullPrompts": False}
+    assert initial.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "logFullPrompts": False}
     assert saved.status_code == 200
     assert saved.json() == {
         "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
         "responseMode": "deep",
-        "autoContinueOutput": False,
+        "outputContinuation": "5",
         "logFullPrompts": True,
     }
     assert invalid.status_code == 400
@@ -294,7 +321,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "balanced", "autoContinueOutput": True, "logFullPrompts": False},
+            json={"model": None, "responseMode": "balanced", "outputContinuation": "2", "logFullPrompts": False},
         )
 
     assert response.status_code == 400
@@ -322,7 +349,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True, "logFullPrompts": False}
+        assert response.json() == {"model": None, "responseMode": "default", "outputContinuation": "2", "logFullPrompts": False}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()

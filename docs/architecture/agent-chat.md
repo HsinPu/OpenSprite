@@ -240,8 +240,9 @@ the capability boundary uses a Context-bounded 32K fallback on both backend and
 frontend. Explicit model capability always wins. Provider truncation still
 flows through the durable `output_limit` completion path.
 
-Each Run snapshots the requested output budget and automatic-continuation
-preference in SQLite schema v6. The
+Each Run snapshots the requested output budget and output-continuation policy.
+SQLite schema v8 converts the former boolean to `2` or `off` while preserving
+Messages, Runs and events. The
 resolved token number is persisted on every `model.started` event and shown in
 the execution record, so later settings changes cannot rewrite historical
 execution behavior. Existing Runs migrate to `auto`; pre-v5 model events record
@@ -262,8 +263,11 @@ Run manager makes one fail-closed terminal transition with a safe internal
 error; it does not silently discard the task while leaving an active Run.
 
 Automatic continuation is owned by the backend Agent loop, not by the browser.
-It defaults on, is limited to two attempts, disables tools, and adds no
-synthetic user Message. Each attempt records `response.continuation.started`.
+Each Run snapshots `off`, 1, 2, 3, 5, or `unlimited`; the default is 2. The
+unlimited policy still stops at 64 continuation requests, the assistant size
+bound, cancellation, Context exhaustion, invalid output, or Provider failure.
+Continuation disables tools and adds no synthetic user Message. Each attempt
+records `response.continuation.started`; `maxAttempts` is null for unlimited.
 The continuation request retains the original transcript plus at most 4K
 estimated tokens from the current assistant tail. If that cannot fit, the loop
 may compact older conversation history once before the attempt. A remaining

@@ -261,7 +261,7 @@ class AgentChatService:
                 response_mode=settings.responseMode.value,
                 context_budget=settings.model.context_budget,
                 output_budget=settings.model.output_budget,
-                auto_continue_output=settings.autoContinueOutput,
+                output_continuation=settings.outputContinuation.value,
                 log_full_prompts=settings.logFullPrompts,
             )
         except ConversationStoreError as error:
