@@ -86,6 +86,7 @@ const outputContinuationLabelKeys: Record<OutputContinuation, MessageKey> = {
   "5": "models.outputContinuation.five",
   unlimited: "models.outputContinuation.unlimited",
 };
+const outputContinuationValues: readonly OutputContinuation[] = ["off", "1", "2", "3", "5", "unlimited"];
 
 type ProviderFeedback = { message?: string; error?: string };
 type ProviderOperation = Partial<Record<ProviderId, number>>;
@@ -308,7 +309,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
   }, [aiSettingsSaving, connectedProviders, modelSelection, openRouterModelLoadStatus, openRouterModels, providers, requestSelection, selectedModelIsAvailable, selectedProvider]);
 
   const getSettingsPopupContainer = () => modalContainer ?? document.body;
-  const outputContinuationOptions = (Object.keys(outputContinuationLabelKeys) as OutputContinuation[]).map((value) => ({
+  const outputContinuationOptions = outputContinuationValues.map((value) => ({
     value,
     label: t(outputContinuationLabelKeys[value]),
   }));
