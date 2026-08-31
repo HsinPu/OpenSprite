@@ -17,6 +17,7 @@ import {
 } from "../../api/agentChat";
 import type { ResponseDelivery } from "../../api/aiSettings";
 import { useI18n } from "../../i18n/I18nProvider";
+import { appendEventPreservingContextUsage } from "./contextUsage";
 
 
 export type DisplayMessage = Pick<ChatMessage, "id" | "role" | "content" | "createdAt"> & {
@@ -170,7 +171,7 @@ export function useConversationRun({
           if (generationRef.current !== generation || seenEventSequencesRef.current.has(event.sequence)) return;
           seenEventSequencesRef.current.add(event.sequence);
           setError(null);
-          setEvents((current) => [...current, event].slice(-500));
+          setEvents((current) => appendEventPreservingContextUsage(current, event));
           if (event.type === "assistant.delta") {
             const text = String(event.data.text);
             if (!receivedDelta) bufferedText = "";

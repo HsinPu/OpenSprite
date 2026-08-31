@@ -1,43 +1,15 @@
-import type { ContextUsage, RunEvent } from "../../api/agentChat";
+import type { ContextUsage } from "../../api/agentChat";
 import { useI18n } from "../../i18n/I18nProvider";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
+import { contextUsageFromEvents } from "./contextUsage";
+
+export { contextUsageFromEvent, contextUsageFromEvents, appendEventPreservingContextUsage } from "./contextUsage";
 
 type ContextUsageIndicatorProps = {
   usage: ContextUsage | null;
   fallbackLimitTokens: number | null;
   compacting?: boolean;
 };
-
-const isInteger = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value);
-
-export function contextUsageFromEvents(events: ReadonlyArray<RunEvent>): ContextUsage | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.type !== "model.started") continue;
-    const { providerId, modelId, contextTokens, contextLimitTokens, inputBudgetTokens } = event.data;
-    if (
-      (providerId !== "openai" && providerId !== "anthropic" && providerId !== "openrouter")
-      || typeof modelId !== "string"
-      || !modelId
-      || !isInteger(contextTokens)
-      || !isInteger(contextLimitTokens)
-      || !isInteger(inputBudgetTokens)
-      || contextTokens < 1
-      || contextLimitTokens < 1
-      || inputBudgetTokens < 1
-      || contextTokens > inputBudgetTokens
-      || inputBudgetTokens > contextLimitTokens
-    ) continue;
-    return {
-      providerId,
-      modelId,
-      contextTokens,
-      contextLimitTokens,
-      inputBudgetTokens,
-    };
-  }
-  return null;
-}
 
 export function ContextUsageIndicator({ usage, fallbackLimitTokens, compacting = false }: ContextUsageIndicatorProps) {
   const { t } = useI18n();

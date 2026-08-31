@@ -11,6 +11,7 @@ import {
   type RunSnapshot,
 } from "../../api/agentChat";
 import { useI18n } from "../../i18n/I18nProvider";
+import { appendEventPreservingContextUsage } from "./contextUsage";
 
 type UseRunInspectionOptions = {
   conversationId: string | null;
@@ -90,7 +91,7 @@ export function useRunInspection({
         onEvent: (event) => {
           if (generationRef.current !== generation || seenSequencesRef.current.has(event.sequence)) return;
           seenSequencesRef.current.add(event.sequence);
-          setEvents((current) => [...current, event].slice(-500));
+          setEvents((current) => appendEventPreservingContextUsage(current, event));
           if (terminalEventTypes.has(event.type)) {
             terminalReceived = true;
             closeStream();

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { ContextUsage, RunEvent } from "../src/api/agentChat";
-import { ContextUsageIndicator, contextUsageFromEvents } from "../src/features/chat/ContextUsageIndicator";
+import { ContextUsageIndicator, appendEventPreservingContextUsage, contextUsageFromEvents } from "../src/features/chat/ContextUsageIndicator";
 
 const usage: ContextUsage = {
   providerId: "openrouter",
@@ -36,6 +36,25 @@ describe("context usage indicator", () => {
     expect(indicator.textContent).toContain("Context — / 256K");
     expect(indicator.getAttribute("aria-label")).toContain("256K");
     expect(indicator.className).toContain("is-unavailable");
+  });
+
+  it("preserves the latest valid context event when the visible event window is full", () => {
+    const first = event({ providerId: usage.providerId, modelId: usage.modelId, contextTokens: usage.contextTokens, contextLimitTokens: usage.contextLimitTokens, inputBudgetTokens: usage.inputBudgetTokens });
+    const filled = Array.from({ length: 500 }, (_, index): RunEvent => ({
+      sequence: index + 2,
+      type: "assistant.delta",
+      runId: first.runId,
+      conversationId: first.conversationId,
+      createdAt: first.createdAt,
+      data: { text: "x" },
+    }));
+
+    const retained = appendEventPreservingContextUsage([first, ...filled.slice(0, 499)], filled[499]!);
+
+    expect(retained).toHaveLength(500);
+    expect(contextUsageFromEvents(retained)).toEqual(usage);
+    expect(retained[0]?.sequence).toBe(first.sequence);
+    expect(retained.at(-1)?.sequence).toBe(501);
   });
 
   it("marks the indicator while Context is being compacted", () => {
