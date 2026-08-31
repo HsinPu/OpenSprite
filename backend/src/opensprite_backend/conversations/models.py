@@ -114,6 +114,7 @@ class RunSnapshot:
     context_budget: ContextBudget = "auto"
     output_budget: OutputBudget = "auto"
     auto_continue_output: bool = True
+    log_full_prompts: bool = False
     completion_reason: CompletionReason | None = None
 
 

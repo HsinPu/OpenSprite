@@ -22,6 +22,7 @@ export function useAiSettings(
   const [modelSelection, setModelSelection] = useState<ModelSelection | null>(null);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [autoContinueOutput, setAutoContinueOutput] = useState(true);
+  const [logFullPrompts, setLogFullPrompts] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function useAiSettings(
         setModelSelection(savedSettings.model);
         setResponseMode(savedSettings.responseMode);
         setAutoContinueOutput(savedSettings.autoContinueOutput);
+        setLogFullPrompts(savedSettings.logFullPrompts);
         setLoaded(true);
         setError(null);
       })
@@ -65,10 +67,14 @@ export function useAiSettings(
           || saved.autoContinueOutput !== next.autoContinueOutput) {
           throw new Error("ai_settings_response_mismatch");
         }
+        if (saved.logFullPrompts !== next.logFullPrompts) {
+          throw new Error("ai_settings_response_mismatch");
+        }
         if (saveGenerationRef.current === generation) {
           setModelSelection(saved.model);
           setResponseMode(saved.responseMode);
           setAutoContinueOutput(saved.autoContinueOutput);
+          setLogFullPrompts(saved.logFullPrompts);
           setError(null);
         }
         return null;
@@ -85,16 +91,20 @@ export function useAiSettings(
   }, [t]);
 
   const saveModelSelection = useCallback(
-    (next: ModelSelection | null) => save({ model: next, responseMode, autoContinueOutput }),
-    [autoContinueOutput, responseMode, save],
+    (next: ModelSelection | null) => save({ model: next, responseMode, autoContinueOutput, logFullPrompts }),
+    [autoContinueOutput, logFullPrompts, responseMode, save],
   );
   const saveResponseMode = useCallback(
-    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, autoContinueOutput }),
-    [autoContinueOutput, modelSelection, save],
+    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, autoContinueOutput, logFullPrompts }),
+    [autoContinueOutput, logFullPrompts, modelSelection, save],
   );
   const saveAutoContinueOutput = useCallback(
-    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput: next }),
-    [modelSelection, responseMode, save],
+    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput: next, logFullPrompts }),
+    [logFullPrompts, modelSelection, responseMode, save],
+  );
+  const saveLogFullPrompts = useCallback(
+    (next: boolean) => save({ model: modelSelection, responseMode, autoContinueOutput, logFullPrompts: next }),
+    [autoContinueOutput, modelSelection, responseMode, save],
   );
 
   useEffect(() => {
@@ -117,10 +127,12 @@ export function useAiSettings(
     modelSelection,
     responseMode,
     autoContinueOutput,
+    logFullPrompts,
     saving,
     error,
     saveModelSelection,
     saveResponseMode,
     saveAutoContinueOutput,
+    saveLogFullPrompts,
   };
 }

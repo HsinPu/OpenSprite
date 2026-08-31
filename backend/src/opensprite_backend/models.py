@@ -161,12 +161,14 @@ class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     autoContinueOutput: StrictBool = True
+    logFullPrompts: StrictBool = False
 
 
 class PutAiSettingsRequest(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
     autoContinueOutput: StrictBool
+    logFullPrompts: StrictBool
 
 
 class GeneralSettings(ContractModel):

@@ -262,6 +262,7 @@ class AgentChatService:
                 context_budget=settings.model.context_budget,
                 output_budget=settings.model.output_budget,
                 auto_continue_output=settings.autoContinueOutput,
+                log_full_prompts=settings.logFullPrompts,
             )
         except ConversationStoreError as error:
             raise _store_error(error) from error

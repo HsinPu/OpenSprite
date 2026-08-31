@@ -31,11 +31,13 @@ type SettingsPageProps = {
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   autoContinueOutput: boolean;
+  logFullPrompts: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   onAutoContinueOutputChange: (enabled: boolean) => Promise<string | null>;
+  onLogFullPromptsChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
   conversationSettings: ConversationSettingsController;
@@ -83,11 +85,13 @@ type ModelsSettingsProps = {
   modelSelection: ModelSelection | null;
   responseMode: ResponseMode;
   autoContinueOutput: boolean;
+  logFullPrompts: boolean;
   aiSettingsSaving: boolean;
   aiSettingsError: string | null;
   onModelSelectionChange: (selection: ModelSelection | null) => Promise<string | null>;
   onResponseModeChange: (responseMode: ResponseMode) => Promise<string | null>;
   onAutoContinueOutputChange: (enabled: boolean) => Promise<string | null>;
+  onLogFullPromptsChange: (enabled: boolean) => Promise<string | null>;
   providerCatalog: ProviderCatalogController;
   onProviderModalChange?: (open: boolean) => void;
   modalContainer: HTMLElement | null;
@@ -155,7 +159,7 @@ function ConnectionModal({ provider, container, onCancel, onSubmit }: { provider
   );
 }
 
-function ModelsSettings({ modelSelection, responseMode, autoContinueOutput, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
+function ModelsSettings({ modelSelection, responseMode, autoContinueOutput, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, onLogFullPromptsChange, providerCatalog, onProviderModalChange, modalContainer }: ModelsSettingsProps) {
   const { t } = useI18n();
   const {
     providers,
@@ -373,6 +377,7 @@ function ModelsSettings({ modelSelection, responseMode, autoContinueOutput, aiSe
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
         <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.autoContinueOutput")}</span><span className="settings-control-description">{t("models.autoContinueOutputDescription")}</span></span><Switch aria-label={t("models.autoContinueOutput")} checked={autoContinueOutput} disabled={aiSettingsSaving} onChange={(enabled) => void onAutoContinueOutputChange(enabled)} /></div>
+        <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.logFullPrompts")}</span><span className="settings-control-description">{t("models.logFullPromptsDescription")}</span></span><Switch aria-label={t("models.logFullPrompts")} checked={logFullPrompts} disabled={aiSettingsSaving} onChange={(enabled) => void onLogFullPromptsChange(enabled)} /></div>
         <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
         <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />
       </SettingsCard>
@@ -381,7 +386,7 @@ function ModelsSettings({ modelSelection, responseMode, autoContinueOutput, aiSe
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, autoContinueOutput, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, autoContinueOutput, logFullPrompts, aiSettingsSaving, aiSettingsError, onModelSelectionChange, onResponseModeChange, onAutoContinueOutputChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
   const wasSavingRef = useRef(false);
@@ -415,7 +420,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} autoContinueOutput={autoContinueOutput} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onAutoContinueOutputChange={onAutoContinueOutputChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} autoContinueOutput={autoContinueOutput} logFullPrompts={logFullPrompts} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onAutoContinueOutputChange={onAutoContinueOutputChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>

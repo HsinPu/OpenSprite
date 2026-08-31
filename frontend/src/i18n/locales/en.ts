@@ -201,6 +201,8 @@ export const enMessages = {
   "models.outputSummary": "Model output maximum: {maximum} · Current maximum: {effective}",
   "models.autoContinueOutput": "Continue long responses automatically",
   "models.autoContinueOutputDescription": "Continue up to 2 times when a response reaches its output limit",
+  "models.logFullPrompts": "Log full model prompts",
+  "models.logFullPromptsDescription": "Save the System Prompt, user message and included context sent to each model request for debugging",
   "models.autoModel": "Automatically choose an available model",
   "models.autoModelDescription": "Model routing and failover will be available later",
   "models.showModelName": "Show model name",

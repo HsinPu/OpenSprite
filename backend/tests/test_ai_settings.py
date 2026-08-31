@@ -98,7 +98,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
 
     assert store.get() == saved
     assert json.loads(paths.settings_file.read_text(encoding="utf-8")) == {
-        "version": 5,
+        "version": 6,
         "model": {
             "providerId": "openai",
             "modelId": "gpt-5.6",
@@ -107,6 +107,7 @@ def test_store_round_trip_and_lazy_default_read(tmp_path: Path) -> None:
         },
         "responseMode": "deep",
         "autoContinueOutput": True,
+        "logFullPrompts": False,
     }
     assert sorted(path.relative_to(paths.home).as_posix() for path in paths.home.rglob("*")) == [
         "config",
@@ -259,19 +260,20 @@ def test_api_routes_return_ai_settings_and_map_errors(tmp_path: Path) -> None:
         initial = client.get("/api/settings/ai")
         saved = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "autoContinueOutput": False},
+            json={"model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"}, "responseMode": "deep", "autoContinueOutput": False, "logFullPrompts": True},
         )
         invalid = client.put(
             "/api/settings/ai",
-            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "autoContinueOutput": True},
+            json={"model": {"providerId": "openai", "modelId": "   ", "contextBudget": "auto", "outputBudget": "auto"}, "responseMode": "deep", "autoContinueOutput": True, "logFullPrompts": False},
         )
 
-    assert initial.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True}
+    assert initial.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True, "logFullPrompts": False}
     assert saved.status_code == 200
     assert saved.json() == {
         "model": {"providerId": "openai", "modelId": "gpt-5.6", "contextBudget": "128k", "outputBudget": "32k"},
         "responseMode": "deep",
         "autoContinueOutput": False,
+        "logFullPrompts": True,
     }
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "invalid_request"
@@ -292,7 +294,7 @@ def test_same_origin_protection_applies_to_ai_settings_put(tmp_path: Path) -> No
         response = client.put(
             "/api/settings/ai",
             headers={"Origin": "http://evil.example"},
-            json={"model": None, "responseMode": "balanced", "autoContinueOutput": True},
+            json={"model": None, "responseMode": "balanced", "autoContinueOutput": True, "logFullPrompts": False},
         )
 
     assert response.status_code == 400
@@ -320,7 +322,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")
         assert response.status_code == 200
-        assert response.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True}
+        assert response.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True, "logFullPrompts": False}
 
     assert paths.backend_logs_dir.is_dir()
     assert not paths.config_dir.exists()

@@ -77,6 +77,7 @@ class ConversationRepository(Protocol):
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
         auto_continue_output: bool = True,
+        log_full_prompts: bool = False,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(

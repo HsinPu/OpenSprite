@@ -65,9 +65,10 @@ Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
 
-`config/settings.json` is a strict schema-v5, non-secret file containing one
+`config/settings.json` is a strict schema-v6, non-secret file containing one
 nullable `model` (`providerId`, `modelId`, `contextBudget`, and `outputBudget`)
-plus `responseMode` and the `autoContinueOutput` boolean:
+plus `responseMode`, the `autoContinueOutput` boolean and the opt-in
+`logFullPrompts` boolean:
 `default`, `fast`, `balanced`, or `deep`. `default` means future inference omits
 the Provider reasoning-strength parameter. It never contains a display label, API key, or
 provider model catalog. Schema-v3 is read with `outputBudget: auto` and
@@ -103,8 +104,8 @@ successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns Conversation, visible Message, Run, append-only
 conversation compaction, and safe semantic Run-event tables described by
-`agent-chat.md`. SQLite schema v6 snapshots each Run's requested output budget
-and automatic-continuation preference
+`agent-chat.md`. SQLite schema v7 snapshots each Run's requested output budget,
+automatic-continuation preference and full-Prompt logging preference
 and stores the resolved maximum in its `model.started` event. Empty reads,
 backend import, and service startup do not create `data/` or the database.
 Conversation and Run identifiers are backend-generated UUIDs rather than values
@@ -118,6 +119,10 @@ Runtime startup creates `logs/backend/<local-date>/backend.log`. The centralized
 handler rotates at 10 MiB with two same-day backups, retains 14 days, redacts
 credential-like text and records safe traceback diagnostics. System Prompt logs
 remain isolated under `logs/system-prompts` and are never mixed into runtime logs.
+Opt-in full model-request receipts use `logs/prompts/<local-date>/<run-id>/` and
+are controlled by the AI setting `logFullPrompts`; they are plaintext diagnostic
+records and may contain user-provided sensitive content, so the directory and
+files use the same local protection and bounded retention policy.
 
 This rebuild is new-install-only. It does not scan, migrate, import, or fall back
 to any earlier application-data location.

@@ -205,6 +205,8 @@ export const zhTWMessages = {
   "models.outputSummary": "模型輸出上限：{maximum} · 本次最高：{effective}",
   "models.autoContinueOutput": "自動續接過長回覆",
   "models.autoContinueOutputDescription": "模型達到單次輸出上限時自動接續產生，最多 2 次",
+  "models.logFullPrompts": "記錄完整送出 Prompt",
+  "models.logFullPromptsDescription": "保存每次送給模型的 System Prompt、使用者訊息與已帶入內容，方便除錯",
   "models.autoModel": "自動選擇可用模型",
   "models.autoModelDescription": "模型路由與失效切換將在後續版本提供",
   "models.showModelName": "顯示模型名稱",

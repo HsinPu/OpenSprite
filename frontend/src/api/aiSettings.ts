@@ -16,6 +16,7 @@ export type AiSettings = {
   model: PersistedModelSelection | null;
   responseMode: ResponseMode;
   autoContinueOutput: boolean;
+  logFullPrompts: boolean;
 };
 
 export type AiSettingsErrorCode = "invalid_request" | "not_connected" | "credential_store_unavailable" | "settings_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
@@ -44,10 +45,10 @@ function model(value: unknown): PersistedModelSelection | null {
 }
 
 function responseBody(value: unknown): AiSettings {
-  if (!record(value) || !exactKeys(value, ["model", "responseMode", "autoContinueOutput"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.autoContinueOutput !== "boolean") {
+  if (!record(value) || !exactKeys(value, ["model", "responseMode", "autoContinueOutput", "logFullPrompts"]) || typeof value.responseMode !== "string" || !responseModes.includes(value.responseMode as ResponseMode) || typeof value.autoContinueOutput !== "boolean" || typeof value.logFullPrompts !== "boolean") {
     throw new AiSettingsApiError("malformed_response");
   }
-  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, autoContinueOutput: value.autoContinueOutput };
+  return { model: model(value.model), responseMode: value.responseMode as ResponseMode, autoContinueOutput: value.autoContinueOutput, logFullPrompts: value.logFullPrompts };
 }
 
 function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorCode {

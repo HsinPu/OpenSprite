@@ -16,6 +16,7 @@ from context_test_support import TestCapabilityResolver
 
 from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.app_paths import build_app_paths
+from opensprite_backend.prompt_logging import FilePromptLogWriter
 from opensprite_backend.conversations.models import (
     CompletionReason,
     RunEventType,
@@ -300,6 +301,41 @@ async def test_output_limit_persists_partial_text_as_visible_answer(
         "assistantMessageId": result.assistant_message_id,
         "completionReason": "output_limit",
     }
+
+
+@async_test
+async def test_enabled_prompt_logging_records_the_exact_model_messages(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    repository = SqliteConversationRepository(paths.database_file)
+    run = repository.start_run(
+        conversation_id=None,
+        client_request_id=str(uuid4()),
+        message="請檢查這次送出的內容",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        log_full_prompts=True,
+    ).run
+    loop = AgentLoop(
+        repository=repository,
+        gateway=ScriptedGateway([[ModelTextDelta("收到"), ModelCompleted(ModelFinishReason.FINAL)]]),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+        system_prompt_provider=RecordingSystemPromptProvider("system prompt for test"),
+        prompt_log_writer=FilePromptLogWriter(paths),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    files = sorted(paths.prompt_logs_dir.rglob("*.md"))
+    assert len(files) == 1
+    content = files[0].read_text(encoding="utf-8")
+    assert "system prompt for test" in content
+    assert "請檢查這次送出的內容" in content
+    assert "收到" not in content
 
 
 @async_test

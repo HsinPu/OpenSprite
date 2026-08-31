@@ -210,6 +210,15 @@ Safe structured logs contain only limits, estimated or reported token counts,
 message counts and compaction coverage; they never contain prompt or Message
 content.
 
+When `logFullPrompts` is explicitly enabled in AI Settings, the Agent writes a
+separate immutable request receipt before each main or continuation model call
+under `logs/prompts/<local-date>/<run-id>/`. It contains the exact provider-neutral
+messages sent at that boundary, including the rendered System Prompt, user
+message, included history/summary, continuation tail and tool results. This
+deliberate diagnostic log is separate from `backend.log`, is size-bounded and
+owner-protected; it is disabled by default and never includes credentials or
+the model response.
+
 When OpenRouter omits `max_completion_tokens` for router-style model aliases,
 the capability boundary uses a Context-bounded 32K fallback on both backend and
 frontend. Explicit model capability always wins. Provider truncation still

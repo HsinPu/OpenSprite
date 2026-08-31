@@ -201,6 +201,8 @@ export const jaMessages = {
   "models.outputSummary": "モデル出力上限：{maximum} · 今回の上限：{effective}",
   "models.autoContinueOutput": "長い応答を自動で続行",
   "models.autoContinueOutputDescription": "1 回の出力上限に達した場合、最大 2 回まで自動で続行します",
+  "models.logFullPrompts": "送信した Prompt 全体を記録",
+  "models.logFullPromptsDescription": "デバッグ用に、各モデルリクエストへ送信した System Prompt、ユーザー入力、含まれる内容を保存します",
   "models.autoModel": "利用可能なモデルを自動選択",
   "models.autoModelDescription": "モデルルーティングとフェイルオーバーは今後提供予定です",
   "models.showModelName": "モデル名を表示",

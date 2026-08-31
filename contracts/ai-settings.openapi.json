@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite local AI settings API",
-    "version": "0.5.0-draft",
-    "description": "Authoritative HTTP contract for one atomic local model selection, context budget, output budget, bounded output continuation and response mode setting."
+    "version": "0.6.0-draft",
+    "description": "Authoritative HTTP contract for one atomic local model selection, context budget, output budget, bounded output continuation, full prompt logging preference and response mode setting."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "security": [],
@@ -94,11 +94,12 @@
       "AiSettings": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["model", "responseMode", "autoContinueOutput"],
+        "required": ["model", "responseMode", "autoContinueOutput", "logFullPrompts"],
         "properties": {
           "model": {"anyOf": [{"$ref": "#/components/schemas/ModelSelection"}, {"type": "null"}]},
           "responseMode": {"$ref": "#/components/schemas/ResponseMode"},
-          "autoContinueOutput": {"type": "boolean", "description": "Whether output-limited responses may continue automatically for at most two bounded attempts."}
+          "autoContinueOutput": {"type": "boolean", "description": "Whether output-limited responses may continue automatically for at most two bounded attempts."},
+          "logFullPrompts": {"type": "boolean", "description": "Whether complete model request messages are written to local per-request Prompt logs."}
         }
       },
       "ErrorCode": {

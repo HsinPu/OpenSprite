@@ -40,8 +40,8 @@ The contract currently covers:
 
 The AI settings contract covers:
 
-- reading the confirmed model selection and response mode;
-- atomically saving both values for a connected Provider;
+- reading the confirmed model selection, response mode and output logging preferences;
+- atomically saving those values for a connected Provider;
 - clearing the model while preserving a selected response mode.
 
 The general settings contract covers:

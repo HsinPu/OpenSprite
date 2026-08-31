@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import UTC, datetime
 from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
@@ -64,6 +65,7 @@ from .context import (
     resolve_context_budget,
 )
 from .prompt import StaticSystemPromptProvider, SystemPromptProvider
+from ..prompt_logging import PromptLogError, PromptLogWriter
 
 
 class _RunCancelled(Exception):
@@ -105,6 +107,7 @@ class AgentLoop:
         max_tool_calls: int = 16,
         max_compactions_per_run: int = 8,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
+        prompt_log_writer: PromptLogWriter | None = None,
     ) -> None:
         if not 1 <= max_model_rounds <= 32:
             raise ValueError("invalid model round bound")
@@ -133,6 +136,7 @@ class AgentLoop:
         self._max_tool_calls = max_tool_calls
         self._max_compactions_per_run = max_compactions_per_run
         self._max_assistant_chars = max_assistant_chars
+        self._prompt_log_writer = prompt_log_writer
 
     async def execute(
         self,
@@ -158,6 +162,7 @@ class AgentLoop:
             tool_definitions = prepared.tools
             accumulated_text = run.partial_text
             tool_call_count = 0
+            prompt_log_sequence = [0]
             context_retry_used = False
             failed_calls: Counter[str] = Counter()
             used_call_ids: set[str] = set()
@@ -190,6 +195,12 @@ class AgentLoop:
                     messages=tuple(transcript),
                     tools=tool_definitions,
                     max_output_tokens=prepared.budget.output_reserve_tokens,
+                )
+                self._write_prompt_log(
+                    run=run,
+                    request=request,
+                    request_kind=f"main-{_round + 1:02d}",
+                    sequence=prompt_log_sequence,
                 )
                 round_text = ""
                 tool_calls: list[ModelToolCall] = []
@@ -308,6 +319,7 @@ class AgentLoop:
                                 prepared=prepared,
                                 accumulated_text=accumulated_text,
                                 cancellation_event=cancellation_event,
+                                prompt_log_sequence=prompt_log_sequence,
                             )
                     completed = await asyncio.to_thread(
                         self._repository.complete_run,
@@ -430,6 +442,7 @@ class AgentLoop:
         prepared: _PreparedContext,
         accumulated_text: str,
         cancellation_event: asyncio.Event,
+        prompt_log_sequence: list[int],
     ) -> RunSnapshot:
         continuation_base = base_transcript
         for attempt in range(1, _MAX_OUTPUT_CONTINUATIONS + 1):
@@ -493,6 +506,12 @@ class AgentLoop:
                     messages=transcript,
                     tools=(),
                     max_output_tokens=prepared.budget.output_reserve_tokens,
+                )
+                self._write_prompt_log(
+                    run=run,
+                    request=request,
+                    request_kind=f"continuation-{attempt:02d}",
+                    sequence=prompt_log_sequence,
                 )
                 round_text = ""
                 completion: ModelCompleted | None = None
@@ -599,6 +618,37 @@ class AgentLoop:
             reason,
         )
         return completed.run
+
+    def _write_prompt_log(
+        self,
+        *,
+        run: RunSnapshot,
+        request: ModelRequest,
+        request_kind: str,
+        sequence: list[int],
+    ) -> None:
+        if not run.log_full_prompts or self._prompt_log_writer is None:
+            return
+        sequence[0] += 1
+        try:
+            self._prompt_log_writer.write(
+                run_id=run.id,
+                created_at=datetime.now(UTC),
+                request_kind=request_kind,
+                request_sequence=sequence[0],
+                provider_id=request.provider_id,
+                model_id=request.model_id,
+                response_mode=request.response_mode,
+                max_output_tokens=request.max_output_tokens,
+                messages=request.messages,
+                tools=request.tools,
+            )
+        except PromptLogError:
+            _LOGGER.warning(
+                "full prompt log failed run_id=%s request_kind=%s",
+                run.id,
+                request_kind,
+            )
 
     def _continuation_transcript(
         self,

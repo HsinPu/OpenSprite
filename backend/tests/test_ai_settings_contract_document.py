@@ -22,7 +22,7 @@ def test_contract_is_openapi_31_json() -> None:
     contract = load_contract()
 
     assert contract["openapi"] == "3.1.0"
-    assert contract["info"]["version"] == "0.5.0-draft"
+    assert contract["info"]["version"] == "0.6.0-draft"
     assert contract["security"] == []
 
 
@@ -78,9 +78,10 @@ def test_ai_settings_schema_persists_model_response_and_continuation() -> None:
     assert selection["properties"]["modelId"]["maxLength"] == 256
     settings = schemas["AiSettings"]
     assert settings["additionalProperties"] is False
-    assert settings["required"] == ["model", "responseMode", "autoContinueOutput"]
-    assert set(settings["properties"]) == {"model", "responseMode", "autoContinueOutput"}
+    assert settings["required"] == ["model", "responseMode", "autoContinueOutput", "logFullPrompts"]
+    assert set(settings["properties"]) == {"model", "responseMode", "autoContinueOutput", "logFullPrompts"}
     assert settings["properties"]["autoContinueOutput"]["type"] == "boolean"
+    assert settings["properties"]["logFullPrompts"]["type"] == "boolean"
     assert schemas["ResponseMode"]["enum"] == ["default", "fast", "balanced", "deep"]
     assert schemas["ErrorCode"]["enum"] == [
         "invalid_request",

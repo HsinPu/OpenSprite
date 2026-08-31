@@ -38,7 +38,7 @@ from .models import (
 from .repository import ConversationStoreError
 
 
-_SCHEMA_VERSION = 6
+_SCHEMA_VERSION = 7
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -117,6 +117,7 @@ CREATE TABLE runs (
     context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
     output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
     auto_continue_output INTEGER NOT NULL CHECK(auto_continue_output IN (0, 1)),
+    log_full_prompts INTEGER NOT NULL CHECK(log_full_prompts IN (0, 1)),
     status TEXT NOT NULL CHECK(status IN (
         'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
     )),
@@ -176,7 +177,7 @@ ON messages(conversation_id, sequence DESC);
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 COMMIT;
 """
 
@@ -323,6 +324,14 @@ WHERE status IN ('queued', 'running', 'cancelling');
 PRAGMA user_version = 6;
 COMMIT;
 PRAGMA foreign_keys = ON;
+"""
+
+_MIGRATE_V6_TO_V7_SQL = """
+BEGIN IMMEDIATE;
+ALTER TABLE runs ADD COLUMN log_full_prompts INTEGER NOT NULL DEFAULT 0
+CHECK(log_full_prompts IN (0, 1));
+PRAGMA user_version = 7;
+COMMIT;
 """
 
 
@@ -675,6 +684,7 @@ class SqliteConversationRepository:
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
         auto_continue_output: bool = True,
+        log_full_prompts: bool = False,
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -690,6 +700,8 @@ class SqliteConversationRepository:
         if output_budget not in _OUTPUT_BUDGETS:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if not isinstance(auto_continue_output, bool):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if not isinstance(log_full_prompts, bool):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
@@ -795,9 +807,10 @@ class SqliteConversationRepository:
                         id, conversation_id, client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
                         response_mode, context_budget, output_budget, auto_continue_output,
+                        log_full_prompts,
                         status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
@@ -811,6 +824,7 @@ class SqliteConversationRepository:
                         context_budget,
                         output_budget,
                         int(auto_continue_output),
+                        int(log_full_prompts),
                         now_text,
                     ),
                 )
@@ -1388,6 +1402,9 @@ class SqliteConversationRepository:
                     version = 5
                 if version == 5:
                     connection.executescript(_MIGRATE_V5_TO_V6_SQL)
+                    version = 6
+                if version == 6:
+                    connection.executescript(_MIGRATE_V6_TO_V7_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1565,6 +1582,7 @@ class SqliteConversationRepository:
             context_budget=row["context_budget"],
             output_budget=row["output_budget"],
             auto_continue_output=bool(row["auto_continue_output"]),
+            log_full_prompts=bool(row["log_full_prompts"]),
             status=status,
             error=error,
             partial_text=row["partial_text"],

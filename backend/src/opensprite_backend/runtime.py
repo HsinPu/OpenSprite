@@ -18,6 +18,7 @@ from .app import create_app
 from .app_paths import AppPaths, build_app_paths
 from .build_info import load_app_info
 from .runtime_logging import RuntimeLoggingSession, configure_runtime_logging
+from .prompt_logging import FilePromptLogWriter
 from .ai_settings import (
     AiSettingsOperations,
     UnavailableAiSettings,
@@ -119,6 +120,7 @@ def create_system_runtime(
             paths,
             general_settings,
         ),
+        prompt_log_writer=FilePromptLogWriter(paths),
     )
     agent_chat = AgentChatService(
         repository,

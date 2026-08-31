@@ -12,9 +12,10 @@ from .app_paths import AppPaths
 from .models import AiSettings, ErrorCode
 from .provider_connections import ProviderConnectionError, ProviderConnections
 
-_SCHEMA_VERSION: Final = 5
-_PREVIOUS_SCHEMA_VERSION: Final = 4
-_LEGACY_SCHEMA_VERSION: Final = 3
+_SCHEMA_VERSION: Final = 6
+_PREVIOUS_SCHEMA_VERSION: Final = 5
+_LEGACY_SCHEMA_VERSION: Final = 4
+_OLDEST_SCHEMA_VERSION: Final = 3
 _MAX_SETTINGS_BYTES: Final = 1024 * 1024
 
 
@@ -42,6 +43,7 @@ def default_ai_settings() -> AiSettings:
         model=None,
         responseMode="default",
         autoContinueOutput=True,
+        logFullPrompts=False,
     )
 
 
@@ -114,7 +116,7 @@ class JsonAiSettingsStore:
             raise SettingsStoreError
         model = raw["model"]
         auto_continue_output: object
-        if raw["version"] == _LEGACY_SCHEMA_VERSION:
+        if raw["version"] == _OLDEST_SCHEMA_VERSION:
             if set(raw) != {"version", "model", "responseMode"}:
                 raise SettingsStoreError
             if model is not None:
@@ -126,19 +128,28 @@ class JsonAiSettingsStore:
                     raise SettingsStoreError
                 model = {**model, "outputBudget": "auto"}
             auto_continue_output = True
+            log_full_prompts = False
+        elif raw["version"] == _LEGACY_SCHEMA_VERSION:
+            if set(raw) != {"version", "model", "responseMode"}:
+                raise SettingsStoreError
+            auto_continue_output = True
+            log_full_prompts = False
         elif raw["version"] == _PREVIOUS_SCHEMA_VERSION:
             if set(raw) != {"version", "model", "responseMode"}:
                 raise SettingsStoreError
             auto_continue_output = True
+            log_full_prompts = False
         elif raw["version"] == _SCHEMA_VERSION:
             if set(raw) != {
                 "version",
                 "model",
                 "responseMode",
                 "autoContinueOutput",
+                "logFullPrompts",
             }:
                 raise SettingsStoreError
             auto_continue_output = raw["autoContinueOutput"]
+            log_full_prompts = raw["logFullPrompts"]
         else:
             raise SettingsStoreError
         failed = False
@@ -149,6 +160,7 @@ class JsonAiSettingsStore:
                     "model": model,
                     "responseMode": raw["responseMode"],
                     "autoContinueOutput": auto_continue_output,
+                    "logFullPrompts": log_full_prompts,
                 }
             )
         except Exception:
