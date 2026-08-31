@@ -105,6 +105,21 @@ describe("execution context disclosure", () => {
     expect(screen.getByText("對話內容空間不足，保留目前回覆")).toBeTruthy();
   });
 
+  it("shows an unlimited continuation without inventing a numeric maximum", () => {
+    const continuation: RunEvent = {
+      sequence: 2,
+      type: "response.continuation.started",
+      runId: run.id,
+      conversationId: run.conversationId,
+      createdAt: "2026-08-29T08:00:02Z",
+      data: { attempt: 3, maxAttempts: null },
+    };
+
+    render(<ExecutionContext modelName="Auto Router" run={run} events={[continuation]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("繼續產生回覆（3/∞）")).toBeTruthy();
+  });
+
   it("starts collapsed and preserves its controlled state across Run updates", () => {
     const { rerender, container } = render(<ExecutionContext modelName="GPT-5.6" run={run} events={[]} timeZone="system" defaultExpanded={false} expanded={false} />);
     const body = container.querySelector<HTMLElement>(".chat-workspace__context-body");

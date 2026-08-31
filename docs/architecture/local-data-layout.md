@@ -65,18 +65,19 @@ Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
 
-`config/settings.json` is a strict schema-v6, non-secret file containing one
+`config/settings.json` is a strict schema-v7, non-secret file containing one
 nullable `model` (`providerId`, `modelId`, `contextBudget`, and `outputBudget`)
-plus `responseMode`, the `autoContinueOutput` boolean and the opt-in
-`logFullPrompts` boolean:
-`default`, `fast`, `balanced`, or `deep`. `default` means future inference omits
+plus `responseMode`, strict `outputContinuation` policy and the opt-in
+`logFullPrompts` boolean. The continuation policy is `off`, `1`, `2`, `3`, `5`,
+or `unlimited`, with `2` as the default. The response mode is `default`, `fast`,
+`balanced`, or `deep`. `default` means future inference omits
 the Provider reasoning-strength parameter. It never contains a display label, API key, or
-provider model catalog. Schema-v3 is read with `outputBudget: auto` and
-schema-v4 is read with `autoContinueOutput: true` in memory
-without rewriting until the next successful PUT. Reads of a missing file are side-effect free and return
-`model: null` with `responseMode: default`. Every successful change replaces
-both values atomically; clearing the model preserves and persists the chosen
-response mode. `state/providers.json` remains strict non-secret metadata. Other
+provider model catalog. Schema-v6 booleans are converted in memory to `2` or
+`off` without rewriting until the next successful PUT. Reads of a missing file
+are side-effect free and return `model: null`, `responseMode: default`, and
+`outputContinuation: 2`. Every successful change replaces the full settings
+document atomically; clearing the model preserves the other selected settings.
+`state/providers.json` remains strict non-secret metadata. Other
 paths are not created in advance.
 
 Provider connect and disconnect update encrypted credentials and non-secret
@@ -104,8 +105,8 @@ successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns Conversation, visible Message, Run, append-only
 conversation compaction, and safe semantic Run-event tables described by
-`agent-chat.md`. SQLite schema v7 snapshots each Run's requested output budget,
-automatic-continuation preference and full-Prompt logging preference
+`agent-chat.md`. SQLite schema v8 snapshots each Run's requested output budget,
+strict output-continuation policy and full-Prompt logging preference
 and stores the resolved maximum in its `model.started` event. Empty reads,
 backend import, and service startup do not create `data/` or the database.
 Conversation and Run identifiers are backend-generated UUIDs rather than values

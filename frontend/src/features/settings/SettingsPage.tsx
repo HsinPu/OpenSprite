@@ -78,6 +78,15 @@ const outputBudgetLabelKeys: Record<OutputBudget, MessageKey> = {
   max: "models.output.max",
 };
 
+const outputContinuationLabelKeys: Record<OutputContinuation, MessageKey> = {
+  off: "models.outputContinuation.off",
+  "1": "models.outputContinuation.one",
+  "2": "models.outputContinuation.two",
+  "3": "models.outputContinuation.three",
+  "5": "models.outputContinuation.five",
+  unlimited: "models.outputContinuation.unlimited",
+};
+
 type ProviderFeedback = { message?: string; error?: string };
 type ProviderOperation = Partial<Record<ProviderId, number>>;
 
@@ -299,6 +308,15 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
   }, [aiSettingsSaving, connectedProviders, modelSelection, openRouterModelLoadStatus, openRouterModels, providers, requestSelection, selectedModelIsAvailable, selectedProvider]);
 
   const getSettingsPopupContainer = () => modalContainer ?? document.body;
+  const outputContinuationOptions = (Object.keys(outputContinuationLabelKeys) as OutputContinuation[]).map((value) => ({
+    value,
+    label: t(outputContinuationLabelKeys[value]),
+  }));
+  const outputContinuationDescription = outputContinuation === "off"
+    ? t("models.outputContinuation.offDescription")
+    : outputContinuation === "unlimited"
+      ? t("models.outputContinuation.unlimitedDescription")
+      : t("models.outputContinuation.limitedDescription", { count: outputContinuation });
   const providerOptions = connectedProviders.map((provider) => ({ value: provider.id, label: provider.name }));
   const modelOptions = selectedModels.map((model) => ({ value: model.id, label: <span className="settings-model-option"><strong>{model.label}</strong><small>{model.id}</small></span>, searchText: `${model.label} ${model.id}` }));
   const selectedModel = modelSelection ? selectedModels.find((model) => model.id === modelSelection.modelId) : undefined;
@@ -376,7 +394,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, logF
           <p id="settings-model-helper" className="settings-helper-text">{helperText}</p>
         </div>
         <div className="settings-preference-row"><span>{t("models.responseMode")}</span><div className="settings-segmented" role="group" aria-label={t("models.responseMode")}>{responseModes.map((option) => <button key={option.value} type="button" disabled={aiSettingsSaving} className={responseMode === option.value ? "is-selected" : ""} aria-pressed={responseMode === option.value} onClick={() => void onResponseModeChange(option.value)}>{option.label}</button>)}</div></div>
-        <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.autoContinueOutput")}</span><span className="settings-control-description">{t("models.autoContinueOutputDescription")}</span></span><Switch aria-label={t("models.autoContinueOutput")} checked={outputContinuation !== "off"} disabled={aiSettingsSaving} onChange={(enabled) => void onOutputContinuationChange(enabled ? "2" : "off")} /></div>
+        <div className="settings-select-row"><label className="settings-continuation-label" htmlFor="settings-output-continuation"><span className="settings-control-label">{t("models.outputContinuation")}</span><span className="settings-control-description">{outputContinuationDescription}</span></label><Select id="settings-output-continuation" aria-label={t("models.outputContinuation")} value={outputContinuation} options={outputContinuationOptions} getPopupContainer={getSettingsPopupContainer} disabled={aiSettingsSaving} onChange={(policy: OutputContinuation) => void onOutputContinuationChange(policy)} /></div>
         <div className="settings-toggle-row"><span><span className="settings-control-label">{t("models.logFullPrompts")}</span><span className="settings-control-description">{t("models.logFullPromptsDescription")}</span></span><Switch aria-label={t("models.logFullPrompts")} checked={logFullPrompts} disabled={aiSettingsSaving} onChange={(enabled) => void onLogFullPromptsChange(enabled)} /></div>
         <FutureSettingRow label={t("models.autoModel")} description={t("models.autoModelDescription")} />
         <FutureSettingRow label={t("models.showModelName")} description={t("models.showModelNameDescription")} />

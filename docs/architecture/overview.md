@@ -179,9 +179,9 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   internal full SHA-256 credential fingerprint。GET 以完整 fingerprint 綁定 metadata 與 secure-store
   credential，不以 preview 判斷 identity；fingerprint 永不進入 public model。schema v1 直接拒絕，
   不做 migration、legacy lookup 或 plaintext fallback。
-- `config/settings.json` 是 strict schema-v6 的非秘密 AI settings 檔，包含 nullable `model`、該模型的
-  `contextBudget`、`outputBudget`、`responseMode`、`autoContinueOutput` 與 `logFullPrompts`。schema-v3 會在記憶體補上
-  `outputBudget: auto`，schema-v4 會補上 `autoContinueOutput: true`，且不於 GET 寫檔；下一次成功 PUT 才寫成 canonical v5。讀取不存在檔案不建立目錄，並回傳 null model、default 與自動續接開啟；成功 PUT 才以 fsync
+- `config/settings.json` 是 strict schema-v7 的非秘密 AI settings 檔，包含 nullable `model`、該模型的
+  `contextBudget`、`outputBudget`、`responseMode`、`outputContinuation` 與 `logFullPrompts`。舊 schema-v6 的
+  `autoContinueOutput` 只在讀取時轉換為 `2` 或 `off`，不於 GET 寫檔；下一次成功 PUT 才寫成 canonical v7。讀取不存在檔案不建立目錄，並回傳 null model、default 與續接兩次；成功 PUT 才以 fsync
   + atomic replacement 建立或替換整份設定。清除 model 仍保留 response mode，不接觸 credential
   或 provider model catalog。AI-settings route 以獨立 error enum 描述其可觀察錯誤，避免將
   settings-only code 洩漏到 provider API schema。

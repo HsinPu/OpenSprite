@@ -176,15 +176,18 @@ describe("provider settings", () => {
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
   });
 
-  it("allows automatic output continuation to be disabled", async () => {
+  it("selects bounded or unlimited output continuation", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
     render(<SettingsHarness />);
 
-    const toggle = await screen.findByRole("switch", { name: "自動續接過長回覆" });
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(toggle);
+    const select = await screen.findByRole("combobox", { name: "自動續接過長回覆" });
+    fireEvent.mouseDown(select);
+    expect((await screen.findAllByText("2 次（預設）")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("5 次")).toBeTruthy();
+    fireEvent.click(screen.getByText("不限制").closest(".ant-select-item-option")!);
 
-    await waitFor(() => expect(screen.getByTestId("output-continuation").textContent).toBe("off"));
+    await waitFor(() => expect(screen.getByTestId("output-continuation").textContent).toBe("unlimited"));
+    expect(screen.getByText("持續續接直到完成；仍受 Context、字數與安全上限保護")).toBeTruthy();
   });
 
   it("shows speculative model preferences as non-interactive future items", async () => {

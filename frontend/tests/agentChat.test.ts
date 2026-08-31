@@ -240,7 +240,7 @@ describe("Agent chat SSE contract", () => {
         runId,
         conversationId,
         createdAt: "2026-08-21T08:30:02Z",
-        data: { attempt: 1, maxAttempts: 2 },
+        data: { attempt: 3, maxAttempts: null },
       }),
     }));
     source.listeners.get("run.completed")?.(new MessageEvent("run.completed", {
@@ -258,7 +258,7 @@ describe("Agent chat SSE contract", () => {
     expect(events).toHaveLength(5);
     expect(events[0]).toMatchObject({ type: "model.started", data: { maxOutputTokens: 32_768, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 } });
     expect(events[1]).toMatchObject({ type: "context.compaction.started", data: {} });
-    expect(events[3]).toMatchObject({ type: "response.continuation.started", data: { attempt: 1, maxAttempts: 2 } });
+    expect(events[3]).toMatchObject({ type: "response.continuation.started", data: { attempt: 3, maxAttempts: null } });
     expect(events[4]).toMatchObject({
       type: "run.completed",
       data: { assistantMessageId, completionReason: "output_limit" },

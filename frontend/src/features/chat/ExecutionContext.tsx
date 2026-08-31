@@ -43,7 +43,7 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
     case "run.started": return t("execution.event.runStarted");
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
-    case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: String(event.data.maxAttempts ?? "") });
+    case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
     case "tool.started": return t("execution.event.toolStarted", { tool: String(event.data.toolName ?? "") }).trim();
     case "tool.completed": return t("execution.event.toolCompleted", { tool: String(event.data.toolName ?? "") }).trim();

@@ -63,7 +63,7 @@ contract but does not implement model, tool or persistence behavior.
 5. The browser opens `GET /api/runs/{run_id}/events`. Persisted events replay in
    sequence and then stream over SSE; reconnect uses `Last-Event-ID`.
 6. Text deltas update the Run partial text and UI. A natural stop completes the
-   Run. An output limit may enter at most two configured continuation attempts;
+   Run. An output limit may enter the Run-snapshotted continuation policy;
    every attempt appends to the same Run and eventual assistant Message.
 7. A structured model tool request must match an explicitly registered tool and
    pass policy before execution. Tool output returns to the same Agent loop.

@@ -70,6 +70,7 @@
 .settings-select-row .ant-select { min-width: min(350px, 52%); }
 .settings-select-row .ant-select-selector { min-height: 44px !important; border-color: var(--settings-border) !important; border-radius: 9px !important; }
 .settings-select-row .ant-select-selection-item, .settings-select-row .ant-select-selection-placeholder { line-height: 42px !important; }
+.settings-continuation-label { display: grid; min-width: 0; gap: 4px; }
 .settings-model-retry { margin-top: 10px; }
 .settings-model-load-error { margin-top: 10px; color: #b42318; }
 .settings-model-load-error p { margin: 0; font-size: 13px; }
