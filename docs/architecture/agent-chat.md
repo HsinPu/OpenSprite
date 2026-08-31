@@ -205,7 +205,11 @@ a 2K output limit. Append-only compaction records keep monotonic sequence
 coverage, a source hash, model provenance and usage counts. Raw Messages are
 never deleted or replaced and can rebuild every summary. The summary enters the
 model transcript as explicitly marked historical user data, never as a trusted
-System instruction. Each tool round is recounted before its Provider request.
+System instruction. History Messages are likewise wrapped as quoted historical
+data; only the active Run's current user Message remains an actionable user
+instruction. This boundary is applied again after compaction and before
+continuation requests, while the original database Messages remain unchanged.
+Each tool round is recounted before its Provider request.
 Safe structured logs contain only limits, estimated or reported token counts,
 message counts and compaction coverage; they never contain prompt or Message
 content.

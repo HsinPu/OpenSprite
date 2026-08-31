@@ -157,6 +157,7 @@ class AgentLoop:
                 run=run,
                 system_prompt=system_prompt,
                 cancellation_event=cancellation_event,
+                current_user_message_id=run.user_message_id,
             )
             transcript = list(prepared.messages)
             tool_definitions = prepared.tools
@@ -236,6 +237,7 @@ class AgentLoop:
                                 cancellation_event=cancellation_event,
                                 force_compaction=True,
                                 compaction_limit=1,
+                                current_user_message_id=run.user_message_id,
                             )
                             transcript = list(prepared.messages)
                             tool_definitions = prepared.tools
@@ -477,6 +479,7 @@ class AgentLoop:
                             cancellation_event=cancellation_event,
                             force_compaction=True,
                             compaction_limit=1,
+                            current_user_message_id=run.user_message_id,
                         )
                     except ContextLimitExceeded:
                         return await self._complete_partial(
@@ -539,6 +542,7 @@ class AgentLoop:
                                     cancellation_event=cancellation_event,
                                     force_compaction=True,
                                     compaction_limit=1,
+                                    current_user_message_id=run.user_message_id,
                                 )
                             except ContextLimitExceeded:
                                 return await self._complete_partial(
@@ -699,6 +703,7 @@ class AgentLoop:
         cancellation_event: asyncio.Event,
         force_compaction: bool = False,
         compaction_limit: int | None = None,
+        current_user_message_id: str | None = None,
     ) -> _PreparedContext:
         self._raise_if_cancelled(cancellation_event)
         limit = (
@@ -766,6 +771,7 @@ class AgentLoop:
                     budget=budget,
                     summary=summary,
                     has_older_history=has_older,
+                    current_user_message_id=current_user_message_id,
                 )
             except ContextLimitExceeded:
                 raise
