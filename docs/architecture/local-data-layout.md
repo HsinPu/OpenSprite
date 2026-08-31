@@ -114,5 +114,10 @@ profile path. Upload, output, memory, other logs, and cache directories remain
 unimplemented and are not created in advance. The System Prompt log directory
 is created only when the first Run reaches Prompt construction.
 
+Runtime startup creates `logs/backend/<local-date>/backend.log`. The centralized
+handler rotates at 10 MiB with two same-day backups, retains 14 days, redacts
+credential-like text and records safe traceback diagnostics. System Prompt logs
+remain isolated under `logs/system-prompts` and are never mixed into runtime logs.
+
 This rebuild is new-install-only. It does not scan, migrate, import, or fall back
 to any earlier application-data location.

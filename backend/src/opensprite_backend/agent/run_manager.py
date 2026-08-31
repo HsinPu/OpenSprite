@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from opensprite_backend.conversations.models import (
     RunSnapshot,
@@ -16,6 +17,8 @@ from opensprite_backend.conversations.repository import (
 
 from .loop import AgentLoop
 from .events import INTERNAL_ERROR
+
+_LOGGER = logging.getLogger("opensprite.agent.run_manager")
 
 
 class RunManager:
@@ -66,6 +69,7 @@ class RunManager:
         try:
             return await self._loop.execute(run_id, cancellation)
         except ConversationStoreError as execution_error:
+            _LOGGER.exception("run execution failed run_id=%s", run_id)
             try:
                 return await asyncio.to_thread(
                     self._repository.fail_run,

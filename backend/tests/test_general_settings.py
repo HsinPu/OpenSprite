@@ -174,4 +174,6 @@ def test_runtime_composes_general_settings_without_creating_data(tmp_path: Path)
         response = client.get("/api/settings/general")
         assert response.status_code == 200
         assert response.json() == {"locale": "zh-TW", "timeZone": "system"}
-    assert not paths.home.exists()
+    assert paths.backend_logs_dir.is_dir()
+    assert not paths.config_dir.exists()
+    assert not paths.data_dir.exists()

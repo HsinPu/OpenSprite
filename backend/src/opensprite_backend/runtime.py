@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+import logging
 from threading import Lock
 from typing import Protocol
 
@@ -15,6 +16,8 @@ from .application import (
 )
 from .app import create_app
 from .app_paths import AppPaths, build_app_paths
+from .build_info import load_app_info
+from .runtime_logging import RuntimeLoggingSession, configure_runtime_logging
 from .ai_settings import (
     AiSettingsOperations,
     UnavailableAiSettings,
@@ -140,9 +143,10 @@ def create_system_app(
     """Create an offline secured app with one fresh runtime per lifespan."""
 
     entry_lock = Lock()
+    paths = app_paths if app_paths is not None else build_app_paths()
     factory = runtime_factory
     if factory is None:
-        factory = lambda: create_system_runtime(app_paths=app_paths)
+        factory = lambda: create_system_runtime(app_paths=paths)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -151,7 +155,16 @@ def create_system_app(
                 "OpenSprite runtime lifespan is already active."
             )
         runtime: LocalSystemRuntime | None = None
+        logging_session: RuntimeLoggingSession | None = None
         try:
+            logging_session = configure_runtime_logging(paths)
+            info = load_app_info()
+            logging.getLogger("opensprite.runtime").info(
+                "runtime started version=%s revision=%s dirty=%s",
+                info.version,
+                info.revision,
+                info.dirty,
+            )
             app.state.provider_connections = UnavailableProviderConnections()
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
@@ -181,6 +194,9 @@ def create_system_app(
                 if runtime is not None:
                     await runtime.aclose()
             finally:
+                if logging_session is not None:
+                    logging.getLogger("opensprite.runtime").info("runtime stopped")
+                    logging_session.close()
                 entry_lock.release()
 
     return create_app(

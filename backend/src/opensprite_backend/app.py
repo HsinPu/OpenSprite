@@ -1,6 +1,7 @@
 """Typed FastAPI application factory for the local OpenSprite backend."""
 
 from collections.abc import Awaitable, Callable
+import logging
 from typing import cast
 
 from fastapi import FastAPI, Request, Response
@@ -64,6 +65,7 @@ from .conversation_settings import (
 )
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
+_LOGGER = logging.getLogger("opensprite.runtime")
 
 
 def create_app(
@@ -173,7 +175,7 @@ def create_app(
         request: Request,
         exc: Exception,
     ) -> JSONResponse:
-        del request, exc
+        _LOGGER.exception("request failed path=%s", request.url.path, exc_info=exc)
         return provider_error_response(ErrorCode.INTERNAL_ERROR)
 
     app.add_exception_handler(

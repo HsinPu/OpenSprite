@@ -35,6 +35,7 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.conversations_dir == home / "conversations"
     assert paths.logs_dir == home / "logs"
     assert paths.system_prompt_logs_dir == home / "logs" / "system-prompts"
+    assert paths.backend_logs_dir == home / "logs" / "backend"
     assert paths.cache_dir == home / "cache"
     assert not home.exists()
 
@@ -52,7 +53,7 @@ def test_default_root_is_hidden_opensprite_under_the_user_profile(
     assert not paths.home.exists()
 
 
-def test_system_app_lifespan_does_not_create_the_data_root(
+def test_system_app_lifespan_creates_only_runtime_logs(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -61,9 +62,11 @@ def test_system_app_lifespan_does_not_create_the_data_root(
     app = create_system_app()
 
     with TestClient(app, base_url="http://127.0.0.1:8765"):
-        assert not (profile / ".opensprite").exists()
+        assert (profile / ".opensprite" / "logs" / "backend").is_dir()
+        assert not (profile / ".opensprite" / "data").exists()
+        assert not (profile / ".opensprite" / "config").exists()
 
-    assert not (profile / ".opensprite").exists()
+    assert (profile / ".opensprite" / "logs" / "backend").is_dir()
 
 
 def test_only_app_paths_may_own_the_local_data_root() -> None:

@@ -69,6 +69,10 @@ class AppPaths:
         return self.logs_dir / "system-prompts"
 
     @property
+    def backend_logs_dir(self) -> Path:
+        return self.logs_dir / "backend"
+
+    @property
     def cache_dir(self) -> Path:
         return self.home / "cache"
 

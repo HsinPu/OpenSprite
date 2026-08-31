@@ -322,4 +322,6 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
         assert response.status_code == 200
         assert response.json() == {"model": None, "responseMode": "default", "autoContinueOutput": True}
 
-    assert not paths.home.exists()
+    assert paths.backend_logs_dir.is_dir()
+    assert not paths.config_dir.exists()
+    assert not paths.data_dir.exists()
