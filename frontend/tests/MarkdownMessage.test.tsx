@@ -1,8 +1,13 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownMessage } from "../src/features/chat/MarkdownMessage";
 
+const originalClipboard = navigator.clipboard;
+
+afterEach(() => {
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: originalClipboard });
+});
 
 describe("MarkdownMessage", () => {
   it("renders common Markdown and GFM without changing the source string", () => {
@@ -29,6 +34,29 @@ describe("MarkdownMessage", () => {
     expect(screen.getByText("inline").tagName).toBe("CODE");
     expect(container.querySelector("pre code")?.textContent).toContain("const answer = 42;");
     expect(content).toContain("**粗體**");
+  });
+
+  it("copies a fenced code block without changing the rendered source", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<MarkdownMessage content={["```ts", "const answer = 42;", "```"].join("\n")} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "複製程式碼" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("const answer = 42;"));
+    expect(screen.getByRole("button", { name: "已複製程式碼" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("已複製程式碼");
+  });
+
+  it("reports clipboard failures without exposing an exception", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("clipboard unavailable"));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<MarkdownMessage content={["```", "const answer = 42;", "```"].join("\n")} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "複製程式碼" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "複製程式碼失敗" })).toBeTruthy());
+    expect(screen.getByRole("status").textContent).toBe("複製程式碼失敗");
   });
 
   it("keeps links safe and never loads Markdown images or raw HTML", () => {

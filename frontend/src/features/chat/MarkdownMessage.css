@@ -72,6 +72,42 @@
   overflow-wrap: normal;
 }
 
+.markdown-message__code-block {
+  position: relative;
+  margin: 0 0 0.85em;
+}
+
+.markdown-message__code-block pre {
+  margin: 0;
+  padding-top: 42px;
+}
+
+.markdown-message__copy-button {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  inset-inline-end: 8px;
+  color: var(--chat-muted);
+}
+
+.markdown-message__copy-button:hover,
+.markdown-message__copy-button:focus-visible {
+  color: var(--chat-primary-strong);
+  background: color-mix(in srgb, var(--chat-primary) 10%, transparent);
+}
+
+.markdown-message__copy-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .markdown-message pre code { padding: 0; background: transparent; }
 
 .markdown-message table {
