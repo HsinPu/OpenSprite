@@ -154,8 +154,9 @@ timing, and only tool names that actually appeared in persisted tool events.
 Its outer disclosure is collapsed by default. The confirmed Conversation
 Settings preference may default it open; manual disclosure changes remain local
 to the mounted Conversation and never write settings. Historical Run inspection
-always expands the panel, and returning to the latest Run restores the confirmed
-default. Run and event updates do not reset a manual disclosure choice.
+expands the panel when entered, and returning to the latest Run restores the
+confirmed default. Run and event updates do not reset a manual disclosure
+choice, including after entering historical inspection.
 Because the current production Tool Registry is empty, the UI explicitly says
 that no extra tool was used and does not advertise Search, File, Memory, or any
 other speculative capability.

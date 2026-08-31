@@ -399,6 +399,23 @@ describe("live chat workspace", () => {
     expect(returnToLatest).toHaveBeenCalledOnce();
   });
 
+  it("allows historical execution details to be collapsed after opening", () => {
+    const historicalRun: RunSnapshot = { ...run, status: "completed", assistantMessageId: "44444444-4444-4444-8444-444444444444", modelId: "historic/model", partialText: "歷史完成", completionReason: "stop", finishedAt: "2026-08-22T08:00:07Z" };
+    mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: historicalRun, events, loading: false, error: null, inspectRun, retry: vi.fn(async () => undefined), returnToLatest });
+    mockedUseConversationRun.mockReturnValue({ messages: [{ id: run.userMessageId, runId: run.id, role: "user", content: "你好", createdAt: run.createdAt, delivery: "persisted" }, { id: historicalRun.assistantMessageId!, runId: run.id, role: "assistant", content: "歷史完成", createdAt: historicalRun.finishedAt!, delivery: "persisted" }], activeRun: run, events: [], streamedText: "正在整理", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: true, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "目前模型" }, { selection: selection("openrouter", historicalRun.modelId), label: "歷史模型" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    const collapse = screen.getByRole("button", { name: "收合執行詳情" });
+    const body = document.getElementById(collapse.getAttribute("aria-controls")!);
+    expect(body?.hidden).toBe(false);
+
+    fireEvent.click(collapse);
+
+    const expand = screen.getByRole("button", { name: "展開執行詳情" });
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    expect(body?.hidden).toBe(true);
+  });
+
   it("shows a safe historical inspection error and retries without affecting chat", () => {
     const retry = vi.fn(async () => undefined);
     mockedUseRunInspection.mockReturnValue({ selectedRunId: run.id, run: null, events: [], loading: false, error: "執行紀錄暫時無法讀取。", inspectRun, retry, returnToLatest });

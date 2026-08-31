@@ -119,7 +119,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
     onExpandedChange?.(nextExpanded);
   }, [expanded, onExpandedChange]);
   const previousDefaultExpandedRef = useRef(defaultExpanded);
-  const wasHistoricalRef = useRef(historical);
+  const wasHistoricalRef = useRef(false);
   const contextId = useId();
   const executionTitleId = `${contextId}-execution-title`;
   const executionBodyId = bodyId ?? `${contextId}-execution-body`;
@@ -137,14 +137,15 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
   useEffect(() => {
     const defaultChanged = previousDefaultExpandedRef.current !== defaultExpanded;
     const returnedToLatest = wasHistoricalRef.current && !historical;
+    const enteredHistorical = historical && inspectionRunId !== null && !wasHistoricalRef.current;
     previousDefaultExpandedRef.current = defaultExpanded;
-    wasHistoricalRef.current = historical;
 
-    if (historical && inspectionRunId !== null) {
+    if (enteredHistorical) {
       setExpanded(true);
-      return;
+    } else if (defaultChanged || returnedToLatest) {
+      setExpanded(defaultExpanded);
     }
-    if (defaultChanged || returnedToLatest) setExpanded(defaultExpanded);
+    wasHistoricalRef.current = historical;
   }, [defaultExpanded, historical, inspectionRunId, setExpanded]);
 
   return (
