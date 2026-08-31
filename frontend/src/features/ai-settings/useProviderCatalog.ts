@@ -128,6 +128,8 @@ export function useProviderCatalog(): ProviderCatalogController {
     return models.map((model) => ({
       selection: { providerId: provider.id, modelId: model.id, contextBudget: "auto" as const, outputBudget: "auto" as const },
       label: model.label,
+      contextWindowTokens: model.contextWindowTokens,
+      maxOutputTokens: model.maxOutputTokens,
     }));
   }), [openRouterModelLoadStatus, openRouterModels, providers]);
 

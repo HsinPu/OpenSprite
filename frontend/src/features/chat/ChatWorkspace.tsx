@@ -8,7 +8,9 @@ import type { ModelChoice, ModelSelection } from "../ai-settings/modelCatalog";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import type { SendBehavior } from "../../api/conversationSettings";
 import { useI18n } from "../../i18n/I18nProvider";
+import { contextBudgetLimit } from "../ai-settings/contextBudget";
 import { formatMessageTime } from "../general-settings/dateTime";
+import { ContextUsageIndicator, contextUsageFromEvents } from "./ContextUsageIndicator";
 import { ExecutionContext } from "./ExecutionContext";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { useConversationRun } from "./useConversationRun";
@@ -97,6 +99,19 @@ export function ChatWorkspace({
   const inspection = useRunInspection({ conversationId });
   const currentSelectionValue = modelSelection ? JSON.stringify([modelSelection.providerId, modelSelection.modelId]) : "";
   const currentSelectionIsAvailable = modelSelection !== null && modelChoices.some((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
+  const selectedModelChoice = modelSelection === null
+    ? undefined
+    : modelChoices.find((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
+  const fallbackContextLimit = modelSelection !== null && selectedModelChoice?.contextWindowTokens !== undefined
+    ? contextBudgetLimit(modelSelection.contextBudget, selectedModelChoice.contextWindowTokens)
+    : null;
+  const latestContextUsage = contextUsageFromEvents(chat.events);
+  const currentContextUsage = latestContextUsage !== null
+    && modelSelection !== null
+    && latestContextUsage.providerId === modelSelection.providerId
+    && latestContextUsage.modelId === modelSelection.modelId
+    ? latestContextUsage
+    : null;
   const choicesByProvider = ["openai", "anthropic", "openrouter"].map((providerId) => ({
     providerId,
     label: providerId === "openai" ? "OpenAI" : providerId === "anthropic" ? "Anthropic" : "OpenRouter",
@@ -306,6 +321,7 @@ export function ChatWorkspace({
               <button type="button" className="chat-workspace__tool-button" disabled title={t("chat.optionsTitle")} aria-label={t("chat.optionsLabel")}>☷</button>
             </div>
             <div className="chat-workspace__composer-primary-actions">
+              <ContextUsageIndicator usage={currentContextUsage} fallbackLimitTokens={fallbackContextLimit} compacting={isCompactingContext} />
               <select
                 className="chat-workspace__model-select chat-workspace__model-select--composer"
                 disabled={modelChoices.length === 0 || modelSelectionSaving || chat.isRunning}

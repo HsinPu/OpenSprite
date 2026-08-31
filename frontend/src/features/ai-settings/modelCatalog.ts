@@ -14,6 +14,8 @@ export type ModelSelection = PersistedModelSelection;
 export type ModelChoice = {
   selection: ModelSelection;
   label: string;
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
 };
 
 export const localModelCatalog: Record<ProviderId, ReadonlyArray<ModelCatalogItem>> = {

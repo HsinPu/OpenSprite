@@ -42,6 +42,10 @@ const events: RunEvent[] = [
   { sequence: 3, type: "assistant.delta", runId: run.id, conversationId: run.conversationId, createdAt: "2026-08-22T08:00:03Z", data: { text: "正在整理" } },
 ];
 
+const contextEvents: RunEvent[] = events.map((event) => event.type === "model.started"
+  ? { ...event, data: { ...event.data, contextTokens: 4_096, contextLimitTokens: 262_144, inputBudgetTokens: 196_608 } }
+  : event);
+
 const compactionStartedEvent: RunEvent = {
   sequence: 2,
   type: "context.compaction.started",
@@ -98,6 +102,30 @@ afterEach(() => {
 });
 
 describe("live chat workspace", () => {
+  it("shows the latest Context usage beside the model picker", () => {
+    mockedUseConversationRun.mockReturnValue({
+      messages: [],
+      activeRun: run,
+      events: contextEvents,
+      streamedText: "正在整理",
+      loading: false,
+      loadingOlderMessages: false,
+      hasOlderMessages: false,
+      error: null,
+      isRunning: true,
+      send: vi.fn(async () => true),
+      cancel: vi.fn(async () => undefined),
+      loadOlderMessages: vi.fn(async () => undefined),
+    });
+
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6", contextWindowTokens: 262_144, maxOutputTokens: 32_768 }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    const indicator = screen.getByTestId("context-usage");
+    const modelPicker = screen.getByRole("combobox", { name: /目前模型 GPT-5.6/ });
+    expect(indicator.textContent).toContain("Context 4K / 256K");
+    expect(indicator.compareDocumentPosition(modelPicker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("renders persisted assistant Markdown while keeping user messages as plain text", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [

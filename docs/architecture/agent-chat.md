@@ -200,6 +200,14 @@ budget and targets 55%. The current user message and recent 12 visible Messages
 are mandatory; if they cannot fit, the Run fails with `context_limit_exceeded`
 instead of silently dropping them.
 
+The composer displays the latest provider-facing Context estimate beside the
+model picker as `used / effective limit`. The estimate includes the rendered
+System Prompt, summary, selected history, current user Message and tool
+definitions, and is calculated by the backend's conservative counter. It is a
+diagnostic indicator rather than billing usage; a missing value is shown as `—`.
+The warning color compares the estimate with the safe input budget, while
+compaction and Context-limit decisions remain backend-owned.
+
 Older history is summarized through the selected model with tools disabled and
 a 2K output limit. Append-only compaction records keep monotonic sequence
 coverage, a source hash, model provenance and usage counts. Raw Messages are

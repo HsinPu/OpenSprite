@@ -71,6 +71,14 @@ export type RunEvent = {
   data: Record<string, unknown>;
 };
 
+export type ContextUsage = {
+  providerId: "openai" | "anthropic" | "openrouter";
+  modelId: string;
+  contextTokens: number;
+  contextLimitTokens: number;
+  inputBudgetTokens: number;
+};
+
 export type StartRunInput = {
   conversationId: string | null;
   clientRequestId: string;
