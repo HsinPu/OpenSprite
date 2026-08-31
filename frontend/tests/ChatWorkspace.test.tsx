@@ -126,6 +126,17 @@ describe("live chat workspace", () => {
     expect(indicator.compareDocumentPosition(modelPicker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("uses the inspected historical Run Context usage instead of the live chat events", () => {
+    const historicalRun: RunSnapshot = { ...run, status: "completed", modelId: "historic/model", assistantMessageId: "44444444-4444-4444-8444-444444444444", completionReason: "stop", finishedAt: "2026-08-22T08:00:07Z" };
+    const historicalEvents: RunEvent[] = contextEvents.map((event) => ({ ...event, runId: historicalRun.id, data: { ...event.data, ...(event.type === "model.started" ? { providerId: historicalRun.providerId, modelId: historicalRun.modelId } : {}) } }));
+    mockedUseRunInspection.mockReturnValue({ selectedRunId: historicalRun.id, run: historicalRun, events: historicalEvents, loading: false, error: null, inspectRun, retry: vi.fn(async () => undefined), returnToLatest });
+    mockedUseConversationRun.mockReturnValue({ messages: [], activeRun: run, events: [], streamedText: "", loading: false, loadingOlderMessages: false, hasOlderMessages: false, error: null, isRunning: false, send: vi.fn(async () => true), cancel: vi.fn(async () => undefined), loadOlderMessages: vi.fn(async () => undefined) });
+
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="目前模型" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "目前模型", contextWindowTokens: 262_144 }, { selection: selection("openrouter", historicalRun.modelId), label: "歷史模型", contextWindowTokens: 262_144 }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} />);
+
+    expect(screen.getByTestId("context-usage").textContent).toContain("Context 4K / 256K");
+  });
+
   it("renders persisted assistant Markdown while keeping user messages as plain text", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [

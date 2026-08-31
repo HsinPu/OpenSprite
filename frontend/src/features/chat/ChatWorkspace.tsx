@@ -106,15 +106,21 @@ export function ChatWorkspace({
   const selectedModelChoice = modelSelection === null
     ? undefined
     : modelChoices.find((choice) => choice.selection.providerId === modelSelection.providerId && choice.selection.modelId === modelSelection.modelId);
-  const fallbackContextLimit = modelSelection !== null && selectedModelChoice?.contextWindowTokens !== undefined
-    ? contextBudgetLimit(modelSelection.contextBudget, selectedModelChoice.contextWindowTokens)
+  const historical = inspection.selectedRunId !== null;
+  const displayedRun = historical ? inspection.run : chat.activeRun;
+  const displayedEvents = historical ? inspection.events : chat.events;
+  const displayedContextUsage = contextUsageFromEvents(displayedEvents);
+  const currentContextUsage = displayedContextUsage !== null
+    && displayedRun !== null
+    && displayedContextUsage.providerId === displayedRun.providerId
+    && displayedContextUsage.modelId === displayedRun.modelId
+    ? displayedContextUsage
     : null;
-  const latestContextUsage = contextUsageFromEvents(chat.events);
-  const currentContextUsage = latestContextUsage !== null
-    && modelSelection !== null
-    && latestContextUsage.providerId === modelSelection.providerId
-    && latestContextUsage.modelId === modelSelection.modelId
-    ? latestContextUsage
+  const displayedModelChoice = displayedRun === null
+    ? selectedModelChoice
+    : modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId);
+  const fallbackContextLimit = displayedModelChoice?.contextWindowTokens !== undefined
+    ? contextBudgetLimit(historical ? "auto" : (modelSelection?.contextBudget ?? "auto"), displayedModelChoice.contextWindowTokens)
     : null;
   const choicesByProvider = ["openai", "anthropic", "openrouter"].map((providerId) => ({
     providerId,
@@ -139,10 +145,7 @@ export function ChatWorkspace({
   const contextLimitedMessageId = chat.activeRun?.completionReason === "context_limit"
     ? chat.activeRun.assistantMessageId
     : null;
-  const historical = inspection.selectedRunId !== null;
-  const displayedRun = historical ? inspection.run : chat.activeRun;
-  const displayedEvents = historical ? inspection.events : chat.events;
-  const isCompactingContext = chat.events.at(-1)?.type === "context.compaction.started";
+  const isCompactingContext = displayedEvents.at(-1)?.type === "context.compaction.started";
   const displayedModelName = historical && displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
