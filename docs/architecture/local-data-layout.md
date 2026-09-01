@@ -13,7 +13,7 @@ cache entry and encrypted provider credential must remain below this root.
 Features may not introduce their own application-data root or persist an
 absolute user-profile path in the database.
 
-Program files are separate from user data. The future Windows installer owns
+Program files are separate from user data. The Windows installer owns
 `%LOCALAPPDATA%\OpenSprite\app`; the future Linux installer owns its documented
 application installation directory. Uninstallers preserve `.opensprite` unless
 the user explicitly requests verified user-data deletion.
@@ -129,7 +129,9 @@ remain isolated under `logs/system-prompts` and are never mixed into runtime log
 Opt-in full model-request receipts use `logs/prompts/<local-date>/<run-id>/` and
 are controlled by the AI setting `logFullPrompts`; they are plaintext diagnostic
 records and may contain user-provided sensitive content, so the directory and
-files use the same local protection and bounded retention policy.
+files use the same local protection. Automatic retention or cleanup for these
+receipts is not implemented yet; they must be treated as sensitive until a
+separate retention policy is approved and delivered.
 
 This rebuild is new-install-only. It does not scan, migrate, import, or fall back
 to any earlier application-data location.

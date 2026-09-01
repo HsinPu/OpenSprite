@@ -6,7 +6,8 @@ must derive their request, response, and error expectations from this file; they
 must not maintain incompatible copies.
 
 `ai-settings.openapi.json` is the authoritative consumer-visible HTTP contract
-for the atomic model selection and response mode setting. It is separate from
+for the atomic model selection, Context/output budgets, response mode, output
+continuation, response delivery and Prompt logging settings. It is separate from
 provider credential lifecycle because it never returns or persists a raw API
 key, dynamic model list, display label, or inference result.
 
@@ -20,8 +21,9 @@ persisted interface locale and time-zone choice. It remains separate from AI
 model configuration.
 
 `conversation-settings.openapi.json` is the authoritative HTTP contract for
-startup destination and message sending behavior. It remains separate from
-General Settings so the existing locale/time-zone schema does not change.
+startup destination, message sending, chat auto-scroll and execution-panel
+behavior. It remains separate from General Settings so the existing
+locale/time-zone schema does not change.
 
 `app-info.openapi.json` is the authoritative read-only contract for the running
 product version and installed build identity. The backend package version is
@@ -41,6 +43,8 @@ The contract currently covers:
 The AI settings contract covers:
 
 - reading the confirmed model selection, response mode and output logging preferences;
+- reading the confirmed Context/output budgets, output-continuation policy and
+  stream/complete response-delivery preference;
 - atomically saving those values for a connected Provider;
 - clearing the model while preserving a selected response mode.
 
@@ -54,7 +58,7 @@ The conversation settings contract covers:
 - choosing a new or most-recent conversation at application startup;
 - choosing Enter or Ctrl/Cmd+Enter message sending behavior;
 - enabling or disabling automatic following of new chat output;
-- atomically replacing all three values.
+- atomically replacing startup, send, auto-scroll and execution-panel values.
 
 The agent chat contract covers:
 

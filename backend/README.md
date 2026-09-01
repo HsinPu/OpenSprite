@@ -14,7 +14,8 @@ The current slice provides:
 - a fixed OpenAI/Anthropic/OpenRouter validation catalog using `httpx`;
 - on-demand OpenRouter model discovery using the stored credential;
 - strict persisted AI settings at `config/settings.json`, exposed through
-  `GET`/`PUT /api/settings/ai`;
+  `GET`/`PUT /api/settings/ai`, covering model/context/output budgets,
+  reasoning mode, output continuation, response delivery and full Prompt logs;
 - strict persisted locale and time-zone settings at `config/general.json`,
   exposed through `GET`/`PUT /api/settings/general`;
 - strict persisted startup, message sending, chat auto-scroll and execution-panel settings at
@@ -52,14 +53,17 @@ reading absent provider or credential state are filesystem-side-effect free.
 The credential and key files are created only after a provider key validates;
 the provider repository creates `.opensprite/state` when metadata is written.
 The AI settings file is created only after a successful settings write. It uses
-strict schema v2 and stores one nullable Provider/model identifier plus the
-`default`, `fast`, `balanced`, or `deep` response mode. `default` means a future
-inference request must omit reasoning-strength parameters and defer to the
-Provider. A missing file reads as a null model with default mode without creating
-any directory. The file never contains a
-raw API key, display label, or dynamic model catalog. Database, conversation,
-log, and cache paths remain reserved by the layout contract and are not created
-before an approved feature uses them.
+strict schema v8 and stores one nullable Provider/model identifier plus the
+Context/output budgets, `default`/`fast`/`balanced`/`deep` reasoning mode,
+`off`/`1`/`2`/`3`/`5`/`unlimited` output-continuation policy, `stream`/`complete`
+response delivery preference and full-Prompt logging preference. `default`
+means a future inference request must omit reasoning-strength parameters and
+defer to the Provider. A missing file reads as a null model with stream delivery
+and default mode without creating any directory. The file never contains a raw
+API key, display label, or dynamic model catalog. Conversations, SQLite Runs,
+semantic events, backend logs and Prompt receipts are implemented below the
+same `.opensprite` root; uploads, outputs, memory and cache remain reserved until
+their approved features write them.
 
 The general settings file is created only after a successful PUT. It uses
 strict schema v1 and is stored separately so locale and time-zone updates cannot

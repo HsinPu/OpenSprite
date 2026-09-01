@@ -11,7 +11,7 @@
 - `src/features/settings/`：設定視窗與尚未上線的一般偏好呈現。
 - `src/features/general-settings/`：持久化語言、時區與日期時間格式。
 - `src/i18n/`：typed locale catalog、React locale context 與繁中／英文／日文資源。
-- `src/shared/`：不含業務邏輯的共用 UI 與基礎工具。
+- `src/features/app-info/`：已安裝版本與 Build identity 的讀取。
 - `tests/`：前端測試。
 
 ## 啟動
@@ -33,7 +33,7 @@ npm run dev -- --host 127.0.0.1 --port 4173 --strictPort
 - `/#new-chat`：空白新對話。
 - 設定由主導覽的「設定」按鈕開啟彈出視窗，不改變目前網址或對話。
 
-對話清單、可見訊息、Run snapshot 與安全語意事件都來自本機服務；執行期間以 SSE 顯示增量文字與狀態，終止後重新讀取 durable Run 與 Messages。模型選擇與回應模式會透過同源 `GET`／`PUT /api/settings/ai` 以單一設定保存到本機服務；前端只處理 Provider ID、model ID 與 `default`／`fast`／`balanced`／`deep`，其中「預設」代表執行時不指定推理強度。前端不使用 localStorage、網址或瀏覽器 log 保存設定、動態模型清單或 API 金鑰。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
+對話清單、可見訊息、Run snapshot 與安全語意事件都來自本機服務；執行期間以 SSE 顯示增量文字與狀態，終止後重新讀取 durable Run 與 Messages。模型選擇、Context／輸出上限、推理模式、輸出續接、回覆顯示方式與 Prompt log 偏好會透過同源 `GET`／`PUT /api/settings/ai` 以單一設定保存到本機服務；「預設」推理模式代表執行時不指定推理強度，回覆顯示的「一次回答」只改變瀏覽器呈現，Provider 上游仍使用串流。前端不使用 localStorage、網址或瀏覽器 log 保存設定、動態模型清單或 API 金鑰。AI 模型設定會呼叫同源 `/api/providers`，由 Vite 的 dev/preview proxy 轉送到 `http://127.0.0.1:8765` 且保留 browser Host/Origin（`changeOrigin: false`）。API 金鑰只存在於連線 modal 的密碼欄位狀態，送出、錯誤、取消或卸載時會清除；前端不會儲存、預填或顯示原始金鑰。
 
 每則使用者與 AI 訊息下方會顯示建立時間，依確認後的介面語言與時區格式化到分鐘；
 資料來源仍是訊息契約的 UTC `createdAt`，不另存一份前端時間。

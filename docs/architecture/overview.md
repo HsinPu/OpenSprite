@@ -22,8 +22,10 @@ Frontend -> Contracts <- Backend
   定義：單一 secured Uvicorn 程序同源提供 API、SSE 與 built frontend，並由
   `%LOCALAPPDATA%\OpenSprite\app` 下的程式、受限 PowerShell launcher 與 current-user Run entry
   擁有 lifecycle。
-- Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；Chat 與 Settings 可共同依賴
-  `features/ai-settings`，但不得互相 import，`api` 與 `i18n` 不得反向依賴畫面功能。
+- Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；目前的 feature boundaries
+  包含 `ai-settings`、`general-settings`、`conversation-settings`、`app-info`、`chat` 與
+  `settings`。Chat 與 Settings 可共同依賴 `features/ai-settings`，但不得互相 import，`api`
+  與 `i18n` 不得反向依賴畫面功能。
 - Backend 的 `app.py` 只建立 FastAPI application、middleware、exception handlers、health route 與
   feature router composition；Provider、AI Settings 與 Agent Chat 的 HTTP routes 分別由 `api/` 擁有。
 - Provider credential lifecycle policy、Protocol 與 fail-closed behavior 留在 `provider_connections.py`；
@@ -47,14 +49,16 @@ concurrent lifespan entry 在 serving 前直接拒絕。一般 `create_app()` �
 可以確認目前實際執行的 Build。Frontend `package.json` 的版本只屬於內部 npm package。
 
 目前 AI 設定的 authoritative contract 是 `contracts/ai-settings.openapi.json`：
-`GET`／`PUT /api/settings/ai` 將 nullable model、模型所屬 Context budget 與
-`default`／`fast`／`balanced`／`deep` 回應模式視為一個 atomic setting。後端以 strict schema-v3
-保存在 `config/settings.json`，並在寫入 non-null model
-前確認該 provider 有已保存的連線。這個設定 API 不會解密 API key、不聯網驗證模型清單，也不
-保存 display label 或動態 catalog。前端由 `features/ai-settings` 擁有唯一的 Provider/model catalog
-controller、模型目錄、確認後的模型選擇、回應模式與保存流程；設定頁與聊天工作台只消費這個
-明確邊界，不各自重抓或保存另一份 Provider catalog。儲存失敗
-保留原值，OpenRouter 暫時讀取失敗也不會清除既有選擇。
+`GET`／`PUT /api/settings/ai` 將 nullable model、模型所屬 Context／輸出 budget、
+`default`／`fast`／`balanced`／`deep` 推理模式、輸出續接、`responseDelivery` 與
+`logFullPrompts` 視為一個 atomic setting。後端以 strict schema-v8 保存在
+`config/settings.json`，並在寫入 non-null model 前確認該 provider 有已保存的連線。
+這個設定 API 不會解密 API key、不聯網驗證模型清單，也不保存 display label 或動態
+catalog；response delivery 的 `complete` 只控制瀏覽器呈現，Provider 與 SSE 仍使用串流。
+前端由 `features/ai-settings` 擁有唯一的 Provider/model catalog controller、模型目錄、
+確認後的模型選擇、推理／輸出設定與保存流程；設定頁與聊天工作台只消費這個明確邊界，
+不各自重抓或保存另一份 Provider catalog。儲存失敗保留原值，OpenRouter 暫時讀取失敗也
+不會清除既有選擇。
 
 General settings 使用獨立的 `contracts/general-settings.openapi.json` 與
 `config/general.json`，原子保存 `locale`（`zh-TW`／`en`／`ja`）及 `timeZone`
@@ -214,9 +218,10 @@ Provider lifecycle 契約。未來若加入 webhook 或 WebSocket，必須以獨
 
 本切片已決定最小 validation request、per-provider serialization、non-secret metadata、runtime
 composition、loopback Host validation 與 same-origin mutation enforcement。System app 透過
-documented uvicorn factory command 啟動，不建立 project CLI。尚未決定且不屬於本切片的是
-packaging/installer lifecycle。Frontend implementer 只消費 contract 中的 public model；Vite
-proxy 必須保留同源 Host/Origin，不推測 store 或 provider internals。
+documented uvicorn factory command 啟動，不建立 project CLI。Windows packaging/installer
+lifecycle 已由 [`windows-installation.md`](windows-installation.md) 定義；Linux installer
+仍是後續切片。Frontend implementer 只消費 contract 中的 public model；Vite proxy 必須保留
+同源 Host/Origin，不推測 store 或 provider internals。
 
 ## 長期限制
 
