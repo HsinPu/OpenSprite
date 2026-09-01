@@ -17,6 +17,7 @@ from opensprite_backend.inference.models import (
     ModelUsage,
 )
 from opensprite_backend.models import OpenRouterModel, OpenRouterModelListResponse
+from opensprite_backend.providers.operation_locks import ProviderOperationLocks
 
 
 class RecordingConnections:
@@ -84,6 +85,34 @@ def test_capability_resolver_refreshes_once_when_a_fresh_cache_misses() -> None:
         cached = await resolver.resolve("openrouter", "new-account/model")
 
         assert refreshed == cached
+        assert refreshed.context_window_tokens == 262_144
+        assert connections.calls == 2
+
+    asyncio.run(scenario())
+
+
+def test_capability_resolver_invalidates_after_provider_generation_changes() -> None:
+    async def scenario() -> None:
+        connections = RecordingConnections()
+        locks = ProviderOperationLocks()
+        resolver = ProviderModelCapabilityResolver(
+            connections,  # type: ignore[arg-type]
+            operation_locks=locks,
+        )
+
+        await resolver.resolve("openrouter", "acme/model")
+        connections.models = [
+            OpenRouterModel(
+                id="new-account/model",
+                name="New account model",
+                contextWindowTokens=262_144,
+                maxOutputTokens=16_384,
+            )
+        ]
+        locks.invalidate("openrouter")
+
+        refreshed = await resolver.resolve("openrouter", "new-account/model")
+
         assert refreshed.context_window_tokens == 262_144
         assert connections.calls == 2
 

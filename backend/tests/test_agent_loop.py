@@ -7,6 +7,7 @@ from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from functools import wraps
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -1197,6 +1198,7 @@ async def test_second_context_rejection_stops_after_one_compaction_retry(
 @async_test
 async def test_prompt_log_failure_stops_before_any_model_request(
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     repository = store(tmp_path)
     run = accepted_run(repository)
@@ -1211,12 +1213,21 @@ async def test_prompt_log_failure_stops_before_any_model_request(
         system_prompt_provider=FailingSystemPromptProvider(),
     )
 
-    result = await loop.execute(run.id, asyncio.Event())
+    with caplog.at_level(logging.ERROR, logger="opensprite.agent.context"):
+        result = await loop.execute(run.id, asyncio.Event())
 
     assert result.status is RunStatus.FAILED
     assert result.error is not None
     assert result.error.code == "internal_error"
     assert gateway.requests == []
+    records = [
+        record
+        for record in caplog.records
+        if record.name == "opensprite.agent.context"
+        and record.getMessage() == f"agent run failed run_id={run.id}"
+    ]
+    assert len(records) == 1
+    assert records[0].exc_info is not None
 
 
 @async_test

@@ -169,6 +169,7 @@ export const jaMessages = {
   "models.providers": "モデルプロバイダー",
   "models.providersDescription": "ローカルの安全な資格情報ストレージに保存された接続を管理します。",
   "models.loadingProviders": "プロバイダー接続を読み込み中…",
+  "models.loadingSettings": "AI 設定を読み込み中…",
   "models.providerConnection": "{provider} 接続",
   "models.providerActions": "{provider} 操作",
   "models.manage": "管理",

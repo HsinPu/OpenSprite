@@ -219,6 +219,37 @@ def test_run_events_deltas_and_completion_are_atomic_visible_state(
     ]
 
 
+def test_multibyte_assistant_delta_is_split_to_fit_event_payload(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store)
+    store.mark_run_started(accepted.run.id)
+    text = "😀" * 16_384
+
+    store.append_assistant_delta(accepted.run.id, text)
+
+    events = store.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+    deltas = [event for event in events if event.type is RunEventType.ASSISTANT_DELTA]
+    assert len(deltas) > 1
+    assert "".join(str(event.data["text"]) for event in deltas) == text
+    assert all(
+        len(
+            json.dumps(
+                event.data,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ) <= 65_536
+        for event in deltas
+    )
+    persisted = store.get_run(accepted.run.id)
+    assert persisted is not None
+    assert persisted.partial_text == text
+
+
 def test_model_event_context_usage_is_persisted_and_bounded(tmp_path: Path) -> None:
     store = repository(tmp_path)
     accepted = start(store)
@@ -730,7 +761,7 @@ def test_conversation_boundary_does_not_import_api_provider_or_runtime_modules()
     forbidden = {
         "opensprite_backend.app",
         "opensprite_backend.runtime",
-        "opensprite_backend.provider_adapters",
+        "opensprite_backend.providers.adapters",
         "opensprite_backend.provider_connections",
         "opensprite_backend.ai_settings",
     }

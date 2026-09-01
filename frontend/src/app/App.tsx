@@ -76,8 +76,10 @@ export function App() {
     outputContinuation,
     responseDelivery,
     logFullPrompts,
+    loaded: aiSettingsLoaded,
     saving: aiSettingsSaving,
     error: aiSettingsError,
+    reload: reloadAiSettings,
     saveModelSelection,
     saveResponseMode,
     saveOutputContinuation,
@@ -407,8 +409,10 @@ export function App() {
           outputContinuation={outputContinuation}
           responseDelivery={responseDelivery}
           logFullPrompts={logFullPrompts}
+          aiSettingsLoaded={aiSettingsLoaded}
           aiSettingsSaving={aiSettingsSaving}
           aiSettingsError={aiSettingsError}
+          onAiSettingsReload={reloadAiSettings}
           onModelSelectionChange={saveModelSelection}
           onResponseModeChange={saveResponseMode}
           onOutputContinuationChange={saveOutputContinuation}

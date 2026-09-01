@@ -226,6 +226,7 @@ class ProviderConnectionService:
                     self._clear_transaction()
                 raise self._store_unavailable()
             self._clear_transaction()
+            self._operation_locks.invalidate(provider_id)
             return self._summary(provider_id, self._name(provider_id), desired)
 
     async def test(self, provider_id: ProviderId) -> ProviderSummary:
@@ -290,6 +291,7 @@ class ProviderConnectionService:
                     self._clear_transaction()
                 raise self._store_unavailable()
             self._clear_transaction()
+            self._operation_locks.invalidate(provider_id)
 
     async def recover_pending(self) -> None:
         try:
@@ -323,6 +325,7 @@ class ProviderConnectionService:
                 ):
                     raise self._store_unavailable()
                 self._transactions.clear()
+                self._operation_locks.invalidate(transaction.provider_id)
             except ProviderConnectionError:
                 raise
             except Exception:

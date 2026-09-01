@@ -80,6 +80,9 @@ _PUBLIC_ERROR_CODES = {
     "internal_error",
 }
 _MAX_EVENT_JSON_BYTES = 65536
+_MAX_ASSISTANT_DELTA_CHARS = 16384
+_ASSISTANT_DELTA_JSON_PREFIX_BYTES = len(b'{"text":"')
+_ASSISTANT_DELTA_JSON_SUFFIX_BYTES = len(b'"}')
 
 
 _SCHEMA_SQL = """
@@ -1024,8 +1027,13 @@ class SqliteConversationRepository:
 
     def append_assistant_delta(self, run_id: str, text: str) -> RunEvent:
         self._require_identifier(run_id)
-        if not isinstance(text, str) or not text or len(text) > 16384:
+        if (
+            not isinstance(text, str)
+            or not text
+            or len(text) > _MAX_ASSISTANT_DELTA_CHARS
+        ):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        chunks = self._split_assistant_delta(text)
         with self._lock:
             connection = self._open_write()
             try:
@@ -1040,14 +1048,24 @@ class SqliteConversationRepository:
                     "UPDATE runs SET partial_text = ? WHERE id = ?",
                     (partial_text, run_id),
                 )
+                created_at = self._now()
                 event = self._append_event(
                     connection,
                     run_id,
                     row["conversation_id"],
                     RunEventType.ASSISTANT_DELTA,
-                    {"text": text},
-                    self._now(),
+                    {"text": chunks[0]},
+                    created_at,
                 )
+                for chunk in chunks[1:]:
+                    event = self._append_event(
+                        connection,
+                        run_id,
+                        row["conversation_id"],
+                        RunEventType.ASSISTANT_DELTA,
+                        {"text": chunk},
+                        created_at,
+                    )
                 connection.commit()
                 return event
             except ConversationStoreError:
@@ -1060,6 +1078,36 @@ class SqliteConversationRepository:
                 ) from error
             finally:
                 connection.close()
+
+    @staticmethod
+    def _split_assistant_delta(text: str) -> tuple[str, ...]:
+        max_content_bytes = (
+            _MAX_EVENT_JSON_BYTES
+            - _ASSISTANT_DELTA_JSON_PREFIX_BYTES
+            - _ASSISTANT_DELTA_JSON_SUFFIX_BYTES
+        )
+        chunks: list[str] = []
+        current: list[str] = []
+        current_bytes = 0
+        for character in text:
+            encoded = json.dumps(
+                character,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            character_bytes = len(encoded) - 2
+            if character_bytes > max_content_bytes:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            if current and current_bytes + character_bytes > max_content_bytes:
+                chunks.append("".join(current))
+                current = []
+                current_bytes = 0
+            current.append(character)
+            current_bytes += character_bytes
+        if current:
+            chunks.append("".join(current))
+        return tuple(chunks)
 
     def complete_run(
         self,
@@ -1905,7 +1953,7 @@ class SqliteConversationRepository:
         if event_type is RunEventType.ASSISTANT_DELTA:
             if keys != {"text"} or not SqliteConversationRepository._is_bounded_text(
                 data.get("text"),
-                maximum=16384,
+                maximum=_MAX_ASSISTANT_DELTA_CHARS,
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

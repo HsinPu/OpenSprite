@@ -173,6 +173,7 @@ export const zhTWMessages = {
   "models.providers": "模型廠家",
   "models.providersDescription": "管理已儲存在本機安全憑證服務中的模型廠家連線。",
   "models.loadingProviders": "正在讀取模型廠家連線…",
+  "models.loadingSettings": "正在讀取 AI 設定…",
   "models.providerConnection": "{provider} 連線",
   "models.providerActions": "{provider} 操作",
   "models.manage": "管理",

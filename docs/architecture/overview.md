@@ -111,9 +111,10 @@ runtime 的 exact same-origin mutation policy 繼續生效。前端會嚴格驗�
 欄位、狀態與 UTC timestamp；無法驗證的回應只顯示固定安全錯誤。API key 只存在連線 modal
 的短暫密碼欄位 state，絕不寫入 URL、browser storage 或顯示字串；送出、錯誤、取消或卸載時
 都會清除。OpenAI 與 Anthropic 模型選項仍是前端 local catalog；OpenRouter 則在連線後即時
-取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。AI settings 只保存 provider id、
-執行用 model id 與 `default`／`fast`／`balanced`／`deep` 回應模式；`default` 的執行語意是省略
-Provider 推理強度參數，而不是轉成某個固定強度。顯示 label 從固定 catalog 或當次
+取得模型清單，只在同一次設定視窗工作階段重用記憶體結果。AI settings 保存 provider id、
+執行用 model id、Context／輸出 budget、`default`／`fast`／`balanced`／`deep` 回應模式、
+輸出續接、回覆顯示方式與 Prompt log 偏好；`default` 的執行語意是省略 Provider
+推理強度參數，而不是轉成某個固定強度。顯示 label 從固定 catalog 或當次
 OpenRouter 記憶體清單衍生。動態清單與 AI settings 都不寫入 browser storage 或 URL。
 
 Frontend localization 由 [`frontend-localization.md`](frontend-localization.md)
@@ -174,7 +175,8 @@ DELETE 維持 idempotent；catalog 固定且極小，因此沒有 pagination、f
   text input/output 且具有有效 Context window 的項目，保留 bounded Context/output capability，依 id
   去重、依 name 再 id 排序，最多回傳 1000 筆。請求不改寫 credential、metadata 或其他
   `.opensprite` 路徑；上游回應與模型清單均不落盤。Agent runtime 只將 sanitized capability 保留在
-  process memory 十分鐘，避免每個 Run 重複 discovery。
+  process memory 十分鐘，並在 provider credential generation 變更後失效，避免每個 Run 重複
+  discovery 又不沿用舊帳戶的能力資料。
 - 本機資料位置由 [`local-data-layout.md`](local-data-layout.md) 的 `AppPaths` 單一管理；建立路徑
   mapping、匯入 backend、啟動 system app 與讀取不存在的狀態都不建立任何目錄。Provider metadata
   只在實際寫入時建立 `%USERPROFILE%\.opensprite\state\providers.json`（Linux 為

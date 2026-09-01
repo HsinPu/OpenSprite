@@ -93,32 +93,32 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" } }: { initialSelection?: ModelSelection | null }) {
+function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" }, aiSettingsLoaded = true }: { initialSelection?: ModelSelection | null; aiSettingsLoaded?: boolean }) {
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
   const [outputContinuation, setOutputContinuation] = useState<"off" | "1" | "2" | "3" | "5" | "unlimited">("2");
   const providerCatalog = useProviderCatalog();
-  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={false} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
+  return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={false} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
 }
 
 function GuardedDialogHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openai", modelId: "gpt-5.6", contextBudget: "auto", outputBudget: "auto" });
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const providerCatalog = useProviderCatalog();
-  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
+  return <dialog open onCancel={(event) => { if (providerModalOpen) event.preventDefault(); }}><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode="balanced" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} onProviderModalChange={setProviderModalOpen} /></dialog>;
 }
 
 function ToggleSectionHarness() {
   const [selection, setSelection] = useState<ModelSelection | null>({ providerId: "openrouter", modelId: "missing", contextBudget: "auto", outputBudget: "auto" });
   const [section, setSection] = useState<SettingsSection>("models");
   const providerCatalog = useProviderCatalog();
-  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
+  return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
 }
 
 function GeneralSettingsPageHarness({ saving = false }: { saving?: boolean }) {
   const providerCatalog = useProviderCatalog();
-  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsSaving={false} aiSettingsError={null} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
+  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
 }
 
 describe("provider settings", () => {
@@ -175,6 +175,18 @@ describe("provider settings", () => {
     expect(within(group).getByRole("button", { name: "預設" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(within(group).getByRole("button", { name: "深入" }));
     await waitFor(() => expect(within(group).getByRole("button", { name: "深入" }).getAttribute("aria-pressed")).toBe("true"));
+  });
+
+  it("keeps AI settings controls disabled until the initial settings load finishes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(connectedCatalog))));
+    render(<SettingsHarness aiSettingsLoaded={false} />);
+
+    expect(await screen.findByText("正在讀取 AI 設定…")).toBeTruthy();
+    const responseModes = screen.getByRole("group", { name: "回應模式" });
+    expect(responseModes.querySelectorAll("button:not(:disabled)")).toHaveLength(0);
+    expect(screen.getByRole("combobox", { name: "回覆顯示方式" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
+    expect(screen.getByRole("combobox", { name: "自動續接過長回覆" }).closest(".ant-select")?.classList.contains("ant-select-disabled")).toBe(true);
+    expect(screen.getByRole("switch", { name: "記錄完整送出 Prompt" }).classList.contains("ant-switch-disabled")).toBe(true);
   });
 
   it("selects stream or complete response delivery", async () => {

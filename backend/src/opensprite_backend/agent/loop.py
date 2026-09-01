@@ -433,6 +433,7 @@ class AgentLoop:
         except ConversationStoreError:
             raise
         except Exception:
+            _LOGGER.exception("agent run failed run_id=%s", run_id)
             return await self._fail(run_id, INTERNAL_ERROR)
 
     async def _continue_output(

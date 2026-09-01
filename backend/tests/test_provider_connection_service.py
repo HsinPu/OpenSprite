@@ -173,6 +173,7 @@ def service(
     states: ProviderStateRepository,
     validator: FakeValidator,
     transactions: ProviderTransactionJournal | None = None,
+    operation_locks: ProviderOperationLocks | None = None,
 ) -> ProviderConnectionService:
     return ProviderConnectionService(
         credentials,
@@ -180,6 +181,7 @@ def service(
         cast(ProviderValidator, validator),
         transactions or FakeTransactionJournal(),
         clock=lambda: NOW,
+        operation_locks=operation_locks,
     )
 
 
@@ -259,6 +261,20 @@ def test_successful_connect_replaces_after_validation() -> None:
     assert states.values["openai"].status is ProviderStatus.CONNECTED
     assert summary.credential_preview == "••••5678"
     assert NEW_SECRET not in summary.model_dump_json()
+
+
+def test_successful_provider_mutations_advance_the_capability_generation() -> None:
+    credentials = FakeCredentialStore()
+    states = FakeStateRepository()
+    locks = ProviderOperationLocks()
+    runtime = service(credentials, states, FakeValidator(), operation_locks=locks)
+    initial = locks.generation("openrouter")
+
+    run(runtime.connect("openrouter", NEW_SECRET))
+    assert locks.generation("openrouter") == initial + 1
+
+    run(runtime.disconnect("openrouter"))
+    assert locks.generation("openrouter") == initial + 2
 
 
 def test_repeated_put_revalidates_even_same_candidate() -> None:

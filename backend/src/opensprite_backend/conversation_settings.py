@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-import tempfile
 from typing import Final, Protocol
 
 from .app_paths import AppPaths
+from .atomic_file import atomic_write
 from .models import ConversationSettings
 
 
@@ -132,46 +131,10 @@ class JsonConversationSettingsStore:
             raise ConversationSettingsStoreError from None
 
     def _atomic_write(self, payload: bytes) -> None:
-        temporary_path: Path | None = None
-        file_descriptor: int | None = None
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if os.name != "nt":
-                self._path.parent.chmod(0o700)
-            file_descriptor, temporary_name = tempfile.mkstemp(
-                dir=self._path.parent,
-                prefix=f".{self._path.name}.",
-                suffix=".tmp",
-                text=False,
-            )
-            temporary_path = Path(temporary_name)
-            with os.fdopen(file_descriptor, "wb") as stream:
-                file_descriptor = None
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary_path, self._path)
-            temporary_path = None
-            if os.name != "nt":
-                self._path.chmod(0o600)
-                directory_descriptor = os.open(self._path.parent, os.O_RDONLY)
-                try:
-                    os.fsync(directory_descriptor)
-                finally:
-                    os.close(directory_descriptor)
+            atomic_write(self._path, payload)
         except Exception:
             raise ConversationSettingsStoreError from None
-        finally:
-            if file_descriptor is not None:
-                try:
-                    os.close(file_descriptor)
-                except OSError:
-                    pass
-            if temporary_path is not None:
-                try:
-                    temporary_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
 
 
 class UnavailableConversationSettings:

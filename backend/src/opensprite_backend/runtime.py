@@ -114,7 +114,8 @@ def create_system_runtime(
         gateway=provider_runtime.model_gateway,
         tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
         capability_resolver=ProviderModelCapabilityResolver(
-            provider_runtime.connections
+            provider_runtime.connections,
+            operation_locks=provider_runtime.operation_locks,
         ),
         system_prompt_provider=create_system_prompt_provider(
             paths,

@@ -19,6 +19,7 @@ from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnections,
 )
+from opensprite_backend.providers.operation_locks import ProviderOperationLocks
 
 
 class ProviderModelCapabilityResolver:
@@ -27,6 +28,7 @@ class ProviderModelCapabilityResolver:
         provider_connections: ProviderConnections,
         *,
         cache_seconds: float = 600.0,
+        operation_locks: ProviderOperationLocks | None = None,
     ) -> None:
         if not 1 <= cache_seconds <= 3600:
             raise ValueError("invalid model capability cache lifetime")
@@ -34,6 +36,8 @@ class ProviderModelCapabilityResolver:
         self._cache_seconds = cache_seconds
         self._openrouter_cache: dict[str, ModelCapability] = {}
         self._cache_loaded_at = 0.0
+        self._cache_generation: int | None = None
+        self._operation_locks = operation_locks
         self._lock = asyncio.Lock()
 
     async def resolve(
@@ -47,6 +51,11 @@ class ProviderModelCapabilityResolver:
         if provider_id != "openrouter":
             raise ModelCapabilityNotFound
         async with self._lock:
+            generation = self._current_generation()
+            if generation != self._cache_generation:
+                self._openrouter_cache = {}
+                self._cache_loaded_at = 0.0
+                self._cache_generation = generation
             refreshed = False
             if (
                 self._cache_loaded_at == 0.0
@@ -81,6 +90,12 @@ class ProviderModelCapabilityResolver:
             for item in catalog.models
         }
         self._cache_loaded_at = monotonic()
+        self._cache_generation = self._current_generation()
+
+    def _current_generation(self) -> int | None:
+        if self._operation_locks is None:
+            return None
+        return self._operation_locks.generation("openrouter")
 
 
 def _provider_failure(code: ErrorCode) -> InferenceFailure:

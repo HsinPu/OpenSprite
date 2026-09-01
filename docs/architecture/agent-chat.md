@@ -166,11 +166,12 @@ other speculative capability.
 
 ## Persistence
 
-The first implementation uses only four SQLite tables under
+The first implementation uses five SQLite tables under
 `.opensprite/data/opensprite.db`:
 
 - `conversations`
 - `messages`
+- `conversation_compactions`
 - `runs`
 - `run_events`
 
@@ -194,7 +195,8 @@ The initial loop is intentionally small:
 - each tool has an explicit timeout and output cap;
 - cancellation is checked before model and tool boundaries.
 
-Context is bounded by tokens rather than a fixed number of Messages. `auto`,
+Context is primarily bounded by tokens, with a defensive maximum of 256 model
+messages and bounded 200-message repository pages for compaction. `auto`,
 32K, 64K, 128K, 256K and model-maximum choices resolve against a backend-trusted
 model capability. Output choices are Auto, 8K, 16K, 32K, 64K, and model
 maximum. Auto targets one quarter of the selected Context with a 32K ceiling;
@@ -264,6 +266,9 @@ so a Provider cannot push the SQLite Run beyond its storage contract. If an
 otherwise recoverable repository write fails during background execution, the
 Run manager makes one fail-closed terminal transition with a safe internal
 error; it does not silently discard the task while leaving an active Run.
+Each persisted assistant delta is also split on the encoded UTF-8 event-payload
+boundary, so a multi-byte chunk cannot exceed SQLite's 64 KiB semantic-event
+limit while the Run's durable partial text remains the complete response.
 
 Automatic continuation is owned by the backend Agent loop, not by the browser.
 Each Run snapshots `off`, 1, 2, 3, 5, or `unlimited`; the default is 2. The

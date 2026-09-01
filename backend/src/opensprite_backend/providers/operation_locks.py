@@ -20,6 +20,7 @@ class ProviderOperationLocks:
             provider_id: asyncio.Lock()
             for provider_id in sorted(_PROVIDERS)
         }
+        self._generations = {provider_id: 0 for provider_id in _PROVIDERS}
 
     @asynccontextmanager
     async def hold(self, provider_id: ProviderId) -> AsyncIterator[None]:
@@ -27,3 +28,13 @@ class ProviderOperationLocks:
             raise ValueError("unsupported provider lock")
         async with self._locks[provider_id]:
             yield
+
+    def generation(self, provider_id: ProviderId) -> int:
+        if provider_id not in _PROVIDERS:
+            raise ValueError("unsupported provider lock")
+        return self._generations[provider_id]
+
+    def invalidate(self, provider_id: ProviderId) -> None:
+        if provider_id not in _PROVIDERS:
+            raise ValueError("unsupported provider lock")
+        self._generations[provider_id] += 1

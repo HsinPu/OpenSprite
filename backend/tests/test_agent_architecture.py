@@ -28,7 +28,7 @@ def imported_modules(directory: str) -> list[tuple[str, str]]:
 def test_agent_depends_on_interfaces_not_sqlite_or_provider_adapters() -> None:
     forbidden = {
         "opensprite_backend.conversations.sqlite_repository",
-        "opensprite_backend.provider_adapters",
+        "opensprite_backend.providers.adapters",
         "opensprite_backend.provider_connections",
         "opensprite_backend.app",
         "opensprite_backend.runtime",

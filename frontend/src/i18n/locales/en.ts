@@ -169,6 +169,7 @@ export const enMessages = {
   "models.providers": "Model providers",
   "models.providersDescription": "Manage provider connections stored securely by the local service.",
   "models.loadingProviders": "Loading provider connections…",
+  "models.loadingSettings": "Loading AI settings…",
   "models.providerConnection": "{provider} connection",
   "models.providerActions": "{provider} actions",
   "models.manage": "Manage",

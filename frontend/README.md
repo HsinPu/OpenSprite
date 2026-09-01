@@ -8,7 +8,7 @@
 - `src/api/`：Provider、General/AI settings 與 Agent chat 的 HTTP／SSE client。
 - `src/features/conversation-settings/`：持久化啟動目的地與鍵盤傳送偏好。
 - `src/features/chat/`：Conversation 清單、Run 狀態、聊天畫面與 SSE 互動。
-- `src/features/settings/`：設定視窗與尚未上線的一般偏好呈現。
+- `src/features/settings/`：設定視窗、已上線設定與明確標示的 Demo 偏好呈現。
 - `src/features/general-settings/`：持久化語言、時區與日期時間格式。
 - `src/i18n/`：typed locale catalog、React locale context 與繁中／英文／日文資源。
 - `src/features/app-info/`：已安裝版本與 Build identity 的讀取。
@@ -42,6 +42,8 @@ AI 回覆的時間旁可開啟該回覆對應的歷史 Run；沒有 AI 回覆的
 Run 使用不同的前端狀態，因此查看歷史不會停止或取代目前執行。
 
 OpenAI 與 Anthropic 目前使用前端固定模型清單。OpenRouter 連線後會透過 bodyless `POST /api/providers/openrouter/models` 載入帳戶可用模型；清單只在該次設定視窗工作階段的記憶體中重用，不寫入 localStorage、網址或 `.opensprite`。模型選單可用顯示名稱或完整模型 ID 搜尋。
+
+AI 模型偏好會在本機設定完成初次讀取後才可操作；讀取失敗會保留目前畫面並提供重試，不會以前端預設值覆寫已保存設定。
 
 設定視窗以「一般」與「AI 模型」作為可操作分類。未實作的模型偏好、
 通知、記憶、工具、外觀與隱私功能以停用的 `Demo` 分類或「未來上線」資訊列呈現，

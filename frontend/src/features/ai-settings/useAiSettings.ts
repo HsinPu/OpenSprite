@@ -32,27 +32,37 @@ export function useAiSettings(
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
+  const translatorRef = useRef(t);
 
   useEffect(() => {
+    translatorRef.current = t;
+  }, [t]);
+
+  const reload = useCallback(async (): Promise<void> => {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
-    void getAiSettings()
-      .then((savedSettings) => {
-        if (loadGenerationRef.current !== generation) return;
-        setModelSelection(savedSettings.model);
-        setResponseMode(savedSettings.responseMode);
-        setOutputContinuation(savedSettings.outputContinuation);
-        setResponseDelivery(savedSettings.responseDelivery);
-        setLogFullPrompts(savedSettings.logFullPrompts);
-        setLoaded(true);
-        setError(null);
-      })
-      .catch((loadError: unknown) => {
-        if (loadGenerationRef.current !== generation) return;
-        setLoaded(false);
-        setError(aiSettingsErrorText(loadError, t));
-      });
+    setLoaded(false);
+    setError(null);
+    try {
+      const savedSettings = await getAiSettings();
+      if (loadGenerationRef.current !== generation) return;
+      setModelSelection(savedSettings.model);
+      setResponseMode(savedSettings.responseMode);
+      setOutputContinuation(savedSettings.outputContinuation);
+      setResponseDelivery(savedSettings.responseDelivery);
+      setLogFullPrompts(savedSettings.logFullPrompts);
+      setLoaded(true);
+      setError(null);
+    } catch (loadError: unknown) {
+      if (loadGenerationRef.current !== generation) return;
+      setLoaded(false);
+      setError(aiSettingsErrorText(loadError, translatorRef.current));
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const save = useCallback((next: AiSettings): Promise<string | null> => {
     loadGenerationRef.current += 1;
@@ -139,8 +149,10 @@ export function useAiSettings(
     outputContinuation,
     responseDelivery,
     logFullPrompts,
+    loaded,
     saving,
     error,
+    reload,
     saveModelSelection,
     saveResponseMode,
     saveOutputContinuation,

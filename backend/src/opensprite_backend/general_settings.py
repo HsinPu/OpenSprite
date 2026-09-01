@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-import tempfile
 from typing import Final, Protocol
 
 from .app_paths import AppPaths
+from .atomic_file import atomic_write
 from .models import GeneralSettings
 
 _SCHEMA_VERSION: Final = 1
@@ -122,37 +121,11 @@ class JsonGeneralSettingsStore:
         return settings
 
     def _atomic_write(self, payload: bytes) -> None:
-        temporary_path: Path | None = None
-        file_descriptor: int | None = None
         failed = False
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            file_descriptor, temporary_name = tempfile.mkstemp(
-                dir=self._path.parent,
-                prefix=f".{self._path.name}.",
-                suffix=".tmp",
-            )
-            temporary_path = Path(temporary_name)
-            with os.fdopen(file_descriptor, "wb") as stream:
-                file_descriptor = None
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary_path, self._path)
-            temporary_path = None
+            atomic_write(self._path, payload)
         except Exception:
             failed = True
-        finally:
-            if file_descriptor is not None:
-                try:
-                    os.close(file_descriptor)
-                except OSError:
-                    pass
-            if temporary_path is not None:
-                try:
-                    temporary_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
         if failed:
             raise GeneralSettingsStoreError
 
