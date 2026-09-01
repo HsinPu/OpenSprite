@@ -297,7 +297,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.2.1",
+        "version": "0.2.2",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

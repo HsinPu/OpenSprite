@@ -128,6 +128,9 @@ describe("Ant Design shell controls", () => {
     expect(container.querySelector(".sidebar-header button")).toBeNull();
     expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
+    expect(executionToggle.classList.contains("chat-workspace__execution-toggle")).toBe(true);
+    expect(executionToggle.closest(".chat-workspace__header")).toBeNull();
+    expect(executionToggle.closest(".chat-workspace")).toBeTruthy();
     expect(executionToggle.getAttribute("aria-expanded")).toBe("false");
     expect(executionToggle.querySelector(".anticon-left")).toBeTruthy();
 

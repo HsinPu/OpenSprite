@@ -326,7 +326,7 @@ describe("live chat workspace", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("leaves sidebar navigation to the shell and keeps execution toggle in the header", () => {
+  it("leaves sidebar navigation to the shell and places execution toggle on the divider", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [],
       activeRun: run,
@@ -348,9 +348,9 @@ describe("live chat workspace", () => {
     expect(screen.queryByRole("button", { name: "收合側邊欄" })).toBeNull();
     const expand = screen.getByRole("button", { name: "展開本次執行" });
     expect(header.firstElementChild).toBe(screen.getByRole("heading", { level: 1, name: "整理今天的工作" }));
-    expect(header.lastElementChild).toBe(expand);
-    expect(expand.className).toContain("chat-workspace__header-context-toggle");
-    expect(expand.closest("header")).toBeTruthy();
+    expect(expand.className).toContain("chat-workspace__execution-toggle");
+    expect(expand.closest("header")).toBeNull();
+    expect(expand.closest(".chat-workspace")).toBe(header.closest(".chat-workspace"));
     const body = document.getElementById(expand.getAttribute("aria-controls")!);
     expect(body?.hidden).toBe(true);
 

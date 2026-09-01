@@ -218,16 +218,6 @@ export function ChatWorkspace({
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
           <h1>{title ?? t("app.newConversationTitle")}</h1>
-          <Button
-            type="default"
-            className="chat-workspace__header-context-toggle"
-            icon={executionPanelExpanded ? <RightOutlined /> : <LeftOutlined />}
-            aria-expanded={executionPanelExpanded}
-            aria-controls={executionPanelId}
-            aria-label={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-            title={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
-            onClick={handleExecutionPanelToggle}
-          />
         </header>
 
         <div ref={scrolling.containerRef} className="chat-workspace__conversation" aria-live="polite" aria-busy={chat.loading || chat.isRunning} onScroll={scrolling.onScroll}>
@@ -353,6 +343,17 @@ export function ChatWorkspace({
           </div>
         </form>
       </div>
+
+      <Button
+        type="default"
+        className="chat-workspace__execution-toggle"
+        icon={executionPanelExpanded ? <RightOutlined /> : <LeftOutlined />}
+        aria-expanded={executionPanelExpanded}
+        aria-controls={executionPanelId}
+        aria-label={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+        title={executionPanelExpanded ? t(historical ? "execution.collapseDetails" : "execution.collapse") : t(historical ? "execution.expandDetails" : "execution.expand")}
+        onClick={handleExecutionPanelToggle}
+      />
 
       <ExecutionContext
         modelName={displayedModelName}

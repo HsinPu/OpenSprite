@@ -68,7 +68,7 @@ button {
 .app-shell__sidebar-toggle.ant-btn {
   position: absolute;
   z-index: 30;
-  top: 16px;
+  top: 50%;
   inset-inline-start: var(--app-sidebar-width);
   display: grid;
   width: 40px;
@@ -76,7 +76,7 @@ button {
   flex: 0 0 40px;
   place-items: center;
   padding: 0;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   border-color: var(--os-border);
   border-radius: 10px;
   background: var(--os-surface);
@@ -94,7 +94,7 @@ button {
 }
 
 .app-shell__sidebar-toggle.ant-btn:active {
-  transform: translateX(-50%) scale(0.96);
+  transform: translate(-50%, -50%) scale(0.96);
 }
 
 .main-sidebar {
