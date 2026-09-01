@@ -25,7 +25,8 @@ Frontend -> Contracts <- Backend
 - Frontend 的依賴方向由架構測試固定為 `app -> features -> api/i18n`；目前的 feature boundaries
   包含 `ai-settings`、`general-settings`、`conversation-settings`、`app-info`、`chat` 與
   `settings`。Chat 與 Settings 可共同依賴 `features/ai-settings`，但不得互相 import，`api`
-  與 `i18n` 不得反向依賴畫面功能。
+  與 `i18n` 不得反向依賴畫面功能。App shell 擁有全域導覽狀態與桌面側欄切換按鈕；
+  該按鈕以 shell layout divider 為錨點，Chat workspace 只擁有聊天與執行面板控制。
 - Backend 的 `app.py` 只建立 FastAPI application、middleware、exception handlers、health route 與
   feature router composition；Provider、AI Settings 與 Agent Chat 的 HTTP routes 分別由 `api/` 擁有。
 - Provider credential lifecycle policy、Protocol 與 fail-closed behavior 留在 `provider_connections.py`；

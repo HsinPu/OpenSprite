@@ -33,8 +33,6 @@ type ChatWorkspaceProps = {
   autoScroll: boolean;
   executionPanelDefaultExpanded: boolean;
   mobileHeaderActionTarget?: HTMLElement | null;
-  navigationCollapsed?: boolean;
-  onNavigationToggle?: () => void;
   onModelSelectionChange: (selection: ModelSelection) => Promise<string | null>;
   onConversationAccepted: (conversationId: string, firstMessage: string) => void;
   onConversationUpdated: () => void;
@@ -77,8 +75,6 @@ export function ChatWorkspace({
   autoScroll,
   executionPanelDefaultExpanded,
   mobileHeaderActionTarget = null,
-  navigationCollapsed = false,
-  onNavigationToggle,
   onModelSelectionChange,
   onConversationAccepted,
   onConversationUpdated,
@@ -221,18 +217,6 @@ export function ChatWorkspace({
     <section className="chat-workspace" aria-label={t("chat.workspace")}>
       <div className="chat-workspace__main">
         <header className="chat-workspace__header">
-          {onNavigationToggle ? (
-            <Button
-              type="default"
-              className="chat-workspace__header-navigation-toggle"
-              icon={navigationCollapsed ? <RightOutlined /> : <LeftOutlined />}
-              aria-expanded={!navigationCollapsed}
-              aria-controls="conversation-navigation"
-              aria-label={navigationCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-              title={navigationCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
-              onClick={onNavigationToggle}
-            />
-          ) : null}
           <h1>{title ?? t("app.newConversationTitle")}</h1>
           <Button
             type="default"

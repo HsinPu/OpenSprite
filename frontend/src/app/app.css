@@ -50,8 +50,10 @@ button {
 }
 
 .app-shell {
+  --app-sidebar-width: 248px;
+  position: relative;
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -59,7 +61,40 @@ button {
 }
 
 .app-shell.is-sidebar-collapsed {
-  grid-template-columns: 76px minmax(0, 1fr);
+  --app-sidebar-width: 76px;
+  grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
+}
+
+.app-shell__sidebar-toggle.ant-btn {
+  position: absolute;
+  z-index: 30;
+  top: 16px;
+  inset-inline-start: var(--app-sidebar-width);
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  padding: 0;
+  transform: translateX(-50%);
+  border-color: var(--os-border);
+  border-radius: 10px;
+  background: var(--os-surface);
+  color: var(--os-muted);
+  box-shadow: 0 4px 14px rgb(45 39 34 / 7%);
+  font-size: 1rem;
+  line-height: 1;
+  transition: inset-inline-start 180ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.app-shell__sidebar-toggle.ant-btn:not(:disabled):hover {
+  border-color: var(--os-primary);
+  background: var(--os-primary-soft);
+  color: var(--os-primary-strong);
+}
+
+.app-shell__sidebar-toggle.ant-btn:active {
+  transform: translateX(-50%) scale(0.96);
 }
 
 .main-sidebar {
@@ -151,7 +186,8 @@ button {
 .conversation-link:focus-visible,
 .utility-nav button:focus-visible,
 .mobile-execution-button:focus-visible,
-.mobile-menu-button:focus-visible {
+.mobile-menu-button:focus-visible,
+.app-shell__sidebar-toggle:focus-visible {
   outline: 3px solid rgb(255 101 69 / 28%);
   outline-offset: 2px;
 }
@@ -374,6 +410,10 @@ button {
 
   .app-shell.is-sidebar-collapsed {
     display: block;
+  }
+
+  .app-shell__sidebar-toggle.ant-btn {
+    display: none;
   }
 
   .mobile-header {

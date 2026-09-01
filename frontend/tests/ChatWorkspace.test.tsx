@@ -326,7 +326,7 @@ describe("live chat workspace", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("places both desktop shell toggles around the chat title", () => {
+  it("leaves sidebar navigation to the shell and keeps execution toggle in the header", () => {
     mockedUseConversationRun.mockReturnValue({
       messages: [],
       activeRun: run,
@@ -342,16 +342,13 @@ describe("live chat workspace", () => {
       loadOlderMessages: vi.fn(async () => undefined),
     });
 
-    const onNavigationToggle = vi.fn();
-    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} navigationCollapsed={false} onNavigationToggle={onNavigationToggle} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
+    render(<ChatWorkspace conversationId={run.conversationId} modelName="GPT-5.6" modelSelection={selection("openrouter", run.modelId)} modelChoices={[{ selection: selection("openrouter", run.modelId), label: "GPT-5.6" }]} modelSelectionSaving={false} timeZone="system" sendBehavior="enter" autoScroll executionPanelDefaultExpanded={false} onModelSelectionChange={vi.fn(async () => null)} onConversationAccepted={vi.fn()} onConversationUpdated={vi.fn()} title="整理今天的工作" />);
 
     const header = screen.getByRole("heading", { level: 1, name: "整理今天的工作" }).closest("header")!;
-    const navigation = screen.getByRole("button", { name: "收合側邊欄" });
+    expect(screen.queryByRole("button", { name: "收合側邊欄" })).toBeNull();
     const expand = screen.getByRole("button", { name: "展開本次執行" });
-    expect(header.firstElementChild).toBe(navigation);
+    expect(header.firstElementChild).toBe(screen.getByRole("heading", { level: 1, name: "整理今天的工作" }));
     expect(header.lastElementChild).toBe(expand);
-    fireEvent.click(navigation);
-    expect(onNavigationToggle).toHaveBeenCalledOnce();
     expect(expand.className).toContain("chat-workspace__header-context-toggle");
     expect(expand.closest("header")).toBeTruthy();
     const body = document.getElementById(expand.getAttribute("aria-controls")!);

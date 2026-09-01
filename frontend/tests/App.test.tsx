@@ -115,14 +115,16 @@ describe("settings dialog focus restoration", () => {
 });
 
 describe("Ant Design shell controls", () => {
-  it("places both desktop collapse controls in the chat title bar", () => {
+  it("anchors the sidebar collapse control to the app shell divider", () => {
     const { container } = render(<App />);
 
     const sidebarToggle = screen.getByRole("button", { name: "收合側邊欄" });
     const executionToggle = screen.getByRole("button", { name: "展開本次執行" });
     expect(sidebarToggle.classList.contains("ant-btn")).toBe(true);
-    expect(sidebarToggle.classList.contains("chat-workspace__header-navigation-toggle")).toBe(true);
-    expect(sidebarToggle.closest(".chat-workspace__header")).toBe(executionToggle.closest(".chat-workspace__header"));
+    expect(sidebarToggle.classList.contains("app-shell__sidebar-toggle")).toBe(true);
+    expect(sidebarToggle.closest(".app-shell")).toBe(container.querySelector(".app-shell"));
+    expect(sidebarToggle.closest(".chat-workspace__header")).toBeNull();
+    expect(sidebarToggle.getAttribute("aria-controls")).toBe("main-navigation-sidebar");
     expect(container.querySelector(".sidebar-header button")).toBeNull();
     expect(sidebarToggle.querySelector(".anticon-left")).toBeTruthy();
     expect(executionToggle.classList.contains("ant-btn")).toBe(true);
@@ -133,6 +135,14 @@ describe("Ant Design shell controls", () => {
     const expandSidebar = screen.getByRole("button", { name: "展開側邊欄" });
     expect(container.querySelector(".app-shell")?.classList.contains("is-sidebar-collapsed")).toBe(true);
     expect(expandSidebar.querySelector(".anticon-right")).toBeTruthy();
+  });
+
+  it("uses only the mobile menu on narrow screens", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    render(<App />);
+
+    expect(screen.queryByRole("button", { name: "收合側邊欄" })).toBeNull();
+    expect(screen.getByRole("button", { name: "開啟主選單" })).toBeTruthy();
   });
 
   it("does not show the inactive tools and connections shortcut", () => {

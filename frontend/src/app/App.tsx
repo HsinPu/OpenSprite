@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 
 import { isIdentifier, type ConversationSummary } from "../api/agentChat";
 import { ChatWorkspace } from "../features/chat/ChatWorkspace";
@@ -265,6 +267,19 @@ export function App() {
         />
       ) : null}
 
+      {!mobileNavigation ? (
+        <Button
+          type="default"
+          className="app-shell__sidebar-toggle"
+          icon={sidebarCollapsed ? <RightOutlined /> : <LeftOutlined />}
+          aria-expanded={!sidebarCollapsed}
+          aria-controls="main-navigation-sidebar"
+          aria-label={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
+          title={sidebarCollapsed ? t("app.expandSidebar") : t("app.collapseSidebar")}
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+        />
+      ) : null}
+
       <aside
         id="main-navigation-sidebar"
         className={`main-sidebar${menuOpen ? " is-open" : ""}${sidebarCollapsed ? " is-collapsed" : ""}`}
@@ -369,8 +384,6 @@ export function App() {
           autoScroll={conversationSettings.settings.autoScroll}
           executionPanelDefaultExpanded={conversationSettings.settings.executionPanelDefaultExpanded}
           mobileHeaderActionTarget={mobileHeaderActionTarget}
-          navigationCollapsed={sidebarCollapsed}
-          onNavigationToggle={() => setSidebarCollapsed((collapsed) => !collapsed)}
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
