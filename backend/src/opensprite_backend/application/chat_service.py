@@ -22,6 +22,7 @@ from opensprite_backend.conversations.repository import (
     ConversationRepository,
     ConversationStoreError,
 )
+from opensprite_backend.conversations.event_notifier import RunEventNotifier
 from opensprite_backend.models import ErrorCode
 from opensprite_backend.provider_connections import (
     ProviderConnectionError,
@@ -154,15 +155,21 @@ class AgentChatService:
         provider_connections: ProviderConnections,
         run_manager: RunManager,
         *,
+        event_notifier: RunEventNotifier | None = None,
         event_poll_seconds: float = 0.05,
+        event_wait_seconds: float = 5.0,
     ) -> None:
         if not 0.001 <= event_poll_seconds <= 5:
             raise ValueError("invalid event polling interval")
+        if not 0.1 <= event_wait_seconds <= 30:
+            raise ValueError("invalid event wait interval")
         self._repository = repository
         self._ai_settings = ai_settings
         self._provider_connections = provider_connections
         self._run_manager = run_manager
         self._event_poll_seconds = event_poll_seconds
+        self._event_wait_seconds = event_wait_seconds
+        self._event_notifier = event_notifier
 
     async def startup(self) -> tuple[str, ...]:
         try:
@@ -293,6 +300,11 @@ class AgentChatService:
     ) -> AsyncIterator[RunEvent]:
         await self.get_run(run_id)
         current = after_sequence
+        notifier_version = (
+            None
+            if self._event_notifier is None
+            else self._event_notifier.version(run_id)
+        )
         while True:
             try:
                 events = await asyncio.to_thread(
@@ -309,7 +321,14 @@ class AgentChatService:
             run = await self.get_run(run_id)
             if run.status in self._TERMINAL and not events:
                 return
-            if not events:
+            if not events and self._event_notifier is not None:
+                notifier_version = await asyncio.to_thread(
+                    self._event_notifier.wait,
+                    run_id,
+                    notifier_version,
+                    self._event_wait_seconds,
+                )
+            elif not events:
                 await asyncio.sleep(self._event_poll_seconds)
 
 

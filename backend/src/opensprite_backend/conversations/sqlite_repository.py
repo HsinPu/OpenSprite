@@ -37,6 +37,7 @@ from .models import (
     StoreFailure,
 )
 from .repository import ConversationStoreError
+from .event_notifier import RunEventNotifier
 
 
 _SCHEMA_VERSION = 8
@@ -426,10 +427,12 @@ class SqliteConversationRepository:
         *,
         clock: Callable[[], datetime] | None = None,
         identifier_factory: Callable[[], str] | None = None,
+        event_notifier: RunEventNotifier | None = None,
     ) -> None:
         self._database_file = Path(database_file)
         self._clock = clock or (lambda: datetime.now(UTC))
         self._identifier_factory = identifier_factory or (lambda: str(uuid4()))
+        self._event_notifier = event_notifier
         self._lock = RLock()
 
     @property
@@ -973,7 +976,9 @@ class SqliteConversationRepository:
                 )
                 result = self._require_run_row(connection, run_id)
                 connection.commit()
-                return self._run(result)
+                snapshot = self._run(result)
+                self._signal_run_event(run_id)
+                return snapshot
             except ConversationStoreError:
                 connection.rollback()
                 raise
@@ -1013,6 +1018,7 @@ class SqliteConversationRepository:
                     self._now(),
                 )
                 connection.commit()
+                self._signal_run_event(run_id)
                 return event
             except ConversationStoreError:
                 connection.rollback()
@@ -1067,6 +1073,7 @@ class SqliteConversationRepository:
                         created_at,
                     )
                 connection.commit()
+                self._signal_run_event(run_id)
                 return event
             except ConversationStoreError:
                 connection.rollback()
@@ -1202,6 +1209,7 @@ class SqliteConversationRepository:
                 if message_row is None:
                     raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
                 connection.commit()
+                self._signal_run_event(run_id)
                 return CompletedRun(
                     run=self._run(run_row),
                     message=self._message(message_row),
@@ -1260,6 +1268,7 @@ class SqliteConversationRepository:
                     raise ConversationStoreError(StoreFailure.RUN_NOT_ACTIVE)
                 result = self._require_run_row(connection, run_id)
                 connection.commit()
+                self._signal_run_event(run_id)
                 return self._run(result)
             except ConversationStoreError:
                 connection.rollback()
@@ -1302,6 +1311,7 @@ class SqliteConversationRepository:
                 )
                 result = self._require_run_row(connection, run_id)
                 connection.commit()
+                self._signal_run_event(run_id)
                 return self._run(result)
             except ConversationStoreError:
                 connection.rollback()
@@ -1363,7 +1373,10 @@ class SqliteConversationRepository:
                         now,
                     )
                 connection.commit()
-                return tuple(row["id"] for row in rows)
+                run_ids = tuple(row["id"] for row in rows)
+                for run_id in run_ids:
+                    self._signal_run_event(run_id)
+                return run_ids
             except ConversationStoreError:
                 connection.rollback()
                 raise
@@ -1459,6 +1472,7 @@ class SqliteConversationRepository:
                 )
                 result = self._require_run_row(connection, run_id)
                 connection.commit()
+                self._signal_run_event(run_id)
                 return self._run(result)
             except ConversationStoreError:
                 connection.rollback()
@@ -1760,6 +1774,10 @@ class SqliteConversationRepository:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
         return value.astimezone(UTC)
+
+    def _signal_run_event(self, run_id: str) -> None:
+        if self._event_notifier is not None:
+            self._event_notifier.signal(run_id)
 
     def _new_identifier(self) -> str:
         value = self._identifier_factory()

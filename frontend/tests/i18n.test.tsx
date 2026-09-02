@@ -31,6 +31,12 @@ function I18nHarness() {
   return <I18nProvider><GeneralSettingsHarness /></I18nProvider>;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
+}
+
 describe("frontend internationalization", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -97,6 +103,41 @@ describe("frontend internationalization", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("語言與時區設定暫時無法讀取或儲存");
     expect((language as HTMLSelectElement).value).toBe("zh-TW");
     expect(document.documentElement.lang).toBe("zh-TW");
+  });
+
+  it("merges rapid locale and time-zone saves into one latest snapshot", async () => {
+    const firstPut = deferred<Response>();
+    const secondPut = deferred<Response>();
+    const payloads: Array<Record<string, string>> = [];
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path === "/api/settings/general" && !init) return Promise.resolve(new Response(JSON.stringify({ locale: "zh-TW", timeZone: "system" })));
+      if (path === "/api/settings/general" && init?.method === "PUT") {
+        const payload = JSON.parse(String(init.body)) as Record<string, string>;
+        payloads.push(payload);
+        return payloads.length === 1 ? firstPut.promise : secondPut.promise;
+      }
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<I18nHarness />);
+
+    const language = await screen.findByRole("combobox", { name: "介面語言" });
+    const timeZone = screen.getByRole("combobox", { name: "時區" });
+    await waitFor(() => expect((language as HTMLSelectElement).disabled).toBe(false));
+    fireEvent.change(language, { target: { value: "en" } });
+    fireEvent.change(timeZone, { target: { value: "UTC" } });
+
+    await waitFor(() => expect(payloads).toHaveLength(1));
+    expect(payloads[0]).toEqual({ locale: "en", timeZone: "system" });
+    firstPut.resolve(new Response(JSON.stringify(payloads[0])));
+    await waitFor(() => expect(payloads).toHaveLength(2));
+    expect(payloads[1]).toEqual({ locale: "en", timeZone: "UTC" });
+    secondPut.resolve(new Response(JSON.stringify(payloads[1])));
+
+    await waitFor(() => {
+      expect(document.documentElement.lang).toBe("en");
+      expect((timeZone as HTMLSelectElement).value).toBe("UTC");
+    });
   });
 
   it("retries an initial General settings load failure", async () => {

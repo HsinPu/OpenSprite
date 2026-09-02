@@ -16,6 +16,7 @@ from .models import (
 )
 from .repository import ConversationRepository, ConversationStoreError
 from .sqlite_repository import SqliteConversationRepository
+from .event_notifier import RunEventNotifier
 
 __all__ = [
     "CompletedRun",
@@ -28,6 +29,7 @@ __all__ = [
     "PublicRunError",
     "RunEvent",
     "RunEventType",
+    "RunEventNotifier",
     "RunSnapshot",
     "RunStatus",
     "SqliteConversationRepository",

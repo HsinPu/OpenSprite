@@ -39,6 +39,8 @@ export function useConversationSettings(): ConversationSettingsController {
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
+  const confirmedSettingsRef = useRef<ConversationSettings | null>(null);
+  const desiredSettingsRef = useRef<ConversationSettings | null>(null);
   const translatorRef = useRef(t);
 
   useEffect(() => {
@@ -54,6 +56,8 @@ export function useConversationSettings(): ConversationSettingsController {
       const saved = await getConversationSettings();
       if (loadGenerationRef.current !== generation) return;
       setSettings(saved);
+      confirmedSettingsRef.current = saved;
+      desiredSettingsRef.current = saved;
       setLoaded(true);
     } catch (loadError) {
       if (loadGenerationRef.current !== generation) return;
@@ -65,7 +69,10 @@ export function useConversationSettings(): ConversationSettingsController {
     void reload();
   }, [reload]);
 
-  const save = useCallback((next: ConversationSettings): Promise<string | null> => {
+  const save = useCallback((update: (current: ConversationSettings) => ConversationSettings): Promise<string | null> => {
+    const current = desiredSettingsRef.current ?? settings;
+    const next = update(current);
+    desiredSettingsRef.current = next;
     loadGenerationRef.current += 1;
     const generation = saveGenerationRef.current + 1;
     saveGenerationRef.current = generation;
@@ -75,14 +82,19 @@ export function useConversationSettings(): ConversationSettingsController {
       try {
         const saved = await putConversationSettings(next);
         if (saved.startupView !== next.startupView || saved.sendBehavior !== next.sendBehavior || saved.autoScroll !== next.autoScroll || saved.executionPanelDefaultExpanded !== next.executionPanelDefaultExpanded) throw new Error("conversation_settings_response_mismatch");
+        confirmedSettingsRef.current = saved;
         if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = saved;
           setSettings(saved);
           setLoaded(true);
         }
         return null;
       } catch (saveError) {
         const message = conversationSettingsErrorText(saveError, t);
-        if (saveGenerationRef.current === generation) setError(message);
+        if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = confirmedSettingsRef.current;
+          setError(message);
+        }
         return message;
       } finally {
         if (saveGenerationRef.current === generation) setSaving(false);
@@ -90,12 +102,12 @@ export function useConversationSettings(): ConversationSettingsController {
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, [t]);
+  }, [settings, t]);
 
-  const saveStartupView = useCallback((startupView: StartupView) => save({ ...settings, startupView }), [save, settings]);
-  const saveSendBehavior = useCallback((sendBehavior: SendBehavior) => save({ ...settings, sendBehavior }), [save, settings]);
-  const saveAutoScroll = useCallback((autoScroll: boolean) => save({ ...settings, autoScroll }), [save, settings]);
-  const saveExecutionPanelDefaultExpanded = useCallback((executionPanelDefaultExpanded: boolean) => save({ ...settings, executionPanelDefaultExpanded }), [save, settings]);
+  const saveStartupView = useCallback((startupView: StartupView) => save((current) => ({ ...current, startupView })), [save]);
+  const saveSendBehavior = useCallback((sendBehavior: SendBehavior) => save((current) => ({ ...current, sendBehavior })), [save]);
+  const saveAutoScroll = useCallback((autoScroll: boolean) => save((current) => ({ ...current, autoScroll })), [save]);
+  const saveExecutionPanelDefaultExpanded = useCallback((executionPanelDefaultExpanded: boolean) => save((current) => ({ ...current, executionPanelDefaultExpanded })), [save]);
 
   return {
     settings,

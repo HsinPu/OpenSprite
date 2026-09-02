@@ -21,6 +21,8 @@ from opensprite_backend.application import (
 )
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.conversations.models import RunStatus
+from opensprite_backend.conversations.models import RunEventType
+from opensprite_backend.conversations.event_notifier import RunEventNotifier
 from opensprite_backend.conversations.sqlite_repository import (
     SqliteConversationRepository,
 )
@@ -125,9 +127,17 @@ class FinalGateway:
         yield ModelCompleted(ModelFinishReason.FINAL)
 
 
-def service(tmp_path: Path, *, model: bool = True, connected: bool = True):
+def service(
+    tmp_path: Path,
+    *,
+    model: bool = True,
+    connected: bool = True,
+    with_notifier: bool = False,
+):
+    event_notifier = RunEventNotifier() if with_notifier else None
     repository = SqliteConversationRepository(
-        build_app_paths(tmp_path / ".opensprite").database_file
+        build_app_paths(tmp_path / ".opensprite").database_file,
+        event_notifier=event_notifier,
     )
     settings = AiSettings(
         model=(
@@ -154,6 +164,7 @@ def service(tmp_path: Path, *, model: bool = True, connected: bool = True):
         FixedSettings(settings),
         FixedConnections({"openrouter"} if connected else set()),
         manager,
+        event_notifier=event_notifier,
         event_poll_seconds=0.001,
     )
     return chat, repository, manager
@@ -267,6 +278,41 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
 
     assert [event.sequence for event in events] == [2, 3, 4]
     assert events[-1].type.value == "run.completed"
+    await chat.close()
+
+
+@async_test
+async def test_event_stream_waits_for_persisted_event_notification(
+    tmp_path: Path,
+) -> None:
+    chat, repository, _manager = service(tmp_path, with_notifier=True)
+    accepted = repository.start_run(
+        conversation_id=None,
+        client_request_id="e898796c-71e9-4eb5-aac1-7a6e9430a429",
+        message="hello",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+    )
+    repository.mark_run_started(accepted.run.id)
+    stream = chat.stream_events(accepted.run.id, after_sequence=1)
+    next_event = asyncio.create_task(anext(stream))
+    await asyncio.sleep(0.02)
+    assert next_event.done() is False
+
+    persisted = repository.append_run_event(
+        accepted.run.id,
+        RunEventType.MODEL_STARTED,
+        {
+            "providerId": "openrouter",
+            "modelId": "openrouter/auto",
+            "responseMode": "default",
+            "maxOutputTokens": 8_192,
+        },
+    )
+
+    assert await asyncio.wait_for(next_event, timeout=1) == persisted
+    await stream.aclose()
     await chat.close()
 
 

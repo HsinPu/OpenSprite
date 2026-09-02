@@ -32,6 +32,8 @@ export function useAiSettings(
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
+  const confirmedSettingsRef = useRef<AiSettings | null>(null);
+  const desiredSettingsRef = useRef<AiSettings | null>(null);
   const translatorRef = useRef(t);
 
   useEffect(() => {
@@ -51,6 +53,8 @@ export function useAiSettings(
       setOutputContinuation(savedSettings.outputContinuation);
       setResponseDelivery(savedSettings.responseDelivery);
       setLogFullPrompts(savedSettings.logFullPrompts);
+      confirmedSettingsRef.current = savedSettings;
+      desiredSettingsRef.current = savedSettings;
       setLoaded(true);
       setError(null);
     } catch (loadError: unknown) {
@@ -64,7 +68,16 @@ export function useAiSettings(
     void reload();
   }, [reload]);
 
-  const save = useCallback((next: AiSettings): Promise<string | null> => {
+  const save = useCallback((update: (current: AiSettings) => AiSettings): Promise<string | null> => {
+    const current = desiredSettingsRef.current ?? {
+      model: modelSelection,
+      responseMode,
+      outputContinuation,
+      responseDelivery,
+      logFullPrompts,
+    };
+    const next = update(current);
+    desiredSettingsRef.current = next;
     loadGenerationRef.current += 1;
     const generation = saveGenerationRef.current + 1;
     saveGenerationRef.current = generation;
@@ -85,7 +98,9 @@ export function useAiSettings(
         if (saved.logFullPrompts !== next.logFullPrompts) {
           throw new Error("ai_settings_response_mismatch");
         }
+        confirmedSettingsRef.current = saved;
         if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = saved;
           setModelSelection(saved.model);
           setResponseMode(saved.responseMode);
           setOutputContinuation(saved.outputContinuation);
@@ -96,7 +111,10 @@ export function useAiSettings(
         return null;
       } catch (saveError) {
         const message = aiSettingsErrorText(saveError, t);
-        if (saveGenerationRef.current === generation) setError(message);
+        if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = confirmedSettingsRef.current;
+          setError(message);
+        }
         return message;
       } finally {
         if (saveGenerationRef.current === generation) setSaving(false);
@@ -104,27 +122,27 @@ export function useAiSettings(
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, [t]);
+  }, [logFullPrompts, modelSelection, outputContinuation, responseDelivery, responseMode, t]);
 
   const saveModelSelection = useCallback(
-    (next: ModelSelection | null) => save({ model: next, responseMode, outputContinuation, responseDelivery, logFullPrompts }),
-    [logFullPrompts, outputContinuation, responseDelivery, responseMode, save],
+    (next: ModelSelection | null) => save((current) => ({ ...current, model: next })),
+    [save],
   );
   const saveResponseMode = useCallback(
-    (next: ResponseMode) => save({ model: modelSelection, responseMode: next, outputContinuation, responseDelivery, logFullPrompts }),
-    [logFullPrompts, modelSelection, outputContinuation, responseDelivery, save],
+    (next: ResponseMode) => save((current) => ({ ...current, responseMode: next })),
+    [save],
   );
   const saveOutputContinuation = useCallback(
-    (next: OutputContinuation) => save({ model: modelSelection, responseMode, outputContinuation: next, responseDelivery, logFullPrompts }),
-    [logFullPrompts, modelSelection, responseDelivery, responseMode, save],
+    (next: OutputContinuation) => save((current) => ({ ...current, outputContinuation: next })),
+    [save],
   );
   const saveResponseDelivery = useCallback(
-    (next: ResponseDelivery) => save({ model: modelSelection, responseMode, outputContinuation, responseDelivery: next, logFullPrompts }),
-    [logFullPrompts, modelSelection, outputContinuation, responseMode, save],
+    (next: ResponseDelivery) => save((current) => ({ ...current, responseDelivery: next })),
+    [save],
   );
   const saveLogFullPrompts = useCallback(
-    (next: boolean) => save({ model: modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts: next }),
-    [modelSelection, outputContinuation, responseDelivery, responseMode, save],
+    (next: boolean) => save((current) => ({ ...current, logFullPrompts: next })),
+    [save],
   );
 
   useEffect(() => {

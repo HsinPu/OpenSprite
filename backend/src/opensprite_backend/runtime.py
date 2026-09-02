@@ -24,7 +24,7 @@ from .ai_settings import (
     UnavailableAiSettings,
     create_ai_settings_service,
 )
-from .conversations import SqliteConversationRepository
+from .conversations import RunEventNotifier, SqliteConversationRepository
 from .conversation_settings import (
     ConversationSettingsOperations,
     UnavailableConversationSettings,
@@ -108,7 +108,11 @@ def create_system_runtime(
     )
     general_settings = create_general_settings_service(paths)
     conversation_settings = create_conversation_settings_service(paths)
-    repository = SqliteConversationRepository(paths.database_file)
+    event_notifier = RunEventNotifier()
+    repository = SqliteConversationRepository(
+        paths.database_file,
+        event_notifier=event_notifier,
+    )
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
@@ -128,6 +132,7 @@ def create_system_runtime(
         ai_settings,
         provider_runtime.connections,
         RunManager(repository, agent_loop),
+        event_notifier=event_notifier,
     )
     return _SystemRuntime(
         provider_runtime,

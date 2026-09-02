@@ -10,7 +10,7 @@ from collections import Counter
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Final, TypeVar
 
 from opensprite_backend.conversations.models import (
     CompletionReason,
@@ -81,6 +81,8 @@ _LOGGER = logging.getLogger("opensprite.agent.context")
 _MAX_UNLIMITED_CONTINUATIONS = 64
 _BOUNDED_CONTINUATIONS = {"1": 1, "2": 2, "3": 3, "5": 5}
 _CONTINUATION_TAIL_TOKENS = 4_096
+_CONTEXT_PAGE_SIZE: Final = 200
+_ASSISTANT_DELTA_BATCH_CHARS: Final = 4_096
 _CONTINUATION_INSTRUCTION = (
     "Continue the assistant response from the exact point where it stopped. "
     "Do not repeat or summarize text that was already produced. Do not call "
@@ -95,6 +97,41 @@ class _PreparedContext:
     budget: ContextBudgetPlan
 
 
+class _AssistantDeltaBuffer:
+    """Coalesce fast model chunks before persisting them to SQLite."""
+
+    def __init__(
+        self,
+        repository: ConversationRepository,
+        run_id: str,
+        *,
+        batch_chars: int = _ASSISTANT_DELTA_BATCH_CHARS,
+    ) -> None:
+        self._repository = repository
+        self._run_id = run_id
+        self._batch_chars = batch_chars
+        self._pending: list[str] = []
+        self._pending_chars = 0
+
+    async def append(self, text: str) -> None:
+        self._pending.append(text)
+        self._pending_chars += len(text)
+        if self._pending_chars >= self._batch_chars:
+            await self.flush()
+
+    async def flush(self) -> None:
+        if not self._pending:
+            return
+        text = "".join(self._pending)
+        await asyncio.to_thread(
+            self._repository.append_assistant_delta,
+            self._run_id,
+            text,
+        )
+        self._pending.clear()
+        self._pending_chars = 0
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -106,7 +143,7 @@ class AgentLoop:
         system_prompt_provider: SystemPromptProvider | None = None,
         max_model_rounds: int = 8,
         max_tool_calls: int = 16,
-        max_compactions_per_run: int = 8,
+        max_compactions_per_run: int | None = None,
         max_assistant_chars: int = MAX_ASSISTANT_CHARS,
         prompt_log_writer: PromptLogWriter | None = None,
     ) -> None:
@@ -114,7 +151,7 @@ class AgentLoop:
             raise ValueError("invalid model round bound")
         if not 0 <= max_tool_calls <= 64:
             raise ValueError("invalid tool call bound")
-        if not 1 <= max_compactions_per_run <= 32:
+        if max_compactions_per_run is not None and not 1 <= max_compactions_per_run <= 32:
             raise ValueError("invalid compaction bound")
         if not 1 <= max_assistant_chars <= MAX_ASSISTANT_CHARS:
             raise ValueError("invalid assistant output bound")
@@ -151,6 +188,7 @@ class AgentLoop:
             return run
         if cancellation_event.is_set():
             return await asyncio.to_thread(self._repository.request_cancel, run_id)
+        delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
             run = await asyncio.to_thread(self._repository.mark_run_started, run_id)
             system_prompt = await self._system_prompt_provider.build(run_id=run_id)
@@ -245,9 +283,11 @@ class AgentLoop:
                             break
                         raise
                     if completion is not None:
+                        await delta_buffer.flush()
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                     if isinstance(event, ModelTextDelta):
                         if not event.text or len(event.text) > 16384:
+                            await delta_buffer.flush()
                             return await self._fail(
                                 run_id,
                                 INVALID_PROVIDER_RESPONSE,
@@ -255,16 +295,14 @@ class AgentLoop:
                         if len(accumulated_text) + len(event.text) > (
                             self._max_assistant_chars
                         ):
+                            await delta_buffer.flush()
                             return await self._fail(run_id, AGENT_LIMIT_ERROR)
                         round_text += event.text
                         accumulated_text += event.text
-                        await asyncio.to_thread(
-                            self._repository.append_assistant_delta,
-                            run_id,
-                            event.text,
-                        )
+                        await delta_buffer.append(event.text)
                     elif isinstance(event, ModelToolCall):
                         if event.call_id in used_call_ids:
+                            await delta_buffer.flush()
                             return await self._fail(
                                 run_id,
                                 INVALID_PROVIDER_RESPONSE,
@@ -282,10 +320,13 @@ class AgentLoop:
                             event.output_tokens,
                         )
                     else:
+                        await delta_buffer.flush()
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
+                await delta_buffer.flush()
                 if retry_with_compaction:
                     continue
                 if completion is None:
+                    await delta_buffer.flush()
                     return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
 
                 if completion.reason in {
@@ -300,8 +341,10 @@ class AgentLoop:
                             and not round_text.strip()
                         )
                     ):
+                        await delta_buffer.flush()
                         return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                     self._raise_if_cancelled(cancellation_event)
+                    await delta_buffer.flush()
                     completion_reason = (
                         CompletionReason.STOP
                         if completion.reason is ModelFinishReason.FINAL
@@ -322,6 +365,7 @@ class AgentLoop:
                                 accumulated_text=accumulated_text,
                                 cancellation_event=cancellation_event,
                                 prompt_log_sequence=prompt_log_sequence,
+                                delta_buffer=delta_buffer,
                             )
                     completed = await asyncio.to_thread(
                         self._repository.complete_run,
@@ -335,6 +379,7 @@ class AgentLoop:
                     completion.reason is not ModelFinishReason.TOOL_CALLS
                     or not tool_calls
                 ):
+                    await delta_buffer.flush()
                     return await self._fail(run_id, INVALID_PROVIDER_RESPONSE)
                 transcript.append(
                     ModelMessage(
@@ -346,6 +391,7 @@ class AgentLoop:
                 for call in tool_calls:
                     tool_call_count += 1
                     if tool_call_count > self._max_tool_calls:
+                        await delta_buffer.flush()
                         return await self._fail(run_id, AGENT_LIMIT_ERROR)
                     self._raise_if_cancelled(cancellation_event)
                     await asyncio.to_thread(
@@ -395,6 +441,7 @@ class AgentLoop:
                             )
                         )
                         if failed_calls[fingerprint] >= 2:
+                            await delta_buffer.flush()
                             return await self._fail(run_id, AGENT_LIMIT_ERROR)
                     else:
                         await asyncio.to_thread(
@@ -415,24 +462,32 @@ class AgentLoop:
                                 tool_name=call.name,
                             )
                         )
+            await delta_buffer.flush()
             return await self._fail(run_id, AGENT_LIMIT_ERROR)
         except _RunCancelled:
+            await delta_buffer.flush()
             return await self._cancel(run_id)
         except ModelGatewayError as error:
+            await delta_buffer.flush()
             return await self._fail(run_id, inference_error(error.failure))
         except ContextLimitExceeded:
+            await delta_buffer.flush()
             return await self._fail(run_id, CONTEXT_LIMIT_ERROR)
         except ModelCapabilityNotFound:
+            await delta_buffer.flush()
             return await self._fail(run_id, CONTEXT_PREPARATION_ERROR)
         except _ContextPreparationFailed:
+            await delta_buffer.flush()
             return await self._fail(run_id, CONTEXT_PREPARATION_ERROR)
         except ModelCapabilityProviderError as error:
+            await delta_buffer.flush()
             return await self._fail(run_id, inference_error(error.failure))
         except asyncio.CancelledError:
             raise
         except ConversationStoreError:
             raise
         except Exception:
+            await delta_buffer.flush()
             _LOGGER.exception("agent run failed run_id=%s", run_id)
             return await self._fail(run_id, INTERNAL_ERROR)
 
@@ -446,6 +501,7 @@ class AgentLoop:
         accumulated_text: str,
         cancellation_event: asyncio.Event,
         prompt_log_sequence: list[int],
+        delta_buffer: _AssistantDeltaBuffer,
     ) -> RunSnapshot:
         continuation_base = base_transcript
         configured_max = (
@@ -570,17 +626,21 @@ class AgentLoop:
                             )
                         raise
                     if completion is not None:
+                        await delta_buffer.flush()
                         return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
                     if isinstance(event, ModelTextDelta):
+                        if not event.text or len(event.text) > 16384:
+                            await delta_buffer.flush()
+                            return await self._fail(
+                                run.id,
+                                INVALID_PROVIDER_RESPONSE,
+                            )
                         if len(accumulated_text) + len(event.text) > self._max_assistant_chars:
+                            await delta_buffer.flush()
                             return await self._fail(run.id, AGENT_LIMIT_ERROR)
                         round_text += event.text
                         accumulated_text += event.text
-                        await asyncio.to_thread(
-                            self._repository.append_assistant_delta,
-                            run.id,
-                            event.text,
-                        )
+                        await delta_buffer.append(event.text)
                     elif isinstance(event, ModelCompleted):
                         completion = event
                     elif isinstance(event, ModelUsage):
@@ -592,12 +652,15 @@ class AgentLoop:
                             event.output_tokens,
                         )
                     else:
+                        await delta_buffer.flush()
                         return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
                 if retry_with_compaction:
                     continue
                 if completion is None or not round_text.strip():
+                    await delta_buffer.flush()
                     return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
                 if completion.reason is ModelFinishReason.FINAL:
+                    await delta_buffer.flush()
                     return await self._complete_partial(
                         run.id,
                         accumulated_text,
@@ -605,7 +668,9 @@ class AgentLoop:
                         cancellation_event,
                     )
                 if completion.reason is not ModelFinishReason.OUTPUT_LIMIT:
+                    await delta_buffer.flush()
                     return await self._fail(run.id, INVALID_PROVIDER_RESPONSE)
+                await delta_buffer.flush()
                 break
         if configured_max is None:
             _LOGGER.warning(
@@ -613,6 +678,7 @@ class AgentLoop:
                 run.id,
                 attempt_limit,
             )
+        await delta_buffer.flush()
         return await self._complete_partial(
             run.id,
             accumulated_text,
@@ -741,7 +807,7 @@ class AgentLoop:
             if compaction_limit is None
             else compaction_limit
         )
-        if not 0 <= limit <= self._max_compactions_per_run:
+        if limit is not None and not 0 <= limit <= 32:
             raise ValueError("invalid Context compaction limit")
         _LOGGER.info(
             "context preparing run_id=%s provider_id=%s model_id=%s budget=%s force_compaction=%s",
@@ -774,7 +840,7 @@ class AgentLoop:
         page = await asyncio.to_thread(
             self._repository.list_messages,
             run.conversation_id,
-            limit=200,
+            limit=_CONTEXT_PAGE_SIZE,
             before_sequence=None,
         )
         summary = await asyncio.to_thread(
@@ -783,7 +849,8 @@ class AgentLoop:
         )
 
         force_compaction_pending = force_compaction
-        for compaction_index in range(limit + 1):
+        compaction_index = 0
+        while True:
             coverage = 0 if summary is None else summary.covers_through_sequence
             uncovered = tuple(
                 message for message in page.items if message.sequence > coverage
@@ -822,7 +889,7 @@ class AgentLoop:
                     tools=tool_definitions,
                     budget=budget,
                 )
-            if compaction_index >= limit:
+            if limit is not None and compaction_index >= limit:
                 raise ContextLimitExceeded
 
             protected_sequence = (
@@ -836,7 +903,7 @@ class AgentLoop:
                 self._repository.list_messages_after,
                 run.conversation_id,
                 after_sequence=coverage,
-                limit=200,
+                limit=_CONTEXT_PAGE_SIZE,
             )
             candidates = tuple(
                 message
@@ -868,7 +935,10 @@ class AgentLoop:
                     ),
                     cancellation_event,
                 )
+                if summary.covers_through_sequence <= coverage:
+                    raise _ContextPreparationFailed
                 force_compaction_pending = False
+                compaction_index += 1
             except ContextLimitExceeded:
                 raise
             except ValueError as error:

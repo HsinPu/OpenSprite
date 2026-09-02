@@ -6,9 +6,11 @@ import asyncio
 from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import wraps
 import logging
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -19,9 +21,13 @@ from opensprite_backend.agent.loop import AgentLoop
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.prompt_logging import FilePromptLogWriter
 from opensprite_backend.conversations.models import (
+    ConversationCompaction,
     CompletionReason,
+    Message,
+    MessagePage,
     OutputContinuation,
     RunEventType,
+    RunSnapshot,
     RunStatus,
 )
 from opensprite_backend.conversations.sqlite_repository import (
@@ -169,6 +175,135 @@ def seed_completed_turns(
     return conversation_id
 
 
+class PagedContextRepository:
+    def __init__(self, count: int) -> None:
+        conversation_id = "22222222-2222-4222-8222-222222222222"
+        self.messages = tuple(
+            Message(
+                id=str(uuid4()),
+                conversation_id=conversation_id,
+                run_id=str(uuid4()),
+                role="user",
+                content=f"message {sequence}",
+                sequence=sequence,
+                created_at=datetime(2026, 8, 29, tzinfo=UTC),
+            )
+            for sequence in range(1, count + 1)
+        )
+        self.event_count = 0
+
+    def list_messages(
+        self,
+        conversation_id: str,
+        *,
+        limit: int,
+        before_sequence: int | None,
+    ) -> MessagePage:
+        assert conversation_id == self.messages[0].conversation_id
+        assert before_sequence is None
+        selected = self.messages[-limit:]
+        return MessagePage(
+            items=selected,
+            next_before_sequence=(
+                selected[0].sequence if len(self.messages) > limit else None
+            ),
+        )
+
+    def list_messages_after(
+        self,
+        conversation_id: str,
+        *,
+        after_sequence: int,
+        limit: int,
+    ) -> tuple[Message, ...]:
+        assert conversation_id == self.messages[0].conversation_id
+        return tuple(
+            message
+            for message in self.messages
+            if message.sequence > after_sequence
+        )[:limit]
+
+    def get_latest_compaction(self, conversation_id: str) -> None:
+        assert conversation_id == self.messages[0].conversation_id
+        return None
+
+    def append_run_event(
+        self,
+        run_id: str,
+        event_type: RunEventType,
+        data: dict[str, object],
+    ) -> None:
+        del run_id, event_type, data
+        self.event_count += 1
+
+
+class AdvancingCompactionService:
+    def __init__(self) -> None:
+        self.coverages: list[int] = []
+
+    async def compact(self, **kwargs: object) -> ConversationCompaction:
+        messages = kwargs["messages"]
+        assert isinstance(messages, tuple)
+        last = messages[-1]
+        assert isinstance(last, Message)
+        coverage = last.sequence
+        self.coverages.append(coverage)
+        return ConversationCompaction(
+            id=str(uuid4()),
+            conversation_id=str(kwargs["conversation_id"]),
+            covers_through_sequence=coverage,
+            summary=f"Summary through {coverage}",
+            summary_version=1,
+            source_hash="a" * 64,
+            provider_id="openrouter",
+            model_id="openrouter/auto",
+            input_tokens=1,
+            output_tokens=1,
+            created_at=datetime(2026, 8, 29, tzinfo=UTC),
+        )
+
+
+@async_test
+async def test_context_compaction_pages_until_recent_history_is_covered() -> None:
+    repository = PagedContextRepository(4_001)
+    current = repository.messages[-1]
+    run = RunSnapshot(
+        id=str(uuid4()),
+        conversation_id=current.conversation_id,
+        user_message_id=current.id,
+        assistant_message_id=None,
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        status=RunStatus.RUNNING,
+        error=None,
+        partial_text="",
+        created_at=current.created_at,
+        started_at=current.created_at,
+        finished_at=None,
+    )
+    loop = AgentLoop(
+        repository=repository,  # type: ignore[arg-type]
+        gateway=ScriptedGateway([]),
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+    compaction = AdvancingCompactionService()
+    loop._compaction_service = compaction  # type: ignore[assignment]
+
+    prepared = await loop._prepare_context(
+        run=run,
+        system_prompt="System",
+        cancellation_event=asyncio.Event(),
+        current_user_message_id=current.id,
+    )
+
+    assert compaction.coverages == [*range(200, 3_801, 200), 3_989]
+    assert repository.event_count == len(compaction.coverages)
+    assert "Summary through 3989" in prepared.messages[1].content
+    assert prepared.messages[-1].content == "message 4001"
+
+
 @async_test
 async def test_final_text_uses_one_agent_path_and_persists_visible_answer(
     tmp_path: Path,
@@ -250,6 +385,7 @@ async def test_agent_loop_separates_earlier_instruction_from_current_request(
     gateway = ScriptedGateway(
         [[ModelTextDelta("早期問題是請只回覆收到"), ModelCompleted(ModelFinishReason.FINAL)]]
     )
+
 
     result = await AgentLoop(
         repository=repository,
@@ -1326,3 +1462,30 @@ async def test_cancellation_interrupts_context_compaction_request(
         RunEventType.CONTEXT_COMPACTION_STARTED,
         RunEventType.RUN_CANCELLED,
     ]
+
+
+@async_test
+async def test_fast_text_deltas_are_coalesced_before_persistence(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    chunks = [ModelTextDelta("a" * 1_000) for _ in range(8)]
+    gateway = ScriptedGateway([[*chunks, ModelCompleted(ModelFinishReason.FINAL)]])
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    with patch.object(
+        repository,
+        "append_assistant_delta",
+        wraps=repository.append_assistant_delta,
+    ) as append_delta:
+        result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "a" * 8_000
+    assert append_delta.call_count == 2

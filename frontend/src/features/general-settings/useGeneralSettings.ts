@@ -31,6 +31,8 @@ export function useGeneralSettings(): GeneralSettingsController {
   const loadGenerationRef = useRef(0);
   const saveGenerationRef = useRef(0);
   const saveQueueRef = useRef(Promise.resolve());
+  const confirmedSettingsRef = useRef<GeneralSettings | null>(null);
+  const desiredSettingsRef = useRef<GeneralSettings | null>(null);
   const translatorRef = useRef(t);
 
   useEffect(() => {
@@ -47,6 +49,8 @@ export function useGeneralSettings(): GeneralSettingsController {
       if (loadGenerationRef.current !== generation) return;
       setSettings(saved);
       setLocale(saved.locale);
+      confirmedSettingsRef.current = saved;
+      desiredSettingsRef.current = saved;
       setLoaded(true);
       setError(null);
     } catch (loadError) {
@@ -60,7 +64,10 @@ export function useGeneralSettings(): GeneralSettingsController {
     void reload();
   }, [reload]);
 
-  const save = useCallback((next: GeneralSettings): Promise<string | null> => {
+  const save = useCallback((update: (current: GeneralSettings) => GeneralSettings): Promise<string | null> => {
+    const current = desiredSettingsRef.current ?? settings;
+    const next = update(current);
+    desiredSettingsRef.current = next;
     loadGenerationRef.current += 1;
     const generation = saveGenerationRef.current + 1;
     saveGenerationRef.current = generation;
@@ -70,7 +77,9 @@ export function useGeneralSettings(): GeneralSettingsController {
       try {
         const saved = await putGeneralSettings(next);
         if (saved.locale !== next.locale || saved.timeZone !== next.timeZone) throw new Error("general_settings_response_mismatch");
+        confirmedSettingsRef.current = saved;
         if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = saved;
           setSettings(saved);
           setLocale(saved.locale);
           setLoaded(true);
@@ -79,7 +88,10 @@ export function useGeneralSettings(): GeneralSettingsController {
         return null;
       } catch (saveError) {
         const message = generalSettingsErrorText(saveError, t);
-        if (saveGenerationRef.current === generation) setError(message);
+        if (saveGenerationRef.current === generation) {
+          desiredSettingsRef.current = confirmedSettingsRef.current;
+          setError(message);
+        }
         return message;
       } finally {
         if (saveGenerationRef.current === generation) setSaving(false);
@@ -87,10 +99,10 @@ export function useGeneralSettings(): GeneralSettingsController {
     });
     saveQueueRef.current = operation.then(() => undefined, () => undefined);
     return operation;
-  }, [setLocale, t]);
+  }, [settings, t]);
 
-  const saveLocale = useCallback((locale: Locale) => save({ ...settings, locale }), [save, settings]);
-  const saveTimeZone = useCallback((timeZone: TimeZoneSetting) => save({ ...settings, timeZone }), [save, settings]);
+  const saveLocale = useCallback((locale: Locale) => save((current) => ({ ...current, locale })), [save]);
+  const saveTimeZone = useCallback((timeZone: TimeZoneSetting) => save((current) => ({ ...current, timeZone })), [save]);
 
   return { settings, loaded, saving, error, saveLocale, saveTimeZone, reload };
 }

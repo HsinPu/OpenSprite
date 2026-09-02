@@ -83,6 +83,16 @@ Ctrl/Cmd + Enter 傳送、Enter 換行。IME composition 期間不觸發傳送�
 責任與依賴方向。前端以真實對話清單、訊息、Run snapshot、SSE 事件與取消操作消費此契約；
 production Tool Registry 目前刻意為空。
 
+Context 讀取以 200 則 bounded page 逐段前進，正常 Run 依 token 預算持續
+壓縮而不把 page size 當成歷史總量上限。Agent 會合併高速 assistant delta
+後再落盤，並在語意事件邊界 flush；同一 runtime 的 SQLite commit 會透過
+程序內 notifier 喚醒 SSE reader，閒置時不以固定短週期輪詢資料庫。這些是
+內部可靠性優化，不改變既有 HTTP／SSE、SQLite 或前端資料契約。
+
+前端串流畫面以 animation frame 合併高頻 delta 更新，固定歷史 Markdown
+訊息使用 memoized renderer，避免長對話每個 token 都重新解析全部內容；
+完成事件仍會立即提交完整可見回覆。
+
 ## Provider connection 邊界
 
 `contracts/provider-connections.openapi.json` 是唯一 authoritative contract。主要 consumer

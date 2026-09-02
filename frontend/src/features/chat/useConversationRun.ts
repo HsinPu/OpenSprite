@@ -108,6 +108,9 @@ export function useConversationRun({
   const seenEventSequencesRef = useRef(new Set<number>());
   const finishingRunsRef = useRef(new Set<string>());
   const responseDeliveryRef = useRef(responseDelivery);
+  const renderFrameRef = useRef<number | null>(null);
+  const pendingEventsRef = useRef<RunEvent[]>([]);
+  const pendingStreamedTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     responseDeliveryRef.current = responseDelivery;
@@ -117,10 +120,62 @@ export function useConversationRun({
     activeRunRef.current = activeRun;
   }, [activeRun]);
 
+  const discardScheduledRender = useCallback(() => {
+    const frame = renderFrameRef.current;
+    if (frame !== null) {
+      if (typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(frame);
+      else window.clearTimeout(frame);
+      renderFrameRef.current = null;
+    }
+    pendingEventsRef.current = [];
+    pendingStreamedTextRef.current = null;
+  }, []);
+
+  const flushScheduledRender = useCallback(() => {
+    const frame = renderFrameRef.current;
+    if (frame !== null) {
+      if (typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(frame);
+      else window.clearTimeout(frame);
+      renderFrameRef.current = null;
+    }
+    const pendingEvents = pendingEventsRef.current;
+    pendingEventsRef.current = [];
+    if (pendingEvents.length > 0) {
+      setEvents((current) => pendingEvents.reduce(
+        (next, event) => appendEventPreservingContextUsage(next, event),
+        current,
+      ));
+    }
+    const pendingText = pendingStreamedTextRef.current;
+    pendingStreamedTextRef.current = null;
+    if (pendingText !== null) setStreamedText(pendingText);
+  }, []);
+
+  const scheduleRender = useCallback(() => {
+    if (renderFrameRef.current !== null) return;
+    const flush = () => {
+      renderFrameRef.current = null;
+      const pendingEvents = pendingEventsRef.current;
+      pendingEventsRef.current = [];
+      if (pendingEvents.length > 0) {
+        setEvents((current) => pendingEvents.reduce(
+          (next, event) => appendEventPreservingContextUsage(next, event),
+          current,
+        ));
+      }
+      const pendingText = pendingStreamedTextRef.current;
+      pendingStreamedTextRef.current = null;
+      if (pendingText !== null) setStreamedText(pendingText);
+    };
+    if (typeof window.requestAnimationFrame === "function") renderFrameRef.current = window.requestAnimationFrame(flush);
+    else renderFrameRef.current = window.setTimeout(flush, 16);
+  }, []);
+
   const closeStream = useCallback(() => {
     streamRef.current?.close();
     streamRef.current = null;
-  }, []);
+    discardScheduledRender();
+  }, [discardScheduledRender]);
 
   const commitRun = useCallback((run: RunSnapshot | null) => {
     activeRunRef.current = run;
@@ -171,18 +226,23 @@ export function useConversationRun({
           if (generationRef.current !== generation || seenEventSequencesRef.current.has(event.sequence)) return;
           seenEventSequencesRef.current.add(event.sequence);
           setError(null);
-          setEvents((current) => appendEventPreservingContextUsage(current, event));
           if (event.type === "assistant.delta") {
             const text = String(event.data.text);
             if (!receivedDelta) bufferedText = "";
             receivedDelta = true;
             bufferedText += text;
-            if (delivery === "stream") setStreamedText(bufferedText);
+            pendingEventsRef.current.push(event);
+            if (delivery === "stream") pendingStreamedTextRef.current = bufferedText;
+            scheduleRender();
+          } else {
+            flushScheduledRender();
+            setEvents((current) => appendEventPreservingContextUsage(current, event));
           }
           if (event.type === "run.started") {
             updateRun((current) => current ? { ...current, status: "running", startedAt: current.startedAt ?? event.createdAt } : current);
           }
           if (terminalTypes.has(event.type)) {
+            flushScheduledRender();
             if (delivery === "complete") setStreamedText(bufferedText);
             closeStream();
             updateRun((current) => applyTerminalEvent(current, event));
@@ -198,7 +258,7 @@ export function useConversationRun({
       if (delivery === "complete" && bufferedText) setStreamedText(bufferedText);
       if (generationRef.current === generation) setError(agentChatErrorText(streamError, t));
     }
-  }, [closeStream, eventStreamFactory, refreshTerminal, t, updateRun]);
+  }, [closeStream, eventStreamFactory, flushScheduledRender, refreshTerminal, scheduleRender, t, updateRun]);
 
   useEffect(() => {
     const generation = generationRef.current + 1;

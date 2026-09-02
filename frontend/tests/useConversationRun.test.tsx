@@ -175,6 +175,41 @@ describe("useConversationRun", () => {
     expect(updated).toHaveBeenCalled();
   });
 
+  it("coalesces rapid streamed deltas into one animation-frame update", async () => {
+    const fetchMock = vi.fn((path: string, init?: RequestInit) => {
+      if (path.includes("/messages")) return Promise.resolve(new Response(JSON.stringify({ messages: [userMessage], nextBeforeSequence: null })));
+      if (path === `/api/runs/${runId}`) return Promise.resolve(new Response(JSON.stringify(run("running"))));
+      if (path === "/api/runs" && init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ conversationId, runId, status: "queued" }), { status: 202 }));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const frames: Array<FrameRequestCallback> = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    let handlers: RunEventStreamHandlers | null = null;
+    const streamFactory = vi.fn((_runId: string, nextHandlers: RunEventStreamHandlers) => {
+      handlers = nextHandlers;
+      return { close: vi.fn() };
+    });
+    render(<Harness activeConversationId={conversationId} streamFactory={streamFactory} />);
+    await waitFor(() => expect(screen.getByTestId("status").textContent).toBe("running"));
+
+    act(() => {
+      handlers!.onEvent({ sequence: 3, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "一" } });
+      handlers!.onEvent({ sequence: 4, type: "assistant.delta", runId, conversationId, createdAt: "2026-08-21T08:30:02Z", data: { text: "次" } });
+    });
+    expect(screen.getByTestId("streamed").textContent).toBe("");
+    expect(frames).toHaveLength(1);
+
+    act(() => {
+      frames[0]!(0);
+    });
+    expect(screen.getByTestId("streamed").textContent).toBe("一次");
+  });
+
   it("buffers deltas and reveals the assembled response in complete mode", async () => {
     let runReads = 0;
     let messageReads = 0;

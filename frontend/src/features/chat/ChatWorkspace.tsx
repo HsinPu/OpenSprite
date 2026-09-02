@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
 import { createPortal } from "react-dom";
@@ -63,6 +63,9 @@ function StopIcon() {
 }
 
 
+const MemoizedMarkdownMessage = memo(MarkdownMessage);
+
+
 export function ChatWorkspace({
   conversationId,
   modelName,
@@ -118,11 +121,11 @@ export function ChatWorkspace({
   const fallbackContextLimit = displayedModelChoice?.contextWindowTokens !== undefined
     ? contextBudgetLimit(historical ? "auto" : (modelSelection?.contextBudget ?? "auto"), displayedModelChoice.contextWindowTokens)
     : null;
-  const choicesByProvider = ["openai", "anthropic", "openrouter"].map((providerId) => ({
+  const choicesByProvider = useMemo(() => ["openai", "anthropic", "openrouter"].map((providerId) => ({
     providerId,
     label: providerId === "openai" ? "OpenAI" : providerId === "anthropic" ? "Anthropic" : "OpenRouter",
     choices: modelChoices.filter((choice) => choice.selection.providerId === providerId),
-  })).filter((group) => group.choices.length > 0);
+  })).filter((group) => group.choices.length > 0), [modelChoices]);
   const liveText = chat.streamedText || chat.activeRun?.partialText || "";
   const hasDurableAssistant = chat.activeRun?.assistantMessageId !== null
     && chat.activeRun?.assistantMessageId !== undefined
@@ -259,7 +262,7 @@ export function ChatWorkspace({
               <div className="chat-workspace__assistant-row" key={message.id}>
                 <OpenSpriteMark />
                 <div className="chat-workspace__assistant-content">
-                  <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><MarkdownMessage content={message.content} /></div>
+                  <div className="chat-workspace__assistant-card chat-workspace__assistant-card--compact"><MemoizedMarkdownMessage content={message.content} /></div>
                   {message.id === outputLimitedMessageId ? <p className="chat-workspace__output-limit" role="status">{t("chat.outputLimit")}</p> : null}
                   {message.id === contextLimitedMessageId ? <p className="chat-workspace__output-limit" role="status">{t("chat.contextLimitPreserved")}</p> : null}
                   <div className="chat-workspace__assistant-meta">

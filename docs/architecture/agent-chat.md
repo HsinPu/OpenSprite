@@ -59,9 +59,13 @@ contract but does not implement model, tool or persistence behavior.
    transaction succeeds.
 4. The loop resolves the selected model capability, converts the Run's Context
    policy into an input budget, retains the recent message floor, and compacts
-   only older history when required.
+   only older history when required. It reads history in bounded 200-message
+   pages and keeps paging until the token budget is covered; the page size is
+   not a total history or compaction-count limit.
 5. The browser opens `GET /api/runs/{run_id}/events`. Persisted events replay in
-   sequence and then stream over SSE; reconnect uses `Last-Event-ID`.
+   sequence and then stream over SSE; reconnect uses `Last-Event-ID`. Live
+   readers wait on a process-local post-commit notification and retain a long
+   timeout fallback for changes made outside the current runtime.
 6. Text deltas update the Run partial text and UI. A natural stop completes the
    Run. An output limit may enter the Run-snapshotted continuation policy;
    every attempt appends to the same Run and eventual assistant Message.
@@ -113,6 +117,12 @@ reloads both the durable Run snapshot and visible Messages rather than treating
 the stream buffer as authoritative. Duplicate replayed event sequences and
 events belonging to an obsolete selected conversation are ignored. An active
 Run exposes a stop action through the bodyless cancellation operation.
+
+High-frequency assistant deltas are accumulated in the frontend and committed
+to React state at most once per animation frame. Semantic execution events are
+flushed before the next non-delta or terminal event, so execution ordering and
+complete-response delivery remain unchanged. Persisted Markdown messages use a
+stable memoized renderer; only the live message is re-parsed while it changes.
 
 Persisted Messages retain their authoritative `runId` in frontend display
 state. An assistant Message exposes one history-inspection action beside its
@@ -196,7 +206,9 @@ The initial loop is intentionally small:
 - cancellation is checked before model and tool boundaries.
 
 Context is primarily bounded by tokens, with a defensive maximum of 256 model
-messages and bounded 200-message repository pages for compaction. `auto`,
+messages and bounded 200-message repository pages for compaction. Normal Runs
+do not impose a fixed number of compaction batches; an explicit provider-limit
+retry still requests at most one additional compaction. `auto`,
 32K, 64K, 128K, 256K and model-maximum choices resolve against a backend-trusted
 model capability. Output choices are Auto, 8K, 16K, 32K, 64K, and model
 maximum. Auto targets one quarter of the selected Context with a 32K ceiling;
@@ -261,6 +273,14 @@ only as transient progress and as a safe execution-record step. It never becomes
 a Conversation Message, never contains the generated summary, and is cleared by
 the next model or terminal Run event.
 
+The local runtime creates one `RunEventNotifier` alongside the SQLite
+repository. Successful event and Run-state commits signal that notifier after
+the transaction closes. `AgentChatService` drains persisted events immediately,
+then waits for the next signal instead of repeatedly querying SQLite; a bounded
+fallback wait preserves recovery if an external writer ever bypasses the
+notifier. The notifier is process-local and does not change the HTTP/SSE
+contract or SQLite schema.
+
 The Agent checks the shared assistant-output limit before every durable delta,
 so a Provider cannot push the SQLite Run beyond its storage contract. If an
 otherwise recoverable repository write fails during background execution, the
@@ -268,7 +288,11 @@ Run manager makes one fail-closed terminal transition with a safe internal
 error; it does not silently discard the task while leaving an active Run.
 Each persisted assistant delta is also split on the encoded UTF-8 event-payload
 boundary, so a multi-byte chunk cannot exceed SQLite's 64 KiB semantic-event
-limit while the Run's durable partial text remains the complete response.
+limit while the Run's durable partial text remains the complete response. The
+Agent coalesces fast upstream text chunks into approximately 4K-character
+batches before opening a SQLite write transaction, and flushes at model-round,
+tool, terminal, error, and cancellation boundaries so event order and partial
+text durability are preserved.
 
 Automatic continuation is owned by the backend Agent loop, not by the browser.
 Each Run snapshots `off`, 1, 2, 3, 5, or `unlimited`; the default is 2. The
