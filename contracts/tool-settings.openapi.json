@@ -1,0 +1,118 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite local tools API",
+    "version": "0.1.0-draft",
+    "description": "Authoritative HTTP contract for the production tool catalog and persisted tool availability settings."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {
+    "scope": "loopback-only local desktop service",
+    "applicationAuthentication": "none",
+    "browserOriginPolicy": "same-origin",
+    "cors": "disabled by default"
+  },
+  "x-compatibility": {
+    "policy": "Tool settings are new-install-only local configuration; no browser or legacy settings are migrated."
+  },
+  "x-events": {"supported": false},
+  "tags": [
+    {"name": "tools", "description": "Tools in the current production registry."},
+    {"name": "tool-settings", "description": "Persisted availability for production tools."}
+  ],
+  "paths": {
+    "/api/tools": {
+      "get": {
+        "operationId": "listTools",
+        "summary": "List production tools",
+        "tags": ["tools"],
+        "responses": {
+          "200": {"description": "The current production tool catalog.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ToolListResponse"}}}},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    },
+    "/api/settings/tools": {
+      "get": {
+        "operationId": "getToolSettings",
+        "summary": "Read tool settings",
+        "tags": ["tool-settings"],
+        "responses": {
+          "200": {"description": "The confirmed local tool settings.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ToolSettings"}}}},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      },
+      "put": {
+        "operationId": "putToolSettings",
+        "summary": "Replace tool settings atomically",
+        "tags": ["tool-settings"],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ToolSettings"}}}},
+        "responses": {
+          "200": {"description": "The requested values are now confirmed.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ToolSettings"}}}},
+          "400": {"$ref": "#/components/responses/InvalidRequest"},
+          "503": {"$ref": "#/components/responses/SettingsStoreUnavailable"},
+          "500": {"$ref": "#/components/responses/InternalError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ToolSource": {"type": "string", "enum": ["builtin", "mcp", "external"]},
+      "ToolEffect": {"type": "string", "enum": ["read_only", "local_write", "external_write", "destructive", "sensitive"]},
+      "ToolSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "effect", "available"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+          "source": {"$ref": "#/components/schemas/ToolSource"},
+          "effect": {"$ref": "#/components/schemas/ToolEffect"},
+          "available": {"type": "boolean"}
+        }
+      },
+      "ToolListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items"],
+        "properties": {
+          "items": {"type": "array", "maxItems": 64, "items": {"$ref": "#/components/schemas/ToolSummary"}}
+        }
+      },
+      "ToolSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["enabled", "enabledTools"],
+        "properties": {
+          "enabled": {"type": "boolean"},
+          "enabledTools": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}}
+        }
+      },
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "tool_not_found", "settings_store_unavailable", "internal_error"]},
+      "ErrorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "retryable"],
+        "properties": {
+          "code": {"$ref": "#/components/schemas/ErrorCode"},
+          "message": {"type": "string"},
+          "retryable": {"type": "boolean"}
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {"error": {"$ref": "#/components/schemas/ErrorDetail"}}
+      }
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed settings or an unavailable tool id.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "SettingsStoreUnavailable": {"description": "The local tool settings file is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "An unexpected local backend error occurred.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}

@@ -793,6 +793,16 @@
             "minimum": 1,
             "maximum": 4000000,
             "description": "Optional safe input budget after output and safety reserves. Omitted on legacy events."
+          },
+          "toolNames": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "description": "Sorted tool ids advertised for this model request. Omitted on legacy events."
           }
         }
       },

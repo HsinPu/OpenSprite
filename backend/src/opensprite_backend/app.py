@@ -28,6 +28,10 @@ from .api.provider_routes import (
     provider_error_response,
     router as provider_router,
 )
+from .api.tool_settings_routes import (
+    router as tool_settings_router,
+    tool_settings_error_response,
+)
 from .application import (
     AgentChatError,
     AgentChatOperations,
@@ -41,6 +45,7 @@ from .models import (
     ErrorCode,
     GeneralSettingsErrorCode,
     HealthResponse,
+    ToolSettingsErrorCode,
 )
 from .ai_settings import (
     AiSettingsOperations,
@@ -63,6 +68,12 @@ from .conversation_settings import (
     ConversationSettingsStoreError,
     UnavailableConversationSettings,
 )
+from .tool_settings import (
+    ToolNotFoundError,
+    ToolSettingsOperations,
+    ToolSettingsStoreError,
+    UnavailableToolSettings,
+)
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 _LOGGER = logging.getLogger("opensprite.runtime")
@@ -74,6 +85,7 @@ def create_app(
     ai_settings: AiSettingsOperations | None = None,
     general_settings: GeneralSettingsOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
+    tool_settings: ToolSettingsOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
@@ -111,6 +123,9 @@ def create_app(
         conversation_settings
         if conversation_settings is not None
         else UnavailableConversationSettings()
+    )
+    app.state.tool_settings = (
+        tool_settings if tool_settings is not None else UnavailableToolSettings()
     )
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
@@ -164,6 +179,22 @@ def create_app(
             ConversationSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
         )
 
+    async def tool_settings_store_error_handler(
+        request: Request,
+        exc: ToolSettingsStoreError,
+    ) -> JSONResponse:
+        del request, exc
+        return tool_settings_error_response(
+            ToolSettingsErrorCode.SETTINGS_STORE_UNAVAILABLE
+        )
+
+    async def tool_not_found_error_handler(
+        request: Request,
+        exc: ToolNotFoundError,
+    ) -> JSONResponse:
+        del request, exc
+        return tool_settings_error_response(ToolSettingsErrorCode.TOOL_NOT_FOUND)
+
     async def agent_chat_error_handler(
         request: Request,
         exc: AgentChatError,
@@ -199,6 +230,14 @@ def create_app(
         cast(ExceptionHandler, conversation_settings_store_error_handler),
     )
     app.add_exception_handler(
+        ToolSettingsStoreError,
+        cast(ExceptionHandler, tool_settings_store_error_handler),
+    )
+    app.add_exception_handler(
+        ToolNotFoundError,
+        cast(ExceptionHandler, tool_not_found_error_handler),
+    )
+    app.add_exception_handler(
         AgentChatError,
         cast(ExceptionHandler, agent_chat_error_handler),
     )
@@ -220,6 +259,7 @@ def create_app(
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
     app.include_router(conversation_settings_router)
+    app.include_router(tool_settings_router)
     app.include_router(provider_router)
     app.include_router(chat_router)
     return app

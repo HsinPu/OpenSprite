@@ -1911,7 +1911,12 @@ class SqliteConversationRepository:
                 "contextLimitTokens",
                 "inputBudgetTokens",
             }
-            if keys != legacy_keys and keys != context_keys:
+            tool_context_keys = context_keys | {"toolNames"}
+            if (
+                keys != legacy_keys
+                and keys != context_keys
+                and keys != tool_context_keys
+            ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             if data["providerId"] not in _PROVIDER_IDS:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
@@ -1929,7 +1934,7 @@ class SqliteConversationRepository:
                 or not 1 <= max_output_tokens <= 131_072
             ):
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
-            if keys == context_keys:
+            if keys == context_keys or keys == tool_context_keys:
                 context_tokens = data["contextTokens"]
                 context_limit_tokens = data["contextLimitTokens"]
                 input_budget_tokens = data["inputBudgetTokens"]
@@ -1944,6 +1949,21 @@ class SqliteConversationRepository:
                     or isinstance(input_budget_tokens, bool)
                     or not 1 <= input_budget_tokens <= context_limit_tokens
                     or context_tokens > input_budget_tokens
+                ):
+                    raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            if keys == tool_context_keys:
+                tool_names = data["toolNames"]
+                if (
+                    not isinstance(tool_names, list)
+                    or len(tool_names) > 64
+                    or any(
+                        not SqliteConversationRepository._is_bounded_text(
+                            name,
+                            maximum=64,
+                        )
+                        for name in tool_names
+                    )
+                    or len(set(tool_names)) != len(tool_names)
                 ):
                     raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return

@@ -37,6 +37,10 @@ class AppPaths:
         return self.config_dir / "conversation.json"
 
     @property
+    def tool_settings_file(self) -> Path:
+        return self.config_dir / "tools.json"
+
+    @property
     def data_dir(self) -> Path:
         return self.home / "data"
 

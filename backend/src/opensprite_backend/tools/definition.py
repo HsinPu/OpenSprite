@@ -24,12 +24,19 @@ class ToolEffect(str, Enum):
     SENSITIVE = "sensitive"
 
 
+class ToolSource(str, Enum):
+    BUILTIN = "builtin"
+    MCP = "mcp"
+    EXTERNAL = "external"
+
+
 @dataclass(frozen=True, slots=True)
 class ToolDefinition:
     name: str
     description: str
     input_schema: dict[str, object]
     effect: ToolEffect
+    source: ToolSource = ToolSource.BUILTIN
     timeout_seconds: float = 10
     max_output_chars: int = 8192
 
@@ -44,6 +51,8 @@ class ToolDefinition:
             raise ValueError("invalid tool description")
         if not isinstance(self.effect, ToolEffect):
             raise ValueError("invalid tool effect")
+        if not isinstance(self.source, ToolSource):
+            raise ValueError("invalid tool source")
         if (
             not isinstance(self.timeout_seconds, (int, float))
             or isinstance(self.timeout_seconds, bool)

@@ -25,6 +25,7 @@ def test_build_app_paths_maps_the_complete_layout_without_creating_it(
     assert paths.settings_file == home / "config" / "settings.json"
     assert paths.general_settings_file == home / "config" / "general.json"
     assert paths.conversation_settings_file == home / "config" / "conversation.json"
+    assert paths.tool_settings_file == home / "config" / "tools.json"
     assert paths.data_dir == home / "data"
     assert paths.database_file == home / "data" / "opensprite.db"
     assert paths.state_dir == home / "state"

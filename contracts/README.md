@@ -25,6 +25,10 @@ startup destination, message sending, chat auto-scroll and execution-panel
 behavior. It remains separate from General Settings so the existing
 locale/time-zone schema does not change.
 
+`tool-settings.openapi.json` is the authoritative HTTP contract for the current
+production tool catalog and persisted tool availability. It does not expose
+tool arguments, tool results, credentials, or speculative external tools.
+
 `app-info.openapi.json` is the authoritative read-only contract for the running
 product version and installed build identity. The backend package version is
 the single product-version source; the frontend does not maintain another app
@@ -59,6 +63,12 @@ The conversation settings contract covers:
 - choosing Enter or Ctrl/Cmd+Enter message sending behavior;
 - enabling or disabling automatic following of new chat output;
 - atomically replacing startup, send, auto-scroll and execution-panel values.
+
+The tool settings contract covers:
+
+- listing the tools explicitly composed into the production registry;
+- enabling or disabling all tools and individual registered tools;
+- atomically saving the confirmed availability used by newly started Runs.
 
 The agent chat contract covers:
 

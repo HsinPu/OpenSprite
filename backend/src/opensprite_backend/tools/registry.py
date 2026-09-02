@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 
+from .availability import ToolAvailabilitySnapshot
 from .definition import (
     Tool,
     ToolContext,
@@ -41,9 +42,14 @@ class ToolRegistry:
                 raise ToolRegistryError("duplicate tool name")
             self._tools[definition.name] = tool
 
-    def definitions(self) -> tuple[ToolDefinition, ...]:
+    def definitions(
+        self,
+        availability: ToolAvailabilitySnapshot | None = None,
+    ) -> tuple[ToolDefinition, ...]:
         return tuple(
-            self._tools[name].definition for name in sorted(self._tools)
+            self._tools[name].definition
+            for name in sorted(self._tools)
+            if availability is None or availability.allows(name)
         )
 
     async def invoke(
@@ -51,12 +57,18 @@ class ToolRegistry:
         name: str,
         arguments: dict[str, object],
         context: ToolContext,
+        availability: ToolAvailabilitySnapshot | None = None,
     ) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:
             raise ToolInvocationError(
                 "tool_not_found",
                 "要求的工具目前未註冊。",
+            )
+        if availability is not None and not availability.allows(name):
+            raise ToolInvocationError(
+                "tool_denied",
+                "這項工具操作目前不允許執行。",
             )
         definition = tool.definition
         if not self._policy.allows(definition):

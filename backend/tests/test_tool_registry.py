@@ -8,6 +8,7 @@ from functools import wraps
 
 import pytest
 
+from opensprite_backend.tools.availability import ToolAvailabilitySnapshot
 from opensprite_backend.tools.definition import (
     ToolContext,
     ToolDefinition,
@@ -167,3 +168,22 @@ def test_registry_rejects_duplicate_names_and_non_strict_schema() -> None:
             input_schema={"type": "object", "properties": {}},
             effect=ToolEffect.READ_ONLY,
         )
+
+
+@async_test
+async def test_availability_filters_definitions_and_denies_invocation() -> None:
+    tool = RecordingTool(query_definition())
+    registry = ToolRegistry([tool], policy=ReadOnlyToolPolicy())
+    availability = ToolAvailabilitySnapshot(frozenset())
+
+    assert registry.definitions(availability) == ()
+    with pytest.raises(ToolInvocationError) as captured:
+        await registry.invoke(
+            "lookup_note",
+            {"query": "today"},
+            context(),
+            availability,
+        )
+
+    assert captured.value.code == "tool_denied"
+    assert tool.calls == 0

@@ -151,6 +151,7 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "contextTokens",
         "contextLimitTokens",
         "inputBudgetTokens",
+        "toolNames",
     }
     for field in ("contextTokens", "contextLimitTokens", "inputBudgetTokens"):
         assert schemas["ModelStartedEventData"]["properties"][field]["minimum"] == 1

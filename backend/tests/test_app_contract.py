@@ -154,6 +154,9 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/settings/general", "put", "putGeneralSettings"),
         ("/api/settings/conversation", "get", "getConversationSettings"),
         ("/api/settings/conversation", "put", "putConversationSettings"),
+        ("/api/tools", "get", "listTools"),
+        ("/api/settings/tools", "get", "getToolSettings"),
+        ("/api/settings/tools", "put", "putToolSettings"),
         ("/api/conversations", "get", "listConversations"),
         (
             "/api/conversations/{conversation_id}/messages",

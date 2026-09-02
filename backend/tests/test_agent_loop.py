@@ -50,6 +50,7 @@ from opensprite_backend.tools.definition import (
     ToolEffect,
     ToolResult,
 )
+from opensprite_backend.tools.availability import ToolAvailabilitySnapshot
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
 from opensprite_backend.tools import create_production_tool_registry
@@ -97,6 +98,16 @@ class FailingSystemPromptProvider:
     async def build(self, *, run_id: str) -> str:
         del run_id
         raise RuntimeError("prompt log failed")
+
+
+class RecordingToolAvailability:
+    def __init__(self, enabled_names: frozenset[str]) -> None:
+        self.enabled_names = enabled_names
+        self.calls = 0
+
+    async def snapshot(self) -> ToolAvailabilitySnapshot:
+        self.calls += 1
+        return ToolAvailabilitySnapshot(self.enabled_names)
 
 
 @dataclass
@@ -885,6 +896,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     repository = store(tmp_path)
     run = accepted_run(repository)
     tool = LookupTool()
+    availability = RecordingToolAvailability(frozenset({"lookup_note"}))
     prompt_provider = RecordingSystemPromptProvider()
     gateway = ScriptedGateway(
         [
@@ -903,6 +915,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         repository=repository,
         gateway=gateway,
         tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        tool_availability=availability,
         capability_resolver=TestCapabilityResolver(),
         system_prompt_provider=prompt_provider,
     )
@@ -912,6 +925,7 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     assert result.status is RunStatus.COMPLETED
     assert result.partial_text == "我先查詢。今天共有 3 項工作。"
     assert tool.calls == [{"query": "today"}]
+    assert availability.calls == 1
     assert prompt_provider.run_ids == [run.id]
     assert all(
         request.messages[0].content.startswith("dynamic system prompt")
@@ -949,9 +963,51 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
         for event in model_events
     )
     assert model_events[1].data["contextTokens"] > model_events[0].data["contextTokens"]
+    assert all(event.data["toolNames"] == ["lookup_note"] for event in model_events)
     database_bytes = repository.database_file.read_bytes()
     assert b'"query"' not in database_bytes
     assert b'"today"' not in database_bytes
+
+
+@async_test
+async def test_disabled_tool_is_not_advertised_or_executed(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    tool = LookupTool()
+    availability = RecordingToolAvailability(frozenset())
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelToolCall("call-1", "lookup_note", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [
+                ModelTextDelta("這項工具目前未啟用。"),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        tool_availability=availability,
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert availability.calls == 1
+    assert tool.calls == []
+    assert all(request.tools == () for request in gateway.requests)
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    model_events = [
+        event for event in events if event.type is RunEventType.MODEL_STARTED
+    ]
+    assert all(event.data["toolNames"] == [] for event in model_events)
+    assert any(event.type is RunEventType.TOOL_FAILED for event in events)
 
 
 @async_test

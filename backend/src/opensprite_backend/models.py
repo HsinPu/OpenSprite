@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from enum import StrEnum
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
@@ -13,6 +14,15 @@ StartupView = Literal["new", "recent"]
 SendBehavior = Literal["enter", "modifier-enter"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
+ToolSourceValue = Literal["builtin", "mcp", "external"]
+ToolEffectValue = Literal[
+    "read_only",
+    "local_write",
+    "external_write",
+    "destructive",
+    "sensitive",
+]
+_TOOL_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 class ContractModel(BaseModel):
@@ -211,6 +221,56 @@ class PutConversationSettingsRequest(ContractModel):
     executionPanelDefaultExpanded: StrictBool
 
 
+class ToolSummary(ContractModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    source: ToolSourceValue
+    effect: ToolEffectValue
+    available: StrictBool
+
+
+class ToolListResponse(ContractModel):
+    items: list[ToolSummary] = Field(max_length=64)
+
+    @field_validator("items")
+    @classmethod
+    def require_sorted_unique_items(
+        cls,
+        value: list[ToolSummary],
+    ) -> list[ToolSummary]:
+        ids = [item.id for item in value]
+        if ids != sorted(set(ids)):
+            raise ValueError("tool catalog must be sorted and unique")
+        return value
+
+
+def _validate_enabled_tool_ids(value: list[str]) -> list[str]:
+    if len(set(value)) != len(value) or any(
+        _TOOL_ID.fullmatch(item) is None for item in value
+    ):
+        raise ValueError("enabledTools must contain unique tool ids")
+    return value
+
+
+class ToolSettings(ContractModel):
+    enabled: StrictBool
+    enabledTools: list[str] = Field(max_length=64)
+
+    @field_validator("enabledTools")
+    @classmethod
+    def validate_enabled_tools(cls, value: list[str]) -> list[str]:
+        return _validate_enabled_tool_ids(value)
+
+
+class PutToolSettingsRequest(ContractModel):
+    enabled: StrictBool
+    enabledTools: list[str] = Field(max_length=64)
+
+    @field_validator("enabledTools")
+    @classmethod
+    def validate_enabled_tools(cls, value: list[str]) -> list[str]:
+        return _validate_enabled_tool_ids(value)
+
+
 class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid_request"
     UNSUPPORTED_PROVIDER = "unsupported_provider"
@@ -281,3 +341,20 @@ class ConversationSettingsErrorDetail(ContractModel):
 
 class ConversationSettingsErrorEnvelope(ContractModel):
     error: ConversationSettingsErrorDetail
+
+
+class ToolSettingsErrorCode(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    TOOL_NOT_FOUND = "tool_not_found"
+    SETTINGS_STORE_UNAVAILABLE = "settings_store_unavailable"
+    INTERNAL_ERROR = "internal_error"
+
+
+class ToolSettingsErrorDetail(ContractModel):
+    code: ToolSettingsErrorCode
+    message: str
+    retryable: bool
+
+
+class ToolSettingsErrorEnvelope(ContractModel):
+    error: ToolSettingsErrorDetail

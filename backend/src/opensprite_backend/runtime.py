@@ -43,6 +43,11 @@ from .provider_connections import (
 )
 from .provider_runtime import create_provider_runtime
 from .system_prompt import create_system_prompt_provider
+from .tool_settings import (
+    ToolSettingsOperations,
+    UnavailableToolSettings,
+    create_tool_settings_service,
+)
 from .tools import create_production_tool_registry
 
 
@@ -57,6 +62,7 @@ class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     ai_settings: AiSettingsOperations
     general_settings: GeneralSettingsOperations
     conversation_settings: ConversationSettingsOperations
+    tool_settings: ToolSettingsOperations
     agent_chat: AgentChatOperations
 
     async def astart(self) -> None: ...
@@ -72,6 +78,7 @@ class _SystemRuntime:
         ai_settings: AiSettingsOperations,
         general_settings: GeneralSettingsOperations,
         conversation_settings: ConversationSettingsOperations,
+        tool_settings: ToolSettingsOperations,
         agent_chat: AgentChatService,
     ) -> None:
         self._provider_runtime = provider_runtime
@@ -79,6 +86,7 @@ class _SystemRuntime:
         self.ai_settings = ai_settings
         self.general_settings = general_settings
         self.conversation_settings = conversation_settings
+        self.tool_settings = tool_settings
         self.agent_chat = agent_chat
 
     async def astart(self) -> None:
@@ -108,6 +116,8 @@ def create_system_runtime(
     )
     general_settings = create_general_settings_service(paths)
     conversation_settings = create_conversation_settings_service(paths)
+    tool_registry = create_production_tool_registry()
+    tool_settings = create_tool_settings_service(paths, tool_registry)
     event_notifier = RunEventNotifier()
     repository = SqliteConversationRepository(
         paths.database_file,
@@ -116,7 +126,8 @@ def create_system_runtime(
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
-        tools=create_production_tool_registry(),
+        tools=tool_registry,
+        tool_availability=tool_settings,
         capability_resolver=ProviderModelCapabilityResolver(
             provider_runtime.connections,
             operation_locks=provider_runtime.operation_locks,
@@ -139,6 +150,7 @@ def create_system_runtime(
         ai_settings,
         general_settings,
         conversation_settings,
+        tool_settings,
         agent_chat,
     )
 
@@ -177,6 +189,7 @@ def create_system_app(
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
+            app.state.tool_settings = UnavailableToolSettings()
             app.state.agent_chat = UnavailableAgentChat()
             runtime = factory()
             starter = getattr(runtime, "astart", None)
@@ -186,6 +199,11 @@ def create_system_app(
             app.state.ai_settings = runtime.ai_settings
             app.state.general_settings = runtime.general_settings
             app.state.conversation_settings = runtime.conversation_settings
+            app.state.tool_settings = getattr(
+                runtime,
+                "tool_settings",
+                UnavailableToolSettings(),
+            )
             app.state.agent_chat = getattr(
                 runtime,
                 "agent_chat",
@@ -197,6 +215,7 @@ def create_system_app(
             app.state.ai_settings = UnavailableAiSettings()
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
+            app.state.tool_settings = UnavailableToolSettings()
             app.state.agent_chat = UnavailableAgentChat()
             try:
                 if runtime is not None:

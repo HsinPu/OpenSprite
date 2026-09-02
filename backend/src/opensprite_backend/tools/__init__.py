@@ -1,11 +1,13 @@
 """Explicitly registered and policy-governed Agent tools."""
 
+from .availability import ToolAvailabilityProvider, ToolAvailabilitySnapshot
 from .definition import (
     Tool,
     ToolContext,
     ToolDefinition,
     ToolEffect,
     ToolResult,
+    ToolSource,
 )
 from .composition import create_production_tool_registry
 from .policy import ReadOnlyToolPolicy, ToolPolicy
@@ -18,6 +20,8 @@ from .registry import (
 __all__ = [
     "ReadOnlyToolPolicy",
     "Tool",
+    "ToolAvailabilityProvider",
+    "ToolAvailabilitySnapshot",
     "ToolContext",
     "ToolDefinition",
     "ToolEffect",
@@ -26,5 +30,6 @@ __all__ = [
     "ToolRegistry",
     "ToolRegistryError",
     "ToolResult",
+    "ToolSource",
     "create_production_tool_registry",
 ]
