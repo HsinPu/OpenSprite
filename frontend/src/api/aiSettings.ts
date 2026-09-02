@@ -11,7 +11,7 @@ export type PersistedModelSelection = {
 export type ResponseMode = "default" | "fast" | "balanced" | "deep";
 export type ContextBudget = "auto" | "32k" | "64k" | "128k" | "256k" | "max";
 export type OutputBudget = "auto" | "8k" | "16k" | "32k" | "64k" | "max";
-export type OutputContinuation = "off" | "1" | "2" | "3" | "5" | "unlimited";
+export type OutputContinuation = "off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited";
 export type ResponseDelivery = "stream" | "complete";
 
 export type AiSettings = {
@@ -38,7 +38,7 @@ const errorCodes = ["invalid_request", "not_connected", "credential_store_unavai
 const responseModes = ["default", "fast", "balanced", "deep"] as const;
 const contextBudgets = ["auto", "32k", "64k", "128k", "256k", "max"] as const;
 const outputBudgets = ["auto", "8k", "16k", "32k", "64k", "max"] as const;
-const outputContinuations = ["off", "1", "2", "3", "5", "unlimited"] as const;
+const outputContinuations = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"] as const;
 const responseDeliveries = ["stream", "complete"] as const;
 
 function model(value: unknown): PersistedModelSelection | null {

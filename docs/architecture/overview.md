@@ -87,9 +87,13 @@ stdio 或 Streamable HTTP MCP Tool 快照。工具目錄與設定分別由
 原子保存至 `config/tools.json`。每個 Run 啟動時取得一次工具可用性快照；停用工具
 不會提供給模型，Registry 執行前仍以同一份快照再次檢查。
 MCP Server 設定由 `/api/mcp/servers` CRUD 與明確的 test/start/stop 操作管理，
-保存於 strict schema-v2 `config/mcp.json`；新增或編輯不會啟動程式或建立網路連線。
-Streamable HTTP 僅接受公開 HTTPS 或 loopback HTTP，且不保存認證資料。所有 MCP Tool 呼叫一律逐次顯示
+保存於 strict schema-v3 `config/mcp.json`；schema-v1／v2 以無認證讀取，新增或編輯不會啟動程式或建立網路連線。
+Streamable HTTP 僅接受公開 HTTPS 或 loopback HTTP，支援無認證與手動 Bearer Token。Token 僅以
+AES-256-GCM 密文保存於 `auth.json`，不會進入 `mcp.json`、API response 或 log。所有 MCP Tool 呼叫一律逐次顯示
 完整參數並只允許一次或拒絕，授權後才寫入 hash-chained HMAC receipt 並執行。
+本機 stdio 路徑可透過 `POST /api/local-paths/pick` 由使用者主動開啟原生選擇器；
+Windows 使用 `IFileOpenDialog`，Linux 使用 XDG Desktop Portal。API 不列舉、不保存路徑，
+取消回 `204`，不可用時保留手動輸入。
 
 Context 讀取以 200 則 bounded page 逐段前進，正常 Run 依 token 預算持續
 壓縮而不把 page size 當成歷史總量上限。Agent 會合併高速 assistant delta

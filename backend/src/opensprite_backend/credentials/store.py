@@ -19,7 +19,7 @@ class CredentialStoreUnavailableError(CredentialStoreError):
 
 
 class UnsupportedCredentialProviderError(CredentialStoreError):
-    """A caller supplied a provider outside the fixed catalog."""
+    """A caller supplied a credential identifier outside the fixed policy."""
 
     message = "Unsupported credential provider."
 
@@ -31,7 +31,7 @@ class InvalidCredentialSecretError(CredentialStoreError):
 
 
 class CredentialStore(Protocol):
-    """Store one API credential for each supported provider."""
+    """Store one secret for each supported credential identifier."""
 
     def fingerprint(self, provider_id: str) -> str | None: ...
 

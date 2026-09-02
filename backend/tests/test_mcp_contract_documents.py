@@ -32,10 +32,14 @@ def test_mcp_contract_has_stdio_and_streamable_http_with_exact_operations() -> N
     text = json.dumps(contract, sort_keys=True).lower()
     assert '"const": "stdio"' in text
     assert '"const": "streamable-http"' in text
+    assert '"const": "none"' in text
+    assert '"const": "bearer-token"' in text
     assert '"discriminator"' in text
-    assert "oauth" not in text
+    assert '"oauth2"' not in text
     assert "apikey" not in text
-    assert "authorization" not in text
+    bearer = contract["components"]["schemas"]["BearerAuthenticationCreate"]  # type: ignore[index]
+    assert bearer["properties"]["token"]["writeOnly"] is True
+    assert "token" not in contract["components"]["schemas"]["McpServerSummary"]["properties"]  # type: ignore[index]
 
 
 def test_approval_contract_has_only_allow_once_and_deny() -> None:

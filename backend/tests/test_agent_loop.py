@@ -624,7 +624,10 @@ async def test_output_limit_stops_after_two_continuations(
     assert len(gateway.requests) == 3
 
 
-@pytest.mark.parametrize(("policy", "maximum"), [("1", 1), ("3", 3), ("5", 5)])
+@pytest.mark.parametrize(
+    ("policy", "maximum"),
+    [("1", 1), ("3", 3), ("5", 5), ("10", 10), ("20", 20), ("50", 50)],
+)
 @async_test
 async def test_output_limit_uses_the_snapshotted_continuation_limit(
     tmp_path: Path,
@@ -650,9 +653,16 @@ async def test_output_limit_uses_the_snapshotted_continuation_limit(
     assert result.status is RunStatus.COMPLETED
     assert result.completion_reason is CompletionReason.OUTPUT_LIMIT
     assert len(gateway.requests) == maximum + 1
+    events = list(repository.list_run_events(run.id, after_sequence=0, limit=100))
+    if events:
+        events.extend(repository.list_run_events(
+            run.id,
+            after_sequence=events[-1].sequence,
+            limit=100,
+        ))
     continuation_events = [
         event.data
-        for event in repository.list_run_events(run.id, after_sequence=0, limit=100)
+        for event in events
         if event.type is RunEventType.RESPONSE_CONTINUATION_STARTED
     ]
     assert continuation_events == [

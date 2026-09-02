@@ -4,11 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opensprite-backend"
-version = "0.4.0"
+version = "0.7.0"
 description = "Local HTTP service foundation for OpenSprite"
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "cryptography==50.0.0",
+  "dbus-next==0.2.3; sys_platform == 'linux'",
   "fastapi==0.116.1",
   "httpx==0.28.1",
   "mcp>=2,<3",

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenSprite local AI settings API",
-    "version": "0.6.0-draft",
+    "version": "0.7.0-draft",
     "description": "Authoritative HTTP contract for one atomic local model selection, context budget, output budget, bounded output continuation, response delivery preference, full prompt logging preference and response mode setting."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
@@ -35,7 +35,7 @@
       "get": {
         "operationId": "getAiSettings",
         "summary": "Read AI settings",
-        "description": "Returns a null model, default response mode and stream response delivery when no settings file exists. The read is side-effect free.",
+        "description": "Returns a null model, default response mode, five output continuations and stream response delivery when no settings file exists. The read is side-effect free.",
         "tags": ["ai-settings"],
         "responses": {
           "200": {
@@ -73,7 +73,7 @@
       "ProviderId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]},
       "ResponseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"], "description": "default means future inference requests omit provider reasoning-strength parameters."},
       "ResponseDelivery": {"type": "string", "enum": ["stream", "complete"], "description": "stream displays assistant deltas as they arrive; complete displays the assembled response after the Run reaches a terminal state."},
-      "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "unlimited"]},
+      "OutputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]},
       "ModelSelection": {
         "type": "object",
         "additionalProperties": false,

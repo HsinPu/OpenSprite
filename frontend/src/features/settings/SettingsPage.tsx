@@ -93,9 +93,12 @@ const outputContinuationLabelKeys: Record<OutputContinuation, MessageKey> = {
   "2": "models.outputContinuation.two",
   "3": "models.outputContinuation.three",
   "5": "models.outputContinuation.five",
+  "10": "models.outputContinuation.ten",
+  "20": "models.outputContinuation.twenty",
+  "50": "models.outputContinuation.fifty",
   unlimited: "models.outputContinuation.unlimited",
 };
-const outputContinuationValues: readonly OutputContinuation[] = ["off", "1", "2", "3", "5", "unlimited"];
+const outputContinuationValues: readonly OutputContinuation[] = ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"];
 const responseDeliveryValues: readonly ResponseDelivery[] = ["stream", "complete"];
 const responseDeliveryLabelKeys: Record<ResponseDelivery, MessageKey> = {
   stream: "models.responseDelivery.stream",

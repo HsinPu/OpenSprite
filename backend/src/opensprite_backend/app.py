@@ -24,6 +24,10 @@ from .api.general_settings_routes import (
     general_settings_error_response,
     router as general_settings_router,
 )
+from .api.local_path_routes import (
+    local_path_error_response,
+    router as local_path_router,
+)
 from .api.provider_routes import (
     provider_error_response,
     router as provider_router,
@@ -43,6 +47,11 @@ from .application import (
     UnavailableAgentChat,
 )
 from .local_security import LocalRequestSecurityMiddleware
+from .local_paths import (
+    LocalPathPickerError,
+    LocalPathPickerOperations,
+    UnavailableLocalPathPicker,
+)
 from .models import (
     AppInfo,
     AiSettingsErrorCode,
@@ -102,6 +111,7 @@ def create_app(
     conversation_settings: ConversationSettingsOperations | None = None,
     tool_settings: ToolSettingsOperations | None = None,
     mcp_connections: McpConnections | None = None,
+    local_path_picker: LocalPathPickerOperations | None = None,
     tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     app_info: AppInfo | None = None,
@@ -147,6 +157,11 @@ def create_app(
     app.state.mcp_connections = (
         mcp_connections if mcp_connections is not None else UnavailableMcpConnections()
     )
+    app.state.local_path_picker = (
+        local_path_picker
+        if local_path_picker is not None
+        else UnavailableLocalPathPicker()
+    )
     app.state.tool_approvals = (
         tool_approvals if tool_approvals is not None else UnavailableToolApprovals()
     )
@@ -165,8 +180,17 @@ def create_app(
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
-        del request, exc
+        del exc
+        if request.url.path == "/api/local-paths/pick":
+            return local_path_error_response("invalid_request")
         return provider_error_response(ErrorCode.INVALID_REQUEST)
+
+    async def local_path_error_handler(
+        request: Request,
+        exc: LocalPathPickerError,
+    ) -> JSONResponse:
+        del request
+        return local_path_error_response(exc.code)
 
     async def provider_error_handler(
         request: Request,
@@ -262,6 +286,10 @@ def create_app(
         cast(ExceptionHandler, provider_error_handler),
     )
     app.add_exception_handler(
+        LocalPathPickerError,
+        cast(ExceptionHandler, local_path_error_handler),
+    )
+    app.add_exception_handler(
         SettingsStoreError,
         cast(ExceptionHandler, settings_store_error_handler),
     )
@@ -317,6 +345,7 @@ def create_app(
     app.include_router(conversation_settings_router)
     app.include_router(tool_settings_router)
     app.include_router(mcp_router)
+    app.include_router(local_path_router)
     app.include_router(tool_approval_router)
     app.include_router(provider_router)
     app.include_router(chat_router)

@@ -5,7 +5,7 @@ from enum import StrEnum
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, field_validator, model_validator
 
 ProviderId = Literal["openai", "anthropic", "openrouter"]
 InterfaceLocale = Literal["zh-TW", "en", "ja"]
@@ -23,6 +23,7 @@ ToolEffectValue = Literal[
     "sensitive",
 ]
 _TOOL_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_BEARER_TOKEN = re.compile(r"^[A-Za-z0-9\-._~+/]+=*$")
 
 
 class ContractModel(BaseModel):
@@ -37,6 +38,33 @@ class ContractModel(BaseModel):
 
 class HealthResponse(ContractModel):
     status: Literal["ok"] = "ok"
+
+
+class LocalPathPickRequest(ContractModel):
+    kind: Literal["executable", "directory"]
+
+
+class LocalPathPickResponse(ContractModel):
+    path: str = Field(min_length=1, max_length=32768)
+
+
+LocalPathErrorCode = Literal[
+    "invalid_request",
+    "invalid_selection",
+    "picker_busy",
+    "picker_unavailable",
+    "internal_error",
+]
+
+
+class LocalPathErrorDetail(ContractModel):
+    code: LocalPathErrorCode
+    message: str
+    retryable: StrictBool
+
+
+class LocalPathErrorEnvelope(ContractModel):
+    error: LocalPathErrorDetail
 
 
 class AppInfo(ContractModel):
@@ -173,6 +201,9 @@ class OutputContinuation(StrEnum):
     TWO = "2"
     THREE = "3"
     FIVE = "5"
+    TEN = "10"
+    TWENTY = "20"
+    FIFTY = "50"
     UNLIMITED = "unlimited"
 
 
@@ -184,7 +215,7 @@ class ResponseDelivery(StrEnum):
 class AiSettings(ContractModel):
     model: ModelSelection | None
     responseMode: ResponseMode
-    outputContinuation: OutputContinuation = OutputContinuation.TWO
+    outputContinuation: OutputContinuation = OutputContinuation.FIVE
     responseDelivery: ResponseDelivery = ResponseDelivery.STREAM
     logFullPrompts: StrictBool = False
 
@@ -408,9 +439,48 @@ McpTransport = Annotated[
 ]
 
 
+class McpNoAuthentication(ContractModel):
+    type: Literal["none"] = "none"
+
+
+class McpBearerAuthenticationInput(ContractModel):
+    type: Literal["bearer-token"] = "bearer-token"
+    token: SecretStr | None = Field(default=None, min_length=1, max_length=8192)
+
+    @field_validator("token")
+    @classmethod
+    def reject_blank_token(cls, value: SecretStr | None) -> SecretStr | None:
+        if (
+            value is not None
+            and _BEARER_TOKEN.fullmatch(value.get_secret_value()) is None
+        ):
+            raise ValueError("Bearer token has invalid characters")
+        return value
+
+
+McpAuthenticationInput = Annotated[
+    McpNoAuthentication | McpBearerAuthenticationInput,
+    Field(discriminator="type"),
+]
+
+
+class McpBearerAuthenticationSummary(ContractModel):
+    type: Literal["bearer-token"] = "bearer-token"
+    configured: StrictBool
+
+
+McpAuthenticationSummary = Annotated[
+    McpNoAuthentication | McpBearerAuthenticationSummary,
+    Field(discriminator="type"),
+]
+
+
 class CreateMcpServerRequest(ContractModel):
     name: str = Field(min_length=1, max_length=80)
     transport: McpTransport
+    authentication: McpAuthenticationInput = Field(
+        default_factory=McpNoAuthentication
+    )
     startOnLaunch: StrictBool = False
 
     @field_validator("name")
@@ -420,9 +490,45 @@ class CreateMcpServerRequest(ContractModel):
             raise ValueError("name must contain non-whitespace")
         return value
 
+    @model_validator(mode="after")
+    def require_new_bearer_token(self) -> "CreateMcpServerRequest":
+        authentication = self.authentication
+        if (
+            isinstance(authentication, McpBearerAuthenticationInput)
+            and authentication.token is None
+        ):
+            raise ValueError("Bearer token is required when creating a server")
+        if (
+            isinstance(self.transport, McpStdioTransport)
+            and not isinstance(authentication, McpNoAuthentication)
+        ):
+            raise ValueError("stdio does not support HTTP authentication")
+        return self
 
-class PutMcpServerRequest(CreateMcpServerRequest):
-    pass
+
+class PutMcpServerRequest(ContractModel):
+    name: str = Field(min_length=1, max_length=80)
+    transport: McpTransport
+    authentication: McpAuthenticationInput = Field(
+        default_factory=McpNoAuthentication
+    )
+    startOnLaunch: StrictBool = False
+
+    @field_validator("name")
+    @classmethod
+    def reject_blank_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name must contain non-whitespace")
+        return value
+
+    @model_validator(mode="after")
+    def restrict_authentication_to_http(self) -> "PutMcpServerRequest":
+        if (
+            isinstance(self.transport, McpStdioTransport)
+            and not isinstance(self.authentication, McpNoAuthentication)
+        ):
+            raise ValueError("stdio does not support HTTP authentication")
+        return self
 
 
 class McpServerSummary(ContractModel):
@@ -431,6 +537,7 @@ class McpServerSummary(ContractModel):
     enabled: StrictBool
     startOnLaunch: StrictBool
     transport: McpTransport
+    authentication: McpAuthenticationSummary
     status: McpServerStatus
     protocolVersion: str | None
     errorCode: str | None
@@ -481,6 +588,7 @@ class McpErrorCode(StrEnum):
     REDIRECT_NOT_ALLOWED = "redirect_not_allowed"
     PROTOCOL_UNSUPPORTED = "protocol_unsupported"
     MCP_STORE_UNAVAILABLE = "mcp_store_unavailable"
+    CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
     INTERNAL_ERROR = "internal_error"
 
 

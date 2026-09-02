@@ -816,7 +816,7 @@
           "attempt": {"type": "integer", "minimum": 1, "maximum": 64},
           "maxAttempts": {
             "anyOf": [
-              {"type": "integer", "enum": [1, 2, 3, 5]},
+              {"type": "integer", "enum": [1, 2, 3, 5, 10, 20, 50]},
               {"type": "null"}
             ],
             "description": "Configured continuation limit, or null for unlimited mode subject to backend safety bounds."

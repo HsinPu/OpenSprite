@@ -12,7 +12,7 @@ ProviderId = Literal["openai", "anthropic", "openrouter"]
 ResponseMode = Literal["default", "fast", "balanced", "deep"]
 ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
-OutputContinuation = Literal["off", "1", "2", "3", "5", "unlimited"]
+OutputContinuation = Literal["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
 MessageRole = Literal["user", "assistant"]
 MAX_ASSISTANT_CHARS = 1_048_576
 
@@ -116,7 +116,7 @@ class RunSnapshot:
     finished_at: datetime | None
     context_budget: ContextBudget = "auto"
     output_budget: OutputBudget = "auto"
-    output_continuation: OutputContinuation = "2"
+    output_continuation: OutputContinuation = "5"
     log_full_prompts: bool = False
     completion_reason: CompletionReason | None = None
 

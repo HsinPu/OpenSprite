@@ -45,7 +45,7 @@ def start(
     message: str = "整理今天的工作",
     context_budget: str = "auto",
     output_budget: str = "auto",
-    output_continuation: OutputContinuation = "2",
+    output_continuation: OutputContinuation = "5",
 ):
     return store.start_run(
         conversation_id=conversation_id,
@@ -91,7 +91,7 @@ def test_first_start_is_one_durable_conversation_message_and_run(
     assert accepted.run.response_mode == "default"
     assert accepted.run.context_budget == "auto"
     assert accepted.run.output_budget == "auto"
-    assert accepted.run.output_continuation == "2"
+    assert accepted.run.output_continuation == "5"
     assert accepted.run.partial_text == ""
     conversation = store.get_conversation(accepted.conversation.id)
     assert conversation is not None
@@ -535,7 +535,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -601,7 +601,7 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
 
 
 def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
@@ -640,7 +640,7 @@ def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
         "completionReason": "stop",
     }
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
 
 
 def test_schema_v4_output_budget_and_model_event_are_upgraded(
@@ -677,7 +677,7 @@ def test_schema_v4_output_budget_and_model_event_are_upgraded(
     model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
     assert model_event.data["maxOutputTokens"] == 8_192
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
 
 
 def test_schema_v5_adds_default_continuation_policy_without_losing_run(
@@ -698,7 +698,7 @@ def test_schema_v5_adds_default_continuation_policy_without_losing_run(
     assert run is not None
     assert run.output_continuation == "2"
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
 
 
 @pytest.mark.parametrize(("enabled", "expected"), [(0, "off"), (1, "2")])
@@ -731,7 +731,40 @@ def test_schema_v7_converts_boolean_continuation_without_losing_run(
         }
         assert "output_continuation" in columns
         assert "auto_continue_output" not in columns
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
+
+
+def test_schema_v9_expands_continuation_values_without_losing_run(
+    tmp_path: Path,
+) -> None:
+    store = repository(tmp_path)
+    accepted = start(store, output_continuation="2")
+    store.mark_run_started(accepted.run.id)
+    store.append_run_event(accepted.run.id, RunEventType.MODEL_STARTED, {
+        "providerId": "openrouter",
+        "modelId": "openrouter/auto",
+        "responseMode": "default",
+        "maxOutputTokens": 8192,
+    })
+    database = store.database_file
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA user_version = 9")
+
+    upgraded = SqliteConversationRepository(database, clock=lambda: NOW)
+    upgraded.interrupt_incomplete_runs()
+
+    preserved = upgraded.get_run(accepted.run.id)
+    assert preserved is not None
+    assert preserved.output_continuation == "2"
+    assert upgraded.list_run_events(accepted.run.id, after_sequence=0, limit=100)
+    expanded = start(upgraded, output_continuation="50")
+    assert expanded.run.output_continuation == "50"
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 10
+        runs_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'runs'"
+        ).fetchone()[0]
+    assert "'10', '20', '50'" in runs_sql
 
 
 def test_concurrent_starts_on_distinct_conversations_do_not_lose_updates(

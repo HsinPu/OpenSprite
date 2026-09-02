@@ -28,6 +28,7 @@ class ProviderRuntime:
     connections: ProviderConnectionService
     model_gateway: NativeModelGateway
     operation_locks: ProviderOperationLocks
+    credential_store: CredentialStore
     http_client: httpx.AsyncClient
     owns_http_client: bool
 
@@ -94,6 +95,7 @@ def create_provider_runtime(
         connections=connections,
         model_gateway=NativeModelGateway(store, client, locks),
         operation_locks=locks,
+        credential_store=store,
         http_client=client,
         owns_http_client=owns_client,
     )

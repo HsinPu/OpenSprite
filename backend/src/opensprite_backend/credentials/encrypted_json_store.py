@@ -9,6 +9,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import re
 import threading
 import uuid
 from typing import Final, TypedDict, cast
@@ -22,13 +23,16 @@ from .store import (
     UnsupportedCredentialProviderError,
 )
 
-_STORE_VERSION: Final = 1
+_STORE_VERSION: Final = 2
 _ALGORITHM: Final = "AES-256-GCM"
 _MAX_STORE_BYTES: Final = 1024 * 1024
 _KEY_BYTES: Final = 32
 _KEY_TEXT_BYTES: Final = 44
 _NONCE_BYTES: Final = 12
 _PROVIDER_IDS: Final = frozenset({"openai", "anthropic", "openrouter"})
+_MCP_CREDENTIAL_ID: Final = re.compile(
+    r"^mcp:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:bearer$"
+)
 _AAD_PREFIX: Final = b"OpenSprite credential store v1\0"
 
 
@@ -38,10 +42,16 @@ class _EncryptedEntry(TypedDict):
     fingerprint: str
 
 
-def _validated_provider_id(provider_id: str) -> str:
-    if type(provider_id) is not str or provider_id not in _PROVIDER_IDS:
+def _validated_credential_id(credential_id: str) -> str:
+    if (
+        type(credential_id) is not str
+        or (
+            credential_id not in _PROVIDER_IDS
+            and _MCP_CREDENTIAL_ID.fullmatch(credential_id) is None
+        )
+    ):
         raise UnsupportedCredentialProviderError
-    return provider_id
+    return credential_id
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -112,7 +122,7 @@ def _atomic_write(path: Path, payload: bytes) -> None:
 
 
 class EncryptedJsonCredentialStore:
-    """Encrypt each API key with a per-install AES-256-GCM key."""
+    """Encrypt each approved credential with a per-install AES-256-GCM key."""
 
     __slots__ = ("_key_path", "_lock", "_path")
 
@@ -122,7 +132,7 @@ class EncryptedJsonCredentialStore:
         self._lock = threading.RLock()
 
     def fingerprint(self, provider_id: str) -> str | None:
-        provider = _validated_provider_id(provider_id)
+        provider = _validated_credential_id(provider_id)
         with self._lock:
             entry = self._load_entries().get(provider)
             if entry is not None:
@@ -130,7 +140,7 @@ class EncryptedJsonCredentialStore:
             return entry["fingerprint"] if entry is not None else None
 
     def get(self, provider_id: str) -> str | None:
-        provider = _validated_provider_id(provider_id)
+        provider = _validated_credential_id(provider_id)
         with self._lock:
             entry = self._load_entries().get(provider)
             if entry is None:
@@ -159,7 +169,7 @@ class EncryptedJsonCredentialStore:
                 raise CredentialStoreUnavailableError from None
 
     def set(self, provider_id: str, secret: str) -> None:
-        provider = _validated_provider_id(provider_id)
+        provider = _validated_credential_id(provider_id)
         if type(secret) is not str or not secret.strip():
             raise InvalidCredentialSecretError
         plaintext = secret.encode("utf-8")
@@ -181,7 +191,7 @@ class EncryptedJsonCredentialStore:
             self._save_entries(entries)
 
     def delete(self, provider_id: str) -> None:
-        provider = _validated_provider_id(provider_id)
+        provider = _validated_credential_id(provider_id)
         with self._lock:
             entries = self._load_entries()
             if provider not in entries:
@@ -245,7 +255,8 @@ class EncryptedJsonCredentialStore:
         expected_root = {"version", "algorithm", "credentials"}
         if type(payload) is not dict or set(payload) != expected_root:
             raise ValueError("invalid credential file")
-        if payload.get("version") != _STORE_VERSION:
+        version = payload.get("version")
+        if version not in {1, _STORE_VERSION}:
             raise ValueError("unsupported credential file version")
         if payload.get("algorithm") != _ALGORITHM:
             raise ValueError("unsupported credential algorithm")
@@ -256,7 +267,16 @@ class EncryptedJsonCredentialStore:
         entries: dict[str, _EncryptedEntry] = {}
         expected_entry = {"nonce", "ciphertext", "fingerprint"}
         for provider_id, entry in raw_credentials.items():
-            if provider_id not in _PROVIDER_IDS:
+            if (
+                type(provider_id) is not str
+                or (
+                    provider_id not in _PROVIDER_IDS
+                    and not (
+                        version == _STORE_VERSION
+                        and _MCP_CREDENTIAL_ID.fullmatch(provider_id) is not None
+                    )
+                )
+            ):
                 raise ValueError("unsupported provider in credential file")
             if type(entry) is not dict or set(entry) != expected_entry:
                 raise ValueError("invalid credential entry")

@@ -13,7 +13,7 @@ def test_development_info_uses_package_version_without_writing(tmp_path: Path) -
 
     info = load_app_info(path)
 
-    assert info.version == product_version() == "0.4.0"
+    assert info.version == product_version() == "0.7.0"
     assert info.revision == "development"
     assert info.buildType == "development"
     assert info.dirty is True
@@ -24,7 +24,7 @@ def test_development_info_uses_package_version_without_writing(tmp_path: Path) -
 def test_installed_info_requires_matching_package_version(tmp_path: Path) -> None:
     path = tmp_path / "build-info.json"
     path.write_text(json.dumps({
-        "version": "0.4.0",
+        "version": "0.7.0",
         "revision": "84142959",
         "dirty": False,
         "installedAt": "2026-08-31T01:02:03Z",
@@ -33,7 +33,7 @@ def test_installed_info_requires_matching_package_version(tmp_path: Path) -> Non
     info = load_app_info(path)
 
     assert info.model_dump(mode="json") == {
-        "version": "0.4.0",
+        "version": "0.7.0",
         "revision": "84142959",
         "buildType": "installed",
         "dirty": False,

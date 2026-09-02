@@ -15,8 +15,16 @@ import httpx2
 from mcp import Client, StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 
+from ..credentials import CredentialStore
+from ..credentials.store import CredentialStoreError
 from ..tools.definition import ToolDefinition, ToolEffect, ToolSource
-from .config import McpServerConfig, McpStdioConfig, McpStreamableHttpConfig
+from .config import (
+    McpBearerAuthenticationConfig,
+    McpServerConfig,
+    McpStdioConfig,
+    McpStreamableHttpConfig,
+    mcp_bearer_credential_id,
+)
 from .network import McpNetworkPolicyError, McpNetworkTargetPolicy
 
 
@@ -69,11 +77,32 @@ class McpSessionFactory(Protocol):
 
 
 class OfficialMcpSessionFactory:
-    def __init__(self, network_policy: McpNetworkTargetPolicy | None = None) -> None:
+    def __init__(
+        self,
+        network_policy: McpNetworkTargetPolicy | None = None,
+        credential_store: CredentialStore | None = None,
+    ) -> None:
         self._network_policy = network_policy or McpNetworkTargetPolicy()
+        self._credential_store = credential_store
 
     async def open(self, config: McpServerConfig) -> McpClientSession:
-        return await OfficialMcpSession.open(config, self._network_policy)
+        bearer_token: str | None = None
+        if isinstance(config.authentication, McpBearerAuthenticationConfig):
+            if self._credential_store is None:
+                raise McpSessionError("credential_store_unavailable")
+            try:
+                bearer_token = self._credential_store.get(
+                    mcp_bearer_credential_id(config.id)
+                )
+            except CredentialStoreError as error:
+                raise McpSessionError("credential_store_unavailable") from error
+            if bearer_token is None:
+                raise McpSessionError("credential_store_unavailable")
+        return await OfficialMcpSession.open(
+            config,
+            self._network_policy,
+            bearer_token=bearer_token,
+        )
 
 
 @dataclass(slots=True)
@@ -114,11 +143,25 @@ class OfficialMcpSession:
         self.server_name = server_name
 
     @classmethod
-    async def open(cls, config: McpServerConfig, network_policy: McpNetworkTargetPolicy | None = None) -> "OfficialMcpSession":
+    async def open(
+        cls,
+        config: McpServerConfig,
+        network_policy: McpNetworkTargetPolicy | None = None,
+        *,
+        bearer_token: str | None = None,
+    ) -> "OfficialMcpSession":
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[_SessionCommand] = asyncio.Queue()
         ready: asyncio.Future[tuple[str, str]] = loop.create_future()
-        owner = asyncio.create_task(cls._run_owner(config, queue, ready, network_policy or McpNetworkTargetPolicy()))
+        owner = asyncio.create_task(
+            cls._run_owner(
+                config,
+                queue,
+                ready,
+                network_policy or McpNetworkTargetPolicy(),
+                bearer_token,
+            )
+        )
         try:
             async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
                 protocol_version, server_name = await asyncio.shield(ready)
@@ -186,6 +229,7 @@ class OfficialMcpSession:
         queue: asyncio.Queue[_SessionCommand],
         ready: asyncio.Future[tuple[str, str]],
         network_policy: McpNetworkTargetPolicy,
+        bearer_token: str | None,
     ) -> None:
         stack = AsyncExitStack()
         close_future: asyncio.Future[object] | None = None
@@ -206,6 +250,11 @@ class OfficialMcpSession:
                     url = await network_policy.validate(config.transport.url)
                 except McpNetworkPolicyError as error:
                     raise McpSessionError(error.code) from error
+                headers = (
+                    {"Authorization": f"Bearer {bearer_token}"}
+                    if bearer_token is not None
+                    else None
+                )
                 http_client = await stack.enter_async_context(httpx2.AsyncClient(
                     follow_redirects=False,
                     trust_env=False,
@@ -218,6 +267,7 @@ class OfficialMcpSession:
                     ),
                     limits=httpx2.Limits(max_connections=4, max_keepalive_connections=2),
                     event_hooks={"response": [observation.observe]},
+                    headers=headers,
                 ))
                 client_target = streamable_http_client(url, http_client=http_client)
             client = Client(client_target, read_timeout_seconds=_REQUEST_TIMEOUT_SECONDS)

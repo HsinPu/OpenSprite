@@ -43,7 +43,7 @@ def default_ai_settings() -> AiSettings:
     return AiSettings(
         model=None,
         responseMode="default",
-        outputContinuation="2",
+        outputContinuation="5",
         responseDelivery="stream",
         logFullPrompts=False,
     )

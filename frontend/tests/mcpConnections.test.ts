@@ -9,13 +9,14 @@ const server = {
   enabled: false,
   startOnLaunch: false,
   transport: { type: "stdio", executable: "C:\\Python\\python.exe", arguments: ["server.py"], workingDirectory: "C:\\Mcp" },
+  authentication: { type: "none" },
   status: "disabled",
   protocolVersion: null,
   errorCode: null,
   toolCount: 0,
   unsupportedToolCount: 0,
 };
-const draft: McpServerDraft = { name: server.name, startOnLaunch: false, transport: { ...server.transport, type: "stdio" } };
+const draft: McpServerDraft = { name: server.name, startOnLaunch: false, transport: { ...server.transport, type: "stdio" }, authentication: { type: "none" } };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -38,7 +39,7 @@ describe("MCP connections API", () => {
     await expect(listMcpTools(server.id)).rejects.toMatchObject({ code: "malformed_response" });
   });
 
-  it("accepts the strict Streamable HTTP transport without credential fields", async () => {
+  it("accepts the strict Streamable HTTP transport with no authentication", async () => {
     const remote = {
       ...server,
       transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
@@ -48,6 +49,50 @@ describe("MCP connections API", () => {
     await expect(listMcpServers()).resolves.toMatchObject([{
       transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
     }]);
+  });
+
+  it("sends a Bearer token only in the write request and accepts masked state", async () => {
+    const remote = {
+      ...server,
+      transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+      authentication: { type: "bearer-token", configured: true },
+    };
+    const bearerDraft: McpServerDraft = {
+      name: "Protected MCP",
+      startOnLaunch: false,
+      transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+      authentication: { type: "bearer-token", token: "secret-token" },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(remote), { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createMcpServer(bearerDraft)).resolves.toMatchObject({
+      authentication: { type: "bearer-token", configured: true },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/mcp/servers",
+      expect.objectContaining({ body: JSON.stringify(bearerDraft) }),
+    );
+  });
+
+  it("rejects a server response that exposes a Bearer token", async () => {
+    const unsafe = {
+      ...server,
+      authentication: {
+        type: "bearer-token",
+        configured: true,
+        token: "must-not-be-returned",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ servers: [unsafe] })),
+    ));
+
+    await expect(listMcpServers()).rejects.toMatchObject({
+      code: "malformed_response",
+    });
   });
 
   it("maps only fixed MCP errors", async () => {

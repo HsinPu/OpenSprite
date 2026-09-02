@@ -24,9 +24,13 @@ The current slice provides:
   `config/conversation.json`, exposed through
   `GET`/`PUT /api/settings/conversation`;
 - official MCP Python SDK v2 Client sessions for explicitly configured local
-  stdio or credential-free Streamable HTTP Servers, with strict lazy schema-v2
+  stdio or Streamable HTTP Servers with no authentication or a manually supplied
+  Bearer token, with strict lazy schema-v3
   `config/mcp.json`, explicit lifecycle routes, bounded Tool discovery and a
   per-Run dynamic Tool snapshot;
+- a user-initiated `POST /api/local-paths/pick` boundary that opens the Windows
+  native file dialog or Linux XDG Desktop Portal without persisting or listing
+  filesystem paths;
 - short-lived, exact-argument, single-use MCP Tool approval plus required
   HMAC hash-chained receipts that omit raw arguments and results;
 - a transactional `ProviderConnectionService` behind the injectable
@@ -48,7 +52,7 @@ The current slice provides:
 - an injectable `create_app()` default that remains unchanged and fails closed
   with `credential_store_unavailable` unless a caller supplies dependencies.
 
-It stores provider secrets only as AES-256-GCM ciphertext in `auth.json`, using
+It stores provider and MCP Bearer secrets only as AES-256-GCM ciphertext in `auth.json`, using
 a random per-install key at `config/credential.key`. Windows and Linux share the
 same format and do not require a startup password. This protects an isolated
 `auth.json`, but not an attacker who obtains the complete `.opensprite` root
@@ -58,7 +62,8 @@ roots; they make no real provider request or credential operation.
 
 Constructing `AppPaths`, importing this package, starting the system app, and
 reading absent provider or credential state are filesystem-side-effect free.
-The credential and key files are created only after a provider key validates;
+The credential and key files are created only after a provider key validates or
+an MCP Bearer configuration is explicitly saved;
 the provider repository creates `.opensprite/state` when metadata is written.
 The AI settings file is created only after a successful settings write. It uses
 strict schema v8 and stores one nullable Provider/model identifier plus the

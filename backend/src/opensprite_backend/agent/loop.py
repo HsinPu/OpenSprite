@@ -84,7 +84,15 @@ class _ContextPreparationFailed(Exception):
 _Result = TypeVar("_Result")
 _LOGGER = logging.getLogger("opensprite.agent.context")
 _MAX_UNLIMITED_CONTINUATIONS = 64
-_BOUNDED_CONTINUATIONS = {"1": 1, "2": 2, "3": 3, "5": 5}
+_BOUNDED_CONTINUATIONS = {
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "5": 5,
+    "10": 10,
+    "20": 20,
+    "50": 50,
+}
 _CONTINUATION_TAIL_TOKENS = 4_096
 _CONTEXT_PAGE_SIZE: Final = 200
 _ASSISTANT_DELTA_BATCH_CHARS: Final = 4_096

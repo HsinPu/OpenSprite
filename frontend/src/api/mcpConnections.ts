@@ -10,12 +10,20 @@ export type McpStdioTransport = {
 };
 export type McpStreamableHttpTransport = { type: "streamable-http"; url: string };
 export type McpTransport = McpStdioTransport | McpStreamableHttpTransport;
+export type McpAuthenticationDraft =
+  | { type: "none" }
+  | { type: "bearer-token"; token: string | null };
+export type McpAuthenticationSummary =
+  | { type: "none" }
+  | { type: "bearer-token"; configured: boolean };
 export type McpServerDraft = {
   name: string;
   startOnLaunch: boolean;
   transport: McpTransport;
+  authentication: McpAuthenticationDraft;
 };
-export type McpServerSummary = McpServerDraft & {
+export type McpServerSummary = Omit<McpServerDraft, "authentication"> & {
+  authentication: McpAuthenticationSummary;
   id: string;
   enabled: boolean;
   status: McpServerStatus;
@@ -34,7 +42,7 @@ export type McpToolSummary = {
   unsupportedReason: "unsupported_schema" | null;
   annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean };
 };
-export type McpErrorCode = "invalid_request" | "not_found" | "server_disabled" | "server_not_running" | "server_start_failed" | "server_stop_failed" | "server_unreachable" | "server_timeout" | "tools_not_supported" | "tool_catalog_invalid" | "remote_url_blocked" | "authentication_required" | "tls_verification_failed" | "redirect_not_allowed" | "protocol_unsupported" | "mcp_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
+export type McpErrorCode = "invalid_request" | "not_found" | "server_disabled" | "server_not_running" | "server_start_failed" | "server_stop_failed" | "server_unreachable" | "server_timeout" | "tools_not_supported" | "tool_catalog_invalid" | "remote_url_blocked" | "authentication_required" | "tls_verification_failed" | "redirect_not_allowed" | "protocol_unsupported" | "mcp_store_unavailable" | "credential_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
 
 export class McpApiError extends Error {
   constructor(readonly code: McpErrorCode) { super(code); this.name = "McpApiError"; }
@@ -43,7 +51,7 @@ export class McpApiError extends Error {
 const identifier = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const toolId = /^[a-z][a-z0-9_]{0,63}$/;
 const statuses: McpServerStatus[] = ["disabled", "stopped", "starting", "connected", "error", "stopping"];
-const serverCodes: McpErrorCode[] = ["invalid_request", "not_found", "server_disabled", "server_not_running", "server_start_failed", "server_stop_failed", "server_unreachable", "server_timeout", "tools_not_supported", "tool_catalog_invalid", "remote_url_blocked", "authentication_required", "tls_verification_failed", "redirect_not_allowed", "protocol_unsupported", "mcp_store_unavailable", "internal_error"];
+const serverCodes: McpErrorCode[] = ["invalid_request", "not_found", "server_disabled", "server_not_running", "server_start_failed", "server_stop_failed", "server_unreachable", "server_timeout", "tools_not_supported", "tool_catalog_invalid", "remote_url_blocked", "authentication_required", "tls_verification_failed", "redirect_not_allowed", "protocol_unsupported", "mcp_store_unavailable", "credential_store_unavailable", "internal_error"];
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) => Object.keys(value).length === expected.length && Object.keys(value).every((key) => expected.includes(key));
 const bounded = (value: unknown, maximum: number): value is string => typeof value === "string" && value.length > 0 && value.length <= maximum;
@@ -58,9 +66,18 @@ function transport(value: unknown): McpTransport {
   return { type: "stdio", executable: value.executable, arguments: [...value.arguments] as string[], workingDirectory: value.workingDirectory as string | null };
 }
 
+function authentication(value: unknown): McpAuthenticationSummary {
+  if (!record(value) || typeof value.type !== "string") throw new McpApiError("malformed_response");
+  if (value.type === "none" && exactKeys(value, ["type"])) return { type: "none" };
+  if (value.type === "bearer-token" && exactKeys(value, ["type", "configured"]) && typeof value.configured === "boolean") {
+    return { type: "bearer-token", configured: value.configured };
+  }
+  throw new McpApiError("malformed_response");
+}
+
 function server(value: unknown): McpServerSummary {
-  if (!record(value) || !exactKeys(value, ["id", "name", "enabled", "startOnLaunch", "transport", "status", "protocolVersion", "errorCode", "toolCount", "unsupportedToolCount"]) || typeof value.id !== "string" || !identifier.test(value.id) || !bounded(value.name, 80) || typeof value.enabled !== "boolean" || typeof value.startOnLaunch !== "boolean" || typeof value.status !== "string" || !statuses.includes(value.status as McpServerStatus) || (value.protocolVersion !== null && !bounded(value.protocolVersion, 32)) || (value.errorCode !== null && !bounded(value.errorCode, 64)) || !Number.isInteger(value.toolCount) || (value.toolCount as number) < 0 || (value.toolCount as number) > 128 || !Number.isInteger(value.unsupportedToolCount) || (value.unsupportedToolCount as number) < 0 || (value.unsupportedToolCount as number) > 128) throw new McpApiError("malformed_response");
-  return { id: value.id, name: value.name, enabled: value.enabled, startOnLaunch: value.startOnLaunch, transport: transport(value.transport), status: value.status as McpServerStatus, protocolVersion: value.protocolVersion as string | null, errorCode: value.errorCode as string | null, toolCount: value.toolCount as number, unsupportedToolCount: value.unsupportedToolCount as number };
+  if (!record(value) || !exactKeys(value, ["id", "name", "enabled", "startOnLaunch", "transport", "authentication", "status", "protocolVersion", "errorCode", "toolCount", "unsupportedToolCount"]) || typeof value.id !== "string" || !identifier.test(value.id) || !bounded(value.name, 80) || typeof value.enabled !== "boolean" || typeof value.startOnLaunch !== "boolean" || typeof value.status !== "string" || !statuses.includes(value.status as McpServerStatus) || (value.protocolVersion !== null && !bounded(value.protocolVersion, 32)) || (value.errorCode !== null && !bounded(value.errorCode, 64)) || !Number.isInteger(value.toolCount) || (value.toolCount as number) < 0 || (value.toolCount as number) > 128 || !Number.isInteger(value.unsupportedToolCount) || (value.unsupportedToolCount as number) < 0 || (value.unsupportedToolCount as number) > 128) throw new McpApiError("malformed_response");
+  return { id: value.id, name: value.name, enabled: value.enabled, startOnLaunch: value.startOnLaunch, transport: transport(value.transport), authentication: authentication(value.authentication), status: value.status as McpServerStatus, protocolVersion: value.protocolVersion as string | null, errorCode: value.errorCode as string | null, toolCount: value.toolCount as number, unsupportedToolCount: value.unsupportedToolCount as number };
 }
 
 function tool(value: unknown): McpToolSummary {
@@ -103,7 +120,7 @@ export async function listMcpTools(id: string): Promise<McpToolSummary[]> {
 export function mcpErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof McpApiError ? error.code : "network_error";
   const keys: Record<McpErrorCode, MessageKey> = {
-    invalid_request: "error.mcp.invalidRequest", not_found: "error.mcp.notFound", server_disabled: "error.mcp.disabled", server_not_running: "error.mcp.notRunning", server_start_failed: "error.mcp.startFailed", server_stop_failed: "error.mcp.stopFailed", server_unreachable: "error.mcp.unreachable", server_timeout: "error.mcp.timeout", tools_not_supported: "error.mcp.noTools", tool_catalog_invalid: "error.mcp.catalog", remote_url_blocked: "error.mcp.remoteUrlBlocked", authentication_required: "error.mcp.authenticationRequired", tls_verification_failed: "error.mcp.tls", redirect_not_allowed: "error.mcp.redirect", protocol_unsupported: "error.mcp.protocol", mcp_store_unavailable: "error.mcp.store", internal_error: "error.mcp.internal", malformed_response: "error.mcp.malformed", network_error: "error.network",
+    invalid_request: "error.mcp.invalidRequest", not_found: "error.mcp.notFound", server_disabled: "error.mcp.disabled", server_not_running: "error.mcp.notRunning", server_start_failed: "error.mcp.startFailed", server_stop_failed: "error.mcp.stopFailed", server_unreachable: "error.mcp.unreachable", server_timeout: "error.mcp.timeout", tools_not_supported: "error.mcp.noTools", tool_catalog_invalid: "error.mcp.catalog", remote_url_blocked: "error.mcp.remoteUrlBlocked", authentication_required: "error.mcp.authenticationRequired", tls_verification_failed: "error.mcp.tls", redirect_not_allowed: "error.mcp.redirect", protocol_unsupported: "error.mcp.protocol", mcp_store_unavailable: "error.mcp.store", credential_store_unavailable: "error.provider.storeUnavailable", internal_error: "error.mcp.internal", malformed_response: "error.mcp.malformed", network_error: "error.network",
   };
   return t(keys[code]);
 }

@@ -166,6 +166,7 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
         ("/api/mcp/servers/{server_id}/start", "post", "startMcpServer"),
         ("/api/mcp/servers/{server_id}/stop", "post", "stopMcpServer"),
         ("/api/mcp/servers/{server_id}/tools", "get", "listMcpTools"),
+        ("/api/local-paths/pick", "post", "pickLocalPath"),
         ("/api/tool-approvals/{approval_id}", "get", "getToolApproval"),
         ("/api/tool-approvals/{approval_id}", "put", "putToolApprovalDecision"),
         ("/api/conversations", "get", "listConversations"),
@@ -311,7 +312,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.4.0",
+        "version": "0.7.0",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

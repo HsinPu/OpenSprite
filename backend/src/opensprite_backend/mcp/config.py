@@ -12,7 +12,7 @@ from ..atomic_file import atomic_write
 from .network import McpNetworkPolicyError, normalize_streamable_http_url
 
 
-_SCHEMA_VERSION: Final = 2
+_SCHEMA_VERSION: Final = 3
 _MAX_CONFIG_BYTES: Final = 1024 * 1024
 _MAX_SERVERS: Final = 32
 
@@ -46,10 +46,34 @@ McpTransportConfig = McpStdioConfig | McpStreamableHttpConfig
 
 
 @dataclass(frozen=True, slots=True)
+class McpNoAuthenticationConfig:
+    @property
+    def type(self) -> Literal["none"]:
+        return "none"
+
+
+@dataclass(frozen=True, slots=True)
+class McpBearerAuthenticationConfig:
+    @property
+    def type(self) -> Literal["bearer-token"]:
+        return "bearer-token"
+
+
+McpAuthenticationConfig = McpNoAuthenticationConfig | McpBearerAuthenticationConfig
+
+
+def mcp_bearer_credential_id(server_id: str) -> str:
+    """Return the fixed encrypted-store key for one MCP Bearer token."""
+
+    return f"mcp:{server_id}:bearer"
+
+
+@dataclass(frozen=True, slots=True)
 class McpServerConfig:
     id: str
     name: str
     transport: McpTransportConfig
+    authentication: McpAuthenticationConfig = McpNoAuthenticationConfig()
     enabled: bool = False
     start_on_launch: bool = False
 
@@ -86,6 +110,7 @@ class JsonMcpConfigStore:
                         "enabled": item.enabled,
                         "startOnLaunch": item.start_on_launch,
                         "transport": _encode_transport(item.transport),
+                        "authentication": _encode_authentication(item.authentication),
                     }
                     for item in sorted(servers, key=lambda server: server.id)
                 ],
@@ -131,11 +156,14 @@ class JsonMcpConfigStore:
 
     @staticmethod
     def _decode(raw: object) -> tuple[McpServerConfig, ...]:
-        if type(raw) is not dict or set(raw) != {"version", "servers"} or raw["version"] not in {1, _SCHEMA_VERSION} or type(raw["servers"]) is not list or len(raw["servers"]) > _MAX_SERVERS:
+        if type(raw) is not dict or set(raw) != {"version", "servers"} or raw["version"] not in {1, 2, _SCHEMA_VERSION} or type(raw["servers"]) is not list or len(raw["servers"]) > _MAX_SERVERS:
             raise McpConfigStoreError
         servers: list[McpServerConfig] = []
         for item in raw["servers"]:
-            if type(item) is not dict or set(item) != {"id", "name", "enabled", "startOnLaunch", "transport"}:
+            expected_keys = {"id", "name", "enabled", "startOnLaunch", "transport"}
+            if raw["version"] == _SCHEMA_VERSION:
+                expected_keys.add("authentication")
+            if type(item) is not dict or set(item) != expected_keys:
                 raise McpConfigStoreError
             transport = item["transport"]
             if type(transport) is not dict:
@@ -149,11 +177,26 @@ class JsonMcpConfigStore:
                 name = _text(item["name"], 80)
                 if not name.strip():
                     raise ValueError("invalid MCP server name")
+                decoded_transport = _decode_transport(transport)
+                decoded_authentication = (
+                    McpNoAuthenticationConfig()
+                    if raw["version"] in {1, 2}
+                    else _decode_authentication(item["authentication"])
+                )
+                if (
+                    isinstance(decoded_transport, McpStdioConfig)
+                    and isinstance(
+                        decoded_authentication,
+                        McpBearerAuthenticationConfig,
+                    )
+                ):
+                    raise ValueError("stdio cannot use HTTP authentication")
                 servers.append(
                     McpServerConfig(
                         id=identifier,
                         name=name,
-                        transport=_decode_transport(transport),
+                        transport=decoded_transport,
+                        authentication=decoded_authentication,
                         enabled=_boolean(item["enabled"]),
                         start_on_launch=_boolean(item["startOnLaunch"]),
                     )
@@ -202,6 +245,22 @@ def _decode_transport(raw: dict[object, object]) -> McpTransportConfig:
             raise ValueError("invalid Streamable HTTP transport")
         return McpStreamableHttpConfig(url=_validated_http_url(raw["url"]))
     raise ValueError("unknown MCP transport")
+
+
+def _encode_authentication(
+    authentication: McpAuthenticationConfig,
+) -> dict[str, object]:
+    return {"type": authentication.type}
+
+
+def _decode_authentication(raw: object) -> McpAuthenticationConfig:
+    if type(raw) is not dict or set(raw) != {"type"}:
+        raise ValueError("invalid MCP authentication")
+    if raw["type"] == "none":
+        return McpNoAuthenticationConfig()
+    if raw["type"] == "bearer-token":
+        return McpBearerAuthenticationConfig()
+    raise ValueError("unknown MCP authentication")
 
 
 def _validated_http_url(value: object) -> str:

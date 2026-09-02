@@ -25,6 +25,7 @@ from .ai_settings import (
     create_ai_settings_service,
 )
 from .conversations import RunEventNotifier, SqliteConversationRepository
+from .credentials import CredentialStore
 from .conversation_settings import (
     ConversationSettingsOperations,
     UnavailableConversationSettings,
@@ -32,6 +33,7 @@ from .conversation_settings import (
 )
 from .inference import ModelGateway
 from .model_capability_resolver import ProviderModelCapabilityResolver
+from .local_paths import create_local_path_picker
 from .mcp import (
     McpConnections,
     UnavailableMcpConnections,
@@ -65,6 +67,7 @@ from .tools.receipts import FileToolReceiptWriter
 class LocalProviderRuntime(Protocol):
     connections: ProviderConnections
     model_gateway: ModelGateway
+    credential_store: CredentialStore
 
     async def aclose(self) -> None: ...
 
@@ -148,7 +151,10 @@ def create_system_runtime(
         FileToolReceiptWriter(paths),
     )
     tool_settings = create_tool_settings_service(paths, tool_registry)
-    mcp_connections = create_mcp_connection_manager(paths)
+    mcp_connections = create_mcp_connection_manager(
+        paths,
+        credential_store=provider_runtime.credential_store,
+    )
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
@@ -272,4 +278,5 @@ def create_system_app(
     return create_app(
         lifespan=lifespan,
         enforce_local_security=True,
+        local_path_picker=create_local_path_picker(),
     )

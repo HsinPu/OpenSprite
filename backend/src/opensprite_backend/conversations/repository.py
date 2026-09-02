@@ -77,7 +77,7 @@ class ConversationRepository(Protocol):
         response_mode: ResponseMode,
         context_budget: ContextBudget = "auto",
         output_budget: OutputBudget = "auto",
-        output_continuation: OutputContinuation = "2",
+        output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
     ) -> StartRunResult: ...
 

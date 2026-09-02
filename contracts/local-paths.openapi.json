@@ -1,0 +1,34 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "OpenSprite local path picker API", "version": "0.1.0-draft", "description": "User-initiated native file and directory selection for the local desktop runtime."},
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {"scope": "loopback-only local desktop service", "applicationAuthentication": "none", "browserOriginPolicy": "same-origin", "cors": "disabled by default"},
+  "paths": {
+    "/api/local-paths/pick": {
+      "post": {
+        "operationId": "pickLocalPath",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LocalPathPickRequest"}}}},
+        "responses": {
+          "200": {"description": "Selected absolute local path", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LocalPathPickResponse"}}}},
+          "204": {"description": "Selection cancelled"},
+          "400": {"$ref": "#/components/responses/Error"},
+          "409": {"$ref": "#/components/responses/Error"},
+          "422": {"$ref": "#/components/responses/Error"},
+          "500": {"$ref": "#/components/responses/Error"},
+          "503": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LocalPathPickRequest": {"type": "object", "additionalProperties": false, "required": ["kind"], "properties": {"kind": {"type": "string", "enum": ["executable", "directory"]}}},
+      "LocalPathPickResponse": {"type": "object", "additionalProperties": false, "required": ["path"], "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 32768}}},
+      "ErrorEnvelope": {"type": "object", "additionalProperties": false, "required": ["error"], "properties": {"error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"], "properties": {"code": {"type": "string", "enum": ["invalid_request", "invalid_selection", "picker_busy", "picker_unavailable", "internal_error"]}, "message": {"type": "string"}, "retryable": {"type": "boolean"}}}}}
+    },
+    "responses": {
+      "Error": {"description": "Safe local path picker error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}

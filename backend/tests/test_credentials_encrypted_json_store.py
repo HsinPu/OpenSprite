@@ -76,7 +76,7 @@ def test_three_providers_round_trip_without_plaintext_on_disk(
         assert secret.encode("utf-8") not in credential_bytes
         assert secret.encode("utf-8") not in key_bytes
     payload = load_payload(credential_path)
-    assert payload["version"] == 1
+    assert payload["version"] == 2
     assert payload["algorithm"] == "AES-256-GCM"
     assert list(credential_path.parent.glob("auth.json.tmp.*")) == []
     assert list(key_path.parent.glob("credential.key.tmp.*")) == []
@@ -100,6 +100,36 @@ def test_replacing_same_secret_uses_a_new_nonce_and_ciphertext(
     assert first["nonce"] != second["nonce"]
     assert first["ciphertext"] != second["ciphertext"]
     assert first["fingerprint"] == second["fingerprint"]
+
+
+def test_mcp_bearer_token_round_trips_without_plaintext_on_disk(
+    tmp_path: Path,
+) -> None:
+    store, credential_path, key_path = build_store(tmp_path)
+    credential_id = "mcp:11111111-1111-4111-8111-111111111111:bearer"
+    secret = "mcp-bearer-secret"
+
+    store.set(credential_id, secret)
+
+    assert store.get(credential_id) == secret
+    assert store.fingerprint(credential_id) == hashlib.sha256(
+        secret.encode("utf-8")
+    ).hexdigest()
+    assert secret.encode("utf-8") not in credential_path.read_bytes()
+    assert secret.encode("utf-8") not in key_path.read_bytes()
+
+
+def test_schema_v1_provider_credentials_remain_readable(tmp_path: Path) -> None:
+    store, credential_path, _ = build_store(tmp_path)
+    store.set("openai", "legacy-secret")
+    payload = load_payload(credential_path)
+    payload["version"] = 1
+    save_payload(credential_path, payload)
+
+    assert store.get("openai") == "legacy-secret"
+
+    store.set("anthropic", "new-secret")
+    assert load_payload(credential_path)["version"] == 2
 
 
 def test_cross_provider_writes_do_not_lose_updates(tmp_path: Path) -> None:
@@ -217,7 +247,10 @@ def test_blank_secret_is_rejected_without_creating_files(
     assert not key_path.exists()
 
 
-@pytest.mark.parametrize("provider_id", ["", "unknown", 1, None])
+@pytest.mark.parametrize(
+    "provider_id",
+    ["", "unknown", "mcp:bad:bearer", "mcp:11111111-1111-4111-8111-111111111111:token", 1, None],
+)
 def test_unknown_provider_is_rejected_before_file_access(
     tmp_path: Path,
     provider_id: object,
@@ -234,7 +267,7 @@ def test_unknown_provider_is_rejected_before_file_access(
     "raw",
     [
         b"not-json",
-        b'{"version":2,"algorithm":"AES-256-GCM","credentials":{}}',
+        b'{"version":3,"algorithm":"AES-256-GCM","credentials":{}}',
         b'{"version":1,"algorithm":"wrong","credentials":{}}',
         b'{"version":1,"algorithm":"AES-256-GCM","credentials":{},"extra":1}',
         b'{"version":1,"algorithm":"AES-256-GCM","credentials":{"unknown":{}}}',

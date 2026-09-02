@@ -19,7 +19,16 @@ import pytest
 
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.mcp.config import JsonMcpConfigStore, McpConfigStoreError, McpStdioConfig, McpStreamableHttpConfig
+from opensprite_backend.credentials import EncryptedJsonCredentialStore
+from opensprite_backend.mcp.config import (
+    JsonMcpConfigStore,
+    McpBearerAuthenticationConfig,
+    McpConfigStoreError,
+    McpNoAuthenticationConfig,
+    McpStdioConfig,
+    McpStreamableHttpConfig,
+    mcp_bearer_credential_id,
+)
 from opensprite_backend.mcp.manager import McpConnectionManager
 from opensprite_backend.mcp.session import (
     DiscoveredMcpTool,
@@ -27,7 +36,7 @@ from opensprite_backend.mcp.session import (
     McpToolAnnotations,
     OfficialMcpSessionFactory,
 )
-from opensprite_backend.models import CreateMcpServerRequest
+from opensprite_backend.models import CreateMcpServerRequest, PutMcpServerRequest
 from opensprite_backend.tools.definition import (
     ToolDefinition,
     ToolEffect,
@@ -70,6 +79,18 @@ def http_payload(url: str = "https://mcp.example.test/mcp") -> CreateMcpServerRe
     })
 
 
+def bearer_http_payload(
+    token: str | None = "fixture-bearer-token",
+    url: str = "https://mcp.example.test/mcp",
+) -> CreateMcpServerRequest:
+    return CreateMcpServerRequest.model_validate({
+        "name": "Authenticated Remote MCP",
+        "startOnLaunch": False,
+        "transport": {"type": "streamable-http", "url": url},
+        "authentication": {"type": "bearer-token", "token": token},
+    })
+
+
 def start_http_fixture() -> tuple[subprocess.Popen[bytes], str]:
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
@@ -106,10 +127,17 @@ def stop_http_fixture(process: subprocess.Popen[bytes]) -> None:
 
 class FixedStatusHandler(BaseHTTPRequestHandler):
     response_status = 401
+    expected_authorization: str | None = None
 
     def do_POST(self) -> None:  # noqa: N802
-        self.send_response(self.response_status)
-        if self.response_status == 302:
+        status = self.response_status
+        if (
+            self.expected_authorization is not None
+            and self.headers.get("Authorization") != self.expected_authorization
+        ):
+            status = 401
+        self.send_response(status)
+        if status == 302:
             self.send_header("Location", "http://127.0.0.1/private")
         self.end_headers()
 
@@ -117,8 +145,19 @@ class FixedStatusHandler(BaseHTTPRequestHandler):
         del format, args
 
 
-def fixed_status_server(status: int) -> tuple[ThreadingHTTPServer, Thread, str]:
-    handler = type(f"Status{status}Handler", (FixedStatusHandler,), {"response_status": status})
+def fixed_status_server(
+    status: int,
+    *,
+    expected_authorization: str | None = None,
+) -> tuple[ThreadingHTTPServer, Thread, str]:
+    handler = type(
+        f"Status{status}Handler",
+        (FixedStatusHandler,),
+        {
+            "response_status": status,
+            "expected_authorization": expected_authorization,
+        },
+    )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -176,6 +215,21 @@ class FakeSessionFactory:
         return FakeSession()
 
 
+class FailingMcpConfigStore:
+    def __init__(self, inner: JsonMcpConfigStore) -> None:
+        self.inner = inner
+        self.fail_next_set = False
+
+    def get(self):
+        return self.inner.get()
+
+    def set(self, servers) -> None:
+        if self.fail_next_set:
+            self.fail_next_set = False
+            raise McpConfigStoreError
+        self.inner.set(servers)
+
+
 def test_config_store_round_trip_is_lazy_and_strict(tmp_path: Path) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonMcpConfigStore(paths.mcp_settings_file)
@@ -187,8 +241,9 @@ def test_config_store_round_trip_is_lazy_and_strict(tmp_path: Path) -> None:
     created = asyncio.run(manager.create_server(payload()))
     assert created.status == "disabled"
     stored = json.loads(paths.mcp_settings_file.read_text(encoding="utf-8"))
-    assert stored["version"] == 2
+    assert stored["version"] == 3
     assert stored["servers"][0]["enabled"] is False
+    assert stored["servers"][0]["authentication"] == {"type": "none"}
 
     corrupt = paths.mcp_settings_file
     corrupt.write_text('{"version":1,"version":1,"servers":[]}', encoding="utf-8")
@@ -196,7 +251,7 @@ def test_config_store_round_trip_is_lazy_and_strict(tmp_path: Path) -> None:
         store.get()
 
 
-def test_schema_v1_stdio_is_read_without_rewrite_and_next_write_uses_v2(tmp_path: Path) -> None:
+def test_schema_v1_stdio_is_read_without_rewrite_and_next_write_uses_v3(tmp_path: Path) -> None:
     path = tmp_path / "mcp.json"
     identifier = "11111111-1111-4111-8111-111111111111"
     original = json.dumps({
@@ -217,21 +272,33 @@ def test_schema_v1_stdio_is_read_without_rewrite_and_next_write_uses_v2(tmp_path
     assert path.read_text(encoding="utf-8") == original
 
     store.set(loaded)
-    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 3
+    assert isinstance(store.get()[0].authentication, McpNoAuthenticationConfig)
 
 
-def test_schema_v2_streamable_http_round_trip_is_strict(tmp_path: Path) -> None:
+def test_schema_v2_streamable_http_reads_as_no_auth_and_next_write_uses_v3(tmp_path: Path) -> None:
     path = tmp_path / "mcp.json"
-    manager = McpConnectionManager(JsonMcpConfigStore(path), FakeSessionFactory())
-    created = asyncio.run(manager.create_server(http_payload()))
-
-    assert created.transport.type == "streamable-http"
-    loaded = JsonMcpConfigStore(path).get()
+    identifier = "11111111-1111-4111-8111-111111111111"
+    original = json.dumps({"version": 2, "servers": [{
+        "id": identifier,
+        "name": "Remote MCP",
+        "enabled": False,
+        "startOnLaunch": False,
+        "transport": {"type": "streamable-http", "url": "https://mcp.example.test/mcp"},
+    }]}, separators=(",", ":"))
+    path.write_text(original, encoding="utf-8")
+    store = JsonMcpConfigStore(path)
+    loaded = store.get()
     assert isinstance(loaded[0].transport, McpStreamableHttpConfig)
+    assert isinstance(loaded[0].authentication, McpNoAuthenticationConfig)
     assert loaded[0].transport.url == "https://mcp.example.test/mcp"
+    assert path.read_text(encoding="utf-8") == original
+
+    store.set(loaded)
     stored = json.loads(path.read_text(encoding="utf-8"))
-    assert stored["version"] == 2
+    assert stored["version"] == 3
     assert stored["servers"][0]["transport"] == {"type": "streamable-http", "url": "https://mcp.example.test/mcp"}
+    assert stored["servers"][0]["authentication"] == {"type": "none"}
 
     stored["servers"][0]["transport"]["headers"] = {"Authorization": "secret"}
     path.write_text(json.dumps(stored), encoding="utf-8")
@@ -243,6 +310,128 @@ def test_schema_v2_streamable_http_round_trip_is_strict(tmp_path: Path) -> None:
     path.write_text(json.dumps(stored), encoding="utf-8")
     with pytest.raises(McpConfigStoreError):
         JsonMcpConfigStore(path).get()
+
+
+def test_bearer_token_is_encrypted_and_never_persisted_in_mcp_config(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    credentials = EncryptedJsonCredentialStore(
+        paths.credential_file,
+        paths.credential_key_file,
+    )
+    manager = McpConnectionManager(
+        JsonMcpConfigStore(paths.mcp_settings_file),
+        FakeSessionFactory(),
+        credentials,
+    )
+    secret = "super-secret-bearer-token"
+
+    created = asyncio.run(manager.create_server(bearer_http_payload(secret)))
+
+    assert created.authentication.type == "bearer-token"
+    assert created.authentication.configured is True
+    assert secret not in paths.mcp_settings_file.read_text(encoding="utf-8")
+    assert secret.encode("utf-8") not in paths.credential_file.read_bytes()
+    assert credentials.get(mcp_bearer_credential_id(created.id)) == secret
+    loaded = JsonMcpConfigStore(paths.mcp_settings_file).get()[0]
+    assert isinstance(loaded.authentication, McpBearerAuthenticationConfig)
+
+
+@async_test
+async def test_bearer_token_update_preserves_replaces_and_deletes_secret(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    credentials = EncryptedJsonCredentialStore(
+        paths.credential_file,
+        paths.credential_key_file,
+    )
+    manager = McpConnectionManager(
+        JsonMcpConfigStore(paths.mcp_settings_file),
+        FakeSessionFactory(),
+        credentials,
+    )
+    created = await manager.create_server(bearer_http_payload("first-token"))
+    credential_id = mcp_bearer_credential_id(created.id)
+
+    preserved = PutMcpServerRequest.model_validate({
+        "name": "Preserved",
+        "startOnLaunch": False,
+        "transport": {"type": "streamable-http", "url": "https://mcp.example.test/mcp"},
+        "authentication": {"type": "bearer-token", "token": None},
+    })
+    await manager.update_server(created.id, preserved)
+    assert credentials.get(credential_id) == "first-token"
+
+    replaced = PutMcpServerRequest.model_validate({
+        **preserved.model_dump(mode="json"),
+        "authentication": {"type": "bearer-token", "token": "second-token"},
+    })
+    await manager.update_server(created.id, replaced)
+    assert credentials.get(credential_id) == "second-token"
+
+    no_auth = PutMcpServerRequest.model_validate({
+        **preserved.model_dump(mode="json"),
+        "authentication": {"type": "none"},
+    })
+    summary = await manager.update_server(created.id, no_auth)
+    assert summary.authentication.type == "none"
+    assert credentials.get(credential_id) is None
+
+    authenticated = PutMcpServerRequest.model_validate({
+        **preserved.model_dump(mode="json"),
+        "authentication": {"type": "bearer-token", "token": "delete-me"},
+    })
+    await manager.update_server(created.id, authenticated)
+    await manager.delete_server(created.id)
+    assert credentials.get(credential_id) is None
+
+
+@async_test
+async def test_failed_mcp_config_update_rolls_back_bearer_token(
+    tmp_path: Path,
+) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    credentials = EncryptedJsonCredentialStore(
+        paths.credential_file,
+        paths.credential_key_file,
+    )
+    config_store = FailingMcpConfigStore(
+        JsonMcpConfigStore(paths.mcp_settings_file)
+    )
+    manager = McpConnectionManager(
+        config_store,
+        FakeSessionFactory(),
+        credentials,
+    )
+    created = await manager.create_server(bearer_http_payload("original-token"))
+    credential_id = mcp_bearer_credential_id(created.id)
+    replacement = PutMcpServerRequest.model_validate({
+        "name": "Replacement",
+        "startOnLaunch": False,
+        "transport": {"type": "streamable-http", "url": "https://mcp.example.test/mcp"},
+        "authentication": {"type": "bearer-token", "token": "replacement-token"},
+    })
+
+    config_store.fail_next_set = True
+    with pytest.raises(McpConfigStoreError):
+        await manager.update_server(created.id, replacement)
+
+    assert credentials.get(credential_id) == "original-token"
+    assert config_store.get()[0].name == "Authenticated Remote MCP"
+
+
+def test_new_bearer_auth_requires_token_and_stdio_rejects_authentication() -> None:
+    with pytest.raises(ValueError):
+        bearer_http_payload(None)
+    body = payload().model_dump(mode="json")
+    body["authentication"] = {"type": "bearer-token", "token": "secret"}
+    with pytest.raises(ValueError):
+        CreateMcpServerRequest.model_validate(body)
+    for invalid_token in ("contains space", "token\r\nX-Injected: yes", "非 ASCII"):
+        with pytest.raises(ValueError):
+            bearer_http_payload(invalid_token)
 
 
 @async_test
@@ -439,6 +628,52 @@ def test_streamable_http_maps_auth_and_redirect_without_following(
             response = client.post(f"/api/mcp/servers/{created.json()['id']}/start")
         assert response.status_code == expected_status
         assert response.json()["error"]["code"] == expected_code
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_streamable_http_sends_configured_bearer_without_exposing_it(
+    tmp_path: Path,
+) -> None:
+    secret = "expected-secret-token"
+    server, thread, url = fixed_status_server(
+        302,
+        expected_authorization=f"Bearer {secret}",
+    )
+    paths = build_app_paths(tmp_path / ".opensprite")
+    credentials = EncryptedJsonCredentialStore(
+        paths.credential_file,
+        paths.credential_key_file,
+    )
+    try:
+        manager = McpConnectionManager(
+            JsonMcpConfigStore(paths.mcp_settings_file),
+            credential_store=credentials,
+        )
+        app = create_app(mcp_connections=manager)
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/mcp/servers",
+                json={
+                    "name": "Authenticated Remote MCP",
+                    "startOnLaunch": False,
+                    "transport": {"type": "streamable-http", "url": url},
+                    "authentication": {
+                        "type": "bearer-token",
+                        "token": secret,
+                    },
+                },
+            )
+            assert secret not in created.text
+            response = client.post(
+                f"/api/mcp/servers/{created.json()['id']}/start"
+            )
+        assert response.status_code == 502
+        assert response.json()["error"]["code"] == "redirect_not_allowed"
+        assert secret not in response.text
+        assert secret not in paths.mcp_settings_file.read_text(encoding="utf-8")
     finally:
         server.shutdown()
         server.server_close()

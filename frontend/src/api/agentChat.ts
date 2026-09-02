@@ -248,7 +248,7 @@ function parseEvent(value: unknown, expectedType: RunEventType, expectedRunId: s
   }
   if (expectedType === "response.continuation.started") {
     const maximum = data.maxAttempts;
-    if (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 64 || (maximum !== null && (!Number.isInteger(maximum) || ![1, 2, 3, 5].includes(maximum as number) || (data.attempt as number) > (maximum as number)))) throw new AgentChatApiError("malformed_response");
+    if (!exactKeys(data, ["attempt", "maxAttempts"]) || !Number.isInteger(data.attempt) || (data.attempt as number) < 1 || (data.attempt as number) > 64 || (maximum !== null && (!Number.isInteger(maximum) || ![1, 2, 3, 5, 10, 20, 50].includes(maximum as number) || (data.attempt as number) > (maximum as number)))) throw new AgentChatApiError("malformed_response");
   }
   if (expectedType === "assistant.delta" && (!exactKeys(data, ["text"]) || !boundedString(data.text, 1, 16384))) throw new AgentChatApiError("malformed_response");
   if (expectedType === "tool.approval_requested" && (!exactKeys(data, ["approvalId", "toolName", "toolDisplayName", "serverId", "argumentHash", "expiresAt"]) || !isIdentifier(data.approvalId) || !boundedString(data.toolName, 1, 64) || !boundedString(data.toolDisplayName, 1, 256) || !isIdentifier(data.serverId) || typeof data.argumentHash !== "string" || !/^[0-9a-f]{64}$/.test(data.argumentHash) || !utc(data.expiresAt))) throw new AgentChatApiError("malformed_response");

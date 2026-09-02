@@ -190,9 +190,11 @@ rediscovers the same canonical Tool id.
 
 Configured MCP Servers are owned by the `/api/mcp/servers` CRUD surface,
 explicit `test`, `start`, and `stop` operations, and per-Server Tool discovery.
-The strict schema-v2 config lives at `.opensprite/config/mcp.json`; schema-v1
-stdio records remain readable until the next write. Local `stdio` and
-credential-free Streamable HTTP are implemented. A new or edited configuration is inert and disabled;
+The strict schema-v3 config lives at `.opensprite/config/mcp.json`; schema-v1
+and schema-v2 records remain readable as no-authentication connections until the
+next write. Local `stdio` plus no-authentication or manual-Bearer Streamable HTTP
+are implemented. Bearer secrets remain encrypted in `auth.json` and never enter
+the MCP config, public response, prompt log, or runtime log. A new or edited configuration is inert and disabled;
 the browser displays the exact executable and argument vector before saving
 and asks again before an explicit start. The backend invokes the absolute
 executable directly without a shell. Startup launches only Servers previously
@@ -201,8 +203,9 @@ enabled by an explicit start and marked `startOnLaunch`.
 Streamable HTTP accepts public HTTPS endpoints and loopback HTTP only. It
 rejects credentials, query strings, fragments, redirects, private or special
 network destinations, and invalid TLS certificates. Its restricted HTTP client
-does not inherit proxy environment configuration. Authentication, arbitrary
-headers, LAN targets, SSE and WebSocket remain outside the current contract.
+does not inherit proxy environment configuration. Manually supplied Bearer
+authentication is the only supported HTTP credential; OAuth, arbitrary headers,
+LAN targets, SSE and WebSocket remain outside the current contract.
 
 ## Persistence
 
@@ -288,8 +291,8 @@ Each Run snapshots the requested output budget and output-continuation policy.
 Response delivery is a browser presentation preference: the backend and all
 Provider adapters continue to stream semantic events, while the browser may
 buffer assistant deltas until the Run reaches a terminal state.
-SQLite schema v9 converts the former boolean to `2` or `off` while preserving
-Messages, Runs and events. The
+SQLite migration history converts the former boolean to `2` or `off`; schema
+v10 expands the bounded policy values while preserving Messages, Runs and events. The
 resolved token number is persisted on every `model.started` event and shown in
 the execution record, so later settings changes cannot rewrite historical
 execution behavior. Existing Runs migrate to `auto`; pre-v5 model events record
@@ -325,6 +328,8 @@ tool, terminal, error, and cancellation boundaries so event order and partial
 text durability are preserved.
 
 Automatic continuation is owned by the backend Agent loop, not by the browser.
+The finite policies are 1, 2, 3, 5, 10, 20, or 50 continuation requests;
+new settings default to 5 while existing saved settings and Run snapshots remain unchanged.
 Each Run snapshots `off`, 1, 2, 3, 5, or `unlimited`; the default is 2. The
 unlimited policy still stops at 64 continuation requests, the assistant size
 bound, cancellation, Context exhaustion, invalid output, or Provider failure.

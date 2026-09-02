@@ -123,7 +123,7 @@ function SettingsHarness({ initialSelection = { providerId: "openai", modelId: "
   const [selection, setSelection] = useState<ModelSelection | null>(initialSelection);
   const [responseMode, setResponseMode] = useState<ResponseMode>("default");
   const [responseDelivery, setResponseDelivery] = useState<ResponseDelivery>("stream");
-  const [outputContinuation, setOutputContinuation] = useState<"off" | "1" | "2" | "3" | "5" | "unlimited">("2");
+  const [outputContinuation, setOutputContinuation] = useState<"off" | "1" | "2" | "3" | "5" | "10" | "20" | "50" | "unlimited">("5");
   const providerCatalog = useProviderCatalog();
   return <><SettingsPage section="models" onSectionChange={() => undefined} modelSelection={selection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={false} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async (next) => { setResponseMode(next); return null; }} onOutputContinuationChange={async (next) => { setOutputContinuation(next); return null; }} onResponseDeliveryChange={async (next) => { setResponseDelivery(next); return null; }} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /><output data-testid="selected-model">{modelLabel(selection, providerCatalog.modelChoices.filter((choice) => choice.selection.providerId === "openrouter").map((choice) => ({ id: choice.selection.modelId, label: choice.label })))}</output><output data-testid="selected-output">{selection?.outputBudget ?? "none"}</output><output data-testid="output-continuation">{outputContinuation}</output><output data-testid="response-delivery">{responseDelivery}</output></>;
 }
@@ -237,8 +237,10 @@ describe("provider settings", () => {
 
     const select = await screen.findByRole("combobox", { name: "自動續接過長回覆" });
     fireEvent.mouseDown(select);
-    expect((await screen.findAllByText("2 次（預設）")).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("5 次")).toBeTruthy();
+    expect((await screen.findAllByText("5 次（預設）")).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("10 次")).toBeTruthy();
+    expect(screen.getByText("20 次")).toBeTruthy();
+    expect(screen.getByText("50 次")).toBeTruthy();
     fireEvent.click(screen.getByText("不限制").closest(".ant-select-item-option")!);
 
     await waitFor(() => expect(screen.getByTestId("output-continuation").textContent).toBe("unlimited"));

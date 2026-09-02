@@ -9,9 +9,17 @@ from typing import Protocol
 from uuid import uuid4
 
 from ..app_paths import AppPaths
+from ..credentials import (
+    CredentialStore,
+    CredentialStoreError,
+    EncryptedJsonCredentialStore,
+)
 from ..models import (
     CreateMcpServerRequest,
+    McpBearerAuthenticationInput,
+    McpBearerAuthenticationSummary,
     McpErrorCode,
+    McpNoAuthentication,
     McpServerListResponse,
     McpServerStatus,
     McpServerSummary,
@@ -24,11 +32,14 @@ from ..models import (
 )
 from .config import (
     JsonMcpConfigStore,
+    McpBearerAuthenticationConfig,
     McpConfigStore,
     McpConfigStoreError,
     McpServerConfig,
+    McpNoAuthenticationConfig,
     McpStdioConfig,
     McpStreamableHttpConfig,
+    mcp_bearer_credential_id,
 )
 from .session import (
     DiscoveredMcpTool,
@@ -104,9 +115,13 @@ class McpConnectionManager:
         self,
         store: McpConfigStore,
         session_factory: McpSessionFactory | None = None,
+        credential_store: CredentialStore | None = None,
     ) -> None:
         self._store = store
-        self._session_factory = session_factory or OfficialMcpSessionFactory()
+        self._credentials = credential_store
+        self._session_factory = session_factory or OfficialMcpSessionFactory(
+            credential_store=credential_store
+        )
         self._lock = asyncio.Lock()
         self._runtime: dict[str, _ServerRuntime] = {}
         self._operation_locks: dict[str, asyncio.Lock] = {}
@@ -157,12 +172,19 @@ class McpConnectionManager:
         payload: CreateMcpServerRequest,
     ) -> McpServerSummary:
         config = _config_from_request(str(uuid4()), payload, enabled=False)
+        desired_token = _requested_bearer_token(payload)
         async with self._lock:
             self._require_open()
             configs = self._store.get()
             if len(configs) >= 32:
                 raise McpConnectionError(McpErrorCode.INVALID_REQUEST)
-            self._store.set((*configs, config))
+            self._commit_config_and_credential(
+                before_config=None,
+                before_token=None,
+                after_config=config,
+                after_token=desired_token,
+                configs=(*configs, config),
+            )
             self._runtime[config.id] = _ServerRuntime(McpServerStatus.DISABLED)
             self._operation_locks[config.id] = asyncio.Lock()
             return self._summary(config)
@@ -178,7 +200,27 @@ class McpConnectionManager:
                 configs = self._store.get()
                 current = _find_config(configs, server_id)
                 replacement = _config_from_request(current.id, payload, enabled=False)
-                self._store.set(tuple(replacement if item.id == server_id else item for item in configs))
+                before_token = self._stored_bearer_token(current)
+                desired_token = _requested_bearer_token(payload)
+                if (
+                    isinstance(replacement.authentication, McpBearerAuthenticationConfig)
+                    and desired_token is None
+                ):
+                    if not isinstance(current.authentication, McpBearerAuthenticationConfig):
+                        raise McpConnectionError(McpErrorCode.INVALID_REQUEST)
+                    if before_token is None:
+                        raise McpConnectionError(
+                            McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                            retryable=True,
+                        )
+                    desired_token = before_token
+                self._commit_config_and_credential(
+                    before_config=current,
+                    before_token=before_token,
+                    after_config=replacement,
+                    after_token=desired_token,
+                    configs=tuple(replacement if item.id == server_id else item for item in configs),
+                )
                 self._runtime[server_id] = _ServerRuntime(McpServerStatus.DISABLED)
                 return self._summary(replacement)
 
@@ -187,8 +229,15 @@ class McpConnectionManager:
             await self._stop_locked(server_id, persist_enabled=False)
             async with self._lock:
                 configs = self._store.get()
-                _find_config(configs, server_id)
-                self._store.set(tuple(item for item in configs if item.id != server_id))
+                current = _find_config(configs, server_id)
+                before_token = self._stored_bearer_token(current)
+                self._commit_config_and_credential(
+                    before_config=current,
+                    before_token=before_token,
+                    after_config=None,
+                    after_token=None,
+                    configs=tuple(item for item in configs if item.id != server_id),
+                )
                 self._runtime.pop(server_id, None)
 
     async def test_server(self, server_id: str) -> McpServerSummary:
@@ -335,7 +384,102 @@ class McpConnectionManager:
             errorCode=state.error_code,
             toolCount=supported,
             unsupportedToolCount=len(state.tools) - supported,
+            authentication=self._public_authentication(config),
         )
+
+    def _public_authentication(
+        self,
+        config: McpServerConfig,
+    ) -> McpNoAuthentication | McpBearerAuthenticationSummary:
+        if isinstance(config.authentication, McpNoAuthenticationConfig):
+            return McpNoAuthentication()
+        store = self._require_credential_store()
+        try:
+            configured = store.fingerprint(mcp_bearer_credential_id(config.id)) is not None
+        except CredentialStoreError as error:
+            raise McpConnectionError(
+                McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                retryable=True,
+            ) from error
+        return McpBearerAuthenticationSummary(configured=configured)
+
+    def _stored_bearer_token(self, config: McpServerConfig) -> str | None:
+        if isinstance(config.authentication, McpNoAuthenticationConfig):
+            return None
+        store = self._require_credential_store()
+        try:
+            return store.get(mcp_bearer_credential_id(config.id))
+        except CredentialStoreError as error:
+            raise McpConnectionError(
+                McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                retryable=True,
+            ) from error
+
+    def _require_credential_store(self) -> CredentialStore:
+        if self._credentials is None:
+            raise McpConnectionError(
+                McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                retryable=True,
+            )
+        return self._credentials
+
+    def _commit_config_and_credential(
+        self,
+        *,
+        before_config: McpServerConfig | None,
+        before_token: str | None,
+        after_config: McpServerConfig | None,
+        after_token: str | None,
+        configs: tuple[McpServerConfig, ...],
+    ) -> None:
+        credential_involved = any(
+            config is not None
+            and isinstance(config.authentication, McpBearerAuthenticationConfig)
+            for config in (before_config, after_config)
+        )
+        if not credential_involved:
+            self._store.set(configs)
+            return
+        if after_config is not None:
+            server_id = after_config.id
+        elif before_config is not None:
+            server_id = before_config.id
+        else:
+            raise McpConnectionError(McpErrorCode.INVALID_REQUEST)
+        store = self._require_credential_store()
+        credential_id = mcp_bearer_credential_id(server_id)
+
+        def restore() -> None:
+            if before_token is None:
+                store.delete(credential_id)
+            else:
+                store.set(credential_id, before_token)
+
+        try:
+            if after_token is None:
+                store.delete(credential_id)
+            else:
+                store.set(credential_id, after_token)
+        except CredentialStoreError as error:
+            try:
+                restore()
+            except CredentialStoreError:
+                pass
+            raise McpConnectionError(
+                McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                retryable=True,
+            ) from error
+        try:
+            self._store.set(configs)
+        except Exception:
+            try:
+                restore()
+            except CredentialStoreError as error:
+                raise McpConnectionError(
+                    McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
+                    retryable=True,
+                ) from error
+            raise
 
     def _require_open(self) -> None:
         if self._closed:
@@ -362,12 +506,31 @@ def _config_from_request(
         except McpNetworkPolicyError as error:
             raise McpConnectionError(McpErrorCode.REMOTE_URL_BLOCKED) from error
         transport = McpStreamableHttpConfig(url=url)
+    authentication = (
+        McpNoAuthenticationConfig()
+        if isinstance(payload.authentication, McpNoAuthentication)
+        else McpBearerAuthenticationConfig()
+    )
     return McpServerConfig(
         id=server_id,
         name=payload.name.strip(),
         transport=transport,
+        authentication=authentication,
         enabled=enabled,
         start_on_launch=payload.startOnLaunch,
+    )
+
+
+def _requested_bearer_token(
+    payload: CreateMcpServerRequest | PutMcpServerRequest,
+) -> str | None:
+    authentication = payload.authentication
+    if not isinstance(authentication, McpBearerAuthenticationInput):
+        return None
+    return (
+        None
+        if authentication.token is None
+        else authentication.token.get_secret_value()
     )
 
 
@@ -450,6 +613,7 @@ def _public_session_error(error: McpSessionError) -> McpConnectionError:
         "tls_verification_failed": McpErrorCode.TLS_VERIFICATION_FAILED,
         "redirect_not_allowed": McpErrorCode.REDIRECT_NOT_ALLOWED,
         "protocol_unsupported": McpErrorCode.PROTOCOL_UNSUPPORTED,
+        "credential_store_unavailable": McpErrorCode.CREDENTIAL_STORE_UNAVAILABLE,
     }
     return McpConnectionError(mapping.get(error.code, McpErrorCode.SERVER_UNREACHABLE), retryable=error.code in {"server_unreachable", "server_timeout"})
 
@@ -472,5 +636,15 @@ def _public_tool(tool: DiscoveredMcpTool) -> McpToolSummary:
     )
 
 
-def create_mcp_connection_manager(app_paths: AppPaths) -> McpConnectionManager:
-    return McpConnectionManager(JsonMcpConfigStore(app_paths.mcp_settings_file))
+def create_mcp_connection_manager(
+    app_paths: AppPaths,
+    credential_store: CredentialStore | None = None,
+) -> McpConnectionManager:
+    store = credential_store or EncryptedJsonCredentialStore(
+        app_paths.credential_file,
+        app_paths.credential_key_file,
+    )
+    return McpConnectionManager(
+        JsonMcpConfigStore(app_paths.mcp_settings_file),
+        credential_store=store,
+    )
