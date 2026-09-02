@@ -98,4 +98,29 @@ describe("McpServersSettings", () => {
     await waitFor(() => expect(start).toHaveBeenCalledOnce());
     expect(start).toHaveBeenCalledWith(server.id);
   });
+
+  it("switches to a network-only form and confirms the exact endpoint", async () => {
+    const create = vi.fn(async () => null);
+    renderSettings(controller({ create }));
+
+    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    fireEvent.change(await screen.findByLabelText("顯示名稱"), { target: { value: "Remote MCP" } });
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "連線方式" }));
+    fireEvent.click((await screen.findByText("網路位址")).closest(".ant-select-item-option")!);
+    await screen.findByLabelText("MCP Endpoint URL");
+    expect(screen.queryByLabelText("Executable 絕對路徑")).toBeNull();
+    fireEvent.change(screen.getByLabelText("MCP Endpoint URL"), { target: { value: "https://mcp.example.com/mcp" } });
+    fireEvent.click(screen.getByRole("button", { name: /繼\s*續/ }));
+
+    const confirmation = (await screen.findByText("確認 MCP Server 設定")).closest("[role='dialog']") as HTMLElement;
+    expect(confirmation.textContent).toContain("https://mcp.example.com/mcp");
+    expect(confirmation.textContent).toContain("請勿將 Token、密碼或其他憑證放入 URL");
+    fireEvent.click(within(confirmation).getByRole("button", { name: /儲\s*存\s*設\s*定/ }));
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith({
+      name: "Remote MCP",
+      startOnLaunch: false,
+      transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+    }));
+  });
 });

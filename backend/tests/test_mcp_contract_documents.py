@@ -15,7 +15,7 @@ def load(name: str) -> dict[str, object]:
     return json.loads((ROOT / name).read_text(encoding="utf-8"))
 
 
-def test_mcp_contract_is_stdio_only_and_has_exact_operations() -> None:
+def test_mcp_contract_has_stdio_and_streamable_http_with_exact_operations() -> None:
     contract = load("mcp-connections.openapi.json")
     assert contract["openapi"] == "3.1.0"
     operations = {
@@ -31,9 +31,11 @@ def test_mcp_contract_is_stdio_only_and_has_exact_operations() -> None:
     }
     text = json.dumps(contract, sort_keys=True).lower()
     assert '"const": "stdio"' in text
-    assert "streamable" not in text
+    assert '"const": "streamable-http"' in text
+    assert '"discriminator"' in text
     assert "oauth" not in text
     assert "apikey" not in text
+    assert "authorization" not in text
 
 
 def test_approval_contract_has_only_allow_once_and_deny() -> None:

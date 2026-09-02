@@ -1,4 +1,4 @@
-"""Bounded lifecycle and discovery for one local stdio MCP server."""
+"""Bounded lifecycle and discovery for stdio or Streamable HTTP MCP."""
 
 from __future__ import annotations
 
@@ -8,12 +8,16 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 import re
+import ssl
 from typing import Final, Protocol, cast
 
+import httpx2
 from mcp import Client, StdioServerParameters
+from mcp.client.streamable_http import streamable_http_client
 
 from ..tools.definition import ToolDefinition, ToolEffect, ToolSource
-from .config import McpServerConfig
+from .config import McpServerConfig, McpStdioConfig, McpStreamableHttpConfig
+from .network import McpNetworkPolicyError, McpNetworkTargetPolicy
 
 
 _CONNECT_TIMEOUT_SECONDS: Final = 15
@@ -65,8 +69,11 @@ class McpSessionFactory(Protocol):
 
 
 class OfficialMcpSessionFactory:
+    def __init__(self, network_policy: McpNetworkTargetPolicy | None = None) -> None:
+        self._network_policy = network_policy or McpNetworkTargetPolicy()
+
     async def open(self, config: McpServerConfig) -> McpClientSession:
-        return await OfficialMcpSession.open(config)
+        return await OfficialMcpSession.open(config, self._network_policy)
 
 
 @dataclass(slots=True)
@@ -75,6 +82,18 @@ class _SessionCommand:
     future: asyncio.Future[object]
     original_name: str | None = None
     arguments: dict[str, object] | None = None
+
+
+@dataclass(slots=True)
+class _HttpObservation:
+    authentication_required: bool = False
+    redirect_attempted: bool = False
+
+    async def observe(self, response: httpx2.Response) -> None:
+        if response.status_code in {401, 403}:
+            self.authentication_required = True
+        elif 300 <= response.status_code < 400:
+            self.redirect_attempted = True
 
 
 class OfficialMcpSession:
@@ -95,11 +114,11 @@ class OfficialMcpSession:
         self.server_name = server_name
 
     @classmethod
-    async def open(cls, config: McpServerConfig) -> "OfficialMcpSession":
+    async def open(cls, config: McpServerConfig, network_policy: McpNetworkTargetPolicy | None = None) -> "OfficialMcpSession":
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[_SessionCommand] = asyncio.Queue()
         ready: asyncio.Future[tuple[str, str]] = loop.create_future()
-        owner = asyncio.create_task(cls._run_owner(config, queue, ready))
+        owner = asyncio.create_task(cls._run_owner(config, queue, ready, network_policy or McpNetworkTargetPolicy()))
         try:
             async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
                 protocol_version, server_name = await asyncio.shield(ready)
@@ -166,18 +185,42 @@ class OfficialMcpSession:
         config: McpServerConfig,
         queue: asyncio.Queue[_SessionCommand],
         ready: asyncio.Future[tuple[str, str]],
+        network_policy: McpNetworkTargetPolicy,
     ) -> None:
         stack = AsyncExitStack()
         close_future: asyncio.Future[object] | None = None
         failure: McpSessionError | None = None
+        observation = _HttpObservation()
         try:
-            parameters = StdioServerParameters(
-                command=config.executable,
-                args=list(config.arguments),
-                cwd=config.working_directory,
-                env={},
-            )
-            client = Client(parameters, read_timeout_seconds=_REQUEST_TIMEOUT_SECONDS)
+            if isinstance(config.transport, McpStdioConfig):
+                transport = config.transport
+                client_target: object = StdioServerParameters(
+                    command=transport.executable,
+                    args=list(transport.arguments),
+                    cwd=transport.working_directory,
+                    env={},
+                )
+            else:
+                assert isinstance(config.transport, McpStreamableHttpConfig)
+                try:
+                    url = await network_policy.validate(config.transport.url)
+                except McpNetworkPolicyError as error:
+                    raise McpSessionError(error.code) from error
+                http_client = await stack.enter_async_context(httpx2.AsyncClient(
+                    follow_redirects=False,
+                    trust_env=False,
+                    verify=True,
+                    timeout=httpx2.Timeout(
+                        connect=_CONNECT_TIMEOUT_SECONDS,
+                        read=_REQUEST_TIMEOUT_SECONDS,
+                        write=_REQUEST_TIMEOUT_SECONDS,
+                        pool=_CONNECT_TIMEOUT_SECONDS,
+                    ),
+                    limits=httpx2.Limits(max_connections=4, max_keepalive_connections=2),
+                    event_hooks={"response": [observation.observe]},
+                ))
+                client_target = streamable_http_client(url, http_client=http_client)
+            client = Client(client_target, read_timeout_seconds=_REQUEST_TIMEOUT_SECONDS)
             async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
                 await stack.enter_async_context(client)
             if client.server_capabilities is None or client.server_capabilities.tools is None:
@@ -193,9 +236,9 @@ class OfficialMcpSession:
                     break
                 try:
                     if command.kind == "discover":
-                        result: object = await cls._discover(client, config)
+                        result: object = await cls._discover(client, config, observation)
                     elif command.kind == "call" and command.original_name is not None and command.arguments is not None:
-                        result = await cls._call(client, command.original_name, command.arguments)
+                        result = await cls._call(client, command.original_name, command.arguments, observation)
                     else:
                         raise McpSessionError("server_unreachable")
                     if not command.future.done():
@@ -207,8 +250,8 @@ class OfficialMcpSession:
             failure = McpSessionError("server_stop_failed")
         except McpSessionError as error:
             failure = error
-        except BaseException:
-            failure = McpSessionError("server_start_failed" if not ready.done() else "server_unreachable")
+        except BaseException as error:
+            failure = _classify_transport_error(error, starting=not ready.done(), observation=observation)
         finally:
             try:
                 await stack.aclose()
@@ -237,7 +280,7 @@ class OfficialMcpSession:
                 command.future.set_exception(error)
 
     @staticmethod
-    async def _discover(client: Client, config: McpServerConfig) -> tuple[DiscoveredMcpTool, ...]:
+    async def _discover(client: Client, config: McpServerConfig, observation: _HttpObservation) -> tuple[DiscoveredMcpTool, ...]:
         tools: list[DiscoveredMcpTool] = []
         seen_names: set[str] = set()
         cursor: str | None = None
@@ -261,13 +304,14 @@ class OfficialMcpSession:
         except BaseException as error:
             if isinstance(error, asyncio.CancelledError):
                 raise
-            raise McpSessionError("server_unreachable") from error
+            raise _classify_transport_error(error, starting=False, observation=observation) from error
 
     @staticmethod
     async def _call(
         client: Client,
         original_name: str,
         arguments: dict[str, object],
+        observation: _HttpObservation,
     ) -> str:
         try:
             async with asyncio.timeout(_REQUEST_TIMEOUT_SECONDS):
@@ -277,7 +321,7 @@ class OfficialMcpSession:
         except BaseException as error:
             if isinstance(error, asyncio.CancelledError):
                 raise
-            raise McpSessionError("server_unreachable") from error
+            raise _classify_transport_error(error, starting=False, observation=observation) from error
         text_parts = [
             item.text
             for item in result.content
@@ -293,6 +337,37 @@ class OfficialMcpSession:
         if result.is_error or not content or len(content) > _MAX_RESULT_CHARS:
             raise McpSessionError("tool_result_invalid")
         return content
+
+
+def _classify_transport_error(error: BaseException, *, starting: bool, observation: _HttpObservation) -> McpSessionError:
+    if observation.authentication_required:
+        return McpSessionError("authentication_required")
+    if observation.redirect_attempted:
+        return McpSessionError("redirect_not_allowed")
+    pending: list[BaseException] = [error]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        if isinstance(current, BaseExceptionGroup):
+            pending.extend(current.exceptions)
+            continue
+        if isinstance(current, McpSessionError):
+            return current
+        if isinstance(current, httpx2.HTTPStatusError) and current.response.status_code in {401, 403}:
+            return McpSessionError("authentication_required")
+        if isinstance(current, httpx2.TimeoutException) or isinstance(current, TimeoutError):
+            return McpSessionError("server_timeout")
+        if isinstance(current, ssl.SSLError):
+            return McpSessionError("tls_verification_failed")
+        if current.__cause__ is not None:
+            pending.append(current.__cause__)
+        elif current.__context__ is not None:
+            pending.append(current.__context__)
+    return McpSessionError("server_start_failed" if starting else "server_unreachable")
+
 
 def _discovered_tool(server_id: str, tool: object) -> DiscoveredMcpTool:
     original_name = getattr(tool, "name", None)

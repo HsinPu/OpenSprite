@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from enum import StrEnum
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
@@ -390,9 +390,27 @@ class McpStdioTransport(ContractModel):
         return value
 
 
+class McpStreamableHttpTransport(ContractModel):
+    type: Literal["streamable-http"] = "streamable-http"
+    url: str = Field(min_length=1, max_length=2048)
+
+    @field_validator("url")
+    @classmethod
+    def reject_invalid_url_text(cls, value: str) -> str:
+        if any(character in value for character in ("\x00", "\r", "\n")):
+            raise ValueError("invalid MCP URL text")
+        return value
+
+
+McpTransport = Annotated[
+    McpStdioTransport | McpStreamableHttpTransport,
+    Field(discriminator="type"),
+]
+
+
 class CreateMcpServerRequest(ContractModel):
     name: str = Field(min_length=1, max_length=80)
-    transport: McpStdioTransport
+    transport: McpTransport
     startOnLaunch: StrictBool = False
 
     @field_validator("name")
@@ -412,7 +430,7 @@ class McpServerSummary(ContractModel):
     name: str
     enabled: StrictBool
     startOnLaunch: StrictBool
-    transport: McpStdioTransport
+    transport: McpTransport
     status: McpServerStatus
     protocolVersion: str | None
     errorCode: str | None
@@ -457,6 +475,11 @@ class McpErrorCode(StrEnum):
     SERVER_TIMEOUT = "server_timeout"
     TOOLS_NOT_SUPPORTED = "tools_not_supported"
     TOOL_CATALOG_INVALID = "tool_catalog_invalid"
+    REMOTE_URL_BLOCKED = "remote_url_blocked"
+    AUTHENTICATION_REQUIRED = "authentication_required"
+    TLS_VERIFICATION_FAILED = "tls_verification_failed"
+    REDIRECT_NOT_ALLOWED = "redirect_not_allowed"
+    PROTOCOL_UNSUPPORTED = "protocol_unsupported"
     MCP_STORE_UNAVAILABLE = "mcp_store_unavailable"
     INTERNAL_ERROR = "internal_error"
 

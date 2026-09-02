@@ -4,6 +4,7 @@ import {
   getToolCatalog,
   getToolSettings,
   putToolSettings,
+  ToolSettingsApiError,
   toolSettingsErrorText,
   type ToolCatalog,
   type ToolSettings,
@@ -49,7 +50,9 @@ export function useToolSettings(): ToolSettingsController {
       const [nextCatalog, saved] = await Promise.all([getToolCatalog(), getToolSettings()]);
       if (loadGenerationRef.current !== generation) return;
       const available = new Set(nextCatalog.items.filter((item) => item.available).map((item) => item.id));
-      if (saved.enabledTools.some((toolId) => !available.has(toolId))) throw new Error("tool_settings_catalog_mismatch");
+      if (saved.enabledTools.some((toolId) => !available.has(toolId) && !toolId.startsWith("mcp_"))) {
+        throw new ToolSettingsApiError("malformed_response");
+      }
       setCatalog(nextCatalog);
       setSettings(saved);
       confirmedSettingsRef.current = saved;

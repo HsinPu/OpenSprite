@@ -327,6 +327,21 @@ describe("provider settings", () => {
     expect(saveToolEnabled).toHaveBeenCalledWith("calculator", false);
   });
 
+  it("keeps the MCP transport dropdown inside the settings surface and accepts pointer selection", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    render(<GeneralSettingsPageHarness section="tools" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "新增 MCP Server" }));
+    const transport = await screen.findByRole("combobox", { name: "連線方式" });
+    fireEvent.mouseDown(transport);
+    const option = (await screen.findByText("網路位址")).closest(".ant-select-item-option")!;
+    expect(document.querySelector(".settings-page")?.contains(option)).toBe(true);
+    fireEvent.click(option);
+
+    expect(await screen.findByLabelText("MCP Endpoint URL")).toBeTruthy();
+    expect(screen.queryByLabelText("Executable 絕對路徑")).toBeNull();
+  });
+
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(disconnectedCatalog))));
     render(<SettingsHarness />);

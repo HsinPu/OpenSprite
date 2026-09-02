@@ -29,7 +29,8 @@ locale/time-zone schema does not change.
 production tool catalog and persisted tool availability. It does not expose
 tool arguments, tool results, credentials, or speculative external tools.
 
-`mcp-connections.openapi.json` defines configured local stdio MCP Servers,
+`mcp-connections.openapi.json` defines configured local stdio and credential-free
+Streamable HTTP MCP Servers,
 explicit process lifecycle operations and discovered Tool summaries.
 `tool-approvals.openapi.json` defines short-lived, single-use MCP Tool approval;
 full arguments are available only while the approval is pending.

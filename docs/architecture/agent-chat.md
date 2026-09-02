@@ -172,7 +172,7 @@ returns to the latest Run, so the hidden panel cannot leave a historical message
 marked as selected.
 The base production Tool Registry contains the read-only `calculator`. At Run
 start the Agent adds one immutable snapshot of supported Tools from currently
-connected local stdio MCP Servers. The UI localizes the stable built-in id and
+connected stdio or Streamable HTTP MCP Servers. The UI localizes the stable built-in id and
 uses the discovered MCP display name for MCP events; it does not advertise a
 capability unless an active Server actually provides it.
 
@@ -190,12 +190,19 @@ rediscovers the same canonical Tool id.
 
 Configured MCP Servers are owned by the `/api/mcp/servers` CRUD surface,
 explicit `test`, `start`, and `stop` operations, and per-Server Tool discovery.
-The strict schema-v1 config lives at `.opensprite/config/mcp.json`. Only local
-`stdio` is implemented. A new or edited configuration is inert and disabled;
+The strict schema-v2 config lives at `.opensprite/config/mcp.json`; schema-v1
+stdio records remain readable until the next write. Local `stdio` and
+credential-free Streamable HTTP are implemented. A new or edited configuration is inert and disabled;
 the browser displays the exact executable and argument vector before saving
 and asks again before an explicit start. The backend invokes the absolute
 executable directly without a shell. Startup launches only Servers previously
 enabled by an explicit start and marked `startOnLaunch`.
+
+Streamable HTTP accepts public HTTPS endpoints and loopback HTTP only. It
+rejects credentials, query strings, fragments, redirects, private or special
+network destinations, and invalid TLS certificates. Its restricted HTTP client
+does not inherit proxy environment configuration. Authentication, arbitrary
+headers, LAN targets, SSE and WebSocket remain outside the current contract.
 
 ## Persistence
 

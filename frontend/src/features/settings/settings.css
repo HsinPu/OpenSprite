@@ -129,6 +129,7 @@
 .settings-mcp-tool em { color: var(--settings-danger); font-size: 12px; }
 .settings-mcp-form { display: grid; gap: 14px; }
 .settings-mcp-form > label { display: grid; gap: 6px; }
+.settings-mcp-form-field { display: grid; gap: 6px; }
 .settings-mcp-form .settings-mcp-autostart { display: flex; justify-content: space-between; }
 .settings-mcp-modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .settings-mcp-command-preview { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; border-radius: 8px; background: var(--settings-page-bg); }

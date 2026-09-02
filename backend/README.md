@@ -24,8 +24,9 @@ The current slice provides:
   `config/conversation.json`, exposed through
   `GET`/`PUT /api/settings/conversation`;
 - official MCP Python SDK v2 Client sessions for explicitly configured local
-  stdio Servers, with strict lazy `config/mcp.json`, explicit lifecycle routes,
-  bounded Tool discovery and a per-Run dynamic Tool snapshot;
+  stdio or credential-free Streamable HTTP Servers, with strict lazy schema-v2
+  `config/mcp.json`, explicit lifecycle routes, bounded Tool discovery and a
+  per-Run dynamic Tool snapshot;
 - short-lived, exact-argument, single-use MCP Tool approval plus required
   HMAC hash-chained receipts that omit raw arguments and results;
 - a transactional `ProviderConnectionService` behind the injectable

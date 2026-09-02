@@ -31,6 +31,11 @@ MCP_ERROR_STATUS = {
     McpErrorCode.SERVER_TIMEOUT: status.HTTP_504_GATEWAY_TIMEOUT,
     McpErrorCode.TOOLS_NOT_SUPPORTED: status.HTTP_422_UNPROCESSABLE_ENTITY,
     McpErrorCode.TOOL_CATALOG_INVALID: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    McpErrorCode.REMOTE_URL_BLOCKED: status.HTTP_400_BAD_REQUEST,
+    McpErrorCode.AUTHENTICATION_REQUIRED: status.HTTP_401_UNAUTHORIZED,
+    McpErrorCode.TLS_VERIFICATION_FAILED: status.HTTP_502_BAD_GATEWAY,
+    McpErrorCode.REDIRECT_NOT_ALLOWED: status.HTTP_502_BAD_GATEWAY,
+    McpErrorCode.PROTOCOL_UNSUPPORTED: status.HTTP_422_UNPROCESSABLE_ENTITY,
     McpErrorCode.MCP_STORE_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
     McpErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
 }
@@ -45,6 +50,11 @@ MCP_PUBLIC_ERRORS = {
     McpErrorCode.SERVER_TIMEOUT: ("The MCP server did not respond before the timeout.", True),
     McpErrorCode.TOOLS_NOT_SUPPORTED: ("The MCP server does not provide tools.", False),
     McpErrorCode.TOOL_CATALOG_INVALID: ("The MCP tool catalog cannot be used safely.", False),
+    McpErrorCode.REMOTE_URL_BLOCKED: ("The MCP network destination is not allowed.", False),
+    McpErrorCode.AUTHENTICATION_REQUIRED: ("The MCP server requires authentication that is not supported yet.", False),
+    McpErrorCode.TLS_VERIFICATION_FAILED: ("The MCP server TLS certificate could not be verified.", False),
+    McpErrorCode.REDIRECT_NOT_ALLOWED: ("The MCP server attempted an HTTP redirect.", False),
+    McpErrorCode.PROTOCOL_UNSUPPORTED: ("The MCP server protocol is not supported.", False),
     McpErrorCode.MCP_STORE_UNAVAILABLE: ("MCP server settings are unavailable.", True),
     McpErrorCode.INTERNAL_ERROR: ("An internal error occurred.", False),
 }

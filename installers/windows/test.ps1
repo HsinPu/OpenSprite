@@ -105,8 +105,12 @@ try {
     }
 
     $nativeRuntimeBinaries = @(Get-ChildItem -LiteralPath (Join-Path $installRoot "backend\.venv") -File -Recurse -Filter "*.pyd")
+    $pywin32System32 = Join-Path $installRoot "backend\.venv\Lib\site-packages\pywin32_system32"
+    if (Test-Path -LiteralPath $pywin32System32 -PathType Container) {
+        $nativeRuntimeBinaries += @(Get-ChildItem -LiteralPath $pywin32System32 -File -Filter "*.dll")
+    }
     foreach ($nativeRuntimeBinary in $nativeRuntimeBinaries) {
-        $quarantinedRuntime = Join-Path $tempRoot ("OpenSprite-installer-quarantine-" + [Guid]::NewGuid().ToString("N") + ".pyd")
+        $quarantinedRuntime = Join-Path $tempRoot ("OpenSprite-installer-quarantine-" + [Guid]::NewGuid().ToString("N") + $nativeRuntimeBinary.Extension)
         Move-FileWithRetry $nativeRuntimeBinary.FullName $quarantinedRuntime
         $quarantinedRuntimes += $quarantinedRuntime
     }

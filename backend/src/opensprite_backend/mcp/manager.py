@@ -16,6 +16,7 @@ from ..models import (
     McpServerStatus,
     McpServerSummary,
     McpStdioTransport,
+    McpStreamableHttpTransport,
     McpToolAnnotations as PublicMcpToolAnnotations,
     McpToolListResponse,
     McpToolSummary,
@@ -26,6 +27,8 @@ from .config import (
     McpConfigStore,
     McpConfigStoreError,
     McpServerConfig,
+    McpStdioConfig,
+    McpStreamableHttpConfig,
 )
 from .session import (
     DiscoveredMcpTool,
@@ -34,6 +37,7 @@ from .session import (
     McpSessionFactory,
     OfficialMcpSessionFactory,
 )
+from .network import McpNetworkPolicyError, normalize_streamable_http_url
 from .tool_adapter import McpToolAdapter
 from ..tools.definition import Tool
 
@@ -325,11 +329,7 @@ class McpConnectionManager:
             name=config.name,
             enabled=config.enabled,
             startOnLaunch=config.start_on_launch,
-            transport=McpStdioTransport(
-                executable=config.executable,
-                arguments=list(config.arguments),
-                workingDirectory=config.working_directory,
-            ),
+            transport=_public_transport(config),
             status=state.status,
             protocolVersion=state.session.protocol_version if state.session else None,
             errorCode=state.error_code,
@@ -348,14 +348,24 @@ def _config_from_request(
     *,
     enabled: bool,
 ) -> McpServerConfig:
-    executable = _resolved_executable(payload.transport.executable)
-    working_directory = _resolved_directory(payload.transport.workingDirectory)
+    if isinstance(payload.transport, McpStdioTransport):
+        executable = _resolved_executable(payload.transport.executable)
+        working_directory = _resolved_directory(payload.transport.workingDirectory)
+        transport = McpStdioConfig(
+            executable=str(executable),
+            arguments=tuple(payload.transport.arguments),
+            working_directory=None if working_directory is None else str(working_directory),
+        )
+    else:
+        try:
+            url = normalize_streamable_http_url(payload.transport.url)
+        except McpNetworkPolicyError as error:
+            raise McpConnectionError(McpErrorCode.REMOTE_URL_BLOCKED) from error
+        transport = McpStreamableHttpConfig(url=url)
     return McpServerConfig(
         id=server_id,
         name=payload.name.strip(),
-        executable=str(executable),
-        arguments=tuple(payload.transport.arguments),
-        working_directory=None if working_directory is None else str(working_directory),
+        transport=transport,
         enabled=enabled,
         start_on_launch=payload.startOnLaunch,
     )
@@ -386,15 +396,35 @@ def _resolved_directory(value: str | None) -> Path | None:
 
 
 def _validated_stored_config(config: McpServerConfig) -> McpServerConfig:
+    if isinstance(config.transport, McpStreamableHttpConfig):
+        try:
+            return replace(config, transport=replace(config.transport, url=normalize_streamable_http_url(config.transport.url)))
+        except McpNetworkPolicyError as error:
+            raise McpConnectionError(McpErrorCode.REMOTE_URL_BLOCKED) from error
+    transport = config.transport
     return replace(
         config,
-        executable=str(_resolved_executable(config.executable)),
-        working_directory=(
+        transport=replace(
+            transport,
+            executable=str(_resolved_executable(transport.executable)),
+            working_directory=(
             None
-            if config.working_directory is None
-            else str(_resolved_directory(config.working_directory))
+            if transport.working_directory is None
+            else str(_resolved_directory(transport.working_directory))
+            ),
         ),
     )
+
+
+def _public_transport(config: McpServerConfig) -> McpStdioTransport | McpStreamableHttpTransport:
+    transport = config.transport
+    if isinstance(transport, McpStdioConfig):
+        return McpStdioTransport(
+            executable=transport.executable,
+            arguments=list(transport.arguments),
+            workingDirectory=transport.working_directory,
+        )
+    return McpStreamableHttpTransport(url=transport.url)
 
 
 def _find_config(
@@ -415,6 +445,11 @@ def _public_session_error(error: McpSessionError) -> McpConnectionError:
         "server_timeout": McpErrorCode.SERVER_TIMEOUT,
         "tools_not_supported": McpErrorCode.TOOLS_NOT_SUPPORTED,
         "tool_catalog_invalid": McpErrorCode.TOOL_CATALOG_INVALID,
+        "remote_url_blocked": McpErrorCode.REMOTE_URL_BLOCKED,
+        "authentication_required": McpErrorCode.AUTHENTICATION_REQUIRED,
+        "tls_verification_failed": McpErrorCode.TLS_VERIFICATION_FAILED,
+        "redirect_not_allowed": McpErrorCode.REDIRECT_NOT_ALLOWED,
+        "protocol_unsupported": McpErrorCode.PROTOCOL_UNSUPPORTED,
     }
     return McpConnectionError(mapping.get(error.code, McpErrorCode.SERVER_UNREACHABLE), retryable=error.code in {"server_unreachable", "server_timeout"})
 

@@ -70,10 +70,12 @@ Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
 
-`config/mcp.json` is a strict schema-v1 non-secret list of configured local
-stdio Servers. It stores absolute executable and optional working-directory
-paths plus structured arguments, enabled state and `startOnLaunch`; it stores
-no environment map or credential. Missing-config reads are side-effect free.
+`config/mcp.json` is a strict schema-v2 non-secret list of configured stdio or
+Streamable HTTP Servers. Schema-v1 stdio data is read without rewrite and the
+next successful mutation writes canonical v2. Stdio records contain absolute
+executable and optional working-directory paths plus structured arguments;
+HTTP records contain only a bounded credential-free URL. Both retain enabled
+state and `startOnLaunch`. Missing-config reads are side-effect free.
 MCP Tool approvals remain only in process memory. Authorized-call receipts are
 append-only under `logs/tool-receipts` and use the random 256-bit
 `config/tool-receipt.key`; neither file contains raw arguments or results.

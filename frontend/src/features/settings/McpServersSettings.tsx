@@ -1,4 +1,4 @@
-import { Button, Input, Modal, Popconfirm, Switch } from "antd";
+import { Button, Input, Modal, Popconfirm, Select, Switch } from "antd";
 import { useMemo, useState, type FormEvent } from "react";
 
 import type { McpServerDraft, McpServerSummary } from "../../api/mcpConnections";
@@ -14,7 +14,9 @@ const emptyDraft: McpServerDraft = {
 };
 
 function exactCommand(draft: McpServerDraft): string {
-  return [draft.transport.executable, ...draft.transport.arguments].join("\n");
+  return draft.transport.type === "stdio"
+    ? [draft.transport.executable, ...draft.transport.arguments].join("\n")
+    : draft.transport.url;
 }
 
 export function McpServersSettings({ controller, toolSettings, modalContainer = null }: { controller: McpConnectionsController; toolSettings: ToolSettingsController; modalContainer?: HTMLElement | null }) {
@@ -31,13 +33,15 @@ export function McpServersSettings({ controller, toolSettings, modalContainer = 
     const next = server ? { name: server.name, startOnLaunch: server.startOnLaunch, transport: server.transport } : emptyDraft;
     setEditingId(server?.id ?? null);
     setDraft(next);
-    setArgumentsText(next.transport.arguments.join("\n"));
+    setArgumentsText(next.transport.type === "stdio" ? next.transport.arguments.join("\n") : "");
     setEditorOpen(true);
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const normalized = { ...draft, transport: { ...draft.transport, arguments: argumentsText.split("\n").map((item) => item.trim()).filter(Boolean), workingDirectory: draft.transport.workingDirectory?.trim() || null } };
-    if (!normalized.name.trim() || !normalized.transport.executable.trim()) return;
+    const normalized: McpServerDraft = draft.transport.type === "stdio"
+      ? { ...draft, transport: { ...draft.transport, arguments: argumentsText.split("\n").map((item) => item.trim()).filter(Boolean), workingDirectory: draft.transport.workingDirectory?.trim() || null } }
+      : { ...draft, transport: { ...draft.transport, url: draft.transport.url.trim() } };
+    if (!normalized.name.trim() || (normalized.transport.type === "stdio" ? !normalized.transport.executable.trim() : !normalized.transport.url)) return;
     setConfirmDraft(normalized);
     setEditorOpen(false);
   };
@@ -63,8 +67,8 @@ export function McpServersSettings({ controller, toolSettings, modalContainer = 
       const serverBusy = controller.busyServerId === server.id;
       const tools = controller.tools[server.id] ?? [];
       return <section className="settings-mcp-server" key={server.id} aria-label={t("mcp.serverLabel", { server: server.name })}>
-        <div className="settings-mcp-server-header"><span><strong>{server.name}</strong><small>{statusLabels[server.status]}{server.protocolVersion ? ` · MCP ${server.protocolVersion}` : ""}</small></span><span className="settings-mcp-actions"><Button onClick={() => void controller.test(server.id)} disabled={busy}>{t("mcp.test")}</Button>{server.status === "connected" ? <Button onClick={() => void controller.stop(server.id)} disabled={busy}>{t("mcp.stop")}</Button> : <Button type="primary" onClick={() => setStartCandidate(server)} disabled={busy}>{t("mcp.start")}</Button>}<Button onClick={() => openEditor(server)} disabled={busy}>{t("mcp.edit")}</Button><Popconfirm title={t("mcp.removeConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} getPopupContainer={() => modalContainer ?? document.body} onConfirm={() => void controller.remove(server.id)}><Button danger disabled={busy}>{t("common.remove")}</Button></Popconfirm></span></div>
-        <code className="settings-mcp-command">{server.transport.executable}{server.transport.arguments.map((argument) => `\n${argument}`)}</code>
+        <div className="settings-mcp-server-header"><span><strong>{server.name}</strong><small>{statusLabels[server.status]} · {t(server.transport.type === "stdio" ? "mcp.transport.stdio" : "mcp.transport.streamableHttp")}{server.protocolVersion ? ` · MCP ${server.protocolVersion}` : ""}</small></span><span className="settings-mcp-actions"><Button onClick={() => void controller.test(server.id)} disabled={busy}>{t("mcp.test")}</Button>{server.status === "connected" ? <Button onClick={() => void controller.stop(server.id)} disabled={busy}>{t(server.transport.type === "stdio" ? "mcp.stop" : "mcp.disconnect")}</Button> : <Button type="primary" onClick={() => setStartCandidate(server)} disabled={busy}>{t(server.transport.type === "stdio" ? "mcp.start" : "mcp.connect")}</Button>}<Button onClick={() => openEditor(server)} disabled={busy}>{t("mcp.edit")}</Button><Popconfirm title={t("mcp.removeConfirm")} okText={t("common.remove")} cancelText={t("common.cancel")} getPopupContainer={() => modalContainer ?? document.body} onConfirm={() => void controller.remove(server.id)}><Button danger disabled={busy}>{t("common.remove")}</Button></Popconfirm></span></div>
+        <code className="settings-mcp-command">{exactCommand(server)}</code>
         <p className="settings-control-description">{t("mcp.toolSummary", { supported: String(server.toolCount), unsupported: String(server.unsupportedToolCount) })}</p>
         {server.status === "connected" ? <div className="settings-mcp-tools">{tools.map((tool) => {
           const enabled = toolSettings.settings.enabledTools.includes(tool.id);
@@ -76,14 +80,20 @@ export function McpServersSettings({ controller, toolSettings, modalContainer = 
     <Modal getContainer={false} open={editorOpen} title={editingId ? t("mcp.editServer") : t("mcp.addServer")} footer={null} destroyOnHidden onCancel={() => { if (!busy) setEditorOpen(false); }}>
       <form className="settings-mcp-form" onSubmit={submit}>
         <label>{t("mcp.name")}<Input value={draft.name} maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
-        <label>{t("mcp.executable")}<Input value={draft.transport.executable} onChange={(event) => setDraft((current) => ({ ...current, transport: { ...current.transport, executable: event.target.value } }))} /></label>
-        <label>{t("mcp.arguments")}<Input.TextArea rows={4} value={argumentsText} onChange={(event) => setArgumentsText(event.target.value)} /></label>
-        <label>{t("mcp.workingDirectory")}<Input value={draft.transport.workingDirectory ?? ""} onChange={(event) => setDraft((current) => ({ ...current, transport: { ...current.transport, workingDirectory: event.target.value || null } }))} /></label>
+        <div className="settings-mcp-form-field"><label htmlFor="mcp-transport-type">{t("mcp.transport.label")}</label><Select id="mcp-transport-type" value={draft.transport.type} options={[{ value: "stdio", label: t("mcp.transport.stdio") }, { value: "streamable-http", label: t("mcp.transport.streamableHttp") }]} getPopupContainer={() => modalContainer ?? document.body} onChange={(value: "stdio" | "streamable-http") => { setArgumentsText(""); setDraft((current) => ({ ...current, transport: value === "stdio" ? { type: "stdio", executable: "", arguments: [], workingDirectory: null } : { type: "streamable-http", url: "" } })); }} /></div>
+        {draft.transport.type === "stdio" ? <>
+          <label>{t("mcp.executable")}<Input value={draft.transport.executable} onChange={(event) => setDraft((current) => current.transport.type === "stdio" ? ({ ...current, transport: { ...current.transport, executable: event.target.value } }) : current)} /></label>
+          <label>{t("mcp.arguments")}<Input.TextArea rows={4} value={argumentsText} onChange={(event) => setArgumentsText(event.target.value)} /></label>
+          <label>{t("mcp.workingDirectory")}<Input value={draft.transport.workingDirectory ?? ""} onChange={(event) => setDraft((current) => current.transport.type === "stdio" ? ({ ...current, transport: { ...current.transport, workingDirectory: event.target.value || null } }) : current)} /></label>
+        </> : <>
+          <label>{t("mcp.url")}<Input value={draft.transport.url} placeholder="https://example.com/mcp" onChange={(event) => setDraft((current) => current.transport.type === "streamable-http" ? ({ ...current, transport: { ...current.transport, url: event.target.value } }) : current)} /></label>
+          <p className="settings-control-description">{t("mcp.httpNoAuth")}</p>
+        </>}
         <label className="settings-mcp-autostart"><span>{t("mcp.startOnLaunch")}</span><Switch checked={draft.startOnLaunch} onChange={(value) => setDraft((current) => ({ ...current, startOnLaunch: value }))} /></label>
         <div className="settings-mcp-modal-actions"><Button onClick={() => setEditorOpen(false)}>{t("common.cancel")}</Button><Button type="primary" htmlType="submit">{t("mcp.continue")}</Button></div>
       </form>
     </Modal>
-    <Modal getContainer={false} open={confirmDraft !== null} title={t("mcp.commandConfirmTitle")} okText={t("mcp.saveConfiguration")} cancelText={t("common.cancel")} confirmLoading={busy} onOk={() => void save()} onCancel={() => { setConfirmDraft(null); setEditorOpen(true); }}><p>{t("mcp.commandWarning")}</p><pre className="settings-mcp-command-preview">{confirmDraft ? exactCommand(confirmDraft) : ""}</pre><p>{t("mcp.cwdPreview", { path: confirmDraft?.transport.workingDirectory ?? "—" })}</p></Modal>
-    <Modal getContainer={false} open={startCandidate !== null} title={t("mcp.startConfirmTitle")} okText={t("mcp.start")} cancelText={t("common.cancel")} confirmLoading={busy} onOk={async () => { if (!startCandidate) return; const result = await controller.start(startCandidate.id); if (result === null) setStartCandidate(null); }} onCancel={() => setStartCandidate(null)}><p>{t("mcp.commandWarning")}</p><pre className="settings-mcp-command-preview">{startCandidate ? exactCommand(startCandidate) : ""}</pre></Modal>
+    <Modal getContainer={false} open={confirmDraft !== null} title={t("mcp.commandConfirmTitle")} okText={t("mcp.saveConfiguration")} cancelText={t("common.cancel")} confirmLoading={busy} onOk={() => void save()} onCancel={() => { setConfirmDraft(null); setEditorOpen(true); }}><p>{t(confirmDraft?.transport.type === "streamable-http" ? "mcp.networkWarning" : "mcp.commandWarning")}</p><pre className="settings-mcp-command-preview">{confirmDraft ? exactCommand(confirmDraft) : ""}</pre>{confirmDraft?.transport.type === "stdio" ? <p>{t("mcp.cwdPreview", { path: confirmDraft.transport.workingDirectory ?? "—" })}</p> : <p>{t("mcp.urlSecretWarning")}</p>}</Modal>
+    <Modal getContainer={false} open={startCandidate !== null} title={t(startCandidate?.transport.type === "streamable-http" ? "mcp.connectConfirmTitle" : "mcp.startConfirmTitle")} okText={t(startCandidate?.transport.type === "streamable-http" ? "mcp.connect" : "mcp.start")} cancelText={t("common.cancel")} confirmLoading={busy} onOk={async () => { if (!startCandidate) return; const result = await controller.start(startCandidate.id); if (result === null) setStartCandidate(null); }} onCancel={() => setStartCandidate(null)}><p>{t(startCandidate?.transport.type === "streamable-http" ? "mcp.networkWarning" : "mcp.commandWarning")}</p><pre className="settings-mcp-command-preview">{startCandidate ? exactCommand(startCandidate) : ""}</pre></Modal>
   </>;
 }

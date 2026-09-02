@@ -1,17 +1,18 @@
-"""Strict persisted configuration for local stdio MCP servers."""
+"""Strict persisted configuration for supported MCP transports."""
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Final, Literal, Protocol
 from uuid import UUID
 
 from ..atomic_file import atomic_write
+from .network import McpNetworkPolicyError, normalize_streamable_http_url
 
 
-_SCHEMA_VERSION: Final = 1
+_SCHEMA_VERSION: Final = 2
 _MAX_CONFIG_BYTES: Final = 1024 * 1024
 _MAX_SERVERS: Final = 32
 
@@ -22,12 +23,33 @@ class McpConfigStoreError(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class McpServerConfig:
-    id: str
-    name: str
+class McpStdioConfig:
     executable: str
     arguments: tuple[str, ...]
     working_directory: str | None
+
+    @property
+    def type(self) -> Literal["stdio"]:
+        return "stdio"
+
+
+@dataclass(frozen=True, slots=True)
+class McpStreamableHttpConfig:
+    url: str
+
+    @property
+    def type(self) -> Literal["streamable-http"]:
+        return "streamable-http"
+
+
+McpTransportConfig = McpStdioConfig | McpStreamableHttpConfig
+
+
+@dataclass(frozen=True, slots=True)
+class McpServerConfig:
+    id: str
+    name: str
+    transport: McpTransportConfig
     enabled: bool = False
     start_on_launch: bool = False
 
@@ -63,12 +85,7 @@ class JsonMcpConfigStore:
                         "name": item.name,
                         "enabled": item.enabled,
                         "startOnLaunch": item.start_on_launch,
-                        "transport": {
-                            "type": "stdio",
-                            "executable": item.executable,
-                            "arguments": list(item.arguments),
-                            "workingDirectory": item.working_directory,
-                        },
+                        "transport": _encode_transport(item.transport),
                     }
                     for item in sorted(servers, key=lambda server: server.id)
                 ],
@@ -114,16 +131,16 @@ class JsonMcpConfigStore:
 
     @staticmethod
     def _decode(raw: object) -> tuple[McpServerConfig, ...]:
-        if type(raw) is not dict or set(raw) != {"version", "servers"} or raw["version"] != _SCHEMA_VERSION or type(raw["servers"]) is not list or len(raw["servers"]) > _MAX_SERVERS:
+        if type(raw) is not dict or set(raw) != {"version", "servers"} or raw["version"] not in {1, _SCHEMA_VERSION} or type(raw["servers"]) is not list or len(raw["servers"]) > _MAX_SERVERS:
             raise McpConfigStoreError
         servers: list[McpServerConfig] = []
         for item in raw["servers"]:
             if type(item) is not dict or set(item) != {"id", "name", "enabled", "startOnLaunch", "transport"}:
                 raise McpConfigStoreError
             transport = item["transport"]
-            if type(transport) is not dict or set(transport) != {"type", "executable", "arguments", "workingDirectory"} or transport["type"] != "stdio" or type(transport["arguments"]) is not list:
+            if type(transport) is not dict:
                 raise McpConfigStoreError
-            if len(transport["arguments"]) > 64:
+            if raw["version"] == 1 and transport.get("type") != "stdio":
                 raise McpConfigStoreError
             try:
                 identifier = _text(item["id"], 36)
@@ -136,9 +153,7 @@ class JsonMcpConfigStore:
                     McpServerConfig(
                         id=identifier,
                         name=name,
-                        executable=_text(transport["executable"], 2048),
-                        arguments=tuple(_text(argument, 2048) for argument in transport["arguments"]),
-                        working_directory=None if transport["workingDirectory"] is None else _text(transport["workingDirectory"], 2048),
+                        transport=_decode_transport(transport),
                         enabled=_boolean(item["enabled"]),
                         start_on_launch=_boolean(item["startOnLaunch"]),
                     )
@@ -160,3 +175,37 @@ def _boolean(value: object) -> bool:
     if type(value) is not bool:
         raise ValueError("invalid MCP configuration boolean")
     return value
+
+
+def _encode_transport(transport: McpTransportConfig) -> dict[str, object]:
+    if isinstance(transport, McpStdioConfig):
+        return {
+            "type": "stdio",
+            "executable": transport.executable,
+            "arguments": list(transport.arguments),
+            "workingDirectory": transport.working_directory,
+        }
+    return {"type": "streamable-http", "url": transport.url}
+
+
+def _decode_transport(raw: dict[object, object]) -> McpTransportConfig:
+    if raw.get("type") == "stdio":
+        if set(raw) != {"type", "executable", "arguments", "workingDirectory"} or type(raw["arguments"]) is not list or len(raw["arguments"]) > 64:
+            raise ValueError("invalid stdio transport")
+        return McpStdioConfig(
+            executable=_text(raw["executable"], 2048),
+            arguments=tuple(_text(argument, 2048) for argument in raw["arguments"]),
+            working_directory=None if raw["workingDirectory"] is None else _text(raw["workingDirectory"], 2048),
+        )
+    if raw.get("type") == "streamable-http":
+        if set(raw) != {"type", "url"}:
+            raise ValueError("invalid Streamable HTTP transport")
+        return McpStreamableHttpConfig(url=_validated_http_url(raw["url"]))
+    raise ValueError("unknown MCP transport")
+
+
+def _validated_http_url(value: object) -> str:
+    try:
+        return normalize_streamable_http_url(_text(value, 2048))
+    except McpNetworkPolicyError as error:
+        raise ValueError("invalid Streamable HTTP URL") from error

@@ -17,6 +17,8 @@ function Harness() {
     <output data-testid="loaded">{String(controller.loaded)}</output>
     <output data-testid="global">{String(controller.settings.enabled)}</output>
     <output data-testid="calculator">{String(controller.settings.enabledTools.includes("calculator"))}</output>
+    <output data-testid="mcp">{String(controller.settings.enabledTools.some((toolId) => toolId.startsWith("mcp_")))}</output>
+    <output data-testid="error">{controller.error ?? ""}</output>
     <button type="button" onClick={() => void controller.saveEnabled(false)}>disable all</button>
     <button type="button" onClick={() => void controller.saveToolEnabled("calculator", false)}>disable calculator</button>
   </div>;
@@ -71,5 +73,21 @@ describe("useToolSettings", () => {
     await waitFor(() => expect(screen.getByTestId("loaded").textContent).toBe("true"));
     fireEvent.click(screen.getByRole("button", { name: "disable all" }));
     await waitFor(() => expect(screen.getByTestId("global").textContent).toBe("true"));
+  });
+
+  it("keeps an enabled MCP tool id while its server is offline", async () => {
+    const offlineTool = "mcp_78ef7338_echo_http_eba73b64";
+    const fetchMock = vi.fn((path: string) => {
+      if (path === "/api/tools") return Promise.resolve(new Response(JSON.stringify({ items: [{ id: "calculator", source: "builtin", effect: "read_only", available: true }] })));
+      if (path === "/api/settings/tools") return Promise.resolve(new Response(JSON.stringify({ enabled: true, enabledTools: ["calculator", offlineTool] })));
+      throw new Error(`unexpected request ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<I18nProvider><Harness /></I18nProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("loaded").textContent).toBe("true"));
+    expect(screen.getByTestId("mcp").textContent).toBe("true");
+    expect(screen.getByTestId("calculator").textContent).toBe("true");
+    expect(screen.getByTestId("error").textContent).toBe("");
   });
 });

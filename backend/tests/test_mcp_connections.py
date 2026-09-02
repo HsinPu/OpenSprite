@@ -5,16 +5,21 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from functools import wraps
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import socket
+import subprocess
 import sys
+import time
+from threading import Thread
 
 from fastapi.testclient import TestClient
 import pytest
 
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.mcp.config import JsonMcpConfigStore, McpConfigStoreError
+from opensprite_backend.mcp.config import JsonMcpConfigStore, McpConfigStoreError, McpStdioConfig, McpStreamableHttpConfig
 from opensprite_backend.mcp.manager import McpConnectionManager
 from opensprite_backend.mcp.session import (
     DiscoveredMcpTool,
@@ -31,6 +36,7 @@ from opensprite_backend.tools.definition import (
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcp_stdio_server.py"
+HTTP_FIXTURE = Path(__file__).parent / "fixtures" / "mcp_streamable_http_server.py"
 
 
 def async_test(function):
@@ -56,6 +62,67 @@ def payload(*, start_on_launch: bool = False) -> CreateMcpServerRequest:
     )
 
 
+def http_payload(url: str = "https://mcp.example.test/mcp") -> CreateMcpServerRequest:
+    return CreateMcpServerRequest.model_validate({
+        "name": "Remote MCP",
+        "startOnLaunch": False,
+        "transport": {"type": "streamable-http", "url": url},
+    })
+
+
+def start_http_fixture() -> tuple[subprocess.Popen[bytes], str]:
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    process = subprocess.Popen(
+        [sys.executable, str(HTTP_FIXTURE), str(port)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise AssertionError("Streamable HTTP fixture stopped during startup")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                return process, f"http://127.0.0.1:{port}/mcp"
+        except OSError:
+            time.sleep(0.02)
+    process.kill()
+    process.wait(timeout=5)
+    raise AssertionError("Streamable HTTP fixture did not start")
+
+
+def stop_http_fixture(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+class FixedStatusHandler(BaseHTTPRequestHandler):
+    response_status = 401
+
+    def do_POST(self) -> None:  # noqa: N802
+        self.send_response(self.response_status)
+        if self.response_status == 302:
+            self.send_header("Location", "http://127.0.0.1/private")
+        self.end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:
+        del format, args
+
+
+def fixed_status_server(status: int) -> tuple[ThreadingHTTPServer, Thread, str]:
+    handler = type(f"Status{status}Handler", (FixedStatusHandler,), {"response_status": status})
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, f"http://127.0.0.1:{server.server_port}/mcp"
 def discovered_tool() -> DiscoveredMcpTool:
     definition = ToolDefinition(
         name="mcp_12345678_echo_abcdef12",
@@ -119,12 +186,63 @@ def test_config_store_round_trip_is_lazy_and_strict(tmp_path: Path) -> None:
     manager = McpConnectionManager(store, FakeSessionFactory())
     created = asyncio.run(manager.create_server(payload()))
     assert created.status == "disabled"
-    assert json.loads(paths.mcp_settings_file.read_text(encoding="utf-8"))["servers"][0]["enabled"] is False
+    stored = json.loads(paths.mcp_settings_file.read_text(encoding="utf-8"))
+    assert stored["version"] == 2
+    assert stored["servers"][0]["enabled"] is False
 
     corrupt = paths.mcp_settings_file
     corrupt.write_text('{"version":1,"version":1,"servers":[]}', encoding="utf-8")
     with pytest.raises(McpConfigStoreError):
         store.get()
+
+
+def test_schema_v1_stdio_is_read_without_rewrite_and_next_write_uses_v2(tmp_path: Path) -> None:
+    path = tmp_path / "mcp.json"
+    identifier = "11111111-1111-4111-8111-111111111111"
+    original = json.dumps({
+        "version": 1,
+        "servers": [{
+            "id": identifier,
+            "name": "Legacy",
+            "enabled": False,
+            "startOnLaunch": False,
+            "transport": {"type": "stdio", "executable": sys.executable, "arguments": [str(FIXTURE)], "workingDirectory": None},
+        }],
+    }, separators=(",", ":"))
+    path.write_text(original, encoding="utf-8")
+    store = JsonMcpConfigStore(path)
+
+    loaded = store.get()
+    assert isinstance(loaded[0].transport, McpStdioConfig)
+    assert path.read_text(encoding="utf-8") == original
+
+    store.set(loaded)
+    assert json.loads(path.read_text(encoding="utf-8"))["version"] == 2
+
+
+def test_schema_v2_streamable_http_round_trip_is_strict(tmp_path: Path) -> None:
+    path = tmp_path / "mcp.json"
+    manager = McpConnectionManager(JsonMcpConfigStore(path), FakeSessionFactory())
+    created = asyncio.run(manager.create_server(http_payload()))
+
+    assert created.transport.type == "streamable-http"
+    loaded = JsonMcpConfigStore(path).get()
+    assert isinstance(loaded[0].transport, McpStreamableHttpConfig)
+    assert loaded[0].transport.url == "https://mcp.example.test/mcp"
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["version"] == 2
+    assert stored["servers"][0]["transport"] == {"type": "streamable-http", "url": "https://mcp.example.test/mcp"}
+
+    stored["servers"][0]["transport"]["headers"] = {"Authorization": "secret"}
+    path.write_text(json.dumps(stored), encoding="utf-8")
+    with pytest.raises(McpConfigStoreError):
+        JsonMcpConfigStore(path).get()
+
+    del stored["servers"][0]["transport"]["headers"]
+    stored["servers"][0]["transport"]["url"] = "https://user:secret@mcp.example.test/mcp"
+    path.write_text(json.dumps(stored), encoding="utf-8")
+    with pytest.raises(McpConfigStoreError):
+        JsonMcpConfigStore(path).get()
 
 
 @async_test
@@ -274,3 +392,54 @@ def test_official_sdk_session_survives_separate_http_request_tasks(tmp_path: Pat
     }
     assert stopped.status_code == 200, stopped.text
     assert stopped.json()["status"] == "disabled"
+
+
+def test_streamable_http_sdk_session_survives_separate_http_request_tasks(tmp_path: Path) -> None:
+    process, url = start_http_fixture()
+    try:
+        manager = McpConnectionManager(
+            JsonMcpConfigStore(tmp_path / "mcp.json"),
+            OfficialMcpSessionFactory(),
+        )
+        app = create_app(mcp_connections=manager)
+        body = http_payload(url).model_dump(mode="json", by_alias=True)
+
+        with TestClient(app) as client:
+            created = client.post("/api/mcp/servers", json=body)
+            server_id = created.json()["id"]
+            started = client.post(f"/api/mcp/servers/{server_id}/start")
+            tools = client.get(f"/api/mcp/servers/{server_id}/tools")
+            stopped = client.post(f"/api/mcp/servers/{server_id}/stop")
+
+        assert created.status_code == 201
+        assert started.status_code == 200, started.text
+        assert started.json()["transport"] == {"type": "streamable-http", "url": url}
+        assert [item["originalName"] for item in tools.json()["tools"]] == ["echo_http"]
+        assert stopped.status_code == 200, stopped.text
+    finally:
+        stop_http_fixture(process)
+
+
+@pytest.mark.parametrize(("status_code", "expected_status", "expected_code"), [
+    (401, 401, "authentication_required"),
+    (302, 502, "redirect_not_allowed"),
+])
+def test_streamable_http_maps_auth_and_redirect_without_following(
+    tmp_path: Path,
+    status_code: int,
+    expected_status: int,
+    expected_code: str,
+) -> None:
+    server, thread, url = fixed_status_server(status_code)
+    try:
+        manager = McpConnectionManager(JsonMcpConfigStore(tmp_path / "mcp.json"))
+        app = create_app(mcp_connections=manager)
+        with TestClient(app) as client:
+            created = client.post("/api/mcp/servers", json=http_payload(url).model_dump(mode="json", by_alias=True))
+            response = client.post(f"/api/mcp/servers/{created.json()['id']}/start")
+        assert response.status_code == expected_status
+        assert response.json()["error"]["code"] == expected_code
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

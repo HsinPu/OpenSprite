@@ -38,6 +38,18 @@ describe("MCP connections API", () => {
     await expect(listMcpTools(server.id)).rejects.toMatchObject({ code: "malformed_response" });
   });
 
+  it("accepts the strict Streamable HTTP transport without credential fields", async () => {
+    const remote = {
+      ...server,
+      transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ servers: [remote] }))));
+
+    await expect(listMcpServers()).resolves.toMatchObject([{
+      transport: { type: "streamable-http", url: "https://mcp.example.com/mcp" },
+    }]);
+  });
+
   it("maps only fixed MCP errors", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "server_timeout", message: "private", retryable: true } }), { status: 504 })));
     const error = await startMcpServer(server.id).catch((value: unknown) => value);

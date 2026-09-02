@@ -7,7 +7,10 @@ from collections import deque
 from collections.abc import AsyncIterator
 from functools import wraps
 from pathlib import Path
+import socket
+import subprocess
 import sys
+import time
 from uuid import uuid4
 
 from context_test_support import TestCapabilityResolver
@@ -34,6 +37,7 @@ from opensprite_backend.tools.receipts import FileToolReceiptWriter, verify_tool
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcp_stdio_server.py"
+HTTP_FIXTURE = Path(__file__).parent / "fixtures" / "mcp_streamable_http_server.py"
 
 
 def async_test(function):
@@ -71,6 +75,40 @@ async def wait_for_approval(repository, run_id: str) -> str:
                 return str(event.data["approvalId"])
         await asyncio.sleep(0.01)
     raise AssertionError("approval request was not emitted")
+
+
+def start_http_fixture() -> tuple[subprocess.Popen[bytes], str]:
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    process = subprocess.Popen(
+        [sys.executable, str(HTTP_FIXTURE), str(port)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise AssertionError("HTTP fixture stopped during startup")
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                return process, f"http://127.0.0.1:{port}/mcp"
+        except OSError:
+            time.sleep(0.02)
+    process.kill()
+    process.wait(timeout=5)
+    raise AssertionError("HTTP fixture did not start")
+
+
+def stop_http_fixture(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 
 
 @async_test
@@ -154,3 +192,58 @@ async def test_approved_mcp_tool_runs_inside_agent_loop(tmp_path: Path) -> None:
         assert verify_tool_receipts(paths) is True
     finally:
         await manager.close()
+
+
+@async_test
+async def test_approved_streamable_http_tool_reuses_agent_safety_boundary(tmp_path: Path) -> None:
+    process, url = start_http_fixture()
+    paths = build_app_paths(tmp_path / ".opensprite")
+    repository = SqliteConversationRepository(paths.database_file)
+    approvals = ToolApprovalManager(repository)
+    receipts = FileToolReceiptWriter(paths)
+    manager = McpConnectionManager(JsonMcpConfigStore(paths.mcp_settings_file))
+    try:
+        created = await manager.create_server(CreateMcpServerRequest.model_validate({
+            "name": "HTTP Fixture",
+            "transport": {"type": "streamable-http", "url": url},
+            "startOnLaunch": False,
+        }))
+        await manager.start_server(created.id)
+        tools = await manager.list_tools(created.id)
+        echo_id = next(tool.id for tool in tools.tools if tool.originalName == "echo_http")
+        gateway = ScriptedGateway()
+        gateway.scripts.extend([
+            [ModelToolCall("http-call-1", echo_id, {"value": "remote hello"}), ModelCompleted(ModelFinishReason.TOOL_CALLS)],
+            [ModelTextDelta("HTTP MCP returned remote hello."), ModelCompleted(ModelFinishReason.FINAL)],
+        ])
+        run = repository.start_run(
+            conversation_id=None,
+            client_request_id=str(uuid4()),
+            message="Use the HTTP MCP echo tool.",
+            provider_id="openrouter",
+            model_id="openrouter/auto",
+            response_mode="default",
+        ).run
+        loop = AgentLoop(
+            repository=repository,
+            gateway=gateway,
+            tools=create_production_tool_registry(approvals, receipts),
+            tool_availability=FixedAvailability(frozenset({echo_id})),
+            dynamic_tools=manager,
+            capability_resolver=TestCapabilityResolver(),
+        )
+
+        execution = asyncio.create_task(loop.execute(run.id, asyncio.Event()))
+        approval_id = await wait_for_approval(repository, run.id)
+        assert (await approvals.get(approval_id)).arguments == {"value": "remote hello"}
+        await approvals.decide(approval_id, ToolApprovalDecision.ALLOW_ONCE)
+        result = await execution
+
+        assert result.status is RunStatus.COMPLETED
+        assert gateway.requests[1].messages[-1].content == "remote hello"
+        assert verify_tool_receipts(paths) is True
+        receipt = next(paths.tool_receipts_dir.glob("*.jsonl")).read_text(encoding="utf-8")
+        assert "remote hello" not in receipt
+    finally:
+        await manager.close()
+        stop_http_fixture(process)

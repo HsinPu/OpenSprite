@@ -2,15 +2,18 @@ import { defaultTranslator, type MessageKey, type Translator } from "../i18n/cat
 
 
 export type McpServerStatus = "disabled" | "stopped" | "starting" | "connected" | "error" | "stopping";
+export type McpStdioTransport = {
+  type: "stdio";
+  executable: string;
+  arguments: string[];
+  workingDirectory: string | null;
+};
+export type McpStreamableHttpTransport = { type: "streamable-http"; url: string };
+export type McpTransport = McpStdioTransport | McpStreamableHttpTransport;
 export type McpServerDraft = {
   name: string;
   startOnLaunch: boolean;
-  transport: {
-    type: "stdio";
-    executable: string;
-    arguments: string[];
-    workingDirectory: string | null;
-  };
+  transport: McpTransport;
 };
 export type McpServerSummary = McpServerDraft & {
   id: string;
@@ -31,7 +34,7 @@ export type McpToolSummary = {
   unsupportedReason: "unsupported_schema" | null;
   annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean };
 };
-export type McpErrorCode = "invalid_request" | "not_found" | "server_disabled" | "server_not_running" | "server_start_failed" | "server_stop_failed" | "server_unreachable" | "server_timeout" | "tools_not_supported" | "tool_catalog_invalid" | "mcp_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
+export type McpErrorCode = "invalid_request" | "not_found" | "server_disabled" | "server_not_running" | "server_start_failed" | "server_stop_failed" | "server_unreachable" | "server_timeout" | "tools_not_supported" | "tool_catalog_invalid" | "remote_url_blocked" | "authentication_required" | "tls_verification_failed" | "redirect_not_allowed" | "protocol_unsupported" | "mcp_store_unavailable" | "internal_error" | "malformed_response" | "network_error";
 
 export class McpApiError extends Error {
   constructor(readonly code: McpErrorCode) { super(code); this.name = "McpApiError"; }
@@ -40,13 +43,18 @@ export class McpApiError extends Error {
 const identifier = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const toolId = /^[a-z][a-z0-9_]{0,63}$/;
 const statuses: McpServerStatus[] = ["disabled", "stopped", "starting", "connected", "error", "stopping"];
-const serverCodes: McpErrorCode[] = ["invalid_request", "not_found", "server_disabled", "server_not_running", "server_start_failed", "server_stop_failed", "server_unreachable", "server_timeout", "tools_not_supported", "tool_catalog_invalid", "mcp_store_unavailable", "internal_error"];
+const serverCodes: McpErrorCode[] = ["invalid_request", "not_found", "server_disabled", "server_not_running", "server_start_failed", "server_stop_failed", "server_unreachable", "server_timeout", "tools_not_supported", "tool_catalog_invalid", "remote_url_blocked", "authentication_required", "tls_verification_failed", "redirect_not_allowed", "protocol_unsupported", "mcp_store_unavailable", "internal_error"];
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]) => Object.keys(value).length === expected.length && Object.keys(value).every((key) => expected.includes(key));
 const bounded = (value: unknown, maximum: number): value is string => typeof value === "string" && value.length > 0 && value.length <= maximum;
 
-function transport(value: unknown): McpServerDraft["transport"] {
-  if (!record(value) || !exactKeys(value, ["type", "executable", "arguments", "workingDirectory"]) || value.type !== "stdio" || !bounded(value.executable, 2048) || !Array.isArray(value.arguments) || value.arguments.length > 64 || value.arguments.some((item) => !bounded(item, 2048)) || (value.workingDirectory !== null && !bounded(value.workingDirectory, 2048))) throw new McpApiError("malformed_response");
+function transport(value: unknown): McpTransport {
+  if (!record(value) || typeof value.type !== "string") throw new McpApiError("malformed_response");
+  if (value.type === "streamable-http") {
+    if (!exactKeys(value, ["type", "url"]) || !bounded(value.url, 2048)) throw new McpApiError("malformed_response");
+    return { type: "streamable-http", url: value.url };
+  }
+  if (!exactKeys(value, ["type", "executable", "arguments", "workingDirectory"]) || value.type !== "stdio" || !bounded(value.executable, 2048) || !Array.isArray(value.arguments) || value.arguments.length > 64 || value.arguments.some((item) => !bounded(item, 2048)) || (value.workingDirectory !== null && !bounded(value.workingDirectory, 2048))) throw new McpApiError("malformed_response");
   return { type: "stdio", executable: value.executable, arguments: [...value.arguments] as string[], workingDirectory: value.workingDirectory as string | null };
 }
 
@@ -95,7 +103,7 @@ export async function listMcpTools(id: string): Promise<McpToolSummary[]> {
 export function mcpErrorText(error: unknown, t: Translator = defaultTranslator): string {
   const code = error instanceof McpApiError ? error.code : "network_error";
   const keys: Record<McpErrorCode, MessageKey> = {
-    invalid_request: "error.mcp.invalidRequest", not_found: "error.mcp.notFound", server_disabled: "error.mcp.disabled", server_not_running: "error.mcp.notRunning", server_start_failed: "error.mcp.startFailed", server_stop_failed: "error.mcp.stopFailed", server_unreachable: "error.mcp.unreachable", server_timeout: "error.mcp.timeout", tools_not_supported: "error.mcp.noTools", tool_catalog_invalid: "error.mcp.catalog", mcp_store_unavailable: "error.mcp.store", internal_error: "error.mcp.internal", malformed_response: "error.mcp.malformed", network_error: "error.network",
+    invalid_request: "error.mcp.invalidRequest", not_found: "error.mcp.notFound", server_disabled: "error.mcp.disabled", server_not_running: "error.mcp.notRunning", server_start_failed: "error.mcp.startFailed", server_stop_failed: "error.mcp.stopFailed", server_unreachable: "error.mcp.unreachable", server_timeout: "error.mcp.timeout", tools_not_supported: "error.mcp.noTools", tool_catalog_invalid: "error.mcp.catalog", remote_url_blocked: "error.mcp.remoteUrlBlocked", authentication_required: "error.mcp.authenticationRequired", tls_verification_failed: "error.mcp.tls", redirect_not_allowed: "error.mcp.redirect", protocol_unsupported: "error.mcp.protocol", mcp_store_unavailable: "error.mcp.store", internal_error: "error.mcp.internal", malformed_response: "error.mcp.malformed", network_error: "error.network",
   };
   return t(keys[code]);
 }
