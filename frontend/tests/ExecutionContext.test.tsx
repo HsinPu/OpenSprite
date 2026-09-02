@@ -184,6 +184,42 @@ describe("execution context disclosure", () => {
     expect(screen.getAllByText("計算器").length).toBeGreaterThan(0);
   });
 
+  it("uses the approved MCP display name instead of exposing its canonical id", () => {
+    const canonicalName = "mcp_12345678_echo_abcdef12";
+    const approvalRequested: RunEvent = {
+      ...event,
+      sequence: 2,
+      type: "tool.approval_requested",
+      data: {
+        approvalId: "33333333-3333-4333-8333-333333333333",
+        toolName: canonicalName,
+        toolDisplayName: "Echo",
+        serverId: "44444444-4444-4444-8444-444444444444",
+        argumentHash: "a".repeat(64),
+        expiresAt: "2026-08-29T08:10:02Z",
+      },
+    };
+    const toolStarted: RunEvent = {
+      ...event,
+      sequence: 4,
+      type: "tool.started",
+      data: { callId: "mcp-call", toolName: canonicalName },
+    };
+    const toolCompleted: RunEvent = {
+      ...event,
+      sequence: 5,
+      type: "tool.completed",
+      data: { callId: "mcp-call", toolName: canonicalName, summary: "Echo completed" },
+    };
+
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, approvalRequested, toolStarted, toolCompleted]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("執行工具 Echo")).toBeTruthy();
+    expect(screen.getByText("工具完成 Echo")).toBeTruthy();
+    expect(screen.getAllByText("Echo").length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain(canonicalName);
+  });
+
   it("renders a Drawer mode without a second collapse control", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);
 

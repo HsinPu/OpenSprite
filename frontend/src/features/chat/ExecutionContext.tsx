@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { TimeZoneSetting } from "../../api/generalSettings";
 import { formatTime } from "../general-settings/dateTime";
 import { formatTokenLimit } from "../ai-settings/contextBudget";
+import { ToolApprovalCard } from "./ToolApprovalCard";
 
 
 function OpenSpriteMark() {
@@ -42,16 +43,18 @@ function durationText(run: RunSnapshot | null): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function eventLabel(event: RunEvent, t: Translator): string | null {
+function eventLabel(event: RunEvent, t: Translator, displayNames: ReadonlyMap<string, string> = new Map()): string | null {
   switch (event.type) {
     case "run.started": return t("execution.event.runStarted");
     case "context.compaction.started": return t("execution.event.contextCompactionStarted");
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
-    case "tool.started": return t("execution.event.toolStarted", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
-    case "tool.completed": return t("execution.event.toolCompleted", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
-    case "tool.failed": return t("execution.event.toolFailed", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
+    case "tool.approval_requested": return t("execution.event.approvalRequested", { tool: String(event.data.toolDisplayName ?? "") }).trim();
+    case "tool.approval_decided": return t(event.data.decision === "allow_once" ? "execution.event.approvalAllowed" : event.data.decision === "expired" ? "execution.event.approvalExpired" : "execution.event.approvalDenied");
+    case "tool.started": return t("execution.event.toolStarted", { tool: displayNames.get(String(event.data.toolName ?? "")) ?? toolLabel(String(event.data.toolName ?? ""), t) }).trim();
+    case "tool.completed": return t("execution.event.toolCompleted", { tool: displayNames.get(String(event.data.toolName ?? "")) ?? toolLabel(String(event.data.toolName ?? ""), t) }).trim();
+    case "tool.failed": return t("execution.event.toolFailed", { tool: displayNames.get(String(event.data.toolName ?? "")) ?? toolLabel(String(event.data.toolName ?? ""), t) }).trim();
     case "run.completed": return t(
       event.data.completionReason === "output_limit"
         ? "execution.event.outputLimit"
@@ -67,9 +70,13 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
 
 function processEvents(events: RunEvent[], t: Translator, locale: string, timeZone: TimeZoneSetting): Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> {
   const steps: Array<{ key: string; label: string; time: string; state: "complete" | "active" | "error" }> = [];
+  const displayNames = new Map<string, string>();
   let addedTextStep = false;
   let compactionStepIndex: number | null = null;
   for (const event of events) {
+    if (event.type === "tool.approval_requested") {
+      displayNames.set(String(event.data.toolName ?? ""), String(event.data.toolDisplayName ?? ""));
+    }
     if (event.type === "assistant.delta") {
       if (!addedTextStep) {
         addedTextStep = true;
@@ -84,7 +91,7 @@ function processEvents(events: RunEvent[], t: Translator, locale: string, timeZo
       compactionStepIndex = steps.length - 1;
       continue;
     }
-    const label = eventLabel(event, t);
+    const label = eventLabel(event, t, displayNames);
     if (!label) continue;
     const terminalError = event.type === "run.failed" || event.type === "run.interrupted" || event.type === "tool.failed";
     steps.push({ key: `${event.sequence}-${event.type}`, label, time: formatTime(event.createdAt, locale, timeZone), state: terminalError ? "error" : "complete" });
@@ -128,7 +135,13 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
   const executionTitleId = `${contextId}-execution-title`;
   const executionBodyId = bodyId ?? `${contextId}-execution-body`;
   const steps = useMemo(() => processEvents(events, t, locale, timeZone), [events, locale, t, timeZone]);
-  const toolNames = useMemo(() => Array.from(new Set(events.filter((event) => event.type.startsWith("tool.")).map((event) => String(event.data.toolName ?? "")).filter(Boolean))), [events]);
+  const toolNames = useMemo(() => {
+    const displayNames = new Map<string, string>(events.filter((event) => event.type === "tool.approval_requested").map((event) => [String(event.data.toolName ?? ""), String(event.data.toolDisplayName ?? "")] as const));
+    return Array.from(new Set(events.filter((event) => event.type === "tool.started" || event.type === "tool.completed").map((event) => {
+      const name = String(event.data.toolName ?? "");
+      return displayNames.get(name) || toolLabel(name, t);
+    }).filter(Boolean)));
+  }, [events, t]);
   const maxOutputTokens = useMemo(() => {
     const event = [...events].reverse().find((item) => item.type === "model.started");
     return typeof event?.data.maxOutputTokens === "number" ? event.data.maxOutputTokens : null;
@@ -188,6 +201,8 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
                 </ul>
               ) : <p className="chat-workspace__empty-tools">{t("execution.noTools")}</p>}
             </section>
+
+            {!historical && run.status === "running" ? <ToolApprovalCard events={events} /> : null}
 
             <section className="chat-workspace__context-section chat-workspace__execution-info" aria-labelledby={`${contextId}-info-title`}>
               <h3 id={`${contextId}-info-title`}>{t("execution.info")}</h3>

@@ -535,7 +535,7 @@ def test_schema_v1_is_upgraded_narrowly_without_losing_existing_run(
     upgraded.interrupt_incomplete_runs()
 
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
         assert connection.execute(
             "SELECT context_budget FROM runs WHERE id = ?",
             (accepted.run.id,),
@@ -601,7 +601,7 @@ def test_schema_v2_event_table_is_upgraded_without_losing_events(
         RunEventType.CONTEXT_COMPACTION_STARTED,
     ]
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
@@ -640,7 +640,7 @@ def test_schema_v3_completion_metadata_is_upgraded_without_losing_run(
         "completionReason": "stop",
     }
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 def test_schema_v4_output_budget_and_model_event_are_upgraded(
@@ -677,7 +677,7 @@ def test_schema_v4_output_budget_and_model_event_are_upgraded(
     model_event = next(item for item in events if item.type is RunEventType.MODEL_STARTED)
     assert model_event.data["maxOutputTokens"] == 8_192
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 def test_schema_v5_adds_default_continuation_policy_without_losing_run(
@@ -698,7 +698,7 @@ def test_schema_v5_adds_default_continuation_policy_without_losing_run(
     assert run is not None
     assert run.output_continuation == "2"
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 @pytest.mark.parametrize(("enabled", "expected"), [(0, "off"), (1, "2")])
@@ -731,7 +731,7 @@ def test_schema_v7_converts_boolean_continuation_without_losing_run(
         }
         assert "output_continuation" in columns
         assert "auto_continue_output" not in columns
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 9
 
 
 def test_concurrent_starts_on_distinct_conversations_do_not_lose_updates(

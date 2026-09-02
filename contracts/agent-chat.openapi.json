@@ -736,6 +736,8 @@
           "model.started",
           "response.continuation.started",
           "assistant.delta",
+          "tool.approval_requested",
+          "tool.approval_decided",
           "tool.started",
           "tool.completed",
           "tool.failed",
@@ -852,6 +854,28 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$"
           }
+        }
+      },
+      "ToolApprovalRequestedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["approvalId", "toolName", "toolDisplayName", "serverId", "argumentHash", "expiresAt"],
+        "properties": {
+          "approvalId": {"$ref": "#/components/schemas/Identifier"},
+          "toolName": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+          "toolDisplayName": {"type": "string", "minLength": 1, "maxLength": 256},
+          "serverId": {"$ref": "#/components/schemas/Identifier"},
+          "argumentHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "expiresAt": {"$ref": "#/components/schemas/UtcTimestamp"}
+        }
+      },
+      "ToolApprovalDecidedEventData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["approvalId", "decision"],
+        "properties": {
+          "approvalId": {"$ref": "#/components/schemas/Identifier"},
+          "decision": {"type": "string", "enum": ["allow_once", "deny", "expired"]}
         }
       },
       "ToolCompletedEventData": {
@@ -971,6 +995,12 @@
               },
               {
                 "$ref": "#/components/schemas/AssistantDeltaEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ToolApprovalRequestedEventData"
+              },
+              {
+                "$ref": "#/components/schemas/ToolApprovalDecidedEventData"
               },
               {
                 "$ref": "#/components/schemas/ToolStartedEventData"

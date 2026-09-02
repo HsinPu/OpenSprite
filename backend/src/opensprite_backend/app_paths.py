@@ -41,6 +41,10 @@ class AppPaths:
         return self.config_dir / "tools.json"
 
     @property
+    def mcp_settings_file(self) -> Path:
+        return self.config_dir / "mcp.json"
+
+    @property
     def data_dir(self) -> Path:
         return self.home / "data"
 
@@ -79,6 +83,14 @@ class AppPaths:
     @property
     def prompt_logs_dir(self) -> Path:
         return self.logs_dir / "prompts"
+
+    @property
+    def tool_receipts_dir(self) -> Path:
+        return self.logs_dir / "tool-receipts"
+
+    @property
+    def tool_receipt_key_file(self) -> Path:
+        return self.config_dir / "tool-receipt.key"
 
     @property
     def cache_dir(self) -> Path:

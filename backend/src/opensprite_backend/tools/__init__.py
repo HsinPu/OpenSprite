@@ -9,6 +9,7 @@ from .definition import (
     ToolResult,
     ToolSource,
 )
+from .dynamic import DynamicToolProvider
 from .composition import create_production_tool_registry
 from .policy import ReadOnlyToolPolicy, ToolPolicy
 from .registry import (
@@ -19,6 +20,7 @@ from .registry import (
 
 __all__ = [
     "ReadOnlyToolPolicy",
+    "DynamicToolProvider",
     "Tool",
     "ToolAvailabilityProvider",
     "ToolAvailabilitySnapshot",

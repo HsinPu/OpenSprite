@@ -1,10 +1,12 @@
 # Backend
 
-This directory contains the minimal Python 3.12+ FastAPI foundation for the
+This directory contains the Python 3.12-3.13 FastAPI foundation for the
 local OpenSprite service. `contracts/provider-connections.openapi.json` and
 `contracts/ai-settings.openapi.json` and
 `contracts/general-settings.openapi.json` and
 `contracts/conversation-settings.openapi.json` are the authoritative HTTP contracts.
+MCP connections and per-call approvals are defined by
+`contracts/mcp-connections.openapi.json` and `contracts/tool-approvals.openapi.json`.
 
 The current slice provides:
 
@@ -21,6 +23,11 @@ The current slice provides:
 - strict persisted startup, message sending, chat auto-scroll and execution-panel settings at
   `config/conversation.json`, exposed through
   `GET`/`PUT /api/settings/conversation`;
+- official MCP Python SDK v2 Client sessions for explicitly configured local
+  stdio Servers, with strict lazy `config/mcp.json`, explicit lifecycle routes,
+  bounded Tool discovery and a per-Run dynamic Tool snapshot;
+- short-lived, exact-argument, single-use MCP Tool approval plus required
+  HMAC hash-chained receipts that omit raw arguments and results;
 - a transactional `ProviderConnectionService` behind the injectable
   `ProviderConnections` seam;
 - a synchronous, injectable AES-256-GCM credential store below `.opensprite`;

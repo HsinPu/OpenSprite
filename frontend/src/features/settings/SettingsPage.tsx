@@ -20,6 +20,7 @@ import type { ProviderCatalogController } from "../ai-settings/useProviderCatalo
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
 import type { ToolSettingsController } from "../tool-settings/useToolSettings";
+import type { McpConnectionsController } from "../mcp-settings/useMcpConnections";
 import { GeneralSettings } from "./GeneralSettings";
 import { AboutSettings } from "./AboutSettings";
 import { ToolsSettings } from "./ToolsSettings";
@@ -48,6 +49,7 @@ type SettingsPageProps = {
   generalSettings: GeneralSettingsController;
   conversationSettings: ConversationSettingsController;
   toolSettings: ToolSettingsController;
+  mcpConnections: McpConnectionsController;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
 };
@@ -429,7 +431,7 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, mcpConnections, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
   const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving || toolSettings.saving;
   const wasSavingRef = useRef(false);
@@ -463,7 +465,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <><div className="settings-intro"><h2>{t("settings.category.tools")}</h2><p>{t("settings.toolsIntro")}</p></div><ToolsSettings controller={toolSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <><div className="settings-intro"><h2>{t("settings.category.tools")}</h2><p>{t("settings.toolsIntro")}</p></div><ToolsSettings controller={toolSettings} mcpConnections={mcpConnections} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>

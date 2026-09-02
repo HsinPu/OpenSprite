@@ -121,6 +121,8 @@ def test_public_run_events_are_semantic_and_do_not_expose_reasoning() -> None:
         "model.started",
         "response.continuation.started",
         "assistant.delta",
+        "tool.approval_requested",
+        "tool.approval_decided",
         "tool.started",
         "tool.completed",
         "tool.failed",

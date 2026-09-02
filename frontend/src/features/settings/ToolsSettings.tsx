@@ -4,6 +4,8 @@ import type { MessageKey } from "../../i18n/catalog";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { ToolEffect, ToolSource } from "../../api/toolSettings";
 import type { ToolSettingsController } from "../tool-settings/useToolSettings";
+import type { McpConnectionsController } from "../mcp-settings/useMcpConnections";
+import { McpServersSettings } from "./McpServersSettings";
 import { FutureSettingRow, SettingsCard } from "./SettingsPrimitives";
 
 
@@ -28,7 +30,7 @@ function toolDescription(id: string, t: ReturnType<typeof useI18n>["t"]): string
   return id === "calculator" ? t("tools.calculatorDescription") : t("tools.unknownDescription");
 }
 
-export function ToolsSettings({ controller }: { controller: ToolSettingsController }) {
+export function ToolsSettings({ controller, mcpConnections, modalContainer = null }: { controller: ToolSettingsController; mcpConnections: McpConnectionsController; modalContainer?: HTMLElement | null }) {
   const { t } = useI18n();
   const controlsDisabled = !controller.loaded || controller.saving;
   return (
@@ -63,8 +65,11 @@ export function ToolsSettings({ controller }: { controller: ToolSettingsControll
         })}</div> : null}
       </SettingsCard>
 
+      <SettingsCard icon="connections" title={t("mcp.serversTitle")}>
+        <McpServersSettings controller={mcpConnections} toolSettings={controller} modalContainer={modalContainer} />
+      </SettingsCard>
+
       <SettingsCard icon="connections" title={t("tools.externalTitle")}>
-        <FutureSettingRow label={t("tools.mcpConnections")} description={t("tools.mcpConnectionsDescription")} />
         <FutureSettingRow label={t("tools.customTools")} description={t("tools.customToolsDescription")} />
         <FutureSettingRow label={t("tools.thirdPartyServices")} description={t("tools.thirdPartyServicesDescription")} />
       </SettingsCard>

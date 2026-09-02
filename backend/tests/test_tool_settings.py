@@ -137,6 +137,20 @@ def test_service_catalog_settings_and_snapshot(tmp_path: Path) -> None:
         run(operations.put(settings(True, ["missing_tool"])))
 
 
+def test_mcp_tool_selection_survives_when_server_is_offline(tmp_path: Path) -> None:
+    operations = service(tmp_path / "tools.json")
+    tool_id = "mcp_12345678_echo_abcdef12"
+
+    saved = run(operations.put(settings(True, ["calculator", tool_id])))
+    reloaded = run(operations.get())
+
+    assert saved.enabledTools == ["calculator", tool_id]
+    assert reloaded == saved
+    assert run(operations.snapshot()).enabled_names == frozenset(
+        {"calculator", tool_id}
+    )
+
+
 def test_api_round_trip_validation_and_unknown_tool(tmp_path: Path) -> None:
     operations = service(tmp_path / "tools.json")
     with TestClient(create_app(tool_settings=operations)) as client:

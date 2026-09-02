@@ -170,10 +170,11 @@ choice, including after entering historical inspection.
 Closing the desktop header disclosure while historical inspection is active also
 returns to the latest Run, so the hidden panel cannot leave a historical message
 marked as selected.
-The current production Tool Registry contains only the read-only `calculator`.
-The UI localizes that stable tool id when it appears in persisted events and
-otherwise says that no extra tool was used. It does not advertise Search, File,
-Memory, or any other speculative capability.
+The base production Tool Registry contains the read-only `calculator`. At Run
+start the Agent adds one immutable snapshot of supported Tools from currently
+connected local stdio MCP Servers. The UI localizes the stable built-in id and
+uses the discovered MCP display name for MCP events; it does not advertise a
+capability unless an active Server actually provides it.
 
 The Tools settings page reads the production catalog from `GET /api/tools` and
 persists the global switch plus enabled tool ids through
@@ -183,6 +184,18 @@ Each Run resolves one immutable availability snapshot before Context assembly.
 Only definitions in that snapshot are advertised to the model, and the Registry
 checks the same snapshot again before invocation. Changes therefore apply to
 new Runs without changing an active Run. Historical events remain readable.
+MCP ids enabled earlier remain in this settings file while their Server is
+offline. They become available again only after that Server reconnects and
+rediscovers the same canonical Tool id.
+
+Configured MCP Servers are owned by the `/api/mcp/servers` CRUD surface,
+explicit `test`, `start`, and `stop` operations, and per-Server Tool discovery.
+The strict schema-v1 config lives at `.opensprite/config/mcp.json`. Only local
+`stdio` is implemented. A new or edited configuration is inert and disabled;
+the browser displays the exact executable and argument vector before saving
+and asks again before an explicit start. The backend invokes the absolute
+executable directly without a shell. Startup launches only Servers previously
+enabled by an explicit start and marked `startOnLaunch`.
 
 ## Persistence
 
@@ -268,7 +281,7 @@ Each Run snapshots the requested output budget and output-continuation policy.
 Response delivery is a browser presentation preference: the backend and all
 Provider adapters continue to stream semantic events, while the browser may
 buffer assistant deltas until the Run reaches a terminal state.
-SQLite schema v8 converts the former boolean to `2` or `off` while preserving
+SQLite schema v9 converts the former boolean to `2` or `off` while preserving
 Messages, Runs and events. The
 resolved token number is persisted on every `model.started` event and shown in
 the execution record, so later settings changes cannot rewrite historical
@@ -326,15 +339,26 @@ text, incomplete tool data, conflicting terminal states, and unknown reasons
 remain fail-closed. SQLite schema v4 adds the nullable completion reason and
 backfills existing completed Runs and their completion events as `stop`.
 
-The production registry contains only explicitly composed read-only tools. Its
-first tool is `calculator`, which evaluates a 256-character arithmetic
+The base registry contains explicitly composed read-only tools. Its first tool
+is `calculator`, which evaluates a 256-character arithmetic
 expression through a bounded Python AST and Decimal whitelist. It permits only
 decimal numbers, parentheses, unary signs, `+`, `-`, `*`, `/`, `//`, `%`, and
 bounded integer powers. It does not use `eval`, execute code, or access files,
 the shell, network, credentials, or user data. Local writes, external writes,
-destructive actions, shell access, MCP,
-subagents, background work, memory, search, and file mutation are not implied by
-the Agent loop and must be approved as separate capabilities later.
+destructive actions, shell access, subagents, background work, memory, search,
+and file mutation are not implied by the Agent loop.
+
+Every MCP Tool is treated as sensitive regardless of its untrusted annotation.
+Before each call, the Agent appends a bounded `tool.approval_requested` event
+with ids, display name, argument hash and expiry, but no raw arguments.
+`GET /api/tool-approvals/{id}` exposes exact arguments only from short-lived
+process memory; `PUT` accepts only `allow_once` or `deny`. An allow is
+single-use, exact-argument scoped, expires after ten minutes, and never becomes
+a remembered policy. No `tool.started` event occurs before approval. Authorized
+calls require an fsynced HMAC-SHA-256 hash-chained receipt under
+`logs/tool-receipts/<local-date>.jsonl`, signed with the random local
+`config/tool-receipt.key`. Receipts contain hashes and safe identity metadata,
+never raw arguments, results, credentials, or MCP stderr.
 
 The core loop and registry boundary are now implemented independently of HTTP
 and native Provider transports. The loop consumes only the Conversation
@@ -342,9 +366,9 @@ repository protocol, normalized Model gateway, and explicit Tool Registry. It
 streams text into Run partial state, executes structured calls sequentially,
 persists only bounded semantic summaries, and stops on duplicate failed calls,
 round/tool limits, cancellation, malformed model output, or safe Provider
-errors. The runtime composes the approved Calculator through one explicit
-production registry; the UI must not advertise tools that are not present in
-that composition.
+errors. The runtime composes the approved Calculator and extends it only with
+the per-Run connected MCP snapshot; the UI must not advertise tools outside
+those explicit sources.
 
 The `model.started` semantic event records the sorted tool ids advertised for
 that model request. It never records tool arguments or tool results. A disabled

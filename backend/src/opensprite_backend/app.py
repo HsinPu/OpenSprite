@@ -28,6 +28,11 @@ from .api.provider_routes import (
     provider_error_response,
     router as provider_router,
 )
+from .api.mcp_routes import mcp_error_response, router as mcp_router
+from .api.tool_approval_routes import (
+    router as tool_approval_router,
+    tool_approval_error_response,
+)
 from .api.tool_settings_routes import (
     router as tool_settings_router,
     tool_settings_error_response,
@@ -45,7 +50,9 @@ from .models import (
     ErrorCode,
     GeneralSettingsErrorCode,
     HealthResponse,
+    McpErrorCode,
     ToolSettingsErrorCode,
+    ToolApprovalErrorCode,
 )
 from .ai_settings import (
     AiSettingsOperations,
@@ -74,6 +81,14 @@ from .tool_settings import (
     ToolSettingsStoreError,
     UnavailableToolSettings,
 )
+from .mcp import McpConnections, UnavailableMcpConnections
+from .mcp.config import McpConfigStoreError
+from .mcp.manager import McpConnectionError
+from .tools.approval import (
+    ToolApprovalError,
+    ToolApprovalOperations,
+    UnavailableToolApprovals,
+)
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 _LOGGER = logging.getLogger("opensprite.runtime")
@@ -86,6 +101,8 @@ def create_app(
     general_settings: GeneralSettingsOperations | None = None,
     conversation_settings: ConversationSettingsOperations | None = None,
     tool_settings: ToolSettingsOperations | None = None,
+    mcp_connections: McpConnections | None = None,
+    tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
@@ -126,6 +143,12 @@ def create_app(
     )
     app.state.tool_settings = (
         tool_settings if tool_settings is not None else UnavailableToolSettings()
+    )
+    app.state.mcp_connections = (
+        mcp_connections if mcp_connections is not None else UnavailableMcpConnections()
+    )
+    app.state.tool_approvals = (
+        tool_approvals if tool_approvals is not None else UnavailableToolApprovals()
     )
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
@@ -195,6 +218,27 @@ def create_app(
         del request, exc
         return tool_settings_error_response(ToolSettingsErrorCode.TOOL_NOT_FOUND)
 
+    async def mcp_config_store_error_handler(
+        request: Request,
+        exc: McpConfigStoreError,
+    ) -> JSONResponse:
+        del request, exc
+        return mcp_error_response(McpErrorCode.MCP_STORE_UNAVAILABLE)
+
+    async def mcp_connection_error_handler(
+        request: Request,
+        exc: McpConnectionError,
+    ) -> JSONResponse:
+        del request
+        return mcp_error_response(exc.code, retryable=exc.retryable)
+
+    async def tool_approval_error_handler(
+        request: Request,
+        exc: ToolApprovalError,
+    ) -> JSONResponse:
+        del request
+        return tool_approval_error_response(exc.code)
+
     async def agent_chat_error_handler(
         request: Request,
         exc: AgentChatError,
@@ -238,6 +282,18 @@ def create_app(
         cast(ExceptionHandler, tool_not_found_error_handler),
     )
     app.add_exception_handler(
+        McpConfigStoreError,
+        cast(ExceptionHandler, mcp_config_store_error_handler),
+    )
+    app.add_exception_handler(
+        McpConnectionError,
+        cast(ExceptionHandler, mcp_connection_error_handler),
+    )
+    app.add_exception_handler(
+        ToolApprovalError,
+        cast(ExceptionHandler, tool_approval_error_handler),
+    )
+    app.add_exception_handler(
         AgentChatError,
         cast(ExceptionHandler, agent_chat_error_handler),
     )
@@ -260,6 +316,8 @@ def create_app(
     app.include_router(general_settings_router)
     app.include_router(conversation_settings_router)
     app.include_router(tool_settings_router)
+    app.include_router(mcp_router)
+    app.include_router(tool_approval_router)
     app.include_router(provider_router)
     app.include_router(chat_router)
     return app

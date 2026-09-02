@@ -45,6 +45,7 @@ from opensprite_backend.tools.availability import (
     ToolAvailabilitySnapshot,
 )
 from opensprite_backend.tools.definition import ToolContext
+from opensprite_backend.tools.dynamic import DynamicToolProvider
 from opensprite_backend.tools.registry import ToolInvocationError, ToolRegistry
 
 from .events import (
@@ -144,6 +145,7 @@ class AgentLoop:
         gateway: ModelGateway,
         tools: ToolRegistry,
         tool_availability: ToolAvailabilityProvider | None = None,
+        dynamic_tools: DynamicToolProvider | None = None,
         capability_resolver: ModelCapabilityResolver,
         system_prompt_provider: SystemPromptProvider | None = None,
         max_model_rounds: int = 8,
@@ -164,6 +166,7 @@ class AgentLoop:
         self._gateway = gateway
         self._tools = tools
         self._tool_availability = tool_availability
+        self._dynamic_tools = dynamic_tools
         self._capability_resolver = capability_resolver
         self._counter = ConservativeTokenCounter()
         self._context_assembler = ContextAssembler(self._counter)
@@ -197,12 +200,17 @@ class AgentLoop:
         delta_buffer = _AssistantDeltaBuffer(self._repository, run_id)
         try:
             run = await asyncio.to_thread(self._repository.mark_run_started, run_id)
+            run_tools = (
+                self._tools.extended(await self._dynamic_tools.snapshot_tools())
+                if self._dynamic_tools is not None
+                else self._tools
+            )
             availability = (
                 await self._tool_availability.snapshot()
                 if self._tool_availability is not None
                 else ToolAvailabilitySnapshot(
                     frozenset(
-                        definition.name for definition in self._tools.definitions()
+                        definition.name for definition in run_tools.definitions()
                     )
                 )
             )
@@ -212,6 +220,7 @@ class AgentLoop:
                 system_prompt=system_prompt,
                 cancellation_event=cancellation_event,
                 availability=availability,
+                tools=run_tools,
                 current_user_message_id=run.user_message_id,
             )
             transcript = list(prepared.messages)
@@ -291,6 +300,7 @@ class AgentLoop:
                                 system_prompt=system_prompt,
                                 cancellation_event=cancellation_event,
                                 availability=availability,
+                                tools=run_tools,
                                 force_compaction=True,
                                 compaction_limit=1,
                                 current_user_message_id=run.user_message_id,
@@ -383,6 +393,7 @@ class AgentLoop:
                                 accumulated_text=accumulated_text,
                                 cancellation_event=cancellation_event,
                                 availability=availability,
+                                tools=run_tools,
                                 prompt_log_sequence=prompt_log_sequence,
                                 delta_buffer=delta_buffer,
                             )
@@ -413,24 +424,28 @@ class AgentLoop:
                         await delta_buffer.flush()
                         return await self._fail(run_id, AGENT_LIMIT_ERROR)
                     self._raise_if_cancelled(cancellation_event)
-                    await asyncio.to_thread(
-                        self._repository.append_run_event,
-                        run_id,
-                        RunEventType.TOOL_STARTED,
-                        {"callId": call.call_id, "toolName": call.name},
-                    )
                     context = ToolContext(
                         run_id=run.id,
                         conversation_id=run.conversation_id,
                         cancellation_event=cancellation_event,
                     )
+
+                    async def record_tool_started() -> None:
+                        await asyncio.to_thread(
+                            self._repository.append_run_event,
+                            run_id,
+                            RunEventType.TOOL_STARTED,
+                            {"callId": call.call_id, "toolName": call.name},
+                        )
+
                     try:
                         result = await self._await_with_cancellation(
-                            self._tools.invoke(
+                            run_tools.invoke(
                                 call.name,
                                 call.arguments,
                                 context,
                                 availability,
+                                record_tool_started,
                             ),
                             cancellation_event,
                         )
@@ -525,6 +540,7 @@ class AgentLoop:
         accumulated_text: str,
         cancellation_event: asyncio.Event,
         availability: ToolAvailabilitySnapshot,
+        tools: ToolRegistry,
         prompt_log_sequence: list[int],
         delta_buffer: _AssistantDeltaBuffer,
     ) -> RunSnapshot:
@@ -566,6 +582,7 @@ class AgentLoop:
                             system_prompt=system_prompt,
                             cancellation_event=cancellation_event,
                             availability=availability,
+                            tools=tools,
                             force_compaction=True,
                             compaction_limit=1,
                             current_user_message_id=run.user_message_id,
@@ -631,6 +648,7 @@ class AgentLoop:
                                     system_prompt=system_prompt,
                                     cancellation_event=cancellation_event,
                                     availability=availability,
+                                    tools=tools,
                                     force_compaction=True,
                                     compaction_limit=1,
                                     current_user_message_id=run.user_message_id,
@@ -828,6 +846,7 @@ class AgentLoop:
         system_prompt: str,
         cancellation_event: asyncio.Event,
         availability: ToolAvailabilitySnapshot | None = None,
+        tools: ToolRegistry | None = None,
         force_compaction: bool = False,
         compaction_limit: int | None = None,
         current_user_message_id: str | None = None,
@@ -860,8 +879,9 @@ class AgentLoop:
             capability,
             run.output_budget,
         )
+        resolved_tools = tools or self._tools
         resolved_availability = availability or ToolAvailabilitySnapshot(
-            frozenset(definition.name for definition in self._tools.definitions())
+            frozenset(definition.name for definition in resolved_tools.definitions())
         )
         tool_definitions = tuple(
             ModelToolDefinition(
@@ -869,7 +889,7 @@ class AgentLoop:
                 description=definition.description,
                 input_schema=dict(definition.input_schema),
             )
-            for definition in self._tools.definitions(resolved_availability)
+            for definition in resolved_tools.definitions(resolved_availability)
         )
         page = await asyncio.to_thread(
             self._repository.list_messages,

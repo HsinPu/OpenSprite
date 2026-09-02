@@ -158,12 +158,15 @@ class ToolSettingsService:
 
     async def get(self) -> ToolSettings:
         settings = self._store.get()
-        if not self._known(set(settings.enabledTools)):
-            raise ToolSettingsStoreError
         return self._normalized(settings)
 
     async def put(self, payload: ToolSettings) -> ToolSettings:
-        if not self._known(set(payload.enabledTools)):
+        unknown = {
+            name
+            for name in payload.enabledTools
+            if name not in self._registered_names() and not name.startswith("mcp_")
+        }
+        if unknown:
             raise ToolNotFoundError
         confirmed = self._normalized(payload)
         self._store.set(confirmed)
@@ -175,9 +178,8 @@ class ToolSettingsService:
             frozenset(settings.enabledTools if settings.enabled else ())
         )
 
-    def _known(self, names: set[str]) -> bool:
-        registered = {definition.name for definition in self._registry.definitions()}
-        return names.issubset(registered)
+    def _registered_names(self) -> set[str]:
+        return {definition.name for definition in self._registry.definitions()}
 
     @staticmethod
     def _normalized(settings: ToolSettings) -> ToolSettings:

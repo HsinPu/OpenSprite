@@ -27,6 +27,9 @@ the user explicitly requests verified user-data deletion.
 │  ├─ settings.json
 │  ├─ general.json
 │  ├─ conversation.json
+│  ├─ tools.json
+│  ├─ mcp.json
+│  ├─ tool-receipt.key
 │  └─ credential.key
 ├─ data/
 │  └─ opensprite.db
@@ -39,9 +42,11 @@ the user explicitly requests verified user-data deletion.
 │     ├─ outputs/
 │     └─ memory/
 ├─ logs/
-│  └─ system-prompts/
-│     └─ <UTC-date>/
-│        └─ <run-id>.md
+│  ├─ system-prompts/
+│  │  └─ <UTC-date>/
+│  │     └─ <run-id>.md
+│  └─ tool-receipts/
+│     └─ <local-date>.jsonl
 └─ cache/
 ```
 
@@ -51,7 +56,7 @@ create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
 `auth.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
-`config/conversation.json`,
+`config/conversation.json`, `config/tools.json`, `config/mcp.json`,
 `state/providers.json`, the transient `state/provider-transaction.json`, and
 `data/opensprite.db` are implemented today. Each Run also writes one complete,
 create-only System Prompt receipt below `logs/system-prompts/<UTC-date>` before
@@ -64,6 +69,14 @@ isolated `auth.json` cannot be decrypted, but a copy of the complete
 Windows relies on the user-profile ACL. Files are created only after a provider
 key validates, AI settings are successfully saved, or general settings are
 successfully saved.
+
+`config/mcp.json` is a strict schema-v1 non-secret list of configured local
+stdio Servers. It stores absolute executable and optional working-directory
+paths plus structured arguments, enabled state and `startOnLaunch`; it stores
+no environment map or credential. Missing-config reads are side-effect free.
+MCP Tool approvals remain only in process memory. Authorized-call receipts are
+append-only under `logs/tool-receipts` and use the random 256-bit
+`config/tool-receipt.key`; neither file contains raw arguments or results.
 
 `config/settings.json` is a strict schema-v8, non-secret file containing one
 nullable `model` (`providerId`, `modelId`, `contextBudget`, and `outputBudget`)
@@ -111,11 +124,12 @@ successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `data/opensprite.db` is created only when the first user message and Run are
 successfully accepted. It owns Conversation, visible Message, Run, append-only
 conversation compaction, and safe semantic Run-event tables described by
-`agent-chat.md`. SQLite schema v8 snapshots each Run's requested output budget,
+`agent-chat.md`. SQLite schema v9 snapshots each Run's requested output budget,
 strict output-continuation policy and full-Prompt logging preference
 and stores the resolved maximum in its `model.started` event. Empty reads,
 backend import, and service startup do not create `data/` or the database.
-Conversation and Run identifiers are backend-generated UUIDs rather than values
+Schema v9 also permits the bounded `tool.approval_requested` and
+`tool.approval_decided` semantic events. Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored
 relative to the data root; the database must not persist the absolute user
 profile path. Upload, output, memory, other logs, and cache directories remain

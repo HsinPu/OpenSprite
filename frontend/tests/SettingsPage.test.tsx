@@ -10,6 +10,7 @@ import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatal
 import type { GeneralSettingsController } from "../src/features/general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
 import type { ToolSettingsController } from "../src/features/tool-settings/useToolSettings";
+import type { McpConnectionsController } from "../src/features/mcp-settings/useMcpConnections";
 
 const generalSettings: GeneralSettingsController = {
   settings: { locale: "zh-TW", timeZone: "system" },
@@ -50,8 +51,15 @@ const toolSettings: ToolSettingsController = {
   reload: async () => undefined,
 };
 
-function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings">) {
-  return <ProductionSettingsPage {...props} toolSettings={toolSettings} />;
+const mcpConnections: McpConnectionsController = {
+  servers: [], tools: {}, loaded: true, error: null, busyServerId: null,
+  reload: async () => undefined, create: async () => null, update: async () => null,
+  remove: async () => null, test: async () => null, start: async () => null,
+  stop: async () => null, loadTools: async () => null,
+};
+
+function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings" | "mcpConnections">) {
+  return <ProductionSettingsPage {...props} toolSettings={toolSettings} mcpConnections={mcpConnections} />;
 }
 
 const disconnectedCatalog = {
@@ -307,8 +315,9 @@ describe("provider settings", () => {
     expect(calculatorSwitch.getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText("內建 · 唯讀")).toBeTruthy();
     expect(screen.getByText("可使用")).toBeTruthy();
-    expect(screen.getAllByText("未來上線")).toHaveLength(3);
-    expect(screen.getByText("MCP 連線")).toBeTruthy();
+    expect(screen.getAllByText("未來上線")).toHaveLength(2);
+    expect(screen.getByRole("region", { name: "MCP Server" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "新增 MCP Server" })).toBeTruthy();
     expect(screen.getByText("自訂工具")).toBeTruthy();
     expect(screen.getByText("第三方服務")).toBeTruthy();
 

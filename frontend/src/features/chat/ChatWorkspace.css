@@ -418,6 +418,13 @@
   .chat-workspace__context--collapsed { overflow: hidden; }
 }
 
+.execution-approval { margin: 0 16px 16px; padding: 14px; border: 1px solid #ffb39f; border-radius: 12px; background: #fff6f2; }
+.execution-approval h3 { margin: 0 0 8px; font-size: 15px; }
+.execution-approval p { margin: 7px 0; line-height: 1.45; }
+.execution-approval pre { max-height: 220px; overflow: auto; margin: 8px 0; padding: 10px; border-radius: 8px; background: #fff; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.execution-approval__warning { color: #9c3f27; font-size: 12px; }
+.execution-approval__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
 @media (max-width: 900px) {
   .chat-workspace { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; }
   .chat-workspace__execution-toggle.ant-btn { display: none; }

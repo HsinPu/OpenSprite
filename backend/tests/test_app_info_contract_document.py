@@ -23,5 +23,5 @@ def test_app_info_contract_matches_generated_route_and_schema() -> None:
 
 def test_product_version_has_one_authoritative_value() -> None:
     pyproject = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.2.4"' in pyproject
-    assert create_app().version == "0.2.4"
+    assert 'version = "0.3.0"' in pyproject
+    assert create_app().version == "0.3.0"

@@ -12,6 +12,7 @@ import { isTodayInTimeZone } from "../features/general-settings/dateTime";
 import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
 import { useConversationSettings } from "../features/conversation-settings/useConversationSettings";
 import { useToolSettings } from "../features/tool-settings/useToolSettings";
+import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
@@ -73,6 +74,7 @@ export function App() {
   const generalSettings = useGeneralSettings();
   const conversationSettings = useConversationSettings();
   const toolSettings = useToolSettings();
+  const mcpConnections = useMcpConnections();
   const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
@@ -437,6 +439,7 @@ export function App() {
           generalSettings={generalSettings}
           conversationSettings={conversationSettings}
           toolSettings={toolSettings}
+          mcpConnections={mcpConnections}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

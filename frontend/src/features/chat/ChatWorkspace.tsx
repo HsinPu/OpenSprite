@@ -17,6 +17,7 @@ import { MarkdownMessage } from "./MarkdownMessage";
 import { useConversationRun } from "./useConversationRun";
 import { useRunInspection } from "./useRunInspection";
 import { useConversationAutoScroll } from "./useConversationAutoScroll";
+import { pendingToolApprovalId } from "./ToolApprovalCard";
 
 import "./ChatWorkspace.css";
 
@@ -145,6 +146,7 @@ export function ChatWorkspace({
     ? chat.activeRun.assistantMessageId
     : null;
   const isCompactingContext = displayedEvents.at(-1)?.type === "context.compaction.started";
+  const pendingApprovalId = pendingToolApprovalId(chat.events);
   const displayedModelName = historical && displayedRun
     ? modelChoices.find((choice) => choice.selection.providerId === displayedRun.providerId && choice.selection.modelId === displayedRun.modelId)?.label ?? displayedRun.modelId
     : modelName;
@@ -160,6 +162,15 @@ export function ChatWorkspace({
   useEffect(() => {
     if (!historical) setExecutionPanelExpanded(executionPanelDefaultExpanded);
   }, [executionPanelDefaultExpanded, historical]);
+
+  useEffect(() => {
+    if (pendingApprovalId === null) return;
+    inspection.returnToLatest();
+    setExecutionPanelExpanded(true);
+    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 900px)").matches) {
+      setMobileExecutionOpen(true);
+    }
+  }, [inspection.returnToLatest, pendingApprovalId]);
 
   const inspectionButton = (runId: string) => {
     const selected = inspection.selectedRunId === runId;

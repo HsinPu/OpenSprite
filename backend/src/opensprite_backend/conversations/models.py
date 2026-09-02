@@ -39,6 +39,8 @@ class RunEventType(str, Enum):
     MODEL_STARTED = "model.started"
     RESPONSE_CONTINUATION_STARTED = "response.continuation.started"
     ASSISTANT_DELTA = "assistant.delta"
+    TOOL_APPROVAL_REQUESTED = "tool.approval_requested"
+    TOOL_APPROVAL_DECIDED = "tool.approval_decided"
     TOOL_STARTED = "tool.started"
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"

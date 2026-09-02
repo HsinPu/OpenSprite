@@ -32,6 +32,11 @@ from .conversation_settings import (
 )
 from .inference import ModelGateway
 from .model_capability_resolver import ProviderModelCapabilityResolver
+from .mcp import (
+    McpConnections,
+    UnavailableMcpConnections,
+    create_mcp_connection_manager,
+)
 from .general_settings import (
     GeneralSettingsOperations,
     UnavailableGeneralSettings,
@@ -49,6 +54,12 @@ from .tool_settings import (
     create_tool_settings_service,
 )
 from .tools import create_production_tool_registry
+from .tools.approval import (
+    ToolApprovalManager,
+    ToolApprovalOperations,
+    UnavailableToolApprovals,
+)
+from .tools.receipts import FileToolReceiptWriter
 
 
 class LocalProviderRuntime(Protocol):
@@ -63,6 +74,8 @@ class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     general_settings: GeneralSettingsOperations
     conversation_settings: ConversationSettingsOperations
     tool_settings: ToolSettingsOperations
+    mcp_connections: McpConnections
+    tool_approvals: ToolApprovalOperations
     agent_chat: AgentChatOperations
 
     async def astart(self) -> None: ...
@@ -79,6 +92,8 @@ class _SystemRuntime:
         general_settings: GeneralSettingsOperations,
         conversation_settings: ConversationSettingsOperations,
         tool_settings: ToolSettingsOperations,
+        mcp_connections: McpConnections,
+        tool_approvals: ToolApprovalOperations,
         agent_chat: AgentChatService,
     ) -> None:
         self._provider_runtime = provider_runtime
@@ -87,19 +102,25 @@ class _SystemRuntime:
         self.general_settings = general_settings
         self.conversation_settings = conversation_settings
         self.tool_settings = tool_settings
+        self.mcp_connections = mcp_connections
+        self.tool_approvals = tool_approvals
         self.agent_chat = agent_chat
 
     async def astart(self) -> None:
         provider_starter = getattr(self._provider_runtime, "astart", None)
         if provider_starter is not None:
             await provider_starter()
+        await self.mcp_connections.startup()
         await self.agent_chat.startup()
 
     async def aclose(self) -> None:
         try:
             await self.agent_chat.close()
         finally:
-            await self._provider_runtime.aclose()
+            try:
+                await self.mcp_connections.close()
+            finally:
+                await self._provider_runtime.aclose()
 
 
 def create_system_runtime(
@@ -116,18 +137,24 @@ def create_system_runtime(
     )
     general_settings = create_general_settings_service(paths)
     conversation_settings = create_conversation_settings_service(paths)
-    tool_registry = create_production_tool_registry()
-    tool_settings = create_tool_settings_service(paths, tool_registry)
     event_notifier = RunEventNotifier()
     repository = SqliteConversationRepository(
         paths.database_file,
         event_notifier=event_notifier,
     )
+    tool_approvals = ToolApprovalManager(repository)
+    tool_registry = create_production_tool_registry(
+        tool_approvals,
+        FileToolReceiptWriter(paths),
+    )
+    tool_settings = create_tool_settings_service(paths, tool_registry)
+    mcp_connections = create_mcp_connection_manager(paths)
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
         tools=tool_registry,
         tool_availability=tool_settings,
+        dynamic_tools=mcp_connections,
         capability_resolver=ProviderModelCapabilityResolver(
             provider_runtime.connections,
             operation_locks=provider_runtime.operation_locks,
@@ -151,6 +178,8 @@ def create_system_runtime(
         general_settings,
         conversation_settings,
         tool_settings,
+        mcp_connections,
+        tool_approvals,
         agent_chat,
     )
 
@@ -190,6 +219,8 @@ def create_system_app(
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
+            app.state.mcp_connections = UnavailableMcpConnections()
+            app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
             runtime = factory()
             starter = getattr(runtime, "astart", None)
@@ -204,6 +235,16 @@ def create_system_app(
                 "tool_settings",
                 UnavailableToolSettings(),
             )
+            app.state.mcp_connections = getattr(
+                runtime,
+                "mcp_connections",
+                UnavailableMcpConnections(),
+            )
+            app.state.tool_approvals = getattr(
+                runtime,
+                "tool_approvals",
+                UnavailableToolApprovals(),
+            )
             app.state.agent_chat = getattr(
                 runtime,
                 "agent_chat",
@@ -216,6 +257,8 @@ def create_system_app(
             app.state.general_settings = UnavailableGeneralSettings()
             app.state.conversation_settings = UnavailableConversationSettings()
             app.state.tool_settings = UnavailableToolSettings()
+            app.state.mcp_connections = UnavailableMcpConnections()
+            app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
             try:
                 if runtime is not None:

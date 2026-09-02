@@ -40,7 +40,7 @@ from .repository import ConversationStoreError
 from .event_notifier import RunEventNotifier
 
 
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -162,7 +162,8 @@ CREATE TABLE run_events (
     type TEXT NOT NULL CHECK(type IN (
         'run.started', 'context.compaction.started', 'model.started',
         'response.continuation.started',
-        'assistant.delta', 'tool.started', 'tool.completed', 'tool.failed',
+        'assistant.delta', 'tool.approval_requested', 'tool.approval_decided',
+        'tool.started', 'tool.completed', 'tool.failed',
         'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
     )),
     payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
@@ -183,7 +184,7 @@ ON messages(conversation_id, sequence DESC);
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
-PRAGMA user_version = 8;
+PRAGMA user_version = 9;
 COMMIT;
 """
 
@@ -413,6 +414,33 @@ CREATE UNIQUE INDEX one_active_run_per_conversation
 ON runs(conversation_id)
 WHERE status IN ('queued', 'running', 'cancelling');
 PRAGMA user_version = 8;
+COMMIT;
+PRAGMA foreign_keys = ON;
+"""
+
+_MIGRATE_V8_TO_V9_SQL = """
+PRAGMA foreign_keys = OFF;
+BEGIN IMMEDIATE;
+ALTER TABLE run_events RENAME TO run_events_v8;
+CREATE TABLE run_events (
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    sequence INTEGER NOT NULL CHECK(sequence >= 1),
+    type TEXT NOT NULL CHECK(type IN (
+        'run.started', 'context.compaction.started', 'model.started',
+        'response.continuation.started',
+        'assistant.delta', 'tool.approval_requested', 'tool.approval_decided',
+        'tool.started', 'tool.completed', 'tool.failed',
+        'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'
+    )),
+    payload_json TEXT NOT NULL CHECK(length(payload_json) <= 65536),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(run_id, sequence)
+) STRICT;
+INSERT INTO run_events(run_id, sequence, type, payload_json, created_at)
+SELECT run_id, sequence, type, payload_json, created_at
+FROM run_events_v8;
+DROP TABLE run_events_v8;
+PRAGMA user_version = 9;
 COMMIT;
 PRAGMA foreign_keys = ON;
 """
@@ -1549,6 +1577,9 @@ class SqliteConversationRepository:
                     version = 7
                 if version == 7:
                     connection.executescript(_MIGRATE_V7_TO_V8_SQL)
+                    version = 8
+                if version == 8:
+                    connection.executescript(_MIGRATE_V8_TO_V9_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1986,6 +2017,30 @@ class SqliteConversationRepository:
                     )
                 )
             ):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
+        if event_type is RunEventType.TOOL_APPROVAL_REQUESTED:
+            if keys != {
+                "approvalId",
+                "toolName",
+                "toolDisplayName",
+                "serverId",
+                "argumentHash",
+                "expiresAt",
+            }:
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            if (
+                not SqliteConversationRepository._is_bounded_text(data["approvalId"], maximum=36)
+                or not SqliteConversationRepository._is_bounded_text(data["toolName"], maximum=64)
+                or not SqliteConversationRepository._is_bounded_text(data["toolDisplayName"], maximum=256)
+                or not SqliteConversationRepository._is_bounded_text(data["serverId"], maximum=36)
+                or not SqliteConversationRepository._is_bounded_text(data["argumentHash"], maximum=64)
+                or not SqliteConversationRepository._is_bounded_text(data["expiresAt"], maximum=40)
+            ):
+                raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+            return
+        if event_type is RunEventType.TOOL_APPROVAL_DECIDED:
+            if keys != {"approvalId", "decision"} or not SqliteConversationRepository._is_bounded_text(data["approvalId"], maximum=36) or data["decision"] not in {"allow_once", "deny", "expired"}:
                 raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
             return
         if event_type is RunEventType.ASSISTANT_DELTA:

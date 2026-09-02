@@ -37,6 +37,8 @@ class ToolDefinition:
     input_schema: dict[str, object]
     effect: ToolEffect
     source: ToolSource = ToolSource.BUILTIN
+    source_id: str | None = None
+    display_name: str | None = None
     timeout_seconds: float = 10
     max_output_chars: int = 8192
 
@@ -53,6 +55,17 @@ class ToolDefinition:
             raise ValueError("invalid tool effect")
         if not isinstance(self.source, ToolSource):
             raise ValueError("invalid tool source")
+        if self.source is ToolSource.MCP:
+            if not isinstance(self.source_id, str) or not self.source_id:
+                raise ValueError("MCP tool requires source id")
+        elif self.source_id is not None:
+            raise ValueError("non-MCP tool cannot have source id")
+        if self.display_name is not None and (
+            not isinstance(self.display_name, str)
+            or not self.display_name.strip()
+            or len(self.display_name) > 256
+        ):
+            raise ValueError("invalid tool display name")
         if (
             not isinstance(self.timeout_seconds, (int, float))
             or isinstance(self.timeout_seconds, bool)

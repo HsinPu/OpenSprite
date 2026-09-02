@@ -1,0 +1,42 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "OpenSprite local MCP connections API", "version": "0.1.0-draft", "description": "Authoritative contract for configured local stdio MCP servers and discovered tools."},
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "x-transport-security": {"scope": "loopback-only local desktop service", "applicationAuthentication": "none", "browserOriginPolicy": "same-origin", "cors": "disabled by default"},
+  "x-events": {"supported": false},
+  "paths": {
+    "/api/mcp/servers": {
+      "get": {"operationId": "listMcpServers", "responses": {"200": {"description": "Configured MCP servers", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerListResponse"}}}}, "503": {"$ref": "#/components/responses/McpStoreUnavailable"}, "500": {"$ref": "#/components/responses/InternalError"}}},
+      "post": {"operationId": "createMcpServer", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerConfiguration"}}}}, "responses": {"201": {"description": "Saved disabled MCP server", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "503": {"$ref": "#/components/responses/McpStoreUnavailable"}, "500": {"$ref": "#/components/responses/InternalError"}}}
+    },
+    "/api/mcp/servers/{server_id}": {
+      "parameters": [{"name": "server_id", "in": "path", "required": true, "schema": {"$ref": "#/components/schemas/Identifier"}}],
+      "get": {"operationId": "getMcpServer", "responses": {"200": {"description": "MCP server", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}, "404": {"$ref": "#/components/responses/NotFound"}}},
+      "put": {"operationId": "putMcpServer", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerConfiguration"}}}}, "responses": {"200": {"description": "Replaced disabled MCP server", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "404": {"$ref": "#/components/responses/NotFound"}}},
+      "delete": {"operationId": "deleteMcpServer", "responses": {"204": {"description": "Removed"}, "404": {"$ref": "#/components/responses/NotFound"}}}
+    },
+    "/api/mcp/servers/{server_id}/test": {"post": {"operationId": "testMcpServer", "responses": {"200": {"description": "Ephemeral connection result", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}}}},
+    "/api/mcp/servers/{server_id}/start": {"post": {"operationId": "startMcpServer", "responses": {"200": {"description": "Connected MCP server", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}}}},
+    "/api/mcp/servers/{server_id}/stop": {"post": {"operationId": "stopMcpServer", "responses": {"200": {"description": "Stopped MCP server", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpServerSummary"}}}}}}},
+    "/api/mcp/servers/{server_id}/tools": {"get": {"operationId": "listMcpTools", "responses": {"200": {"description": "Discovered tools", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/McpToolListResponse"}}}}}}}
+  },
+  "components": {
+    "schemas": {
+      "Identifier": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
+      "StdioTransport": {"type": "object", "additionalProperties": false, "required": ["type", "executable", "arguments", "workingDirectory"], "properties": {"type": {"const": "stdio"}, "executable": {"type": "string", "minLength": 1, "maxLength": 2048}, "arguments": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 2048}}, "workingDirectory": {"type": ["string", "null"], "maxLength": 2048}}},
+      "McpServerConfiguration": {"type": "object", "additionalProperties": false, "required": ["name", "transport", "startOnLaunch"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 80}, "transport": {"$ref": "#/components/schemas/StdioTransport"}, "startOnLaunch": {"type": "boolean"}}},
+      "McpServerSummary": {"type": "object", "additionalProperties": false, "required": ["id", "name", "enabled", "startOnLaunch", "transport", "status", "protocolVersion", "errorCode", "toolCount", "unsupportedToolCount"], "properties": {"id": {"$ref": "#/components/schemas/Identifier"}, "name": {"type": "string"}, "enabled": {"type": "boolean"}, "startOnLaunch": {"type": "boolean"}, "transport": {"$ref": "#/components/schemas/StdioTransport"}, "status": {"type": "string", "enum": ["disabled", "stopped", "starting", "connected", "error", "stopping"]}, "protocolVersion": {"type": ["string", "null"]}, "errorCode": {"type": ["string", "null"]}, "toolCount": {"type": "integer", "minimum": 0, "maximum": 128}, "unsupportedToolCount": {"type": "integer", "minimum": 0, "maximum": 128}}},
+      "McpServerListResponse": {"type": "object", "additionalProperties": false, "required": ["servers"], "properties": {"servers": {"type": "array", "maxItems": 32, "items": {"$ref": "#/components/schemas/McpServerSummary"}}}},
+      "McpToolListResponse": {"type": "object", "additionalProperties": false, "required": ["tools"], "properties": {"tools": {"type": "array", "maxItems": 128, "items": {"type": "object"}}}},
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "not_found", "server_disabled", "server_not_running", "server_start_failed", "server_stop_failed", "server_unreachable", "server_timeout", "tools_not_supported", "tool_catalog_invalid", "mcp_store_unavailable", "internal_error"]},
+      "ErrorEnvelope": {"type": "object", "additionalProperties": false, "required": ["error"], "properties": {"error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"], "properties": {"code": {"$ref": "#/components/schemas/ErrorCode"}, "message": {"type": "string"}, "retryable": {"type": "boolean"}}}}}
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Invalid MCP configuration", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "NotFound": {"description": "MCP server not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "McpStoreUnavailable": {"description": "MCP configuration unavailable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "InternalError": {"description": "Internal error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+    }
+  }
+}
