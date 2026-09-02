@@ -54,6 +54,8 @@ class OpenRouterInferenceAdapter:
         if request.tools:
             body["tools"] = _tools(request.tools)
             body["tool_choice"] = "auto"
+            if request.model_id != "openrouter/auto":
+                body["provider"] = {"require_parameters": True}
         selected_effort = effort(request.response_mode)
         if selected_effort is not None:
             body["reasoning"] = {

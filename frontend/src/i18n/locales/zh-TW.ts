@@ -78,6 +78,7 @@ export const zhTWMessages = {
   "execution.model": "模型",
   "execution.tools": "工具",
   "execution.noTools": "本次執行沒有使用額外工具。",
+  "tool.calculator": "計算器",
   "execution.executed": "已執行",
   "execution.info": "執行資訊",
   "execution.startTime": "開始時間",

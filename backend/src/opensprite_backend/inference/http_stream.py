@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Final
 
@@ -38,6 +39,7 @@ _REQUEST_TIMEOUT = httpx.Timeout(
     write=30.0,
     pool=30.0,
 )
+_LOGGER = logging.getLogger("opensprite.inference.http")
 
 
 class NativeHttpAdapter:
@@ -67,18 +69,27 @@ class NativeHttpAdapter:
         except ModelGatewayError:
             raise
         except (TimeoutError, httpx.TimeoutException) as error:
+            _LOGGER.warning("provider request timed out")
             raise ModelGatewayError(InferenceFailure.PROVIDER_TIMEOUT) from error
         except StreamFormatError as error:
             raise ModelGatewayError(
                 InferenceFailure.INVALID_PROVIDER_RESPONSE
             ) from error
         except httpx.HTTPError as error:
+            _LOGGER.warning(
+                "provider transport failed error_type=%s",
+                type(error).__name__,
+            )
             raise ModelGatewayError(
                 InferenceFailure.PROVIDER_UNREACHABLE
             ) from error
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            _LOGGER.warning(
+                "provider request failed error_type=%s",
+                type(error).__name__,
+            )
             raise ModelGatewayError(
                 InferenceFailure.PROVIDER_UNREACHABLE
             ) from error
@@ -102,6 +113,7 @@ class NativeHttpAdapter:
         status = response.status_code
         if 200 <= status < 300:
             return
+        _LOGGER.warning("provider request rejected status=%s", status)
         if status in {400, 422}:
             body = await cls._read_bounded_error_body(response)
             if body is not None and cls._is_context_limit_error(body):

@@ -52,6 +52,7 @@ from opensprite_backend.tools.definition import (
 )
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
+from opensprite_backend.tools import create_production_tool_registry
 
 
 def async_test(function):
@@ -951,6 +952,59 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     database_bytes = repository.database_file.read_bytes()
     assert b'"query"' not in database_bytes
     assert b'"today"' not in database_bytes
+
+
+@async_test
+async def test_production_calculator_returns_result_to_the_model(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_run(repository)
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelToolCall(
+                    "calculator-call",
+                    "calculator",
+                    {"expression": "2 + 3 * 4"},
+                ),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ],
+            [
+                ModelTextDelta("計算結果是 14。"),
+                ModelCompleted(ModelFinishReason.FINAL),
+            ],
+        ]
+    )
+    loop = AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=create_production_tool_registry(),
+        capability_resolver=TestCapabilityResolver(),
+    )
+
+    result = await loop.execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.COMPLETED
+    assert result.partial_text == "計算結果是 14。"
+    assert gateway.requests[1].messages[-1].role == "tool"
+    assert gateway.requests[1].messages[-1].tool_name == "calculator"
+    assert gateway.requests[1].messages[-1].content == "14"
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    assert [event.type for event in events] == [
+        RunEventType.RUN_STARTED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.TOOL_STARTED,
+        RunEventType.TOOL_COMPLETED,
+        RunEventType.MODEL_STARTED,
+        RunEventType.ASSISTANT_DELTA,
+        RunEventType.RUN_COMPLETED,
+    ]
+    assert events[3].data == {
+        "callId": "calculator-call",
+        "toolName": "calculator",
+        "summary": "Calculator result: 14",
+    }
 
 
 @async_test

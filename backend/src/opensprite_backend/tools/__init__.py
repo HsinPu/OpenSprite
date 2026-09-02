@@ -7,6 +7,7 @@ from .definition import (
     ToolEffect,
     ToolResult,
 )
+from .composition import create_production_tool_registry
 from .policy import ReadOnlyToolPolicy, ToolPolicy
 from .registry import (
     ToolInvocationError,
@@ -25,4 +26,5 @@ __all__ = [
     "ToolRegistry",
     "ToolRegistryError",
     "ToolResult",
+    "create_production_tool_registry",
 ]

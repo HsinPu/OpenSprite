@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from functools import wraps
 from pathlib import Path
@@ -251,7 +252,10 @@ async def test_openrouter_rejects_conflicting_repeated_finish_reason() -> None:
 
 @async_test
 async def test_openrouter_reassembles_strict_tool_arguments() -> None:
+    captured: list[dict[str, object]] = []
+
     def handler(outbound: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(outbound.content))
         return response(
             outbound,
             {
@@ -294,14 +298,77 @@ async def test_openrouter_reassembles_strict_tool_arguments() -> None:
             "[DONE]",
         )
 
+    tool = ModelToolDefinition(
+        name="lookup_note",
+        description="Look up a note.",
+        input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
-        events = await collect(gateway.stream(request("openrouter")))
+        events = await collect(
+            gateway.stream(request("openrouter", tools=(tool,)))
+        )
 
     assert events == [
         ModelToolCall("call-1", "lookup_note", {"query": "today"}),
         ModelCompleted(ModelFinishReason.TOOL_CALLS),
     ]
+    assert captured[0]["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "lookup_note",
+                "description": "Look up a note.",
+                "parameters": tool.input_schema,
+                "strict": True,
+            },
+        }
+    ]
+    assert captured[0]["tool_choice"] == "auto"
+    assert "provider" not in captured[0]
+
+
+@async_test
+async def test_openrouter_explicit_model_requires_tool_parameters() -> None:
+    captured: list[dict[str, object]] = []
+
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(outbound.content))
+        return response(
+            outbound,
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+            "[DONE]",
+        )
+
+    tool = ModelToolDefinition(
+        name="lookup_note",
+        description="Look up a note.",
+        input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+        events = await collect(
+            gateway.stream(
+                request(
+                    "openrouter",
+                    model_id="openai/gpt-5.6",
+                    tools=(tool,),
+                )
+            )
+        )
+
+    assert events == [ModelCompleted(ModelFinishReason.FINAL)]
+    assert captured[0]["provider"] == {"require_parameters": True}
 
 
 @async_test
@@ -732,6 +799,32 @@ def test_unrecognized_or_oversized_bad_request_stays_provider_unreachable() -> N
                 assert captured.value.failure is InferenceFailure.PROVIDER_UNREACHABLE
 
     asyncio.run(scenario())
+
+
+def test_provider_rejection_logs_status_without_response_body(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret_body = "private-upstream-diagnostic"
+
+    def handler(outbound: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={"error": {"message": secret_body}},
+            request=outbound,
+        )
+
+    async def scenario() -> None:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            gateway = NativeModelGateway(FakeCredentials(), client, ProviderOperationLocks())
+            with pytest.raises(ModelGatewayError):
+                await collect(gateway.stream(request("openrouter")))
+
+    with caplog.at_level(logging.WARNING, logger="opensprite.inference.http"):
+        asyncio.run(scenario())
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert "provider request rejected status=400" in messages
+    assert all(secret_body not in message for message in messages)
 
 
 @async_test

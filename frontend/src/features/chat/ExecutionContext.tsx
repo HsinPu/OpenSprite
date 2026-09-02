@@ -30,6 +30,10 @@ const responseModeKeys: Record<RunSnapshot["responseMode"], MessageKey> = {
   deep: "execution.mode.deep",
 };
 
+function toolLabel(name: string, t: Translator): string {
+  return name === "calculator" ? t("tool.calculator") : name;
+}
+
 function durationText(run: RunSnapshot | null): string {
   if (!run?.startedAt) return "—";
   const end = run.finishedAt ? new Date(run.finishedAt).getTime() : Date.now();
@@ -45,9 +49,9 @@ function eventLabel(event: RunEvent, t: Translator): string | null {
     case "model.started": return t("execution.event.modelStarted", { model: String(event.data.modelId ?? "") }).trim();
     case "response.continuation.started": return t("execution.event.continuationStarted", { attempt: String(event.data.attempt ?? ""), maximum: event.data.maxAttempts === null ? "∞" : String(event.data.maxAttempts ?? "") });
     case "assistant.delta": return null;
-    case "tool.started": return t("execution.event.toolStarted", { tool: String(event.data.toolName ?? "") }).trim();
-    case "tool.completed": return t("execution.event.toolCompleted", { tool: String(event.data.toolName ?? "") }).trim();
-    case "tool.failed": return t("execution.event.toolFailed", { tool: String(event.data.toolName ?? "") }).trim();
+    case "tool.started": return t("execution.event.toolStarted", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
+    case "tool.completed": return t("execution.event.toolCompleted", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
+    case "tool.failed": return t("execution.event.toolFailed", { tool: toolLabel(String(event.data.toolName ?? ""), t) }).trim();
     case "run.completed": return t(
       event.data.completionReason === "output_limit"
         ? "execution.event.outputLimit"
@@ -180,7 +184,7 @@ export function ExecutionContext({ modelName, run, events, timeZone, historical 
               <h3 id={`${contextId}-tools-title`}>{t("execution.tools")}</h3>
               {toolNames.length > 0 ? (
                 <ul className="chat-workspace__capability-list">
-                  {toolNames.map((name) => <li key={name}><span className="chat-workspace__capability-icon" aria-hidden="true">⌘</span><span>{name}</span><i aria-label={t("execution.executed")} /></li>)}
+                  {toolNames.map((name) => <li key={name}><span className="chat-workspace__capability-icon" aria-hidden="true">⌘</span><span>{toolLabel(name, t)}</span><i aria-label={t("execution.executed")} /></li>)}
                 </ul>
               ) : <p className="chat-workspace__empty-tools">{t("execution.noTools")}</p>}
             </section>

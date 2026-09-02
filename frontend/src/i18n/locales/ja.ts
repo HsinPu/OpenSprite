@@ -77,6 +77,7 @@ export const jaMessages = {
   "execution.model": "モデル",
   "execution.tools": "ツール",
   "execution.noTools": "今回の実行では追加ツールを使用していません。",
+  "tool.calculator": "計算機",
   "execution.executed": "実行済み",
   "execution.info": "実行情報",
   "execution.startTime": "開始時刻",

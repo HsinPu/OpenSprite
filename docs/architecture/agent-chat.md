@@ -170,9 +170,10 @@ choice, including after entering historical inspection.
 Closing the desktop header disclosure while historical inspection is active also
 returns to the latest Run, so the hidden panel cannot leave a historical message
 marked as selected.
-Because the current production Tool Registry is empty, the UI explicitly says
-that no extra tool was used and does not advertise Search, File, Memory, or any
-other speculative capability.
+The current production Tool Registry contains only the read-only `calculator`.
+The UI localizes that stable tool id when it appears in persisted events and
+otherwise says that no extra tool was used. It does not advertise Search, File,
+Memory, or any other speculative capability.
 
 ## Persistence
 
@@ -316,8 +317,13 @@ text, incomplete tool data, conflicting terminal states, and unknown reasons
 remain fail-closed. SQLite schema v4 adds the nullable completion reason and
 backfills existing completed Runs and their completion events as `stop`.
 
-The production registry initially contains only explicitly composed read-only
-tools. Local writes, external writes, destructive actions, shell access, MCP,
+The production registry contains only explicitly composed read-only tools. Its
+first tool is `calculator`, which evaluates a 256-character arithmetic
+expression through a bounded Python AST and Decimal whitelist. It permits only
+decimal numbers, parentheses, unary signs, `+`, `-`, `*`, `/`, `//`, `%`, and
+bounded integer powers. It does not use `eval`, execute code, or access files,
+the shell, network, credentials, or user data. Local writes, external writes,
+destructive actions, shell access, MCP,
 subagents, background work, memory, search, and file mutation are not implied by
 the Agent loop and must be approved as separate capabilities later.
 
@@ -327,9 +333,9 @@ repository protocol, normalized Model gateway, and explicit Tool Registry. It
 streams text into Run partial state, executes structured calls sequentially,
 persists only bounded semantic summaries, and stops on duplicate failed calls,
 round/tool limits, cancellation, malformed model output, or safe Provider
-errors. The runtime will compose an empty registry until an individual read-only
-tool is separately approved and implemented; the UI must not advertise tools
-that are not present in that composition.
+errors. The runtime composes the approved Calculator through one explicit
+production registry; the UI must not advertise tools that are not present in
+that composition.
 
 ## Provider and response-mode boundary
 
@@ -370,8 +376,17 @@ protocol data and never become Model events, Messages, Run events, logs, or
 database content.
 
 These adapters and the shared credential/lock composition are now connected to
-the live Run workflow. The production Tool Registry remains empty, so native
-requests do not advertise an unimplemented tool.
+the live Run workflow. Native requests advertise only the Calculator definition
+from the explicit production Tool Registry. Explicit OpenRouter model requests
+also set `provider.require_parameters=true`, so a routed provider may not
+silently ignore the requested tool-calling parameters. The `openrouter/auto`
+router omits this extra Provider filter and selects a compatible upstream model
+from the request features itself.
+
+Rejected upstream responses write only the numeric HTTP status to the central
+runtime log. Timeout and transport failures write only a stable failure label
+and exception type. Response bodies, request bodies, prompts, URLs, headers,
+and credentials are never included in these diagnostics.
 
 ## HTTP and security boundary
 

@@ -43,7 +43,7 @@ from .provider_connections import (
 )
 from .provider_runtime import create_provider_runtime
 from .system_prompt import create_system_prompt_provider
-from .tools import ReadOnlyToolPolicy, ToolRegistry
+from .tools import create_production_tool_registry
 
 
 class LocalProviderRuntime(Protocol):
@@ -116,7 +116,7 @@ def create_system_runtime(
     agent_loop = AgentLoop(
         repository=repository,
         gateway=provider_runtime.model_gateway,
-        tools=ToolRegistry([], policy=ReadOnlyToolPolicy()),
+        tools=create_production_tool_registry(),
         capability_resolver=ProviderModelCapabilityResolver(
             provider_runtime.connections,
             operation_locks=provider_runtime.operation_locks,

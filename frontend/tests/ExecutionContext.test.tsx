@@ -157,6 +157,33 @@ describe("execution context disclosure", () => {
     expect(document.querySelector(".chat-workspace__process-item--active")?.textContent).toContain("整理較早的對話內容");
   });
 
+  it("shows the localized production calculator in tool events", () => {
+    const toolStarted: RunEvent = {
+      ...event,
+      sequence: 2,
+      type: "tool.started",
+      createdAt: "2026-08-29T08:00:02Z",
+      data: { callId: "calculator-call", toolName: "calculator" },
+    };
+    const toolCompleted: RunEvent = {
+      ...event,
+      sequence: 3,
+      type: "tool.completed",
+      createdAt: "2026-08-29T08:00:03Z",
+      data: {
+        callId: "calculator-call",
+        toolName: "calculator",
+        summary: "Calculator result: 42",
+      },
+    };
+
+    render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event, toolStarted, toolCompleted]} timeZone="system" defaultExpanded />);
+
+    expect(screen.getByText("執行工具 計算器")).toBeTruthy();
+    expect(screen.getByText("工具完成 計算器")).toBeTruthy();
+    expect(screen.getAllByText("計算器").length).toBeGreaterThan(0);
+  });
+
   it("renders a Drawer mode without a second collapse control", () => {
     render(<ExecutionContext modelName="GPT-5.6" run={run} events={[event]} timeZone="system" defaultExpanded={false} mode="drawer" />);
 

@@ -12,7 +12,7 @@ Windows 可從 repository root 執行 `./installers/windows/install.ps1`，安�
 - 對話：Conversation、Message、Run 與安全語意事件保存於 `.opensprite/data/opensprite.db`，前端以 HTTP 與 SSE 消費。
 - AI：固定支援 OpenAI、Anthropic、OpenRouter；模型、Context／輸出上限、推理模式、續接次數、回覆顯示方式與 Prompt log 偏好保存於 `.opensprite/config/settings.json`。
 - 金鑰：只以 AES-256-GCM ciphertext 保存於 `.opensprite/auth.json`，每次安裝使用獨立的 `config/credential.key`。
-- Agent：所有使用者訊息進入同一個 Token-budgeted Agent loop；舊對話只做可重建摘要，原始訊息不刪除。執行事件與 Context 用量可由前端即時／歷史查看；目前 production Tool Registry 為空。
+- Agent：所有使用者訊息進入同一個 Token-budgeted Agent loop；舊對話只做可重建摘要，原始訊息不刪除。執行事件與 Context 用量可由前端即時／歷史查看；production Tool Registry 目前包含安全的唯讀計算器。
 - CLI：不在新版本範圍內。
 - API：Provider、AI settings 與 Agent chat HTTP/SSE 契約已實作；未使用 WebSocket。
 - 安裝器：Windows 安裝器已實作並使用 `%LOCALAPPDATA%\OpenSprite\app`；Linux 安裝器位置已預留，尚未實作。

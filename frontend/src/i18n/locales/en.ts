@@ -77,6 +77,7 @@ export const enMessages = {
   "execution.model": "Model",
   "execution.tools": "Tools",
   "execution.noTools": "This run did not use any additional tools.",
+  "tool.calculator": "Calculator",
   "execution.executed": "Executed",
   "execution.info": "Run information",
   "execution.startTime": "Start time",
