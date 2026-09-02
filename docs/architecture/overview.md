@@ -81,7 +81,10 @@ Ctrl/Cmd + Enter 傳送、Enter 換行。IME composition 期間不觸發傳送�
 所有訊息都進入同一個 Agent loop，不加入關鍵字分類、舊 Task lifecycle 或直接繞過 Run 的
 模型分支。公開 HTTP／SSE 形狀以 `contracts/agent-chat.openapi.json` 為準；本段只記錄已固定的
 責任與依賴方向。前端以真實對話清單、訊息、Run snapshot、SSE 事件與取消操作消費此契約；
-production Tool Registry 目前只明確註冊唯讀 `calculator`。
+production Tool Registry 目前只明確註冊唯讀 `calculator`。工具目錄與設定分別由
+`GET /api/tools` 與 `GET/PUT /api/settings/tools` 提供，並以 strict schema-v1
+原子保存至 `config/tools.json`。每個 Run 啟動時取得一次工具可用性快照；停用工具
+不會提供給模型，Registry 執行前仍以同一份快照再次檢查。
 
 Context 讀取以 200 則 bounded page 逐段前進，正常 Run 依 token 預算持續
 壓縮而不把 page size 當成歷史總量上限。Agent 會合併高速 assistant delta

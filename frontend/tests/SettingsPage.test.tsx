@@ -1,14 +1,15 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { StrictMode, useState } from "react";
+import { StrictMode, useState, type ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SettingsPage } from "../src/features/settings/SettingsPage";
+import { SettingsPage as ProductionSettingsPage } from "../src/features/settings/SettingsPage";
 import type { SettingsSection } from "../src/features/settings/settingsState";
 import type { ResponseDelivery, ResponseMode } from "../src/api/aiSettings";
 import { modelLabel, type ModelSelection } from "../src/features/ai-settings/modelCatalog";
 import { useProviderCatalog } from "../src/features/ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../src/features/general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../src/features/conversation-settings/useConversationSettings";
+import type { ToolSettingsController } from "../src/features/tool-settings/useToolSettings";
 
 const generalSettings: GeneralSettingsController = {
   settings: { locale: "zh-TW", timeZone: "system" },
@@ -35,6 +36,23 @@ const conversationSettings: ConversationSettingsController = {
   saveExecutionPanelDefaultExpanded,
   reload: async () => undefined,
 };
+
+const saveToolsEnabled = vi.fn(async () => null);
+const saveToolEnabled = vi.fn(async () => null);
+const toolSettings: ToolSettingsController = {
+  catalog: { items: [{ id: "calculator", source: "builtin", effect: "read_only", available: true }] },
+  settings: { enabled: true, enabledTools: ["calculator"] },
+  loaded: true,
+  saving: false,
+  error: null,
+  saveEnabled: saveToolsEnabled,
+  saveToolEnabled,
+  reload: async () => undefined,
+};
+
+function SettingsPage(props: Omit<ComponentProps<typeof ProductionSettingsPage>, "toolSettings">) {
+  return <ProductionSettingsPage {...props} toolSettings={toolSettings} />;
+}
 
 const disconnectedCatalog = {
   providers: [
@@ -116,9 +134,9 @@ function ToggleSectionHarness() {
   return <><button type="button" onClick={() => setSection("general")}>show general</button><button type="button" onClick={() => setSection("models")}>show models</button><SettingsPage section={section} onSectionChange={setSection} modelSelection={selection} responseMode="balanced" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async (next) => { setSelection(next); return null; }} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={generalSettings} conversationSettings={conversationSettings} onClose={() => undefined} /></>;
 }
 
-function GeneralSettingsPageHarness({ saving = false }: { saving?: boolean }) {
+function GeneralSettingsPageHarness({ saving = false, section = "general" }: { saving?: boolean; section?: SettingsSection }) {
   const providerCatalog = useProviderCatalog();
-  return <SettingsPage section="general" onSectionChange={() => undefined} modelSelection={null} responseMode="default" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
+  return <SettingsPage section={section} onSectionChange={() => undefined} modelSelection={null} responseMode="default" outputContinuation="2" responseDelivery="stream" logFullPrompts={false} aiSettingsLoaded aiSettingsSaving={false} aiSettingsError={null} onAiSettingsReload={async () => undefined} onModelSelectionChange={async () => null} onResponseModeChange={async () => null} onOutputContinuationChange={async () => null} onResponseDeliveryChange={async () => null} onLogFullPromptsChange={async () => null} providerCatalog={providerCatalog} generalSettings={{ ...generalSettings, saving }} conversationSettings={conversationSettings} onClose={() => undefined} />;
 }
 
 describe("provider settings", () => {
@@ -165,6 +183,8 @@ describe("provider settings", () => {
     saveSendBehavior.mockClear();
     saveAutoScroll.mockClear();
     saveExecutionPanelDefaultExpanded.mockClear();
+    saveToolsEnabled.mockClear();
+    saveToolEnabled.mockClear();
   });
 
   it("presents provider default plus the three explicit response modes", async () => {
@@ -234,10 +254,10 @@ describe("provider settings", () => {
     render(<GeneralSettingsPageHarness />);
 
     const categoryRail = screen.getByRole("navigation", { name: "設定分類" });
-    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具與連線Demo", "外觀Demo", "隱私Demo", "關於"]);
+    expect(within(categoryRail).getAllByRole("button").map((button) => button.textContent)).toEqual(["一般", "AI 模型", "記憶與資料Demo", "工具", "外觀Demo", "隱私Demo", "關於"]);
     expect(screen.getByRole("region", { name: "語言與時間" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "時區" })).toBeTruthy();
-    expect(screen.getAllByText("Demo")).toHaveLength(4);
+    expect(screen.getAllByText("Demo")).toHaveLength(3);
     expect(screen.getByRole("region", { name: "啟動與對話" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "通知" })).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "啟動時開啟" })).toBeTruthy();
@@ -274,6 +294,28 @@ describe("provider settings", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("shows the real tool controls and keeps external tools as future items", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    render(<GeneralSettingsPageHarness section="tools" />);
+
+    expect(screen.getByRole("heading", { name: "工具" })).toBeTruthy();
+    const globalSwitch = screen.getByRole("switch", { name: "允許 AI 使用工具" });
+    const calculatorSwitch = screen.getByRole("switch", { name: "啟用工具：計算器" });
+    expect(globalSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(calculatorSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("內建 · 唯讀")).toBeTruthy();
+    expect(screen.getByText("可使用")).toBeTruthy();
+    expect(screen.getAllByText("未來上線")).toHaveLength(3);
+    expect(screen.getByText("MCP 連線")).toBeTruthy();
+    expect(screen.getByText("自訂工具")).toBeTruthy();
+    expect(screen.getByText("第三方服務")).toBeTruthy();
+
+    fireEvent.click(globalSwitch);
+    fireEvent.click(calculatorSwitch);
+    expect(saveToolsEnabled).toHaveBeenCalledWith(false);
+    expect(saveToolEnabled).toHaveBeenCalledWith("calculator", false);
   });
 
   it("renders OpenRouter as the third provider with the OR badge and normal connection actions", async () => {

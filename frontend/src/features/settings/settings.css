@@ -89,6 +89,14 @@
 .settings-helper-text { margin-top: 10px; }
 .settings-service-list { display: grid; gap: 12px; }
 .settings-service-card { min-height: 78px; padding: 14px 16px; border: 1px solid var(--settings-border); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-tool-list { display: grid; gap: 10px; padding: 2px 0 10px; }
+.settings-tool-row { min-height: 92px; padding: 14px 16px; border: 1px solid var(--settings-border); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-tool-identity { min-width: 0; display: grid; gap: 4px; }
+.settings-tool-identity strong { font-size: 15px; }
+.settings-tool-meta { color: var(--settings-muted); font-size: 12px; font-weight: 600; }
+.settings-tool-status { width: fit-content; color: var(--settings-muted); font-size: 12px; }
+.settings-tool-status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; }
+.settings-tool-status.is-available { color: var(--settings-success); }
 .settings-service-identity { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .settings-service-identity > .settings-icon { width: 42px; height: 42px; flex: none; }
 .settings-service-identity > span { min-width: 0; display: grid; grid-template-columns: auto auto; align-items: center; column-gap: 10px; row-gap: 5px; }
@@ -150,6 +158,7 @@
   .settings-select-row .ant-select { width: 100%; min-width: 0; }
   .settings-model-select { min-height: 56px; }
   .settings-service-card { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .settings-tool-row { align-items: flex-start; }
   .settings-service-actions { width: 100%; }
   .settings-secondary-button, .settings-outline-button { flex: 1; min-height: 42px; }
   .settings-danger-button { flex: 1; min-height: 42px; }

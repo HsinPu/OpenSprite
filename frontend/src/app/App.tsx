@@ -11,6 +11,7 @@ import { useProviderCatalog } from "../features/ai-settings/useProviderCatalog";
 import { isTodayInTimeZone } from "../features/general-settings/dateTime";
 import { useGeneralSettings } from "../features/general-settings/useGeneralSettings";
 import { useConversationSettings } from "../features/conversation-settings/useConversationSettings";
+import { useToolSettings } from "../features/tool-settings/useToolSettings";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
@@ -71,6 +72,7 @@ export function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const generalSettings = useGeneralSettings();
   const conversationSettings = useConversationSettings();
+  const toolSettings = useToolSettings();
   const providerCatalog = useProviderCatalog();
   const {
     modelSelection,
@@ -434,6 +436,7 @@ export function App() {
           providerCatalog={providerCatalog}
           generalSettings={generalSettings}
           conversationSettings={conversationSettings}
+          toolSettings={toolSettings}
           onClose={closeSettings}
           onProviderModalChange={setProviderModalOpen}
         />

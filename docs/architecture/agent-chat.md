@@ -175,6 +175,15 @@ The UI localizes that stable tool id when it appears in persisted events and
 otherwise says that no extra tool was used. It does not advertise Search, File,
 Memory, or any other speculative capability.
 
+The Tools settings page reads the production catalog from `GET /api/tools` and
+persists the global switch plus enabled tool ids through
+`GET/PUT /api/settings/tools`. Tool settings live in
+`.opensprite/config/tools.json`, separate from AI and conversation settings.
+Each Run resolves one immutable availability snapshot before Context assembly.
+Only definitions in that snapshot are advertised to the model, and the Registry
+checks the same snapshot again before invocation. Changes therefore apply to
+new Runs without changing an active Run. Historical events remain readable.
+
 ## Persistence
 
 The first implementation uses five SQLite tables under
@@ -336,6 +345,10 @@ round/tool limits, cancellation, malformed model output, or safe Provider
 errors. The runtime composes the approved Calculator through one explicit
 production registry; the UI must not advertise tools that are not present in
 that composition.
+
+The `model.started` semantic event records the sorted tool ids advertised for
+that model request. It never records tool arguments or tool results. A disabled
+tool cannot be executed even if a Provider returns an unsolicited call for it.
 
 ## Provider and response-mode boundary
 

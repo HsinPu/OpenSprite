@@ -19,8 +19,10 @@ import { outputBudgetAvailable, outputBudgetLimit, outputBudgetValues } from "..
 import type { ProviderCatalogController } from "../ai-settings/useProviderCatalog";
 import type { GeneralSettingsController } from "../general-settings/useGeneralSettings";
 import type { ConversationSettingsController } from "../conversation-settings/useConversationSettings";
+import type { ToolSettingsController } from "../tool-settings/useToolSettings";
 import { GeneralSettings } from "./GeneralSettings";
 import { AboutSettings } from "./AboutSettings";
+import { ToolsSettings } from "./ToolsSettings";
 import { FutureSettingRow, Icon, SaveStatus, SettingsCard, type IconName } from "./SettingsPrimitives";
 import type { SettingsSection } from "./settingsState";
 import "./settings.css";
@@ -45,6 +47,7 @@ type SettingsPageProps = {
   providerCatalog: ProviderCatalogController;
   generalSettings: GeneralSettingsController;
   conversationSettings: ConversationSettingsController;
+  toolSettings: ToolSettingsController;
   onClose: () => void;
   onProviderModalChange?: (open: boolean) => void;
 };
@@ -53,7 +56,7 @@ const categories: Array<{ id: SettingsSection | "memory" | "tools" | "appearance
   { id: "general", labelKey: "settings.category.general", icon: "settings", enabled: true },
   { id: "models", labelKey: "settings.category.models", icon: "robot", enabled: true },
   { id: "memory", labelKey: "settings.category.memory", icon: "database" },
-  { id: "tools", labelKey: "settings.category.tools", icon: "connections" },
+  { id: "tools", labelKey: "settings.category.tools", icon: "connections", enabled: true },
   { id: "appearance", labelKey: "settings.category.appearance", icon: "appearance" },
   { id: "privacy", labelKey: "settings.category.privacy", icon: "privacy" },
   { id: "about", labelKey: "settings.category.about", icon: "info", enabled: true },
@@ -426,9 +429,9 @@ function ModelsSettings({ modelSelection, responseMode, outputContinuation, resp
   );
 }
 
-export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, onClose, onProviderModalChange }: SettingsPageProps) {
+export function SettingsPage({ section, onSectionChange, modelSelection, responseMode, outputContinuation, responseDelivery, logFullPrompts, aiSettingsLoaded, aiSettingsSaving, aiSettingsError, onAiSettingsReload, onModelSelectionChange, onResponseModeChange, onOutputContinuationChange, onResponseDeliveryChange, onLogFullPromptsChange, providerCatalog, generalSettings, conversationSettings, toolSettings, onClose, onProviderModalChange }: SettingsPageProps) {
   const { t } = useI18n();
-  const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving;
+  const saving = aiSettingsSaving || generalSettings.saving || conversationSettings.saving || toolSettings.saving;
   const wasSavingRef = useRef(false);
   const [showSaveStatus, setShowSaveStatus] = useState(false);
   useEffect(() => {
@@ -460,7 +463,7 @@ export function SettingsPage({ section, onSectionChange, modelSelection, respons
           <p className="settings-rail-note">{t("settings.moreCategoriesFuture")}</p>
         </nav>
         <div className="settings-content">
-          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
+          {section === "general" ? <><div className="settings-intro"><h2>{t("settings.category.general")}</h2><p>{t("settings.generalIntro")}</p></div><GeneralSettings generalSettings={generalSettings} conversationSettings={conversationSettings} /></> : section === "models" ? <><div className="settings-intro"><h2>{t("settings.category.models")}</h2><p>{t("settings.modelsIntro")}</p></div><ModelsSettings modelSelection={modelSelection} responseMode={responseMode} outputContinuation={outputContinuation} responseDelivery={responseDelivery} logFullPrompts={logFullPrompts} aiSettingsLoaded={aiSettingsLoaded} aiSettingsSaving={aiSettingsSaving} aiSettingsError={aiSettingsError} onAiSettingsReload={onAiSettingsReload} onModelSelectionChange={onModelSelectionChange} onResponseModeChange={onResponseModeChange} onOutputContinuationChange={onOutputContinuationChange} onResponseDeliveryChange={onResponseDeliveryChange} onLogFullPromptsChange={onLogFullPromptsChange} providerCatalog={providerCatalog} onProviderModalChange={onProviderModalChange} modalContainer={modalContainer} /></> : section === "tools" ? <><div className="settings-intro"><h2>{t("settings.category.tools")}</h2><p>{t("settings.toolsIntro")}</p></div><ToolsSettings controller={toolSettings} /></> : <><div className="settings-intro"><h2>{t("settings.category.about")}</h2><p>{t("about.intro")}</p></div><AboutSettings /></>}
         </div>
       </div>
     </section>
