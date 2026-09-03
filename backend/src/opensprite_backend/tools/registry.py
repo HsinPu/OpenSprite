@@ -79,6 +79,8 @@ class ToolRegistry:
         context: ToolContext,
         availability: ToolAvailabilitySnapshot | None = None,
         on_authorized: Callable[[], Awaitable[None]] | None = None,
+        *,
+        allow_approval: bool = True,
     ) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:
@@ -102,6 +104,11 @@ class ToolRegistry:
             )
         grant: ToolApprovalGrant | None = None
         if not self._policy.allows(definition):
+            if not allow_approval:
+                raise ToolInvocationError(
+                    "scheduled_tool_approval_required",
+                    "排程執行不會自動核准這項工具。",
+                )
             if self._approval is None:
                 raise ToolInvocationError(
                     "tool_denied",

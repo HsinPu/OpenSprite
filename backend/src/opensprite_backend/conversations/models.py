@@ -14,6 +14,7 @@ ContextBudget = Literal["auto", "32k", "64k", "128k", "256k", "max"]
 OutputBudget = Literal["auto", "8k", "16k", "32k", "64k", "max"]
 OutputContinuation = Literal["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]
 MessageRole = Literal["user", "assistant"]
+RunSource = Literal["user", "schedule"]
 MAX_ASSISTANT_CHARS = 1_048_576
 
 
@@ -119,6 +120,8 @@ class RunSnapshot:
     output_continuation: OutputContinuation = "5"
     log_full_prompts: bool = False
     completion_reason: CompletionReason | None = None
+    source: RunSource = "user"
+    occurrence_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

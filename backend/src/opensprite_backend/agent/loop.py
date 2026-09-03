@@ -54,6 +54,7 @@ from .events import (
     CONTEXT_PREPARATION_ERROR,
     INTERNAL_ERROR,
     INVALID_PROVIDER_RESPONSE,
+    SCHEDULED_TOOL_APPROVAL_REQUIRED,
     inference_error,
 )
 from .context import (
@@ -454,10 +455,14 @@ class AgentLoop:
                                 context,
                                 availability,
                                 record_tool_started,
+                                allow_approval=run.source != "schedule",
                             ),
                             cancellation_event,
                         )
                     except ToolInvocationError as error:
+                        if error.code == "scheduled_tool_approval_required":
+                            await delta_buffer.flush()
+                            return await self._fail(run_id, SCHEDULED_TOOL_APPROVAL_REQUIRED)
                         public_error = PublicRunError(
                             code="tool_failure",
                             message=error.message,

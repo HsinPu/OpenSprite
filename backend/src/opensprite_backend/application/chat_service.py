@@ -28,6 +28,7 @@ from opensprite_backend.provider_connections import (
     ProviderConnectionError,
     ProviderConnections,
 )
+from opensprite_backend.schedules.models import ExecutionProfile
 
 
 class ChatErrorCode(StrEnum):
@@ -238,6 +239,56 @@ class AgentChatService:
             raise AgentChatError(ChatErrorCode.SETTINGS_STORE_UNAVAILABLE) from error
         if settings.model is None:
             raise AgentChatError(ChatErrorCode.MODEL_NOT_SELECTED)
+        profile = ExecutionProfile(
+            settings.model.provider_id,
+            settings.model.model_id,
+            settings.responseMode.value,
+            settings.model.context_budget,
+            settings.model.output_budget,
+            settings.outputContinuation.value,
+        )
+        return await self._start_configured_run(
+            conversation_id=conversation_id,
+            client_request_id=client_request_id,
+            message=message,
+            profile=profile,
+            source="user",
+            occurrence_id=None,
+            log_full_prompts=settings.logFullPrompts,
+        )
+
+    async def start_scheduled_run(
+        self,
+        *,
+        conversation_id: str | None,
+        occurrence_id: str,
+        message: str,
+        profile: ExecutionProfile,
+    ) -> StartRunResult:
+        return await self._start_configured_run(
+            conversation_id=conversation_id,
+            client_request_id=occurrence_id,
+            message=message,
+            profile=profile,
+            source="schedule",
+            occurrence_id=occurrence_id,
+            log_full_prompts=False,
+        )
+
+    async def wait_run(self, run_id: str) -> RunSnapshot | None:
+        return await self._run_manager.wait(run_id)
+
+    async def _start_configured_run(
+        self,
+        *,
+        conversation_id: str | None,
+        client_request_id: str,
+        message: str,
+        profile: ExecutionProfile,
+        source: str,
+        occurrence_id: str | None,
+        log_full_prompts: bool,
+    ) -> StartRunResult:
         try:
             providers = await self._provider_connections.list_providers()
         except ProviderConnectionError as error:
@@ -251,7 +302,7 @@ class AgentChatService:
             (
                 provider
                 for provider in providers.providers
-                if provider.id == settings.model.provider_id
+                if provider.id == profile.provider_id
             ),
             None,
         )
@@ -263,13 +314,15 @@ class AgentChatService:
                 conversation_id=conversation_id,
                 client_request_id=client_request_id,
                 message=message,
-                provider_id=settings.model.provider_id,
-                model_id=settings.model.model_id,
-                response_mode=settings.responseMode.value,
-                context_budget=settings.model.context_budget,
-                output_budget=settings.model.output_budget,
-                output_continuation=settings.outputContinuation.value,
-                log_full_prompts=settings.logFullPrompts,
+                provider_id=profile.provider_id,
+                model_id=profile.model_id,
+                response_mode=profile.response_mode,
+                context_budget=profile.context_budget,
+                output_budget=profile.output_budget,
+                output_continuation=profile.output_continuation,
+                log_full_prompts=log_full_prompts,
+                source=source,
+                occurrence_id=occurrence_id,
             )
         except ConversationStoreError as error:
             raise _store_error(error) from error

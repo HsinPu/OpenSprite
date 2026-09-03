@@ -19,6 +19,7 @@ from .models import (
     ProviderId,
     PublicRunError,
     ResponseMode,
+    RunSource,
     RunEvent,
     RunEventType,
     RunSnapshot,
@@ -79,6 +80,8 @@ class ConversationRepository(Protocol):
         output_budget: OutputBudget = "auto",
         output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
+        source: RunSource = "user",
+        occurrence_id: str | None = None,
     ) -> StartRunResult: ...
 
     def get_latest_compaction(

@@ -163,6 +163,20 @@ def accepted_run(
     ).run
 
 
+def accepted_scheduled_run(repository: SqliteConversationRepository):
+    occurrence_id = str(uuid4())
+    return repository.start_run(
+        conversation_id=None,
+        client_request_id=occurrence_id,
+        message="整理排程工作",
+        provider_id="openrouter",
+        model_id="openrouter/auto",
+        response_mode="default",
+        source="schedule",
+        occurrence_id=occurrence_id,
+    ).run
+
+
 def seed_completed_turns(
     repository: SqliteConversationRepository,
     count: int,
@@ -977,6 +991,57 @@ async def test_structured_tool_call_returns_to_same_loop_before_final_answer(
     database_bytes = repository.database_file.read_bytes()
     assert b'"query"' not in database_bytes
     assert b'"today"' not in database_bytes
+
+
+@async_test
+async def test_scheduled_run_fails_closed_when_tool_requires_approval(
+    tmp_path: Path,
+) -> None:
+    repository = store(tmp_path)
+    run = accepted_scheduled_run(repository)
+    tool = LookupTool(
+        definition=ToolDefinition(
+            name="write_note",
+            description="Write one local note.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 50,
+                    }
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            effect=ToolEffect.LOCAL_WRITE,
+            timeout_seconds=1,
+            max_output_chars=1024,
+        )
+    )
+    gateway = ScriptedGateway(
+        [
+            [
+                ModelToolCall("call-1", "write_note", {"query": "today"}),
+                ModelCompleted(ModelFinishReason.TOOL_CALLS),
+            ]
+        ]
+    )
+
+    result = await AgentLoop(
+        repository=repository,
+        gateway=gateway,
+        tools=ToolRegistry([tool], policy=ReadOnlyToolPolicy()),
+        capability_resolver=TestCapabilityResolver(),
+    ).execute(run.id, asyncio.Event())
+
+    assert result.status is RunStatus.FAILED
+    assert result.error is not None
+    assert result.error.code == "scheduled_tool_approval_required"
+    assert tool.calls == []
+    events = repository.list_run_events(run.id, after_sequence=0, limit=100)
+    assert all(event.type is not RunEventType.TOOL_APPROVAL_REQUESTED for event in events)
 
 
 @async_test

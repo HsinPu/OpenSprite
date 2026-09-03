@@ -119,6 +119,61 @@ class SqliteScheduleRepository:
             return OccurrencePage(tuple(self._occurrence(row) for row in selected),self._encode(selected[-1]["scheduled_for"],selected[-1]["id"]) if len(rows)>limit and selected else None)
         finally: connection.close()
 
+    def list_due(self, *, now: datetime, limit: int = 100) -> tuple[Schedule, ...]:
+        if now.tzinfo is None or type(limit) is not int or not 1 <= limit <= 100: raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
+        connection=self._read()
+        if connection is None: return ()
+        try: return tuple(self._schedule(row) for row in connection.execute("SELECT * FROM schedules WHERE status='active' AND next_run_at IS NOT NULL AND next_run_at<=? ORDER BY next_run_at,id LIMIT ?",(self._stamp(now),limit)).fetchall())
+        finally: connection.close()
+
+    def list_incomplete_occurrences(self, *, limit: int = 100) -> tuple[Occurrence, ...]:
+        if type(limit) is not int or not 1 <= limit <= 100: raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
+        connection=self._read()
+        if connection is None: return ()
+        try: return tuple(self._occurrence(row) for row in connection.execute("SELECT * FROM schedule_occurrences WHERE status IN ('pending','running') ORDER BY scheduled_for,id LIMIT ?",(limit,)).fetchall())
+        finally: connection.close()
+
+    def claim_scheduled(self, schedule: Schedule, *, scheduled_for: datetime, next_run_at: datetime | None, next_status: ScheduleStatus, missed_count: int = 0, skipped_error: str | None = None) -> Occurrence:
+        self._require_id(schedule.id); identifier=self._new_id(); now=self._now()
+        occurrence_status=OccurrenceStatus.SKIPPED if skipped_error else OccurrenceStatus.PENDING
+        with self._write() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                connection.execute("INSERT INTO schedule_occurrences(id,schedule_id,scheduled_for,trigger,status,run_id,error_code,missed_count,started_at,finished_at,created_at) VALUES(?,?,?,'scheduled',?,NULL,?,?,NULL,?,?)",(identifier,schedule.id,self._stamp(scheduled_for),occurrence_status.value,skipped_error,missed_count,self._stamp(now) if skipped_error else None,self._stamp(now)))
+            except sqlite3.IntegrityError as error: raise ScheduleStoreError(ScheduleFailure.REVISION_CONFLICT) from error
+            changed=connection.execute("UPDATE schedules SET status=?,next_run_at=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?",(next_status.value,self._stamp(next_run_at),self._stamp(now),schedule.id,schedule.revision)).rowcount
+            if changed==0: self._raise_missing_or_conflict(connection,schedule.id)
+            connection.commit(); return self._occurrence(connection.execute("SELECT * FROM schedule_occurrences WHERE id=?",(identifier,)).fetchone())
+
+    def mark_occurrence_running(self, occurrence_id: str, run_id: str) -> Occurrence:
+        self._require_id(occurrence_id);self._require_id(run_id)
+        with self._write() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("UPDATE schedule_occurrences SET status='running',run_id=?,started_at=? WHERE id=? AND status='pending'",(run_id,self._stamp(self._now()),occurrence_id)).rowcount!=1: raise ScheduleStoreError(ScheduleFailure.REVISION_CONFLICT)
+            connection.commit();return self._occurrence(connection.execute("SELECT * FROM schedule_occurrences WHERE id=?",(occurrence_id,)).fetchone())
+
+    def finish_occurrence(self, occurrence_id: str, status: OccurrenceStatus, error_code: str | None = None) -> Occurrence:
+        self._require_id(occurrence_id)
+        if status not in {OccurrenceStatus.COMPLETED,OccurrenceStatus.FAILED,OccurrenceStatus.SKIPPED}: raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
+        with self._write() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("UPDATE schedule_occurrences SET status=?,error_code=?,finished_at=? WHERE id=? AND status IN ('pending','running')",(status.value,error_code,self._stamp(self._now()),occurrence_id)).rowcount!=1: raise ScheduleStoreError(ScheduleFailure.REVISION_CONFLICT)
+            connection.commit();return self._occurrence(connection.execute("SELECT * FROM schedule_occurrences WHERE id=?",(occurrence_id,)).fetchone())
+
+    def bind_conversation(self, schedule_id: str, conversation_id: str) -> Schedule:
+        self._require_id(schedule_id);self._require_id(conversation_id)
+        with self._write() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            changed=connection.execute("UPDATE schedules SET conversation_id=COALESCE(conversation_id,?),revision=revision+1,updated_at=? WHERE id=?",(conversation_id,self._stamp(self._now()),schedule_id)).rowcount
+            if changed!=1: raise ScheduleStoreError(ScheduleFailure.NOT_FOUND)
+            connection.commit();return self._schedule(self._require_row(connection,schedule_id))
+
+    def has_running_occurrence(self, schedule_id: str) -> bool:
+        self._require_id(schedule_id);connection=self._read()
+        if connection is None:return False
+        try:return connection.execute("SELECT 1 FROM schedule_occurrences WHERE schedule_id=? AND status='running' LIMIT 1",(schedule_id,)).fetchone() is not None
+        finally:connection.close()
+
     @contextmanager
     def _write(self):
         SqliteConversationRepository(self._database_file).ensure_schema()

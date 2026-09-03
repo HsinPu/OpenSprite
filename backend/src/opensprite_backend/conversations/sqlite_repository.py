@@ -32,6 +32,7 @@ from .models import (
     RunEvent,
     RunEventType,
     RunSnapshot,
+    RunSource,
     RunStatus,
     StartRunResult,
     StoreFailure,
@@ -77,6 +78,7 @@ _PUBLIC_ERROR_CODES = {
     "context_limit_exceeded",
     "context_preparation_failed",
     "tool_failure",
+    "scheduled_tool_approval_required",
     "invalid_provider_response",
     "internal_error",
 }
@@ -969,6 +971,8 @@ class SqliteConversationRepository:
         output_budget: OutputBudget = "auto",
         output_continuation: OutputContinuation = "5",
         log_full_prompts: bool = False,
+        source: RunSource = "user",
+        occurrence_id: str | None = None,
     ) -> StartRunResult:
         if conversation_id is not None:
             self._require_identifier(conversation_id)
@@ -987,9 +991,15 @@ class SqliteConversationRepository:
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
         if not isinstance(log_full_prompts, bool):
             raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if source not in {"user", "schedule"} or (source == "user") != (occurrence_id is None):
+            raise ConversationStoreError(StoreFailure.INVALID_REQUEST)
+        if occurrence_id is not None:
+            self._require_identifier(occurrence_id)
         request_fingerprint = self._request_fingerprint(
             conversation_id,
             normalized_message,
+            source,
+            occurrence_id,
         )
         with self._lock:
             connection = self._open_write()
@@ -1091,10 +1101,10 @@ class SqliteConversationRepository:
                         id, conversation_id, client_request_id, request_fingerprint,
                         user_message_id, assistant_message_id, provider_id, model_id,
                         response_mode, context_budget, output_budget, output_continuation,
-                        log_full_prompts,
+                        log_full_prompts, source, occurrence_id,
                         status, partial_text, created_at,
                         started_at, finished_at
-                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
+                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', '', ?, NULL, NULL)
                     """,
                     (
                         run_id,
@@ -1109,6 +1119,8 @@ class SqliteConversationRepository:
                         output_budget,
                         output_continuation,
                         int(log_full_prompts),
+                        source,
+                        occurrence_id,
                         now_text,
                     ),
                 )
@@ -1965,6 +1977,8 @@ class SqliteConversationRepository:
                 )
             ),
             completion_reason=completion_reason,
+            source=row["source"],
+            occurrence_id=row["occurrence_id"],
         )
 
     @staticmethod
@@ -2035,9 +2049,11 @@ class SqliteConversationRepository:
     def _request_fingerprint(
         conversation_id: str | None,
         message: str,
+        source: RunSource = "user",
+        occurrence_id: str | None = None,
     ) -> str:
         canonical = json.dumps(
-            {"conversationId": conversation_id, "message": message},
+            {"conversationId": conversation_id, "message": message, "source": source, "occurrenceId": occurrence_id},
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
