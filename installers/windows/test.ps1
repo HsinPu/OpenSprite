@@ -31,9 +31,10 @@ function Move-FileWithRetry([string]$Path, [string]$Destination, [int]$Attempts 
 }
 
 $installScript = Join-Path $PSScriptRoot "install.ps1"
+$accessScript = Join-Path $PSScriptRoot "access.ps1"
 $uninstallScript = Join-Path $PSScriptRoot "uninstall.ps1"
 $launchScript = Join-Path $PSScriptRoot "launch.ps1"
-foreach ($script in @($installScript, $uninstallScript, $launchScript)) {
+foreach ($script in @($installScript, $accessScript, $uninstallScript, $launchScript)) {
     $tokens = $null
     $errors = $null
     [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
@@ -73,17 +74,42 @@ if (-not $testRoot.StartsWith($tempRoot + "\", [System.StringComparison]::Ordina
     throw "Unsafe installer test root: $testRoot"
 }
 $installRoot = Join-Path $testRoot "app"
+$userDataRoot = Join-Path $testRoot ".opensprite"
 $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $quarantinedRuntimes = @()
 try {
-    & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -AllowCustomInstallRoot -SkipStartupRegistration -NoStart | Out-Null
+    . $accessScript
+    New-Item -ItemType Directory -Path (Join-Path $userDataRoot "config") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $userDataRoot "data") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $userDataRoot "logs") -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $userDataRoot "config\access.json"), "old-access", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $userDataRoot "config\settings.json"), "keep-settings", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $userDataRoot "data\opensprite.db"), "keep-database", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $userDataRoot "logs\keep.log"), "keep-log", [Text.UTF8Encoding]::new($false))
+    $rawBootstrap = New-LocalAccessBootstrap $userDataRoot -Reset
+    $storedBootstrap = Get-Content -LiteralPath (Join-Path $userDataRoot "state\access-bootstrap.json") -Raw
+    if (Test-Path -LiteralPath (Join-Path $userDataRoot "config\access.json")) { throw "Access reset retained the old password hash." }
+    if ($storedBootstrap.Contains($rawBootstrap)) { throw "Bootstrap state contains the raw token." }
+    foreach ($preserved in @("config\settings.json", "data\opensprite.db", "logs\keep.log")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $userDataRoot $preserved) -PathType Leaf)) { throw "Access reset removed preserved data: $preserved" }
+    }
+    $firstBootstrap = $storedBootstrap
+    $rawBootstrap = $null
+    $replacementBootstrap = New-LocalAccessBootstrap $userDataRoot
+    $storedBootstrap = Get-Content -LiteralPath (Join-Path $userDataRoot "state\access-bootstrap.json") -Raw
+    if ($storedBootstrap -eq $firstBootstrap) { throw "Existing bootstrap state was not atomically replaced." }
+    if ($storedBootstrap.Contains($replacementBootstrap)) { throw "Replacement bootstrap state contains the raw token." }
+    $replacementBootstrap = $null
+
+    & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -UserDataRoot $userDataRoot -AllowCustomInstallRoot -AllowCustomUserDataRoot -SkipAccessBootstrap -SkipStartupRegistration -NoStart | Out-Null
     foreach ($required in @(
         "build-info.json",
         "backend\.venv\Scripts\python.exe",
         "backend\src\opensprite_backend\installed_runtime.py",
         "frontend\dist\index.html",
         "installers\windows\uninstall.ps1",
-        "installers\windows\launch.ps1"
+        "installers\windows\launch.ps1",
+        "installers\windows\access.ps1"
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $installRoot $required) -PathType Leaf)) {
             throw "Isolated install is missing: $required"

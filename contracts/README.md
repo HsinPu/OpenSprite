@@ -33,6 +33,8 @@ tool arguments, tool results, credentials, or speculative external tools.
 MCP Servers with either no authentication or a write-only manual Bearer token,
 `local-paths.openapi.json` defines user-initiated native executable and directory
 selection without filesystem enumeration or persistence,
+`local-authentication.openapi.json` defines mandatory single-owner password,
+bootstrap and process-memory Session behavior,
 explicit process lifecycle operations and discovered Tool summaries.
 `tool-approvals.openapi.json` defines short-lived, single-use MCP Tool approval;
 full arguments are available only while the approval is pending.

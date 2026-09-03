@@ -30,7 +30,7 @@ function errorCode(value: unknown): ToolApprovalErrorCode {
 
 async function request(id: string, init?: RequestInit): Promise<unknown> {
   let response: Response;
-  try { response = await fetch(`/api/tool-approvals/${id}`, init); } catch { throw new ToolApprovalApiError("network_error"); }
+  try { response = await apiFetch(`/api/tool-approvals/${id}`, init); } catch { throw new ToolApprovalApiError("network_error"); }
   let body: unknown;
   try { body = await response.json(); } catch { throw new ToolApprovalApiError("malformed_response"); }
   if (response.status !== 200) throw new ToolApprovalApiError(errorCode(body));
@@ -62,3 +62,4 @@ export function toolApprovalErrorText(error: unknown, t: Translator = defaultTra
   };
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

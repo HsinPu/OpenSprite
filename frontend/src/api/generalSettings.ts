@@ -51,7 +51,7 @@ function errorCode(value: unknown, allowed: readonly string[]): GeneralSettingsE
 async function request(init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>): Promise<GeneralSettings> {
   let response: Response;
   try {
-    response = await fetch("/api/settings/general", init);
+    response = await apiFetch("/api/settings/general", init);
   } catch {
     throw new GeneralSettingsApiError("network_error");
   }
@@ -85,3 +85,4 @@ export function generalSettingsErrorText(error: unknown, t: Translator = default
   } satisfies Record<GeneralSettingsErrorCode, MessageKey>;
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

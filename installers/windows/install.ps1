@@ -5,12 +5,18 @@ param(
     [string]$StartupName = "OpenSprite",
     [int]$Port = 8765,
     [switch]$NoStart,
+    [switch]$ResetLocalAccess,
+    [string]$UserDataRoot = (Join-Path $env:USERPROFILE ".opensprite"),
     [switch]$SkipStartupRegistration,
-    [switch]$AllowCustomInstallRoot
+    [switch]$AllowCustomInstallRoot,
+    [switch]$AllowCustomUserDataRoot,
+    [switch]$SkipAccessBootstrap,
+    [switch]$SkipBrowserLaunch
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "access.ps1")
 
 function Resolve-AbsolutePath([string]$Path) {
     return [System.IO.Path]::GetFullPath(
@@ -126,10 +132,22 @@ function Wait-OpenSpriteHealth([int]$ListenPort, [int]$TimeoutSeconds = 20) {
 
 $sourceRootPath = Resolve-AbsolutePath $SourceRoot
 $installRootPath = Resolve-AbsolutePath $InstallRoot
+$userDataRootPath = Resolve-AbsolutePath $UserDataRoot
 $expectedRoot = Resolve-AbsolutePath (Join-Path $env:LOCALAPPDATA "OpenSprite\app")
+$expectedUserDataRoot = Resolve-AbsolutePath (Join-Path $env:USERPROFILE ".opensprite")
 if (-not $AllowCustomInstallRoot -and -not (Test-SamePath $installRootPath $expectedRoot)) {
     throw "InstallRoot must be the official OpenSprite app path: $expectedRoot"
 }
+if (-not $AllowCustomUserDataRoot -and -not (Test-SamePath $userDataRootPath $expectedUserDataRoot)) {
+    throw "UserDataRoot must be the official OpenSprite data path: $expectedUserDataRoot"
+}
+if ($ResetLocalAccess -and -not (Test-SamePath $userDataRootPath $expectedUserDataRoot)) {
+    throw "ResetLocalAccess is restricted to the official OpenSprite data path: $expectedUserDataRoot"
+}
+if ($SkipAccessBootstrap -and (-not $AllowCustomUserDataRoot -or -not $NoStart)) {
+    throw "SkipAccessBootstrap is reserved for non-starting isolated tests with a custom user-data root."
+}
+if ($ResetLocalAccess -and $SkipAccessBootstrap) { throw "ResetLocalAccess cannot be combined with SkipAccessBootstrap." }
 if ($SkipStartupRegistration -and -not $NoStart) {
     throw "SkipStartupRegistration requires NoStart."
 }
@@ -150,10 +168,11 @@ $dirty = $true
 $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
 if ($null -eq $gitCommand) { $gitCommand = Get-Command git -ErrorAction SilentlyContinue }
 if ($null -ne $gitCommand) {
-    $resolvedRevision = (& $gitCommand.Source -C $sourceRootPath rev-parse --short=8 HEAD 2>$null)
+    $gitSafeDirectory = $sourceRootPath.Replace("\", "/")
+    $resolvedRevision = (& $gitCommand.Source -c "safe.directory=$gitSafeDirectory" -C $sourceRootPath rev-parse --short=8 HEAD 2>$null)
     if ($LASTEXITCODE -eq 0 -and -not [String]::IsNullOrWhiteSpace($resolvedRevision)) {
         $revision = $resolvedRevision.Trim().ToLowerInvariant()
-        $gitStatus = (& $gitCommand.Source -C $sourceRootPath status --porcelain -- `
+        $gitStatus = (& $gitCommand.Source -c "safe.directory=$gitSafeDirectory" -C $sourceRootPath status --porcelain -- `
             backend/src backend/pyproject.toml backend/uv.lock `
             frontend/src frontend/package.json frontend/package-lock.json `
             frontend/index.html frontend/tsconfig.json frontend/vite.config.ts `
@@ -193,6 +212,7 @@ try {
         Copy-RequiredItem (Join-Path $sourceRootPath "frontend\$file") (Join-Path $stagingRoot "frontend")
     }
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\install.ps1") (Join-Path $stagingRoot "installers\windows")
+    Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\access.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\launch.ps1") (Join-Path $stagingRoot "installers\windows")
     Copy-RequiredItem (Join-Path $sourceRootPath "installers\windows\uninstall.ps1") (Join-Path $stagingRoot "installers\windows")
     $installedAt = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
@@ -246,6 +266,19 @@ try {
         }
     }
 
+    $accessPath = Join-Path $userDataRootPath "config\access.json"
+    $needsBootstrap = $ResetLocalAccess -or -not (Test-Path -LiteralPath $accessPath -PathType Leaf)
+    if ($needsBootstrap -and -not $SkipAccessBootstrap) {
+        if ($NoStart) { throw "A new local access password must be configured while OpenSprite is running. Remove -NoStart or use the isolated-test bootstrap bypass." }
+        $bootstrapToken = New-LocalAccessBootstrap $userDataRootPath -Reset:$ResetLocalAccess
+        try {
+            if (-not $SkipBrowserLaunch) {
+                Start-Process -FilePath "http://localhost:$Port/#setup=$bootstrapToken"
+            }
+        }
+        finally { $bootstrapToken = $null }
+    }
+
     if (Test-Path -LiteralPath $previousRoot) {
         $previousCleanupComplete = Remove-DirectoryWithRetry $previousRoot $installParent
     }
@@ -257,7 +290,7 @@ try {
         Version = $productVersion
         Revision = $revision
         Dirty = [bool]$dirty
-        Url = "http://127.0.0.1:$Port/"
+        Url = "http://localhost:$Port/"
     }
 }
 catch {

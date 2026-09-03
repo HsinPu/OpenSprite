@@ -23,7 +23,7 @@ function errorCode(value: unknown): LocalPathErrorCode {
 export async function pickLocalPath(kind: LocalPathKind): Promise<string | null> {
   let response: Response;
   try {
-    response = await fetch("/api/local-paths/pick", {
+    response = await apiFetch("/api/local-paths/pick", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind }),
@@ -52,3 +52,4 @@ export function localPathErrorText(error: unknown, t: Translator = defaultTransl
   };
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

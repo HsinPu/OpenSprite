@@ -169,7 +169,7 @@ def test_runtime_composes_general_settings_without_creating_data(tmp_path: Path)
     assert not paths.home.exists()
     run(runtime.aclose())
 
-    app = create_system_app(app_paths=paths)
+    app = create_system_app(app_paths=paths, enforce_authentication=False)
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/general")
         assert response.status_code == 200

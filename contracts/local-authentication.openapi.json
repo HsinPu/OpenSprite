@@ -1,0 +1,24 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "OpenSprite local authentication API", "version": "0.1.0", "description": "Mandatory single-owner local password and process-memory session contract."},
+  "security": [{"localSession": []}],
+  "paths": {
+    "/api/auth/status": {"get": {"operationId": "getAuthStatus", "security": [], "responses": {"200": {"description": "Current local access state", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AuthStatus"}}}}}}},
+    "/api/auth/setup": {"post": {"operationId": "setupLocalAccess", "security": [], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SetupRequest"}}}}, "responses": {"200": {"description": "Password configured and session issued"}, "400": {"$ref": "#/components/responses/Error"}, "409": {"$ref": "#/components/responses/Error"}, "503": {"$ref": "#/components/responses/Error"}}}},
+    "/api/auth/login": {"post": {"operationId": "loginLocalAccess", "security": [], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LoginRequest"}}}}, "responses": {"200": {"description": "Session issued"}, "401": {"$ref": "#/components/responses/Error"}, "429": {"$ref": "#/components/responses/Error"}}}},
+    "/api/auth/logout": {"post": {"operationId": "logoutLocalAccess", "responses": {"204": {"description": "Current session revoked"}, "401": {"$ref": "#/components/responses/Error"}}}},
+    "/api/auth/logout-all": {"post": {"operationId": "logoutAllLocalAccess", "responses": {"204": {"description": "All sessions revoked"}, "401": {"$ref": "#/components/responses/Error"}}}},
+    "/api/auth/password": {"put": {"operationId": "changeLocalPassword", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PasswordChangeRequest"}}}}, "responses": {"200": {"description": "Password changed and current session replaced"}, "400": {"$ref": "#/components/responses/Error"}, "401": {"$ref": "#/components/responses/Error"}}}}
+  },
+  "components": {
+    "securitySchemes": {"localSession": {"type": "apiKey", "in": "cookie", "name": "__Host-OpenSpriteSession"}},
+    "schemas": {
+      "SetupRequest": {"type": "object", "additionalProperties": false, "required": ["bootstrapToken", "password"], "properties": {"bootstrapToken": {"type": "string", "minLength": 32, "maxLength": 128, "writeOnly": true}, "password": {"type": "string", "minLength": 15, "maxLength": 128, "writeOnly": true}}},
+      "LoginRequest": {"type": "object", "additionalProperties": false, "required": ["password"], "properties": {"password": {"type": "string", "minLength": 1, "maxLength": 128, "writeOnly": true}}},
+      "PasswordChangeRequest": {"type": "object", "additionalProperties": false, "required": ["currentPassword", "newPassword"], "properties": {"currentPassword": {"type": "string", "minLength": 1, "maxLength": 128, "writeOnly": true}, "newPassword": {"type": "string", "minLength": 15, "maxLength": 128, "writeOnly": true}}},
+      "AuthStatus": {"oneOf": [{"type": "object", "additionalProperties": false, "required": ["state"], "properties": {"state": {"const": "setup_required"}}}, {"type": "object", "additionalProperties": false, "required": ["state"], "properties": {"state": {"const": "unauthenticated"}}}, {"type": "object", "additionalProperties": false, "required": ["state", "expiresAt"], "properties": {"state": {"const": "authenticated"}, "expiresAt": {"type": "string", "format": "date-time"}}}], "discriminator": {"propertyName": "state"}},
+      "ErrorEnvelope": {"type": "object", "additionalProperties": false, "required": ["error"], "properties": {"error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"], "properties": {"code": {"type": "string", "enum": ["invalid_request", "invalid_credentials", "authentication_required", "setup_required", "setup_unavailable", "rate_limited", "access_store_unavailable", "internal_error"]}, "message": {"type": "string"}, "retryable": {"type": "boolean"}}}}}
+    },
+    "responses": {"Error": {"description": "Safe authentication error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}}
+  }
+}

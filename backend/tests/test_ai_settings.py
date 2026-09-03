@@ -368,7 +368,7 @@ def test_system_app_uses_one_injected_data_root_for_ai_settings(
     tmp_path: Path,
 ) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
-    app = create_system_app(app_paths=paths)
+    app = create_system_app(app_paths=paths, enforce_authentication=False)
 
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/ai")

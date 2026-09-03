@@ -17,12 +17,24 @@ The installer:
 - installs to `%LOCALAPPDATA%\OpenSprite\app`;
 - registers one `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry
   named `OpenSprite` that invokes the installed hidden PowerShell launcher;
-- starts the launcher and verifies `/healthz` plus the frontend index;
+- starts the launcher, verifies `/healthz` plus the frontend index, and opens a
+  one-time local password setup link on first install;
 - rolls the application directory back if dependency setup, task registration,
   startup or health verification fails.
 
-The installed UI is available at `http://127.0.0.1:8765/`. The backend and
+The installed UI is available at `http://localhost:8765/`. The backend and
 frontend share one loopback origin and one Uvicorn process.
+
+Existing upgrades preserve `~/.opensprite/config/access.json`. To replace a
+forgotten local password without deleting conversations, provider credentials,
+MCP settings, or logs, run:
+
+```powershell
+./installers/windows/install.ps1 -ResetLocalAccess
+```
+
+The reset stops the previous backend, replaces only the local-access bootstrap
+state, and opens a fresh setup link that expires after 30 minutes.
 
 ## Uninstall
 

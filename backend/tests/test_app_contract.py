@@ -148,6 +148,12 @@ def test_app_routes_and_operation_ids_match_contract() -> None:
     assert operations == {
         ("/healthz", "get", "getHealth"),
         ("/api/app-info", "get", "getAppInfo"),
+        ("/api/auth/status", "get", "getAuthStatus"),
+        ("/api/auth/setup", "post", "setupLocalAccess"),
+        ("/api/auth/login", "post", "loginLocalAccess"),
+        ("/api/auth/logout", "post", "logoutLocalAccess"),
+        ("/api/auth/logout-all", "post", "logoutAllLocalAccess"),
+        ("/api/auth/password", "put", "changeLocalPassword"),
         ("/api/settings/ai", "get", "getAiSettings"),
         ("/api/settings/ai", "put", "putAiSettings"),
         ("/api/settings/general", "get", "getGeneralSettings"),
@@ -312,7 +318,7 @@ def test_app_info_uses_the_package_version() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "version": "0.7.0",
+        "version": "0.8.0",
         "revision": "development",
         "buildType": "development",
         "dirty": True,

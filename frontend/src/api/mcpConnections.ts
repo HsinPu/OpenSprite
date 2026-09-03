@@ -92,7 +92,7 @@ function errorCode(value: unknown): McpErrorCode {
 
 async function request(path: string, init?: RequestInit, expected = 200): Promise<unknown> {
   let response: Response;
-  try { response = await fetch(path, init); } catch { throw new McpApiError("network_error"); }
+  try { response = await apiFetch(path, init); } catch { throw new McpApiError("network_error"); }
   if (response.status === 204 && expected === 204) return null;
   let body: unknown;
   try { body = await response.json(); } catch { throw new McpApiError("malformed_response"); }
@@ -124,3 +124,4 @@ export function mcpErrorText(error: unknown, t: Translator = defaultTranslator):
   };
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

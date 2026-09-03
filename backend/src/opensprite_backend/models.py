@@ -40,6 +40,60 @@ class HealthResponse(ContractModel):
     status: Literal["ok"] = "ok"
 
 
+class AuthSetupRequired(ContractModel):
+    state: Literal["setup_required"] = "setup_required"
+
+
+class AuthUnauthenticated(ContractModel):
+    state: Literal["unauthenticated"] = "unauthenticated"
+
+
+class AuthAuthenticated(ContractModel):
+    state: Literal["authenticated"] = "authenticated"
+    expiresAt: datetime
+
+
+AuthStatus = Annotated[
+    AuthSetupRequired | AuthUnauthenticated | AuthAuthenticated,
+    Field(discriminator="state"),
+]
+
+
+class AuthErrorCode(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    INVALID_CREDENTIALS = "invalid_credentials"
+    SETUP_REQUIRED = "setup_required"
+    SETUP_UNAVAILABLE = "setup_unavailable"
+    RATE_LIMITED = "rate_limited"
+    AUTHENTICATION_REQUIRED = "authentication_required"
+    ACCESS_STORE_UNAVAILABLE = "access_store_unavailable"
+    INTERNAL_ERROR = "internal_error"
+
+
+class AuthErrorDetail(ContractModel):
+    code: AuthErrorCode
+    message: str
+    retryable: StrictBool
+
+
+class AuthErrorEnvelope(ContractModel):
+    error: AuthErrorDetail
+
+
+class AuthSetupRequest(ContractModel):
+    bootstrapToken: SecretStr = Field(min_length=32, max_length=128)
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class AuthLoginRequest(ContractModel):
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class AuthPasswordChangeRequest(ContractModel):
+    currentPassword: SecretStr = Field(min_length=1, max_length=128)
+    newPassword: SecretStr = Field(min_length=1, max_length=128)
+
+
 class LocalPathPickRequest(ContractModel):
     kind: Literal["executable", "directory"]
 

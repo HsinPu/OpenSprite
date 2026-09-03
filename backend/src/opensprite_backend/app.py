@@ -19,6 +19,7 @@ from .api.conversation_settings_routes import (
     conversation_settings_error_response,
     router as conversation_settings_router,
 )
+from .api.auth_routes import auth_error_response, router as auth_router
 from .api.app_info_routes import router as app_info_router
 from .api.general_settings_routes import (
     general_settings_error_response,
@@ -52,6 +53,12 @@ from .local_paths import (
     LocalPathPickerOperations,
     UnavailableLocalPathPicker,
 )
+from .authentication import (
+    LocalAuthenticationError,
+    LocalAuthenticationOperations,
+    UnavailableLocalAuthentication,
+)
+from .authentication.middleware import LocalAuthenticationMiddleware, ResponseSecurityHeadersMiddleware
 from .models import (
     AppInfo,
     AiSettingsErrorCode,
@@ -112,11 +119,13 @@ def create_app(
     tool_settings: ToolSettingsOperations | None = None,
     mcp_connections: McpConnections | None = None,
     local_path_picker: LocalPathPickerOperations | None = None,
+    local_authentication: LocalAuthenticationOperations | None = None,
     tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
+    enforce_authentication: bool = False,
 ) -> FastAPI:
     """Create the ASGI app with an injectable provider-connection boundary."""
 
@@ -162,12 +171,23 @@ def create_app(
         if local_path_picker is not None
         else UnavailableLocalPathPicker()
     )
+    app.state.local_authentication = (
+        local_authentication
+        if local_authentication is not None
+        else UnavailableLocalAuthentication()
+    )
     app.state.tool_approvals = (
         tool_approvals if tool_approvals is not None else UnavailableToolApprovals()
     )
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
     )
+    if enforce_authentication:
+        app.add_middleware(
+            LocalAuthenticationMiddleware,
+            authentication=app.state.local_authentication,
+            unauthorized_response=lambda: auth_error_response("authentication_required"),
+        )
     if enforce_local_security:
         app.add_middleware(
             LocalRequestSecurityMiddleware,
@@ -175,12 +195,15 @@ def create_app(
                 ErrorCode.INVALID_REQUEST
             ),
         )
+    app.add_middleware(ResponseSecurityHeadersMiddleware)
 
     async def validation_error_handler(
         request: Request,
         exc: RequestValidationError,
     ) -> JSONResponse:
         del exc
+        if request.url.path.startswith("/api/auth/"):
+            return auth_error_response("invalid_request")
         if request.url.path == "/api/local-paths/pick":
             return local_path_error_response("invalid_request")
         return provider_error_response(ErrorCode.INVALID_REQUEST)
@@ -191,6 +214,13 @@ def create_app(
     ) -> JSONResponse:
         del request
         return local_path_error_response(exc.code)
+
+    async def local_authentication_error_handler(
+        request: Request,
+        exc: LocalAuthenticationError,
+    ) -> JSONResponse:
+        del request
+        return auth_error_response(exc.code, retry_after=exc.retry_after)
 
     async def provider_error_handler(
         request: Request,
@@ -290,6 +320,10 @@ def create_app(
         cast(ExceptionHandler, local_path_error_handler),
     )
     app.add_exception_handler(
+        LocalAuthenticationError,
+        cast(ExceptionHandler, local_authentication_error_handler),
+    )
+    app.add_exception_handler(
         SettingsStoreError,
         cast(ExceptionHandler, settings_store_error_handler),
     )
@@ -340,6 +374,7 @@ def create_app(
         return HealthResponse()
 
     app.include_router(app_info_router)
+    app.include_router(auth_router)
     app.include_router(ai_settings_router)
     app.include_router(general_settings_router)
     app.include_router(conversation_settings_router)

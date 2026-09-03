@@ -72,7 +72,7 @@ def test_system_app_is_offline_until_lifespan_entry() -> None:
         factory_calls += 1
         return FakeRuntime()
 
-    app = create_system_app(runtime_factory=factory)
+    app = create_system_app(runtime_factory=factory, enforce_authentication=False)
 
     assert factory_calls == 0
     assert isinstance(
@@ -89,7 +89,7 @@ def test_sequential_lifespans_use_and_close_fresh_runtimes() -> None:
         runtimes.append(runtime)
         return runtime
 
-    app = create_system_app(runtime_factory=factory)
+    app = create_system_app(runtime_factory=factory, enforce_authentication=False)
 
     for expected_count in (1, 2):
         with TestClient(app, base_url="http://127.0.0.1:8765") as client:
@@ -119,7 +119,7 @@ def test_close_failure_unbinds_and_later_entry_uses_fresh_runtime() -> None:
         FakeRuntime(),
     ]
     pending: Iterator[FakeRuntime] = iter(runtimes)
-    app = create_system_app(runtime_factory=lambda: next(pending))
+    app = create_system_app(runtime_factory=lambda: next(pending), enforce_authentication=False)
     unbound_during_close: list[bool] = []
     runtimes[0].client.on_close = lambda: unbound_during_close.append(
         isinstance(
@@ -160,7 +160,7 @@ def test_factory_failure_does_not_enter_or_bind_and_can_retry() -> None:
             raise RuntimeError("startup failed")
         return runtime
 
-    app = create_system_app(runtime_factory=factory)
+    app = create_system_app(runtime_factory=factory, enforce_authentication=False)
 
     with pytest.raises(RuntimeError, match="startup failed"):
         with TestClient(app, base_url="http://localhost:8765"):
@@ -182,7 +182,7 @@ def test_factory_failure_does_not_enter_or_bind_and_can_retry() -> None:
 
 def test_exception_inside_lifespan_closes_and_unbinds_runtime() -> None:
     runtime = FakeRuntime()
-    app = create_system_app(runtime_factory=lambda: runtime)
+    app = create_system_app(runtime_factory=lambda: runtime, enforce_authentication=False)
 
     async def exercise_lifespan() -> None:
         with pytest.raises(RuntimeError, match="lifespan body failed"):
@@ -208,7 +208,7 @@ def test_concurrent_lifespan_entry_is_rejected_before_serving() -> None:
         factory_calls += 1
         return runtime
 
-    app = create_system_app(runtime_factory=factory)
+    app = create_system_app(runtime_factory=factory, enforce_authentication=False)
 
     async def exercise_lifespans() -> None:
         async with app.router.lifespan_context(app):
@@ -241,7 +241,7 @@ def test_real_system_runtime_exposes_chat_and_interrupts_orphaned_run(
         model_id="openrouter/auto",
         response_mode="default",
     ).run
-    app = create_system_app(app_paths=paths)
+    app = create_system_app(app_paths=paths, enforce_authentication=False)
 
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         response = client.get(f"/api/runs/{queued.id}")

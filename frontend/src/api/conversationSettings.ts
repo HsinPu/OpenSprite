@@ -63,7 +63,7 @@ function errorCode(value: unknown, allowed: readonly string[]): ConversationSett
 async function request(init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>): Promise<ConversationSettings> {
   let response: Response;
   try {
-    response = await fetch("/api/settings/conversation", init);
+    response = await apiFetch("/api/settings/conversation", init);
   } catch {
     throw new ConversationSettingsApiError("network_error");
   }
@@ -97,3 +97,4 @@ export function conversationSettingsErrorText(error: unknown, t: Translator = de
   } satisfies Record<ConversationSettingsErrorCode, MessageKey>;
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

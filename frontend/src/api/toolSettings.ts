@@ -82,7 +82,7 @@ function errorCode(value: unknown, allowed: readonly string[]): ToolSettingsErro
 
 async function getJson(path: string, init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>): Promise<unknown> {
   let response: Response;
-  try { response = await fetch(path, init); } catch { throw new ToolSettingsApiError("network_error"); }
+  try { response = await apiFetch(path, init); } catch { throw new ToolSettingsApiError("network_error"); }
   let body: unknown;
   try { body = await response.json(); } catch { throw new ToolSettingsApiError("malformed_response"); }
   if (response.status !== 200) {
@@ -119,3 +119,4 @@ export function toolSettingsErrorText(error: unknown, t: Translator = defaultTra
   } satisfies Record<ToolSettingsErrorCode, MessageKey>;
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

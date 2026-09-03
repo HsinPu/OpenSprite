@@ -6,6 +6,7 @@ import jaJP from "antd/locale/ja_JP";
 import zhTW from "antd/locale/zh_TW";
 
 import { App } from "./app/App";
+import { AuthGate } from "./features/auth/AuthGate";
 import { I18nProvider, useI18n } from "./i18n/I18nProvider";
 import "./app/app.css";
 
@@ -49,7 +50,7 @@ createRoot(root).render(
   <StrictMode>
     <I18nProvider>
       <LocalizedConfig>
-        <App />
+        <AuthGate><App /></AuthGate>
       </LocalizedConfig>
     </I18nProvider>
   </StrictMode>,

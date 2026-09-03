@@ -220,7 +220,7 @@ def test_runtime_composes_tool_settings_without_creating_config(tmp_path: Path) 
     assert not paths.home.exists()
     run(runtime.aclose())
 
-    app = create_system_app(app_paths=paths)
+    app = create_system_app(app_paths=paths, enforce_authentication=False)
     with TestClient(app, base_url="http://localhost:8765") as client:
         response = client.get("/api/settings/tools")
         assert response.status_code == 200

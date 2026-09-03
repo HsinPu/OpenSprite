@@ -216,3 +216,6 @@
 @media (prefers-reduced-motion: reduce) {
   .settings-page *, .settings-page *::before, .settings-page *::after { transition-duration: .001ms !important; animation-duration: .001ms !important; }
 }
+.settings-password-form { display: grid; gap: 10px; max-width: 480px; }
+.settings-password-form label { margin-top: 4px; font-weight: 600; }
+.settings-password-form .ant-btn { justify-self: start; margin-top: 8px; }

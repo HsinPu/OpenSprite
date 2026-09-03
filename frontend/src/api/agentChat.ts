@@ -174,7 +174,7 @@ function errorCode(value: unknown, allowed: readonly ChatServerErrorCode[]): Cha
 async function jsonRequest(path: string, init: RequestInit | undefined, successStatus: number, errors: ReadonlyMap<number, readonly ChatServerErrorCode[]>): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await apiFetch(path, init);
   } catch {
     throw new AgentChatApiError("network_error");
   }
@@ -286,7 +286,13 @@ export function openRunEventStream(runId: string, handlers: RunEventStreamHandle
       }
     });
   }
-  source.onerror = () => { if (!closed) handlers.onError(new AgentChatApiError("network_error")); };
+  source.onerror = () => {
+    if (closed) return;
+    void getAuthStatus().then((status) => {
+      if (status.state !== "authenticated") notifyAuthenticationRequired();
+      else handlers.onError(new AgentChatApiError("network_error"));
+    }).catch(() => handlers.onError(new AgentChatApiError("network_error")));
+  };
   return { close };
 }
 
@@ -318,3 +324,5 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
   return t(keys[code]);
 }
 import { defaultTranslator, type MessageKey, type Translator } from "../i18n/catalog";
+import { getAuthStatus } from "./authentication";
+import { apiFetch, notifyAuthenticationRequired } from "./http";

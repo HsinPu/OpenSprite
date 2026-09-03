@@ -66,7 +66,7 @@ function errorCode(value: unknown, allowed: readonly string[]): AiSettingsErrorC
 async function request(init: RequestInit | undefined, errors: ReadonlyMap<number, readonly string[]>): Promise<AiSettings> {
   let response: Response;
   try {
-    response = await fetch("/api/settings/ai", init);
+    response = await apiFetch("/api/settings/ai", init);
   } catch {
     throw new AiSettingsApiError("network_error");
   }
@@ -110,3 +110,4 @@ export function aiSettingsErrorText(error: unknown, t: Translator = defaultTrans
   } satisfies Record<AiSettingsErrorCode, MessageKey>;
   return t(keys[code]);
 }
+import { apiFetch } from "./http";

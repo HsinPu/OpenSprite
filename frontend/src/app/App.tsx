@@ -16,6 +16,7 @@ import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
 import { SettingsPage } from "../features/settings/SettingsPage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
+import { useAuthentication } from "../features/auth/AuthGate";
 
 function conversationIdFromHash(): string | null {
   if (!window.location.hash.startsWith("#chat=")) return null;
@@ -54,6 +55,7 @@ function ConversationButton({
 
 export function App() {
   const { t } = useI18n();
+  const { signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
   const {
     conversations,
@@ -365,6 +367,10 @@ export function App() {
           >
             <span aria-hidden="true">⚙</span>
             <span className="utility-label">{t("app.settings")}</span>
+          </button>
+          <button type="button" aria-label={t("app.logout")} title={t("app.logout")} onClick={() => void signOut()}>
+            <span aria-hidden="true">↪</span>
+            <span className="utility-label">{t("app.logout")}</span>
           </button>
         </nav>
       </aside>

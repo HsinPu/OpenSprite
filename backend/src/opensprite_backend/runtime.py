@@ -39,6 +39,7 @@ from .mcp import (
     UnavailableMcpConnections,
     create_mcp_connection_manager,
 )
+from .authentication import create_local_authentication
 from .general_settings import (
     GeneralSettingsOperations,
     UnavailableGeneralSettings,
@@ -194,11 +195,13 @@ def create_system_app(
     *,
     app_paths: AppPaths | None = None,
     runtime_factory: RuntimeFactory | None = None,
+    enforce_authentication: bool = True,
 ) -> FastAPI:
     """Create an offline secured app with one fresh runtime per lifespan."""
 
     entry_lock = Lock()
     paths = app_paths if app_paths is not None else build_app_paths()
+    local_authentication = create_local_authentication(paths)
     factory = runtime_factory
     if factory is None:
         factory = lambda: create_system_runtime(app_paths=paths)
@@ -279,4 +282,6 @@ def create_system_app(
         lifespan=lifespan,
         enforce_local_security=True,
         local_path_picker=create_local_path_picker(),
+        local_authentication=local_authentication,
+        enforce_authentication=enforce_authentication,
     )
