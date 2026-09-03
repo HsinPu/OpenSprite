@@ -32,6 +32,10 @@ class ScheduleOperations(Protocol):
         limit: int,
         before: str | None,
     ) -> OccurrencePage: ...
+    async def latest_occurrences(
+        self,
+        schedule_ids: tuple[str, ...],
+    ) -> dict[str, Occurrence]: ...
 
 
 class UnavailableSchedules:
@@ -73,6 +77,10 @@ class UnavailableSchedules:
 
     async def occurrences(self, schedule_id, *, limit, before):
         del schedule_id, limit, before
+        self._raise()
+
+    async def latest_occurrences(self, schedule_ids):
+        del schedule_ids
         self._raise()
 
 
@@ -195,6 +203,15 @@ class ScheduleService:
             schedule_id,
             limit=limit,
             before=before,
+        )
+
+    async def latest_occurrences(
+        self,
+        schedule_ids: tuple[str, ...],
+    ) -> dict[str, Occurrence]:
+        return await asyncio.to_thread(
+            self.repository.latest_occurrences,
+            schedule_ids,
         )
 
     def _next(self, draft: ScheduleDraft, after: datetime) -> datetime | None:

@@ -119,6 +119,38 @@ class SqliteScheduleRepository:
             return OccurrencePage(tuple(self._occurrence(row) for row in selected),self._encode(selected[-1]["scheduled_for"],selected[-1]["id"]) if len(rows)>limit and selected else None)
         finally: connection.close()
 
+    def latest_occurrences(self, schedule_ids: tuple[str, ...]) -> dict[str, Occurrence]:
+        if not schedule_ids:
+            return {}
+        if len(schedule_ids) > 100:
+            raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
+        for schedule_id in schedule_ids:
+            self._require_id(schedule_id)
+        connection = self._read()
+        if connection is None:
+            return {}
+        placeholders = ",".join("?" for _ in schedule_ids)
+        try:
+            rows = connection.execute(
+                f"""SELECT * FROM (
+                    SELECT occurrence.*, ROW_NUMBER() OVER (
+                        PARTITION BY schedule_id
+                        ORDER BY scheduled_for DESC, id DESC
+                    ) AS occurrence_rank
+                    FROM schedule_occurrences AS occurrence
+                    WHERE schedule_id IN ({placeholders})
+                ) WHERE occurrence_rank=1""",
+                schedule_ids,
+            ).fetchall()
+            return {
+                row["schedule_id"]: self._occurrence(row)
+                for row in rows
+            }
+        except sqlite3.Error as error:
+            raise ScheduleStoreError(ScheduleFailure.DATABASE_UNAVAILABLE) from error
+        finally:
+            connection.close()
+
     def list_due(self, *, now: datetime, limit: int = 100) -> tuple[Schedule, ...]:
         if now.tzinfo is None or type(limit) is not int or not 1 <= limit <= 100: raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         connection=self._read()

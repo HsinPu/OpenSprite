@@ -83,7 +83,9 @@ async def list_schedules(
     before: Annotated[str | None, Query(min_length=1, max_length=512)] = None,
     schedules: ScheduleOperations = Depends(_schedules),
 ) -> ScheduleListResponse:
-    return schedule_list_response(await schedules.list(limit=limit, before=before))
+    page = await schedules.list(limit=limit, before=before)
+    latest = await schedules.latest_occurrences(tuple(item.id for item in page.items))
+    return schedule_list_response(page, latest)
 
 
 @router.post(
@@ -122,7 +124,9 @@ async def get_schedule(
     schedule_id: UUID,
     schedules: ScheduleOperations = Depends(_schedules),
 ) -> ScheduleResponse:
-    return schedule_response(await schedules.get(str(schedule_id)))
+    item = await schedules.get(str(schedule_id))
+    latest = await schedules.latest_occurrences((item.id,))
+    return schedule_response(item, latest.get(item.id))
 
 
 @router.put(

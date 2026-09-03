@@ -75,6 +75,9 @@ def test_schedule_crud_actions_and_occurrence_history(tmp_path: Path) -> None:
         assert manual.json()["trigger"] == "manual"
         assert manual.json()["status"] == "pending"
 
+        refreshed_list = client.get("/api/schedules").json()["schedules"]
+        assert refreshed_list[0]["latestOccurrence"]["id"] == manual.json()["id"]
+
         history = client.get(f"/api/schedules/{schedule_id}/occurrences")
         assert history.status_code == 200
         assert history.json()["occurrences"][0]["id"] == manual.json()["id"]

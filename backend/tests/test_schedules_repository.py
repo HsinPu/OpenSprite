@@ -58,6 +58,7 @@ def test_schedule_crud_revision_pagination_and_occurrence_uniqueness(tmp_path: P
     assert paused.status is ScheduleStatus.PAUSED and paused.next_run_at is None
     occurrence = store.create_occurrence(first.id, scheduled_for=first_next, trigger=OccurrenceTrigger.SCHEDULED, status=OccurrenceStatus.SKIPPED, error_code="missed", missed_count=3)
     assert occurrence.missed_count == 3
+    assert store.latest_occurrences((first.id, second.id)) == {first.id: occurrence}
     with pytest.raises(ScheduleStoreError):
         store.create_occurrence(first.id, scheduled_for=first_next, trigger=OccurrenceTrigger.SCHEDULED, status=OccurrenceStatus.PENDING)
     assert store.list_occurrences(first.id, limit=10, before=None).items == (occurrence,)

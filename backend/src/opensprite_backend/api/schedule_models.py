@@ -138,6 +138,7 @@ class ScheduleResponse(ScheduleContractModel):
     revision: int
     createdAt: datetime
     updatedAt: datetime
+    latestOccurrence: OccurrenceResponse | None = None
 
 
 class ScheduleListResponse(ScheduleContractModel):
@@ -184,7 +185,10 @@ class ScheduleErrorEnvelope(ScheduleContractModel):
     error: ScheduleErrorDetail
 
 
-def schedule_response(item: Schedule) -> ScheduleResponse:
+def schedule_response(
+    item: Schedule,
+    latest_occurrence: Occurrence | None = None,
+) -> ScheduleResponse:
     cadence: dict[str, object] = {"type": item.cadence.type.value}
     if item.cadence.run_at is not None:
         cadence["runAt"] = item.cadence.run_at
@@ -212,12 +216,24 @@ def schedule_response(item: Schedule) -> ScheduleResponse:
         revision=item.revision,
         createdAt=item.created_at,
         updatedAt=item.updated_at,
+        latestOccurrence=(
+            None
+            if latest_occurrence is None
+            else occurrence_response(latest_occurrence)
+        ),
     )
 
 
-def schedule_list_response(page: SchedulePage) -> ScheduleListResponse:
+def schedule_list_response(
+    page: SchedulePage,
+    latest_occurrences: dict[str, Occurrence] | None = None,
+) -> ScheduleListResponse:
+    latest_occurrences = latest_occurrences or {}
     return ScheduleListResponse(
-        schedules=[schedule_response(item) for item in page.items],
+        schedules=[
+            schedule_response(item, latest_occurrences.get(item.id))
+            for item in page.items
+        ],
         nextCursor=page.next_cursor,
     )
 
