@@ -51,6 +51,7 @@ def test_linux_installer_is_loopback_user_service_and_never_echoes_token() -> No
     assert "systemctl --user" in source
     assert "not root or sudo" in source
     assert "--test-root" in source and "Unsafe test root" in source
+    assert "systemd specifiers" in source
     helper = HELPER.read_text(encoding="utf-8")
     assert 'open("/dev/tty"' in helper
     assert "print(token" not in helper

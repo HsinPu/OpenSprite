@@ -13,6 +13,8 @@ SSH password protection.
   writes one-time setup URLs only to `/dev/tty`.
 - Added SSH Tunnel documentation, root/symlink/path guards, restrictive modes,
   and explicit data-removal confirmation.
+- Rejected systemd `%` specifiers and quoting/control characters in rendered
+  unit paths.
 - Added portable Python helper tests, Bash syntax checks, and a Linux-only full
   isolation script.
 

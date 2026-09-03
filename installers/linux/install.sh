@@ -39,7 +39,7 @@ fi
 INSTALL_ROOT="$(realpath -m "$INSTALL_ROOT")"
 USER_DATA_ROOT="$(realpath -m "$USER_DATA_ROOT")"
 EXPECTED_DATA_ROOT="$(realpath -m "$HOME/.opensprite")"
-case "$SOURCE_ROOT$INSTALL_ROOT$USER_DATA_ROOT$UNIT_ROOT" in *$'\n'*|*$'\r'*|*'"'*) echo "Paths must not contain control characters or quotes." >&2; exit 1;; esac
+case "$SOURCE_ROOT$INSTALL_ROOT$USER_DATA_ROOT$UNIT_ROOT" in *$'\n'*|*$'\r'*|*'"'*|*'%'*) echo "Paths must not contain control characters, quotes, or systemd specifiers." >&2; exit 1;; esac
 [[ "$USER_DATA_ROOT" == "$EXPECTED_DATA_ROOT" || -n "$TEST_ROOT" ]] || { echo "User data root must be $EXPECTED_DATA_ROOT" >&2; exit 1; }
 [[ ! -L "$INSTALL_ROOT" && ! -L "$USER_DATA_ROOT" ]] || { echo "Install and data roots must not be symbolic links." >&2; exit 1; }
 [[ "$INSTALL_ROOT" == */opensprite/app || -n "$TEST_ROOT" ]] || { echo "Unexpected install root." >&2; exit 1; }
