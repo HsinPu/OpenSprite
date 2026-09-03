@@ -79,6 +79,10 @@ $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $quarantinedRuntimes = @()
 try {
     . $accessScript
+    Set-LocalAccessPolicy $userDataRoot "trusted_local"
+    $policy = Get-Content -LiteralPath (Join-Path $userDataRoot "config\access-policy.json") -Raw
+    if ($policy -ne '{"version":1,"mode":"trusted_local"}') { throw "Trusted-local access policy is malformed." }
+    Set-LocalAccessPolicy $userDataRoot "password_required"
     New-Item -ItemType Directory -Path (Join-Path $userDataRoot "config") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $userDataRoot "data") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $userDataRoot "logs") -Force | Out-Null
@@ -101,7 +105,9 @@ try {
     if ($storedBootstrap.Contains($replacementBootstrap)) { throw "Replacement bootstrap state contains the raw token." }
     $replacementBootstrap = $null
 
-    & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -UserDataRoot $userDataRoot -AllowCustomInstallRoot -AllowCustomUserDataRoot -SkipAccessBootstrap -SkipStartupRegistration -NoStart | Out-Null
+    & $installScript -SourceRoot $sourceRoot -InstallRoot $installRoot -UserDataRoot $userDataRoot -AccessMode TrustedLocal -AllowCustomInstallRoot -AllowCustomUserDataRoot -SkipAccessBootstrap -SkipStartupRegistration -NoStart | Out-Null
+    $installedPolicy = Get-Content -LiteralPath (Join-Path $userDataRoot "config\access-policy.json") -Raw | ConvertFrom-Json
+    if ($installedPolicy.mode -ne "trusted_local") { throw "Isolated install did not persist trusted-local mode." }
     foreach ($required in @(
         "build-info.json",
         "backend\.venv\Scripts\python.exe",

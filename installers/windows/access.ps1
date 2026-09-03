@@ -1,5 +1,26 @@
 Set-StrictMode -Version Latest
 
+function Set-LocalAccessPolicy([string]$Root, [ValidateSet("trusted_local", "password_required")][string]$Mode) {
+    $configRoot = Join-Path $Root "config"
+    $policyPath = Join-Path $configRoot "access-policy.json"
+    New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
+    $record = [ordered]@{ version = 1; mode = $Mode } | ConvertTo-Json -Compress
+    $temporaryPath = Join-Path $configRoot (".access-policy-" + [Guid]::NewGuid().ToString("N") + ".tmp")
+    $backupPath = $null
+    [IO.File]::WriteAllText($temporaryPath, $record, [Text.UTF8Encoding]::new($false))
+    try {
+        if (Test-Path -LiteralPath $policyPath -PathType Leaf) {
+            $backupPath = Join-Path $configRoot (".access-policy-backup-" + [Guid]::NewGuid().ToString("N") + ".tmp")
+            [IO.File]::Replace($temporaryPath, $policyPath, $backupPath)
+        }
+        else { [IO.File]::Move($temporaryPath, $policyPath) }
+    }
+    finally {
+        if (Test-Path -LiteralPath $temporaryPath) { Remove-Item -LiteralPath $temporaryPath -Force }
+        if ($null -ne $backupPath -and (Test-Path -LiteralPath $backupPath)) { Remove-Item -LiteralPath $backupPath -Force }
+    }
+}
+
 function New-LocalAccessBootstrap([string]$Root, [switch]$Reset) {
     $configRoot = Join-Path $Root "config"
     $stateRoot = Join-Path $Root "state"

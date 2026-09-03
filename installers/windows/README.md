@@ -22,6 +22,23 @@ The installer:
 - rolls the application directory back if dependency setup, task registration,
   startup or health verification fails.
 
+New Windows installs default to trusted-local access and open without a
+password. Select password protection explicitly with:
+
+```powershell
+./installers/windows/install.ps1 -AccessMode Password
+```
+
+Switch an installation to local desktop trust with:
+
+```powershell
+./installers/windows/install.ps1 -AccessMode TrustedLocal
+```
+
+Existing installations preserve their strict `access-policy.json`. A pre-policy
+installation with an existing password or bootstrap remains password-protected;
+updates never silently reduce authentication.
+
 The installed UI is available at `http://localhost:8765/`. The backend and
 frontend share one loopback origin and one Uvicorn process.
 

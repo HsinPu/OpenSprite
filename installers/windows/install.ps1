@@ -6,6 +6,7 @@ param(
     [int]$Port = 8765,
     [switch]$NoStart,
     [switch]$ResetLocalAccess,
+    [ValidateSet("TrustedLocal", "Password")][string]$AccessMode,
     [string]$UserDataRoot = (Join-Path $env:USERPROFILE ".opensprite"),
     [switch]$SkipStartupRegistration,
     [switch]$AllowCustomInstallRoot,
@@ -148,6 +149,7 @@ if ($SkipAccessBootstrap -and (-not $AllowCustomUserDataRoot -or -not $NoStart))
     throw "SkipAccessBootstrap is reserved for non-starting isolated tests with a custom user-data root."
 }
 if ($ResetLocalAccess -and $SkipAccessBootstrap) { throw "ResetLocalAccess cannot be combined with SkipAccessBootstrap." }
+if ($ResetLocalAccess -and $AccessMode -eq "TrustedLocal") { throw "ResetLocalAccess cannot be combined with TrustedLocal mode." }
 if ($SkipStartupRegistration -and -not $NoStart) {
     throw "SkipStartupRegistration requires NoStart."
 }
@@ -158,6 +160,21 @@ foreach ($required in @("backend\pyproject.toml", "backend\uv.lock", "backend\sr
     if (-not (Test-Path -LiteralPath (Join-Path $sourceRootPath $required))) {
         throw "SourceRoot is not a complete OpenSprite checkout: $required"
     }
+}
+$accessPath = Join-Path $userDataRootPath "config\access.json"
+$bootstrapPath = Join-Path $userDataRootPath "state\access-bootstrap.json"
+$policyPath = Join-Path $userDataRootPath "config\access-policy.json"
+$selectedAccessMode = $AccessMode
+if ([String]::IsNullOrWhiteSpace($selectedAccessMode)) {
+    if (Test-Path -LiteralPath $policyPath -PathType Leaf) {
+        try { $existingPolicy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json }
+        catch { throw "Existing access policy is malformed." }
+        $propertyNames = @($existingPolicy.PSObject.Properties.Name)
+        if ($propertyNames.Count -ne 2 -or $propertyNames -notcontains "version" -or $propertyNames -notcontains "mode" -or $existingPolicy.version -ne 1 -or $existingPolicy.mode -notin @("trusted_local", "password_required")) { throw "Existing access policy is malformed." }
+        $selectedAccessMode = if ($existingPolicy.mode -eq "trusted_local") { "TrustedLocal" } else { "Password" }
+    }
+    elseif ((Test-Path -LiteralPath $accessPath -PathType Leaf) -or (Test-Path -LiteralPath $bootstrapPath -PathType Leaf)) { $selectedAccessMode = "Password" }
+    else { $selectedAccessMode = "TrustedLocal" }
 }
 $pyprojectText = Get-Content -LiteralPath (Join-Path $sourceRootPath "backend\pyproject.toml") -Raw
 $versionMatch = [Regex]::Match($pyprojectText, '(?m)^version\s*=\s*"([^\"]+)"\s*$')
@@ -192,6 +209,10 @@ $previousStartupValue = Get-OpenSpriteStartup $StartupName
 $installedNewRoot = $false
 $cutoverStarted = $false
 $previousCleanupComplete = $true
+$previousPolicyBytes = if (Test-Path -LiteralPath $policyPath -PathType Leaf) { [IO.File]::ReadAllBytes($policyPath) } else { $null }
+$previousBootstrapBytes = if (Test-Path -LiteralPath $bootstrapPath -PathType Leaf) { [IO.File]::ReadAllBytes($bootstrapPath) } else { $null }
+$policyMutated = $false
+$bootstrapMutated = $false
 
 if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite")) {
     return
@@ -244,6 +265,14 @@ try {
         Remove-OpenSpriteStartup $StartupName
         if ($hadPreviousInstall) { Stop-InstalledRuntime $installRootPath }
     }
+
+    $policyMode = if ($selectedAccessMode -eq "TrustedLocal") { "trusted_local" } else { "password_required" }
+    Set-LocalAccessPolicy $userDataRootPath $policyMode
+    $policyMutated = $true
+    if ($selectedAccessMode -eq "TrustedLocal" -and (Test-Path -LiteralPath $bootstrapPath -PathType Leaf)) {
+        Remove-Item -LiteralPath $bootstrapPath -Force
+        $bootstrapMutated = $true
+    }
     if ($hadPreviousInstall) { Move-Item -LiteralPath $installRootPath -Destination $previousRoot }
     Move-Item -LiteralPath $stagingRoot -Destination $installRootPath
     $installedNewRoot = $true
@@ -266,17 +295,20 @@ try {
         }
     }
 
-    $accessPath = Join-Path $userDataRootPath "config\access.json"
-    $needsBootstrap = $ResetLocalAccess -or -not (Test-Path -LiteralPath $accessPath -PathType Leaf)
+    $needsBootstrap = $selectedAccessMode -eq "Password" -and ($ResetLocalAccess -or -not (Test-Path -LiteralPath $accessPath -PathType Leaf))
     if ($needsBootstrap -and -not $SkipAccessBootstrap) {
         if ($NoStart) { throw "A new local access password must be configured while OpenSprite is running. Remove -NoStart or use the isolated-test bootstrap bypass." }
         $bootstrapToken = New-LocalAccessBootstrap $userDataRootPath -Reset:$ResetLocalAccess
+        $bootstrapMutated = $true
         try {
             if (-not $SkipBrowserLaunch) {
                 Start-Process -FilePath "http://localhost:$Port/#setup=$bootstrapToken"
             }
         }
         finally { $bootstrapToken = $null }
+    }
+    elseif ($selectedAccessMode -eq "TrustedLocal" -and -not $NoStart -and -not $SkipBrowserLaunch) {
+        Start-Process -FilePath "http://localhost:$Port/"
     }
 
     if (Test-Path -LiteralPath $previousRoot) {
@@ -290,6 +322,7 @@ try {
         Version = $productVersion
         Revision = $revision
         Dirty = [bool]$dirty
+        AccessMode = $selectedAccessMode
         Url = "http://localhost:$Port/"
     }
 }
@@ -310,6 +343,17 @@ catch {
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name $StartupName -Value $previousStartupValue
         if (-not $NoStart) {
             & (Join-Path $installRootPath "installers\windows\launch.ps1") -InstallRoot $installRootPath -Port $Port
+        }
+    }
+    if ($policyMutated) {
+        if ($null -eq $previousPolicyBytes) { Remove-Item -LiteralPath $policyPath -Force -ErrorAction SilentlyContinue }
+        else { [IO.File]::WriteAllBytes($policyPath, $previousPolicyBytes) }
+    }
+    if ($bootstrapMutated) {
+        if ($null -eq $previousBootstrapBytes) { Remove-Item -LiteralPath $bootstrapPath -Force -ErrorAction SilentlyContinue }
+        else {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $bootstrapPath) -Force | Out-Null
+            [IO.File]::WriteAllBytes($bootstrapPath, $previousBootstrapBytes)
         }
     }
     throw $failure
