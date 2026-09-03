@@ -1,7 +1,7 @@
 # Installers
 
-這個目錄擁有 Linux 與 Windows 安裝器。Windows 安裝器已實作於
-[`windows/`](windows/)；Linux 安裝器仍待後續切片建立。
+這個目錄擁有 Linux 與 Windows 安裝器。兩者分別實作於
+[`linux/`](linux/) 與 [`windows/`](windows/)。
 
 兩個平台必須維持相同行為：安裝依賴、部署前後端、建立背景啟動方式、執行健康檢查，以及預設保留使用者資料的安全解除安裝。
 
@@ -21,3 +21,8 @@
 Windows 安裝後由同一個 secured FastAPI/Uvicorn 程序提供 `/api`、SSE 與已建置的前端，網址為
 `http://localhost:8765/`。current-user Run entry 透過受路徑限制的隱藏 PowerShell launcher
 只啟動該單一程序，不需要系統管理員權限。
+
+Linux 採 current-user systemd service，程式位於
+`${XDG_DATA_HOME:-$HOME/.local/share}/opensprite/app`，仍只綁定
+`127.0.0.1:8765`。遠端使用必須透過 SSH Tunnel；installer 不設定或
+宣稱支援公網 listener。
