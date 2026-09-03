@@ -49,6 +49,7 @@ class ChatErrorCode(StrEnum):
     CONTEXT_LIMIT_EXCEEDED = "context_limit_exceeded"
     CONTEXT_PREPARATION_FAILED = "context_preparation_failed"
     TOOL_FAILURE = "tool_failure"
+    SCHEDULED_TOOL_APPROVAL_REQUIRED = "scheduled_tool_approval_required"
     INVALID_PROVIDER_RESPONSE = "invalid_provider_response"
     INTERNAL_ERROR = "internal_error"
 

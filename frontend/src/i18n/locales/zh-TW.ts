@@ -544,6 +544,7 @@ export const zhTWMessages = {
   "error.chat.contextLimit": "必要的近期對話超過目前選擇的內容上限，請提高上限或建立新對話。",
   "error.chat.contextPreparation": "暫時無法準備這次對話的模型內容，請稍後再試。",
   "error.chat.toolFailure": "工具執行失敗。",
+  "error.chat.scheduledToolApprovalRequired": "排程無法執行需要人工核准的工具。請在一般對話中手動執行。",
   "error.chat.invalidProviderResponse": "模型廠家的回應無法安全使用。",
   "error.chat.internal": "本機服務暫時無法完成這次回覆。",
   "error.chat.malformed": "本機服務回傳的對話資料無法安全使用。",

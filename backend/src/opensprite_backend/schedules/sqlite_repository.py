@@ -70,7 +70,7 @@ class SqliteScheduleRepository:
         with self._write() as connection:
             connection.execute("BEGIN IMMEDIATE")
             changed = connection.execute(
-                """UPDATE schedules SET name=?,prompt=?,cadence_type=?,run_at=?,local_time=?,weekdays_json=?,time_zone=?,provider_id=?,model_id=?,response_mode=?,context_budget=?,output_budget=?,output_continuation=?,status='active',next_run_at=?,revision=revision+1,updated_at=? WHERE id=? AND revision=?""",
+                """UPDATE schedules SET name=?,prompt=?,cadence_type=?,run_at=?,local_time=?,weekdays_json=?,time_zone=?,provider_id=?,model_id=?,response_mode=?,context_budget=?,output_budget=?,output_continuation=?,status=CASE WHEN status='paused' THEN 'paused' ELSE 'active' END,next_run_at=CASE WHEN status='paused' THEN NULL ELSE ? END,revision=revision+1,updated_at=? WHERE id=? AND revision=?""",
                 self._editable_values(draft, next_run_at, now) + (schedule_id, revision),
             ).rowcount
             if changed == 0: self._raise_missing_or_conflict(connection, schedule_id)

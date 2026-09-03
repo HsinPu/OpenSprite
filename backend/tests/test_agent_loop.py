@@ -18,6 +18,7 @@ import pytest
 from context_test_support import TestCapabilityResolver
 
 from opensprite_backend.agent.loop import AgentLoop
+from opensprite_backend.api.chat_models import run_response
 from opensprite_backend.app_paths import build_app_paths
 from opensprite_backend.prompt_logging import FilePromptLogWriter
 from opensprite_backend.conversations.models import (
@@ -1039,6 +1040,7 @@ async def test_scheduled_run_fails_closed_when_tool_requires_approval(
     assert result.status is RunStatus.FAILED
     assert result.error is not None
     assert result.error.code == "scheduled_tool_approval_required"
+    assert run_response(result).error.code == "scheduled_tool_approval_required"
     assert tool.calls == []
     events = repository.list_run_events(run.id, after_sequence=0, limit=100)
     assert all(event.type is not RunEventType.TOOL_APPROVAL_REQUESTED for event in events)

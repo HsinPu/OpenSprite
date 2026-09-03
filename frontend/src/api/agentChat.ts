@@ -7,7 +7,7 @@ export type CompletionReason = (typeof completionReasons)[number];
 export const runEventTypes = ["run.started", "context.compaction.started", "model.started", "response.continuation.started", "assistant.delta", "tool.approval_requested", "tool.approval_decided", "tool.started", "tool.completed", "tool.failed", "run.completed", "run.failed", "run.cancelled", "run.interrupted"] as const;
 export type RunEventType = (typeof runEventTypes)[number];
 
-export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "invalid_provider_response", "internal_error"] as const;
+export const chatErrorCodes = ["invalid_request", "not_found", "run_busy", "run_not_active", "model_not_selected", "provider_not_connected", "invalid_credentials", "provider_rate_limited", "provider_timeout", "provider_unreachable", "credential_store_unavailable", "settings_store_unavailable", "database_unavailable", "agent_limit_reached", "context_limit_exceeded", "context_preparation_failed", "tool_failure", "scheduled_tool_approval_required", "invalid_provider_response", "internal_error"] as const;
 export type ChatServerErrorCode = (typeof chatErrorCodes)[number];
 export type AgentChatErrorCode = ChatServerErrorCode | "malformed_response" | "network_error";
 
@@ -316,6 +316,7 @@ export function agentChatErrorText(error: unknown, t: Translator = defaultTransl
     context_limit_exceeded: "error.chat.contextLimit",
     context_preparation_failed: "error.chat.contextPreparation",
     tool_failure: "error.chat.toolFailure",
+    scheduled_tool_approval_required: "error.chat.scheduledToolApprovalRequired",
     invalid_provider_response: "error.chat.invalidProviderResponse",
     internal_error: "error.chat.internal",
     malformed_response: "error.chat.malformed",

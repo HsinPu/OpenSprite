@@ -432,6 +432,7 @@ export const jaMessages = {
   "error.chat.contextLimit": "必要な最近の履歴が選択したコンテキスト上限を超えています。上限を上げるか、新しい会話を開始してください。",
   "error.chat.contextPreparation": "モデル用コンテキストを準備できませんでした。しばらくしてから再試行してください。",
   "error.chat.toolFailure": "ツールの実行に失敗しました。",
+  "error.chat.scheduledToolApprovalRequired": "人の承認が必要なツールはスケジュールで実行できません。会話から手動で実行してください。",
   "error.chat.invalidProviderResponse": "モデルプロバイダーの応答を安全に使用できません。",
   "error.chat.internal": "ローカルサービスが今回の応答を完了できませんでした。",
   "error.chat.malformed": "ローカルサービスから安全に使用できない会話データが返されました。",

@@ -141,6 +141,9 @@ class ScheduleService:
         return item
 
     async def pause(self, schedule_id: str, revision: int) -> Schedule:
+        current = await self.get(schedule_id)
+        if current.status is not ScheduleStatus.ACTIVE:
+            raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         item = await asyncio.to_thread(
             self.repository.set_status,
             schedule_id,
@@ -153,6 +156,8 @@ class ScheduleService:
 
     async def resume(self, schedule_id: str, revision: int) -> Schedule:
         current = await self.get(schedule_id)
+        if current.status is not ScheduleStatus.PAUSED:
+            raise ScheduleStoreError(ScheduleFailure.INVALID_REQUEST)
         next_run = self._next(
             ScheduleDraft(
                 current.name,

@@ -135,13 +135,26 @@ async def test_service_wakes_coordinator_and_resume_uses_future_time(
         _draft(Cadence(CadenceType.DAILY, local_time=time(4)))
     )
     paused = await service.pause(schedule.id, schedule.revision)
-    resumed = await service.resume(paused.id, paused.revision)
+    edited_while_paused = await service.update(
+        paused.id,
+        paused.revision,
+        ScheduleDraft(
+            "Updated while paused",
+            paused.prompt,
+            paused.cadence,
+            paused.time_zone,
+            paused.profile,
+        ),
+    )
+    assert edited_while_paused.status is ScheduleStatus.PAUSED
+    assert edited_while_paused.next_run_at is None
+    resumed = await service.resume(edited_while_paused.id, edited_while_paused.revision)
     manual = await service.run_now(resumed.id)
 
     assert resumed.next_run_at == datetime(2026, 3, 5, 4, tzinfo=UTC)
     assert manual.trigger is OccurrenceTrigger.MANUAL
     assert manual.status is OccurrenceStatus.PENDING
-    assert wake_count == 4
+    assert wake_count == 5
 
 
 @async_test

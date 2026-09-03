@@ -432,6 +432,7 @@ export const enMessages = {
   "error.chat.contextLimit": "Required recent history exceeds the selected context limit. Raise the limit or start a new conversation.",
   "error.chat.contextPreparation": "OpenSprite could not prepare model context. Try again shortly.",
   "error.chat.toolFailure": "Tool execution failed.",
+  "error.chat.scheduledToolApprovalRequired": "Schedules cannot run tools that require human approval. Run it manually in a conversation.",
   "error.chat.invalidProviderResponse": "The model provider response could not be used safely.",
   "error.chat.internal": "The local service could not complete this response.",
   "error.chat.malformed": "The local service returned conversation data that could not be used safely.",

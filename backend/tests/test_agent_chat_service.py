@@ -44,6 +44,7 @@ from opensprite_backend.models import (
 )
 from opensprite_backend.tools.policy import ReadOnlyToolPolicy
 from opensprite_backend.tools.registry import ToolRegistry
+from opensprite_backend.schedules.models import ExecutionProfile
 
 
 def async_test(function):
@@ -278,6 +279,42 @@ async def test_event_stream_replays_from_sequence_and_ends_at_terminal(
 
     assert [event.sequence for event in events] == [2, 3, 4]
     assert events[-1].type.value == "run.completed"
+    await chat.close()
+
+
+@async_test
+async def test_scheduled_start_uses_fixed_profile_and_disables_prompt_log(
+    tmp_path: Path,
+) -> None:
+    chat, repository, manager = service(tmp_path)
+    occurrence_id = "e898796c-71e9-4eb5-aac1-7a6e9430a430"
+    profile = ExecutionProfile(
+        "openrouter",
+        "openrouter/fixed-model",
+        "deep",
+        "128k",
+        "32k",
+        "10",
+    )
+
+    accepted = await chat.start_scheduled_run(
+        conversation_id=None,
+        occurrence_id=occurrence_id,
+        message="scheduled work",
+        profile=profile,
+    )
+    completed = await manager.wait(accepted.run.id)
+
+    assert completed is not None
+    assert completed.source == "schedule"
+    assert completed.occurrence_id == occurrence_id
+    assert completed.model_id == "openrouter/fixed-model"
+    assert completed.response_mode == "deep"
+    assert completed.context_budget == "128k"
+    assert completed.output_budget == "32k"
+    assert completed.output_continuation == "10"
+    assert completed.log_full_prompts is False
+    assert repository.get_run(completed.id) == completed
     await chat.close()
 
 
