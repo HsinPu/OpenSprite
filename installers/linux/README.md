@@ -18,3 +18,9 @@ The backend always binds `127.0.0.1`. Existing policy is preserved when the
 flag is omitted. Reset password setup with `--access-mode password_required
 --reset-local-access`. Uninstall preserves `~/.opensprite` unless the explicit
 interactive `--remove-user-data` flow is confirmed.
+
+The installer checks user lingering before registering the user service. It
+never enables lingering or invokes `sudo`. When lingering is not enabled or
+cannot be confirmed, the installer prints the administrator command
+`sudo loginctl enable-linger $USER`; until an administrator enables it,
+OpenSprite and its schedules may stop after logout.

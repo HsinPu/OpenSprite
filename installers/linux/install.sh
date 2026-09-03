@@ -99,6 +99,20 @@ rollback() {
 trap cleanup EXIT
 trap rollback ERR
 
+check_user_linger() {
+  local linger="unknown"
+  local target_user="${USER:-$(id -un)}"
+  if command -v loginctl >/dev/null; then
+    linger="$(loginctl show-user --property=Linger --value 2>/dev/null || true)"
+  fi
+  if [[ "${linger,,}" != "yes" ]]; then
+    printf '%s\n' \
+      'Warning: user lingering is not enabled or could not be confirmed.' \
+      'OpenSprite schedules may stop after logout.' \
+      "Ask an administrator to run: sudo loginctl enable-linger $target_user" >&2
+  fi
+}
+
 mkdir -p "$STAGING/backend" "$STAGING/frontend" "$STAGING/installers"
 cp -a "$SOURCE_ROOT/backend/src" "$SOURCE_ROOT/backend/pyproject.toml" "$SOURCE_ROOT/backend/uv.lock" "$SOURCE_ROOT/backend/README.md" "$STAGING/backend/"
 cp -a "$SOURCE_ROOT/frontend/src" "$SOURCE_ROOT/frontend/package.json" "$SOURCE_ROOT/frontend/package-lock.json" "$SOURCE_ROOT/frontend/index.html" "$SOURCE_ROOT/frontend/tsconfig.json" "$SOURCE_ROOT/frontend/vite.config.ts" "$SOURCE_ROOT/frontend/README.md" "$STAGING/frontend/"
@@ -134,6 +148,7 @@ PY
 INSTALLED_PYTHON="$INSTALL_ROOT/backend/.venv/bin/python"
 "$INSTALLED_PYTHON" "$INSTALL_ROOT/installers/linux/access.py" policy "$USER_DATA_ROOT" "$ACCESS_MODE"
 if ((SKIP_SERVICE == 0)); then
+  check_user_linger
   mkdir -p "$UNIT_ROOT"
   cat >"$UNIT_FILE" <<EOF
 [Unit]
