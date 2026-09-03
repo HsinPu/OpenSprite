@@ -14,6 +14,8 @@ the local desktop, without presenting password-only actions.
   enabled.
 - Added a localized Privacy explanation of the same-OS-account trust boundary
   in Traditional Chinese, English, and Japanese.
+- Made the Privacy introduction follow the active access mode instead of
+  describing password changes in trusted-local mode.
 
 ## Public impact
 
