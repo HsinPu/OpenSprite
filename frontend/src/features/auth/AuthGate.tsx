@@ -8,9 +8,11 @@ import { isLocale, localeLabels, supportedLocales, type Locale } from "../../i18
 import { useI18n } from "../../i18n/I18nProvider";
 import "./auth.css";
 
-type AuthContextValue = { signOut: () => Promise<void>; requireLogin: () => void };
+export type AuthMode = "trusted_local" | "password_required";
+type AuthContextValue = { mode: AuthMode; signOut: () => Promise<void>; requireLogin: () => void };
 const AuthContext = createContext<AuthContextValue | null>(null);
 const unavailableAuthContext: AuthContextValue = {
+  mode: "password_required",
   signOut: async () => undefined,
   requireLogin: () => undefined,
 };
@@ -45,7 +47,7 @@ function messageFor(code: AuthenticationApiError["code"], t: ReturnType<typeof u
   return t("auth.error.unavailable");
 }
 
-function AuthPage({ status, bootstrapToken, onAuthenticated }: { status: Exclude<AuthStatus, { state: "authenticated" }>; bootstrapToken: string | null; onAuthenticated: (status: AuthStatus) => void }) {
+function AuthPage({ status, bootstrapToken, onAuthenticated }: { status: Extract<AuthStatus, { state: "setup_required" | "unauthenticated" }>; bootstrapToken: string | null; onAuthenticated: (status: AuthStatus) => void }) {
   const { locale, setLocale, t } = useI18n();
   const setup = status.state === "setup_required";
   const [password, setPassword] = useState("");
@@ -137,11 +139,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, [requireLogin, status]);
   const signOut = useCallback(async () => { try { await logout(); } finally { requireLogin(); } }, [requireLogin]);
-  const context = useMemo(() => ({ signOut, requireLogin }), [signOut, requireLogin]);
+  const mode: AuthMode = status?.state === "trusted_local" ? "trusted_local" : "password_required";
+  const context = useMemo(() => ({ mode, signOut, requireLogin }), [mode, signOut, requireLogin]);
 
   if (window.location.hostname === "127.0.0.1") return null;
   if (loadError) return <main className="auth-shell"><section className="auth-card"><p role="alert">{t("auth.error.unavailable")}</p><Button onClick={() => window.location.reload()}>{t("common.retry")}</Button></section></main>;
   if (!status) return <main className="auth-shell" aria-label={t("auth.loading")}><Spin size="large" /></main>;
-  if (status.state !== "authenticated") return <AuthPage status={status} bootstrapToken={bootstrapToken.current} onAuthenticated={setStatus} />;
+  if (status.state !== "authenticated" && status.state !== "trusted_local") return <AuthPage status={status} bootstrapToken={bootstrapToken.current} onAuthenticated={setStatus} />;
   return <AuthContext.Provider value={context}>{children}</AuthContext.Provider>;
 }

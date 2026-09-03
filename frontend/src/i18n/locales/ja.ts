@@ -462,5 +462,9 @@ export const jaMessages = {
   "auth.changeAction": "パスワードを変更",
   "auth.passwordChanged": "パスワードを更新し、他のセッションをログアウトしました。",
   "auth.logoutAll": "すべてのセッションをログアウト",
-  "auth.logoutAllDescription": "現在のブラウザーを含むすべてのログイン状態を取り消します。"
+  "auth.logoutAllDescription": "現在のブラウザーを含むすべてのログイン状態を取り消します。",
+  "auth.trustedLocalTitle": "ローカル信頼モード",
+  "auth.trustedLocalDescription": "このコンピューターの OpenSprite はパスワードなしで開きます。",
+  "auth.trustedLocalWarning": "同じ OS アカウントで実行されるプログラムは、OpenSprite のローカルデータと API にアクセスできる可能性があります。",
+  "auth.trustedLocalChange": "パスワード保護を有効にするには、インストーラーを再実行してパスワード保護モードを選択してください。"
 } satisfies Record<MessageKey, string>;

@@ -462,5 +462,9 @@ export const enMessages = {
   "auth.changeAction": "Change password",
   "auth.passwordChanged": "Password updated. Other sessions were signed out.",
   "auth.logoutAll": "Log out all sessions",
-  "auth.logoutAllDescription": "Revoke every browser session, including this browser."
+  "auth.logoutAllDescription": "Revoke every browser session, including this browser.",
+  "auth.trustedLocalTitle": "Trusted local mode",
+  "auth.trustedLocalDescription": "OpenSprite on this computer opens without a password.",
+  "auth.trustedLocalWarning": "Any program running as the same operating-system account may access OpenSprite local data and APIs.",
+  "auth.trustedLocalChange": "To enable password protection, run the installer again and select password-protected mode."
 } satisfies Record<MessageKey, string>;

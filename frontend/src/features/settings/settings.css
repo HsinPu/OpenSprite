@@ -219,3 +219,4 @@
 .settings-password-form { display: grid; gap: 10px; max-width: 480px; }
 .settings-password-form label { margin-top: 4px; font-weight: 600; }
 .settings-password-form .ant-btn { justify-self: start; margin-top: 8px; }
+.settings-trust-warning { padding: 12px 14px; border-radius: 10px; color: #7a3d00; background: #fff7e6; }

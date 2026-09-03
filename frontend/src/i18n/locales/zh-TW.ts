@@ -51,6 +51,10 @@ export const zhTWMessages = {
   "auth.passwordChanged": "密碼已更新，其他 Session 已登出。",
   "auth.logoutAll": "登出所有 Session",
   "auth.logoutAllDescription": "撤銷所有瀏覽器的登入狀態，包含目前這個瀏覽器。",
+  "auth.trustedLocalTitle": "本機信任模式",
+  "auth.trustedLocalDescription": "這台電腦上的 OpenSprite 不需要密碼即可進入。",
+  "auth.trustedLocalWarning": "任何能以相同作業系統帳號執行程式的人，都可能存取 OpenSprite 的本機資料與 API。",
+  "auth.trustedLocalChange": "若要啟用密碼保護，請重新執行 installer 並選擇密碼保護模式。",
 
   "chat.workspace": "AI 對話工作台",
   "chat.loadingConversation": "正在讀取對話…",

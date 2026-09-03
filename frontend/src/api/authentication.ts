@@ -1,4 +1,5 @@
 export type AuthStatus =
+  | { state: "trusted_local" }
   | { state: "setup_required" }
   | { state: "unauthenticated" }
   | { state: "authenticated"; expiresAt: string };
@@ -10,6 +11,7 @@ export type AuthErrorCode =
   | "setup_unavailable"
   | "rate_limited"
   | "authentication_required"
+  | "authentication_not_enabled"
   | "access_store_unavailable"
   | "internal_error"
   | "malformed_response"
@@ -24,11 +26,11 @@ export class AuthenticationApiError extends Error {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).length === keys.length && Object.keys(value).every((key) => keys.includes(key));
-const authCodes = new Set<AuthErrorCode>(["invalid_request", "invalid_credentials", "setup_required", "setup_unavailable", "rate_limited", "authentication_required", "access_store_unavailable", "internal_error"]);
+const authCodes = new Set<AuthErrorCode>(["invalid_request", "invalid_credentials", "setup_required", "setup_unavailable", "rate_limited", "authentication_required", "authentication_not_enabled", "access_store_unavailable", "internal_error"]);
 
 function parseStatus(value: unknown): AuthStatus {
   if (!isRecord(value) || typeof value.state !== "string") throw new AuthenticationApiError("malformed_response");
-  if (value.state === "setup_required" || value.state === "unauthenticated") {
+  if (value.state === "trusted_local" || value.state === "setup_required" || value.state === "unauthenticated") {
     if (!exactKeys(value, ["state"])) throw new AuthenticationApiError("malformed_response");
     return { state: value.state };
   }

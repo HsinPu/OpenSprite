@@ -55,7 +55,7 @@ function ConversationButton({
 
 export function App() {
   const { t } = useI18n();
-  const { signOut } = useAuthentication();
+  const { mode: authMode, signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
   const {
     conversations,
@@ -368,10 +368,10 @@ export function App() {
             <span aria-hidden="true">⚙</span>
             <span className="utility-label">{t("app.settings")}</span>
           </button>
-          <button type="button" aria-label={t("app.logout")} title={t("app.logout")} onClick={() => void signOut()}>
+          {authMode === "password_required" ? <button type="button" aria-label={t("app.logout")} title={t("app.logout")} onClick={() => void signOut()}>
             <span aria-hidden="true">↪</span>
             <span className="utility-label">{t("app.logout")}</span>
-          </button>
+          </button> : null}
         </nav>
       </aside>
 

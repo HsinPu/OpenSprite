@@ -18,6 +18,18 @@ beforeEach(() => { Object.defineProperty(navigator, "languages", { configurable:
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); window.history.replaceState(null, "", "#new-chat"); });
 
 describe("AuthGate", () => {
+  it("mounts the application directly in trusted local mode", async () => {
+    const fetchMock = vi.fn().mockImplementation((path: string) => {
+      if (path === "/api/auth/status") return Promise.resolve(response({ state: "trusted_local" }));
+      if (path === "/api/conversations") return Promise.resolve(response({ conversations: [], nextCursor: null }));
+      throw new Error(`unexpected request: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<I18nProvider><AuthGate><ProtectedApp /></AuthGate></I18nProvider>);
+    expect(await screen.findByText("SENSITIVE APP")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "登入 OpenSprite" })).toBeNull();
+  });
+
   it("does not mount protected application before authentication", async () => {
     const fetchMock = vi.fn().mockImplementation((path: string) => {
       if (path === "/api/auth/status") return Promise.resolve(response({ state: "unauthenticated" }));

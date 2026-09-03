@@ -8,7 +8,7 @@ import { SettingsCard } from "./SettingsPrimitives";
 
 export function PrivacySettings() {
   const { t } = useI18n();
-  const { requireLogin } = useAuthentication();
+  const { mode, requireLogin } = useAuthentication();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -35,6 +35,14 @@ export function PrivacySettings() {
     setBusy(true); setFeedback({});
     try { await logoutAll(); } finally { requireLogin(); }
   };
+
+  if (mode === "trusted_local") return <div className="settings-form-stack">
+    <SettingsCard icon="privacy" title={t("auth.trustedLocalTitle")}>
+      <p className="settings-card-description">{t("auth.trustedLocalDescription")}</p>
+      <p className="settings-trust-warning" role="note">{t("auth.trustedLocalWarning")}</p>
+      <p className="settings-card-description">{t("auth.trustedLocalChange")}</p>
+    </SettingsCard>
+  </div>;
 
   return <div className="settings-form-stack">
     <SettingsCard icon="privacy" title={t("auth.changeTitle")}>

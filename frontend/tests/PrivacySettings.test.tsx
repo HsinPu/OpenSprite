@@ -2,11 +2,20 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PrivacySettings } from "../src/features/settings/PrivacySettings";
+import { AuthGate } from "../src/features/auth/AuthGate";
 import { I18nProvider } from "../src/i18n/I18nProvider";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("PrivacySettings", () => {
+  it("shows the local trust boundary without password actions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ state: "trusted_local" }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    render(<I18nProvider><AuthGate><PrivacySettings /></AuthGate></I18nProvider>);
+    expect(await screen.findByRole("region", { name: /本機信任模式|Trusted local mode/ })).toBeTruthy();
+    expect(screen.queryByLabelText(/目前密碼|Current password/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /登出所有 Session|Log out all sessions/ })).toBeNull();
+  });
+
   it("changes the password with the exact secret fields and clears the form", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       state: "authenticated",
