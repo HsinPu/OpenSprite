@@ -144,14 +144,16 @@ collapsed execution-panel preference without rewriting the file; the next
 successful PUT writes canonical v3. Schema-v1 is rejected. It does not alter
 `config/general.json`.
 
-`data/opensprite.db` is created only when the first user message and Run are
-successfully accepted. It owns Conversation, visible Message, Run, append-only
-conversation compaction, and safe semantic Run-event tables described by
+`data/opensprite.db` is created only when the first user message, Run, or
+Schedule is successfully accepted. It owns Conversation, visible Message, Run,
+Schedule, ScheduleOccurrence, append-only conversation compaction, and safe
+semantic Run-event tables described by
 `agent-chat.md`. SQLite schema v10 snapshots each Run's requested output budget,
 strict output-continuation policy and full-Prompt logging preference
 and stores the resolved maximum in its `model.started` event. Empty reads,
 backend import, and service startup do not create `data/` or the database.
-Schema v9 introduced the bounded `tool.approval_requested` and
+SQLite schema v11 adds durable schedules, occurrence idempotency, fixed
+execution profiles, and Run source metadata. Schema v9 introduced the bounded `tool.approval_requested` and
 `tool.approval_decided` semantic events. Conversation and Run identifiers are backend-generated UUIDs rather than values
 derived from a channel, title, or user text. Database file references are stored
 relative to the data root; the database must not persist the absolute user

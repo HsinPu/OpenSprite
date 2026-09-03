@@ -40,7 +40,7 @@ from .repository import ConversationStoreError
 from .event_notifier import RunEventNotifier
 
 
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 11
 _ACTIVE_STATUSES = (
     RunStatus.QUEUED.value,
     RunStatus.RUNNING.value,
@@ -124,6 +124,8 @@ CREATE TABLE runs (
     output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
     output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', '10', '20', '50', 'unlimited')),
     log_full_prompts INTEGER NOT NULL CHECK(log_full_prompts IN (0, 1)),
+    source TEXT NOT NULL DEFAULT 'user' CHECK(source IN ('user', 'schedule')),
+    occurrence_id TEXT,
     status TEXT NOT NULL CHECK(status IN (
         'queued', 'running', 'cancelling', 'completed', 'failed', 'cancelled', 'interrupted'
     )),
@@ -184,7 +186,54 @@ ON messages(conversation_id, sequence DESC);
 CREATE INDEX compactions_by_conversation_coverage
 ON conversation_compactions(conversation_id, covers_through_sequence DESC);
 
-PRAGMA user_version = 10;
+CREATE TABLE schedules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
+    prompt TEXT NOT NULL CHECK(length(prompt) BETWEEN 1 AND 32768),
+    cadence_type TEXT NOT NULL CHECK(cadence_type IN ('once', 'daily', 'weekly')),
+    run_at TEXT,
+    local_time TEXT,
+    weekdays_json TEXT,
+    time_zone TEXT NOT NULL CHECK(length(time_zone) BETWEEN 1 AND 128),
+    provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
+    model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
+    response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep')),
+    context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
+    output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
+    output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', '10', '20', '50', 'unlimited')),
+    status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'completed')),
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    next_run_at TEXT,
+    revision INTEGER NOT NULL CHECK(revision >= 1),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK(
+      (cadence_type = 'once' AND run_at IS NOT NULL AND local_time IS NULL AND weekdays_json IS NULL) OR
+      (cadence_type = 'daily' AND run_at IS NULL AND local_time IS NOT NULL AND weekdays_json IS NULL) OR
+      (cadence_type = 'weekly' AND run_at IS NULL AND local_time IS NOT NULL AND weekdays_json IS NOT NULL)
+    )
+) STRICT;
+
+CREATE TABLE schedule_occurrences (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+    scheduled_for TEXT NOT NULL,
+    trigger TEXT NOT NULL CHECK(trigger IN ('scheduled', 'manual')),
+    status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped')),
+    run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+    error_code TEXT,
+    missed_count INTEGER NOT NULL DEFAULT 0 CHECK(missed_count >= 0),
+    started_at TEXT,
+    finished_at TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(schedule_id, scheduled_for, trigger)
+) STRICT;
+
+CREATE INDEX schedules_by_next_run ON schedules(status, next_run_at, id);
+CREATE INDEX schedule_occurrences_by_schedule ON schedule_occurrences(schedule_id, scheduled_for DESC, id DESC);
+CREATE UNIQUE INDEX runs_by_occurrence ON runs(occurrence_id) WHERE occurrence_id IS NOT NULL;
+
+PRAGMA user_version = 11;
 COMMIT;
 """
 
@@ -521,6 +570,47 @@ COMMIT;
 PRAGMA foreign_keys = ON;
 """
 
+_MIGRATE_V10_TO_V11_SQL = """
+BEGIN IMMEDIATE;
+CREATE TABLE IF NOT EXISTS schedules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
+    prompt TEXT NOT NULL CHECK(length(prompt) BETWEEN 1 AND 32768),
+    cadence_type TEXT NOT NULL CHECK(cadence_type IN ('once', 'daily', 'weekly')),
+    run_at TEXT, local_time TEXT, weekdays_json TEXT,
+    time_zone TEXT NOT NULL CHECK(length(time_zone) BETWEEN 1 AND 128),
+    provider_id TEXT NOT NULL CHECK(provider_id IN ('openai', 'anthropic', 'openrouter')),
+    model_id TEXT NOT NULL CHECK(length(model_id) BETWEEN 1 AND 256),
+    response_mode TEXT NOT NULL CHECK(response_mode IN ('default', 'fast', 'balanced', 'deep')),
+    context_budget TEXT NOT NULL CHECK(context_budget IN ('auto', '32k', '64k', '128k', '256k', 'max')),
+    output_budget TEXT NOT NULL CHECK(output_budget IN ('auto', '8k', '16k', '32k', '64k', 'max')),
+    output_continuation TEXT NOT NULL CHECK(output_continuation IN ('off', '1', '2', '3', '5', '10', '20', '50', 'unlimited')),
+    status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'completed')),
+    conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+    next_run_at TEXT,
+    revision INTEGER NOT NULL CHECK(revision >= 1),
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    CHECK((cadence_type='once' AND run_at IS NOT NULL AND local_time IS NULL AND weekdays_json IS NULL) OR (cadence_type='daily' AND run_at IS NULL AND local_time IS NOT NULL AND weekdays_json IS NULL) OR (cadence_type='weekly' AND run_at IS NULL AND local_time IS NOT NULL AND weekdays_json IS NOT NULL))
+) STRICT;
+CREATE TABLE IF NOT EXISTS schedule_occurrences (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+    scheduled_for TEXT NOT NULL,
+    trigger TEXT NOT NULL CHECK(trigger IN ('scheduled', 'manual')),
+    status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'skipped')),
+    run_id TEXT REFERENCES runs(id) ON DELETE SET NULL,
+    error_code TEXT,
+    missed_count INTEGER NOT NULL DEFAULT 0 CHECK(missed_count >= 0),
+    started_at TEXT, finished_at TEXT, created_at TEXT NOT NULL,
+    UNIQUE(schedule_id, scheduled_for, trigger)
+) STRICT;
+CREATE INDEX IF NOT EXISTS schedules_by_next_run ON schedules(status, next_run_at, id);
+CREATE INDEX IF NOT EXISTS schedule_occurrences_by_schedule ON schedule_occurrences(schedule_id, scheduled_for DESC, id DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS runs_by_occurrence ON runs(occurrence_id) WHERE occurrence_id IS NOT NULL;
+PRAGMA user_version = 11;
+COMMIT;
+"""
+
 
 class SqliteConversationRepository:
     """Own four chat tables below one explicit AppPaths database file."""
@@ -542,6 +632,11 @@ class SqliteConversationRepository:
     @property
     def database_file(self) -> Path:
         return self._database_file
+
+    def ensure_schema(self) -> None:
+        with self._lock:
+            connection = self._open_write()
+            connection.close()
 
     def list_conversations(
         self,
@@ -1659,6 +1754,16 @@ class SqliteConversationRepository:
                     version = 9
                 if version == 9:
                     connection.executescript(_MIGRATE_V9_TO_V10_SQL)
+                    version = 10
+                if version == 10:
+                    run_columns = {
+                        row[1] for row in connection.execute("PRAGMA table_info(runs)")
+                    }
+                    if "source" not in run_columns:
+                        connection.execute("ALTER TABLE runs ADD COLUMN source TEXT NOT NULL DEFAULT 'user' CHECK(source IN ('user', 'schedule'))")
+                    if "occurrence_id" not in run_columns:
+                        connection.execute("ALTER TABLE runs ADD COLUMN occurrence_id TEXT")
+                    connection.executescript(_MIGRATE_V10_TO_V11_SQL)
                 self._validate_schema(connection)
             return connection
         except ConversationStoreError:
@@ -1690,6 +1795,8 @@ class SqliteConversationRepository:
             "messages",
             "runs",
             "run_events",
+            "schedules",
+            "schedule_occurrences",
         }:
             raise ConversationStoreError(StoreFailure.DATABASE_UNAVAILABLE)
 

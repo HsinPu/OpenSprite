@@ -1,0 +1,32 @@
+"""Persistence interface and safe schedule errors."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Protocol
+
+from .models import Occurrence, OccurrencePage, OccurrenceStatus, OccurrenceTrigger, Schedule, ScheduleDraft, SchedulePage, ScheduleStatus
+
+
+class ScheduleFailure(StrEnum):
+    INVALID_REQUEST = "invalid_request"
+    NOT_FOUND = "not_found"
+    REVISION_CONFLICT = "revision_conflict"
+    DATABASE_UNAVAILABLE = "database_unavailable"
+
+
+class ScheduleStoreError(Exception):
+    def __init__(self, failure: ScheduleFailure) -> None:
+        self.failure = failure
+        super().__init__(failure.value)
+
+
+class ScheduleRepository(Protocol):
+    def create(self, draft: ScheduleDraft, *, next_run_at) -> Schedule: ...
+    def get(self, schedule_id: str) -> Schedule | None: ...
+    def list(self, *, limit: int, before: str | None) -> SchedulePage: ...
+    def update(self, schedule_id: str, revision: int, draft: ScheduleDraft, *, next_run_at) -> Schedule: ...
+    def set_status(self, schedule_id: str, revision: int, status: ScheduleStatus, *, next_run_at) -> Schedule: ...
+    def delete(self, schedule_id: str) -> None: ...
+    def create_occurrence(self, schedule_id: str, *, scheduled_for, trigger: OccurrenceTrigger, status: OccurrenceStatus, error_code: str | None = None, missed_count: int = 0) -> Occurrence: ...
+    def list_occurrences(self, schedule_id: str, *, limit: int, before: str | None) -> OccurrencePage: ...
