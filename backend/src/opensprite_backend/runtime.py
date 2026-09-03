@@ -64,6 +64,9 @@ from .tools.approval import (
     UnavailableToolApprovals,
 )
 from .tools.receipts import FileToolReceiptWriter
+from .schedules.coordinator import ScheduleCoordinator
+from .schedules.service import ScheduleOperations, ScheduleService, UnavailableSchedules
+from .schedules.sqlite_repository import SqliteScheduleRepository
 
 
 class LocalProviderRuntime(Protocol):
@@ -82,6 +85,7 @@ class LocalSystemRuntime(LocalProviderRuntime, Protocol):
     mcp_connections: McpConnections
     tool_approvals: ToolApprovalOperations
     agent_chat: AgentChatOperations
+    schedules: ScheduleOperations
 
     async def astart(self) -> None: ...
 
@@ -100,6 +104,8 @@ class _SystemRuntime:
         mcp_connections: McpConnections,
         tool_approvals: ToolApprovalOperations,
         agent_chat: AgentChatService,
+        schedules: ScheduleService,
+        schedule_coordinator: ScheduleCoordinator,
     ) -> None:
         self._provider_runtime = provider_runtime
         self.connections = provider_runtime.connections
@@ -110,6 +116,8 @@ class _SystemRuntime:
         self.mcp_connections = mcp_connections
         self.tool_approvals = tool_approvals
         self.agent_chat = agent_chat
+        self.schedules = schedules
+        self._schedule_coordinator = schedule_coordinator
 
     async def astart(self) -> None:
         provider_starter = getattr(self._provider_runtime, "astart", None)
@@ -117,15 +125,19 @@ class _SystemRuntime:
             await provider_starter()
         await self.mcp_connections.startup()
         await self.agent_chat.startup()
+        await self._schedule_coordinator.start()
 
     async def aclose(self) -> None:
         try:
-            await self.agent_chat.close()
+            await self._schedule_coordinator.close()
         finally:
             try:
-                await self.mcp_connections.close()
+                await self.agent_chat.close()
             finally:
-                await self._provider_runtime.aclose()
+                try:
+                    await self.mcp_connections.close()
+                finally:
+                    await self._provider_runtime.aclose()
 
 
 def create_system_runtime(
@@ -173,12 +185,19 @@ def create_system_runtime(
         ),
         prompt_log_writer=FilePromptLogWriter(paths),
     )
+    run_manager = RunManager(repository, agent_loop)
     agent_chat = AgentChatService(
         repository,
         ai_settings,
         provider_runtime.connections,
-        RunManager(repository, agent_loop),
+        run_manager,
         event_notifier=event_notifier,
+    )
+    schedule_repository = SqliteScheduleRepository(paths.database_file)
+    schedule_coordinator = ScheduleCoordinator(schedule_repository, agent_chat)
+    schedules = ScheduleService(
+        schedule_repository,
+        on_change=schedule_coordinator.wake,
     )
     return _SystemRuntime(
         provider_runtime,
@@ -189,6 +208,8 @@ def create_system_runtime(
         mcp_connections,
         tool_approvals,
         agent_chat,
+        schedules,
+        schedule_coordinator,
     )
 
 
@@ -237,6 +258,7 @@ def create_system_app(
             app.state.mcp_connections = UnavailableMcpConnections()
             app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
+            app.state.schedules = UnavailableSchedules()
             runtime = factory()
             starter = getattr(runtime, "astart", None)
             if starter is not None:
@@ -265,6 +287,11 @@ def create_system_app(
                 "agent_chat",
                 UnavailableAgentChat(),
             )
+            app.state.schedules = getattr(
+                runtime,
+                "schedules",
+                UnavailableSchedules(),
+            )
             yield
         finally:
             app.state.provider_connections = UnavailableProviderConnections()
@@ -275,6 +302,7 @@ def create_system_app(
             app.state.mcp_connections = UnavailableMcpConnections()
             app.state.tool_approvals = UnavailableToolApprovals()
             app.state.agent_chat = UnavailableAgentChat()
+            app.state.schedules = UnavailableSchedules()
             try:
                 if runtime is not None:
                     await runtime.aclose()

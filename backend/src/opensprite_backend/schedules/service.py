@@ -4,11 +4,76 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Callable
+from typing import Callable, Protocol
 
 from .models import CadenceType, Occurrence, OccurrencePage, OccurrenceStatus, OccurrenceTrigger, Schedule, ScheduleDraft, SchedulePage, ScheduleStatus
 from .recurrence import RecurrenceError, next_occurrence
 from .repository import ScheduleFailure, ScheduleRepository, ScheduleStoreError
+
+
+class ScheduleOperations(Protocol):
+    async def create(self, draft: ScheduleDraft) -> Schedule: ...
+    async def get(self, schedule_id: str) -> Schedule: ...
+    async def list(self, *, limit: int, before: str | None) -> SchedulePage: ...
+    async def update(
+        self,
+        schedule_id: str,
+        revision: int,
+        draft: ScheduleDraft,
+    ) -> Schedule: ...
+    async def pause(self, schedule_id: str, revision: int) -> Schedule: ...
+    async def resume(self, schedule_id: str, revision: int) -> Schedule: ...
+    async def delete(self, schedule_id: str) -> None: ...
+    async def run_now(self, schedule_id: str) -> Occurrence: ...
+    async def occurrences(
+        self,
+        schedule_id: str,
+        *,
+        limit: int,
+        before: str | None,
+    ) -> OccurrencePage: ...
+
+
+class UnavailableSchedules:
+    @staticmethod
+    def _raise():
+        raise ScheduleStoreError(ScheduleFailure.DATABASE_UNAVAILABLE)
+
+    async def create(self, draft):
+        del draft
+        self._raise()
+
+    async def get(self, schedule_id):
+        del schedule_id
+        self._raise()
+
+    async def list(self, *, limit, before):
+        del limit, before
+        self._raise()
+
+    async def update(self, schedule_id, revision, draft):
+        del schedule_id, revision, draft
+        self._raise()
+
+    async def pause(self, schedule_id, revision):
+        del schedule_id, revision
+        self._raise()
+
+    async def resume(self, schedule_id, revision):
+        del schedule_id, revision
+        self._raise()
+
+    async def delete(self, schedule_id):
+        del schedule_id
+        self._raise()
+
+    async def run_now(self, schedule_id):
+        del schedule_id
+        self._raise()
+
+    async def occurrences(self, schedule_id, *, limit, before):
+        del schedule_id, limit, before
+        self._raise()
 
 
 class ScheduleService:

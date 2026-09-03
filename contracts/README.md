@@ -39,6 +39,9 @@ explicit process lifecycle operations and discovered Tool summaries.
 `tool-approvals.openapi.json` defines short-lived, single-use MCP Tool approval;
 full arguments are available only while the approval is pending.
 
+`schedules.openapi.json` defines durable once, daily, and weekly Agent schedules,
+optimistic revisions, manual runs, occurrence history, and host continuity status.
+
 `app-info.openapi.json` is the authoritative read-only contract for the running
 product version and installed build identity. The backend package version is
 the single product-version source; the frontend does not maintain another app

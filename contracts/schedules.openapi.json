@@ -1,0 +1,73 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenSprite schedules API",
+    "version": "0.10.0",
+    "description": "Authoritative contract for durable Agent schedules and occurrence history."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "security": [],
+  "paths": {
+    "/api/schedules": {
+      "get": {"operationId": "listSchedules"},
+      "post": {"operationId": "createSchedule"}
+    },
+    "/api/schedules/runtime-status": {
+      "get": {"operationId": "getScheduleRuntimeStatus"}
+    },
+    "/api/schedules/{schedule_id}": {
+      "get": {"operationId": "getSchedule"},
+      "put": {"operationId": "updateSchedule"},
+      "delete": {"operationId": "deleteSchedule"}
+    },
+    "/api/schedules/{schedule_id}/pause": {
+      "post": {"operationId": "pauseSchedule"}
+    },
+    "/api/schedules/{schedule_id}/resume": {
+      "post": {"operationId": "resumeSchedule"}
+    },
+    "/api/schedules/{schedule_id}/run-now": {
+      "post": {"operationId": "runScheduleNow"}
+    },
+    "/api/schedules/{schedule_id}/occurrences": {
+      "get": {"operationId": "listScheduleOccurrences"}
+    }
+  },
+  "components": {
+    "schemas": {
+      "ExecutionProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["providerId", "modelId", "responseMode", "contextBudget", "outputBudget", "outputContinuation"]
+      },
+      "ScheduleFields": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "prompt", "timeZone", "cadence", "executionProfile"]
+      },
+      "UpdateScheduleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "prompt", "timeZone", "cadence", "executionProfile", "revision"]
+      },
+      "RevisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision"]
+      },
+      "RuntimeStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["platform", "continuity"],
+        "properties": {
+          "platform": {"type": "string"},
+          "continuity": {"type": "string", "enum": ["linger_enabled", "login_only", "unknown"]}
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": ["invalid_request", "not_found", "revision_conflict", "database_unavailable"]
+      }
+    }
+  }
+}

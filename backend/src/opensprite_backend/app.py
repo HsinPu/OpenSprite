@@ -42,6 +42,10 @@ from .api.tool_settings_routes import (
     router as tool_settings_router,
     tool_settings_error_response,
 )
+from .api.schedule_routes import (
+    router as schedule_router,
+    schedule_error_response,
+)
 from .application import (
     AgentChatError,
     AgentChatOperations,
@@ -105,6 +109,8 @@ from .tools.approval import (
     ToolApprovalOperations,
     UnavailableToolApprovals,
 )
+from .schedules.repository import ScheduleFailure, ScheduleStoreError
+from .schedules.service import ScheduleOperations, UnavailableSchedules
 
 ExceptionHandler = Callable[[Request, Exception], Awaitable[Response]]
 _LOGGER = logging.getLogger("opensprite.runtime")
@@ -122,6 +128,7 @@ def create_app(
     local_authentication: LocalAuthenticationOperations | None = None,
     tool_approvals: ToolApprovalOperations | None = None,
     agent_chat: AgentChatOperations | None = None,
+    schedules: ScheduleOperations | None = None,
     app_info: AppInfo | None = None,
     lifespan: Lifespan[FastAPI] | None = None,
     enforce_local_security: bool = False,
@@ -182,6 +189,7 @@ def create_app(
     app.state.agent_chat = (
         agent_chat if agent_chat is not None else UnavailableAgentChat()
     )
+    app.state.schedules = schedules if schedules is not None else UnavailableSchedules()
     if enforce_authentication:
         app.add_middleware(
             LocalAuthenticationMiddleware,
@@ -207,6 +215,8 @@ def create_app(
             return auth_error_response("invalid_request")
         if request.url.path == "/api/local-paths/pick":
             return local_path_error_response("invalid_request")
+        if request.url.path.startswith("/api/schedules"):
+            return schedule_error_response(ScheduleFailure.INVALID_REQUEST)
         return provider_error_response(ErrorCode.INVALID_REQUEST)
 
     async def local_path_error_handler(
@@ -301,6 +311,13 @@ def create_app(
         del request
         return chat_error_response(exc.code)
 
+    async def schedule_store_error_handler(
+        request: Request,
+        exc: ScheduleStoreError,
+    ) -> JSONResponse:
+        del request
+        return schedule_error_response(exc.failure)
+
     async def internal_error_handler(
         request: Request,
         exc: Exception,
@@ -361,6 +378,10 @@ def create_app(
         cast(ExceptionHandler, agent_chat_error_handler),
     )
     app.add_exception_handler(
+        ScheduleStoreError,
+        cast(ExceptionHandler, schedule_store_error_handler),
+    )
+    app.add_exception_handler(
         Exception,
         cast(ExceptionHandler, internal_error_handler),
     )
@@ -385,4 +406,5 @@ def create_app(
     app.include_router(tool_approval_router)
     app.include_router(provider_router)
     app.include_router(chat_router)
+    app.include_router(schedule_router)
     return app
