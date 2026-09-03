@@ -27,11 +27,14 @@ def test_contract_contains_only_approved_schedule_operations() -> None:
         "/api/schedules/{schedule_id}/occurrences",
     }
     schemas = contract["components"]["schemas"]
-    assert schemas["RuntimeStatus"]["properties"]["continuity"]["enum"] == [
+    assert schemas["RuntimeStatusResponse"]["properties"]["continuity"]["enum"] == [
         "linger_enabled",
         "login_only",
         "unknown",
     ]
+    assert schemas["ScheduleResponse"]["required"][-1] == "latestOccurrence"
+    assert schemas["ExecutionProfile"]["additionalProperties"] is False
+    assert contract["security"] == [{"cookieSession": []}]
 
 
 def test_generated_operation_ids_match_schedule_contract() -> None:
@@ -39,6 +42,8 @@ def test_generated_operation_ids_match_schedule_contract() -> None:
     generated = create_app().openapi()
     for path, methods in contract["paths"].items():
         for method, operation in methods.items():
+            if method not in {"get", "post", "put", "delete"}:
+                continue
             assert generated["paths"][path][method]["operationId"] == operation[
                 "operationId"
             ]

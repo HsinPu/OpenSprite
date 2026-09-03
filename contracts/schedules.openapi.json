@@ -1,73 +1,51 @@
 {
   "openapi": "3.1.0",
-  "info": {
-    "title": "OpenSprite schedules API",
-    "version": "0.10.0",
-    "description": "Authoritative contract for durable Agent schedules and occurrence history."
-  },
+  "info": {"title": "OpenSprite schedules API", "version": "0.10.0", "description": "Authoritative contract for durable Agent schedules and occurrence history."},
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
-  "security": [],
+  "security": [{"cookieSession": []}],
   "paths": {
     "/api/schedules": {
-      "get": {"operationId": "listSchedules"},
-      "post": {"operationId": "createSchedule"}
+      "get": {"operationId": "listSchedules", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}}, {"name": "before", "in": "query", "schema": {"type": ["string", "null"], "maxLength": 512}}], "responses": {"200": {"description": "Schedule page.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleListResponse"}}}}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "503": {"$ref": "#/components/responses/DatabaseUnavailable"}}},
+      "post": {"operationId": "createSchedule", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateScheduleRequest"}}}}, "responses": {"201": {"description": "Created schedule.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleResponse"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "503": {"$ref": "#/components/responses/DatabaseUnavailable"}}}
     },
-    "/api/schedules/runtime-status": {
-      "get": {"operationId": "getScheduleRuntimeStatus"}
-    },
+    "/api/schedules/runtime-status": {"get": {"operationId": "getScheduleRuntimeStatus", "responses": {"200": {"description": "Host continuity status.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RuntimeStatusResponse"}}}}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}}}},
     "/api/schedules/{schedule_id}": {
-      "get": {"operationId": "getSchedule"},
-      "put": {"operationId": "updateSchedule"},
-      "delete": {"operationId": "deleteSchedule"}
+      "parameters": [{"$ref": "#/components/parameters/ScheduleId"}],
+      "get": {"operationId": "getSchedule", "responses": {"200": {"description": "Schedule.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleResponse"}}}}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "404": {"$ref": "#/components/responses/NotFound"}}},
+      "put": {"operationId": "updateSchedule", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UpdateScheduleRequest"}}}}, "responses": {"200": {"description": "Updated schedule.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleResponse"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "404": {"$ref": "#/components/responses/NotFound"}, "409": {"$ref": "#/components/responses/RevisionConflict"}}},
+      "delete": {"operationId": "deleteSchedule", "responses": {"204": {"description": "Schedule metadata deleted; conversation retained."}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "404": {"$ref": "#/components/responses/NotFound"}}}
     },
-    "/api/schedules/{schedule_id}/pause": {
-      "post": {"operationId": "pauseSchedule"}
-    },
-    "/api/schedules/{schedule_id}/resume": {
-      "post": {"operationId": "resumeSchedule"}
-    },
-    "/api/schedules/{schedule_id}/run-now": {
-      "post": {"operationId": "runScheduleNow"}
-    },
-    "/api/schedules/{schedule_id}/occurrences": {
-      "get": {"operationId": "listScheduleOccurrences"}
-    }
+    "/api/schedules/{schedule_id}/pause": {"parameters": [{"$ref": "#/components/parameters/ScheduleId"}], "post": {"operationId": "pauseSchedule", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevisionRequest"}}}}, "responses": {"200": {"description": "Paused schedule.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleResponse"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "409": {"$ref": "#/components/responses/RevisionConflict"}}}},
+    "/api/schedules/{schedule_id}/resume": {"parameters": [{"$ref": "#/components/parameters/ScheduleId"}], "post": {"operationId": "resumeSchedule", "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevisionRequest"}}}}, "responses": {"200": {"description": "Resumed schedule.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ScheduleResponse"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "409": {"$ref": "#/components/responses/RevisionConflict"}}}},
+    "/api/schedules/{schedule_id}/run-now": {"parameters": [{"$ref": "#/components/parameters/ScheduleId"}], "post": {"operationId": "runScheduleNow", "responses": {"202": {"description": "Durable manual occurrence accepted.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OccurrenceResponse"}}}}, "400": {"$ref": "#/components/responses/InvalidRequest"}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "404": {"$ref": "#/components/responses/NotFound"}}}},
+    "/api/schedules/{schedule_id}/occurrences": {"parameters": [{"$ref": "#/components/parameters/ScheduleId"}], "get": {"operationId": "listScheduleOccurrences", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50}}, {"name": "before", "in": "query", "schema": {"type": ["string", "null"], "maxLength": 512}}], "responses": {"200": {"description": "Occurrence page.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OccurrenceListResponse"}}}}, "401": {"$ref": "#/components/responses/AuthenticationRequired"}, "404": {"$ref": "#/components/responses/NotFound"}}}}
   },
   "components": {
+    "securitySchemes": {"cookieSession": {"type": "apiKey", "in": "cookie", "name": "__Host-OpenSpriteSession"}},
+    "parameters": {"ScheduleId": {"name": "schedule_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}},
     "schemas": {
-      "ExecutionProfile": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["providerId", "modelId", "responseMode", "contextBudget", "outputBudget", "outputContinuation"]
-      },
-      "ScheduleFields": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "prompt", "timeZone", "cadence", "executionProfile"]
-      },
-      "UpdateScheduleRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "prompt", "timeZone", "cadence", "executionProfile", "revision"]
-      },
-      "RevisionRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["revision"]
-      },
-      "RuntimeStatus": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["platform", "continuity"],
-        "properties": {
-          "platform": {"type": "string"},
-          "continuity": {"type": "string", "enum": ["linger_enabled", "login_only", "unknown"]}
-        }
-      },
-      "ErrorCode": {
-        "type": "string",
-        "enum": ["invalid_request", "not_found", "revision_conflict", "database_unavailable"]
-      }
+      "ExecutionProfile": {"type": "object", "additionalProperties": false, "required": ["providerId", "modelId", "responseMode", "contextBudget", "outputBudget", "outputContinuation"], "properties": {"providerId": {"type": "string", "enum": ["openai", "anthropic", "openrouter"]}, "modelId": {"type": "string", "minLength": 1, "maxLength": 200}, "responseMode": {"type": "string", "enum": ["default", "fast", "balanced", "deep"]}, "contextBudget": {"type": "string", "enum": ["auto", "32k", "64k", "128k", "256k", "max"]}, "outputBudget": {"type": "string", "enum": ["auto", "8k", "16k", "32k", "64k", "max"]}, "outputContinuation": {"type": "string", "enum": ["off", "1", "2", "3", "5", "10", "20", "50", "unlimited"]}}},
+      "OnceCadence": {"type": "object", "additionalProperties": false, "required": ["type", "runAt"], "properties": {"type": {"const": "once"}, "runAt": {"type": "string", "format": "date-time"}}},
+      "DailyCadence": {"type": "object", "additionalProperties": false, "required": ["type", "localTime"], "properties": {"type": {"const": "daily"}, "localTime": {"type": "string", "format": "time"}}},
+      "WeeklyCadence": {"type": "object", "additionalProperties": false, "required": ["type", "localTime", "weekdays"], "properties": {"type": {"const": "weekly"}, "localTime": {"type": "string", "format": "time"}, "weekdays": {"type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 7}}}},
+      "Cadence": {"oneOf": [{"$ref": "#/components/schemas/OnceCadence"}, {"$ref": "#/components/schemas/DailyCadence"}, {"$ref": "#/components/schemas/WeeklyCadence"}], "discriminator": {"propertyName": "type"}},
+      "CreateScheduleRequest": {"type": "object", "additionalProperties": false, "required": ["name", "prompt", "timeZone", "cadence", "executionProfile"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "prompt": {"type": "string", "minLength": 1, "maxLength": 32768}, "timeZone": {"type": "string", "minLength": 1, "maxLength": 100}, "cadence": {"$ref": "#/components/schemas/Cadence"}, "executionProfile": {"$ref": "#/components/schemas/ExecutionProfile"}}},
+      "UpdateScheduleRequest": {"type": "object", "additionalProperties": false, "required": ["name", "prompt", "timeZone", "cadence", "executionProfile", "revision"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 120}, "prompt": {"type": "string", "minLength": 1, "maxLength": 32768}, "timeZone": {"type": "string", "minLength": 1, "maxLength": 100}, "cadence": {"$ref": "#/components/schemas/Cadence"}, "executionProfile": {"$ref": "#/components/schemas/ExecutionProfile"}, "revision": {"type": "integer", "minimum": 1}}},
+      "RevisionRequest": {"type": "object", "additionalProperties": false, "required": ["revision"], "properties": {"revision": {"type": "integer", "minimum": 1}}},
+      "OccurrenceResponse": {"type": "object", "additionalProperties": false, "required": ["id", "scheduleId", "scheduledFor", "trigger", "status", "runId", "errorCode", "missedCount", "startedAt", "finishedAt", "createdAt"], "properties": {"id": {"type": "string", "format": "uuid"}, "scheduleId": {"type": "string", "format": "uuid"}, "scheduledFor": {"type": "string", "format": "date-time"}, "trigger": {"type": "string", "enum": ["manual", "scheduled"]}, "status": {"type": "string", "enum": ["pending", "running", "completed", "failed", "skipped"]}, "runId": {"type": ["string", "null"], "format": "uuid"}, "errorCode": {"type": ["string", "null"]}, "missedCount": {"type": "integer", "minimum": 0}, "startedAt": {"type": ["string", "null"], "format": "date-time"}, "finishedAt": {"type": ["string", "null"], "format": "date-time"}, "createdAt": {"type": "string", "format": "date-time"}}},
+      "ScheduleResponse": {"type": "object", "additionalProperties": false, "required": ["id", "name", "prompt", "timeZone", "cadence", "executionProfile", "status", "conversationId", "nextRunAt", "revision", "createdAt", "updatedAt", "latestOccurrence"], "properties": {"id": {"type": "string", "format": "uuid"}, "name": {"type": "string"}, "prompt": {"type": "string"}, "timeZone": {"type": "string"}, "cadence": {"$ref": "#/components/schemas/Cadence"}, "executionProfile": {"$ref": "#/components/schemas/ExecutionProfile"}, "status": {"type": "string", "enum": ["active", "paused", "completed"]}, "conversationId": {"type": ["string", "null"], "format": "uuid"}, "nextRunAt": {"type": ["string", "null"], "format": "date-time"}, "revision": {"type": "integer", "minimum": 1}, "createdAt": {"type": "string", "format": "date-time"}, "updatedAt": {"type": "string", "format": "date-time"}, "latestOccurrence": {"oneOf": [{"$ref": "#/components/schemas/OccurrenceResponse"}, {"type": "null"}]}}},
+      "ScheduleListResponse": {"type": "object", "additionalProperties": false, "required": ["schedules", "nextCursor"], "properties": {"schedules": {"type": "array", "maxItems": 100, "items": {"$ref": "#/components/schemas/ScheduleResponse"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "OccurrenceListResponse": {"type": "object", "additionalProperties": false, "required": ["occurrences", "nextCursor"], "properties": {"occurrences": {"type": "array", "maxItems": 100, "items": {"$ref": "#/components/schemas/OccurrenceResponse"}}, "nextCursor": {"type": ["string", "null"]}}},
+      "RuntimeStatusResponse": {"type": "object", "additionalProperties": false, "required": ["platform", "continuity"], "properties": {"platform": {"type": "string"}, "continuity": {"type": "string", "enum": ["linger_enabled", "login_only", "unknown"]}}},
+      "ErrorCode": {"type": "string", "enum": ["invalid_request", "not_found", "revision_conflict", "database_unavailable"]},
+      "ErrorEnvelope": {"type": "object", "additionalProperties": false, "required": ["error"], "properties": {"error": {"type": "object", "additionalProperties": false, "required": ["code", "message", "retryable"], "properties": {"code": {"$ref": "#/components/schemas/ErrorCode"}, "message": {"type": "string"}, "retryable": {"type": "boolean"}}}}}
+    },
+    "responses": {
+      "InvalidRequest": {"description": "Malformed schedule request.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "AuthenticationRequired": {"description": "A valid local Session is required."},
+      "NotFound": {"description": "Schedule not found.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "RevisionConflict": {"description": "The schedule was updated elsewhere.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+      "DatabaseUnavailable": {"description": "The local schedule database is unavailable.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
     }
   }
 }
