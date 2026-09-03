@@ -145,6 +145,10 @@ Frontend localization 由 [`frontend-localization.md`](frontend-localization.md)
 控制日期分組及顯示時間；穩定 locale/time-zone ID 與 message key 不使用顯示文字作為
 狀態或 DOM identity。
 
+Durable Agent 排程由 [`schedules.md`](schedules.md) 定義。SQLite schema v11
+保存 once／daily／weekly schedule、固定 execution profile 與 occurrence；單一
+runtime coordinator 負責補跑、重啟恢復、全域併發 1 與禁止人工核准工具。
+
 同一 provider 的 replace、test、delete 必須序列化；不同 provider 可獨立處理。不提供 ETag、
 `If-Match` 或 idempotency key。每次 PUT 都必須重新驗證傳入 credential，即使內容與已儲存值
 相同；成功時更新 `lastCheckedAt`，因此不承諾 repeated PUT 有完全相同的 observable result。

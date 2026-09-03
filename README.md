@@ -12,8 +12,9 @@ Windows 與 Linux 都從 repository root 使用各自的 installer。安裝後�
 - AI：固定支援 OpenAI、Anthropic、OpenRouter；模型、Context／輸出上限、推理模式、續接次數、回覆顯示方式與 Prompt log 偏好保存於 `.opensprite/config/settings.json`。
 - 金鑰：只以 AES-256-GCM ciphertext 保存於 `.opensprite/auth.json`，每次安裝使用獨立的 `config/credential.key`。
 - Agent：所有使用者訊息進入同一個 Token-budgeted Agent loop；舊對話只做可重建摘要，原始訊息不刪除。執行事件與 Context 用量可由前端即時／歷史查看；production Tool Registry 目前包含安全的唯讀計算器。
+- 排程：支援單次、每日與每週自動執行；每個排程使用專屬對話與固定模型設定，執行紀錄保存在 SQLite，backend 重啟後可恢復。
 - CLI：不在新版本範圍內。
-- API：Provider、AI settings 與 Agent chat HTTP/SSE 契約已實作；未使用 WebSocket。
+- API：Provider、AI settings、Agent chat HTTP/SSE 與受保護的排程 CRUD／執行紀錄契約已實作；未使用 WebSocket。
 - 存取：支援本機免密碼的 `trusted_local` 與需要 Argon2id 密碼、記憶體 Session 的 `password_required`。
 - 安裝器：Windows 與 Linux current-user installer 均已實作；Linux 實機 systemd 隔離測試仍待真實 Linux 主機執行。
 
