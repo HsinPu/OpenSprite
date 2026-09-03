@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 from typing import Final
+from enum import StrEnum
 
 from ..atomic_file import atomic_write
 
@@ -23,6 +24,16 @@ class AccessStoreError(Exception):
 @dataclass(frozen=True, slots=True)
 class AccessRecord:
     password_hash: str
+
+
+class AccessMode(StrEnum):
+    TRUSTED_LOCAL = "trusted_local"
+    PASSWORD_REQUIRED = "password_required"
+
+
+@dataclass(frozen=True, slots=True)
+class AccessPolicy:
+    mode: AccessMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +103,27 @@ class JsonAccessStore:
             self._path.unlink(missing_ok=True)
         except OSError:
             raise AccessStoreError from None
+
+
+class JsonAccessPolicyStore:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def get(self) -> AccessPolicy:
+        raw = _read(self._path)
+        if raw is None:
+            return AccessPolicy(AccessMode.PASSWORD_REQUIRED)
+        if type(raw) is not dict or set(raw) != {"version", "mode"} or raw["version"] != 1:
+            raise AccessStoreError
+        try:
+            return AccessPolicy(AccessMode(raw["mode"]))
+        except (TypeError, ValueError):
+            raise AccessStoreError from None
+
+    def set(self, policy: AccessPolicy) -> None:
+        if not isinstance(policy, AccessPolicy):
+            raise AccessStoreError
+        _write(self._path, {"version": 1, "mode": policy.mode.value})
 
 
 class JsonBootstrapStore:

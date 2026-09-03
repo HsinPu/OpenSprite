@@ -5,6 +5,13 @@ serving any sensitive API. This boundary is intentionally not an account or
 role system: there is no username, email address, cloud identity, multi-user
 authorization, OAuth, MFA, or passkey flow.
 
+The installed runtime reads a strict `config/access-policy.json` with either
+`password_required` or `trusted_local`. Missing or malformed policy fails closed
+to password protection; installers must write an explicit policy for new
+installs. `trusted_local` skips only Session authentication and never relaxes
+the loopback Host, same-origin mutation, response-header, or single-process
+boundaries.
+
 ## Stored and process-local state
 
 `config/access.json` stores only a strict versioned Argon2id password hash. The

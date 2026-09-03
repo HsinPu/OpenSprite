@@ -25,6 +25,7 @@ the user explicitly requests verified user-data deletion.
 ├─ auth.json
 ├─ config/
 │  ├─ access.json
+│  ├─ access-policy.json
 │  ├─ settings.json
 │  ├─ general.json
 │  ├─ conversation.json
@@ -57,7 +58,7 @@ importing the backend, starting the system app, and reading absent state do not
 create the root or any child directory. A persistence owner creates only the
 parent directory needed for an actual write.
 
-`auth.json`, `config/access.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
+`auth.json`, `config/access.json`, `config/access-policy.json`, `config/credential.key`, `config/settings.json`, `config/general.json`,
 `config/conversation.json`, `config/tools.json`, `config/mcp.json`,
 `state/providers.json`, the transient `state/provider-transaction.json`, and
 `data/opensprite.db` are implemented today. Each Run also writes one complete,
@@ -77,6 +78,9 @@ single local owner. `state/access-bootstrap.json` contains only a SHA-256 token
 hash and its timestamps, exists during the one-time 30-minute setup window, and
 is deleted after successful setup. Browser sessions remain exclusively in
 backend process memory and are not part of this on-disk layout.
+`config/access-policy.json` is a strict non-secret schema-v1 document whose mode
+is `trusted_local` or `password_required`. A missing document defaults to
+`password_required`; malformed data prevents authenticated API access.
 
 `config/mcp.json` is a strict schema-v3 non-secret list of configured stdio or
 Streamable HTTP Servers. Schema-v1 and schema-v2 data are read without rewrite

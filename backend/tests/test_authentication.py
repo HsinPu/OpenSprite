@@ -11,7 +11,13 @@ import pytest
 
 from opensprite_backend.app import create_app
 from opensprite_backend.app_paths import build_app_paths
-from opensprite_backend.authentication import LocalAuthentication, LocalAuthenticationError
+from opensprite_backend.authentication import (
+    AccessMode,
+    AccessPolicy,
+    JsonAccessPolicyStore,
+    LocalAuthentication,
+    LocalAuthenticationError,
+)
 from opensprite_backend.authentication.store import (
     AccessRecord,
     AccessStoreError,
@@ -58,6 +64,19 @@ def test_access_store_absent_read_is_lazy_and_strict(tmp_path: Path) -> None:
         store.get()
 
 
+def test_access_policy_is_strict_atomic_and_defaults_to_password(tmp_path: Path) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    store = JsonAccessPolicyStore(paths.access_policy_file)
+    assert store.get() == AccessPolicy(AccessMode.PASSWORD_REQUIRED)
+    assert not paths.home.exists()
+    store.set(AccessPolicy(AccessMode.TRUSTED_LOCAL))
+    assert store.get() == AccessPolicy(AccessMode.TRUSTED_LOCAL)
+    assert paths.access_policy_file.read_text(encoding="utf-8") == '{"version":1,"mode":"trusted_local"}\n'
+    paths.access_policy_file.write_text('{"version":1,"mode":"unknown"}', encoding="utf-8")
+    with pytest.raises(AccessStoreError):
+        store.get()
+
+
 def test_access_store_atomic_failure_preserves_previous_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     paths = build_app_paths(tmp_path / ".opensprite")
     store = JsonAccessStore(paths.access_file)
@@ -89,6 +108,25 @@ def test_setup_hashes_password_and_bootstrap_is_single_use(tmp_path: Path) -> No
     with pytest.raises(LocalAuthenticationError) as raised:
         asyncio_run(auth.setup(BOOTSTRAP, PASSWORD))
     assert raised.value.code == "setup_unavailable"
+
+
+def test_trusted_local_status_never_accepts_password_mutations(tmp_path: Path) -> None:
+    auth, paths = authentication(tmp_path)
+    trusted = LocalAuthentication(
+        JsonAccessStore(paths.access_file),
+        JsonBootstrapStore(paths.access_bootstrap_file),
+        access_mode=AccessMode.TRUSTED_LOCAL,
+        clock=lambda: NOW,
+    )
+    assert asyncio_run(trusted.status(None)).state == "trusted_local"
+    for operation in (
+        trusted.setup(BOOTSTRAP, PASSWORD),
+        trusted.login(PASSWORD),
+        trusted.change_password(None, PASSWORD, "replacement password value"),
+    ):
+        with pytest.raises(LocalAuthenticationError) as raised:
+            asyncio_run(operation)
+        assert raised.value.code == "authentication_not_enabled"
 
 
 def test_password_normalization_length_and_controls(tmp_path: Path) -> None:

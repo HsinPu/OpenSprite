@@ -187,6 +187,7 @@ def create_app(
             LocalAuthenticationMiddleware,
             authentication=app.state.local_authentication,
             unauthorized_response=lambda: auth_error_response("authentication_required"),
+            unavailable_response=lambda: auth_error_response("access_store_unavailable"),
         )
     if enforce_local_security:
         app.add_middleware(

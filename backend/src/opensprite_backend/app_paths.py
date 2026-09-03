@@ -25,6 +25,10 @@ class AppPaths:
         return self.config_dir / "access.json"
 
     @property
+    def access_policy_file(self) -> Path:
+        return self.config_dir / "access-policy.json"
+
+    @property
     def access_bootstrap_file(self) -> Path:
         return self.state_dir / "access-bootstrap.json"
 

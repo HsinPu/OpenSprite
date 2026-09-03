@@ -44,6 +44,10 @@ class AuthSetupRequired(ContractModel):
     state: Literal["setup_required"] = "setup_required"
 
 
+class AuthTrustedLocal(ContractModel):
+    state: Literal["trusted_local"] = "trusted_local"
+
+
 class AuthUnauthenticated(ContractModel):
     state: Literal["unauthenticated"] = "unauthenticated"
 
@@ -54,7 +58,7 @@ class AuthAuthenticated(ContractModel):
 
 
 AuthStatus = Annotated[
-    AuthSetupRequired | AuthUnauthenticated | AuthAuthenticated,
+    AuthTrustedLocal | AuthSetupRequired | AuthUnauthenticated | AuthAuthenticated,
     Field(discriminator="state"),
 ]
 
@@ -67,6 +71,7 @@ class AuthErrorCode(StrEnum):
     RATE_LIMITED = "rate_limited"
     AUTHENTICATION_REQUIRED = "authentication_required"
     ACCESS_STORE_UNAVAILABLE = "access_store_unavailable"
+    AUTHENTICATION_NOT_ENABLED = "authentication_not_enabled"
     INTERNAL_ERROR = "internal_error"
 
 

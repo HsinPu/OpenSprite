@@ -39,7 +39,8 @@ from .mcp import (
     UnavailableMcpConnections,
     create_mcp_connection_manager,
 )
-from .authentication import create_local_authentication
+from .authentication import AccessMode, JsonAccessPolicyStore, UnavailableLocalAuthentication, create_local_authentication
+from .authentication.store import AccessStoreError
 from .general_settings import (
     GeneralSettingsOperations,
     UnavailableGeneralSettings,
@@ -201,7 +202,12 @@ def create_system_app(
 
     entry_lock = Lock()
     paths = app_paths if app_paths is not None else build_app_paths()
-    local_authentication = create_local_authentication(paths)
+    try:
+        access_mode = JsonAccessPolicyStore(paths.access_policy_file).get().mode
+        local_authentication = create_local_authentication(paths, access_mode=access_mode)
+    except AccessStoreError:
+        access_mode = AccessMode.PASSWORD_REQUIRED
+        local_authentication = UnavailableLocalAuthentication()
     factory = runtime_factory
     if factory is None:
         factory = lambda: create_system_runtime(app_paths=paths)
@@ -283,5 +289,5 @@ def create_system_app(
         enforce_local_security=True,
         local_path_picker=create_local_path_picker(),
         local_authentication=local_authentication,
-        enforce_authentication=enforce_authentication,
+        enforce_authentication=enforce_authentication and access_mode is AccessMode.PASSWORD_REQUIRED,
     )

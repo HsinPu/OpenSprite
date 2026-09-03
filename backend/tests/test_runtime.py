@@ -18,6 +18,7 @@ from opensprite_backend.provider_connections import (
     UnavailableProviderConnections,
 )
 from opensprite_backend.runtime import create_system_app
+from opensprite_backend.authentication import AccessMode, AccessPolicy, JsonAccessPolicyStore
 
 from test_local_security import RecordingConnections
 
@@ -62,6 +63,29 @@ class FakeRuntime:
 
     async def aclose(self) -> None:
         await self.client.aclose()
+
+
+def test_system_app_trusted_local_mode_bypasses_only_session_authentication(tmp_path) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    JsonAccessPolicyStore(paths.access_policy_file).set(AccessPolicy(AccessMode.TRUSTED_LOCAL))
+    app = create_system_app(app_paths=paths, runtime_factory=FakeRuntime)
+    with TestClient(app, base_url="http://localhost:8765") as client:
+        assert client.get("/api/auth/status").json() == {"state": "trusted_local"}
+        assert client.get("/api/providers").status_code == 200
+        rejected = client.put("/api/settings/general", headers={"Origin": "http://evil.example"}, json={})
+        assert rejected.status_code == 400
+
+
+def test_invalid_access_policy_fails_closed(tmp_path) -> None:
+    paths = build_app_paths(tmp_path / ".opensprite")
+    paths.access_policy_file.parent.mkdir(parents=True)
+    paths.access_policy_file.write_text('{"version":1,"mode":"invalid"}', encoding="utf-8")
+    app = create_system_app(app_paths=paths, runtime_factory=FakeRuntime)
+    with TestClient(app, base_url="http://localhost:8765") as client:
+        protected = client.get("/api/providers")
+        assert protected.status_code == 503
+        assert protected.json()["error"]["code"] == "access_store_unavailable"
+        assert client.get("/api/auth/status").status_code == 503
 
 
 def test_system_app_is_offline_until_lifespan_entry() -> None:

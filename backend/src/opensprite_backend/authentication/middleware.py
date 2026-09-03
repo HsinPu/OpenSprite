@@ -8,7 +8,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from .service import LocalAuthenticationOperations
+from .service import LocalAuthenticationError, LocalAuthenticationOperations
 
 
 SESSION_COOKIE = "__Host-OpenSpriteSession"
@@ -33,16 +33,24 @@ class LocalAuthenticationMiddleware:
         *,
         authentication: LocalAuthenticationOperations,
         unauthorized_response: Callable[[], Response],
+        unavailable_response: Callable[[], Response],
     ) -> None:
         self._app = app
         self._authentication = authentication
         self._unauthorized_response = unauthorized_response
+        self._unavailable_response = unavailable_response
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and scope.get("path", "").startswith("/api/") and scope.get("path") not in PUBLIC_API:
             request = Request(scope)
             token = request.cookies.get(SESSION_COOKIE)
-            if await self._authentication.authenticate(token) is None:
+            try:
+                authenticated = await self._authentication.authenticate(token)
+            except LocalAuthenticationError:
+                response = self._unavailable_response()
+                await response(scope, receive, send)
+                return
+            if authenticated is None:
                 response = self._unauthorized_response()
                 await response(scope, receive, send)
                 return

@@ -28,6 +28,7 @@ _ERRORS = {
     "setup_unavailable": (409, "Local access setup is unavailable.", False),
     "rate_limited": (429, "Too many authentication attempts.", True),
     "access_store_unavailable": (503, "Local access storage is unavailable.", True),
+    "authentication_not_enabled": (409, "Password authentication is not enabled.", False),
     "internal_error": (500, "An internal error occurred.", False),
 }
 

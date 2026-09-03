@@ -16,8 +16,8 @@ from argon2 import PasswordHasher, Type
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 from ..app_paths import AppPaths
-from ..models import AuthAuthenticated, AuthSetupRequired, AuthStatus, AuthUnauthenticated
-from .store import AccessRecord, AccessStoreError, JsonAccessStore, JsonBootstrapStore
+from ..models import AuthAuthenticated, AuthSetupRequired, AuthStatus, AuthTrustedLocal, AuthUnauthenticated
+from .store import AccessMode, AccessRecord, AccessStoreError, JsonAccessStore, JsonBootstrapStore
 
 
 _SESSION_IDLE = timedelta(hours=12)
@@ -73,6 +73,7 @@ class LocalAuthentication:
         *,
         clock: Callable[[], datetime] | None = None,
         password_hasher: PasswordHasher | None = None,
+        access_mode: AccessMode = AccessMode.PASSWORD_REQUIRED,
     ) -> None:
         self._access = access_store
         self._bootstrap = bootstrap_store
@@ -90,8 +91,11 @@ class LocalAuthentication:
         self._blocked_until: datetime | None = None
         self._lock = RLock()
         self._mutation_lock = asyncio.Lock()
+        self._access_mode = access_mode
 
     async def status(self, token: str | None) -> AuthStatus:
+        if self._access_mode is AccessMode.TRUSTED_LOCAL:
+            return AuthTrustedLocal()
         try:
             if self._access.get() is None:
                 return AuthSetupRequired()
@@ -116,6 +120,7 @@ class LocalAuthentication:
             return AuthAuthenticated(expiresAt=now + _SESSION_IDLE)
 
     async def setup(self, bootstrap_token: str, password: str) -> AuthResult:
+        self._require_password_mode()
         normalized = _validated_password(password)
         async with self._mutation_lock:
             try:
@@ -139,6 +144,7 @@ class LocalAuthentication:
             return self._issue(now)
 
     async def login(self, password: str) -> AuthResult:
+        self._require_password_mode()
         now = self._now()
         self._require_not_throttled(now)
         try:
@@ -178,6 +184,7 @@ class LocalAuthentication:
             self._sessions.clear()
 
     async def change_password(self, token: str | None, current_password: str, new_password: str) -> AuthResult:
+        self._require_password_mode()
         if await self.authenticate(token) is None:
             raise LocalAuthenticationError("authentication_required")
         normalized_new = _validated_password(new_password)
@@ -230,6 +237,10 @@ class LocalAuthentication:
             raise LocalAuthenticationError("access_store_unavailable")
         return value.astimezone(UTC)
 
+    def _require_password_mode(self) -> None:
+        if self._access_mode is AccessMode.TRUSTED_LOCAL:
+            raise LocalAuthenticationError("authentication_not_enabled")
+
 
 def _validated_password(password: str) -> str:
     normalized = unicodedata.normalize("NFC", password)
@@ -238,5 +249,5 @@ def _validated_password(password: str) -> str:
     return normalized
 
 
-def create_local_authentication(paths: AppPaths) -> LocalAuthentication:
-    return LocalAuthentication(JsonAccessStore(paths.access_file), JsonBootstrapStore(paths.access_bootstrap_file))
+def create_local_authentication(paths: AppPaths, *, access_mode: AccessMode = AccessMode.PASSWORD_REQUIRED) -> LocalAuthentication:
+    return LocalAuthentication(JsonAccessStore(paths.access_file), JsonBootstrapStore(paths.access_bootstrap_file), access_mode=access_mode)
