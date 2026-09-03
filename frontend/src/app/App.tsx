@@ -14,6 +14,7 @@ import { useConversationSettings } from "../features/conversation-settings/useCo
 import { useToolSettings } from "../features/tool-settings/useToolSettings";
 import { useMcpConnections } from "../features/mcp-settings/useMcpConnections";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { SchedulePage } from "../features/schedules/SchedulePage";
 import type { SettingsSection } from "../features/settings/settingsState";
 import { useI18n } from "../i18n/I18nProvider";
 import { useAuthentication } from "../features/auth/AuthGate";
@@ -57,6 +58,7 @@ export function App() {
   const { t } = useI18n();
   const { mode: authMode, signOut } = useAuthentication();
   const [conversationId, setConversationId] = useState<string | null>(conversationIdFromHash);
+  const [schedulesOpen, setSchedulesOpen] = useState(() => window.location.hash === "#schedules");
   const {
     conversations,
     loading: conversationsLoading,
@@ -117,7 +119,7 @@ export function App() {
       || (!conversationSettings.loaded && !conversationSettings.error)) return;
 
     const hash = window.location.hash;
-    if (hash === "#new-chat" || conversationIdFromHash() !== null) {
+    if (hash === "#new-chat" || hash === "#schedules" || conversationIdFromHash() !== null) {
       startupResolvedRef.current = true;
       return;
     }
@@ -140,6 +142,7 @@ export function App() {
   useEffect(() => {
     const syncHash = () => {
       setConversationId(conversationIdFromHash());
+      setSchedulesOpen(window.location.hash === "#schedules");
       setMenuOpen(false);
     };
     window.addEventListener("hashchange", syncHash);
@@ -202,6 +205,7 @@ export function App() {
   }, []);
 
   const openChat = (conversation: ConversationSummary) => {
+    setSchedulesOpen(false);
     setConversationId(conversation.id);
     window.location.hash = `chat=${conversation.id}`;
     setMenuOpen(false);
@@ -210,7 +214,14 @@ export function App() {
   const startNewChat = () => {
     setChatRevision((revision) => revision + 1);
     setConversationId(null);
+    setSchedulesOpen(false);
     window.location.hash = "new-chat";
+    setMenuOpen(false);
+  };
+
+  const openSchedules = () => {
+    setSchedulesOpen(true);
+    window.location.hash = "schedules";
     setMenuOpen(false);
   };
 
@@ -312,6 +323,16 @@ export function App() {
           <span className="new-chat-label">{t("app.newConversation")}</span>
         </button>
 
+        <button
+          className={`schedules-nav-button${schedulesOpen ? " is-active" : ""}`}
+          type="button"
+          aria-current={schedulesOpen ? "page" : undefined}
+          onClick={openSchedules}
+        >
+          <span aria-hidden="true">◷</span>
+          <span className="new-chat-label">{t("app.schedules")}</span>
+        </button>
+
         <nav
           id="conversation-navigation"
           className="conversation-nav"
@@ -380,7 +401,19 @@ export function App() {
         aria-hidden={mobileNavigation && menuOpen ? true : undefined}
         inert={mobileNavigation && menuOpen}
       >
-        <ChatWorkspace
+        {schedulesOpen ? <SchedulePage
+          active={schedulesOpen}
+          defaultTimeZone={generalSettings.settings.timeZone}
+          modelSelection={modelSelection}
+          modelChoices={modelChoices}
+          responseMode={responseMode}
+          outputContinuation={outputContinuation}
+          onOpenConversation={(id) => {
+            setSchedulesOpen(false);
+            setConversationId(id);
+            window.location.hash = `chat=${id}`;
+          }}
+        /> : <ChatWorkspace
           key={`${conversationId ?? "new"}-${chatRevision}`}
           conversationId={conversationId}
           title={chatTitle}
@@ -397,7 +430,7 @@ export function App() {
           onModelSelectionChange={saveModelSelection}
           onConversationAccepted={acceptConversation}
           onConversationUpdated={conversationUpdated}
-        />
+        />}
       </main>
 
       <dialog

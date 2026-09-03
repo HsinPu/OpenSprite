@@ -284,6 +284,16 @@ describe("persisted AI settings", () => {
 });
 
 describe("conversation navigation", () => {
+  it("opens schedules from the sidebar and preserves the schedules hash", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "排程" }));
+
+    expect(window.location.hash).toBe("#schedules");
+    expect(screen.getByRole("heading", { level: 1, name: "排程" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 1, name: "新對話" })).toBeNull();
+  });
+
   it.each([
     ["#new-chat", null],
     ["#chat=49d6c5e3-1724-44a7-9e69-0c0103176461", "49d6c5e3-1724-44a7-9e69-0c0103176461"],
