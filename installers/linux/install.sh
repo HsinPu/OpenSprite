@@ -75,8 +75,9 @@ PREVIOUS="$PARENT/.app-previous-$(python3 -c 'import secrets; print(secrets.toke
 UNIT_FILE="$UNIT_ROOT/opensprite.service"
 STATE_BACKUP="$PARENT/.access-state-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
 mkdir -p "$STATE_BACKUP"
-POLICY_EXISTED=0; BOOTSTRAP_EXISTED=0; UNIT_EXISTED=0
+POLICY_EXISTED=0; ACCESS_EXISTED=0; BOOTSTRAP_EXISTED=0; UNIT_EXISTED=0
 [[ ! -f "$POLICY_FILE" ]] || { cp -p -- "$POLICY_FILE" "$STATE_BACKUP/access-policy.json"; POLICY_EXISTED=1; }
+[[ ! -f "$ACCESS_FILE" ]] || { cp -p -- "$ACCESS_FILE" "$STATE_BACKUP/access.json"; ACCESS_EXISTED=1; }
 [[ ! -f "$BOOTSTRAP_FILE" ]] || { cp -p -- "$BOOTSTRAP_FILE" "$STATE_BACKUP/access-bootstrap.json"; BOOTSTRAP_EXISTED=1; }
 [[ ! -f "$UNIT_FILE" ]] || { cp -p -- "$UNIT_FILE" "$STATE_BACKUP/opensprite.service"; UNIT_EXISTED=1; }
 cutover=0
@@ -87,6 +88,7 @@ rollback() {
     [[ ! -e "$PREVIOUS" ]] || mv -- "$PREVIOUS" "$INSTALL_ROOT"
   fi
   if ((POLICY_EXISTED == 1)); then mkdir -p "$(dirname "$POLICY_FILE")"; cp -p -- "$STATE_BACKUP/access-policy.json" "$POLICY_FILE"; else rm -f -- "$POLICY_FILE"; fi
+  if ((ACCESS_EXISTED == 1)); then mkdir -p "$(dirname "$ACCESS_FILE")"; cp -p -- "$STATE_BACKUP/access.json" "$ACCESS_FILE"; else rm -f -- "$ACCESS_FILE"; fi
   if ((BOOTSTRAP_EXISTED == 1)); then mkdir -p "$(dirname "$BOOTSTRAP_FILE")"; cp -p -- "$STATE_BACKUP/access-bootstrap.json" "$BOOTSTRAP_FILE"; else rm -f -- "$BOOTSTRAP_FILE"; fi
   if ((SKIP_SERVICE == 0)); then
     if ((UNIT_EXISTED == 1)); then mkdir -p "$UNIT_ROOT"; cp -p -- "$STATE_BACKUP/opensprite.service" "$UNIT_FILE"; else rm -f -- "$UNIT_FILE"; fi

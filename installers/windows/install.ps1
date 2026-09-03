@@ -210,9 +210,11 @@ $installedNewRoot = $false
 $cutoverStarted = $false
 $previousCleanupComplete = $true
 $previousPolicyBytes = if (Test-Path -LiteralPath $policyPath -PathType Leaf) { [IO.File]::ReadAllBytes($policyPath) } else { $null }
+$previousAccessBytes = if (Test-Path -LiteralPath $accessPath -PathType Leaf) { [IO.File]::ReadAllBytes($accessPath) } else { $null }
 $previousBootstrapBytes = if (Test-Path -LiteralPath $bootstrapPath -PathType Leaf) { [IO.File]::ReadAllBytes($bootstrapPath) } else { $null }
 $policyMutated = $false
 $bootstrapMutated = $false
+$accessMutated = $false
 
 if (-not $PSCmdlet.ShouldProcess($installRootPath, "Build and install OpenSprite")) {
     return
@@ -300,6 +302,7 @@ try {
         if ($NoStart) { throw "A new local access password must be configured while OpenSprite is running. Remove -NoStart or use the isolated-test bootstrap bypass." }
         $bootstrapToken = New-LocalAccessBootstrap $userDataRootPath -Reset:$ResetLocalAccess
         $bootstrapMutated = $true
+        $accessMutated = $ResetLocalAccess
         try {
             if (-not $SkipBrowserLaunch) {
                 Start-Process -FilePath "http://localhost:$Port/#setup=$bootstrapToken"
@@ -354,6 +357,13 @@ catch {
         else {
             New-Item -ItemType Directory -Path (Split-Path -Parent $bootstrapPath) -Force | Out-Null
             [IO.File]::WriteAllBytes($bootstrapPath, $previousBootstrapBytes)
+        }
+    }
+    if ($accessMutated) {
+        if ($null -eq $previousAccessBytes) { Remove-Item -LiteralPath $accessPath -Force -ErrorAction SilentlyContinue }
+        else {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $accessPath) -Force | Out-Null
+            [IO.File]::WriteAllBytes($accessPath, $previousAccessBytes)
         }
     }
     throw $failure
