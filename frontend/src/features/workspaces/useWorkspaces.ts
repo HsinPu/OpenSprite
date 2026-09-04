@@ -32,31 +32,46 @@ export function useWorkspaces(): WorkspaceController {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<WorkspaceApiError | null>(null);
   const mounted = useRef(true);
+  const reloadInFlight = useRef<Promise<WorkspaceCatalog | null> | null>(null);
+  const reloadGeneration = useRef(0);
 
-  useEffect(() => () => { mounted.current = false; }, []);
-
-  const reload = useCallback(async (): Promise<WorkspaceCatalog | null> => {
-    if (mounted.current) setLoading(true);
-    try {
-      const next = await listWorkspaces();
-      if (mounted.current) {
-        setCatalog(next);
+  const loadCatalog = useCallback((force: boolean): Promise<WorkspaceCatalog | null> => {
+    if (!force && reloadInFlight.current) return reloadInFlight.current;
+    const generation = reloadGeneration.current + 1;
+    reloadGeneration.current = generation;
+    let request!: Promise<WorkspaceCatalog | null>;
+    request = (async () => {
+      if (mounted.current && reloadGeneration.current === generation) {
+        setLoading(true);
         setError(null);
       }
-      return next;
-    } catch (caught) {
-      const nextError = caught instanceof WorkspaceApiError ? caught : new WorkspaceApiError("network_error");
-      if (mounted.current) setError(nextError);
-      return null;
-    } finally {
-      if (mounted.current) {
-        setLoaded(true);
-        setLoading(false);
+      try {
+        const next = await listWorkspaces();
+        if (mounted.current && reloadGeneration.current === generation) setCatalog(next);
+        return next;
+      } catch (caught) {
+        const nextError = caught instanceof WorkspaceApiError ? caught : new WorkspaceApiError("network_error");
+        if (mounted.current && reloadGeneration.current === generation) setError(nextError);
+        return null;
+      } finally {
+        if (reloadInFlight.current === request) reloadInFlight.current = null;
+        if (mounted.current && reloadGeneration.current === generation) {
+          setLoaded(true);
+          setLoading(false);
+        }
       }
-    }
+    })();
+    reloadInFlight.current = request;
+    return request;
   }, []);
 
-  useEffect(() => { void reload(); }, [reload]);
+  const reload = useCallback(() => loadCatalog(false), [loadCatalog]);
+
+  useEffect(() => {
+    mounted.current = true;
+    void reload();
+    return () => { mounted.current = false; };
+  }, [reload]);
 
   const mutate = useCallback(async <T,>(operation: (current: WorkspaceCatalog) => Promise<T>, apply?: (result: T) => WorkspaceCatalog | null): Promise<T> => {
     if (catalog === null) throw error ?? new WorkspaceApiError("workspace_store_unavailable");
@@ -64,9 +79,19 @@ export function useWorkspaces(): WorkspaceController {
     try {
       const result = await operation(catalog);
       const immediate = apply?.(result) ?? null;
-      if (mounted.current && immediate) setCatalog(immediate);
-      if (!immediate) await reload();
-      if (mounted.current) setError(null);
+      let refreshSucceeded = true;
+      if (immediate) {
+        reloadGeneration.current += 1;
+        reloadInFlight.current = null;
+        if (mounted.current) {
+          setCatalog(immediate);
+          setLoaded(true);
+          setLoading(false);
+        }
+      } else {
+        refreshSucceeded = await loadCatalog(true) !== null;
+      }
+      if (mounted.current && refreshSucceeded) setError(null);
       return result;
     } catch (caught) {
       const nextError = caught instanceof WorkspaceApiError ? caught : new WorkspaceApiError("network_error");
@@ -75,7 +100,7 @@ export function useWorkspaces(): WorkspaceController {
     } finally {
       if (mounted.current) setSaving(false);
     }
-  }, [catalog, error, reload]);
+  }, [catalog, error, loadCatalog]);
 
   const activeWorkspace = useMemo(() => catalog?.workspaces.find((item) => item.id === catalog.activeWorkspaceId) ?? null, [catalog]);
   const create = useCallback((name: string, rootPath: string) => mutate((current) => createWorkspace(name, rootPath, current.revision), (result) => result as WorkspaceCatalog), [mutate]);

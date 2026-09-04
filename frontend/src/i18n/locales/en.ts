@@ -548,6 +548,7 @@ export const enMessages = {
   "schedules.workspaceMissing": "Workspace is missing",
   "schedules.workspaceMissingWarning": "This schedule's Workspace is no longer present in the catalog.",
   "schedules.workspaceLoading": "Loading Workspace",
+  "schedules.workspaceLoadError": "Unable to load Workspaces. Try again.",
   "schedules.latestRun": "Latest status",
   "schedules.group.active": "Active",
   "schedules.group.paused": "Paused",

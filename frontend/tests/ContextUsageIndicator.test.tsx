@@ -38,22 +38,24 @@ describe("context usage indicator", () => {
     expect(indicator.className).toContain("is-unavailable");
   });
 
-  it("preserves the latest valid context event when the visible event window is full", () => {
-    const first = event({ providerId: usage.providerId, modelId: usage.modelId, contextTokens: usage.contextTokens, contextLimitTokens: usage.contextLimitTokens, inputBudgetTokens: usage.inputBudgetTokens });
-    const filled = Array.from({ length: 500 }, (_, index): RunEvent => ({
-      sequence: index + 2,
+  it("preserves Run start and the latest valid Context event when the visible event window is full", () => {
+    const runStarted: RunEvent = { ...event({}), type: "run.started" };
+    const context = { ...event({ providerId: usage.providerId, modelId: usage.modelId, contextTokens: usage.contextTokens, contextLimitTokens: usage.contextLimitTokens, inputBudgetTokens: usage.inputBudgetTokens }), sequence: 2 };
+    const filled = Array.from({ length: 499 }, (_, index): RunEvent => ({
+      sequence: index + 3,
       type: "assistant.delta",
-      runId: first.runId,
-      conversationId: first.conversationId,
-      createdAt: first.createdAt,
+      runId: context.runId,
+      conversationId: context.conversationId,
+      createdAt: context.createdAt,
       data: { text: "x" },
     }));
 
-    const retained = appendEventPreservingContextUsage([first, ...filled.slice(0, 499)], filled[499]!);
+    const retained = appendEventPreservingContextUsage([runStarted, context, ...filled.slice(0, 498)], filled[498]!);
 
     expect(retained).toHaveLength(500);
     expect(contextUsageFromEvents(retained)).toEqual(usage);
-    expect(retained[0]?.sequence).toBe(first.sequence);
+    expect(retained[0]).toEqual(runStarted);
+    expect(retained[1]).toEqual(context);
     expect(retained.at(-1)?.sequence).toBe(501);
   });
 

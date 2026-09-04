@@ -42,8 +42,15 @@ export function appendEventPreservingContextUsage(
 ): RunEvent[] {
   const next = [...events, event];
   if (next.length <= MAX_VISIBLE_EVENTS) return next;
-  const recent = next.slice(-MAX_VISIBLE_EVENTS);
+  const runStarted = next.find((candidate) => candidate.type === "run.started");
   const latestContextEvent = [...next].reverse().find((candidate) => contextUsageFromEvent(candidate) !== null);
-  if (latestContextEvent === undefined || recent.some((candidate) => candidate.sequence === latestContextEvent.sequence)) return recent;
-  return [latestContextEvent, ...recent.slice(1)];
+  const pinned = [runStarted, latestContextEvent].filter(
+    (candidate, index, values): candidate is RunEvent => candidate !== undefined
+      && values.findIndex((value) => value?.sequence === candidate.sequence) === index,
+  );
+  const pinnedSequences = new Set(pinned.map((candidate) => candidate.sequence));
+  const recent = next
+    .filter((candidate) => !pinnedSequences.has(candidate.sequence))
+    .slice(-(MAX_VISIBLE_EVENTS - pinned.length));
+  return [...pinned, ...recent].sort((left, right) => left.sequence - right.sequence);
 }

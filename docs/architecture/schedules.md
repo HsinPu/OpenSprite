@@ -55,5 +55,7 @@ navigation. The UI polls the authenticated schedule API every five seconds only
 while Settings is open on the Schedules section. Create and edit forms always
 send a Workspace ID, defaulting to the current Workspace. Schedule cards and
 selector options show an unavailable or missing Workspace warning without
-disabling text-only execution. There is no WebSocket, OS notification, Email,
-or push notification in version 0.11.0.
+disabling text-only execution. A Workspace catalog load failure has its own
+retry action and temporarily disables Schedule create/edit instead of showing a
+permanent loading label. There is no WebSocket, OS notification, Email, or push
+notification in version 0.11.0.

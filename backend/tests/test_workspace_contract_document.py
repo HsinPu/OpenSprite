@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from opensprite_backend.app import create_app
+
 
 CONTRACT_PATH = (
     Path(__file__).resolve().parents[2] / "contracts" / "workspaces.openapi.json"
@@ -60,3 +62,14 @@ def test_workspace_contract_has_explicit_conflict_and_store_failures() -> None:
     ]
     create_responses = contract["paths"]["/api/workspaces"]["post"]["responses"]  # type: ignore[index]
     assert set(create_responses) == {"201", "400", "409", "503"}
+
+
+def test_live_openapi_keeps_the_workspace_delete_revision_parameter() -> None:
+    operation = create_app().openapi()["paths"]["/api/workspaces/{workspace_id}"]["delete"]
+    parameters = {
+        (item["name"], item["in"], item["required"])
+        for item in operation["parameters"]
+    }
+
+    assert ("workspace_id", "path", True) in parameters
+    assert ("expectedRevision", "query", True) in parameters

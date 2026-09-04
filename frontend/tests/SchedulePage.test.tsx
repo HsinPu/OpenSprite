@@ -90,6 +90,18 @@ describe("schedule page", () => {
     expect(screen.getByText("工作區資料不存在")).toBeTruthy();
   });
 
+  it("shows a retryable Workspace catalog error and blocks create or edit", () => {
+    controller.schedules = [schedule];
+    const retry = vi.fn();
+    render(<SchedulePage {...props} workspaceError onWorkspaceRetry={retry} />);
+
+    expect(screen.getByRole("alert").textContent).toContain("無法載入工作區，請重試。");
+    expect((screen.getByRole("button", { name: /新增排程/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /編輯/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /重.*試/ }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
   it.each([[1440, ".ant-modal"], [390, ".ant-drawer"]])("uses the responsive editor at %ipx", (width, selector) => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
     const container = document.createElement("div");

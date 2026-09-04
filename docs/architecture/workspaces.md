@@ -34,7 +34,9 @@ allowed.
 Windows detects the complete reparse-point file attribute in addition to the
 portable symlink and junction checks. Workspace DELETE accepts exactly one
 `expectedRevision` query item; missing, duplicate, unknown or non-positive
-values fail as `invalid_request` before the service is called.
+values fail as `invalid_request` before the service is called. The declarative
+FastAPI query parameter remains present so live OpenAPI matches the authoritative
+contract.
 
 A saved root that later disappears, becomes inaccessible, stops being a
 directory or becomes unsafe is reported as `unavailable` with a bounded reason

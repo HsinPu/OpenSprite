@@ -100,6 +100,7 @@ export const zhTWMessages = {
   "schedules.workspaceMissing": "工作區資料不存在",
   "schedules.workspaceMissingWarning": "這個排程所屬的工作區已不在目前目錄中。",
   "schedules.workspaceLoading": "正在載入工作區",
+  "schedules.workspaceLoadError": "無法載入工作區，請重試。",
   "schedules.latestRun": "最近狀態",
   "schedules.group.active": "已啟用",
   "schedules.group.paused": "已暫停",

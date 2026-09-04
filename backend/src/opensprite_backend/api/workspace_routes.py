@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import cast
+from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from opensprite_backend.workspaces import (
@@ -177,12 +177,16 @@ async def update_workspace(
 async def delete_workspace(
     workspace_id: UUID,
     request: Request,
+    expectedRevision: Annotated[int, Query(ge=1)],
     workspaces: WorkspaceOperations = Depends(_workspaces),
 ) -> Response:
     if await request.body():
         raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
+    strict_revision = _expected_revision(request)
+    if strict_revision != expectedRevision:
+        raise WorkspaceError(WorkspaceFailure.INVALID_REQUEST)
     await workspaces.delete(
         str(workspace_id),
-        expected_revision=_expected_revision(request),
+        expected_revision=strict_revision,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

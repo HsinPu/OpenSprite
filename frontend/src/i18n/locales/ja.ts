@@ -548,6 +548,7 @@ export const jaMessages = {
   "schedules.workspaceMissing": "ワークスペースがありません",
   "schedules.workspaceMissingWarning": "このスケジュールのワークスペースは現在のカタログにありません。",
   "schedules.workspaceLoading": "ワークスペースを読み込み中",
+  "schedules.workspaceLoadError": "ワークスペースを読み込めません。再試行してください。",
   "schedules.latestRun": "最新の状態",
   "schedules.group.active": "有効",
   "schedules.group.paused": "一時停止中",

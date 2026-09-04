@@ -33,6 +33,9 @@ type Props = {
   onOverlayChange?: (open: boolean) => void;
   activeWorkspaceId?: string;
   workspaces?: readonly Workspace[];
+  workspaceLoading?: boolean;
+  workspaceError?: boolean;
+  onWorkspaceRetry?: () => void;
 };
 
 type FormState = {
@@ -95,7 +98,7 @@ function scheduleForm(schedule: Schedule): FormState {
   };
 }
 
-export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID, workspaces = [] }: Props) {
+export function SchedulePage({ active, container, defaultTimeZone, modelSelection, modelChoices, responseMode, outputContinuation, onOpenConversation, onOverlayChange, activeWorkspaceId = UNASSIGNED_WORKSPACE_ID, workspaces = [], workspaceLoading = false, workspaceError = false, onWorkspaceRetry }: Props) {
   const { t, locale } = useI18n();
   const controller = useSchedules(active);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -140,8 +143,9 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
     value: item.id,
     label: workspaceLabel(item),
   }));
+  const workspaceFallbackLabel = t(workspaceError ? "schedules.workspaceLoadError" : workspaceLoading ? "schedules.workspaceLoading" : "schedules.workspaceMissing");
   if (!workspaceOptions.some((option) => option.value === form.workspaceId)) {
-    workspaceOptions.push({ value: form.workspaceId, label: t(workspaces.length ? "schedules.workspaceMissing" : "schedules.workspaceLoading") });
+    workspaceOptions.push({ value: form.workspaceId, label: workspaceFallbackLabel });
   }
   if (editing && !modelOptions.some((option) => option.value === form.providerModel)) {
     modelOptions.push({
@@ -214,15 +218,16 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
 
   return <section className="schedules-settings" aria-label={t("settings.category.schedules")}>
     <div className="schedules-toolbar">
-      <Button type="primary" icon={<PlusOutlined />} onClick={(event) => openEditor(null, event.currentTarget)} disabled={!modelSelection}>{t("schedules.create")}</Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={(event) => openEditor(null, event.currentTarget)} disabled={!modelSelection || workspaceLoading || workspaceError}>{t("schedules.create")}</Button>
     </div>
     {controller.runtimeStatus?.continuity !== "linger_enabled" ? <div className="schedules-warning" role="status">{t(controller.runtimeStatus?.platform === "linux" ? "schedules.warning.linux" : "schedules.warning.windows")}</div> : null}
+    {workspaceError ? <div className="schedules-error" role="alert"><span>{t("schedules.workspaceLoadError")}</span>{onWorkspaceRetry ? <Button loading={workspaceLoading} disabled={workspaceLoading} onClick={onWorkspaceRetry}>{t("common.retry")}</Button> : null}</div> : null}
     {errorText ? <div className="schedules-error" role="alert"><span>{errorText}</span><Button onClick={() => void controller.refresh()}>{t("common.retry")}</Button></div> : null}
     {controller.loading ? <p className="schedules-state" role="status">{t("schedules.loading")}</p> : null}
     {!controller.loading && controller.schedules.length === 0 ? <div className="schedules-empty"><CalendarOutlined /><h2>{t("schedules.emptyTitle")}</h2><p>{t("schedules.emptyDescription")}</p></div> : null}
     {(["active", "paused", "completed"] as const).map((status) => grouped[status].length ? <section className="schedule-group" key={status}><h2>{t(`schedules.group.${status}` as never)} <span>{grouped[status].length}</span></h2><div className="schedule-grid">{grouped[status].map((item) => {
       const workspace = workspaces.find((candidate) => candidate.id === item.workspaceId);
-      const workspaceMissing = workspaces.length > 0 && !workspace;
+      const workspaceMissing = !workspaceLoading && !workspaceError && workspaces.length > 0 && !workspace;
       const workspaceWarning = workspace?.availability === "unavailable"
         ? t("schedules.workspaceUnavailableWarning", { reason: workspaceReason(workspace) })
         : workspaceMissing ? t("schedules.workspaceMissingWarning") : null;
@@ -230,11 +235,11 @@ export function SchedulePage({ active, container, defaultTimeZone, modelSelectio
         <div className="schedule-card__top"><div><h3>{item.name}</h3><p>{cadenceText(item)}</p></div><Tag color={item.status === "active" ? "green" : item.status === "paused" ? "gold" : "default"}>{t(`schedules.status.${item.status}` as never)}</Tag></div>
         <p className="schedule-card__prompt">{item.prompt}</p>
         {workspaceWarning ? <p className="schedule-card__workspace-warning" role="status"><WarningOutlined aria-hidden="true" />{workspaceWarning}</p> : null}
-        <dl><div><dt>{t("schedules.workspace")}</dt><dd>{workspace ? workspaceLabel(workspace) : t(workspaces.length ? "schedules.workspaceMissing" : "schedules.workspaceLoading")}</dd></div><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
+        <dl><div><dt>{t("schedules.workspace")}</dt><dd>{workspace ? workspaceLabel(workspace) : workspaceFallbackLabel}</dd></div><div><dt>{t("schedules.nextRun")}</dt><dd>{formatDate(item.nextRunAt)}</dd></div><div><dt>{t("schedules.model")}</dt><dd>{modelChoices.find((choice) => choice.selection.modelId === item.executionProfile.modelId)?.label ?? item.executionProfile.modelId}</dd></div><div><dt>{t("schedules.latestRun")}</dt><dd>{item.latestOccurrence ? t(`schedules.occurrence.${item.latestOccurrence.status}` as never) : t("schedules.none")}</dd></div></dl>
         <div className="schedule-card__actions">
           <Button icon={<PlayCircleOutlined />} onClick={() => void controller.runNow(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.runNow")}</Button>
           {item.status === "active" ? <Button icon={<PauseCircleOutlined />} onClick={() => void controller.pause(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.pause")}</Button> : item.status === "paused" ? <Button icon={<PlayCircleOutlined />} onClick={() => void controller.resume(item).catch(() => undefined)} disabled={controller.saving}>{t("schedules.resume")}</Button> : null}
-          <Button icon={<EditOutlined />} onClick={(event) => openEditor(item, event.currentTarget)}>{t("schedules.edit")}</Button>
+          <Button icon={<EditOutlined />} disabled={workspaceLoading || workspaceError} onClick={(event) => openEditor(item, event.currentTarget)}>{t("schedules.edit")}</Button>
           <Button icon={<HistoryOutlined />} onClick={(event) => { historyOpenerRef.current = event.currentTarget; setHistoryId(item.id); void controller.loadOccurrences(item.id); }}>{t("schedules.history")}</Button>
           {item.conversationId ? <Button onClick={() => onOpenConversation(item.conversationId!)}>{t("schedules.openConversation")}</Button> : null}
           <Popconfirm getPopupContainer={() => container ?? document.body} title={t("schedules.deleteConfirm")} description={t("schedules.deleteDescription")} okText={t("common.remove")} cancelText={t("common.cancel")} onConfirm={() => controller.remove(item).catch(() => undefined)}><Button danger>{t("common.remove")}</Button></Popconfirm>

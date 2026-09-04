@@ -139,6 +139,10 @@ to React state at most once per animation frame. Semantic execution events are
 flushed before the next non-delta or terminal event, so execution ordering and
 complete-response delivery remain unchanged. Persisted Markdown messages use a
 stable memoized renderer; only the live message is re-parsed while it changes.
+The visible event window remains bounded to 500 entries. When trimming is
+required, it pins the initial `run.started` event and latest Context-usage event
+before retaining the newest remaining events, preserving Workspace status and
+the composer indicator during long Runs.
 
 Persisted Messages retain their authoritative `runId` in frontend display
 state. An assistant Message exposes one history-inspection action beside its
